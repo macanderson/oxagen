@@ -3,10 +3,7 @@
   "domain": "chat",
   "description": "Record an agent execution that originated from a chat message; atomically links the execution to the message for observability and UI streaming",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["api", "mcp"],
   "sensitivity": "low",
   "agent": null,
   "chain": {
@@ -40,13 +37,7 @@
       },
       "status": {
         "type": "string",
-        "enum": [
-          "planning",
-          "running",
-          "completed",
-          "failed",
-          "cancelled"
-        ]
+        "enum": ["planning", "running", "completed", "failed", "cancelled"]
       },
       "inputPayload": {},
       "outputPayload": {},
@@ -135,12 +126,7 @@
                   "responsePayload": {},
                   "status": {
                     "type": "string",
-                    "enum": [
-                      "pending",
-                      "running",
-                      "completed",
-                      "failed"
-                    ]
+                    "enum": ["pending", "running", "completed", "failed"]
                   },
                   "latencyMs": {
                     "type": "integer",
@@ -165,12 +151,7 @@
               }
             }
           },
-          "required": [
-            "stepNumber",
-            "stepType",
-            "status",
-            "inputPayload"
-          ],
+          "required": ["stepNumber", "stepType", "status", "inputPayload"],
           "additionalProperties": false
         }
       }
@@ -202,11 +183,7 @@
         "format": "date-time"
       }
     },
-    "required": [
-      "executionId",
-      "status",
-      "createdAt"
-    ],
+    "required": ["executionId", "status", "createdAt"],
     "additionalProperties": false
   }
 }

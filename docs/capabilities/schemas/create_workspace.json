@@ -3,11 +3,7 @@
   "domain": "workspace",
   "description": "Create a workspace within the active tenant. Refused for a slug already used in the organization.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": true,
@@ -35,10 +31,7 @@
         "maxLength": 40
       }
     },
-    "required": [
-      "name",
-      "slug"
-    ],
+    "required": ["name", "slug"],
     "additionalProperties": false
   },
   "output": {
@@ -61,13 +54,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "publicId",
-      "name",
-      "slug",
-      "orgSlug",
-      "createdAt"
-    ],
+    "required": ["publicId", "name", "slug", "orgSlug", "createdAt"],
     "additionalProperties": false
   }
 }

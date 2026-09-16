@@ -3,9 +3,7 @@
   "domain": "agent",
   "description": "Commit an agent's definition file (.oxagen/agents/<slug>.toml) to a branch of the workspace repository and open the pull request that publishes it, or add to the branch's open pull request; the default branch is never written.",
   "mode": "sync",
-  "surfaces": [
-    "api"
-  ],
+  "surfaces": ["api"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": true,
@@ -46,11 +44,7 @@
         "maxLength": 200
       }
     },
-    "required": [
-      "agentId",
-      "branch",
-      "source"
-    ],
+    "required": ["agentId", "branch", "source"],
     "additionalProperties": false
   },
   "output": {
@@ -91,10 +85,7 @@
             "format": "uri"
           }
         },
-        "required": [
-          "number",
-          "url"
-        ],
+        "required": ["number", "url"],
         "additionalProperties": false
       }
     },

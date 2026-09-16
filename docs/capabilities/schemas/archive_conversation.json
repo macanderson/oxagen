@@ -3,11 +3,7 @@
   "domain": "conversation",
   "description": "Archive or unarchive conversations (reversible — sets or clears archived_at, no data loss)",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -35,10 +31,7 @@
         "type": "boolean"
       }
     },
-    "required": [
-      "conversationIds",
-      "archived"
-    ],
+    "required": ["conversationIds", "archived"],
     "additionalProperties": false
   },
   "output": {
@@ -50,9 +43,7 @@
         "minimum": 0
       }
     },
-    "required": [
-      "updated"
-    ],
+    "required": ["updated"],
     "additionalProperties": false
   }
 }

@@ -3,11 +3,7 @@
   "domain": "router",
   "description": "Set the market-router policy for this org or workspace (partial update). Choose the mode (off = deterministic routing; shadow = compute + record the market decision but keep today's routing; enforce = route to the cheapest model clearing the verified-success bar and escalate tiers on judge rejection), the verified-success threshold, min samples, window days, and tier-escalation. Changes model spend behavior — Owner/Admin only.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "cli"
-  ],
+  "surfaces": ["api", "mcp", "cli"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -26,18 +22,11 @@
     "properties": {
       "scope": {
         "type": "string",
-        "enum": [
-          "org",
-          "workspace"
-        ]
+        "enum": ["org", "workspace"]
       },
       "mode": {
         "type": "string",
-        "enum": [
-          "off",
-          "shadow",
-          "enforce"
-        ]
+        "enum": ["off", "shadow", "enforce"]
       },
       "successThreshold": {
         "type": "number",
@@ -64,18 +53,11 @@
     "properties": {
       "scope": {
         "type": "string",
-        "enum": [
-          "org",
-          "workspace"
-        ]
+        "enum": ["org", "workspace"]
       },
       "mode": {
         "type": "string",
-        "enum": [
-          "off",
-          "shadow",
-          "enforce"
-        ]
+        "enum": ["off", "shadow", "enforce"]
       },
       "successThreshold": {
         "type": "number"

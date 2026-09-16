@@ -3,9 +3,7 @@
   "domain": "telemetry",
   "description": "Mint a signed Stella enterprise-telemetry enrollment and its bound API key for this workspace.",
   "mode": "sync",
-  "surfaces": [
-    "api"
-  ],
+  "surfaces": ["api"],
   "sensitivity": "high",
   "agent": null,
   "chain": {
@@ -49,10 +47,7 @@
               "maxLength": 128
             }
           },
-          "required": [
-            "provider",
-            "model"
-          ],
+          "required": ["provider", "model"],
           "additionalProperties": false
         }
       },
@@ -63,12 +58,7 @@
         "default": 90
       }
     },
-    "required": [
-      "name",
-      "endpoint",
-      "credentialEnv",
-      "modelCatalog"
-    ],
+    "required": ["name", "endpoint", "credentialEnv", "modelCatalog"],
     "additionalProperties": false
   },
   "output": {

@@ -3,12 +3,7 @@
   "domain": "billing",
   "description": "Set (create or replace) the hard period-to-date spend ceiling for one scope — the org-level ceiling that covers every workspace, or this workspace's own ceiling. Choose the window (monthly = calendar month to date; rolling = a trailing N-day window), the limit in micro-units, and whether it is enforced. Over-ceiling agent runs are denied at invoke() before any provider call; RAISING a ceiling here is the org-admin override that clears a denial (IAM-gated and audited). Owner / Admin / Billing only.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent",
-    "cli"
-  ],
+  "surfaces": ["api", "mcp", "agent", "cli"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -27,20 +22,14 @@
     "properties": {
       "scope": {
         "type": "string",
-        "enum": [
-          "org",
-          "workspace"
-        ]
+        "enum": ["org", "workspace"]
       },
       "enabled": {
         "type": "boolean"
       },
       "period": {
         "type": "string",
-        "enum": [
-          "monthly",
-          "rolling"
-        ]
+        "enum": ["monthly", "rolling"]
       },
       "windowDays": {
         "anyOf": [
@@ -63,19 +52,11 @@
             "type": "string"
           }
         },
-        "required": [
-          "micros",
-          "currency"
-        ],
+        "required": ["micros", "currency"],
         "additionalProperties": false
       }
     },
-    "required": [
-      "scope",
-      "enabled",
-      "period",
-      "limit"
-    ],
+    "required": ["scope", "enabled", "period", "limit"],
     "additionalProperties": false
   },
   "output": {
@@ -84,10 +65,7 @@
     "properties": {
       "scope": {
         "type": "string",
-        "enum": [
-          "org",
-          "workspace"
-        ]
+        "enum": ["org", "workspace"]
       },
       "publicId": {
         "anyOf": [
@@ -104,10 +82,7 @@
       },
       "period": {
         "type": "string",
-        "enum": [
-          "monthly",
-          "rolling"
-        ]
+        "enum": ["monthly", "rolling"]
       },
       "windowDays": {
         "anyOf": [
@@ -132,10 +107,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "micros",
-              "currency"
-            ],
+            "required": ["micros", "currency"],
             "additionalProperties": false
           },
           {
@@ -153,10 +125,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "micros",
-          "currency"
-        ],
+        "required": ["micros", "currency"],
         "additionalProperties": false
       },
       "projected": {
@@ -169,10 +138,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "micros",
-          "currency"
-        ],
+        "required": ["micros", "currency"],
         "additionalProperties": false
       },
       "ratio": {

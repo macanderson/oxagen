@@ -84,7 +84,9 @@ function Checks({ checks }: { checks: ContextPr["checks"] }) {
             className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2"
           >
             <span className="flex min-w-0 flex-col">
-              <span className="text-foreground">{t(`names.${check.name}`)}</span>
+              <span className="text-foreground">
+                {t(`names.${check.name}`)}
+              </span>
               {check.summary === "" ? null : (
                 <span className="text-xs text-muted-foreground">
                   {check.summary}

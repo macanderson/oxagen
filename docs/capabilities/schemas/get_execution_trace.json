@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "Get one agent execution as a collapsible span tree — the run, its ordered steps, each step's tool calls with durations/tokens/cost/status, and child executions (subagent/A2A lineage).",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -29,9 +25,7 @@
         "description": "Public ID (aex_…) or UUID of the execution to fetch"
       }
     },
-    "required": [
-      "executionId"
-    ],
+    "required": ["executionId"],
     "additionalProperties": false
   },
   "output": {

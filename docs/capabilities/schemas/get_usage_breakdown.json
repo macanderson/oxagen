@@ -3,11 +3,7 @@
   "domain": "billing",
   "description": "Aggregated usage for a time window broken down by model, surface, workspace, capability, acting principal, and user, plus a daily time series of tokens, cost, and chat-turn (message) counts. Org-scoped; pass workspaceId to narrow to one workspace. Powers the usage dashboard and per-seat/per-agent metering.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -37,10 +33,7 @@
         "format": "uuid"
       }
     },
-    "required": [
-      "start",
-      "end"
-    ],
+    "required": ["start", "end"],
     "additionalProperties": false
   },
   "output": {
@@ -57,10 +50,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "start",
-          "end"
-        ],
+        "required": ["start", "end"],
         "additionalProperties": false
       },
       "totals": {

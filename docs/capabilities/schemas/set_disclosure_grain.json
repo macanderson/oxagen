@@ -3,9 +3,7 @@
   "domain": "evidence",
   "description": "Set the workspace's witness disclosure grain, from L0 (the worker hears only pass or fail) to L3, recorded as a security event.",
   "mode": "sync",
-  "surfaces": [
-    "api"
-  ],
+  "surfaces": ["api"],
   "sensitivity": "high",
   "agent": null,
   "chain": {
@@ -20,17 +18,10 @@
     "properties": {
       "grain": {
         "type": "string",
-        "enum": [
-          "L0",
-          "L1",
-          "L2",
-          "L3"
-        ]
+        "enum": ["L0", "L1", "L2", "L3"]
       }
     },
-    "required": [
-      "grain"
-    ],
+    "required": ["grain"],
     "additionalProperties": false
   },
   "output": {
@@ -39,21 +30,11 @@
     "properties": {
       "grain": {
         "type": "string",
-        "enum": [
-          "L0",
-          "L1",
-          "L2",
-          "L3"
-        ]
+        "enum": ["L0", "L1", "L2", "L3"]
       },
       "previousGrain": {
         "type": "string",
-        "enum": [
-          "L0",
-          "L1",
-          "L2",
-          "L3"
-        ]
+        "enum": ["L0", "L1", "L2", "L3"]
       },
       "changedAt": {
         "anyOf": [
@@ -66,11 +47,7 @@
         ]
       }
     },
-    "required": [
-      "grain",
-      "previousGrain",
-      "changedAt"
-    ],
+    "required": ["grain", "previousGrain", "changedAt"],
     "additionalProperties": false
   }
 }

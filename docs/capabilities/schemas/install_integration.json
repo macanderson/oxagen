@@ -3,12 +3,7 @@
   "domain": "integration",
   "description": "Install a plugin instance from catalog or custom URL. Fetches schema, validates config, and installs in workspace scope.",
   "mode": "async",
-  "surfaces": [
-    "api",
-    "mcp",
-    "cli",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "cli", "agent"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -46,11 +41,7 @@
         "description": "Human-readable display name for this plugin instance"
       }
     },
-    "required": [
-      "pluginId",
-      "config",
-      "displayName"
-    ],
+    "required": ["pluginId", "config", "displayName"],
     "additionalProperties": false
   },
   "output": {
@@ -71,12 +62,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "jobId",
-      "status",
-      "pluginId",
-      "displayName"
-    ],
+    "required": ["jobId", "status", "pluginId", "displayName"],
     "additionalProperties": false
   }
 }

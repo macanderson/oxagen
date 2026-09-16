@@ -3,10 +3,7 @@
   "domain": "agent",
   "description": "List the workspace's pending tool-call approvals, soonest expiry first, cursor-paged, optionally narrowed to one run",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["api", "mcp"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -93,6 +90,39 @@
                 }
               ]
             },
+            "autoEligibility": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "ruleId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "reasons": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    },
+                    "floor": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": ["ruleId", "ok", "reasons", "floor"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "chain": {
               "type": "object",
               "properties": {
@@ -117,10 +147,7 @@
                   ]
                 }
               },
-              "required": [
-                "agentKey",
-                "rule"
-              ],
+              "required": ["agentKey", "rule"],
               "additionalProperties": false
             }
           },
@@ -132,6 +159,7 @@
             "createdAt",
             "expiresAt",
             "mandateId",
+            "autoEligibility",
             "chain"
           ],
           "additionalProperties": false
@@ -148,10 +176,7 @@
         ]
       }
     },
-    "required": [
-      "items",
-      "nextCursor"
-    ],
+    "required": ["items", "nextCursor"],
     "additionalProperties": false
   }
 }

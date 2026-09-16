@@ -3,11 +3,7 @@
   "domain": "iam",
   "description": "Delete a custom IAM role and its grants. Refused for a system role and for a role any principal still holds.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -29,9 +25,7 @@
         "description": "Public role id (rol_…)"
       }
     },
-    "required": [
-      "roleId"
-    ],
+    "required": ["roleId"],
     "additionalProperties": false
   },
   "output": {
@@ -46,10 +40,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "id",
-      "name"
-    ],
+    "required": ["id", "name"],
     "additionalProperties": false
   }
 }

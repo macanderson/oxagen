@@ -3,11 +3,7 @@
   "domain": "billing",
   "description": "Start a Stripe Checkout session for a dynamic usage-credit purchase; returns a URL the customer opens to complete payment",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -37,9 +33,7 @@
         "format": "uri"
       }
     },
-    "required": [
-      "amountUsd"
-    ],
+    "required": ["amountUsd"],
     "additionalProperties": false
   },
   "output": {
@@ -63,12 +57,7 @@
         "minimum": 0
       }
     },
-    "required": [
-      "url",
-      "grantCents",
-      "priceCents",
-      "percent"
-    ],
+    "required": ["url", "grantCents", "priceCents", "percent"],
     "additionalProperties": false
   }
 }

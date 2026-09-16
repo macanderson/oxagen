@@ -3,11 +3,7 @@
   "domain": "model",
   "description": "List the provider capability posture matrix — per vendor, how its prompt cache is engaged (explicit opt-in vs implicit), how its reasoning budget is controlled, how structured output is obtained, and which attachment kinds it accepts. Query before routing work to a BYOK-configured provider.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -74,11 +70,7 @@
                       "description": "Title of the test proving the opt-in marker reaches the request"
                     }
                   },
-                  "required": [
-                    "kind",
-                    "mechanism",
-                    "witness"
-                  ],
+                  "required": ["kind", "mechanism", "witness"],
                   "additionalProperties": false
                 },
                 {
@@ -96,11 +88,7 @@
                       "description": "Title of the test proving the hit telemetry is parsed and metered"
                     }
                   },
-                  "required": [
-                    "kind",
-                    "telemetry",
-                    "witness"
-                  ],
+                  "required": ["kind", "telemetry", "witness"],
                   "additionalProperties": false
                 },
                 {
@@ -113,10 +101,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "kind",
-                    "reason"
-                  ],
+                  "required": ["kind", "reason"],
                   "additionalProperties": false
                 }
               ]
@@ -136,11 +121,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "kind",
-                    "mechanism",
-                    "witness"
-                  ],
+                  "required": ["kind", "mechanism", "witness"],
                   "additionalProperties": false
                 },
                 {
@@ -153,10 +134,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "kind",
-                    "note"
-                  ],
+                  "required": ["kind", "note"],
                   "additionalProperties": false
                 },
                 {
@@ -169,10 +147,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "kind",
-                    "note"
-                  ],
+                  "required": ["kind", "note"],
                   "additionalProperties": false
                 },
                 {
@@ -185,10 +160,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "kind",
-                    "note"
-                  ],
+                  "required": ["kind", "note"],
                   "additionalProperties": false
                 },
                 {
@@ -201,10 +173,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "kind",
-                    "reason"
-                  ],
+                  "required": ["kind", "reason"],
                   "additionalProperties": false
                 }
               ]
@@ -224,11 +193,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "kind",
-                    "mechanism",
-                    "witness"
-                  ],
+                  "required": ["kind", "mechanism", "witness"],
                   "additionalProperties": false
                 },
                 {
@@ -244,11 +209,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "kind",
-                    "mechanism",
-                    "witness"
-                  ],
+                  "required": ["kind", "mechanism", "witness"],
                   "additionalProperties": false
                 },
                 {
@@ -261,10 +222,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "kind",
-                    "reason"
-                  ],
+                  "required": ["kind", "reason"],
                   "additionalProperties": false
                 }
               ]
@@ -281,11 +239,7 @@
                       "type": "array",
                       "items": {
                         "type": "string",
-                        "enum": [
-                          "image",
-                          "video",
-                          "audio"
-                        ]
+                        "enum": ["image", "video", "audio"]
                       }
                     },
                     "mechanism": {
@@ -295,12 +249,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "kind",
-                    "kinds",
-                    "mechanism",
-                    "witness"
-                  ],
+                  "required": ["kind", "kinds", "mechanism", "witness"],
                   "additionalProperties": false
                 },
                 {
@@ -313,10 +262,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "kind",
-                    "note"
-                  ],
+                  "required": ["kind", "note"],
                   "additionalProperties": false
                 },
                 {
@@ -329,10 +275,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "kind",
-                    "reason"
-                  ],
+                  "required": ["kind", "reason"],
                   "additionalProperties": false
                 }
               ]
@@ -361,10 +304,7 @@
         ]
       }
     },
-    "required": [
-      "vendors",
-      "unknownFilter"
-    ],
+    "required": ["vendors", "unknownFilter"],
     "additionalProperties": false
   }
 }

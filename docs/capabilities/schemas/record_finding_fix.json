@@ -3,11 +3,7 @@
   "domain": "spend",
   "description": "Record that the fix an open finding names was applied (org Owner or Admin): the finding becomes applied with the request id of this call, and later passes cite only runs that start after it.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": true,
@@ -28,9 +24,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "findingId"
-    ],
+    "required": ["findingId"],
     "additionalProperties": false
   },
   "output": {
@@ -54,12 +48,7 @@
           },
           "level": {
             "type": "string",
-            "enum": [
-              "tool",
-              "agent",
-              "operator",
-              "workspace"
-            ]
+            "enum": ["tool", "agent", "operator", "workspace"]
           },
           "subject": {
             "type": "string"
@@ -83,19 +72,12 @@
                 ]
               }
             },
-            "required": [
-              "micros",
-              "currency",
-              "basis"
-            ],
+            "required": ["micros", "currency", "basis"],
             "additionalProperties": false
           },
           "confidence": {
             "type": "string",
-            "enum": [
-              "high",
-              "medium"
-            ]
+            "enum": ["high", "medium"]
           },
           "window": {
             "type": "object",
@@ -107,10 +89,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "from",
-              "to"
-            ],
+            "required": ["from", "to"],
             "additionalProperties": false
           },
           "why": {
@@ -129,11 +108,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "open",
-              "applied",
-              "dismissed"
-            ]
+            "enum": ["open", "applied", "dismissed"]
           },
           "detectedAt": {
             "type": "string"
@@ -179,9 +154,7 @@
         "additionalProperties": false
       }
     },
-    "required": [
-      "finding"
-    ],
+    "required": ["finding"],
     "additionalProperties": false
   }
 }

@@ -3,11 +3,7 @@
   "domain": "mandate",
   "description": "List the workspace's mandates with remaining authority by measure, newest first, optionally narrowed to one agent or one status.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -29,12 +25,7 @@
       },
       "status": {
         "type": "string",
-        "enum": [
-          "draft",
-          "active",
-          "expired",
-          "revoked"
-        ]
+        "enum": ["draft", "active", "expired", "revoked"]
       },
       "limit": {
         "type": "integer",
@@ -112,11 +103,7 @@
                   },
                   "period": {
                     "type": "string",
-                    "enum": [
-                      "daily",
-                      "weekly",
-                      "monthly"
-                    ]
+                    "enum": ["daily", "weekly", "monthly"]
                   },
                   "currencyOrUnit": {
                     "type": "string",
@@ -124,10 +111,7 @@
                     "maxLength": 32
                   }
                 },
-                "required": [
-                  "period",
-                  "currencyOrUnit"
-                ],
+                "required": ["period", "currencyOrUnit"],
                 "additionalProperties": false
               }
             },
@@ -204,12 +188,7 @@
             },
             "status": {
               "type": "string",
-              "enum": [
-                "draft",
-                "active",
-                "expired",
-                "revoked"
-              ]
+              "enum": ["draft", "active", "expired", "revoked"]
             },
             "revokedBy": {
               "anyOf": [
@@ -260,11 +239,7 @@
                   },
                   "period": {
                     "type": "string",
-                    "enum": [
-                      "daily",
-                      "weekly",
-                      "monthly"
-                    ]
+                    "enum": ["daily", "weekly", "monthly"]
                   },
                   "periodKey": {
                     "type": "string"
@@ -348,9 +323,7 @@
         }
       }
     },
-    "required": [
-      "items"
-    ],
+    "required": ["items"],
     "additionalProperties": false
   }
 }

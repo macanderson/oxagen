@@ -3,9 +3,7 @@
   "domain": "user",
   "description": "Update the calling user's per-workspace coding-agent defaults (partial update): default repository connection + its owner/repo slug, default environment, default agent, and whether the one-time repo-default prompt has been answered. App-only surface for setting a preferred/default repo, environment, and agent for coding tasks.",
   "mode": "sync",
-  "surfaces": [
-    "api"
-  ],
+  "surfaces": ["api"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,

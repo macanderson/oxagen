@@ -82,6 +82,14 @@ Capabilities granted to an agent as a set have a page of their own:
 - [api.key.revoke](api.key.revoke.md) — Revoke an API key by its public ID; the key is soft-deleted and immediately invalid for all subsequent requests
 - [api.key.rotate](api.key.rotate.md) — Atomically issue a replacement API key and revoke the old one; the new raw key is shown once
 
+## Approval_rule (5)
+
+- [delete_approval_rule](delete_approval_rule.md) — Remove one auto-approval rule from the workspace's rule set
+- [get_auto_eligibility](get_auto_eligibility.md) — The auto-approval evaluation recorded for one approval request, and who resolved it
+- [list_approval_rules](list_approval_rules.md) — List the workspace's auto-approval rules, with the calls each released and held in the last 30 days
+- [set_approval_rule_enabled](set_approval_rule_enabled.md) — Switch one auto-approval rule on or off
+- [set_approval_rules](set_approval_rules.md) — Replace the workspace's auto-approval rules — the conditions under which a call a policy sent to a person may skip them
+
 ## Asset (1)
 
 - [asset.upload](asset.upload.md) — Ingest a binary asset from a publicly reachable source URL into object storage

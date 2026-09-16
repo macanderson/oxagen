@@ -3,11 +3,7 @@
   "domain": "graph",
   "description": "Customer-context workspace graph statistics: node count, edge count, inferred edge count, and breakdown by type.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -108,10 +104,7 @@
                   "minimum": 0
                 }
               },
-              "required": [
-                "day",
-                "count"
-              ],
+              "required": ["day", "count"],
               "additionalProperties": false
             },
             "description": "Last 14 UTC days of node-creation counts, ascending, zero-filled"
@@ -137,10 +130,7 @@
             "additionalProperties": {}
           }
         },
-        "required": [
-          "componentId",
-          "props"
-        ],
+        "required": ["componentId", "props"],
         "additionalProperties": false
       }
     },

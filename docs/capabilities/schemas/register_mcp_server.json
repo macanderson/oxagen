@@ -3,10 +3,7 @@
   "domain": "agent",
   "description": "Register an external MCP server with the workspace; its tools become available to the agent after health check",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["api", "mcp"],
   "sensitivity": "medium",
   "agent": null,
   "chain": {
@@ -26,10 +23,7 @@
       },
       "transportType": {
         "type": "string",
-        "enum": [
-          "streamable-http",
-          "stdio"
-        ]
+        "enum": ["streamable-http", "stdio"]
       },
       "endpointUrl": {
         "type": "string",
@@ -37,11 +31,7 @@
       },
       "authStrategy": {
         "type": "string",
-        "enum": [
-          "none",
-          "bearer",
-          "header"
-        ],
+        "enum": ["none", "bearer", "header"],
         "default": "none"
       },
       "authConfig": {
@@ -51,11 +41,7 @@
         }
       }
     },
-    "required": [
-      "name",
-      "transportType",
-      "endpointUrl"
-    ],
+    "required": ["name", "transportType", "endpointUrl"],
     "additionalProperties": false
   },
   "output": {
@@ -67,11 +53,7 @@
       },
       "healthStatus": {
         "type": "string",
-        "enum": [
-          "healthy",
-          "degraded",
-          "unreachable"
-        ]
+        "enum": ["healthy", "degraded", "unreachable"]
       },
       "discoveredTools": {
         "type": "array",
@@ -80,11 +62,7 @@
         }
       }
     },
-    "required": [
-      "mcpServerId",
-      "healthStatus",
-      "discoveredTools"
-    ],
+    "required": ["mcpServerId", "healthStatus", "discoveredTools"],
     "additionalProperties": false
   }
 }

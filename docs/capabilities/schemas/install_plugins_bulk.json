@@ -3,11 +3,7 @@
   "domain": "plugin",
   "description": "Bulk install catalog or custom plugin servers to the org allow-list. Per-item errors are captured — not all-or-nothing.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": true,
@@ -66,19 +62,10 @@
                 },
                 "authKind": {
                   "type": "string",
-                  "enum": [
-                    "oauth",
-                    "secret",
-                    "none"
-                  ]
+                  "enum": ["oauth", "secret", "none"]
                 }
               },
-              "required": [
-                "name",
-                "endpointUrl",
-                "transport",
-                "authKind"
-              ],
+              "required": ["name", "endpointUrl", "transport", "authKind"],
               "additionalProperties": false
             }
           },
@@ -86,9 +73,7 @@
         }
       }
     },
-    "required": [
-      "items"
-    ],
+    "required": ["items"],
     "additionalProperties": false
   },
   "output": {
@@ -124,11 +109,7 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": [
-                    "oauth",
-                    "secret",
-                    "none"
-                  ]
+                  "enum": ["oauth", "secret", "none"]
                 },
                 {
                   "type": "null"
@@ -146,19 +127,12 @@
               ]
             }
           },
-          "required": [
-            "pluginId",
-            "orgListingId",
-            "authKind",
-            "error"
-          ],
+          "required": ["pluginId", "orgListingId", "authKind", "error"],
           "additionalProperties": false
         }
       }
     },
-    "required": [
-      "installed"
-    ],
+    "required": ["installed"],
     "additionalProperties": false
   }
 }

@@ -3,10 +3,7 @@
   "domain": "workspace",
   "description": "Send a workspace invitation to an email address",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["api", "mcp"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -29,20 +26,14 @@
       },
       "role": {
         "type": "string",
-        "enum": [
-          "member",
-          "admin",
-          "owner"
-        ],
+        "enum": ["member", "admin", "owner"],
         "default": "member"
       },
       "message": {
         "type": "string"
       }
     },
-    "required": [
-      "email"
-    ],
+    "required": ["email"],
     "additionalProperties": false
   },
   "output": {
@@ -59,11 +50,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "id",
-      "status",
-      "expires_at"
-    ],
+    "required": ["id", "status", "expires_at"],
     "additionalProperties": false
   }
 }

@@ -3,10 +3,7 @@
   "domain": "billing",
   "description": "List the organization's invoices, newest first, in one cursor-paged list: number, status, what each invoice charged for (the subscription, a block purchase, an auto top-up, an interim or a period-close charge), amounts due and paid, period and the Stripe-hosted page.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["api", "mcp"],
   "sensitivity": "medium",
   "agent": null,
   "chain": {
@@ -57,12 +54,7 @@
             },
             "status": {
               "type": "string",
-              "enum": [
-                "open",
-                "paid",
-                "uncollectible",
-                "void"
-              ]
+              "enum": ["open", "paid", "uncollectible", "void"]
             },
             "kind": {
               "type": "string",
@@ -127,10 +119,7 @@
         ]
       }
     },
-    "required": [
-      "items",
-      "nextCursor"
-    ],
+    "required": ["items", "nextCursor"],
     "additionalProperties": false
   }
 }

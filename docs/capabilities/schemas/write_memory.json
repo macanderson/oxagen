@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "Persist a two-axis memory (class + kind) tied to a graph node per the oxagen-feature skill memory contract",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -29,11 +25,7 @@
       },
       "memoryClass": {
         "type": "string",
-        "enum": [
-          "OBSERVATION",
-          "RULE",
-          "FACT"
-        ],
+        "enum": ["OBSERVATION", "RULE", "FACT"],
         "default": "OBSERVATION"
       },
       "memoryKind": {
@@ -54,12 +46,7 @@
       },
       "source": {
         "type": "string",
-        "enum": [
-          "feature",
-          "fix",
-          "exception-watcher",
-          "bug-report"
-        ]
+        "enum": ["feature", "fix", "exception-watcher", "bug-report"]
       },
       "relatedNodeIds": {
         "type": "array",
@@ -68,12 +55,7 @@
         }
       }
     },
-    "required": [
-      "nodeRef",
-      "memoryKind",
-      "lesson",
-      "source"
-    ],
+    "required": ["nodeRef", "memoryKind", "lesson", "source"],
     "additionalProperties": false
   },
   "output": {
@@ -91,11 +73,7 @@
         "description": "Count of :ABOUT edges created to KnowledgeNode entities"
       }
     },
-    "required": [
-      "memoryId",
-      "nodeRef",
-      "edgesCreated"
-    ],
+    "required": ["memoryId", "nodeRef", "edgesCreated"],
     "additionalProperties": false
   }
 }

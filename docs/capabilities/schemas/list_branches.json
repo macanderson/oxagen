@@ -3,11 +3,7 @@
   "domain": "repo",
   "description": "List branches in a GitHub repository, including each branch's SHA, protection status, and which one is the repository's default branch.",
   "mode": "sync",
-  "surfaces": [
-    "agent",
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["agent", "api", "mcp"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -33,10 +29,7 @@
         "description": "Repository name"
       }
     },
-    "required": [
-      "owner",
-      "repo"
-    ],
+    "required": ["owner", "repo"],
     "additionalProperties": false
   },
   "output": {
@@ -65,12 +58,7 @@
               "description": "Whether the branch has protection rules enabled"
             }
           },
-          "required": [
-            "name",
-            "sha",
-            "isDefault",
-            "protected"
-          ],
+          "required": ["name", "sha", "isDefault", "protected"],
           "additionalProperties": false
         },
         "description": "Branches returned by GitHub, up to 300 (3 pages of 100), in GitHub's default order"
@@ -86,10 +74,7 @@
         ]
       }
     },
-    "required": [
-      "branches",
-      "defaultBranch"
-    ],
+    "required": ["branches", "defaultBranch"],
     "additionalProperties": false
   }
 }

@@ -3,11 +3,7 @@
   "domain": "capability",
   "description": "List the platform's typed capability contracts from the live in-process registry — name, domain, surfaces, layers, sensitivity, default IAM grants, entitlement gate, and audit binding for each. Read-only platform metadata; powers the org governance catalog.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -32,33 +28,15 @@
       },
       "surface": {
         "type": "string",
-        "enum": [
-          "api",
-          "mcp",
-          "agent",
-          "cli"
-        ]
+        "enum": ["api", "mcp", "agent", "cli"]
       },
       "missingLayer": {
         "type": "string",
-        "enum": [
-          "schema",
-          "api",
-          "mcp",
-          "unit",
-          "e2e",
-          "docs",
-          "app"
-        ]
+        "enum": ["schema", "api", "mcp", "unit", "e2e", "docs", "app"]
       },
       "sensitivity": {
         "type": "string",
-        "enum": [
-          "low",
-          "medium",
-          "high",
-          "destructive"
-        ]
+        "enum": ["low", "medium", "high", "destructive"]
       },
       "limit": {
         "type": "integer",
@@ -96,22 +74,13 @@
             },
             "mode": {
               "type": "string",
-              "enum": [
-                "sync",
-                "async",
-                "batch"
-              ]
+              "enum": ["sync", "async", "batch"]
             },
             "surfaces": {
               "type": "array",
               "items": {
                 "type": "string",
-                "enum": [
-                  "api",
-                  "mcp",
-                  "agent",
-                  "cli"
-                ]
+                "enum": ["api", "mcp", "agent", "cli"]
               },
               "description": "Surfaces the capability is exposed on"
             },
@@ -119,34 +88,17 @@
               "type": "array",
               "items": {
                 "type": "string",
-                "enum": [
-                  "schema",
-                  "api",
-                  "mcp",
-                  "unit",
-                  "e2e",
-                  "docs",
-                  "app"
-                ]
+                "enum": ["schema", "api", "mcp", "unit", "e2e", "docs", "app"]
               },
               "description": "Layers the contract declares (parity promises)"
             },
             "sensitivity": {
               "type": "string",
-              "enum": [
-                "low",
-                "medium",
-                "high",
-                "destructive"
-              ]
+              "enum": ["low", "medium", "high", "destructive"]
             },
             "defaultEffect": {
               "type": "string",
-              "enum": [
-                "allow",
-                "deny",
-                "require_approval"
-              ],
+              "enum": ["allow", "deny", "require_approval"],
               "description": "IAM rule-8 fallback when no explicit grant matches"
             },
             "scoped": {
@@ -167,11 +119,7 @@
                     },
                     "riskLevel": {
                       "type": "string",
-                      "enum": [
-                        "low",
-                        "medium",
-                        "high"
-                      ]
+                      "enum": ["low", "medium", "high"]
                     },
                     "category": {
                       "anyOf": [
@@ -184,11 +132,7 @@
                       ]
                     }
                   },
-                  "required": [
-                    "requiresApproval",
-                    "riskLevel",
-                    "category"
-                  ],
+                  "required": ["requiresApproval", "riskLevel", "category"],
                   "additionalProperties": false
                 },
                 {
@@ -217,21 +161,13 @@
                     },
                     "tier": {
                       "type": "string",
-                      "enum": [
-                        "free",
-                        "premium"
-                      ]
+                      "enum": ["free", "premium"]
                     },
                     "minPlanTier": {
                       "anyOf": [
                         {
                           "type": "string",
-                          "enum": [
-                            "free",
-                            "build",
-                            "scale",
-                            "enterprise"
-                          ]
+                          "enum": ["free", "build", "scale", "enterprise"]
                         },
                         {
                           "type": "null"
@@ -239,11 +175,7 @@
                       ]
                     }
                   },
-                  "required": [
-                    "id",
-                    "tier",
-                    "minPlanTier"
-                  ],
+                  "required": ["id", "tier", "minPlanTier"],
                   "additionalProperties": false
                 },
                 {
@@ -255,11 +187,7 @@
               "type": "object",
               "additionalProperties": {
                 "type": "string",
-                "enum": [
-                  "allow",
-                  "deny",
-                  "require_approval"
-                ]
+                "enum": ["allow", "deny", "require_approval"]
               },
               "description": "Default org-role grants (role name → effect)"
             },
@@ -267,11 +195,7 @@
               "type": "object",
               "additionalProperties": {
                 "type": "string",
-                "enum": [
-                  "allow",
-                  "deny",
-                  "require_approval"
-                ]
+                "enum": ["allow", "deny", "require_approval"]
               },
               "description": "Default workspace-role grants (role name → effect)"
             }

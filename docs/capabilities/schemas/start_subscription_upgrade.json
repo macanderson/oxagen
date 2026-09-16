@@ -3,11 +3,7 @@
   "domain": "billing",
   "description": "Start a Stripe Checkout session for a plan change; returns a URL the user opens to complete the upgrade",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -30,10 +26,7 @@
       },
       "interval": {
         "type": "string",
-        "enum": [
-          "month",
-          "year"
-        ]
+        "enum": ["month", "year"]
       },
       "successUrl": {
         "type": "string",
@@ -44,12 +37,7 @@
         "format": "uri"
       }
     },
-    "required": [
-      "planSlug",
-      "interval",
-      "successUrl",
-      "cancelUrl"
-    ],
+    "required": ["planSlug", "interval", "successUrl", "cancelUrl"],
     "additionalProperties": false
   },
   "output": {
@@ -65,17 +53,10 @@
       },
       "interval": {
         "type": "string",
-        "enum": [
-          "month",
-          "year"
-        ]
+        "enum": ["month", "year"]
       }
     },
-    "required": [
-      "checkoutUrl",
-      "planSlug",
-      "interval"
-    ],
+    "required": ["checkoutUrl", "planSlug", "interval"],
     "additionalProperties": false
   }
 }

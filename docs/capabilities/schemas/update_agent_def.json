@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "Update an agent definition by snapshotting a NEW unpublished version with the updated config — published versions are immutable and never edited in place; the version number is bumped",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -60,10 +56,7 @@
               },
               "mode": {
                 "type": "string",
-                "enum": [
-                  "read",
-                  "extend"
-                ],
+                "enum": ["read", "extend"],
                 "default": "read"
               },
               "retrieval": {
@@ -71,12 +64,7 @@
                 "properties": {
                   "strategy": {
                     "type": "string",
-                    "enum": [
-                      "semantic",
-                      "lexical",
-                      "hybrid",
-                      "explicit"
-                    ]
+                    "enum": ["semantic", "lexical", "hybrid", "explicit"]
                   },
                   "scopeToTypes": {
                     "type": "array",
@@ -85,9 +73,7 @@
                     }
                   }
                 },
-                "required": [
-                  "strategy"
-                ],
+                "required": ["strategy"],
                 "additionalProperties": false
               },
               "budget": {
@@ -111,18 +97,11 @@
                     "minimum": 0
                   }
                 },
-                "required": [
-                  "maxHops",
-                  "maxNodes"
-                ],
+                "required": ["maxHops", "maxNodes"],
                 "additionalProperties": false
               }
             },
-            "required": [
-              "ontologyId",
-              "retrieval",
-              "budget"
-            ],
+            "required": ["ontologyId", "retrieval", "budget"],
             "additionalProperties": false
           },
           "agentTools": {
@@ -132,10 +111,7 @@
               "properties": {
                 "type": {
                   "type": "string",
-                  "enum": [
-                    "function",
-                    "mcp_server"
-                  ]
+                  "enum": ["function", "mcp_server"]
                 },
                 "ref": {
                   "type": "string"
@@ -145,10 +121,7 @@
                   "additionalProperties": {}
                 }
               },
-              "required": [
-                "type",
-                "ref"
-              ],
+              "required": ["type", "ref"],
               "additionalProperties": false
             },
             "default": []
@@ -157,16 +130,11 @@
             "type": "string"
           }
         },
-        "required": [
-          "graph"
-        ],
+        "required": ["graph"],
         "additionalProperties": false
       }
     },
-    "required": [
-      "agentId",
-      "config"
-    ],
+    "required": ["agentId", "config"],
     "additionalProperties": false
   },
   "output": {
@@ -184,11 +152,7 @@
         "type": "boolean"
       }
     },
-    "required": [
-      "agentId",
-      "version",
-      "isPublished"
-    ],
+    "required": ["agentId", "version", "isPublished"],
     "additionalProperties": false
   }
 }

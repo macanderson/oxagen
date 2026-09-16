@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "Approve or deny a pending tool-call approval request; resolution resumes the paused agent stream",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -29,19 +25,13 @@
       },
       "decision": {
         "type": "string",
-        "enum": [
-          "approved",
-          "denied"
-        ]
+        "enum": ["approved", "denied"]
       },
       "note": {
         "type": "string"
       }
     },
-    "required": [
-      "approvalId",
-      "decision"
-    ],
+    "required": ["approvalId", "decision"],
     "additionalProperties": false
   },
   "output": {
@@ -53,10 +43,7 @@
       },
       "resolution": {
         "type": "string",
-        "enum": [
-          "approved",
-          "denied"
-        ]
+        "enum": ["approved", "denied"]
       },
       "mandate": {
         "anyOf": [
@@ -81,27 +68,16 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "measure",
-                    "value",
-                    "unitOrCurrency"
-                  ],
+                  "required": ["measure", "value", "unitOrCurrency"],
                   "additionalProperties": false
                 }
               },
               "outcome": {
                 "type": "string",
-                "enum": [
-                  "held",
-                  "released"
-                ]
+                "enum": ["held", "released"]
               }
             },
-            "required": [
-              "mandateId",
-              "reserved",
-              "outcome"
-            ],
+            "required": ["mandateId", "reserved", "outcome"],
             "additionalProperties": false
           },
           {
@@ -110,11 +86,7 @@
         ]
       }
     },
-    "required": [
-      "approvalId",
-      "resolution",
-      "mandate"
-    ],
+    "required": ["approvalId", "resolution", "mandate"],
     "additionalProperties": false
   }
 }

@@ -3,10 +3,7 @@
   "domain": "control",
   "description": "Queue a pause, resume, cancel, steer or message command for one run, an agent's live runs, or every live run in the workspace, with a delivery mode on steer and message.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["api", "mcp"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": false,
@@ -35,10 +32,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "kind",
-              "id"
-            ],
+            "required": ["kind", "id"],
             "additionalProperties": false
           },
           {
@@ -53,10 +47,7 @@
                 "maxLength": 128
               }
             },
-            "required": [
-              "kind",
-              "id"
-            ],
+            "required": ["kind", "id"],
             "additionalProperties": false
           },
           {
@@ -70,23 +61,14 @@
                 "format": "uuid"
               }
             },
-            "required": [
-              "kind",
-              "id"
-            ],
+            "required": ["kind", "id"],
             "additionalProperties": false
           }
         ]
       },
       "command": {
         "type": "string",
-        "enum": [
-          "pause",
-          "resume",
-          "cancel",
-          "steer",
-          "message"
-        ]
+        "enum": ["pause", "resume", "cancel", "steer", "message"]
       },
       "payload": {
         "type": "object",
@@ -98,17 +80,11 @@
           },
           "requestedMode": {
             "type": "string",
-            "enum": [
-              "next_step",
-              "interrupt",
-              "turn_boundary"
-            ],
+            "enum": ["next_step", "interrupt", "turn_boundary"],
             "default": "next_step"
           }
         },
-        "required": [
-          "text"
-        ],
+        "required": ["text"],
         "additionalProperties": false
       },
       "reason": {
@@ -123,10 +99,7 @@
         "default": 3600000
       }
     },
-    "required": [
-      "target",
-      "command"
-    ],
+    "required": ["target", "command"],
     "additionalProperties": false
   },
   "output": {
@@ -141,9 +114,7 @@
         }
       }
     },
-    "required": [
-      "commandIds"
-    ],
+    "required": ["commandIds"],
     "additionalProperties": false
   }
 }

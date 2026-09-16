@@ -3,9 +3,7 @@
   "domain": "control",
   "description": "Acknowledge applied commands and fetch the pending ones with the host's control envelope.",
   "mode": "sync",
-  "surfaces": [
-    "api"
-  ],
+  "surfaces": ["api"],
   "sensitivity": "high",
   "agent": null,
   "chain": {
@@ -56,10 +54,7 @@
               "format": "uuid"
             }
           },
-          "required": [
-            "command_id",
-            "status"
-          ],
+          "required": ["command_id", "status"],
           "additionalProperties": false
         },
         "default": []
@@ -89,10 +84,7 @@
         "additionalProperties": false
       }
     },
-    "required": [
-      "schema",
-      "host_enrollment_id"
-    ],
+    "required": ["schema", "host_enrollment_id"],
     "additionalProperties": false
   },
   "output": {
@@ -108,12 +100,7 @@
         "properties": {
           "host_status": {
             "type": "string",
-            "enum": [
-              "active",
-              "paused",
-              "suspended",
-              "revoked"
-            ]
+            "enum": ["active", "paused", "suspended", "revoked"]
           },
           "deny_generation": {
             "type": "object",
@@ -127,10 +114,7 @@
                 "minimum": 0
               }
             },
-            "required": [
-              "org",
-              "workspace"
-            ],
+            "required": ["org", "workspace"],
             "additionalProperties": false
           },
           "bundle_etag": {
@@ -178,11 +162,7 @@
                   "anyOf": [
                     {
                       "type": "string",
-                      "enum": [
-                        "next_step",
-                        "interrupt",
-                        "turn_boundary"
-                      ]
+                      "enum": ["next_step", "interrupt", "turn_boundary"]
                     },
                     {
                       "type": "null"
@@ -193,11 +173,7 @@
                   "anyOf": [
                     {
                       "type": "string",
-                      "enum": [
-                        "next_step",
-                        "interrupt",
-                        "turn_boundary"
-                      ]
+                      "enum": ["next_step", "interrupt", "turn_boundary"]
                     },
                     {
                       "type": "null"
@@ -265,10 +241,7 @@
         "additionalProperties": false
       }
     },
-    "required": [
-      "acknowledged",
-      "control"
-    ],
+    "required": ["acknowledged", "control"],
     "additionalProperties": false
   }
 }

@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "Parse a batch of uploaded markdown documents into draft AgentMemory records, classifying each by kind + weight. Read-only: returns editable drafts for review, persists nothing.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -42,10 +38,7 @@
               "description": "Raw markdown content of the document"
             }
           },
-          "required": [
-            "filename",
-            "content"
-          ],
+          "required": ["filename", "content"],
           "additionalProperties": false
         },
         "description": "The uploaded documents to extract memories from (max 25 per call)"
@@ -55,9 +48,7 @@
         "maxLength": 256
       }
     },
-    "required": [
-      "documents"
-    ],
+    "required": ["documents"],
     "additionalProperties": false
   },
   "output": {
@@ -77,11 +68,7 @@
             },
             "memoryClass": {
               "type": "string",
-              "enum": [
-                "OBSERVATION",
-                "RULE",
-                "FACT"
-              ],
+              "enum": ["OBSERVATION", "RULE", "FACT"],
               "default": "OBSERVATION"
             },
             "memoryKind": {
@@ -117,10 +104,7 @@
               "default": false
             }
           },
-          "required": [
-            "lesson",
-            "memoryKind"
-          ],
+          "required": ["lesson", "memoryKind"],
           "additionalProperties": false
         },
         "description": "Extracted, classified, editable draft memories across all documents"
@@ -141,20 +125,13 @@
               "type": "string"
             }
           },
-          "required": [
-            "filename",
-            "reason"
-          ],
+          "required": ["filename", "reason"],
           "additionalProperties": false
         },
         "description": "Documents that produced no drafts (empty, unparseable, or model error)"
       }
     },
-    "required": [
-      "drafts",
-      "documentCount",
-      "skipped"
-    ],
+    "required": ["drafts", "documentCount", "skipped"],
     "additionalProperties": false
   }
 }

@@ -3,11 +3,7 @@
   "domain": "connection",
   "description": "Delete a data source connection. Supports three modes: connection_only (revoke auth, keep data), data_only (delete Neo4j data, keep config), or full (delete everything).",
   "mode": "async",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -31,17 +27,11 @@
       },
       "mode": {
         "type": "string",
-        "enum": [
-          "connection_only",
-          "data_only",
-          "full"
-        ],
+        "enum": ["connection_only", "data_only", "full"],
         "default": "full"
       }
     },
-    "required": [
-      "connectionId"
-    ],
+    "required": ["connectionId"],
     "additionalProperties": false
   },
   "output": {
@@ -54,21 +44,13 @@
       },
       "mode": {
         "type": "string",
-        "enum": [
-          "connection_only",
-          "data_only",
-          "full"
-        ]
+        "enum": ["connection_only", "data_only", "full"]
       },
       "status": {
         "const": "running"
       }
     },
-    "required": [
-      "deletionJobId",
-      "mode",
-      "status"
-    ],
+    "required": ["deletionJobId", "mode", "status"],
     "additionalProperties": false
   }
 }

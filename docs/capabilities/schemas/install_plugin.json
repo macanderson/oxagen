@@ -3,11 +3,7 @@
   "domain": "plugin",
   "description": "Install a plugin into this workspace.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": true,
@@ -58,19 +54,10 @@
           },
           "authKind": {
             "type": "string",
-            "enum": [
-              "oauth",
-              "secret",
-              "none"
-            ]
+            "enum": ["oauth", "secret", "none"]
           }
         },
-        "required": [
-          "name",
-          "endpointUrl",
-          "transport",
-          "authKind"
-        ],
+        "required": ["name", "endpointUrl", "transport", "authKind"],
         "additionalProperties": false
       }
     },
@@ -85,17 +72,10 @@
       },
       "authKind": {
         "type": "string",
-        "enum": [
-          "oauth",
-          "secret",
-          "none"
-        ]
+        "enum": ["oauth", "secret", "none"]
       }
     },
-    "required": [
-      "orgListingId",
-      "authKind"
-    ],
+    "required": ["orgListingId", "authKind"],
     "additionalProperties": false
   }
 }

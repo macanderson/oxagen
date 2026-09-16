@@ -3,11 +3,7 @@
   "domain": "context",
   "description": "Get one context record: a published record by ctr_ id or lineage id with its versions and publishing PR, or an appended record by cta_ id with its provenance",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -31,9 +27,7 @@
         "description": "A ctr_ public id, a lineage id, or a cta_ public id"
       }
     },
-    "required": [
-      "recordId"
-    ],
+    "required": ["recordId"],
     "additionalProperties": false
   },
   "output": {
@@ -79,12 +73,7 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "enum": [
-                      "must",
-                      "should",
-                      "may",
-                      "info"
-                    ]
+                    "enum": ["must", "should", "may", "info"]
                   },
                   {
                     "type": "null"
@@ -95,10 +84,7 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "enum": [
-                      "require",
-                      "forbid"
-                    ]
+                    "enum": ["require", "forbid"]
                   },
                   {
                     "type": "null"
@@ -107,10 +93,7 @@
               },
               "sharingScope": {
                 "type": "string",
-                "enum": [
-                  "repository",
-                  "workspace"
-                ]
+                "enum": ["repository", "workspace"]
               },
               "statement": {
                 "anyOf": [
@@ -124,11 +107,7 @@
               },
               "status": {
                 "type": "string",
-                "enum": [
-                  "active",
-                  "retired",
-                  "superseded"
-                ]
+                "enum": ["active", "retired", "superseded"]
               },
               "version": {
                 "anyOf": [
@@ -263,13 +242,7 @@
             ]
           }
         },
-        "required": [
-          "source",
-          "record",
-          "versions",
-          "proposalId",
-          "prUrl"
-        ],
+        "required": ["source", "record", "versions", "proposalId", "prUrl"],
         "additionalProperties": false
       },
       {
@@ -304,10 +277,7 @@
               },
               "sharingScope": {
                 "type": "string",
-                "enum": [
-                  "repository",
-                  "workspace"
-                ]
+                "enum": ["repository", "workspace"]
               },
               "recordHash": {
                 "type": "string"
@@ -353,10 +323,7 @@
             "additionalProperties": false
           }
         },
-        "required": [
-          "source",
-          "record"
-        ],
+        "required": ["source", "record"],
         "additionalProperties": false
       }
     ]

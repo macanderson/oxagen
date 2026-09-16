@@ -3,10 +3,7 @@
   "domain": "conversation",
   "description": "Post a message to a conversation",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["api", "mcp"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -30,9 +27,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "conversation_id"
-    ],
+    "required": ["conversation_id"],
     "additionalProperties": false
   },
   "output": {
@@ -49,11 +44,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "message_id",
-      "created_at",
-      "author"
-    ],
+    "required": ["message_id", "created_at", "author"],
     "additionalProperties": false
   }
 }

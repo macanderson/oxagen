@@ -3,11 +3,7 @@
   "domain": "schema",
   "description": "Structural diff of two versions: added/removed/changed schemas, labels, relationship types, properties.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "cli"
-  ],
+  "surfaces": ["api", "mcp", "cli"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -33,10 +29,7 @@
         "minLength": 1
       }
     },
-    "required": [
-      "fromVersionId",
-      "toVersionId"
-    ],
+    "required": ["fromVersionId", "toVersionId"],
     "additionalProperties": false
   },
   "output": {
@@ -67,10 +60,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "schemaName",
-            "labelName"
-          ],
+          "required": ["schemaName", "labelName"],
           "additionalProperties": false
         }
       },
@@ -86,10 +76,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "schemaName",
-            "labelName"
-          ],
+          "required": ["schemaName", "labelName"],
           "additionalProperties": false
         }
       },
@@ -111,11 +98,7 @@
               }
             }
           },
-          "required": [
-            "schemaName",
-            "labelName",
-            "changes"
-          ],
+          "required": ["schemaName", "labelName", "changes"],
           "additionalProperties": false
         }
       },
@@ -131,10 +114,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "schemaName",
-            "relationshipTypeName"
-          ],
+          "required": ["schemaName", "relationshipTypeName"],
           "additionalProperties": false
         }
       },
@@ -150,10 +130,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "schemaName",
-            "relationshipTypeName"
-          ],
+          "required": ["schemaName", "relationshipTypeName"],
           "additionalProperties": false
         }
       },
@@ -175,11 +152,7 @@
               }
             }
           },
-          "required": [
-            "schemaName",
-            "relationshipTypeName",
-            "changes"
-          ],
+          "required": ["schemaName", "relationshipTypeName", "changes"],
           "additionalProperties": false
         }
       },
@@ -195,10 +168,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "ownerName",
-            "key"
-          ],
+          "required": ["ownerName", "key"],
           "additionalProperties": false
         }
       },
@@ -214,10 +184,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "ownerName",
-            "key"
-          ],
+          "required": ["ownerName", "key"],
           "additionalProperties": false
         }
       },
@@ -239,11 +206,7 @@
               }
             }
           },
-          "required": [
-            "ownerName",
-            "key",
-            "changes"
-          ],
+          "required": ["ownerName", "key", "changes"],
           "additionalProperties": false
         }
       }

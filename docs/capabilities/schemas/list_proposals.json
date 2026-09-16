@@ -3,10 +3,7 @@
   "domain": "context",
   "description": "List the workspace's record proposals with their support and Context PR state, newest first, optionally narrowed to one status or lineage",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["api", "mcp"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -82,21 +79,13 @@
             },
             "force": {
               "type": "string",
-              "enum": [
-                "must",
-                "should",
-                "may",
-                "info"
-              ]
+              "enum": ["must", "should", "may", "info"]
             },
             "constraintEffect": {
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": [
-                    "require",
-                    "forbid"
-                  ]
+                  "enum": ["require", "forbid"]
                 },
                 {
                   "type": "null"
@@ -105,10 +94,7 @@
             },
             "sharingScope": {
               "type": "string",
-              "enum": [
-                "repository",
-                "workspace"
-              ]
+              "enum": ["repository", "workspace"]
             },
             "statement": {
               "type": "string"
@@ -147,12 +133,7 @@
                   }
                 }
               },
-              "required": [
-                "runs",
-                "agents",
-                "recordIds",
-                "evidenceLinks"
-              ],
+              "required": ["runs", "agents", "recordIds", "evidenceLinks"],
               "additionalProperties": false
             },
             "status": {
@@ -186,12 +167,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "number",
-                    "url",
-                    "repository",
-                    "branch"
-                  ],
+                  "required": ["number", "url", "repository", "branch"],
                   "additionalProperties": false
                 },
                 {
@@ -211,10 +187,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "passed",
-                    "total"
-                  ],
+                  "required": ["passed", "total"],
                   "additionalProperties": false
                 },
                 {
@@ -254,10 +227,7 @@
         "minimum": 0
       }
     },
-    "required": [
-      "proposals",
-      "total"
-    ],
+    "required": ["proposals", "total"],
     "additionalProperties": false
   }
 }

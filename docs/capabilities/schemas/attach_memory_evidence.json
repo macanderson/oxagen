@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "Attach supporting or refuting evidence to a memory, adjusting its confidence and refreshing the decay clock.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -53,11 +49,7 @@
         "default": false
       }
     },
-    "required": [
-      "memoryId",
-      "sourceKind",
-      "strength"
-    ],
+    "required": ["memoryId", "sourceKind", "strength"],
     "additionalProperties": false
   },
   "output": {
@@ -71,10 +63,7 @@
         "type": "number"
       }
     },
-    "required": [
-      "evidenceId",
-      "confidenceScore"
-    ],
+    "required": ["evidenceId", "confidenceScore"],
     "additionalProperties": false
   }
 }

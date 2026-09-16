@@ -3,11 +3,7 @@
   "domain": "plugin",
   "description": "Soft-delete a plugin listing from this workspace and remove all dependent MCP server rows.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "destructive",
   "agent": {
     "requiresApproval": true,
@@ -28,9 +24,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "orgListingId"
-    ],
+    "required": ["orgListingId"],
     "additionalProperties": false
   },
   "output": {
@@ -41,9 +35,7 @@
         "type": "boolean"
       }
     },
-    "required": [
-      "ok"
-    ],
+    "required": ["ok"],
     "additionalProperties": false
   }
 }

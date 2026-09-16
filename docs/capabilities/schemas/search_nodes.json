@@ -3,12 +3,7 @@
   "domain": "graph",
   "description": "Fuzzy search customer-context graph nodes by displayName and description, optionally filtered by label.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent",
-    "cli"
-  ],
+  "surfaces": ["api", "mcp", "agent", "cli"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -16,15 +11,9 @@
     "category": "graph"
   },
   "chain": {
-    "produces": [
-      "graph.nodeId"
-    ],
-    "consumes": [
-      "query"
-    ],
-    "chainHints": [
-      "get_node"
-    ]
+    "produces": ["graph.nodeId"],
+    "consumes": ["query"],
+    "chainHints": ["get_node"]
   },
   "render": {
     "componentId": "graph-node-list-card"
@@ -52,9 +41,7 @@
         "default": 10
       }
     },
-    "required": [
-      "query"
-    ],
+    "required": ["query"],
     "additionalProperties": false
   },
   "output": {
@@ -101,9 +88,7 @@
         }
       }
     },
-    "required": [
-      "nodes"
-    ],
+    "required": ["nodes"],
     "additionalProperties": false
   }
 }

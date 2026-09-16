@@ -3,9 +3,7 @@
   "domain": "run",
   "description": "Queue a signed, offline-verifiable evidence bundle for one sealed run: frame envelopes as NDJSON, the Merkle root, an attestation, the verifying key id and a verifier script.",
   "mode": "async",
-  "surfaces": [
-    "api"
-  ],
+  "surfaces": ["api"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": false,
@@ -26,9 +24,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "runId"
-    ],
+    "required": ["runId"],
     "additionalProperties": false
   },
   "output": {
@@ -42,10 +38,7 @@
         "const": "queued"
       }
     },
-    "required": [
-      "exportId",
-      "status"
-    ],
+    "required": ["exportId", "status"],
     "additionalProperties": false
   }
 }

@@ -1,5 +1,5 @@
 /**
- * The five auto-approval rule handlers against Postgres (ADR-068; issue
+ * The five auto-approval rule handlers against Postgres (ADR-069; issue
  * #2970 §8). Runs in the CI Postgres job and locally with DATABASE_URL set;
  * skipped otherwise.
  *

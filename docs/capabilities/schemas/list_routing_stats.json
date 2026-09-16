@@ -3,11 +3,7 @@
   "domain": "router",
   "description": "List observed market-router outcomes per (task class, model) — samples, verified-success rate, average cost and latency — over a window, plus a derived per-class summary of the cheapest model currently clearing the verified-success bar. The Pareto-curve read.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "cli"
-  ],
+  "surfaces": ["api", "mcp", "cli"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -164,19 +160,11 @@
             "type": "number"
           }
         },
-        "required": [
-          "windowDays",
-          "minSamples",
-          "successThreshold"
-        ],
+        "required": ["windowDays", "minSamples", "successThreshold"],
         "additionalProperties": false
       }
     },
-    "required": [
-      "rows",
-      "summary",
-      "window"
-    ],
+    "required": ["rows", "summary", "window"],
     "additionalProperties": false
   }
 }

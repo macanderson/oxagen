@@ -3,11 +3,7 @@
   "domain": "conversation",
   "description": "List a user's conversations in a workspace, filtered by active or archived state, newest first, keyset-paginated",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -15,9 +11,7 @@
     "category": "conversation"
   },
   "chain": {
-    "produces": [
-      "conversation.id"
-    ],
+    "produces": ["conversation.id"],
     "consumes": [],
     "chainHints": []
   },
@@ -30,10 +24,7 @@
     "properties": {
       "filter": {
         "type": "string",
-        "enum": [
-          "active",
-          "archived"
-        ],
+        "enum": ["active", "archived"],
         "default": "active"
       },
       "limit": {
@@ -120,10 +111,7 @@
         ]
       }
     },
-    "required": [
-      "conversations",
-      "nextCursor"
-    ],
+    "required": ["conversations", "nextCursor"],
     "additionalProperties": false
   }
 }

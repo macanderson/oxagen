@@ -3,11 +3,7 @@
   "domain": "connection",
   "description": "Create a new data source connection for a workspace. Credentials are encrypted before storage.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -48,11 +44,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "connectorId",
-      "displayName",
-      "authCredential"
-    ],
+    "required": ["connectorId", "displayName", "authCredential"],
     "additionalProperties": false
   },
   "output": {

@@ -3,11 +3,7 @@
   "domain": "workspace",
   "description": "Read the workspace-level model defaults (text tier and model)",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -34,11 +30,7 @@
         "anyOf": [
           {
             "type": "string",
-            "enum": [
-              "fast",
-              "balanced",
-              "precise"
-            ]
+            "enum": ["fast", "balanced", "precise"]
           },
           {
             "type": "null"
@@ -56,10 +48,7 @@
         ]
       }
     },
-    "required": [
-      "defaultTextTier",
-      "defaultTextModel"
-    ],
+    "required": ["defaultTextTier", "defaultTextModel"],
     "additionalProperties": false
   }
 }

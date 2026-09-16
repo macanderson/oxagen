@@ -3,10 +3,7 @@
   "domain": "onboarding",
   "description": "For one registered agent: the host enrolled for it, what that host last reported, and the first frame ingested from it, long-polled for up to waitMs.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["api", "mcp"],
   "sensitivity": "medium",
   "agent": null,
   "chain": {
@@ -29,9 +26,7 @@
         "default": 0
       }
     },
-    "required": [
-      "agentId"
-    ],
+    "required": ["agentId"],
     "additionalProperties": false
   },
   "output": {
@@ -108,10 +103,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "runId",
-              "receivedAt"
-            ],
+            "required": ["runId", "receivedAt"],
             "additionalProperties": false
           },
           {
@@ -120,12 +112,7 @@
         ]
       }
     },
-    "required": [
-      "agentId",
-      "agentKey",
-      "host",
-      "firstFrame"
-    ],
+    "required": ["agentId", "agentKey", "host", "firstFrame"],
     "additionalProperties": false
   }
 }

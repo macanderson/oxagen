@@ -3,11 +3,7 @@
   "domain": "context",
   "description": "Open a proposal on a lineage: the record it should become (kind, force, constraint effect, scope, statement), the rationale and the supporting runs, agents, records and evidence. Steers nothing until its Context PR merges.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -46,26 +42,15 @@
           },
           "force": {
             "type": "string",
-            "enum": [
-              "must",
-              "should",
-              "may",
-              "info"
-            ]
+            "enum": ["must", "should", "may", "info"]
           },
           "constraintEffect": {
             "type": "string",
-            "enum": [
-              "require",
-              "forbid"
-            ]
+            "enum": ["require", "forbid"]
           },
           "sharingScope": {
             "type": "string",
-            "enum": [
-              "repository",
-              "workspace"
-            ],
+            "enum": ["repository", "workspace"],
             "description": "Decides which repo the Context PR targets (spec §10.3 step 1)"
           },
           "statement": {
@@ -75,13 +60,7 @@
             "description": "The single-sentence claim"
           }
         },
-        "required": [
-          "lineageId",
-          "kind",
-          "force",
-          "sharingScope",
-          "statement"
-        ],
+        "required": ["lineageId", "kind", "force", "sharingScope", "statement"],
         "additionalProperties": false
       },
       "rationale": {
@@ -138,10 +117,7 @@
         "default": {}
       }
     },
-    "required": [
-      "record",
-      "rationale"
-    ],
+    "required": ["record", "rationale"],
     "additionalProperties": false
   },
   "output": {
@@ -158,11 +134,7 @@
         "const": "proposed"
       }
     },
-    "required": [
-      "proposalId",
-      "lineageId",
-      "status"
-    ],
+    "required": ["proposalId", "lineageId", "status"],
     "additionalProperties": false
   }
 }

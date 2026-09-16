@@ -2,7 +2,7 @@
  * Where a workspace's rule set lives, and the cache in front of it.
  *
  * `workspaces.settings.decisionRules` — the workspace settings JSONB. Both
- * clauses of the document live here (ADR-068 decision 2): the gate rules that
+ * clauses of the document live here (ADR-069 decision 2): the gate rules that
  * were already stored here, and the auto-approval rules `set_approval_rules`
  * writes. One store, one loader, one read on the decision path. The loader
  * shape stays the seam: moving the document to a versioned registry record is

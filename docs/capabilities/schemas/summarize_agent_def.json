@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "Generate (or refresh) a short, LLM-inferred plain-text summary of what an agent does, derived from its name, instructions, equipped tools, and triggers. The summary is cached against a checksum of the agent's current config: it is only regenerated when the config has changed since the last summary, or when `force` is set. Returns the summary and the checksum it was derived from.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -32,9 +28,7 @@
         "type": "boolean"
       }
     },
-    "required": [
-      "agentId"
-    ],
+    "required": ["agentId"],
     "additionalProperties": false
   },
   "output": {
@@ -54,11 +48,7 @@
         "description": "SHA-256 of the canonical version config this summary was derived from. Detects staleness on the next call."
       }
     },
-    "required": [
-      "agentId",
-      "summary",
-      "checksum"
-    ],
+    "required": ["agentId", "summary", "checksum"],
     "additionalProperties": false
   }
 }

@@ -3,12 +3,7 @@
   "domain": "schema",
   "description": "Create/update a node label on a schema within the draft version.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "cli",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "cli", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -120,19 +115,12 @@
               "type": "string"
             }
           },
-          "required": [
-            "key",
-            "dataType"
-          ],
+          "required": ["key", "dataType"],
           "additionalProperties": false
         }
       }
     },
-    "required": [
-      "schemaName",
-      "name",
-      "displayName"
-    ],
+    "required": ["schemaName", "name", "displayName"],
     "additionalProperties": false
   },
   "output": {
@@ -146,10 +134,7 @@
         "type": "boolean"
       }
     },
-    "required": [
-      "labelId",
-      "created"
-    ],
+    "required": ["labelId", "created"],
     "additionalProperties": false
   }
 }

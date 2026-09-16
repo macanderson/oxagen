@@ -3,12 +3,7 @@
   "domain": "ontology",
   "description": "Return the one-hop neighborhood of a node — directly connected nodes, optionally filtered by relationship type and direction. Customer-context only, org + workspace scoped. Read-only; no Cypher required.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent",
-    "cli"
-  ],
+  "surfaces": ["api", "mcp", "agent", "cli"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -37,11 +32,7 @@
       },
       "direction": {
         "type": "string",
-        "enum": [
-          "out",
-          "in",
-          "both"
-        ],
+        "enum": ["out", "in", "both"],
         "description": "Direction of neighbors to return relative to the node: 'out' for targets of outgoing edges, 'in' for sources of incoming edges, 'both' for either.",
         "default": "both"
       },
@@ -58,9 +49,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "nodeId"
-    ],
+    "required": ["nodeId"],
     "additionalProperties": false
   },
   "output": {
@@ -107,10 +96,7 @@
             },
             "direction": {
               "type": "string",
-              "enum": [
-                "out",
-                "in"
-              ],
+              "enum": ["out", "in"],
               "description": "'out' if the edge points from the node to this neighbor; 'in' if from the neighbor to the node"
             },
             "validFrom": {
@@ -175,12 +161,7 @@
         "description": "True when the result was capped by `limit` and more neighbors exist"
       }
     },
-    "required": [
-      "nodeId",
-      "found",
-      "neighbors",
-      "truncated"
-    ],
+    "required": ["nodeId", "found", "neighbors", "truncated"],
     "additionalProperties": false
   }
 }

@@ -3,11 +3,7 @@
   "domain": "org",
   "description": "Change a member's org role. Replaces the existing org role assignment in the IAM layer and updates the legacy org_users.role column. Blocked if demoting the last org owner. Audited as org.role_changed.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -35,10 +31,7 @@
         "description": "The new org role name (e.g. 'Admin', 'Member')"
       }
     },
-    "required": [
-      "targetUserId",
-      "newRole"
-    ],
+    "required": ["targetUserId", "newRole"],
     "additionalProperties": false
   },
   "output": {
@@ -68,13 +61,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "changed",
-      "targetUserId",
-      "orgId",
-      "previousRole",
-      "newRole"
-    ],
+    "required": ["changed", "targetUserId", "orgId", "previousRole", "newRole"],
     "additionalProperties": false
   }
 }

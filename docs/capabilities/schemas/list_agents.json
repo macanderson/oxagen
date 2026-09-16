@@ -3,10 +3,7 @@
   "domain": "agent",
   "description": "List the agent identities registered in this workspace with their principal, harness, operator, status, enrollment and credential counts, and the 30-day run, spend and incident figures the stores record.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["api", "mcp"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -68,12 +65,7 @@
             },
             "harness": {
               "type": "string",
-              "enum": [
-                "stella",
-                "claude-code",
-                "claude-agent-sdk",
-                "custom"
-              ]
+              "enum": ["stella", "claude-code", "claude-agent-sdk", "custom"]
             },
             "principalId": {
               "anyOf": [
@@ -97,12 +89,7 @@
             },
             "status": {
               "type": "string",
-              "enum": [
-                "unenrolled",
-                "enrolled",
-                "suspended",
-                "retired"
-              ]
+              "enum": ["unenrolled", "enrolled", "suspended", "retired"]
             },
             "tier": {
               "anyOf": [
@@ -150,11 +137,7 @@
                       ]
                     }
                   },
-                  "required": [
-                    "micros",
-                    "currency",
-                    "basis"
-                  ],
+                  "required": ["micros", "currency", "basis"],
                   "additionalProperties": false
                 },
                 {
@@ -269,11 +252,7 @@
         "additionalProperties": false
       }
     },
-    "required": [
-      "items",
-      "nextCursor",
-      "totals"
-    ],
+    "required": ["items", "nextCursor", "totals"],
     "additionalProperties": false
   }
 }

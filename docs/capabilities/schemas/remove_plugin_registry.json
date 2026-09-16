@@ -3,11 +3,7 @@
   "domain": "plugin",
   "description": "Remove a workspace MCP registry source (including the default — removes the default and promotes the most-recently-created remaining registry, if any).",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "destructive",
   "agent": {
     "requiresApproval": true,
@@ -28,9 +24,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "registryId"
-    ],
+    "required": ["registryId"],
     "additionalProperties": false
   },
   "output": {
@@ -51,10 +45,7 @@
         ]
       }
     },
-    "required": [
-      "ok",
-      "promotedId"
-    ],
+    "required": ["ok", "promotedId"],
     "additionalProperties": false
   }
 }

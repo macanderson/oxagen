@@ -3,9 +3,7 @@
   "domain": "tacho",
   "description": "Ingest a batch of hash-chained tacho/1.0 events from an enrolled host and return its control envelope.",
   "mode": "sync",
-  "surfaces": [
-    "api"
-  ],
+  "surfaces": ["api"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": false,
@@ -71,11 +69,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -158,11 +152,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -195,9 +185,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -426,11 +414,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -577,12 +561,7 @@
                     },
                     "session_outcome": {
                       "type": "string",
-                      "enum": [
-                        "completed",
-                        "aborted",
-                        "crashed",
-                        "unknown"
-                      ]
+                      "enum": ["completed", "aborted", "crashed", "unknown"]
                     },
                     "terminal_reason": {
                       "type": "string",
@@ -771,11 +750,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -858,11 +833,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -895,9 +866,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -1126,11 +1095,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -1277,12 +1242,7 @@
                     },
                     "session_outcome": {
                       "type": "string",
-                      "enum": [
-                        "completed",
-                        "aborted",
-                        "crashed",
-                        "unknown"
-                      ]
+                      "enum": ["completed", "aborted", "crashed", "unknown"]
                     },
                     "terminal_reason": {
                       "type": "string",
@@ -1593,11 +1553,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -1680,11 +1636,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -1717,9 +1669,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -1948,11 +1898,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -2067,12 +2013,7 @@
                     },
                     "policy_decision": {
                       "type": "string",
-                      "enum": [
-                        "allow",
-                        "deny",
-                        "ask",
-                        "defer"
-                      ]
+                      "enum": ["allow", "deny", "ask", "defer"]
                     },
                     "policy_rule": {
                       "type": "string",
@@ -2101,12 +2042,7 @@
                     },
                     "risk_grade": {
                       "type": "string",
-                      "enum": [
-                        "low",
-                        "medium",
-                        "high",
-                        "critical"
-                      ]
+                      "enum": ["low", "medium", "high", "critical"]
                     },
                     "bundle_version": {
                       "type": "integer",
@@ -2115,10 +2051,7 @@
                     },
                     "bundle_mode": {
                       "type": "string",
-                      "enum": [
-                        "observe",
-                        "enforce"
-                      ]
+                      "enum": ["observe", "enforce"]
                     },
                     "deny_generation_org": {
                       "type": "integer",
@@ -2221,11 +2154,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -2308,11 +2237,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -2345,9 +2270,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -2576,11 +2499,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -2759,11 +2678,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -2846,11 +2761,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -2883,9 +2794,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -3114,11 +3023,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -3205,12 +3110,7 @@
                     },
                     "tool_status": {
                       "type": "string",
-                      "enum": [
-                        "ok",
-                        "error",
-                        "rejected",
-                        "cancelled"
-                      ]
+                      "enum": ["ok", "error", "rejected", "cancelled"]
                     },
                     "tool_error_class": {
                       "type": "string",
@@ -3234,10 +3134,7 @@
                     },
                     "tool_decision": {
                       "type": "string",
-                      "enum": [
-                        "accept",
-                        "reject"
-                      ]
+                      "enum": ["accept", "reject"]
                     },
                     "tool_decision_source": {
                       "type": "string",
@@ -3305,12 +3202,7 @@
                     },
                     "policy_decision": {
                       "type": "string",
-                      "enum": [
-                        "allow",
-                        "deny",
-                        "ask",
-                        "defer"
-                      ]
+                      "enum": ["allow", "deny", "ask", "defer"]
                     },
                     "policy_rule": {
                       "type": "string",
@@ -3339,12 +3231,7 @@
                     },
                     "risk_grade": {
                       "type": "string",
-                      "enum": [
-                        "low",
-                        "medium",
-                        "high",
-                        "critical"
-                      ]
+                      "enum": ["low", "medium", "high", "critical"]
                     },
                     "bundle_version": {
                       "type": "integer",
@@ -3353,10 +3240,7 @@
                     },
                     "bundle_mode": {
                       "type": "string",
-                      "enum": [
-                        "observe",
-                        "enforce"
-                      ]
+                      "enum": ["observe", "enforce"]
                     },
                     "deny_generation_org": {
                       "type": "integer",
@@ -3459,11 +3343,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -3546,11 +3426,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -3583,9 +3459,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -3814,11 +3688,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -3905,12 +3775,7 @@
                     },
                     "tool_status": {
                       "type": "string",
-                      "enum": [
-                        "ok",
-                        "error",
-                        "rejected",
-                        "cancelled"
-                      ]
+                      "enum": ["ok", "error", "rejected", "cancelled"]
                     },
                     "tool_error_class": {
                       "type": "string",
@@ -3934,10 +3799,7 @@
                     },
                     "tool_decision": {
                       "type": "string",
-                      "enum": [
-                        "accept",
-                        "reject"
-                      ]
+                      "enum": ["accept", "reject"]
                     },
                     "tool_decision_source": {
                       "type": "string",
@@ -4065,11 +3927,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -4152,11 +4010,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -4189,9 +4043,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -4420,11 +4272,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -4511,12 +4359,7 @@
                     },
                     "tool_status": {
                       "type": "string",
-                      "enum": [
-                        "ok",
-                        "error",
-                        "rejected",
-                        "cancelled"
-                      ]
+                      "enum": ["ok", "error", "rejected", "cancelled"]
                     },
                     "tool_error_class": {
                       "type": "string",
@@ -4540,10 +4383,7 @@
                     },
                     "tool_decision": {
                       "type": "string",
-                      "enum": [
-                        "accept",
-                        "reject"
-                      ]
+                      "enum": ["accept", "reject"]
                     },
                     "tool_decision_source": {
                       "type": "string",
@@ -4671,11 +4511,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -4758,11 +4594,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -4795,9 +4627,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -5026,11 +4856,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -5117,12 +4943,7 @@
                     },
                     "tool_status": {
                       "type": "string",
-                      "enum": [
-                        "ok",
-                        "error",
-                        "rejected",
-                        "cancelled"
-                      ]
+                      "enum": ["ok", "error", "rejected", "cancelled"]
                     },
                     "tool_error_class": {
                       "type": "string",
@@ -5146,10 +4967,7 @@
                     },
                     "tool_decision": {
                       "type": "string",
-                      "enum": [
-                        "accept",
-                        "reject"
-                      ]
+                      "enum": ["accept", "reject"]
                     },
                     "tool_decision_source": {
                       "type": "string",
@@ -5277,11 +5095,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -5364,11 +5178,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -5401,9 +5211,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -5632,11 +5440,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -5723,12 +5527,7 @@
                     },
                     "tool_status": {
                       "type": "string",
-                      "enum": [
-                        "ok",
-                        "error",
-                        "rejected",
-                        "cancelled"
-                      ]
+                      "enum": ["ok", "error", "rejected", "cancelled"]
                     },
                     "tool_error_class": {
                       "type": "string",
@@ -5752,10 +5551,7 @@
                     },
                     "tool_decision": {
                       "type": "string",
-                      "enum": [
-                        "accept",
-                        "reject"
-                      ]
+                      "enum": ["accept", "reject"]
                     },
                     "tool_decision_source": {
                       "type": "string",
@@ -5883,11 +5679,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -5970,11 +5762,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -6007,9 +5795,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -6238,11 +6024,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -6565,11 +6347,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -6652,11 +6430,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -6689,9 +6463,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -6920,11 +6692,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -7011,12 +6779,7 @@
                     },
                     "tool_status": {
                       "type": "string",
-                      "enum": [
-                        "ok",
-                        "error",
-                        "rejected",
-                        "cancelled"
-                      ]
+                      "enum": ["ok", "error", "rejected", "cancelled"]
                     },
                     "tool_error_class": {
                       "type": "string",
@@ -7040,10 +6803,7 @@
                     },
                     "tool_decision": {
                       "type": "string",
-                      "enum": [
-                        "accept",
-                        "reject"
-                      ]
+                      "enum": ["accept", "reject"]
                     },
                     "tool_decision_source": {
                       "type": "string",
@@ -7111,12 +6871,7 @@
                     },
                     "policy_decision": {
                       "type": "string",
-                      "enum": [
-                        "allow",
-                        "deny",
-                        "ask",
-                        "defer"
-                      ]
+                      "enum": ["allow", "deny", "ask", "defer"]
                     },
                     "policy_rule": {
                       "type": "string",
@@ -7145,12 +6900,7 @@
                     },
                     "risk_grade": {
                       "type": "string",
-                      "enum": [
-                        "low",
-                        "medium",
-                        "high",
-                        "critical"
-                      ]
+                      "enum": ["low", "medium", "high", "critical"]
                     },
                     "bundle_version": {
                       "type": "integer",
@@ -7159,10 +6909,7 @@
                     },
                     "bundle_mode": {
                       "type": "string",
-                      "enum": [
-                        "observe",
-                        "enforce"
-                      ]
+                      "enum": ["observe", "enforce"]
                     },
                     "deny_generation_org": {
                       "type": "integer",
@@ -7265,11 +7012,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -7352,11 +7095,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -7389,9 +7128,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -7620,11 +7357,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -7711,12 +7444,7 @@
                     },
                     "tool_status": {
                       "type": "string",
-                      "enum": [
-                        "ok",
-                        "error",
-                        "rejected",
-                        "cancelled"
-                      ]
+                      "enum": ["ok", "error", "rejected", "cancelled"]
                     },
                     "tool_error_class": {
                       "type": "string",
@@ -7740,10 +7468,7 @@
                     },
                     "tool_decision": {
                       "type": "string",
-                      "enum": [
-                        "accept",
-                        "reject"
-                      ]
+                      "enum": ["accept", "reject"]
                     },
                     "tool_decision_source": {
                       "type": "string",
@@ -7811,12 +7536,7 @@
                     },
                     "policy_decision": {
                       "type": "string",
-                      "enum": [
-                        "allow",
-                        "deny",
-                        "ask",
-                        "defer"
-                      ]
+                      "enum": ["allow", "deny", "ask", "defer"]
                     },
                     "policy_rule": {
                       "type": "string",
@@ -7845,12 +7565,7 @@
                     },
                     "risk_grade": {
                       "type": "string",
-                      "enum": [
-                        "low",
-                        "medium",
-                        "high",
-                        "critical"
-                      ]
+                      "enum": ["low", "medium", "high", "critical"]
                     },
                     "bundle_version": {
                       "type": "integer",
@@ -7859,10 +7574,7 @@
                     },
                     "bundle_mode": {
                       "type": "string",
-                      "enum": [
-                        "observe",
-                        "enforce"
-                      ]
+                      "enum": ["observe", "enforce"]
                     },
                     "deny_generation_org": {
                       "type": "integer",
@@ -7965,11 +7677,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -8052,11 +7760,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -8089,9 +7793,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -8320,11 +8022,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -8411,12 +8109,7 @@
                     },
                     "tool_status": {
                       "type": "string",
-                      "enum": [
-                        "ok",
-                        "error",
-                        "rejected",
-                        "cancelled"
-                      ]
+                      "enum": ["ok", "error", "rejected", "cancelled"]
                     },
                     "tool_error_class": {
                       "type": "string",
@@ -8440,10 +8133,7 @@
                     },
                     "tool_decision": {
                       "type": "string",
-                      "enum": [
-                        "accept",
-                        "reject"
-                      ]
+                      "enum": ["accept", "reject"]
                     },
                     "tool_decision_source": {
                       "type": "string",
@@ -8511,12 +8201,7 @@
                     },
                     "policy_decision": {
                       "type": "string",
-                      "enum": [
-                        "allow",
-                        "deny",
-                        "ask",
-                        "defer"
-                      ]
+                      "enum": ["allow", "deny", "ask", "defer"]
                     },
                     "policy_rule": {
                       "type": "string",
@@ -8545,12 +8230,7 @@
                     },
                     "risk_grade": {
                       "type": "string",
-                      "enum": [
-                        "low",
-                        "medium",
-                        "high",
-                        "critical"
-                      ]
+                      "enum": ["low", "medium", "high", "critical"]
                     },
                     "bundle_version": {
                       "type": "integer",
@@ -8559,10 +8239,7 @@
                     },
                     "bundle_mode": {
                       "type": "string",
-                      "enum": [
-                        "observe",
-                        "enforce"
-                      ]
+                      "enum": ["observe", "enforce"]
                     },
                     "deny_generation_org": {
                       "type": "integer",
@@ -8665,11 +8342,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -8752,11 +8425,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -8789,9 +8458,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -9020,11 +8687,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -9049,12 +8712,7 @@
                   "properties": {
                     "policy_decision": {
                       "type": "string",
-                      "enum": [
-                        "allow",
-                        "deny",
-                        "ask",
-                        "defer"
-                      ]
+                      "enum": ["allow", "deny", "ask", "defer"]
                     },
                     "policy_rule": {
                       "type": "string",
@@ -9083,12 +8741,7 @@
                     },
                     "risk_grade": {
                       "type": "string",
-                      "enum": [
-                        "low",
-                        "medium",
-                        "high",
-                        "critical"
-                      ]
+                      "enum": ["low", "medium", "high", "critical"]
                     },
                     "bundle_version": {
                       "type": "integer",
@@ -9097,10 +8750,7 @@
                     },
                     "bundle_mode": {
                       "type": "string",
-                      "enum": [
-                        "observe",
-                        "enforce"
-                      ]
+                      "enum": ["observe", "enforce"]
                     },
                     "deny_generation_org": {
                       "type": "integer",
@@ -9203,11 +8853,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -9290,11 +8936,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -9327,9 +8969,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -9558,11 +9198,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -9649,12 +9285,7 @@
                     },
                     "tool_status": {
                       "type": "string",
-                      "enum": [
-                        "ok",
-                        "error",
-                        "rejected",
-                        "cancelled"
-                      ]
+                      "enum": ["ok", "error", "rejected", "cancelled"]
                     },
                     "tool_error_class": {
                       "type": "string",
@@ -9678,10 +9309,7 @@
                     },
                     "tool_decision": {
                       "type": "string",
-                      "enum": [
-                        "accept",
-                        "reject"
-                      ]
+                      "enum": ["accept", "reject"]
                     },
                     "tool_decision_source": {
                       "type": "string",
@@ -9749,12 +9377,7 @@
                     },
                     "policy_decision": {
                       "type": "string",
-                      "enum": [
-                        "allow",
-                        "deny",
-                        "ask",
-                        "defer"
-                      ]
+                      "enum": ["allow", "deny", "ask", "defer"]
                     },
                     "policy_rule": {
                       "type": "string",
@@ -9783,12 +9406,7 @@
                     },
                     "risk_grade": {
                       "type": "string",
-                      "enum": [
-                        "low",
-                        "medium",
-                        "high",
-                        "critical"
-                      ]
+                      "enum": ["low", "medium", "high", "critical"]
                     },
                     "bundle_version": {
                       "type": "integer",
@@ -9797,10 +9415,7 @@
                     },
                     "bundle_mode": {
                       "type": "string",
-                      "enum": [
-                        "observe",
-                        "enforce"
-                      ]
+                      "enum": ["observe", "enforce"]
                     },
                     "deny_generation_org": {
                       "type": "integer",
@@ -9903,11 +9518,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -9990,11 +9601,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -10027,9 +9634,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -10258,11 +9863,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -10349,12 +9950,7 @@
                     },
                     "tool_status": {
                       "type": "string",
-                      "enum": [
-                        "ok",
-                        "error",
-                        "rejected",
-                        "cancelled"
-                      ]
+                      "enum": ["ok", "error", "rejected", "cancelled"]
                     },
                     "tool_error_class": {
                       "type": "string",
@@ -10378,10 +9974,7 @@
                     },
                     "tool_decision": {
                       "type": "string",
-                      "enum": [
-                        "accept",
-                        "reject"
-                      ]
+                      "enum": ["accept", "reject"]
                     },
                     "tool_decision_source": {
                       "type": "string",
@@ -10449,12 +10042,7 @@
                     },
                     "policy_decision": {
                       "type": "string",
-                      "enum": [
-                        "allow",
-                        "deny",
-                        "ask",
-                        "defer"
-                      ]
+                      "enum": ["allow", "deny", "ask", "defer"]
                     },
                     "policy_rule": {
                       "type": "string",
@@ -10483,12 +10071,7 @@
                     },
                     "risk_grade": {
                       "type": "string",
-                      "enum": [
-                        "low",
-                        "medium",
-                        "high",
-                        "critical"
-                      ]
+                      "enum": ["low", "medium", "high", "critical"]
                     },
                     "bundle_version": {
                       "type": "integer",
@@ -10497,10 +10080,7 @@
                     },
                     "bundle_mode": {
                       "type": "string",
-                      "enum": [
-                        "observe",
-                        "enforce"
-                      ]
+                      "enum": ["observe", "enforce"]
                     },
                     "deny_generation_org": {
                       "type": "integer",
@@ -10603,11 +10183,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -10690,11 +10266,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -10727,9 +10299,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -10958,11 +10528,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -11095,11 +10661,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -11182,11 +10744,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -11219,9 +10777,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -11450,11 +11006,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -11527,12 +11079,7 @@
                     },
                     "tool_status": {
                       "type": "string",
-                      "enum": [
-                        "ok",
-                        "error",
-                        "rejected",
-                        "cancelled"
-                      ]
+                      "enum": ["ok", "error", "rejected", "cancelled"]
                     }
                   },
                   "additionalProperties": false
@@ -11596,11 +11143,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -11683,11 +11226,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -11720,9 +11259,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -11951,11 +11488,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -12511,11 +12044,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -12598,11 +12127,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -12635,9 +12160,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -12866,11 +12389,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -13026,11 +12545,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -13113,11 +12628,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -13150,9 +12661,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -13381,11 +12890,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -13541,11 +13046,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -13628,11 +13129,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -13665,9 +13162,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -13896,11 +13391,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -14047,12 +13538,7 @@
                     },
                     "session_outcome": {
                       "type": "string",
-                      "enum": [
-                        "completed",
-                        "aborted",
-                        "crashed",
-                        "unknown"
-                      ]
+                      "enum": ["completed", "aborted", "crashed", "unknown"]
                     },
                     "terminal_reason": {
                       "type": "string",
@@ -14363,11 +13849,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -14450,11 +13932,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -14487,9 +13965,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -14718,11 +14194,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -15021,11 +14493,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -15108,11 +14576,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -15145,9 +14609,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -15376,11 +14838,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -15608,11 +15066,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -15695,11 +15149,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -15732,9 +15182,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -15963,11 +15411,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -16195,11 +15639,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -16282,11 +15722,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -16319,9 +15755,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -16550,11 +15984,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -16790,11 +16220,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -16877,11 +16303,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -16914,9 +16336,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -17145,11 +16565,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -17296,12 +16712,7 @@
                     },
                     "session_outcome": {
                       "type": "string",
-                      "enum": [
-                        "completed",
-                        "aborted",
-                        "crashed",
-                        "unknown"
-                      ]
+                      "enum": ["completed", "aborted", "crashed", "unknown"]
                     },
                     "terminal_reason": {
                       "type": "string",
@@ -17478,11 +16889,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -17565,11 +16972,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -17602,9 +17005,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -17833,11 +17234,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -18242,11 +17639,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -18329,11 +17722,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -18366,9 +17755,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -18597,11 +17984,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -18748,12 +18131,7 @@
                     },
                     "session_outcome": {
                       "type": "string",
-                      "enum": [
-                        "completed",
-                        "aborted",
-                        "crashed",
-                        "unknown"
-                      ]
+                      "enum": ["completed", "aborted", "crashed", "unknown"]
                     },
                     "terminal_reason": {
                       "type": "string",
@@ -18834,11 +18212,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -18921,11 +18295,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -18958,9 +18328,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -19189,11 +18557,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -19340,12 +18704,7 @@
                     },
                     "session_outcome": {
                       "type": "string",
-                      "enum": [
-                        "completed",
-                        "aborted",
-                        "crashed",
-                        "unknown"
-                      ]
+                      "enum": ["completed", "aborted", "crashed", "unknown"]
                     },
                     "terminal_reason": {
                       "type": "string",
@@ -19426,11 +18785,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -19513,11 +18868,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -19550,9 +18901,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -19781,11 +19130,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -19932,12 +19277,7 @@
                     },
                     "session_outcome": {
                       "type": "string",
-                      "enum": [
-                        "completed",
-                        "aborted",
-                        "crashed",
-                        "unknown"
-                      ]
+                      "enum": ["completed", "aborted", "crashed", "unknown"]
                     },
                     "terminal_reason": {
                       "type": "string",
@@ -20018,11 +19358,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -20105,11 +19441,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -20142,9 +19474,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -20373,11 +19703,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -20524,12 +19850,7 @@
                     },
                     "session_outcome": {
                       "type": "string",
-                      "enum": [
-                        "completed",
-                        "aborted",
-                        "crashed",
-                        "unknown"
-                      ]
+                      "enum": ["completed", "aborted", "crashed", "unknown"]
                     },
                     "terminal_reason": {
                       "type": "string",
@@ -20610,11 +19931,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -20697,11 +20014,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -20734,9 +20047,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -20965,11 +20276,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -21116,12 +20423,7 @@
                     },
                     "session_outcome": {
                       "type": "string",
-                      "enum": [
-                        "completed",
-                        "aborted",
-                        "crashed",
-                        "unknown"
-                      ]
+                      "enum": ["completed", "aborted", "crashed", "unknown"]
                     },
                     "terminal_reason": {
                       "type": "string",
@@ -21202,11 +20504,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -21289,11 +20587,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -21326,9 +20620,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -21557,11 +20849,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -21708,12 +20996,7 @@
                     },
                     "session_outcome": {
                       "type": "string",
-                      "enum": [
-                        "completed",
-                        "aborted",
-                        "crashed",
-                        "unknown"
-                      ]
+                      "enum": ["completed", "aborted", "crashed", "unknown"]
                     },
                     "terminal_reason": {
                       "type": "string",
@@ -21794,11 +21077,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -21881,11 +21160,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -21918,9 +21193,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -22149,11 +21422,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -22300,12 +21569,7 @@
                     },
                     "session_outcome": {
                       "type": "string",
-                      "enum": [
-                        "completed",
-                        "aborted",
-                        "crashed",
-                        "unknown"
-                      ]
+                      "enum": ["completed", "aborted", "crashed", "unknown"]
                     },
                     "terminal_reason": {
                       "type": "string",
@@ -22616,11 +21880,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -22703,11 +21963,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -22740,9 +21996,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -22971,11 +22225,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -23122,12 +22372,7 @@
                     },
                     "session_outcome": {
                       "type": "string",
-                      "enum": [
-                        "completed",
-                        "aborted",
-                        "crashed",
-                        "unknown"
-                      ]
+                      "enum": ["completed", "aborted", "crashed", "unknown"]
                     },
                     "terminal_reason": {
                       "type": "string",
@@ -23208,11 +22453,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -23295,11 +22536,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -23332,9 +22569,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -23563,11 +22798,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -23714,12 +22945,7 @@
                     },
                     "session_outcome": {
                       "type": "string",
-                      "enum": [
-                        "completed",
-                        "aborted",
-                        "crashed",
-                        "unknown"
-                      ]
+                      "enum": ["completed", "aborted", "crashed", "unknown"]
                     },
                     "terminal_reason": {
                       "type": "string",
@@ -23890,11 +23116,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -23977,11 +23199,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -24014,9 +23232,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -24245,11 +23461,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -24477,11 +23689,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -24564,11 +23772,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -24601,9 +23805,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -24832,11 +24034,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -25064,11 +24262,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -25151,11 +24345,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -25188,9 +24378,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -25419,11 +24607,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -25746,11 +24930,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -25833,11 +25013,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -25870,9 +25046,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -26101,11 +25275,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -26428,11 +25598,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -26515,11 +25681,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -26552,9 +25714,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -26783,11 +25943,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -27039,11 +26195,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -27126,11 +26278,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -27163,9 +26311,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -27394,11 +26540,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -27697,11 +26839,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -27784,11 +26922,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -27821,9 +26955,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -28052,11 +27184,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -28212,11 +27340,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -28299,11 +27423,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -28336,9 +27456,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -28567,11 +27685,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -28596,12 +27710,7 @@
                   "properties": {
                     "policy_decision": {
                       "type": "string",
-                      "enum": [
-                        "allow",
-                        "deny",
-                        "ask",
-                        "defer"
-                      ]
+                      "enum": ["allow", "deny", "ask", "defer"]
                     },
                     "policy_rule": {
                       "type": "string",
@@ -28630,12 +27739,7 @@
                     },
                     "risk_grade": {
                       "type": "string",
-                      "enum": [
-                        "low",
-                        "medium",
-                        "high",
-                        "critical"
-                      ]
+                      "enum": ["low", "medium", "high", "critical"]
                     },
                     "bundle_version": {
                       "type": "integer",
@@ -28644,10 +27748,7 @@
                     },
                     "bundle_mode": {
                       "type": "string",
-                      "enum": [
-                        "observe",
-                        "enforce"
-                      ]
+                      "enum": ["observe", "enforce"]
                     },
                     "deny_generation_org": {
                       "type": "integer",
@@ -28821,11 +27922,7 @@
                 },
                 "fidelity": {
                   "type": "string",
-                  "enum": [
-                    "sdk",
-                    "ambient",
-                    "proxy"
-                  ]
+                  "enum": ["sdk", "ambient", "proxy"]
                 },
                 "source": {
                   "type": "string",
@@ -28908,11 +28005,7 @@
                     },
                     "enforcement_tier": {
                       "type": "string",
-                      "enum": [
-                        "gateway",
-                        "harness",
-                        "observe"
-                      ]
+                      "enum": ["gateway", "harness", "observe"]
                     }
                   },
                   "required": [
@@ -28945,9 +28038,7 @@
                       "maxLength": 512
                     }
                   },
-                  "required": [
-                    "subagent_id"
-                  ],
+                  "required": ["subagent_id"],
                   "additionalProperties": false
                 },
                 "turn": {
@@ -29176,11 +28267,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "path",
-                          "reason",
-                          "original_digest"
-                        ],
+                        "required": ["path", "reason", "original_digest"],
                         "additionalProperties": false
                       },
                       "default": []
@@ -29246,11 +28333,7 @@
               "maxLength": 1398104
             }
           },
-          "required": [
-            "event_id_idem",
-            "content_type",
-            "bytes_base64"
-          ],
+          "required": ["event_id_idem", "content_type", "bytes_base64"],
           "additionalProperties": false
         }
       },
@@ -29286,11 +28369,7 @@
         "additionalProperties": false
       }
     },
-    "required": [
-      "schema",
-      "host_enrollment_id",
-      "events"
-    ],
+    "required": ["schema", "host_enrollment_id", "events"],
     "additionalProperties": false
   },
   "output": {
@@ -29326,11 +28405,7 @@
               "maxLength": 256
             }
           },
-          "required": [
-            "session_uuid",
-            "at_seq",
-            "reason"
-          ],
+          "required": ["session_uuid", "at_seq", "reason"],
           "additionalProperties": false
         }
       },
@@ -29353,10 +28428,7 @@
               ]
             }
           },
-          "required": [
-            "event_id_idem",
-            "reason"
-          ],
+          "required": ["event_id_idem", "reason"],
           "additionalProperties": false
         }
       },
@@ -29365,12 +28437,7 @@
         "properties": {
           "host_status": {
             "type": "string",
-            "enum": [
-              "active",
-              "paused",
-              "suspended",
-              "revoked"
-            ]
+            "enum": ["active", "paused", "suspended", "revoked"]
           },
           "deny_generation": {
             "type": "object",
@@ -29384,10 +28451,7 @@
                 "minimum": 0
               }
             },
-            "required": [
-              "org",
-              "workspace"
-            ],
+            "required": ["org", "workspace"],
             "additionalProperties": false
           },
           "bundle_etag": {
@@ -29435,11 +28499,7 @@
                   "anyOf": [
                     {
                       "type": "string",
-                      "enum": [
-                        "next_step",
-                        "interrupt",
-                        "turn_boundary"
-                      ]
+                      "enum": ["next_step", "interrupt", "turn_boundary"]
                     },
                     {
                       "type": "null"
@@ -29450,11 +28510,7 @@
                   "anyOf": [
                     {
                       "type": "string",
-                      "enum": [
-                        "next_step",
-                        "interrupt",
-                        "turn_boundary"
-                      ]
+                      "enum": ["next_step", "interrupt", "turn_boundary"]
                     },
                     {
                       "type": "null"

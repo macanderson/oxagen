@@ -3,11 +3,7 @@
   "domain": "environment",
   "description": "Soft-delete a workspace environment. The default environment cannot be deleted — promote another first.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -29,9 +25,7 @@
         "minLength": 1
       }
     },
-    "required": [
-      "environmentId"
-    ],
+    "required": ["environmentId"],
     "additionalProperties": false
   },
   "output": {
@@ -42,9 +36,7 @@
         "type": "boolean"
       }
     },
-    "required": [
-      "ok"
-    ],
+    "required": ["ok"],
     "additionalProperties": false
   }
 }

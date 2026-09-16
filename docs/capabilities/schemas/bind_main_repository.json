@@ -3,9 +3,7 @@
   "domain": "repository",
   "description": "Bind a GitHub repository the workspace's GitHub App installation reaches as its main repo, and close the onboarding gate's provisional window.",
   "mode": "sync",
-  "surfaces": [
-    "api"
-  ],
+  "surfaces": ["api"],
   "sensitivity": "high",
   "agent": null,
   "chain": {
@@ -29,10 +27,7 @@
         "maxLength": 100
       }
     },
-    "required": [
-      "owner",
-      "name"
-    ],
+    "required": ["owner", "name"],
     "additionalProperties": false
   },
   "output": {

@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "List the IAM roles attached to an agent's delegated principal — active, non-expired principal_role_assignments with role identity, scope, and assignment provenance. Read-only governance introspection.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -30,9 +26,7 @@
         "description": "Agent public id (agt_…), UUID, or slug — workspace-scoped"
       }
     },
-    "required": [
-      "agentId"
-    ],
+    "required": ["agentId"],
     "additionalProperties": false
   },
   "output": {
@@ -61,10 +55,7 @@
             },
             "scopeKind": {
               "type": "string",
-              "enum": [
-                "org",
-                "workspace"
-              ]
+              "enum": ["org", "workspace"]
             },
             "isSystemDefault": {
               "type": "boolean",
@@ -124,11 +115,7 @@
         "type": "integer"
       }
     },
-    "required": [
-      "agentId",
-      "roles",
-      "total"
-    ],
+    "required": ["agentId", "roles", "total"],
     "additionalProperties": false
   }
 }

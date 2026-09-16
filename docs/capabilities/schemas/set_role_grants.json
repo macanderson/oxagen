@@ -3,11 +3,7 @@
   "domain": "iam",
   "description": "Replace a custom IAM role's grants with a set of permissions from the catalogue. System roles are read-only; the new set is refused above the granter's own permissions and for a tier the kernel does not enforce roles on.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -56,10 +52,7 @@
         "description": "Catalogue permission ids the role allows (ADR-063)"
       }
     },
-    "required": [
-      "roleId",
-      "permissions"
-    ],
+    "required": ["roleId", "permissions"],
     "additionalProperties": false
   },
   "output": {
@@ -88,17 +81,11 @@
           },
           "scopeKind": {
             "type": "string",
-            "enum": [
-              "org",
-              "workspace"
-            ]
+            "enum": ["org", "workspace"]
           },
           "kind": {
             "type": "string",
-            "enum": [
-              "human",
-              "agent"
-            ],
+            "enum": ["human", "agent"],
             "description": "human for the seeded membership roles; agent for the seeded agent roles and every custom role, which only assign_agent_role binds"
           },
           "isSystemDefault": {
@@ -123,17 +110,10 @@
                 },
                 "effect": {
                   "type": "string",
-                  "enum": [
-                    "allow",
-                    "deny",
-                    "require_approval"
-                  ]
+                  "enum": ["allow", "deny", "require_approval"]
                 }
               },
-              "required": [
-                "capability",
-                "effect"
-              ],
+              "required": ["capability", "effect"],
               "additionalProperties": false
             },
             "description": "Capability grants carried by the role (empty when includeGrants=false)"
@@ -177,9 +157,7 @@
         "additionalProperties": false
       }
     },
-    "required": [
-      "role"
-    ],
+    "required": ["role"],
     "additionalProperties": false
   }
 }

@@ -26,7 +26,7 @@ export {
   requiredFactKeys,
 } from "./evaluate";
 export { parseRuleSet, ruleSetSchema } from "./schema";
-// The auto-approval clause of the same rule set (ADR-068): the pure evaluator
+// The auto-approval clause of the same rule set (ADR-069): the pure evaluator
 // the decision path runs, the reason vocabulary the app maps to copy, and the
 // floor test a recorded result is read back through.
 export {

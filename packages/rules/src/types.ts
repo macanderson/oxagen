@@ -118,7 +118,7 @@ export interface DecisionRule {
  *
  * Two clauses, one document, one store, one loader. `rules` decides at the
  * kernel gate; `autoApproval` decides whether a call the gate sent to a person
- * may skip them (MC spec §6.9 part 2, ADR-068). They are kept apart because
+ * may skip them (MC spec §6.9 part 2, ADR-069). They are kept apart because
  * they answer different questions: an auto-approval carried on a gate rule
  * would have to ride `effect: "allow"`, and an `allow` verdict stops
  * evaluation, so writing one would silently outrank every later deny rule.

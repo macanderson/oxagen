@@ -3,11 +3,7 @@
   "domain": "connection",
   "description": "Get details of a single data source connection.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -30,9 +26,7 @@
         "description": "Public ID or internal UUID of the connection"
       }
     },
-    "required": [
-      "connectionId"
-    ],
+    "required": ["connectionId"],
     "additionalProperties": false
   },
   "output": {
@@ -96,11 +90,7 @@
       },
       "healthStatus": {
         "type": "string",
-        "enum": [
-          "healthy",
-          "degraded",
-          "errored"
-        ]
+        "enum": ["healthy", "degraded", "errored"]
       },
       "consecutiveFailureCount": {
         "type": "number"

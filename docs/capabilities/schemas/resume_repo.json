@@ -3,12 +3,7 @@
   "domain": "repo",
   "description": "Resume automatic syncing for a paused repository connection.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "cli",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "cli", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -30,9 +25,7 @@
         "description": "Repository connection ID"
       }
     },
-    "required": [
-      "repoId"
-    ],
+    "required": ["repoId"],
     "additionalProperties": false
   },
   "output": {
@@ -59,12 +52,7 @@
         ]
       }
     },
-    "required": [
-      "repoId",
-      "status",
-      "resumedAt",
-      "nextSyncAt"
-    ],
+    "required": ["repoId", "status", "resumedAt", "nextSyncAt"],
     "additionalProperties": false
   }
 }

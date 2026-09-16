@@ -3,11 +3,7 @@
   "domain": "workspace",
   "description": "Read the active workspace's general settings: name, slug, description, and the effective consequence-role map for mandates.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -62,12 +58,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": [
-              "Owner",
-              "Admin",
-              "Compliance",
-              "Billing"
-            ]
+            "enum": ["Owner", "Admin", "Compliance", "Billing"]
           }
         }
       }

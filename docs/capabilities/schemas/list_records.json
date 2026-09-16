@@ -3,11 +3,7 @@
   "domain": "context",
   "description": "List the workspace's published steering records with kind, force, constraint effect, scope, lineage, commit and path, filtered by kind, scope, status or lineage",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -37,18 +33,11 @@
       },
       "sharingScope": {
         "type": "string",
-        "enum": [
-          "repository",
-          "workspace"
-        ]
+        "enum": ["repository", "workspace"]
       },
       "status": {
         "type": "string",
-        "enum": [
-          "active",
-          "retired",
-          "superseded"
-        ]
+        "enum": ["active", "retired", "superseded"]
       },
       "lineageId": {
         "type": "string",
@@ -109,12 +98,7 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": [
-                    "must",
-                    "should",
-                    "may",
-                    "info"
-                  ]
+                  "enum": ["must", "should", "may", "info"]
                 },
                 {
                   "type": "null"
@@ -125,10 +109,7 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": [
-                    "require",
-                    "forbid"
-                  ]
+                  "enum": ["require", "forbid"]
                 },
                 {
                   "type": "null"
@@ -137,10 +118,7 @@
             },
             "sharingScope": {
               "type": "string",
-              "enum": [
-                "repository",
-                "workspace"
-              ]
+              "enum": ["repository", "workspace"]
             },
             "statement": {
               "anyOf": [
@@ -154,11 +132,7 @@
             },
             "status": {
               "type": "string",
-              "enum": [
-                "active",
-                "retired",
-                "superseded"
-              ]
+              "enum": ["active", "retired", "superseded"]
             },
             "version": {
               "anyOf": [
@@ -239,10 +213,7 @@
         "minimum": 0
       }
     },
-    "required": [
-      "records",
-      "total"
-    ],
+    "required": ["records", "total"],
     "additionalProperties": false
   }
 }

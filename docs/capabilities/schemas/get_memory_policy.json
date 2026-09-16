@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "Read the workspace memory decay policy: half-lives by weight and recall confidence threshold",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,

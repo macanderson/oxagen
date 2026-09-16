@@ -3,11 +3,7 @@
   "domain": "mandate",
   "description": "Grant an agent bounded, expiring authority for a consequence: limits over the tool's declared measures, allowed targets, tool patterns, the mandate's own approval rule, a purpose and a validity window. Activates a requested draft when requestId is given.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -46,11 +42,7 @@
             },
             "period": {
               "type": "string",
-              "enum": [
-                "daily",
-                "weekly",
-                "monthly"
-              ]
+              "enum": ["daily", "weekly", "monthly"]
             },
             "currencyOrUnit": {
               "type": "string",
@@ -58,10 +50,7 @@
               "maxLength": 32
             }
           },
-          "required": [
-            "period",
-            "currencyOrUnit"
-          ],
+          "required": ["period", "currencyOrUnit"],
           "additionalProperties": false
         }
       },
@@ -221,11 +210,7 @@
             },
             "period": {
               "type": "string",
-              "enum": [
-                "daily",
-                "weekly",
-                "monthly"
-              ]
+              "enum": ["daily", "weekly", "monthly"]
             },
             "currencyOrUnit": {
               "type": "string",
@@ -233,10 +218,7 @@
               "maxLength": 32
             }
           },
-          "required": [
-            "period",
-            "currencyOrUnit"
-          ],
+          "required": ["period", "currencyOrUnit"],
           "additionalProperties": false
         }
       },
@@ -313,12 +295,7 @@
       },
       "status": {
         "type": "string",
-        "enum": [
-          "draft",
-          "active",
-          "expired",
-          "revoked"
-        ]
+        "enum": ["draft", "active", "expired", "revoked"]
       },
       "revokedBy": {
         "anyOf": [
@@ -369,11 +346,7 @@
             },
             "period": {
               "type": "string",
-              "enum": [
-                "daily",
-                "weekly",
-                "monthly"
-              ]
+              "enum": ["daily", "weekly", "monthly"]
             },
             "periodKey": {
               "type": "string"

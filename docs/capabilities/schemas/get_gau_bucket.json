@@ -3,10 +3,7 @@
   "domain": "billing",
   "description": "Read the organization's governed action unit bucket for the current month: the billing mode, the period, the units included, purchased, carried forward, used and remaining, plus the invoice thresholds of an invoice-billed organization or the auto top-up state of a prepaid one.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["api", "mcp"],
   "sensitivity": "medium",
   "agent": null,
   "chain": {
@@ -27,10 +24,7 @@
     "properties": {
       "mode": {
         "type": "string",
-        "enum": [
-          "prepaid",
-          "invoice"
-        ]
+        "enum": ["prepaid", "invoice"]
       },
       "period": {
         "type": "object",
@@ -42,10 +36,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "start",
-          "end"
-        ],
+        "required": ["start", "end"],
         "additionalProperties": false
       },
       "includedGau": {
@@ -139,10 +130,7 @@
                         ]
                       }
                     },
-                    "required": [
-                      "brand",
-                      "last4"
-                    ],
+                    "required": ["brand", "last4"],
                     "additionalProperties": false
                   },
                   {
@@ -160,17 +148,10 @@
                       },
                       "status": {
                         "type": "string",
-                        "enum": [
-                          "paid",
-                          "open",
-                          "failed"
-                        ]
+                        "enum": ["paid", "open", "failed"]
                       }
                     },
-                    "required": [
-                      "at",
-                      "status"
-                    ],
+                    "required": ["at", "status"],
                     "additionalProperties": false
                   },
                   {
@@ -179,12 +160,7 @@
                 ]
               }
             },
-            "required": [
-              "enabled",
-              "blocks",
-              "paymentMethod",
-              "lastAttempt"
-            ],
+            "required": ["enabled", "blocks", "paymentMethod", "lastAttempt"],
             "additionalProperties": false
           },
           {

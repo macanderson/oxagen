@@ -280,7 +280,11 @@
     --sidebar-primary-foreground: var(--ox-ink);
     --sidebar-accent: var(--_stone-150); /* neutral nav hover/active */
     --sidebar-accent-foreground: var(--_ink);
-    --sidebar-border: color-mix(in oklch, var(--ox-paper-border) 60%, transparent); /* paper-border, softened */
+    --sidebar-border: color-mix(
+      in oklch,
+      var(--ox-paper-border) 60%,
+      transparent
+    ); /* paper-border, softened */
     --sidebar-ring: var(--ring);
 
     /* ════════════════════════════════════════════════════════════════════════
@@ -919,8 +923,8 @@
    * in the product the brand system never approved.
    */
   --font-mono:
-    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
-    "Liberation Mono", "DejaVu Sans Mono", monospace;
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    "DejaVu Sans Mono", monospace;
   /* The wordmark is the same face at the kit's logo weight (600). Wherever the
      SVG mark from <OxagenWordmark>/<StellaWordmark> is used this is unused;
      it exists so a text-only fallback still sets the word correctly. */
@@ -1139,9 +1143,9 @@
   .ox-grad-surface {
     background-image: linear-gradient(
       100deg,
-      var(--_ember-a, #8B5E1A) 0%,
-      var(--_ember-b, #D6962C) 46%,
-      var(--_ember-c, #F1C364) 100%
+      var(--_ember-a, #8b5e1a) 0%,
+      var(--_ember-b, #d6962c) 46%,
+      var(--_ember-c, #f1c364) 100%
     );
   }
 

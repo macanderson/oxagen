@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "List registered external MCP servers in the active workspace with their current health",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -43,23 +39,14 @@
             },
             "transportType": {
               "type": "string",
-              "enum": [
-                "streamable-http",
-                "sse",
-                "stdio"
-              ]
+              "enum": ["streamable-http", "sse", "stdio"]
             },
             "endpointUrl": {
               "type": "string"
             },
             "healthStatus": {
               "type": "string",
-              "enum": [
-                "healthy",
-                "degraded",
-                "unreachable",
-                "unknown"
-              ]
+              "enum": ["healthy", "degraded", "unreachable", "unknown"]
             },
             "lastHealthcheckAt": {
               "anyOf": [
@@ -89,9 +76,7 @@
         }
       }
     },
-    "required": [
-      "servers"
-    ],
+    "required": ["servers"],
     "additionalProperties": false
   }
 }

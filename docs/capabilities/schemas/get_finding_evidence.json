@@ -3,10 +3,7 @@
   "domain": "spend",
   "description": "Get the evidence behind one finding: the calls it cites and how many the counterfactual covers, the tokens and money they cost against the counterfactual, and the cited runs with the largest saving.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["api", "mcp"],
   "sensitivity": "medium",
   "agent": null,
   "chain": {
@@ -23,9 +20,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "findingId"
-    ],
+    "required": ["findingId"],
     "additionalProperties": false
   },
   "output": {
@@ -49,12 +44,7 @@
           },
           "level": {
             "type": "string",
-            "enum": [
-              "tool",
-              "agent",
-              "operator",
-              "workspace"
-            ]
+            "enum": ["tool", "agent", "operator", "workspace"]
           },
           "subject": {
             "type": "string"
@@ -78,19 +68,12 @@
                 ]
               }
             },
-            "required": [
-              "micros",
-              "currency",
-              "basis"
-            ],
+            "required": ["micros", "currency", "basis"],
             "additionalProperties": false
           },
           "confidence": {
             "type": "string",
-            "enum": [
-              "high",
-              "medium"
-            ]
+            "enum": ["high", "medium"]
           },
           "window": {
             "type": "object",
@@ -102,10 +85,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "from",
-              "to"
-            ],
+            "required": ["from", "to"],
             "additionalProperties": false
           },
           "why": {
@@ -124,11 +104,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "open",
-              "applied",
-              "dismissed"
-            ]
+            "enum": ["open", "applied", "dismissed"]
           },
           "detectedAt": {
             "type": "string"
@@ -202,10 +178,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "micros",
-              "currency"
-            ],
+            "required": ["micros", "currency"],
             "additionalProperties": false
           },
           "counterfactual": {
@@ -218,10 +191,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "micros",
-              "currency"
-            ],
+            "required": ["micros", "currency"],
             "additionalProperties": false
           },
           "runs": {
@@ -257,10 +227,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "micros",
-                    "currency"
-                  ],
+                  "required": ["micros", "currency"],
                   "additionalProperties": false
                 },
                 "counterfactual": {
@@ -273,10 +240,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "micros",
-                    "currency"
-                  ],
+                  "required": ["micros", "currency"],
                   "additionalProperties": false
                 }
               },
@@ -305,10 +269,7 @@
         "additionalProperties": false
       }
     },
-    "required": [
-      "finding",
-      "evidence"
-    ],
+    "required": ["finding", "evidence"],
     "additionalProperties": false
   }
 }

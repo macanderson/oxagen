@@ -3,11 +3,7 @@
   "domain": "org",
   "description": "Read the active organization's profile settings: name, slug, avatar, website, industry, employee size, and type.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -89,10 +85,7 @@
       },
       "type": {
         "type": "string",
-        "enum": [
-          "personal",
-          "business"
-        ]
+        "enum": ["personal", "business"]
       }
     },
     "required": [

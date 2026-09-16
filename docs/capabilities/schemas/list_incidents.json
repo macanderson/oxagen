@@ -3,10 +3,7 @@
   "domain": "tacho",
   "description": "List the workspace's tamper and integrity incidents, newest first, cursor-paged, optionally narrowed to one agent or to open incidents.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["api", "mcp"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -91,11 +88,7 @@
             },
             "detectedBy": {
               "type": "string",
-              "enum": [
-                "collector",
-                "control_plane",
-                "human"
-              ]
+              "enum": ["collector", "control_plane", "human"]
             },
             "hostEnrollmentId": {
               "anyOf": [
@@ -179,10 +172,7 @@
         ]
       }
     },
-    "required": [
-      "items",
-      "nextCursor"
-    ],
+    "required": ["items", "nextCursor"],
     "additionalProperties": false
   }
 }

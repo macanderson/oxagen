@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "Query Neo4j AgentMemory by semantic similarity with optional class/enforcement filters; returns ranked memories scoped to the workspace",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -30,11 +26,7 @@
       },
       "memoryClass": {
         "type": "string",
-        "enum": [
-          "OBSERVATION",
-          "RULE",
-          "FACT"
-        ]
+        "enum": ["OBSERVATION", "RULE", "FACT"]
       },
       "minEnforcement": {
         "type": "integer",
@@ -57,9 +49,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "query"
-    ],
+    "required": ["query"],
     "additionalProperties": false
   },
   "output": {
@@ -79,11 +69,7 @@
             },
             "memoryClass": {
               "type": "string",
-              "enum": [
-                "OBSERVATION",
-                "RULE",
-                "FACT"
-              ]
+              "enum": ["OBSERVATION", "RULE", "FACT"]
             },
             "memoryKind": {
               "type": "string"
@@ -130,9 +116,7 @@
         }
       }
     },
-    "required": [
-      "memories"
-    ],
+    "required": ["memories"],
     "additionalProperties": false
   }
 }

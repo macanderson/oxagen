@@ -229,15 +229,13 @@
       to right,
       transparent calc(50% - 80px),
       #000 calc(50% + 260px)
-    ),
-    linear-gradient(to top, transparent 0, #000 40%);
+    ), linear-gradient(to top, transparent 0, #000 40%);
   mask-image:
     linear-gradient(
       to right,
       transparent calc(50% - 80px),
       #000 calc(50% + 260px)
-    ),
-    linear-gradient(to top, transparent 0, #000 40%);
+    ), linear-gradient(to top, transparent 0, #000 40%);
   -webkit-mask-composite: source-in;
   mask-composite: intersect;
 }

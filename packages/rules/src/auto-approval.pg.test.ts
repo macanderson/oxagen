@@ -1,5 +1,5 @@
 /**
- * The auto-approval decision path against Postgres (ADR-068; issue #2970 §8).
+ * The auto-approval decision path against Postgres (ADR-069; issue #2970 §8).
  * Runs in the CI Postgres job and locally with DATABASE_URL set; skipped
  * otherwise.
  *

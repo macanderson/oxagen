@@ -3,11 +3,7 @@
   "domain": "context",
   "description": "Append one context record to the workspace — an observation, memory, knowledge claim, evidence, context-use record or record proposal — content-addressed by record_hash. A directive is refused: it reaches the workspace only through a Context PR.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -56,10 +52,7 @@
       },
       "sharingScope": {
         "type": "string",
-        "enum": [
-          "repository",
-          "workspace"
-        ],
+        "enum": ["repository", "workspace"],
         "default": "workspace"
       },
       "sourceRefs": {
@@ -96,19 +89,11 @@
           },
           "force": {
             "type": "string",
-            "enum": [
-              "must",
-              "should",
-              "may",
-              "info"
-            ]
+            "enum": ["must", "should", "may", "info"]
           },
           "constraintEffect": {
             "type": "string",
-            "enum": [
-              "require",
-              "forbid"
-            ]
+            "enum": ["require", "forbid"]
           },
           "rationale": {
             "type": "string",
@@ -116,19 +101,11 @@
             "maxLength": 4000
           }
         },
-        "required": [
-          "kind",
-          "force",
-          "rationale"
-        ],
+        "required": ["kind", "force", "rationale"],
         "additionalProperties": false
       }
     },
-    "required": [
-      "kind",
-      "lineageId",
-      "statement"
-    ],
+    "required": ["kind", "lineageId", "statement"],
     "additionalProperties": false
   },
   "output": {
@@ -167,13 +144,7 @@
         ]
       }
     },
-    "required": [
-      "recordId",
-      "recordHash",
-      "kind",
-      "appended",
-      "proposalId"
-    ],
+    "required": ["recordId", "recordHash", "kind", "appended", "proposalId"],
     "additionalProperties": false
   }
 }

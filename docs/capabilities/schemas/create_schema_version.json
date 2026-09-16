@@ -3,11 +3,7 @@
   "domain": "schema",
   "description": "Freeze the current draft into an immutable published version and open a fresh draft.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "cli"
-  ],
+  "surfaces": ["api", "mcp", "cli"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -49,11 +45,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "versionId",
-      "versionNumber",
-      "publishedAt"
-    ],
+    "required": ["versionId", "versionNumber", "publishedAt"],
     "additionalProperties": false
   }
 }

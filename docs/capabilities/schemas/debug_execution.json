@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "Diagnose why an agent execution failed as a structured frame: the failing step, error class + message, parsed top stack frames, related spans, and suspect files ranked deterministically. Prefer this over reading raw logs or the full trace when an execution has failed and you need the fix site. Not for successful runs (use agent.trace.get) or for listing runs (use agent.execution.list). Set summarize:true to also get an LLM root-cause diagnosis.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -37,9 +33,7 @@
         "type": "boolean"
       }
     },
-    "required": [
-      "executionId"
-    ],
+    "required": ["executionId"],
     "additionalProperties": false
   },
   "output": {
@@ -242,11 +236,7 @@
           "properties": {
             "kind": {
               "type": "string",
-              "enum": [
-                "execution",
-                "step",
-                "toolCall"
-              ]
+              "enum": ["execution", "step", "toolCall"]
             },
             "id": {
               "type": "string",
@@ -312,11 +302,7 @@
               "description": "Why it scored, e.g. 'stack-frame ×3', 'tool-arg'"
             }
           },
-          "required": [
-            "path",
-            "score",
-            "reasons"
-          ],
+          "required": ["path", "score", "reasons"],
           "additionalProperties": false
         },
         "description": "Files ranked deterministically as likely fix sites"
@@ -328,11 +314,7 @@
           "properties": {
             "severity": {
               "type": "string",
-              "enum": [
-                "fatal",
-                "error",
-                "warn"
-              ]
+              "enum": ["fatal", "error", "warn"]
             },
             "source": {
               "type": "string"
@@ -380,13 +362,7 @@
           "properties": {
             "level": {
               "type": "string",
-              "enum": [
-                "debug",
-                "info",
-                "warn",
-                "error",
-                "fatal"
-              ]
+              "enum": ["debug", "info", "warn", "error", "fatal"]
             },
             "message": {
               "type": "string"
@@ -405,12 +381,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "level",
-            "message",
-            "stepId",
-            "createdAt"
-          ],
+          "required": ["level", "message", "stepId", "createdAt"],
           "additionalProperties": false
         },
         "description": "Bounded tail of warn/error/fatal execution logs"
@@ -442,17 +413,10 @@
                     },
                     "probeResult": {
                       "type": "string",
-                      "enum": [
-                        "survived",
-                        "falsified"
-                      ]
+                      "enum": ["survived", "falsified"]
                     }
                   },
-                  "required": [
-                    "id",
-                    "statement",
-                    "evidence"
-                  ],
+                  "required": ["id", "statement", "evidence"],
                   "additionalProperties": false
                 }
               },
@@ -499,13 +463,7 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "spans",
-          "frames",
-          "suspectFiles",
-          "errorEvents",
-          "logs"
-        ],
+        "required": ["spans", "frames", "suspectFiles", "errorEvents", "logs"],
         "additionalProperties": false,
         "description": "Which lists the deterministic compressor clipped to their caps"
       }

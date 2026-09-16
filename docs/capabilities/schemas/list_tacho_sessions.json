@@ -3,9 +3,7 @@
   "domain": "tacho",
   "description": "List Tacho sessions in this workspace, newest first, optionally filtered by host, outcome, or start time.",
   "mode": "sync",
-  "surfaces": [
-    "api"
-  ],
+  "surfaces": ["api"],
   "sensitivity": "medium",
   "agent": null,
   "chain": {
@@ -23,13 +21,7 @@
       },
       "outcome": {
         "type": "string",
-        "enum": [
-          "running",
-          "completed",
-          "aborted",
-          "crashed",
-          "unknown"
-        ]
+        "enum": ["running", "completed", "aborted", "crashed", "unknown"]
       },
       "since": {
         "type": "string"
@@ -119,21 +111,11 @@
             },
             "outcome": {
               "type": "string",
-              "enum": [
-                "running",
-                "completed",
-                "aborted",
-                "crashed",
-                "unknown"
-              ]
+              "enum": ["running", "completed", "aborted", "crashed", "unknown"]
             },
             "enforcementTier": {
               "type": "string",
-              "enum": [
-                "gateway",
-                "harness",
-                "observe"
-              ]
+              "enum": ["gateway", "harness", "observe"]
             },
             "startedAt": {
               "type": "string"
@@ -254,10 +236,7 @@
         ]
       }
     },
-    "required": [
-      "sessions",
-      "nextCursor"
-    ],
+    "required": ["sessions", "nextCursor"],
     "additionalProperties": false
   }
 }

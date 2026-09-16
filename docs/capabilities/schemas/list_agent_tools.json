@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "List the capabilities surfaced as agent tools for the active workspace, after allowlist and risk filtering",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -61,11 +57,7 @@
             },
             "riskLevel": {
               "type": "string",
-              "enum": [
-                "low",
-                "medium",
-                "high"
-              ]
+              "enum": ["low", "medium", "high"]
             },
             "requiresApproval": {
               "type": "boolean"
@@ -87,9 +79,7 @@
         }
       }
     },
-    "required": [
-      "tools"
-    ],
+    "required": ["tools"],
     "additionalProperties": false
   }
 }

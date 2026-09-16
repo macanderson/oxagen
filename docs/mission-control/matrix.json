@@ -3,12 +3,8 @@
     "name": "create_org",
     "group": "Organization and workspace",
     "does": "organization, Neo4j database, keys, billing account",
-    "absorbs": [
-      "create_org"
-    ],
-    "resolved": [
-      "create_org"
-    ],
+    "absorbs": ["create_org"],
+    "resolved": ["create_org"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -33,12 +29,8 @@
     "name": "update_org",
     "group": "Organization and workspace",
     "does": "name, settings, retention policy",
-    "absorbs": [
-      "update_org_settings"
-    ],
-    "resolved": [
-      "update_org_settings"
-    ],
+    "absorbs": ["update_org_settings"],
+    "resolved": ["update_org_settings"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -63,14 +55,8 @@
     "name": "invite_member",
     "group": "Organization and workspace",
     "does": "invite to org or workspace with role",
-    "absorbs": [
-      "send_workspace_invite",
-      "add_org_member"
-    ],
-    "resolved": [
-      "send_workspace_invite",
-      "add_org_member"
-    ],
+    "absorbs": ["send_workspace_invite", "add_org_member"],
+    "resolved": ["send_workspace_invite", "add_org_member"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -95,14 +81,8 @@
     "name": "respond_to_invite",
     "group": "Organization and workspace",
     "does": "accept or decline",
-    "absorbs": [
-      "accept_member_invite",
-      "decline_member_invite"
-    ],
-    "resolved": [
-      "accept_member_invite",
-      "decline_member_invite"
-    ],
+    "absorbs": ["accept_member_invite", "decline_member_invite"],
+    "resolved": ["accept_member_invite", "decline_member_invite"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -127,14 +107,8 @@
     "name": "set_member_role",
     "group": "Organization and workspace",
     "does": "set a role or remove (role `none`) at org or workspace",
-    "absorbs": [
-      "change_member_role",
-      "remove_org_member"
-    ],
-    "resolved": [
-      "change_member_role",
-      "remove_org_member"
-    ],
+    "absorbs": ["change_member_role", "remove_org_member"],
+    "resolved": ["change_member_role", "remove_org_member"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -159,12 +133,8 @@
     "name": "list_members",
     "group": "Organization and workspace",
     "does": "members with roles at either scope",
-    "absorbs": [
-      "list_workspace_members"
-    ],
-    "resolved": [
-      "list_workspace_members"
-    ],
+    "absorbs": ["list_workspace_members"],
+    "resolved": ["list_workspace_members"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -189,14 +159,8 @@
     "name": "create_workspace",
     "group": "Organization and workspace",
     "does": "workspace plus its main repo binding and production branch",
-    "absorbs": [
-      "create_workspace",
-      "configure_repo"
-    ],
-    "resolved": [
-      "create_workspace",
-      "configure_repo"
-    ],
+    "absorbs": ["create_workspace", "configure_repo"],
+    "resolved": ["create_workspace", "configure_repo"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -257,14 +221,8 @@
     "name": "list_workspaces",
     "group": "Organization and workspace",
     "does": "scoped listing",
-    "absorbs": [
-      "list_workspaces",
-      "list_orgs"
-    ],
-    "resolved": [
-      "list_workspaces",
-      "list_orgs"
-    ],
+    "absorbs": ["list_workspaces", "list_orgs"],
+    "resolved": ["list_workspaces", "list_orgs"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -289,12 +247,8 @@
     "name": "get_data_plane",
     "group": "Organization and workspace",
     "does": "plane binding, DSN never returned",
-    "absorbs": [
-      "get_data_plane"
-    ],
-    "resolved": [
-      "get_data_plane"
-    ],
+    "absorbs": ["get_data_plane"],
+    "resolved": ["get_data_plane"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -319,12 +273,8 @@
     "name": "set_data_plane",
     "group": "Organization and workspace",
     "does": "approval-gated",
-    "absorbs": [
-      "set_data_plane"
-    ],
-    "resolved": [
-      "set_data_plane"
-    ],
+    "absorbs": ["set_data_plane"],
+    "resolved": ["set_data_plane"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -349,12 +299,8 @@
     "name": "create_api_key",
     "group": "Identity and access",
     "does": "purpose-locked keys for humans and services",
-    "absorbs": [
-      "create_api_key"
-    ],
-    "resolved": [
-      "create_api_key"
-    ],
+    "absorbs": ["create_api_key"],
+    "resolved": ["create_api_key"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -379,12 +325,8 @@
     "name": "rotate_api_key",
     "group": "Identity and access",
     "does": "",
-    "absorbs": [
-      "rotate_api_key"
-    ],
-    "resolved": [
-      "rotate_api_key"
-    ],
+    "absorbs": ["rotate_api_key"],
+    "resolved": ["rotate_api_key"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -409,12 +351,8 @@
     "name": "revoke_api_key",
     "group": "Identity and access",
     "does": "",
-    "absorbs": [
-      "revoke_api_key"
-    ],
-    "resolved": [
-      "revoke_api_key"
-    ],
+    "absorbs": ["revoke_api_key"],
+    "resolved": ["revoke_api_key"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -439,11 +377,7 @@
     "name": "register_agent",
     "group": "Identity and access",
     "does": "opens a Context PR adding `.oxagen/agents/<slug>.toml` and the generated harness files; identity is created on merge",
-    "absorbs": [
-      "create_agent_def",
-      "suggest_agent_def",
-      "summarize_agent_def"
-    ],
+    "absorbs": ["create_agent_def", "suggest_agent_def", "summarize_agent_def"],
     "resolved": [
       "create_agent_def",
       "suggest_agent_def",
@@ -509,12 +443,8 @@
     "name": "retire_agent",
     "group": "Identity and access",
     "does": "a Context PR removing the file; principal retired, never deleted",
-    "absorbs": [
-      "delete_agent_def"
-    ],
-    "resolved": [
-      "delete_agent_def"
-    ],
+    "absorbs": ["delete_agent_def"],
+    "resolved": ["delete_agent_def"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -539,14 +469,8 @@
     "name": "get_agent",
     "group": "Identity and access",
     "does": "identity, roles, belt, mandates",
-    "absorbs": [
-      "get_agent_def",
-      "get_agent_role"
-    ],
-    "resolved": [
-      "get_agent_def",
-      "get_agent_role"
-    ],
+    "absorbs": ["get_agent_def", "get_agent_role"],
+    "resolved": ["get_agent_def", "get_agent_role"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -571,12 +495,8 @@
     "name": "list_agents",
     "group": "Identity and access",
     "does": "",
-    "absorbs": [
-      "list_agent_defs"
-    ],
-    "resolved": [
-      "list_agent_defs"
-    ],
+    "absorbs": ["list_agent_defs"],
+    "resolved": ["list_agent_defs"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -601,14 +521,8 @@
     "name": "set_agent_role",
     "group": "Identity and access",
     "does": "",
-    "absorbs": [
-      "assign_agent_role",
-      "revoke_agent_role"
-    ],
-    "resolved": [
-      "assign_agent_role",
-      "revoke_agent_role"
-    ],
+    "absorbs": ["assign_agent_role", "revoke_agent_role"],
+    "resolved": ["assign_agent_role", "revoke_agent_role"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -643,12 +557,8 @@
     "name": "enroll_host",
     "group": "Wrapping and control",
     "does": "device key, host agent, bundle, hooks",
-    "absorbs": [
-      "create_tacho_enrollment"
-    ],
-    "resolved": [
-      "create_tacho_enrollment"
-    ],
+    "absorbs": ["create_tacho_enrollment"],
+    "resolved": ["create_tacho_enrollment"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -673,12 +583,8 @@
     "name": "revoke_enrollment",
     "group": "Wrapping and control",
     "does": "",
-    "absorbs": [
-      "revoke_tacho_enrollment"
-    ],
-    "resolved": [
-      "revoke_tacho_enrollment"
-    ],
+    "absorbs": ["revoke_tacho_enrollment"],
+    "resolved": ["revoke_tacho_enrollment"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -703,12 +609,8 @@
     "name": "list_hosts",
     "group": "Wrapping and control",
     "does": "",
-    "absorbs": [
-      "list_tacho_hosts"
-    ],
-    "resolved": [
-      "list_tacho_hosts"
-    ],
+    "absorbs": ["list_tacho_hosts"],
+    "resolved": ["list_tacho_hosts"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -733,14 +635,8 @@
     "name": "get_policy_bundle",
     "group": "Wrapping and control",
     "does": "signed bundle for a host or agent",
-    "absorbs": [
-      "get_tacho_bundle",
-      "get_registry_config"
-    ],
-    "resolved": [
-      "get_tacho_bundle",
-      "get_registry_config"
-    ],
+    "absorbs": ["get_tacho_bundle", "get_registry_config"],
+    "resolved": ["get_tacho_bundle", "get_registry_config"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -801,12 +697,8 @@
     "name": "fetch_commands",
     "group": "Wrapping and control",
     "does": "control channel; headless",
-    "absorbs": [
-      "fetch_tacho_commands"
-    ],
-    "resolved": [
-      "fetch_tacho_commands"
-    ],
+    "absorbs": ["fetch_tacho_commands"],
+    "resolved": ["fetch_tacho_commands"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -831,12 +723,8 @@
     "name": "dispatch_command",
     "group": "Wrapping and control",
     "does": "pause, resume, steer, cancel, revoke",
-    "absorbs": [
-      "dispatch_tacho_command"
-    ],
-    "resolved": [
-      "dispatch_tacho_command"
-    ],
+    "absorbs": ["dispatch_tacho_command"],
+    "resolved": ["dispatch_tacho_command"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -861,14 +749,8 @@
     "name": "list_runs",
     "group": "Wrapping and control",
     "does": "by operator, agent, task, tier, verdict",
-    "absorbs": [
-      "list_executions",
-      "list_tacho_sessions"
-    ],
-    "resolved": [
-      "list_executions",
-      "list_tacho_sessions"
-    ],
+    "absorbs": ["list_executions", "list_tacho_sessions"],
+    "resolved": ["list_executions", "list_tacho_sessions"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -947,14 +829,8 @@
     "name": "resolve_approval",
     "group": "Wrapping and control",
     "does": "approve or deny, mints the token",
-    "absorbs": [
-      "resolve_approval",
-      "resolve_mcp_consent"
-    ],
-    "resolved": [
-      "resolve_approval",
-      "resolve_mcp_consent"
-    ],
+    "absorbs": ["resolve_approval", "resolve_mcp_consent"],
+    "resolved": ["resolve_approval", "resolve_mcp_consent"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -999,14 +875,8 @@
     "name": "register_tool_server",
     "group": "Toolbelt",
     "does": "MCP or HTTP server",
-    "absorbs": [
-      "register_mcp_server",
-      "set_mcp_enabled"
-    ],
-    "resolved": [
-      "register_mcp_server",
-      "set_mcp_enabled"
-    ],
+    "absorbs": ["register_mcp_server", "set_mcp_enabled"],
+    "resolved": ["register_mcp_server", "set_mcp_enabled"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -1031,12 +901,8 @@
     "name": "remove_tool_server",
     "group": "Toolbelt",
     "does": "",
-    "absorbs": [
-      "delete_mcp_server"
-    ],
-    "resolved": [
-      "delete_mcp_server"
-    ],
+    "absorbs": ["delete_mcp_server"],
+    "resolved": ["delete_mcp_server"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -1061,11 +927,7 @@
     "name": "list_tool_servers",
     "group": "Toolbelt",
     "does": "",
-    "absorbs": [
-      "list_mcp_servers",
-      "resolve_mcp_servers",
-      "list_mcp_consents"
-    ],
+    "absorbs": ["list_mcp_servers", "resolve_mcp_servers", "list_mcp_consents"],
     "resolved": [
       "list_mcp_servers",
       "resolve_mcp_servers",
@@ -1139,14 +1001,8 @@
     "name": "search_tools",
     "group": "Toolbelt",
     "does": "belt search meta-tool; also the UI's command menu",
-    "absorbs": [
-      "search_command_menu",
-      "suggest_commands"
-    ],
-    "resolved": [
-      "search_command_menu",
-      "suggest_commands"
-    ],
+    "absorbs": ["search_command_menu", "suggest_commands"],
+    "resolved": ["search_command_menu", "suggest_commands"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -1259,11 +1115,7 @@
     "name": "list_connections",
     "group": "Toolbelt",
     "does": "never returns secrets",
-    "absorbs": [
-      "list_connections",
-      "list_secret_keys",
-      "get_model_credential"
-    ],
+    "absorbs": ["list_connections", "list_secret_keys", "get_model_credential"],
     "resolved": [
       "list_connections",
       "list_secret_keys",
@@ -1363,14 +1215,8 @@
     "name": "link_repository",
     "group": "Ontology and knowledge",
     "does": "link, role, production branch, issue import",
-    "absorbs": [
-      "configure_repo",
-      "sync_repo"
-    ],
-    "resolved": [
-      "configure_repo",
-      "sync_repo"
-    ],
+    "absorbs": ["configure_repo", "sync_repo"],
+    "resolved": ["configure_repo", "sync_repo"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -1395,14 +1241,8 @@
     "name": "unlink_repository",
     "group": "Ontology and knowledge",
     "does": "",
-    "absorbs": [
-      "pause_repo",
-      "delete_integration"
-    ],
-    "resolved": [
-      "pause_repo",
-      "delete_integration"
-    ],
+    "absorbs": ["pause_repo", "delete_integration"],
+    "resolved": ["pause_repo", "delete_integration"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -1427,16 +1267,8 @@
     "name": "sync_repository",
     "group": "Ontology and knowledge",
     "does": "manual full re-index",
-    "absorbs": [
-      "sync_repo",
-      "resume_repo",
-      "sync_integration"
-    ],
-    "resolved": [
-      "sync_repo",
-      "resume_repo",
-      "sync_integration"
-    ],
+    "absorbs": ["sync_repo", "resume_repo", "sync_integration"],
+    "resolved": ["sync_repo", "resume_repo", "sync_integration"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -1461,14 +1293,8 @@
     "name": "add_source",
     "group": "Ontology and knowledge",
     "does": "connector source",
-    "absorbs": [
-      "install_plugin",
-      "configure_integration"
-    ],
-    "resolved": [
-      "install_plugin",
-      "configure_integration"
-    ],
+    "absorbs": ["install_plugin", "configure_integration"],
+    "resolved": ["install_plugin", "configure_integration"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -1531,14 +1357,8 @@
     "name": "remove_source",
     "group": "Ontology and knowledge",
     "does": "",
-    "absorbs": [
-      "delete_connection",
-      "uninstall_plugin"
-    ],
-    "resolved": [
-      "delete_connection",
-      "uninstall_plugin"
-    ],
+    "absorbs": ["delete_connection", "uninstall_plugin"],
+    "resolved": ["delete_connection", "uninstall_plugin"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -1765,14 +1585,8 @@
     "name": "expand_graph",
     "group": "Ontology and knowledge",
     "does": "typed traversal",
-    "absorbs": [
-      "get_ontology_neighbors",
-      "get_node"
-    ],
-    "resolved": [
-      "get_ontology_neighbors",
-      "get_node"
-    ],
+    "absorbs": ["get_ontology_neighbors", "get_node"],
+    "resolved": ["get_ontology_neighbors", "get_node"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -1797,14 +1611,8 @@
     "name": "query_graph",
     "group": "Ontology and knowledge",
     "does": "natural language to Cypher",
-    "absorbs": [
-      "query_ontology",
-      "get_graph_stats"
-    ],
-    "resolved": [
-      "query_ontology",
-      "get_graph_stats"
-    ],
+    "absorbs": ["query_ontology", "get_graph_stats"],
+    "resolved": ["query_ontology", "get_graph_stats"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -1913,14 +1721,8 @@
     "name": "retract_record",
     "group": "Context and steering",
     "does": "new record on the lineage",
-    "absorbs": [
-      "delete_memory",
-      "demote_memory"
-    ],
-    "resolved": [
-      "delete_memory",
-      "demote_memory"
-    ],
+    "absorbs": ["delete_memory", "demote_memory"],
+    "resolved": ["delete_memory", "demote_memory"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -1945,12 +1747,8 @@
     "name": "recall_context",
     "group": "Context and steering",
     "does": "the provider's query, as a tool for agents",
-    "absorbs": [
-      "recall_memory"
-    ],
-    "resolved": [
-      "recall_memory"
-    ],
+    "absorbs": ["recall_memory"],
+    "resolved": ["recall_memory"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -2009,12 +1807,8 @@
     "name": "open_context_pr",
     "group": "Context and steering",
     "does": "the pull request",
-    "absorbs": [
-      "publish_context_record"
-    ],
-    "resolved": [
-      "publish_context_record"
-    ],
+    "absorbs": ["publish_context_record"],
+    "resolved": ["publish_context_record"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -2039,12 +1833,8 @@
     "name": "list_proposals",
     "group": "Context and steering",
     "does": "",
-    "absorbs": [
-      "list_memory_promotions"
-    ],
-    "resolved": [
-      "list_memory_promotions"
-    ],
+    "absorbs": ["list_memory_promotions"],
+    "resolved": ["list_memory_promotions"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -2069,12 +1859,8 @@
     "name": "dismiss_proposal",
     "group": "Context and steering",
     "does": "",
-    "absorbs": [
-      "dismiss_memory_promotion"
-    ],
-    "resolved": [
-      "dismiss_memory_promotion"
-    ],
+    "absorbs": ["dismiss_memory_promotion"],
+    "resolved": ["dismiss_memory_promotion"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -2133,12 +1919,8 @@
     "name": "list_findings",
     "group": "Spend and billing",
     "does": "ranked optimizations",
-    "absorbs": [
-      "list_error_clusters"
-    ],
-    "resolved": [
-      "list_error_clusters"
-    ],
+    "absorbs": ["list_error_clusters"],
+    "resolved": ["list_error_clusters"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -2267,12 +2049,8 @@
     "name": "get_subscription",
     "group": "Spend and billing",
     "does": "",
-    "absorbs": [
-      "get_subscription"
-    ],
-    "resolved": [
-      "get_subscription"
-    ],
+    "absorbs": ["get_subscription"],
+    "resolved": ["get_subscription"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -2297,14 +2075,8 @@
     "name": "change_subscription",
     "group": "Spend and billing",
     "does": "",
-    "absorbs": [
-      "start_subscription_upgrade",
-      "purchase_credits"
-    ],
-    "resolved": [
-      "start_subscription_upgrade",
-      "purchase_credits"
-    ],
+    "absorbs": ["start_subscription_upgrade", "purchase_credits"],
+    "resolved": ["start_subscription_upgrade", "purchase_credits"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -2329,14 +2101,8 @@
     "name": "query_audit_log",
     "group": "Audit and compliance",
     "does": "control-plane events, receipts",
-    "absorbs": [
-      "query_audit_log",
-      "get_auth_alerts"
-    ],
-    "resolved": [
-      "query_audit_log",
-      "get_auth_alerts"
-    ],
+    "absorbs": ["query_audit_log", "get_auth_alerts"],
+    "resolved": ["query_audit_log", "get_auth_alerts"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -2361,12 +2127,8 @@
     "name": "export_data",
     "group": "Audit and compliance",
     "does": "organization export",
-    "absorbs": [
-      "export_data"
-    ],
-    "resolved": [
-      "export_data"
-    ],
+    "absorbs": ["export_data"],
+    "resolved": ["export_data"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -2391,12 +2153,8 @@
     "name": "erase_data",
     "group": "Audit and compliance",
     "does": "crypto-shred",
-    "absorbs": [
-      "erase_data"
-    ],
-    "resolved": [
-      "erase_data"
-    ],
+    "absorbs": ["erase_data"],
+    "resolved": ["erase_data"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -2575,12 +2333,8 @@
     "name": "list_notifications",
     "group": "Assistant and account",
     "does": "",
-    "absorbs": [
-      "list_notifications"
-    ],
-    "resolved": [
-      "list_notifications"
-    ],
+    "absorbs": ["list_notifications"],
+    "resolved": ["list_notifications"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -2605,12 +2359,8 @@
     "name": "mark_notification",
     "group": "Assistant and account",
     "does": "",
-    "absorbs": [
-      "mark_notification"
-    ],
-    "resolved": [
-      "mark_notification"
-    ],
+    "absorbs": ["mark_notification"],
+    "resolved": ["mark_notification"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
@@ -2635,12 +2385,8 @@
     "name": "get_install_instructions",
     "group": "Assistant and account",
     "does": "per harness",
-    "absorbs": [
-      "get_install_instructions"
-    ],
-    "resolved": [
-      "get_install_instructions"
-    ],
+    "absorbs": ["get_install_instructions"],
+    "resolved": ["get_install_instructions"],
     "unresolved": [],
     "isNew": false,
     "inherit": {

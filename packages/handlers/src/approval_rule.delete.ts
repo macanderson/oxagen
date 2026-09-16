@@ -1,5 +1,5 @@
 // delete_approval_rule — take one auto-approval rule out of the workspace's
-// rule set (MC spec §6.9 part 2; ADR-068).
+// rule set (MC spec §6.9 part 2; ADR-069).
 //
 // The role gate is the same as the write that created it (INV-29). The rule
 // that is going carries no consequence check of its own: removing a rule can

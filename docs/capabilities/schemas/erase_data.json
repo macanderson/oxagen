@@ -3,11 +3,7 @@
   "domain": "privacy",
   "description": "Request erasure of personal or organizational data (GDPR Article 17 — right to erasure). Requires explicit confirmation. Revokes all sessions immediately; hard-delete is scheduled asynchronously. Emits a webhook event for downstream integrations.",
   "mode": "async",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "destructive",
   "agent": {
     "requiresApproval": true,
@@ -26,10 +22,7 @@
     "properties": {
       "scope": {
         "type": "string",
-        "enum": [
-          "user",
-          "org"
-        ]
+        "enum": ["user", "org"]
       },
       "orgId": {
         "type": "string",
@@ -39,10 +32,7 @@
         "const": true
       }
     },
-    "required": [
-      "scope",
-      "confirm"
-    ],
+    "required": ["scope", "confirm"],
     "additionalProperties": false
   },
   "output": {
@@ -60,11 +50,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "requestId",
-      "status",
-      "effectiveAt"
-    ],
+    "required": ["requestId", "status", "effectiveAt"],
     "additionalProperties": false
   }
 }

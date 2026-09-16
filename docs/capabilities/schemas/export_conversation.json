@@ -3,11 +3,7 @@
   "domain": "conversation",
   "description": "Export an entire conversation (active branch) as a Markdown document or a formatted PDF",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -29,16 +25,10 @@
       },
       "format": {
         "type": "string",
-        "enum": [
-          "markdown",
-          "pdf"
-        ]
+        "enum": ["markdown", "pdf"]
       }
     },
-    "required": [
-      "conversationId",
-      "format"
-    ],
+    "required": ["conversationId", "format"],
     "additionalProperties": false
   },
   "output": {
@@ -47,10 +37,7 @@
     "properties": {
       "format": {
         "type": "string",
-        "enum": [
-          "markdown",
-          "pdf"
-        ]
+        "enum": ["markdown", "pdf"]
       },
       "filename": {
         "type": "string"
@@ -79,13 +66,7 @@
         "type": "integer"
       }
     },
-    "required": [
-      "format",
-      "filename",
-      "content",
-      "url",
-      "messageCount"
-    ],
+    "required": ["format", "filename", "content", "url", "messageCount"],
     "additionalProperties": false
   }
 }

@@ -3,11 +3,7 @@
   "domain": "repo",
   "description": "Read the per-file unified-diff patches for a GitHub pull request.",
   "mode": "sync",
-  "surfaces": [
-    "agent",
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["agent", "api", "mcp"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -37,11 +33,7 @@
         "description": "Pull request number"
       }
     },
-    "required": [
-      "owner",
-      "repo",
-      "number"
-    ],
+    "required": ["owner", "repo", "number"],
     "additionalProperties": false
   },
   "output": {
@@ -132,13 +124,7 @@
         "description": "Per-file diff entries"
       }
     },
-    "required": [
-      "summary",
-      "additions",
-      "deletions",
-      "changedFiles",
-      "files"
-    ],
+    "required": ["summary", "additions", "deletions", "changedFiles", "files"],
     "additionalProperties": false
   }
 }

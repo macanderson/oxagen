@@ -3,11 +3,7 @@
   "domain": "workspace",
   "description": "List the workspaces inside an organization the authenticated user belongs to. Backs the CLI workspace picker in `oxagen init`.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -34,9 +30,7 @@
         "default": false
       }
     },
-    "required": [
-      "orgSlug"
-    ],
+    "required": ["orgSlug"],
     "additionalProperties": false
   },
   "output": {
@@ -62,13 +56,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "id",
-          "publicId",
-          "slug",
-          "namespace",
-          "name"
-        ],
+        "required": ["id", "publicId", "slug", "namespace", "name"],
         "additionalProperties": false
       },
       "workspaces": {
@@ -125,10 +113,7 @@
         }
       }
     },
-    "required": [
-      "organization",
-      "workspaces"
-    ],
+    "required": ["organization", "workspaces"],
     "additionalProperties": false
   }
 }

@@ -1,10 +1,10 @@
--- ADR-068 (G2970): the record an auto-approval leaves on an approval request
+-- ADR-069 (G2970): the record an auto-approval leaves on an approval request
 -- (MC spec §6.9 part 2).
 --
 -- Hand-written from the drizzle schema (packages/database/src/schema/agent.ts)
 -- and reviewed; the statements below are this change's only. No new table: the
 -- rules themselves are the second clause of the rule set already stored in
--- workspace.workspaces.settings.decisionRules (ADR-068 decision 2), so there is
+-- workspace.workspaces.settings.decisionRules (ADR-069 decision 2), so there is
 -- nothing to grant, and agent.approval_requests keeps the tenant + workspace
 -- RLS it already carries.
 --

@@ -1,6 +1,6 @@
 // list_approval_rules — the workspace's auto-approval rules with what each one
 // has done in the last 30 days. The read behind Tools › Auto-approvals
-// (MC spec §6.9 part 2, ADR-068).
+// (MC spec §6.9 part 2, ADR-069).
 //
 // A console read is outside the metering surface (ADR-052 exclusion 2), so the
 // contract declares `noBillingGate: true`; `mutates: false` is what lets the

@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "Record citations of memories within an agent execution — influence and rule-compliance — and update citation/influence/violation counters.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -50,12 +46,7 @@
             },
             "influence": {
               "type": "string",
-              "enum": [
-                "DECISIVE",
-                "CONTRIBUTING",
-                "CONSIDERED",
-                "IGNORED"
-              ]
+              "enum": ["DECISIVE", "CONTRIBUTING", "CONSIDERED", "IGNORED"]
             },
             "deviated": {
               "type": "boolean",
@@ -74,18 +65,12 @@
               "maxLength": 1000
             }
           },
-          "required": [
-            "memoryId",
-            "influence"
-          ],
+          "required": ["memoryId", "influence"],
           "additionalProperties": false
         }
       }
     },
-    "required": [
-      "executionRef",
-      "citations"
-    ],
+    "required": ["executionRef", "citations"],
     "additionalProperties": false
   },
   "output": {
@@ -118,12 +103,7 @@
             },
             "compliance": {
               "type": "string",
-              "enum": [
-                "COMPLIED",
-                "DISCRETION",
-                "VIOLATION",
-                "NA"
-              ]
+              "enum": ["COMPLIED", "DISCRETION", "VIOLATION", "NA"]
             },
             "error": {
               "anyOf": [
@@ -136,13 +116,7 @@
               ]
             }
           },
-          "required": [
-            "memoryId",
-            "ok",
-            "citationId",
-            "compliance",
-            "error"
-          ],
+          "required": ["memoryId", "ok", "citationId", "compliance", "error"],
           "additionalProperties": false
         }
       },
@@ -151,11 +125,7 @@
         "minimum": 0
       }
     },
-    "required": [
-      "executionId",
-      "results",
-      "recorded"
-    ],
+    "required": ["executionId", "results", "recorded"],
     "additionalProperties": false
   }
 }

@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "List external MCP tool consent grants in the active workspace (which tools the agent may invoke without re-prompting)",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -53,10 +49,7 @@
             },
             "status": {
               "type": "string",
-              "enum": [
-                "granted",
-                "denied"
-              ]
+              "enum": ["granted", "denied"]
             },
             "grantedAt": {
               "anyOf": [
@@ -103,9 +96,7 @@
         }
       }
     },
-    "required": [
-      "consents"
-    ],
+    "required": ["consents"],
     "additionalProperties": false
   }
 }

@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "Dismiss a memory from the promotion candidate queue (or restore it), freeing the slot for the next candidate without archiving the memory.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -34,9 +30,7 @@
         "default": false
       }
     },
-    "required": [
-      "memoryId"
-    ],
+    "required": ["memoryId"],
     "additionalProperties": false
   },
   "output": {
@@ -51,10 +45,7 @@
         "description": "True when the memory is now excluded from promotion candidates"
       }
     },
-    "required": [
-      "memoryId",
-      "dismissed"
-    ],
+    "required": ["memoryId", "dismissed"],
     "additionalProperties": false
   }
 }

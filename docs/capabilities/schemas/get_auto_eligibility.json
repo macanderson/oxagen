@@ -1,0 +1,84 @@
+{
+  "name": "get_auto_eligibility",
+  "domain": "approval_rule",
+  "description": "The auto-approval evaluation recorded for one approval request, and who resolved it",
+  "mode": "sync",
+  "surfaces": ["api", "mcp"],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "approval"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "approvalId": {
+        "type": "string"
+      }
+    },
+    "required": ["approvalId"],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "approvalId": {
+        "type": "string"
+      },
+      "resolvedBy": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "eligibility": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ruleId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "ok": {
+                "type": "boolean"
+              },
+              "reasons": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                }
+              },
+              "floor": {
+                "type": "boolean"
+              }
+            },
+            "required": ["ruleId", "ok", "reasons", "floor"],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": ["approvalId", "resolvedBy", "eligibility"],
+    "additionalProperties": false
+  }
+}

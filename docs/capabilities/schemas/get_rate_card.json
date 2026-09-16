@@ -3,11 +3,7 @@
   "domain": "billing",
   "description": "The published rate card for governed actions (ADR-052): volume bands per 1,000 actions, per-tier included allowances, the evidence-retention price beyond the included window, and confirmation that model tokens are reported at zero charge. Static — the same answer for every organisation on a tier.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -80,12 +76,7 @@
           "properties": {
             "tier": {
               "type": "string",
-              "enum": [
-                "free",
-                "build",
-                "scale",
-                "enterprise"
-              ]
+              "enum": ["free", "build", "scale", "enterprise"]
             },
             "includedActionsAnnual": {
               "anyOf": [
@@ -103,11 +94,7 @@
               "minimum": 0
             }
           },
-          "required": [
-            "tier",
-            "includedActionsAnnual",
-            "retentionMonths"
-          ],
+          "required": ["tier", "includedActionsAnnual", "retentionMonths"],
           "additionalProperties": false
         }
       },
@@ -126,11 +113,7 @@
             "const": true
           }
         },
-        "required": [
-          "includedMonths",
-          "usdPerGbMonth",
-          "optIn"
-        ],
+        "required": ["includedMonths", "usdPerGbMonth", "optIn"],
         "additionalProperties": false
       },
       "modelTokens": {
@@ -143,20 +126,12 @@
             "type": "string"
           }
         },
-        "required": [
-          "usdPerToken",
-          "explanation"
-        ],
+        "required": ["usdPerToken", "explanation"],
         "additionalProperties": false
       },
       "yourTier": {
         "type": "string",
-        "enum": [
-          "free",
-          "build",
-          "scale",
-          "enterprise"
-        ]
+        "enum": ["free", "build", "scale", "enterprise"]
       },
       "yourIncludedActionsAnnual": {
         "type": "integer",

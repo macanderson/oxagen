@@ -3,11 +3,7 @@
   "domain": "plugin",
   "description": "Update the org MCP auth-alert notification setting (which roles receive alerts and whether email is sent).",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": true,
@@ -31,19 +27,11 @@
         "type": "array",
         "items": {
           "type": "string",
-          "enum": [
-            "Owner",
-            "Admin",
-            "Compliance",
-            "Billing"
-          ]
+          "enum": ["Owner", "Admin", "Compliance", "Billing"]
         }
       }
     },
-    "required": [
-      "sendEmail",
-      "roles"
-    ],
+    "required": ["sendEmail", "roles"],
     "additionalProperties": false
   },
   "output": {
@@ -54,9 +42,7 @@
         "type": "boolean"
       }
     },
-    "required": [
-      "ok"
-    ],
+    "required": ["ok"],
     "additionalProperties": false
   }
 }

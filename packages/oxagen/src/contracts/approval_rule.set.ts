@@ -1,5 +1,5 @@
 // set_approval_rules — write the workspace's auto-approval rules (MC spec
-// §6.9 part 2, App. E; ADR-068). Create and edit are the same write: the
+// §6.9 part 2, App. E; ADR-069). Create and edit are the same write: the
 // caller sends the whole set and it replaces the stored clause atomically, so
 // two rules can never disagree about which one a call matched first.
 //

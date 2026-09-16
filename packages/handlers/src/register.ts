@@ -583,7 +583,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./mandate.limits.update"))
         .mandateLimitsUpdateHandler as CapabilityHandlerFn,
   );
-  // Auto-approval rules (ADR-068): the second clause of the workspace rule
+  // Auto-approval rules (ADR-069): the second clause of the workspace rule
   // set, and the recorded evaluation behind every approval card.
   registerHandler(
     "list_approval_rules",

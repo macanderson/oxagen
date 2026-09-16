@@ -3,12 +3,7 @@
   "domain": "integration",
   "description": "Get full details of a single plugin instance including schema and configuration.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "cli",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "cli", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -30,9 +25,7 @@
         "description": "Plugin instance ID"
       }
     },
-    "required": [
-      "integrationId"
-    ],
+    "required": ["integrationId"],
     "additionalProperties": false
   },
   "output": {
@@ -53,12 +46,7 @@
       },
       "status": {
         "type": "string",
-        "enum": [
-          "active",
-          "paused",
-          "failed",
-          "pending_setup"
-        ]
+        "enum": ["active", "paused", "failed", "pending_setup"]
       },
       "config": {
         "type": "object",

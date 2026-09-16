@@ -3,11 +3,7 @@
   "domain": "schema",
   "description": "Point the workspace at a published version; returns whether a pin downgrade occurred.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "cli"
-  ],
+  "surfaces": ["api", "mcp", "cli"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -29,9 +25,7 @@
         "minLength": 1
       }
     },
-    "required": [
-      "versionId"
-    ],
+    "required": ["versionId"],
     "additionalProperties": false
   },
   "output": {

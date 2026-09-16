@@ -3,12 +3,7 @@
   "domain": "repo",
   "description": "Pause automatic syncing for a repository connection.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "cli",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "cli", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -30,9 +25,7 @@
         "description": "Repository connection ID"
       }
     },
-    "required": [
-      "repoId"
-    ],
+    "required": ["repoId"],
     "additionalProperties": false
   },
   "output": {
@@ -49,11 +42,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "repoId",
-      "status",
-      "pausedAt"
-    ],
+    "required": ["repoId", "status", "pausedAt"],
     "additionalProperties": false
   }
 }

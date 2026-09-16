@@ -3,11 +3,7 @@
   "domain": "plugin",
   "description": "Search and filter the plugin marketplace by type, text, transport, and auth kind. Results are workspace-scoped — only registries enabled for the caller's org+workspace are queried.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -51,11 +47,7 @@
       },
       "authKind": {
         "type": "string",
-        "enum": [
-          "oauth",
-          "secret",
-          "none"
-        ]
+        "enum": ["oauth", "secret", "none"]
       },
       "installed": {
         "type": "boolean"
@@ -114,9 +106,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "src"
-                ],
+                "required": ["src"],
                 "additionalProperties": false
               }
             },
@@ -150,10 +140,7 @@
             },
             "tier": {
               "type": "string",
-              "enum": [
-                "free",
-                "premium"
-              ]
+              "enum": ["free", "premium"]
             },
             "installed": {
               "type": "boolean"
@@ -195,11 +182,7 @@
         }
       }
     },
-    "required": [
-      "servers",
-      "nextOffset",
-      "total"
-    ],
+    "required": ["servers", "nextOffset", "total"],
     "additionalProperties": false
   }
 }

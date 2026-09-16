@@ -1,5 +1,5 @@
 // set_approval_rules — replace the workspace's auto-approval rules (MC spec
-// §6.9 part 2, App. E; ADR-068).
+// §6.9 part 2, App. E; ADR-069).
 //
 //   1. Role gate — assertOrgRole: org Owner or Admin, for the signed-in user
 //      or the creator of the API key (resolveActingUserId). The kernel's IAM

@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "Soft-delete an agent definition and its delegated IAM principal together — the row is retained for audit but the agent stops appearing in every list and can no longer run",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "destructive",
   "agent": {
     "requiresApproval": true,
@@ -29,9 +25,7 @@
         "description": "Agent public id (agt_…) or UUID"
       }
     },
-    "required": [
-      "agentId"
-    ],
+    "required": ["agentId"],
     "additionalProperties": false
   },
   "output": {
@@ -45,10 +39,7 @@
         "type": "boolean"
       }
     },
-    "required": [
-      "agentId",
-      "deleted"
-    ],
+    "required": ["agentId", "deleted"],
     "additionalProperties": false
   }
 }

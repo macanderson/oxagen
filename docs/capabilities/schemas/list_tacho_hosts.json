@@ -3,9 +3,7 @@
   "domain": "tacho",
   "description": "List the machines enrolled as Tacho hosts in this workspace with their status, liveness, and counters.",
   "mode": "sync",
-  "surfaces": [
-    "api"
-  ],
+  "surfaces": ["api"],
   "sensitivity": "medium",
   "agent": null,
   "chain": {
@@ -20,12 +18,7 @@
     "properties": {
       "status": {
         "type": "string",
-        "enum": [
-          "active",
-          "paused",
-          "suspended",
-          "revoked"
-        ]
+        "enum": ["active", "paused", "suspended", "revoked"]
       },
       "limit": {
         "type": "integer",
@@ -60,30 +53,18 @@
             },
             "platform": {
               "type": "string",
-              "enum": [
-                "darwin",
-                "linux",
-                "win32"
-              ]
+              "enum": ["darwin", "linux", "win32"]
             },
             "osUser": {
               "type": "string"
             },
             "status": {
               "type": "string",
-              "enum": [
-                "active",
-                "paused",
-                "suspended",
-                "revoked"
-              ]
+              "enum": ["active", "paused", "suspended", "revoked"]
             },
             "mode": {
               "type": "string",
-              "enum": [
-                "observe",
-                "enforce"
-              ]
+              "enum": ["observe", "enforce"]
             },
             "harnesses": {
               "type": "array",
@@ -221,10 +202,7 @@
         ]
       }
     },
-    "required": [
-      "hosts",
-      "nextCursor"
-    ],
+    "required": ["hosts", "nextCursor"],
     "additionalProperties": false
   }
 }

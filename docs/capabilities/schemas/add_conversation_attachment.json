@@ -3,11 +3,7 @@
   "domain": "conversation",
   "description": "Link an already-uploaded asset to a conversation as a chat attachment and return its conversation-file record.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -33,10 +29,7 @@
         "minLength": 1
       }
     },
-    "required": [
-      "conversationId",
-      "assetPublicId"
-    ],
+    "required": ["conversationId", "assetPublicId"],
     "additionalProperties": false
   },
   "output": {
@@ -79,11 +72,7 @@
       },
       "accessPolicy": {
         "type": "string",
-        "enum": [
-          "user",
-          "org",
-          "public"
-        ]
+        "enum": ["user", "org", "public"]
       },
       "createdAt": {
         "type": "string"

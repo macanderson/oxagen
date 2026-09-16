@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "List the top OBSERVATION memories by citation pressure that are candidates for promotion to RULE/FACT.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -82,9 +78,7 @@
         }
       }
     },
-    "required": [
-      "candidates"
-    ],
+    "required": ["candidates"],
     "additionalProperties": false
   }
 }

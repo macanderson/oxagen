@@ -3,10 +3,7 @@
   "domain": "billing",
   "description": "Turn automatic top-up on or off for the organization and set how many governed-action-unit blocks each top-up buys.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["api", "mcp"],
   "sensitivity": "high",
   "agent": null,
   "chain": {
@@ -28,10 +25,7 @@
         "maximum": 100
       }
     },
-    "required": [
-      "enabled",
-      "blocks"
-    ],
+    "required": ["enabled", "blocks"],
     "additionalProperties": false
   },
   "output": {
@@ -47,10 +41,7 @@
         "maximum": 100
       }
     },
-    "required": [
-      "enabled",
-      "blocks"
-    ],
+    "required": ["enabled", "blocks"],
     "additionalProperties": false
   }
 }

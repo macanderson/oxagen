@@ -3,11 +3,7 @@
   "domain": "privacy",
   "description": "Request a machine-readable ZIP export of personal or organizational data (GDPR Article 20 — right to data portability). Returns immediately with status 'queued'; poll via GET /v1/privacy/export/:exportId for the download URL.",
   "mode": "async",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": false,
@@ -26,19 +22,14 @@
     "properties": {
       "scope": {
         "type": "string",
-        "enum": [
-          "user",
-          "org"
-        ]
+        "enum": ["user", "org"]
       },
       "orgId": {
         "type": "string",
         "format": "uuid"
       }
     },
-    "required": [
-      "scope"
-    ],
+    "required": ["scope"],
     "additionalProperties": false
   },
   "output": {
@@ -51,22 +42,14 @@
       },
       "status": {
         "type": "string",
-        "enum": [
-          "queued",
-          "processing",
-          "ready",
-          "failed"
-        ]
+        "enum": ["queued", "processing", "ready", "failed"]
       },
       "downloadUrl": {
         "type": "string",
         "format": "uri"
       }
     },
-    "required": [
-      "exportId",
-      "status"
-    ],
+    "required": ["exportId", "status"],
     "additionalProperties": false
   }
 }

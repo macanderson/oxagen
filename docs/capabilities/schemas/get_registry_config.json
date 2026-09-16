@@ -3,11 +3,7 @@
   "domain": "schema",
   "description": "Set enforcement_mode and conformance_floor for the workspace registry.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "cli"
-  ],
+  "surfaces": ["api", "mcp", "cli"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": true,
@@ -26,11 +22,7 @@
     "properties": {
       "enforcementMode": {
         "type": "string",
-        "enum": [
-          "strict",
-          "lenient",
-          "off"
-        ]
+        "enum": ["strict", "lenient", "off"]
       },
       "conformanceFloor": {
         "type": "number",
@@ -49,21 +41,13 @@
       },
       "enforcementMode": {
         "type": "string",
-        "enum": [
-          "strict",
-          "lenient",
-          "off"
-        ]
+        "enum": ["strict", "lenient", "off"]
       },
       "conformanceFloor": {
         "type": "number"
       }
     },
-    "required": [
-      "registryId",
-      "enforcementMode",
-      "conformanceFloor"
-    ],
+    "required": ["registryId", "enforcementMode", "conformanceFloor"],
     "additionalProperties": false
   }
 }

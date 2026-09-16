@@ -3,11 +3,7 @@
   "domain": "billing",
   "description": "Buy governed action units in block quantities at the organisation's contracted rate through Stripe Checkout; returns the Checkout URL, the quantity, the block size and the number of blocks",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -40,11 +36,7 @@
         "maxLength": 2048
       }
     },
-    "required": [
-      "quantityGau",
-      "successPath",
-      "cancelPath"
-    ],
+    "required": ["quantityGau", "successPath", "cancelPath"],
     "additionalProperties": false
   },
   "output": {
@@ -68,12 +60,7 @@
         "minimum": 0
       }
     },
-    "required": [
-      "checkoutUrl",
-      "quantityGau",
-      "blockSizeGau",
-      "blocks"
-    ],
+    "required": ["checkoutUrl", "quantityGau", "blockSizeGau", "blocks"],
     "additionalProperties": false
   }
 }

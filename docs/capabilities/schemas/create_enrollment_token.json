@@ -3,10 +3,7 @@
   "domain": "tacho",
   "description": "Mint the single-use enrollment token a machine presents to enroll_host to become the named agent's host. Shown once; expires unused after its TTL.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "cli"
-  ],
+  "surfaces": ["api", "cli"],
   "sensitivity": "high",
   "agent": null,
   "chain": {
@@ -29,9 +26,7 @@
         "default": 30
       }
     },
-    "required": [
-      "agentId"
-    ],
+    "required": ["agentId"],
     "additionalProperties": false
   },
   "output": {

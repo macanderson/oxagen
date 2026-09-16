@@ -3,10 +3,7 @@
   "domain": "command",
   "description": "Generate 3–5 context-aware 'Suggested for this page' prompts for the Command Menu using a fast/cheap LLM tier. Accepts SuggestionContext (route, page entity summary, recent entities, effective capabilities). Returns [] when the org has opted out of LLM suggestions. Privacy: only entity.summary is sent to the model.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "agent"
-  ],
+  "surfaces": ["api", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -61,10 +58,7 @@
             "maxLength": 500
           }
         },
-        "required": [
-          "kind",
-          "id"
-        ],
+        "required": ["kind", "id"],
         "additionalProperties": false
       },
       "recentEntities": {
@@ -82,10 +76,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind",
-            "id"
-          ],
+          "required": ["kind", "id"],
           "additionalProperties": false
         },
         "default": []
@@ -103,9 +94,7 @@
         "default": "en"
       }
     },
-    "required": [
-      "route"
-    ],
+    "required": ["route"],
     "additionalProperties": false
   },
   "output": {
@@ -138,18 +127,12 @@
               "maximum": 1
             }
           },
-          "required": [
-            "text",
-            "category",
-            "confidence"
-          ],
+          "required": ["text", "category", "confidence"],
           "additionalProperties": false
         }
       }
     },
-    "required": [
-      "suggestions"
-    ],
+    "required": ["suggestions"],
     "additionalProperties": false
   }
 }

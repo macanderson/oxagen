@@ -119,7 +119,7 @@ const REQUIRED_EMIT_PREFIXES: readonly string[] = [
   "org.create", // org creation (privileged bootstrap)
   "iam-provision", // IAM bootstrap helper (roles / principals / grants)
   "mandate.", // mandates: grant / limits change / revoke (ADR-059); reads and the draft request are exempt
-  "approval_rule.", // auto-approval rules: written, switched off, deleted (ADR-068); the two reads are exempt
+  "approval_rule.", // auto-approval rules: written, switched off, deleted (ADR-069); the two reads are exempt
   "prompt.settings.write", // system-prompt customization mutation
 ] as const;
 

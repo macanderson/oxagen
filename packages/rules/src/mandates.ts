@@ -688,7 +688,7 @@ export async function decideMandate(
       // (§6.9 part 3), so the call waits for a person whatever the evaluation
       // says. What it buys is the eligibility line every approval card
       // renders — which rule was read, whether it would have qualified, and
-      // every reason it would not (ADR-068).
+      // every reason it would not (ADR-069).
       const eligibility = await evaluateParkedCall(tx, {
         capability: args.capability,
         input: args.input,

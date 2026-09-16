@@ -66,7 +66,7 @@ export function toApprovalListItem(row: ApprovalListRow): ApprovalListItem {
     createdAt: row.createdAt.toISOString(),
     expiresAt: row.expiresAt.toISOString(),
     mandateId: row.mandatePublicId,
-    // The evaluation recorded when the call was parked (ADR-068). `ok` is the
+    // The evaluation recorded when the call was parked (ADR-069). `ok` is the
     // evaluator's verdict, not whether the call was released: a mandate's own
     // approval rule outranks any workspace rule, so a row here can carry
     // `ok: true` and still be waiting for a person.

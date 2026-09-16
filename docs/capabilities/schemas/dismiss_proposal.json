@@ -3,9 +3,7 @@
   "domain": "context",
   "description": "Reject a record proposal with a reason. Refused once the proposal has merged.",
   "mode": "sync",
-  "surfaces": [
-    "api"
-  ],
+  "surfaces": ["api"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -31,10 +29,7 @@
         "maxLength": 2000
       }
     },
-    "required": [
-      "proposalId",
-      "reason"
-    ],
+    "required": ["proposalId", "reason"],
     "additionalProperties": false
   },
   "output": {
@@ -48,10 +43,7 @@
         "const": "rejected"
       }
     },
-    "required": [
-      "proposalId",
-      "status"
-    ],
+    "required": ["proposalId", "status"],
     "additionalProperties": false
   }
 }

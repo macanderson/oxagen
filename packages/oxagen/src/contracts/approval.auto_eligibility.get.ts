@@ -1,5 +1,5 @@
 // get_auto_eligibility — what the auto-approval clause said about one approval
-// request, and who resolved it (MC spec §6.9 part 2; ADR-068).
+// request, and who resolved it (MC spec §6.9 part 2; ADR-069).
 //
 // The eligibility is READ, never recomputed: it is the evaluation recorded on
 // the row when the call was parked, so what the page shows is what the

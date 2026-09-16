@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "Revoke an IAM role from an agent's delegated principal — soft-deletes the principal_role_assignments row (audit trail preserved). Idempotent: returns revoked=false when the agent did not hold the role. Audited with principal_kind='agent'.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -35,10 +31,7 @@
         "description": "IAM role name to detach"
       }
     },
-    "required": [
-      "agentId",
-      "roleName"
-    ],
+    "required": ["agentId", "roleName"],
     "additionalProperties": false
   },
   "output": {
@@ -57,11 +50,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "revoked",
-      "agentId",
-      "roleName"
-    ],
+    "required": ["revoked", "agentId", "roleName"],
     "additionalProperties": false
   }
 }

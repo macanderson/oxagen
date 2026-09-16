@@ -1,5 +1,5 @@
 /**
- * The auto-approval rule vocabulary (MC spec §6.9 part 2, ADR-068).
+ * The auto-approval rule vocabulary (MC spec §6.9 part 2, ADR-069).
  *
  * An auto-approval rule names the conditions under which a call the policy
  * sent to a person may skip them. The contracts, the handlers and the

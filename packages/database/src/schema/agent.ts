@@ -186,7 +186,7 @@ export const approvalRequests = agentSchema.table(
       mode: "date",
     }),
     // The auto-approval clause of the workspace's rule set, evaluated when the
-    // call was parked (MC spec §6.9 part 2, ADR-068): the rule that was read,
+    // call was parked (MC spec §6.9 part 2, ADR-069): the rule that was read,
     // and every reason the call did not qualify (empty when it did). Null /
     // empty when no rule covered the call.
     autoRuleId: text("auto_rule_id"),

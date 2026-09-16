@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "Grant or deny first-use consent for an external MCP tool; the decision resumes the paused agent stream and is remembered for subsequent calls",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -29,19 +25,13 @@
       },
       "decision": {
         "type": "string",
-        "enum": [
-          "granted",
-          "denied"
-        ]
+        "enum": ["granted", "denied"]
       },
       "grantAllTools": {
         "type": "boolean"
       }
     },
-    "required": [
-      "approvalId",
-      "decision"
-    ],
+    "required": ["approvalId", "decision"],
     "additionalProperties": false
   },
   "output": {
@@ -53,17 +43,10 @@
       },
       "resolution": {
         "type": "string",
-        "enum": [
-          "granted",
-          "denied",
-          "expired"
-        ]
+        "enum": ["granted", "denied", "expired"]
       }
     },
-    "required": [
-      "approvalId",
-      "resolution"
-    ],
+    "required": ["approvalId", "resolution"],
     "additionalProperties": false
   }
 }

@@ -3,11 +3,7 @@
   "domain": "graph",
   "description": "Paginated browse of customer-context nodes in the workspace graph. Enables graph explorer UI.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -15,13 +11,9 @@
     "category": "read"
   },
   "chain": {
-    "produces": [
-      "graph.nodeId"
-    ],
+    "produces": ["graph.nodeId"],
     "consumes": [],
-    "chainHints": [
-      "get_node"
-    ]
+    "chainHints": ["get_node"]
   },
   "render": {
     "componentId": "graph-node-list-card"
@@ -91,12 +83,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "id",
-            "labels",
-            "properties",
-            "displayName"
-          ],
+          "required": ["id", "labels", "properties", "displayName"],
           "additionalProperties": false
         }
       },
@@ -115,13 +102,7 @@
         "type": "number"
       }
     },
-    "required": [
-      "nodes",
-      "total",
-      "hasMore",
-      "limit",
-      "offset"
-    ],
+    "required": ["nodes", "total", "hasMore", "limit", "offset"],
     "additionalProperties": false
   }
 }

@@ -3,10 +3,7 @@
   "domain": "run",
   "description": "Align two runs frame by frame on each frame's kind and call identity and answer the first sequence at which they diverge, with both keys there; null when they agree throughout.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["api", "mcp"],
   "sensitivity": "medium",
   "agent": null,
   "chain": {
@@ -26,10 +23,7 @@
         "type": "string"
       }
     },
-    "required": [
-      "runA",
-      "runB"
-    ],
+    "required": ["runA", "runB"],
     "additionalProperties": false
   },
   "output": {
@@ -71,12 +65,7 @@
         "minimum": 0
       }
     },
-    "required": [
-      "divergentSeq",
-      "keyA",
-      "keyB",
-      "aligned"
-    ],
+    "required": ["divergentSeq", "keyA", "keyB", "aligned"],
     "additionalProperties": false
   }
 }

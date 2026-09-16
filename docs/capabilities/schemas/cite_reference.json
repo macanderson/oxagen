@@ -3,9 +3,7 @@
   "domain": "reference",
   "description": "Record @-mention citations of knowledge-graph nodes within a chat execution — creates :Citation lineage and increments the node's citation_count (plus influence_count for AgentMemory nodes), identical to automatic citations.",
   "mode": "sync",
-  "surfaces": [
-    "agent"
-  ],
+  "surfaces": ["agent"],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -45,17 +43,12 @@
               "description": "publicId of the mentioned :GraphNode"
             }
           },
-          "required": [
-            "nodeId"
-          ],
+          "required": ["nodeId"],
           "additionalProperties": false
         }
       }
     },
-    "required": [
-      "executionRef",
-      "references"
-    ],
+    "required": ["executionRef", "references"],
     "additionalProperties": false
   },
   "output": {
@@ -97,12 +90,7 @@
               ]
             }
           },
-          "required": [
-            "nodeId",
-            "ok",
-            "citationId",
-            "error"
-          ],
+          "required": ["nodeId", "ok", "citationId", "error"],
           "additionalProperties": false
         }
       },
@@ -111,11 +99,7 @@
         "minimum": 0
       }
     },
-    "required": [
-      "executionId",
-      "results",
-      "recorded"
-    ],
+    "required": ["executionId", "results", "recorded"],
     "additionalProperties": false
   }
 }

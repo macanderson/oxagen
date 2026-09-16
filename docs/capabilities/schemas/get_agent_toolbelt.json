@@ -3,10 +3,7 @@
   "domain": "agent",
   "description": "Compute the toolbelt an agent would be shown without executing anything: the decision and rule per tool, how the belt was computed, what the model receives in full or searchable mode, and what the agent cannot see.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp"
-  ],
+  "surfaces": ["api", "mcp"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -30,15 +27,10 @@
       },
       "mode": {
         "type": "string",
-        "enum": [
-          "full",
-          "searchable"
-        ]
+        "enum": ["full", "searchable"]
       }
     },
-    "required": [
-      "agentId"
-    ],
+    "required": ["agentId"],
     "additionalProperties": false
   },
   "output": {
@@ -66,10 +58,7 @@
         "properties": {
           "humanCeiling": {
             "type": "string",
-            "enum": [
-              "caller",
-              "sentinel"
-            ]
+            "enum": ["caller", "sentinel"]
           },
           "roleGrants": {
             "type": "integer",
@@ -87,10 +76,7 @@
                 "minimum": 0
               }
             },
-            "required": [
-              "org",
-              "workspace"
-            ],
+            "required": ["org", "workspace"],
             "additionalProperties": false
           },
           "killSwitches": {
@@ -111,10 +97,7 @@
         "properties": {
           "mode": {
             "type": "string",
-            "enum": [
-              "full",
-              "searchable"
-            ]
+            "enum": ["full", "searchable"]
           },
           "limit": {
             "type": "integer",
@@ -122,17 +105,10 @@
           },
           "sentToModel": {
             "type": "string",
-            "enum": [
-              "definitions",
-              "meta_tools"
-            ]
+            "enum": ["definitions", "meta_tools"]
           }
         },
-        "required": [
-          "mode",
-          "limit",
-          "sentToModel"
-        ],
+        "required": ["mode", "limit", "sentToModel"],
         "additionalProperties": false
       },
       "tools": {
@@ -146,10 +122,7 @@
             },
             "kind": {
               "type": "string",
-              "enum": [
-                "capability",
-                "mcp"
-              ]
+              "enum": ["capability", "mcp"]
             },
             "server": {
               "anyOf": [
@@ -173,18 +146,11 @@
             },
             "riskLevel": {
               "type": "string",
-              "enum": [
-                "low",
-                "medium",
-                "high"
-              ]
+              "enum": ["low", "medium", "high"]
             },
             "decision": {
               "type": "string",
-              "enum": [
-                "allow",
-                "require_approval"
-              ]
+              "enum": ["allow", "require_approval"]
             },
             "rule": {
               "type": "string",
@@ -218,10 +184,7 @@
             },
             "kind": {
               "type": "string",
-              "enum": [
-                "capability",
-                "mcp"
-              ]
+              "enum": ["capability", "mcp"]
             },
             "server": {
               "anyOf": [
@@ -238,12 +201,7 @@
               "minLength": 1
             }
           },
-          "required": [
-            "name",
-            "kind",
-            "server",
-            "rule"
-          ],
+          "required": ["name", "kind", "server", "rule"],
           "additionalProperties": false
         }
       }

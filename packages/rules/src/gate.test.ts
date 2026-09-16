@@ -280,7 +280,7 @@ describe("createDecisionRulesGate — the mandate check", () => {
 });
 
 /**
- * The auto-approval clause of the same rule set (ADR-068): what the gate does
+ * The auto-approval clause of the same rule set (ADR-069): what the gate does
  * with a `require_approval` verdict it is told may skip the person.
  */
 describe("auto-approval at a require_approval verdict", () => {

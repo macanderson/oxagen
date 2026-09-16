@@ -49,7 +49,7 @@ export const approvalListItem = z
     /**
      * What the workspace's auto-approval clause said about this call when it
      * was parked: the rule that was read, whether it qualified, and every
-     * reason it did not (ADR-068). Null when no rule covered the call.
+     * reason it did not (ADR-069). Null when no rule covered the call.
      *
      * A row a mandate parked can carry `ok: true` and still be here: a
      * mandate's own approval rule outranks any workspace rule (§6.9 part 3),

@@ -3,11 +3,7 @@
   "domain": "agent",
   "description": "Get one IAM role's status relative to an agent: whether the agent's delegated principal holds it, the assignment provenance when held, and the role's capability grant list (what attaching it confers). Read-only governance introspection.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": ["api", "mcp", "agent"],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -35,10 +31,7 @@
         "description": "IAM role name to inspect"
       }
     },
-    "required": [
-      "agentId",
-      "roleName"
-    ],
+    "required": ["agentId", "roleName"],
     "additionalProperties": false
   },
   "output": {
@@ -78,10 +71,7 @@
               },
               "scopeKind": {
                 "type": "string",
-                "enum": [
-                  "org",
-                  "workspace"
-                ]
+                "enum": ["org", "workspace"]
               },
               "isSystemDefault": {
                 "type": "boolean",
@@ -151,17 +141,10 @@
             },
             "effect": {
               "type": "string",
-              "enum": [
-                "allow",
-                "deny",
-                "require_approval"
-              ]
+              "enum": ["allow", "deny", "require_approval"]
             }
           },
-          "required": [
-            "capability",
-            "effect"
-          ],
+          "required": ["capability", "effect"],
           "additionalProperties": false
         },
         "description": "Capability grants the role carries"
