@@ -60,6 +60,37 @@
       "never": "Never",
       "empty": "No invitations are waiting for an answer."
     },
+    "apiKeys": {
+      "lead": "A key acts as the person who created it: on the API, MCP and the CLI it can do what that person can do, and no more.",
+      "tableLabel": "API keys",
+      "columns": {
+        "name": "Name",
+        "prefix": "Prefix",
+        "created": "Created",
+        "lastUsed": "Last used",
+        "expires": "Expires",
+        "status": "Status"
+      },
+      "status": {
+        "live": "live",
+        "revoked": "revoked"
+      },
+      "never": "Never",
+      "neverUsed": "Never used",
+      "empty": "This organization has no API keys.",
+      "denied": {
+        "title": "You cannot see this organization’s API keys",
+        "body": "Signed in as {role}. Needed: {permission}. An owner can grant it, and the grant is recorded in the audit record."
+      },
+      "pending": {
+        "title": "Waiting for approval",
+        "body": "Access request {id} is waiting for an owner’s decision."
+      },
+      "error": {
+        "title": "API keys could not be loaded",
+        "body": "{status} {code}. Nothing was changed. Reload the page to try again."
+      }
+    },
     "denied": {
       "title": "You cannot see this organization’s people",
       "body": "Signed in as {role}. Needed: {permission}. An owner can grant it, and the grant is recorded in the audit record."

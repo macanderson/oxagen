@@ -112,7 +112,7 @@ export function onboardingSource(reads: Reads): {
       waste: refuse("spend.waste"),
       budgets: refuse("spend.budgets"),
     },
-    org: { members: refuse("org.members") },
+    org: { members: refuse("org.members"), apiKeys: refuse("org.apiKeys") },
     skills: { inventory: refuse("skills.inventory") },
     steering: {
       records: refuse("steering.records"),

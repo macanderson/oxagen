@@ -5,6 +5,7 @@
 // source in a required field, and NullableOnlyWhenSourceIs refuses a required
 // source in a nullable field. Every mapper's output is checked against it.
 import type { agentApprovalList } from "@oxagen/oxagen/contracts/agent.approval.list";
+import type { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import type { agentGet } from "@oxagen/oxagen/contracts/agent.get";
 import type { agentList } from "@oxagen/oxagen/contracts/agent.list";
 import type { onboardingFirstFrameGet } from "@oxagen/oxagen/contracts/onboarding.first_frame.get";
@@ -15,6 +16,7 @@ import type { ContractOutput } from "@/server/kernel";
 import type { toAgentDetail, toAgentPage, toIncidentPage } from "./agents";
 import type { toApprovalItems } from "./approvals";
 import type { toFirstFrame, toOnboardingGate } from "./onboarding";
+import type { toApiKeys } from "./org";
 import type { toRunPage } from "./runs";
 
 /** Each field of View that Out also has may be nullable only where Out's is. */
@@ -39,6 +41,8 @@ type AgentOut = ContractOutput<typeof agentGet>;
 type AgentView = ReturnType<typeof toAgentDetail>;
 type IncidentOut = ContractOutput<typeof tachoIncidentList>["items"][number];
 type IncidentView = ReturnType<typeof toIncidentPage>["incidents"][number];
+type ApiKeyOut = ContractOutput<typeof apiKeyList>["items"][number];
+type ApiKeyView = ReturnType<typeof toApiKeys>[number];
 
 declare const runOut: RunOut;
 declare const runView: RunView;
@@ -48,6 +52,7 @@ declare const identityView: AgentView["identity"];
 declare const credentialView: AgentView["credentials"][number];
 declare const hostView: AgentView["hosts"][number];
 declare const incidentView: IncidentView;
+declare const apiKeyView: ApiKeyView;
 
 type GateOut = ContractOutput<typeof onboardingStateGet>;
 type GateView = ReturnType<typeof toOnboardingGate>;
@@ -79,6 +84,8 @@ const _incidentsHold: NullableOnlyWhenSourceIs<IncidentView, IncidentOut> =
   incidentView;
 const _gateHolds: NullableOnlyWhenSourceIs<GateView, GateOut> = gateView;
 const _frameHolds: NullableOnlyWhenSourceIs<FrameView, FrameOut> = frameView;
+const _apiKeysHold: NullableOnlyWhenSourceIs<ApiKeyView, ApiKeyOut> =
+  apiKeyView;
 
 // @ts-expect-error -- turns may be null on the contract, and frames is required on the view
 const _nullableIntoRequired: Pick<RunView, "frames"> = { frames: runOut.turns };

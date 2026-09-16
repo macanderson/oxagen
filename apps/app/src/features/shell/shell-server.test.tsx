@@ -78,7 +78,7 @@ describe("ShellChrome", () => {
         budgets: vi.fn(),
       },
       onboarding: { state: vi.fn(), firstFrame: vi.fn() },
-      org: { members: vi.fn() },
+      org: { members: vi.fn(), apiKeys: vi.fn() },
       skills: { inventory: vi.fn() },
       steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
     };

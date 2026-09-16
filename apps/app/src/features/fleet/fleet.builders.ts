@@ -103,7 +103,7 @@ export function fleetSource(reads: FleetReads) {
       budgets: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
-    org: { members: refuse },
+    org: { members: refuse, apiKeys: refuse },
     skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },
   };

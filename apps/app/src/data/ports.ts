@@ -19,7 +19,7 @@ import type {
   PlanCard,
 } from "./contracts/billing";
 import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
-import type { MemberList } from "./contracts/org";
+import type { ApiKey, MemberList } from "./contracts/org";
 import type { RunPage } from "./contracts/runs";
 import type {
   OrgChoice,
@@ -152,8 +152,17 @@ export interface DataSource {
       q: { waitMs: number },
     ): Promise<Read<FirstFrame>>;
   };
-  /** list_members {scope:"org"}; caller: features/organization/people.tsx. */
-  org: { members(ctx: OrgCtx): Promise<Read<MemberList>> };
+  /**
+   * The Organization page's two tabs, each an Owner-or-Admin read checked in
+   * its handler; callers: features/organization/people.tsx and
+   * features/organization/api-keys.tsx.
+   */
+  org: {
+    /** list_members {scope:"org"} */
+    members(ctx: OrgCtx): Promise<Read<MemberList>>;
+    /** list_api_keys, every key in scope, newest first, revoked ones included */
+    apiKeys(ctx: OrgCtx): Promise<Read<ApiKey[]>>;
+  };
   /**
    * list_skills, one page by name over its default window (noBillingGate;
    * workspace members, checked in its handler); caller:
