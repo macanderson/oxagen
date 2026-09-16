@@ -70,25 +70,35 @@ const roster: Read<MemberList> = readOk({
 const events = vi.fn<DataSource["audit"]["events"]>();
 const exportEvents = vi.fn<DataSource["audit"]["exportEvents"]>();
 const members = vi.fn<DataSource["org"]["members"]>();
-const source = {
-  pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-  shell: { context: vi.fn() },
+const refuse = () => Promise.reject(new Error("not an Audit read"));
+const source: DataSource = {
+  pretenant: { orgs: refuse, workspaces: refuse },
+  shell: { context: refuse },
+  runs: { list: refuse },
+  approvals: { pending: refuse },
+  agents: {
+    list: refuse,
+    get: refuse,
+    toolbelt: refuse,
+    incidents: refuse,
+  },
   billing: {
-    plan: vi.fn(),
-    bucket: vi.fn(),
-    contractRate: vi.fn(),
-    invoices: vi.fn(),
+    plan: refuse,
+    bucket: refuse,
+    contractRate: refuse,
+    invoices: refuse,
   },
   spend: {
-    byGroup: vi.fn(),
-    fleet: vi.fn(),
-    drill: vi.fn(),
-    waste: vi.fn(),
-    budgets: vi.fn(),
+    byGroup: refuse,
+    fleet: refuse,
+    drill: refuse,
+    waste: refuse,
+    budgets: refuse,
   },
   org: { members },
   audit: { events, exportEvents },
-} as unknown as DataSource;
+  steering: { records: refuse, proposals: refuse, contextPr: refuse },
+};
 
 async function renderAudit(
   searchParams: Record<string, string | string[]> = {},

@@ -2,6 +2,8 @@
 // and what the file carries. The export reads through the audit port alone, so
 // the test hands it a fake DataSource and asserts the call it makes.
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { DataSource } from "@/data/ports";
+import type { AuditExportDeps } from "./export";
 
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
@@ -27,12 +29,33 @@ const file = {
   rowCount: 1,
 };
 
+const refuse = () => Promise.reject(new Error("not the audit export read"));
 const exportEvents = vi.fn();
 const resolveViewer = vi.fn();
-const deps = {
-  resolveViewer,
-  dataSource: () => ({ audit: { exportEvents } }) as never,
+const source: DataSource = {
+  pretenant: { orgs: refuse, workspaces: refuse },
+  shell: { context: refuse },
+  runs: { list: refuse },
+  approvals: { pending: refuse },
+  agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
+  billing: {
+    plan: refuse,
+    bucket: refuse,
+    contractRate: refuse,
+    invoices: refuse,
+  },
+  spend: {
+    byGroup: refuse,
+    fleet: refuse,
+    drill: refuse,
+    waste: refuse,
+    budgets: refuse,
+  },
+  org: { members: refuse },
+  audit: { events: refuse, exportEvents },
+  steering: { records: refuse, proposals: refuse, contextPr: refuse },
 };
+const deps: AuditExportDeps = { resolveViewer, dataSource: () => source };
 
 const request = (search = "") =>
   new Request(`http://mission-control.test/acme/audit/export${search}`);

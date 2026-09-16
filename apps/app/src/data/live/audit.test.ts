@@ -6,8 +6,11 @@ import { auditEventsExport } from "@oxagen/oxagen/contracts/audit.events.export"
 import { auditLogQuery } from "@oxagen/oxagen/contracts/audit.log.query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+/** Only the part of a kernelRead call this test reads back off the mock. */
+type KernelCall = { input: Record<string, unknown> };
+
 const { kernelRead, captureError } = vi.hoisted(() => ({
-  kernelRead: vi.fn(),
+  kernelRead: vi.fn<(ctx: unknown, call: KernelCall) => Promise<unknown>>(),
   captureError: vi.fn(),
 }));
 vi.mock("@/server/kernel", () => ({ kernelRead }));
@@ -85,7 +88,7 @@ describe("audit.events", () => {
       to: "2026-09-15",
       offset: 50,
     });
-    expect(kernelRead.mock.calls[0]?.[1].input).toEqual({
+    expect(kernelRead.mock.calls[0]?.[1]?.input).toEqual({
       source: "security",
       eventType: "capability.invoke_denied",
       outcome: "deny",
@@ -103,7 +106,7 @@ describe("audit.events", () => {
       readOk({ events: [], total: 0, hasMore: false, limit: 50, offset: 0 }),
     );
     await audit.events(ctx, { ...NO_FILTERS, to: "2026-12-31", offset: 0 });
-    expect(kernelRead.mock.calls[0]?.[1].input.to).toBe(
+    expect(kernelRead.mock.calls[0]?.[1]?.input?.to).toBe(
       "2027-01-01T00:00:00.000Z",
     );
   });
