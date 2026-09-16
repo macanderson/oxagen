@@ -167,7 +167,7 @@ describe("toApiKeys", () => {
 
   it("copies no field it does not name, so a secret or a hash beside the metadata does not reach the view (negative)", () => {
     const leaky = {
-      ...apiKeyList.output.parse({ items: [storedKey] }).items[0],
+      ...storedKey,
       keyHash: "sha256-of-the-live-key",
       secret: "ox_thewholekey",
     };

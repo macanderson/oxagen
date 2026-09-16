@@ -58,7 +58,7 @@ const source: DataSource = {
     waste: refuse,
     budgets: refuse,
   },
-  org: { members: refuse },
+  org: { members: refuse, apiKeys: refuse },
 };
 
 function spend(over: Partial<FleetSpend> = {}): Read<FleetSpend> {

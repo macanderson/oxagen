@@ -48,7 +48,7 @@ const source = {
     waste: vi.fn(),
     budgets: vi.fn(),
   },
-  org: { members: vi.fn() },
+  org: { members: vi.fn(), apiKeys: vi.fn() },
 };
 const listed = readOk({
   orgs: [{ slug: "acme", name: "Acme Robotics" }],

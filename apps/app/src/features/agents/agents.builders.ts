@@ -248,7 +248,7 @@ export function agentsSource(reads: AgentReads) {
       waste: refuse,
       budgets: refuse,
     },
-    org: { members: refuse },
+    org: { members: refuse, apiKeys: refuse },
   };
   return { source, calls };
 }

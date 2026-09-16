@@ -67,7 +67,9 @@ const revoked = apiKey({
 
 const keysTable = () => screen.getByRole("table", { name: "API keys" });
 const rowFor = (key: ApiKey) => {
-  const row = keysTable().querySelector(`[data-api-key="${key.id}"]`);
+  const row = keysTable().querySelector<HTMLElement>(
+    `[data-api-key="${key.id}"]`,
+  );
   if (row === null) throw new Error(`no row for ${key.id}`);
   return row;
 };
