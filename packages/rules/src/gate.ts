@@ -62,8 +62,24 @@ type MandateCheck = (args: {
   requestId?: string;
 }) => Promise<DecisionSettlement | undefined>;
 
+/**
+ * The auto-approval clause of the same rule set (ADR-068). The gate asks it
+ * once, on a `require_approval` verdict: an outcome with `ok` has recorded
+ * the approval as `policy:<rule id>` and the call proceeds; anything else
+ * leaves the call with the person it was already going to.
+ */
+export type AutoApprovalHook = (args: {
+  capability: string;
+  input: unknown;
+  ruleSet: RuleSet;
+  verdict: Verdict;
+  ctx: { orgId: string; workspaceId: string; userId: string | null };
+}) => Promise<{ ok: boolean } | null>;
+
 export interface DecisionRulesGateOptions {
   loadRuleSet: RuleSetLoader;
+  /** Omitted ⇒ every `require_approval` verdict goes to a person. */
+  autoApprove?: AutoApprovalHook;
   /** Omitted ⇒ no mandate check; every agent call proceeds on the rules alone. */
   checkMandate?: MandateCheck;
   /** Omitted ⇒ rules that declare `requires_facts` see an empty bag and their fact conditions do not match. */
@@ -127,6 +143,47 @@ export function createDecisionRulesGate(
   };
 }
 
+/**
+ * Whether an auto-approval rule answered the person's question for this call.
+ *
+ * Needs a workspace: the rules are a workspace's. A hook that throws is
+ * infrastructure failing, and the gate's posture there is unchanged — the
+ * call goes to the person the verdict already sent it to, which is the safe
+ * direction, so the error is reported and swallowed rather than allowed to
+ * release the call.
+ */
+async function skipsThePerson(
+  options: DecisionRulesGateOptions,
+  args: {
+    capability: string;
+    input: unknown;
+    ctx: DecisionGateArgs["ctx"];
+    ruleSet: RuleSet;
+    verdict: Verdict;
+  },
+): Promise<boolean> {
+  if (options.autoApprove === undefined || args.ctx.workspaceId === null) {
+    return false;
+  }
+  try {
+    const outcome = await options.autoApprove({
+      capability: args.capability,
+      input: args.input,
+      ruleSet: args.ruleSet,
+      verdict: args.verdict,
+      ctx: {
+        orgId: args.ctx.orgId,
+        workspaceId: args.ctx.workspaceId,
+        userId: args.ctx.userId,
+      },
+    });
+    return outcome?.ok === true;
+  } catch (error) {
+    options.onError?.(error);
+    return false;
+  }
+}
+
 /** Evaluate the workspace's rule set; throws on a deny or a require_approval verdict. */
 async function judgeRules(
   options: DecisionRulesGateOptions,
@@ -183,6 +240,17 @@ async function judgeRules(
   const verdict = evaluateRules(ruleSet, subject);
   if (verdict === null || verdict.effect === "allow") return;
   if (verdict.effect === "require_approval") {
+    if (
+      await skipsThePerson(options, {
+        capability,
+        input,
+        ctx,
+        ruleSet,
+        verdict,
+      })
+    ) {
+      return;
+    }
     throw new DecisionRuleApprovalRequiredError(verdict);
   }
   throw new DecisionRuleDeniedError(verdict);

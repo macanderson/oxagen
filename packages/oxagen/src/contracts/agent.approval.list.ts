@@ -15,6 +15,7 @@
 // parked the call are recorded on rows the mandate gate writes (ADR-059) and
 // null on the chat gate's rows.
 import { z } from "zod";
+import { autoEligibilitySchema } from "../approval-rules/schemas";
 import { registerCapability } from "../registry";
 
 const instant = z.string().datetime({ offset: true });
@@ -45,6 +46,17 @@ export const approvalListItem = z
      * approval gate wrote.
      */
     mandateId: z.string().nullable(),
+    /**
+     * What the workspace's auto-approval clause said about this call when it
+     * was parked: the rule that was read, whether it qualified, and every
+     * reason it did not (ADR-068). Null when no rule covered the call.
+     *
+     * A row a mandate parked can carry `ok: true` and still be here: a
+     * mandate's own approval rule outranks any workspace rule (§6.9 part 3),
+     * so the eligibility line says the rule would have released the call and
+     * the mandate asked for a person anyway.
+     */
+    autoEligibility: autoEligibilitySchema.nullable(),
     /** The hops of the four-hop chain (MC spec §7.5). */
     chain: z
       .object({

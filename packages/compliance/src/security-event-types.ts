@@ -179,6 +179,15 @@ export const SECURITY_EVENT_TYPES = [
   "mandate.revoked",
   "mandate.expired",
   "mandate.exception",
+  // Auto-approval (MC spec §6.9 part 2, ADR-068): a call a decision rule sent
+  // to a person that an auto-approval rule released instead, recorded with
+  // `policy:<rule id>` as its approver. Emitted by
+  // packages/rules/src/auto-approval-path.ts.
+  "approval.auto_approved",
+  // The rules themselves: written, switched off, or deleted. Emitted by
+  // packages/handlers/src/approval_rule.*.ts.
+  "approval_rule.changed",
+  "approval_rule.deleted",
   // Access review
   "access.review_completed",
   "access.member_access_confirmed",

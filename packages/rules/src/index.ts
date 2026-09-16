@@ -26,6 +26,29 @@ export {
   requiredFactKeys,
 } from "./evaluate";
 export { parseRuleSet, ruleSetSchema } from "./schema";
+// The auto-approval clause of the same rule set (ADR-068): the pure evaluator
+// the decision path runs, the reason vocabulary the app maps to copy, and the
+// floor test a recorded result is read back through.
+export {
+  evaluateAutoApproval,
+  isFloorReason,
+  withinBusinessHours,
+  HARD_FLOOR_REASONS,
+  IRREVERSIBLE_CONSEQUENCE_TAGS,
+  REASON,
+  type AutoApprovalOutcome,
+  type AutoApprovalSubject,
+} from "./auto-approval";
+export { autoApproveParkedCall } from "./auto-approval-path";
+export {
+  buildAutoApprovalSubject,
+  inputDigest,
+  lastHumanApprovalOf,
+  loadDeclaredTool,
+  readDeclaredMeasures,
+  type DeclaredTool,
+} from "./call-facts";
+export { loadRuleSetIn } from "./rule-store";
 export {
   createDecisionRulesGate,
   DecisionRuleApprovalRequiredError,

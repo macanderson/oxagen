@@ -63,6 +63,8 @@ describe("list_approvals item", () => {
         requesterPublicId: "usr_0123456789abcdefghjkmn",
         mandatePublicId: null,
         ruleIds: [],
+        autoRuleId: null,
+        resolvedReasons: [],
       }),
     ).toEqual({
       id: "apr_0123456789abcdefghjkmn",
@@ -72,6 +74,7 @@ describe("list_approvals item", () => {
       createdAt: "2026-09-13T10:00:00.000Z",
       expiresAt: "2026-09-13T10:05:00.000Z",
       mandateId: null,
+      autoEligibility: null,
       chain: { agentKey: null, rule: null },
     });
   });
@@ -88,8 +91,16 @@ describe("list_approvals item", () => {
         "mandate:mnd_0123456789abcdefghjkmn:human_above:amount",
         "mandate:mnd_0123456789abcdefghjkmn:always_human_for:moves_money",
       ],
+      autoRuleId: "small-vendor-payments",
+      resolvedReasons: ["measure_above_ceiling:amount"],
     });
     expect(item.mandateId).toBe("mnd_0123456789abcdefghjkmn");
+    expect(item.autoEligibility).toEqual({
+      ruleId: "small-vendor-payments",
+      ok: false,
+      reasons: ["measure_above_ceiling:amount"],
+      floor: false,
+    });
     expect(item.chain.rule).toBe(
       "mandate:mnd_0123456789abcdefghjkmn:human_above:amount",
     );

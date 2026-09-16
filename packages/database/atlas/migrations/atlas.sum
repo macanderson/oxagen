@@ -1,4 +1,4 @@
-h1:DjXqyBh/QnGlq4Rvifz1kkohhGyjY6Q/GJWV+HbvWYg=
+h1:PRMdZt4KnCycKgQwEcP71qRBa7pTTXN0o9lcDOeq3t0=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:Xh0Mx6rfN3XHIBA7nIlNhADsWGfC1mZtn25NsnrIZXo=
@@ -130,3 +130,5 @@ h1:DjXqyBh/QnGlq4Rvifz1kkohhGyjY6Q/GJWV+HbvWYg=
 20260915202300_mandates_and_ledger.sql h1:Q5U2yLbPMC071XjFGtORz3Y/RGRBjZaE17p+mGEcKkk=
 20260915202500_mandate_security_events.sql h1:wh1KHUtIhDiKk1SCY2zlhJRo7e5b8z8NkpsSu1BKXxE=
 20260915205000_proof_witnesses_verdicts.sql h1:uiZH38hINJNUdG+vlHtTF2NyULn33IWySV/+rNdhbtg=
+20260916120000_auto_approval_columns.sql h1:i5ds+VzADl5IBCQfbHe7ZpJiVrRHRDL3ZjNkSwxPkGk=
+20260916120500_auto_approval_security_events.sql h1:eZYJrwAq6etMsS7KcMCjIY2t4kBL9ndWfW6pXs+gAyc=

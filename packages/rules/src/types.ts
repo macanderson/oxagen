@@ -28,6 +28,8 @@
  * the verdict and the decision re-derives byte-for-byte.
  */
 
+import type { AutoApprovalRule } from "@oxagen/oxagen/approval-rules/schemas";
+
 /** Comparison operators a condition leaf may use. */
 export const CONDITION_OPS = [
   "eq",
@@ -111,11 +113,26 @@ export interface DecisionRule {
   requires_facts?: string[];
 }
 
-/** A workspace's rule set — the unit that is authored, versioned and loaded. */
+/**
+ * A workspace's rule set — the unit that is authored, versioned and loaded.
+ *
+ * Two clauses, one document, one store, one loader. `rules` decides at the
+ * kernel gate; `autoApproval` decides whether a call the gate sent to a person
+ * may skip them (MC spec §6.9 part 2, ADR-068). They are kept apart because
+ * they answer different questions: an auto-approval carried on a gate rule
+ * would have to ride `effect: "allow"`, and an `allow` verdict stops
+ * evaluation, so writing one would silently outrank every later deny rule.
+ *
+ * `v2` is the discriminator a document carrying the second clause takes. A
+ * `v1` document parses unchanged and reads as a rule set with no
+ * auto-approval clause.
+ */
 export interface RuleSet {
   /** Wire/schema discriminator for forward compatibility. */
-  schema: "oxagen.decision-rules.v1";
+  schema: "oxagen.decision-rules.v1" | "oxagen.decision-rules.v2";
   rules: DecisionRule[];
+  /** Absent on a v1 document; `parseRuleSet` always fills it, with `[]` where there is none. */
+  autoApproval?: AutoApprovalRule[];
 }
 
 /** The call under judgment. */
