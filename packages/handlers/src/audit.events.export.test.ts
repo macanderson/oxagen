@@ -60,7 +60,11 @@ function roles(fixture: RoleFixture) {
 
 type Stored = AuditRow & { orgId: string };
 
-function stored(n: number, over: Partial<AuditEvent> = {}, orgId = ORG): Stored {
+function stored(
+  n: number,
+  over: Partial<AuditEvent> = {},
+  orgId = ORG,
+): Stored {
   const id = `0192d4a8-7c1e-7a00-8000-${String(n).padStart(12, "0")}`;
   // Every event shares one millisecond; only the microseconds and the id order them.
   const at = `2026-09-15 12:00:00.${String(999_999 - n).padStart(6, "0")}+00`;
@@ -171,6 +175,30 @@ describe("export_audit_events serialization and signature", () => {
     expect(out.signature).toBe(hmac(out.body));
     expect(out.signature).not.toBe(hmac(`${out.body} `));
     expect(auditEventsExport.output.parse(out)).toEqual(out);
+  });
+
+  it("neutralizes a formula-leading field in CSV and leaves NDJSON the recorded value", async () => {
+    // A member can plant this: packages/auth/src/auth.ts writes the session
+    // User-Agent onto the organization's events, and an Owner opening the CSV
+    // would otherwise have the spreadsheet evaluate it.
+    const planted = '=HYPERLINK("http://evil.test","click")';
+    const rows = [stored(1, { userAgent: planted, capability: "+1+1" })];
+
+    const csv = await handlerOver(rows).handler(
+      auditEventsExport.input.parse({}),
+      ctx(),
+    );
+    expect(csv.body).toContain(`"\t${planted.replace(/"/g, '""')}"`);
+    expect(csv.body).toContain('"\t+1+1"');
+    expect(csv.body).not.toContain(`,${planted}`);
+
+    const ndjson = await handlerOver(rows).handler(
+      auditEventsExport.input.parse({ format: "ndjson" }),
+      ctx(),
+    );
+    const object = JSON.parse(ndjson.body.trimEnd()) as Record<string, string>;
+    expect(object.user_agent).toBe(planted);
+    expect(object.capability).toBe("+1+1");
   });
 
   it("writes one JSON object per line in NDJSON, every column present and nulls empty", async () => {

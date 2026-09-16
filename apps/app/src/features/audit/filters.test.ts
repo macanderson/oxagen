@@ -62,9 +62,9 @@ describe("parseAuditQuery", () => {
   });
 
   it("drops an event type nothing writes (negative)", () => {
-    expect(parseAuditQuery({ eventType: "billing.nothing_writes_this" })).toEqual(
-      NONE,
-    );
+    expect(
+      parseAuditQuery({ eventType: "billing.nothing_writes_this" }),
+    ).toEqual(NONE);
   });
 
   it("drops an outcome the column cannot hold (negative)", () => {
@@ -77,8 +77,19 @@ describe("parseAuditQuery", () => {
   });
 
   it("drops a capability name no registry could hold (negative)", () => {
-    for (const capability of ["Query Audit Log", "'; drop table", "a".repeat(80)])
+    for (const capability of [
+      "Query Audit Log",
+      "'; drop table",
+      "a".repeat(80),
+    ])
       expect(parseAuditQuery({ capability }).capability).toBeNull();
+  });
+
+  it("drops a day-shaped value no calendar holds (negative)", () => {
+    // Both match the shape: 99 is no month and no day, and 31 February would
+    // normalize into March and silently query a period nobody asked for.
+    for (const day of ["2026-99-99", "2026-02-31", "2026-13-01", "2026-00-10"])
+      expect(parseAuditQuery({ from: day, to: day })).toEqual(NONE);
   });
 
   it("drops a day that is not a day, and a range that runs backwards (negative)", () => {
@@ -102,8 +113,17 @@ describe("parseAuditQuery", () => {
     );
   });
 
+  it("bounds an offset past the end of the record (negative)", () => {
+    // Finite and positive, so the old check passed it through to PostgreSQL's
+    // bigint OFFSET, which failed the conversion and answered a 500.
+    for (const offset of ["100000000000000000000", "1e21", "9007199254740993"])
+      expect(parseAuditQuery({ offset }).offset).toBe(1_000_000);
+  });
+
   it("reads the first value when a parameter arrives repeated", () => {
-    expect(parseAuditQuery({ outcome: ["deny", "allow"] }).outcome).toBe("deny");
+    expect(parseAuditQuery({ outcome: ["deny", "allow"] }).outcome).toBe(
+      "deny",
+    );
   });
 });
 

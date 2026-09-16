@@ -78,9 +78,23 @@ function rowValues(orgId: string, e: AuditEvent): Record<Column, string> {
   };
 }
 
-/** RFC 4180: quote a field that holds a comma, a quote or a line break. */
+/**
+ * A field a spreadsheet would evaluate rather than display. The audit record
+ * holds attacker-controlled text — `packages/auth/src/auth.ts` writes the
+ * session User-Agent onto an organization's events — so a member can plant
+ * `=HYPERLINK(...)` and have it run when an Owner opens the exported file.
+ */
+const CSV_FORMULA_LEAD = /^[=+\-@\t\r]/;
+
+/**
+ * RFC 4180: quote a field that holds a comma, a quote or a line break, and
+ * prefix a formula-leading field with a tab so Excel, Numbers and Sheets read
+ * it as text. The tab is inside the quotes, so the value a verifier parses
+ * back is the recorded one with one leading tab; NDJSON carries it unchanged.
+ */
 function csvField(value: string): string {
-  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  const text = CSV_FORMULA_LEAD.test(value) ? `\t${value}` : value;
+  return /[",\r\n\t]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 export function serializeAuditExport(

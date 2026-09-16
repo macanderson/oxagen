@@ -31,7 +31,8 @@
         "type": "string"
       },
       "actorUserId": {
-        "type": "string"
+        "type": "string",
+        "format": "uuid"
       },
       "actorPublicId": {
         "type": "string"
@@ -49,7 +50,8 @@
         ]
       },
       "workspaceId": {
-        "type": "string"
+        "type": "string",
+        "format": "uuid"
       },
       "from": {
         "type": "string"

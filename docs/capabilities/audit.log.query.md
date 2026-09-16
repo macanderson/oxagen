@@ -33,11 +33,11 @@ A workspace-scoped call that names no workspace reads the whole organization for
 |-----------|------|----------|-------------|
 | `source` | `"all" \| "security"` | no | Which spine to query; default `all`. Both read `security_events`. |
 | `eventType` | string | no | Exact event-type match (e.g. `billing.plan_changed`) |
-| `actorUserId` | string | no | The acting user's id |
+| `actorUserId` | uuid | no | The acting user's id |
 | `actorPublicId` | string | no | The acting user's public id (`usr_…`) |
 | `capability` | string | no | Capability name |
 | `outcome` | `"allow" \| "deny" \| "error" \| "success"` | no | Authz outcome |
-| `workspaceId` | string | no | Restrict to one workspace |
+| `workspaceId` | uuid | no | Restrict to one workspace |
 | `from` | string (ISO-8601) | no | Inclusive lower bound on `occurredAt` |
 | `to` | string (ISO-8601) | no | Exclusive upper bound on `occurredAt` |
 | `limit` | number | no | Events per page, 1–200; default `50` |

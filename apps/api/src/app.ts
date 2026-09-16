@@ -800,6 +800,11 @@ orgOnlyScoped.use("*", authMiddleware, orgMiddleware);
 orgOnlyScoped.route("/workspaces", workspaceCreateRoute);
 // The onboarding gate for an organization (#2967): its gate row.
 orgOnlyScoped.route("/onboarding/state", onboardingStateGetRoute);
+// An audit export answers for the whole organization, and the documented path
+// is `POST /v1/:org_slug/audit/events/export`. Mounted only on the
+// workspace-scoped group above, that URL matched no route and 404'd, leaving
+// the advertised REST surface unreachable (#3097).
+orgOnlyScoped.route("/audit/events/export", auditEventsExportRoute);
 app.route("/v1/:org_slug", orgOnlyScoped);
 
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

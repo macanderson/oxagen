@@ -215,8 +215,9 @@ describe("the record", () => {
     for (const absent of [/severity/i, /reference/i, /service principal/i])
       expect(screen.queryByText(absent)).toBeNull();
     expect(screen.queryAllByRole("meter")).toHaveLength(0);
-    expect(within(screen.getByRole("table")).getAllByRole("columnheader"))
-      .toHaveLength(6);
+    expect(
+      within(screen.getByRole("table")).getAllByRole("columnheader"),
+    ).toHaveLength(6);
   });
 });
 

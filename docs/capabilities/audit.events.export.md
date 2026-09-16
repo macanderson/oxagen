@@ -23,11 +23,11 @@ Org `Owner` or `Admin`, checked in the handler for the signed-in user or the cre
 |---|---|---|---|
 | `format` | `"csv" \| "ndjson"` | no | default `csv` |
 | `eventType` | string | no | exact match |
-| `actorUserId` | string | no | the acting user's id |
+| `actorUserId` | uuid | no | the acting user's id |
 | `actorPublicId` | string | no | the acting user's public id (`usr_…`) |
 | `capability` | string | no | capability name |
 | `outcome` | `"allow" \| "deny" \| "error" \| "success"` | no | |
-| `workspaceId` | string | no | one workspace |
+| `workspaceId` | uuid | no | one workspace |
 | `from` | string (ISO-8601) | no | inclusive lower bound |
 | `to` | string (ISO-8601) | no | exclusive upper bound |
 

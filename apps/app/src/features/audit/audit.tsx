@@ -243,12 +243,17 @@ function FilterBar({
   );
 }
 
+// Both links are `prefetch={false}`: the href is a route handler that runs
+// `export_audit_events`, and Next prefetches a Link that enters the viewport,
+// so the default would walk up to 50,000 rows twice and record two exports
+// nobody asked for, every time the page is opened.
 function ExportLinks({ org, query }: { org: string; query: AuditQuery }) {
   const t = useTranslations("audit");
   return (
     <span className="flex flex-wrap items-center gap-2">
       <SafeLink
         to={routes.auditExport(org, auditQueryParams(query, { format: "csv" }))}
+        prefetch={false}
         data-export="csv"
         className={buttonSecondary}
       >
@@ -258,6 +263,7 @@ function ExportLinks({ org, query }: { org: string; query: AuditQuery }) {
         to={routes.auditExport(org, {
           ...auditQueryParams(query, { format: "ndjson" }),
         })}
+        prefetch={false}
         data-export="ndjson"
         className={buttonSecondary}
       >
@@ -311,7 +317,9 @@ function EventsTable({
             {event.actor === null ? (
               <NotRecordedValue />
             ) : (
-              (names.get(event.actor) ?? <span className={mono}>{event.actor}</span>)
+              (names.get(event.actor) ?? (
+                <span className={mono}>{event.actor}</span>
+              ))
             )}
           </td>
           <td className={`${cell} ${mono}`}>
@@ -478,7 +486,11 @@ function Failure({
   switch (read.reason) {
     case "denied":
       return (
-        <OutcomePanel tone="deny" testId="audit-denied" title={t("denied.title")}>
+        <OutcomePanel
+          tone="deny"
+          testId="audit-denied"
+          title={t("denied.title")}
+        >
           {t("denied.body", {
             role: t(`roles.${orgRole}`),
             permission: read.permission,
@@ -510,7 +522,10 @@ function Failure({
           <span className="flex flex-col gap-1">
             <span>{t("error.body")}</span>
             <span className={mono}>
-              {t("error.code", { status: String(read.status), code: read.code })}
+              {t("error.code", {
+                status: String(read.status),
+                code: read.code,
+              })}
             </span>
           </span>
         </OutcomePanel>

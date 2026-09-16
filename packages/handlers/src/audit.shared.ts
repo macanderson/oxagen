@@ -17,10 +17,12 @@ import { and, desc, eq, gte, lt, sql, type SQL } from "drizzle-orm";
 
 /**
  * The workspace id an organization-level invoke carries (apps/app
- * `src/server/kernel.ts`). It names no workspace, so a call carrying it is
- * treated as having no workspace scope.
+ * `src/server/kernel.ts`, `apps/api/src/routes/v1/audit.events.export.ts`). It
+ * names no workspace, so a call carrying it is treated as having no workspace
+ * scope. Declared with the contracts, so a surface and a handler cannot drift
+ * to two different sentinels.
  */
-export const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
+export { ORG_ONLY_WORKSPACE_ID as ORG_ONLY_WS } from "@oxagen/oxagen/contracts/audit.log.query";
 
 /** The filters both audit contracts accept. */
 export type AuditEventFilter = {

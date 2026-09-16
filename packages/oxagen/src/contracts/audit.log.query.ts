@@ -25,6 +25,16 @@ const SECURITY_OUTCOMES = ["allow", "deny", "error", "success"] as const;
 const auditSource = z.enum(["all", "security"]);
 
 /**
+ * The workspace id an organization-level invoke carries. It names no
+ * workspace, so a call carrying it is treated as having no workspace scope:
+ * `query_audit_log` answers for the whole organization and
+ * `export_audit_events` signs the whole organization's record. Declared beside
+ * the contracts because every surface that mounts one org-wide has to send it
+ * — `scoped: true` needs a uuid, and "" is not one.
+ */
+export const ORG_ONLY_WORKSPACE_ID = "00000000-0000-0000-0000-000000000000";
+
+/**
  * The filters `query_audit_log` and `export_audit_events` share, so the rows a
  * reader pages through are the rows an export signs.
  */
@@ -33,24 +43,26 @@ export const auditEventFilters = {
     .string()
     .optional()
     .describe("Exact event-type match (e.g. 'billing.plan_changed')"),
+  // A uuid, because the column is one: an arbitrary string reaches PostgreSQL
+  // and fails the uuid cast there, which answers a store error where the
+  // caller's input is what is wrong.
   actorUserId: z
     .string()
+    .uuid()
     .optional()
     .describe("Filter by the acting user's id"),
   actorPublicId: z
     .string()
     .optional()
     .describe("Filter by the acting user's public id (usr_…)"),
-  capability: z
-    .string()
-    .optional()
-    .describe("Filter by capability name"),
+  capability: z.string().optional().describe("Filter by capability name"),
   outcome: z
     .enum(SECURITY_OUTCOMES)
     .optional()
     .describe("Filter by authz outcome"),
   workspaceId: z
     .string()
+    .uuid()
     .optional()
     .describe("Restrict to one workspace (default: all in org)"),
   from: z

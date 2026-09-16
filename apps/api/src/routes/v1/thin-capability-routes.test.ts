@@ -108,6 +108,7 @@ import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import { spendStatementExport } from "@oxagen/oxagen/contracts/spend.statement.export";
 import { auditEventsExport } from "@oxagen/oxagen/contracts/audit.events.export";
+import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/contracts/audit.log.query";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
 import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
@@ -254,6 +255,12 @@ interface ThinRoute {
   body?: unknown;
   /** The input `invoke` should receive — defaults to the body when omitted. */
   expectedInput?: unknown;
+  /**
+   * The capability context `invoke` should receive — defaults to CTX. Set it
+   * where the route deliberately sends something else, as the audit export
+   * does with the organization-only workspace sentinel.
+   */
+  expectedCtx?: Record<string, unknown>;
   /** A body the contract must reject. Omitted for bodyless GET routes. */
   invalidBody?: unknown;
   /**
@@ -1192,6 +1199,9 @@ const ROUTES: ThinRoute[] = [
     capability: auditEventsExport.name,
     body: { outcome: "deny" },
     expectedInput: { outcome: "deny", format: "csv" },
+    // An export answers for the whole organization, so the route sends the
+    // organization-only sentinel whichever router it was reached through.
+    expectedCtx: { ...CTX, workspaceId: ORG_ONLY_WORKSPACE_ID },
     invalidBody: { format: "pdf" },
     status: 200,
   },
@@ -1504,7 +1514,7 @@ describe("thin capability routes", () => {
       expect(mocks.invoke).toHaveBeenCalledWith(
         entry.capability,
         entry.expectedInput ?? entry.body,
-        CTX,
+        entry.expectedCtx ?? CTX,
         { surface: "api" },
       );
     },
