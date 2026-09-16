@@ -68,6 +68,41 @@ export async function withTenantDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
 }
 
 /**
+ * Re-point `app.current_workspace_id` on an ALREADY-OPEN tenant transaction.
+ *
+ * NARROW BY DESIGN — there is exactly one legitimate use: a transaction that
+ * CREATES the workspace it then writes rows for. `withTenantDb` sets the GUCs
+ * from the scope the caller was already in, and a workspace being created has
+ * no scope to have been in: `create_workspace` runs under the caller's scope,
+ * which for an org-only caller (`ORG_ONLY_WORKSPACE_ID`, ADR-068) names no
+ * workspace at all. `workspace.workspaces` is `org_only` so the INSERT lands,
+ * but every workspace-GUC-scoped table the bootstrap then writes —
+ * `workspace.workspace_users` (workspace_only), `agent.agents` and
+ * `environments.environments` (standard) — is refused by its
+ * `tenant_isolation` WITH CHECK with SQLSTATE 42501. Re-pointing the GUC the
+ * moment the row exists keeps the whole bootstrap in ONE transaction, which is
+ * the property `workspace-bootstrap.ts` depends on: the workspace and
+ * everything that makes it usable commit together or not at all.
+ *
+ * `set_config(..., true)` is transaction-local, so the new value rolls back
+ * with the transaction like the original one did.
+ *
+ * Do NOT reach for this to "fix" a scope mismatch anywhere else. Every other
+ * write whose target workspace differs from the ambient scope re-enters that
+ * workspace's scope with `runInTenantScope` + `withTenantDb` (see
+ * `workspace.archive` and `workspace.settings.write`), which keeps the
+ * AsyncLocalStorage scope and the transaction's GUCs telling the same story.
+ */
+export async function setTransactionWorkspaceScope(
+  tx: Tx,
+  workspaceId: string,
+): Promise<void> {
+  await tx.execute(
+    sql`select set_config('app.current_workspace_id', ${workspaceId}, true)`,
+  );
+}
+
+/**
  * Like `withTenantDb`, but the transaction runs at REPEATABLE READ.
  *
  * Narrow by design: this exists for ADMISSION-TIME AUTHORIZATION SNAPSHOT

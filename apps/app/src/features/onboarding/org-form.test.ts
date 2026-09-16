@@ -59,6 +59,18 @@ describe("OrganizationForm", () => {
     [{ name: "" }, "name", "orgNameRequired"],
     [{ workspaceSlug: "billing" }, "workspaceSlug", "workspaceSlugReserved"],
     [{ workspaceSlug: "-core" }, "workspaceSlug", "workspaceSlugInvalid"],
+    // The form takes the contract's own spelling now (#3110). It used to take
+    // a doubled hyphen and let `create_org` do the refusing — and worse, a
+    // workspace created that way could never be edited, because
+    // `update_workspace_settings` always rejected it.
+    [
+      { workspaceSlug: "core--platform" },
+      "workspaceSlug",
+      "workspaceSlugInvalid",
+    ],
+    [{ workspaceSlug: "core-" }, "workspaceSlug", "workspaceSlugInvalid"],
+    [{ workspaceSlug: "roles" }, "workspaceSlug", "workspaceSlugReserved"],
+    [{ workspaceSlug: "api-keys" }, "workspaceSlug", "workspaceSlugReserved"],
   ])("refuses %j", (patch, field, key) => {
     const r = OrganizationForm.safeParse({ ...valid, ...patch });
     expect(r.success).toBe(false);

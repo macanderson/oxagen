@@ -226,7 +226,12 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
       findingEvidence: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
-    org: { members: refuse, apiKeys: refuse },
+    org: {
+      members: refuse,
+      roles: refuse,
+      workspaces: refuse,
+      apiKeys: refuse,
+    },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },

@@ -8,6 +8,7 @@
  * The last item is the current page (no href, aria-current="page").
  */
 
+import type { JSX } from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,7 +23,7 @@ export interface BreadcrumbProps {
   className?: string;
 }
 
-export function Breadcrumb({ items, className }: BreadcrumbProps) {
+export function Breadcrumb({ items, className }: BreadcrumbProps): JSX.Element {
   return (
     <nav aria-label="Breadcrumb" className={cn("flex items-center", className)}>
       <ol className="flex items-center gap-1 text-sm text-muted-foreground">

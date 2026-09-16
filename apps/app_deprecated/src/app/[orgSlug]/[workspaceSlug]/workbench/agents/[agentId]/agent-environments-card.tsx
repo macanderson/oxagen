@@ -1,5 +1,6 @@
 "use client";
 
+import type { JSX } from "react";
 import { useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +35,7 @@ interface Props {
   ) => Promise<ActionResult>;
 }
 
-export function AgentEnvironmentsCard(props: Props) {
+export function AgentEnvironmentsCard(props: Props): JSX.Element {
   const { scope, agentId, canManage, bindings, environments } = props;
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();

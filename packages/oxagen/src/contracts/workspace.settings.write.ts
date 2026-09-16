@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { workspaceSlug } from "../workspace-slug";
 import { avatarUrlSchema, avatarUrlOutputSchema } from "../avatar";
 import { consequenceRolesSchema } from "../mandates/schemas";
 
@@ -40,15 +41,11 @@ export const workspaceSettingsWrite = registerCapability({
         "Public id (wrk_…) of the workspace to update; omitted, the workspace the call is scoped to",
       ),
     name: z.string().min(1).max(120).trim().optional(),
-    slug: z
-      .string()
-      .min(1)
-      .max(100)
-      .regex(
-        /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-        "Slug must be lowercase letters, numbers, and single hyphens",
-      )
-      .optional(),
+    // The shared shape (packages/oxagen/src/workspace-slug.ts), the same one
+    // `create_workspace` takes: a re-slug cannot move a workspace onto a
+    // reserved org-route segment, and cannot be refused a bound the create
+    // allowed (#3110).
+    slug: workspaceSlug.optional(),
     description: z.string().max(2000).nullable().optional(),
     // Omit = unchanged, a value = set (https:// URL or an "avatar:v1:<json>"
     // designed-avatar string), null = clear the avatar. Models avatarUrl exactly

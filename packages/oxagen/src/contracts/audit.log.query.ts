@@ -25,14 +25,15 @@ const SECURITY_OUTCOMES = ["allow", "deny", "error", "success"] as const;
 const auditSource = z.enum(["all", "security"]);
 
 /**
- * The workspace id an organization-level invoke carries. It names no
- * workspace, so a call carrying it is treated as having no workspace scope:
+ * Re-exported from `../types`, which holds the one definition (ADR-068
+ * decision 1). It stays reachable from this path because every surface that
+ * mounts `query_audit_log` or `export_audit_events` org-wide imports it from
+ * beside the contracts, and a second literal is a pair of constants that must
+ * never diverge. A call carrying it is treated as having no workspace scope:
  * `query_audit_log` answers for the whole organization and
- * `export_audit_events` signs the whole organization's record. Declared beside
- * the contracts because every surface that mounts one org-wide has to send it
- * — `scoped: true` needs a uuid, and "" is not one.
+ * `export_audit_events` signs the whole organization's record.
  */
-export const ORG_ONLY_WORKSPACE_ID = "00000000-0000-0000-0000-000000000000";
+export { ORG_ONLY_WORKSPACE_ID } from "../types";
 
 /**
  * The filters `query_audit_log` and `export_audit_events` share, so the rows a

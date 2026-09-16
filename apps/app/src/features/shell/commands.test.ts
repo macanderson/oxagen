@@ -7,7 +7,7 @@ const labels = { nav: (key: string) => `nav:${key}` };
 describe("buildCommands", () => {
   const commands = buildCommands({ org: "acme", ws: "core-platform" }, labels);
 
-  it("offers the eight sidebar pages and API keys, and nothing else", () => {
+  it("offers the eight sidebar pages and the organization's other two, and nothing else", () => {
     expect(commands.map((c) => c.href)).toEqual([
       "/acme/core-platform",
       "/acme/core-platform/agents",
@@ -16,12 +16,14 @@ describe("buildCommands", () => {
       "/acme/core-platform/steering",
       "/acme/core-platform/spend",
       "/acme",
+      "/acme/roles",
       "/acme/api-keys",
       "/acme/billing",
       "/acme/audit",
     ]);
     expect(commands.every((c) => c.id.startsWith("go:"))).toBe(true);
     expect(commands.map((c) => c.label)).toContain("nav:apiKeys");
+    expect(commands.map((c) => c.label)).toContain("nav:roles");
   });
 
   it("offers go:skills to the workspace's Skills page under the Skills label", () => {
@@ -36,6 +38,7 @@ describe("buildCommands", () => {
     const orgOnly = buildCommands({ org: "acme", ws: null }, labels);
     expect(orgOnly.map((c) => c.href)).toEqual([
       "/acme",
+      "/acme/roles",
       "/acme/api-keys",
       "/acme/billing",
       "/acme/audit",
