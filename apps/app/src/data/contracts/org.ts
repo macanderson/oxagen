@@ -51,6 +51,8 @@ export const ApiKey = z.object({
 export type ApiKey = z.infer<typeof ApiKey>;
 
 export const ApiKeyList = z.array(ApiKey);
+
+/**
  * The roles `change_member_role` can grant. `bootstrapOrgIAM` seeds four
  * org-scoped roles (`ORG_ROLES`, packages/handlers/src/iam-provision.ts:55-60)
  * and the handler resolves `newRole` against that set; `member` and `viewer`

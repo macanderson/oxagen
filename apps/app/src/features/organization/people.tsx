@@ -1,14 +1,11 @@
 // Organization › People (ARCHITECTURE.md §1.2): the organization's members and
 // its pending invitations from list_members {scope:"org"}, under the tabs that
 // link People and API keys. A refused or failed read replaces both sections;
-// the tabs stay. Role changes, removal and invitations sent from here land
-// with the People writes.
-import { useTranslations } from "next-intl";
 // the tabs stay. Each member's row carries the two writes on a membership —
 // change role and remove (WL-42) — which an Owner or an Admin makes and every
 // other role sees refused. Invitations are sent from here with the People
 // writes the #2964 lane adds.
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import type { MemberList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
@@ -17,8 +14,8 @@ import { routes, type SafePath } from "@/shared/safe-path";
 import { mono } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
 import { RouteTabs } from "@/ui/route-tabs";
-import { DateCell, emptyLine } from "./parts";
 import { MemberRowActions } from "./member-row-actions";
+import { DateCell, emptyLine } from "./parts";
 
 /** The org roles the two membership handlers admit (INV-29). */
 const MEMBERSHIP_WRITERS: readonly OrgRole[] = ["owner", "admin"];
@@ -105,16 +102,6 @@ function PeopleView({
         </OutcomePanel>
       )}
     </div>
-  );
-}
-
-function Members({ members }: { members: MemberList["members"] }) {
-function DateCell({ iso }: { iso: string }) {
-  const format = useFormatter();
-  return (
-    <time dateTime={iso}>
-      {format.dateTime(new Date(iso), { dateStyle: "medium" })}
-    </time>
   );
 }
 
