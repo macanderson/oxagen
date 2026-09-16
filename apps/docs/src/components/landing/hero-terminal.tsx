@@ -34,11 +34,11 @@ const STEPS: TerminalStep[] = [
       },
       {
         kind: "out",
-        text: "→ packages/database/rls.sql — FORCE ROW LEVEL SECURITY on every tenant table",
+        text: "→ packages/database/rls.sql: FORCE ROW LEVEL SECURITY on every tenant table",
       },
       {
         kind: "out",
-        text: "→ oxagen_app role has no BYPASSRLS; an unscoped query returns zero rows",
+        text: "→ the oxagen_app role has no BYPASSRLS, so an unscoped query returns zero rows",
       },
       { kind: "ok", text: "✓ answered in 4.2s · 1,284 context tokens used" },
     ],
@@ -46,5 +46,5 @@ const STEPS: TerminalStep[] = [
 ];
 
 export function HeroTerminal() {
-  return <TypewriterTerminal steps={STEPS} title="oxagen — install" />;
+  return <TypewriterTerminal steps={STEPS} title="oxagen · install" />;
 }

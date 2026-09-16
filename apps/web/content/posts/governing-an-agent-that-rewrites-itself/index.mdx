@@ -20,6 +20,18 @@ Your compliance team has one question about the agent, and it is not a hard one.
 
 This is not hypothetical any more. The Darwin Gödel Machine iteratively edits its own codebase and validates the edits on coding benchmarks, taking SWE-bench performance from 20.0% to 50.0% and Polyglot from 14.2% to 30.7%.[^1] Systems like this work. The interesting question is no longer whether an agent can improve itself, it is what you sign when you let one run inside your company.
 
+<Dumbbell
+  title="Darwin Gödel Machine, before and after editing itself"
+  unit="%"
+  fromLabel="Initial agent"
+  toLabel="After self-edits"
+  rows={[
+    { label: "SWE-bench", from: 20, to: 50 },
+    { label: "Polyglot", from: 14.2, to: 30.7 },
+  ]}
+  caption="Source: Zhang, Hu, Lu, Lange, and Clune (2025). Each edit is validated on the same benchmarks it is scored on, which is the weight this post argues a benchmark cannot carry alone."
+/>
+
 The good news is that the safety literature has been working on the underlying question for a decade, and its answers are concrete. The bad news is that most of them say the thing you were hoping to skip is the thing you cannot skip.
 
 ## The failure mode is not rebellion, it is a bad objective
@@ -83,6 +95,18 @@ RETURN n
 That query is a boundary a compliance team can read. It also survives self-modification, because the agent changing its own code does not change what the domain contains. Bounding the world is capability control, expressed as structure.
 
 **Evolution proposals go through the same gate as any other change.** This is the piece teams skip. A self-edit is a change to a production system, so it takes the path every other change takes: a proposal, a diff, a policy check, a test run, a decision, and a record. Not a special fast lane because a model wrote it. The upside is that a lot of self-evolution research already produces reviewable artifacts, which makes this cheaper than it sounds. Agent Workflow Memory induces named, readable workflows from prior trajectories rather than opaque weight updates.[^9] ADAS keeps discovered agents as code in an archive.[^10] Both are diffable. Review what you can read, and refuse to promote what you cannot.
+
+<Flow
+  title="A self-edit takes the path every change takes"
+  steps={[
+    { label: "Proposal", detail: "The diff, and the new identity it produces" },
+    { label: "Policy check", detail: "Against the contract in force" },
+    { label: "Test run", detail: "Evidence, not a score alone" },
+    { label: "Decision", detail: "A person holding the evidence", emph: true },
+    { label: "Record", detail: "Append-only and hash-chained" },
+  ]}
+  caption="The same gate the agent's actions pass through. If this path is weaker than that one, the shortest route to a forbidden action is a self-edit."
+/>
 
 **An immutable record of every accepted change.** Append-only, hash-chained, with the contract version, the proposal, the evidence that justified acceptance, and the approver. The reason is not audit theatre. It is that reproducibility is the documented weak point of this entire field,[^7] and the only defence against "we cannot tell you why the agent did that in March" is having written it down in March. The 2025 survey of self-evolving agents frames the open problems in the same terms: evaluation and safety are the constraints on the field, not capability.[^11]
 
