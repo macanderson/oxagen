@@ -127,6 +127,25 @@ export async function assertToolsDeclareMeasures(
   const limitMeasures = Object.keys(args.limits).filter(
     (k) => k !== CALLS_MEASURE,
   );
+  // The built-in measure is exempt from the declared-measure check below
+  // because no tool declares it: every call draws exactly one, whatever a tool
+  // says. That exemption is about the *declaration*, not about the *unit* —
+  // `calls` has a correct denomination and it is its own name. Without this,
+  // `{ calls: { perPeriod: "250000000", currencyOrUnit: "USD" } }` is accepted
+  // by the contract, enforced by the gate as a ceiling of 250 million calls,
+  // and rendered by every screen as $250.00: the same two-halves-a-billion-
+  // apart failure the declared-measure unit check closes, reached through the
+  // exemption beside it. An exemption from a check needs its own rule rather
+  // than silence, so this one is checked against a constant where the others
+  // are checked against a declaration.
+  const callsLimit = args.limits[CALLS_MEASURE];
+  if (callsLimit !== undefined && callsLimit.currencyOrUnit !== CALLS_MEASURE) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "measure_unit_mismatch",
+      message: `the built-in "${CALLS_MEASURE}" measure is denominated in ${CALLS_MEASURE}; the mandate denominates its limit in ${callsLimit.currencyOrUnit}`,
+    });
+  }
   const targetMeasures = Object.keys(args.targets);
   for (const pattern of args.tools) {
     const matched = declared.filter(

@@ -44,13 +44,28 @@ function isDrawn(value: MandateAuthority["reserved"]): boolean {
   return /[1-9]/.test(digits);
 }
 
+/**
+ * Whether this measure has what a bar needs: a per-period limit for its
+ * denominator and the two ratios drawn against it. Exported because a caller
+ * deciding what else to render has to ask the same question the component
+ * answers — the approvals panel partitions a mandate's measures by it — and
+ * two predicates that must agree are one that will eventually not.
+ */
+export function drawsBar(authority: MandateAuthority): boolean {
+  return (
+    authority.perPeriod !== null &&
+    authority.settledRatio !== null &&
+    authority.reservedRatio !== null
+  );
+}
+
 export function MandateBar({ authority }: { authority: MandateAuthority }) {
   const t = useTranslations("ui.mandateBar");
   const text = useMeasureText();
   const { perPeriod, settledRatio, reservedRatio, remaining } = authority;
-  if (perPeriod === null || settledRatio === null || reservedRatio === null) {
-    return null;
-  }
+  if (!drawsBar(authority) || perPeriod === null) return null;
+  // `drawsBar` has established both, and narrowing needs them named.
+  if (settledRatio === null || reservedRatio === null) return null;
   const showReserved = isDrawn(authority.reserved);
   // The settled segment takes what it measures; the reservation takes what is
   // left of the track, so the two never total more than the limit they draw.

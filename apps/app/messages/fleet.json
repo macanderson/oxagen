@@ -24,7 +24,7 @@
       "openRun": "Open run",
       "mandateUnread": "Drew on mandate {mandate}. Its remaining authority was not read, so none is shown.",
       "mandatePeriodBasis": "Counted over the mandate's current period. A reservation this call made in an earlier period is not in these figures.",
-      "mandatePerCallOnly": "Drew on mandate {mandate}. It limits per call only, so there is no period to count against and nothing has been drawn down. Per call:"
+      "mandatePerCallOnly": "Mandate {mandate} limits these per call only, so there is no period to count them against:"
     },
     "runs": {
       "title": "Runs",

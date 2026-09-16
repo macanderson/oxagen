@@ -503,6 +503,24 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // tool's unit while every screen shows the operator's. `amount` is
       // declared in USD; a limit calling it EUR, or "cents", would be approved
       // as one thing and enforced as another.
+      // The built-in measure is exempt from the declared-measure check, not
+      // from having a correct unit: the gate reads it as a call ceiling while
+      // every screen reads `USD` as money, so 250000000 is 250 million calls
+      // and $250.00 at once.
+      for (const unit of ["USD", "rows", "Calls"]) {
+        await expect(
+          grant(billingUserId, {
+            ...body(),
+            limits: {
+              calls: {
+                perPeriod: "250000000",
+                period: "daily",
+                currencyOrUnit: unit,
+              },
+            },
+          }),
+        ).rejects.toSatisfy(conflict("measure_unit_mismatch"));
+      }
       for (const unit of ["EUR", "cents", "usd", "GB"]) {
         await expect(
           grant(billingUserId, {

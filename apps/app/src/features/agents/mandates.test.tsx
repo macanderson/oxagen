@@ -373,4 +373,23 @@ describe("Agents › Mandates", () => {
       .querySelectorAll("td");
     expect(cells[2]?.textContent).toBe("$250.00tax");
   });
+
+  // Adjacent to the label fix: a column where every measure is unlimited. An
+  // empty cell reads as "nothing" and is ambiguous between no limit and not
+  // shown; the Tools ledger already said "no limit" and this did not.
+  it("says no limit where a column has none, rather than rendering nothing", async () => {
+    await renderMandates(
+      mandateList([
+        mandateRow({
+          authority: [mandateAuthority({ perCall: null })],
+        }),
+      ]),
+    );
+    const cells = within(held())
+      .getByTestId("agent-mandate")
+      .querySelectorAll("td");
+    expect(cells[2]?.textContent).toBe("no limit");
+    // The columns that do have a figure are unaffected.
+    expect(cells[3]?.textContent).toContain("$2,000.00");
+  });
 });

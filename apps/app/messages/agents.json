@@ -412,7 +412,8 @@
       "partial": "You see the mandates of the agents you created. This list is not every mandate recorded for this agent.",
       "noneListed": "No mandate listed here is in effect. The list above is not complete, so that is not a statement that the agent holds no authority.",
       "noneListedDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate recorded in the workspace. Ask one of them whether this agent holds authority, or read the Tools ledger with that role.",
-      "retired": "This agent is retired, so it cannot be given a mandate: its principal is suspended and authority granted now could never be drawn. The mandates recorded for it stay listed."
+      "retired": "This agent is retired, so it cannot be given a mandate: its principal is suspended and authority granted now could never be drawn. The mandates recorded for it stay listed.",
+      "noLimit": "no limit"
     }
   }
 }

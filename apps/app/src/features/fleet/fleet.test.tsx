@@ -450,7 +450,7 @@ describe("Fleet approvals › the mandate bar", () => {
     expect(within(card).queryByTestId("mandate-period-basis")).toBeNull();
     const line = within(card).getByTestId("mandate-per-call-only");
     expect(line.textContent).toContain("mnd_4f2a9c");
-    expect(line.textContent).toContain("limits per call only");
+    expect(line.textContent).toContain("limits these per call only");
     expect(line.textContent).toContain("$250.00");
     expect(line.textContent).toContain("amount");
   });
@@ -466,5 +466,42 @@ describe("Fleet approvals › the mandate bar", () => {
       within(card).getByTestId("mandate-period-basis"),
     ).toBeInTheDocument();
     expect(within(card).queryByTestId("mandate-per-call-only")).toBeNull();
+  });
+
+  // A mandate's measures are a partition, not an either/or. Keying the
+  // fallback on "are there any bars" hid the per-call measures of a mandate
+  // that had one of each.
+  it("draws the bars and names the per-call-only measures beside them", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([parked]),
+      mandates: mandateList([
+        mandateRow({
+          authority: [
+            mandateAuthority(),
+            mandateAuthority({
+              measure: "tax",
+              perPeriod: null,
+              remaining: null,
+              settledRatio: null,
+              reservedRatio: null,
+            }),
+          ],
+        }),
+      ]),
+    });
+    const card = within(approvalsSection()).getByTestId("approval");
+    const bars = within(card).getAllByTestId("mandate-bar");
+    expect(bars).toHaveLength(1);
+    expect(bars[0]).toHaveAttribute("data-measure", "amount");
+    // The period caveat belongs to the bar, and the bar is there.
+    expect(
+      within(card).getByTestId("mandate-period-basis"),
+    ).toBeInTheDocument();
+    // And the measure with no period is named rather than dropped.
+    const line = within(card).getByTestId("mandate-per-call-only");
+    expect(line.textContent).toContain("tax");
+    expect(line.textContent).toContain("$250.00");
+    expect(line.textContent).not.toContain("amount");
   });
 });

@@ -189,23 +189,30 @@ export function MandatesSection({
                           {(["perCall", "perPeriod", "remaining"] as const).map(
                             (field) => (
                               <td key={field} className="px-3 py-2">
-                                <ul className="flex flex-col gap-0.5">
-                                  {mandate.authority.map((measure) => {
-                                    const value = measure[field];
-                                    // The name is never conditional:
-                                    // `NamedMeasure` carries it, so a lone
-                                    // `tax` limit is not an unlabelled dollar
-                                    // figure under a column headed Per call.
-                                    return value === null ? null : (
-                                      <li key={measure.measure}>
-                                        <NamedMeasure
-                                          measure={measure.measure}
-                                          value={value}
-                                        />
-                                      </li>
-                                    );
-                                  })}
-                                </ul>
+                                {mandate.authority.every(
+                                  (measure) => measure[field] === null,
+                                ) ? (
+                                  <span className="text-muted-foreground">
+                                    {t("noLimit")}
+                                  </span>
+                                ) : (
+                                  <ul className="flex flex-col gap-0.5">
+                                    {mandate.authority.map((measure) => {
+                                      const value = measure[field];
+                                      // The name is never conditional: `NamedMeasure` carries
+                                      // it, so a lone `tax` limit is not an unlabelled dollar
+                                      // figure under a column headed Per call.
+                                      return value === null ? null : (
+                                        <li key={measure.measure}>
+                                          <NamedMeasure
+                                            measure={measure.measure}
+                                            value={value}
+                                          />
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                )}
                               </td>
                             ),
                           )}
