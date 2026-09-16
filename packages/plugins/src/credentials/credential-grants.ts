@@ -1,4 +1,4 @@
-// credential-grants.ts — the credential broker's log (MC spec §6.8, ADR-065,
+// credential-grants.ts — the credential broker's log (MC spec §6.8, ADR-068,
 // #2958).
 //
 // A wrapped agent holds no credentials. When the tool gateway reaches an MCP

@@ -1,5 +1,5 @@
 // kill-switch.ts — kill switches on iam.emergency_denies (MC spec §6.11,
-// ADR-065, #2958).
+// ADR-068, #2958).
 //
 // A kill switch is an emergency deny that names what it stops: `target_kind`
 // and `target_id` on the row, beside the typed deny the live check matches

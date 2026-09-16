@@ -10,7 +10,7 @@
 
 ## Intent
 
-The Tools page's registry table (MC spec §6.4, §6.9 part 1; ADR-065). Lists the workspace's tools with their active version: the capability id a call is governed under, read-only flag, risk grade (the classified grade, or the declared one while the version is unclassified), safety classification (null until an admin classifies the tool; a new version starts with the classification of the one it replaces), schema origin and digest, the kill switch that stops the version today, and its calls in the last 30 days.
+The Tools page's registry table (MC spec §6.4, §6.9 part 1; ADR-068). Lists the workspace's tools with their active version: the capability id a call is governed under, read-only flag, risk grade (the classified grade, or the declared one while the version is unclassified), safety classification (null until an admin classifies the tool; a new version starts with the classification of the one it replaces), schema origin and digest, the kill switch that stops the version today, and its calls in the last 30 days.
 
 The gate is decided with the same matcher the tool gateway uses (`matchKillSwitch`, `packages/iam/src/kill-switch.ts`) against the switches that are on, in the recorded decision order: a version switch, then a server switch, then a class switch matching one of the version's consequence tags. Workspace and organisation switches are the page header's, never a version's gate.
 
@@ -64,7 +64,7 @@ None. Read-only; audit-exempt.
 ## Surfaces
 
 - `POST /v1/{org}/{ws}/tools/versions`
-- MCP tool `list_tool_versions` (an API key acts as its creator at the role gate, ADR-065 decision 8)
+- MCP tool `list_tool_versions` (an API key acts as its creator at the role gate, ADR-068 decision 8)
 
 ## Errors
 

@@ -104,6 +104,11 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
     await closeDatabase();
   });
 
+  // create_org runs the whole IAM and workspace bootstrap in one system
+  // transaction; under coverage, with the other pg files bootstrapping
+  // organizations over the same shared IAM rows, it outlasts vitest's 5s
+  // default.
+  //
   // Every withSystemDb call is its own BEGIN + set_config + COMMIT, so the
   // verification reads are batched into as few transactions as the assertions
   // allow: the pre-check, then one snapshot transaction that collects the whole

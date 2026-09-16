@@ -86,7 +86,12 @@ const membersCall = {
   page: "organization",
 } as const;
 const resolveInput = { approvalId: APPROVAL_ID, decision: "approved" } as const;
-const resolved = { approvalId: APPROVAL_ID, resolution: "approved" } as const;
+// resolve_approval answers the mandate settlement (ADR-059); a chat-gate row settles none.
+const resolved = {
+  approvalId: APPROVAL_ID,
+  resolution: "approved",
+  mandate: null,
+} as const;
 
 const DENIED = {
   ok: false,

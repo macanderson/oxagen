@@ -1,5 +1,5 @@
 // kill-switch-gate.ts — the tool gateway's kill-switch check (MC spec §6.11,
-// §7.4 last row, ADR-065, #2958).
+// §7.4 last row, ADR-068, #2958).
 //
 // A kill switch takes effect at the next call boundary through the deny
 // generation: flipping one bumps `iam.authorization_deny_generations` in the

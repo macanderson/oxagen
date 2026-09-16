@@ -89,10 +89,35 @@ export const routes = {
   /** Organization › People is the organization's root. */
   people: (org: string): SafePath => pathOf(org),
   apiKeys: (org: string): SafePath => pathOf(org, "api-keys"),
-  fleet: (org: string, ws: string): SafePath => pathOf(org, ws),
-  /** Billing; `cursor` opens a later page of its invoices. */
-  billing: (org: string, q?: { cursor: string }): SafePath =>
-    withQuery(pathOf(org, "billing"), { cursor: q?.cursor }),
+  /** Fleet; `cursor` opens a later page of its runs table. */
+  fleet: (org: string, ws: string, q?: { cursor: string }): SafePath =>
+    withQuery(pathOf(org, ws), { cursor: q?.cursor }),
+  /** Agent IAM; `cursor` opens a later page of the identities table. */
+  agents: (org: string, ws: string, q?: { cursor: string }): SafePath =>
+    withQuery(pathOf(org, ws, "agents"), { cursor: q?.cursor }),
+  /** One agent; `tab` picks the section, `cursor` a later page of its incidents. */
+  agent: (
+    org: string,
+    ws: string,
+    agent: string,
+    q?: { tab: string; cursor?: string },
+  ): SafePath =>
+    withQuery(pathOf(org, ws, "agents", agent), {
+      tab: q?.tab,
+      cursor: q?.cursor,
+    }),
+  /** The agent's definition file in the source editor. */
+  agentSource: (org: string, ws: string, agent: string): SafePath =>
+    pathOf(org, ws, "agents", agent, "source"),
+  /** Billing; `cursor` opens a later page of its invoices, `checkout` is where a Stripe Checkout returns. */
+  billing: (
+    org: string,
+    q?: { cursor: string } | { checkout: "success" | "cancel" },
+  ): SafePath =>
+    withQuery(pathOf(org, "billing"), {
+      cursor: q !== undefined && "cursor" in q ? q.cursor : undefined,
+      checkout: q !== undefined && "checkout" in q ? q.checkout : undefined,
+    }),
   /** A run opened from a list (a run id is a public id, never a raw row id). */
   run: (org: string, ws: string, run: string): SafePath =>
     pathOf(org, ws, "runs", run),

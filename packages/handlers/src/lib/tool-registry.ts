@@ -40,6 +40,30 @@ export interface PublishToolArgs {
   /** The mcp.mcp_servers row an imported or server-declared tool belongs to. */
   mcpServerId: string | null;
   schemaOrigin: "declared" | "imported";
+  /**
+   * The mandate gate's half of the classification (ADR-059 decision 6). Part
+   * of the checksum: re-tagging or re-measuring a tool is a declared change
+   * and publishes a version, unlike the `classification` jsonb, which a
+   * reclassification edits in place.
+   */
+  consequenceTags?: readonly string[];
+  measures?: Record<string, unknown>;
+  effectIdPath?: string | null;
+  /**
+   * Called once, with the classification the active version carries (null for
+   * a fresh tool), after the idempotent case has been ruled out and before any
+   * new version is written. `publish_tool_declaration` uses it to require the
+   * consequence role for a change to those fields, so an unchanged republish
+   * never asks for a role it does not need.
+   */
+  beforeNewVersion?: (active: ActiveClassification | null) => Promise<void>;
+}
+
+/** The classification fields the mandate gate reads off the active version. */
+export interface ActiveClassification {
+  consequenceTags: readonly string[];
+  measures: unknown;
+  effectIdPath: string | null;
 }
 
 interface PublishedTool {
@@ -75,9 +99,12 @@ export function toolSlugOf(
 export function toolChecksum(
   args: Pick<
     PublishToolArgs,
+    | "consequenceTags"
     | "description"
+    | "effectIdPath"
     | "inputSchema"
     | "manifest"
+    | "measures"
     | "policyGroup"
     | "readOnly"
     | "riskGrade"
@@ -86,9 +113,12 @@ export function toolChecksum(
 ): string {
   return sha256Hex(
     canonicalJson({
+      consequence_tags: args.consequenceTags ?? [],
       description: args.description,
+      effect_id_path: args.effectIdPath ?? null,
       input_schema: args.inputSchema,
       manifest: args.manifest,
+      measures: args.measures ?? {},
       name: args.slug,
       policy_group: args.policyGroup,
       read_only: args.readOnly,
@@ -137,6 +167,9 @@ export async function publishTool(
     manifest: args.manifest,
     checksum,
     schemaOrigin: args.schemaOrigin,
+    consequenceTags: args.consequenceTags ?? [],
+    measures: args.measures ?? {},
+    effectIdPath: args.effectIdPath ?? null,
     isLatest: true,
     publishedAt: sql`now()`,
     createdByUserId: args.userId ?? undefined,
@@ -166,6 +199,9 @@ export async function publishTool(
           publicId: schema.toolVersions.publicId,
           versionNumber: schema.toolVersions.versionNumber,
           checksum: schema.toolVersions.checksum,
+          consequenceTags: schema.toolVersions.consequenceTags,
+          measures: schema.toolVersions.measures,
+          effectIdPath: schema.toolVersions.effectIdPath,
         })
         .from(schema.toolVersions)
         .where(
@@ -191,6 +227,16 @@ export async function publishTool(
         published: false,
       };
     }
+
+    await args.beforeNewVersion?.(
+      latest
+        ? {
+            consequenceTags: latest.consequenceTags ?? [],
+            measures: latest.measures,
+            effectIdPath: latest.effectIdPath,
+          }
+        : null,
+    );
 
     const nextVersion = (latest?.versionNumber ?? 0) + 1;
     const versionPublicId = await withTenantDb(async (tx) => {
@@ -261,6 +307,7 @@ export async function publishTool(
   // existence check and this insert run in separate sessions, so two
   // concurrent publishes can both pass the check; tools_workspace_slug_idx
   // makes the second insert throw 23505 and we fall back to the version path.
+  await args.beforeNewVersion?.(null);
   try {
     const result = await withTenantDb(async (tx) => {
       const [toolRow] = await tx

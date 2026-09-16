@@ -57,6 +57,8 @@ describe("agent.approval.list handler", () => {
         requester: "usr_0123456789abcdefghjkmn",
         createdAt: "2026-09-13T10:00:00.000Z",
         expiresAt: "2026-09-13T10:05:00.000Z",
+        // A row the chat approval gate wrote: no mandate hop, no parking rule.
+        mandateId: null,
         chain: { agentKey: null, rule: null },
       },
     ],
@@ -82,6 +84,29 @@ describe("agent.approval.list handler", () => {
       surface: "mcp",
     });
     expect(result).toEqual(validOutput);
+  });
+
+  it("carries the mandate hop and the parking rule of a mandate-gate row", async () => {
+    const mandateRow = {
+      items: [
+        {
+          ...validOutput.items[0],
+          mandateId: "mnd_0123456789abcdefghjkmn",
+          chain: {
+            agentKey: null,
+            rule: "mandate:mnd_0123456789abcdefghjkmn:human_above:usd",
+          },
+        },
+      ],
+      nextCursor: null,
+    };
+    mocks.invoke.mockResolvedValue(mandateRow);
+    const result = await handler_agentApprovalList({
+      runId: undefined,
+      limit: 50,
+      cursor: undefined,
+    });
+    expect(result).toEqual(mandateRow);
   });
 
   it("refuses an output that carries a row uuid instead of a public id", async () => {
@@ -123,7 +148,12 @@ import handler_agentApprovalResolve, {
 } from "./agent.approval.resolve";
 
 describe("agent.approval.resolve handler", () => {
-  const validOutput = { approvalId: "apr_1", resolution: "approved" as const };
+  // A row the chat approval gate wrote settles no mandate reservation.
+  const validOutput = {
+    approvalId: "apr_1",
+    resolution: "approved" as const,
+    mandate: null,
+  };
 
   it("exports schema and metadata", () => {
     expect(agentApprovalResolveSchema).toBeDefined();
@@ -150,7 +180,27 @@ describe("agent.approval.resolve handler", () => {
     expect(result).toMatchObject({
       approvalId: "apr_1",
       resolution: "approved",
+      mandate: null,
     });
+  });
+
+  it("returns the mandate settlement of a mandate-gate row", async () => {
+    const settled = {
+      approvalId: "apr_1",
+      resolution: "approved" as const,
+      mandate: {
+        mandateId: "mnd_0123456789abcdefghjkmn",
+        reserved: [{ measure: "spend", value: "2.50", unitOrCurrency: "USD" }],
+        outcome: "held" as const,
+      },
+    };
+    mocks.invoke.mockResolvedValue(settled);
+    const result = await handler_agentApprovalResolve({
+      approvalId: "apr_1",
+      decision: "approved" as const,
+      note: undefined,
+    });
+    expect(result).toEqual(settled);
   });
 
   it("propagates invoke errors", async () => {

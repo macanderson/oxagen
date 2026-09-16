@@ -6,7 +6,9 @@ import {
   registerHandler,
   clearHandlersForTests,
   clearSecurityEventEmitter,
+  setSecurityEventEmitter,
 } from "./kernel";
+import type { KernelSecurityEvent } from "./kernel";
 import { registerCapability, clearRegistryForTests } from "./registry";
 import type { CapabilityContext } from "./types";
 
@@ -131,8 +133,18 @@ describe("kernel tenant scope", () => {
       output: z.object({}),
     });
     registerHandler("test.echo2", async () => async () => ({}));
+    const events: KernelSecurityEvent[] = [];
+    setSecurityEventEmitter((e) => {
+      events.push(e);
+    });
     await expect(invoke("test.echo2", {}, ctx({ orgId: "" }))).rejects.toThrow(
       /tenant scope|orgId/,
     );
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      capability: "test.echo2",
+      outcome: "deny",
+      errorCode: "no_tenant_scope",
+    });
   });
 });

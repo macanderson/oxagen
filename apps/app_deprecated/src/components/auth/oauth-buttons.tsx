@@ -1,9 +1,14 @@
 "use client";
+import type { JSX } from "react";
 import { Github } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@oxagen/auth/client";
 
-export function OAuthButtons({ callbackURL = "/" }: { callbackURL?: string }) {
+export function OAuthButtons({
+  callbackURL = "/",
+}: {
+  callbackURL?: string;
+}): JSX.Element {
   const handle = (provider: "google" | "github") => () =>
     authClient.signIn.social({ provider, callbackURL });
 

@@ -234,6 +234,84 @@ describe("workspace.settings.write handler", () => {
     expect(mocks.update).not.toHaveBeenCalled();
   });
 
+  // ── Consequence-role overrides (ADR-059 decision 1) ─────────────────────
+
+  it.each(["Admin"])(
+    "refuses consequenceRoles from an org %s with forbidden / org_role_required, writing nothing (negative)",
+    async (roleName) => {
+      mocks.tenant.roleName = roleName;
+      await expect(
+        refusal(
+          workspaceSettingsWriteHandler(
+            {
+              name: "Research Lab",
+              consequenceRoles: { moves_money: ["Admin"] },
+            },
+            CTX,
+          ),
+        ),
+      ).resolves.toEqual({ code: "forbidden", reason: "org_role_required" });
+      expect(mocks.findFirst).not.toHaveBeenCalled();
+      expect(mocks.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refuses consequenceRoles from a workspace Owner with no org role (negative)", async () => {
+    mocks.tenant.roleName = "Member";
+    mocks.tenant.workspaceRoleName = "Owner";
+    await expect(
+      refusal(
+        workspaceSettingsWriteHandler(
+          { consequenceRoles: { moves_money: ["Admin"] } },
+          CTX,
+        ),
+      ),
+    ).resolves.toEqual({ code: "forbidden", reason: "org_role_required" });
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it("lets an org Admin write the other fields", async () => {
+    mocks.tenant.roleName = "Admin";
+    mocks.findFirst
+      .mockResolvedValueOnce(EXISTING)
+      .mockResolvedValueOnce({ ...EXISTING, name: "Research Lab" });
+    await workspaceSettingsWriteHandler({ name: "Research Lab" }, CTX);
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("replaces the consequence-role overrides as a whole for an org Owner and returns the effective map", async () => {
+    mocks.findFirst.mockResolvedValueOnce(EXISTING).mockResolvedValueOnce({
+      name: "Research",
+      slug: "research",
+      avatarUrl: null,
+      description: "old",
+      consequenceRoles: { moves_money: ["Billing"] },
+    });
+    const out = await workspaceSettingsWriteHandler(
+      { consequenceRoles: { moves_money: ["Billing"] } },
+      CTX,
+    );
+    const setArg = mocks.set.mock.calls[0]![0] as {
+      consequenceRoles?: Record<string, string[]>;
+    };
+    expect(setArg.consequenceRoles).toEqual({ moves_money: ["Billing"] });
+    expect(out.consequenceRoles.moves_money).toEqual(["Billing"]);
+    // A tag with no override reads the default.
+    expect(out.consequenceRoles.destroys_data).toEqual(["Owner", "Admin"]);
+  });
+
+  it("writes consequenceRoles as an API key whose creator is an org Owner", async () => {
+    mocks.findFirst.mockResolvedValueOnce(EXISTING).mockResolvedValueOnce({
+      ...EXISTING,
+      consequenceRoles: { moves_money: ["Owner"] },
+    });
+    const out = await workspaceSettingsWriteHandler(
+      { consequenceRoles: { moves_money: ["Owner"] } },
+      { ...CTX, userId: null, apiKeyId: "aky_1", surface: "mcp" as const },
+    );
+    expect(out.consequenceRoles.moves_money).toEqual(["Owner"]);
+  });
+
   it("updates the name and description columns independently", async () => {
     mocks.findFirst.mockResolvedValueOnce(EXISTING).mockResolvedValueOnce({
       name: "Research Lab",

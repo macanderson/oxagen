@@ -8,7 +8,7 @@
  * and the selection state.
  */
 
-import { useCallback, useState, useTransition } from "react";
+import { type JSX, useCallback, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -60,7 +60,7 @@ export function ConsentForm({
   state,
   codeChallenge,
   orgs,
-}: ConsentFormProps) {
+}: ConsentFormProps): JSX.Element {
   const defaultOrg = orgs[0];
   const [selectedOrgSlug, setSelectedOrgSlug] = useState<string>(
     defaultOrg?.slug ?? "",

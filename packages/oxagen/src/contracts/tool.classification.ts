@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Safety classification of a tool version (MC spec §6.9 part 1, ADR-065).
+ * Safety classification of a tool version (MC spec §6.9 part 1, ADR-068).
  *
  * Classification describes a tool and decides nothing by itself: a class kill
  * switch (`set_kill_switch` with `target.kind = "class"`) matches a version by

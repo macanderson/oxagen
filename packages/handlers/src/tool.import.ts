@@ -17,7 +17,7 @@
 //      checksums of its tools' active versions.
 //
 // The pull-request path the mockup shows (declarations to `.oxagen/tools/` on
-// a branch) needs a bound repository, which no capability records; ADR-065.
+// a branch) needs a bound repository, which no capability records; ADR-068.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
@@ -160,6 +160,9 @@ export function createToolImportHandler(
           policyGroup: d.policy_group ?? null,
           manifest: d.manifest,
           schemaOrigin: "declared",
+          consequenceTags: d.consequence_tags,
+          measures: d.measures,
+          effectIdPath: d.effect_id_path ?? null,
         });
       }
     } else {
@@ -190,6 +193,11 @@ export function createToolImportHandler(
             inputSchema: pin.inputSchema,
           },
           schemaOrigin: "imported",
+          // A pulled descriptor states no consequences: it lands unclassified
+          // and an admin classifies it, the same fail-safe as the risk grade.
+          consequenceTags: [],
+          measures: {},
+          effectIdPath: null,
         });
       }
     }
@@ -212,6 +220,9 @@ export function createToolImportHandler(
         version: published.version,
         checksum: published.checksum,
         schemaOrigin: p.schemaOrigin,
+        consequenceTags: [...(p.consequenceTags ?? [])],
+        measures: p.measures ?? {},
+        effectIdPath: p.effectIdPath ?? null,
         published: published.published,
       });
     }

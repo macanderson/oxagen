@@ -124,7 +124,7 @@ export const SECURITY_EVENT_TYPES = [
   // key writes nothing and is not audited.
   "model_credential.set",
   "model_credential.revoked",
-  // Tool governance (MC spec §6.9, §6.11, ADR-065, #2958). A kill switch
+  // Tool governance (MC spec §6.9, §6.11, ADR-068, #2958). A kill switch
   // flip is the emergency deny an operator issues against a tool version, a
   // tool server, a connection, an agent, an operator, a workspace, the
   // organisation or a consequence class; every flip, on or off, is recorded
@@ -173,6 +173,17 @@ export const SECURITY_EVENT_TYPES = [
   "agent_run.forged_decision_reference",
   "agent_run.stale_deny_generation",
   "agent_run.finalization_grant_misuse",
+  // Mandates (MC spec §6.9 part 3, ADR-059): the grant, the limits change,
+  // the revocation, the hourly expiry, and a call the gate refused
+  // (no_mandate, target_denied, over_limit) — the spec catalog's
+  // `mandate.exception`. Emitted by packages/handlers/src/mandate.*.ts,
+  // packages/inngest-functions/src/functions/mandate.expiry.ts and
+  // packages/rules/src/mandates.ts.
+  "mandate.granted",
+  "mandate.limits_changed",
+  "mandate.revoked",
+  "mandate.expired",
+  "mandate.exception",
   // Access review
   "access.review_completed",
   "access.member_access_confirmed",

@@ -26,6 +26,11 @@ vi.mock("next/link", () => ({
     <a {...rest}>{children}</a>
   ),
 }));
+// Each write is tested through its own control (auto-topup.test.tsx,
+// purchase-form.test.tsx). Both mocks live in one factory because a second
+// vi.mock of the same path replaces the first, which left setAutoTopup off
+// the mock and would throw the moment the control read it.
+vi.mock("./actions", () => ({ setAutoTopup: vi.fn(), purchaseGau: vi.fn() }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
@@ -106,9 +111,40 @@ describe("Billing reads", () => {
       "Governed action bucket",
       "Auto top-up",
       "Your contracted rate",
+      "Buy governed action units",
       "Invoices",
     ]);
   });
+});
+
+describe("Buy governed action units", () => {
+  const purchase = () =>
+    screen.getByRole("region", { name: "Buy governed action units" });
+
+  it.each(["owner", "billing"] as const)(
+    "offers an %s the purchase at the rate block's block size",
+    async (role) => {
+      await renderBilling({}, { role });
+      expect(purchase()).toHaveAttribute("data-state", "ok");
+      expect(
+        within(purchase()).getByRole("spinbutton", {
+          name: "Governed action units",
+        }),
+      ).toHaveAttribute(
+        "step",
+        section("Your contracted rate").getAttribute("data-block-size"),
+      );
+    },
+  );
+
+  it.each(["admin", "member", "compliance", "viewer"] as const)(
+    "shows a %s who can buy instead of the form (negative)",
+    async (role) => {
+      await renderBilling({}, { role });
+      expect(purchase()).toHaveAttribute("data-state", "denied");
+      expect(within(purchase()).queryByRole("spinbutton")).toBeNull();
+    },
+  );
 });
 
 describe("checkout banner", () => {
@@ -319,6 +355,9 @@ describe("Auto top-up", () => {
     },
   );
 
+  // The block size reaches the control from the rate read and from nothing
+  // else (R3-I6). These two pin that derivation; the control's own test takes
+  // the size as a prop and cannot see where the page got it.
   it("prints the GAUs one top-up buys, from the rate block's block size", async () => {
     await renderBilling({ bucket: readOk(prepaidBucket({}, { blocks: 3 })) });
     expect(
@@ -329,57 +368,6 @@ describe("Auto top-up", () => {
   it("leaves the per-top-up count out when the rate could not be read (negative)", async () => {
     await renderBilling({ rate: DOWN });
     expect(section("Auto top-up").querySelector("[data-per-topup]")).toBeNull();
-  });
-
-  it("prints a saved card Stripe did not label without inventing a brand", async () => {
-    await renderBilling({
-      bucket: readOk(
-        prepaidBucket({}, { paymentMethod: { brand: null, last4: null } }),
-      ),
-    });
-    expect(
-      section("Auto top-up").querySelector("[data-card=saved]"),
-    ).toHaveTextContent(/^charged to the saved payment method$/);
-  });
-
-  it("tells a card-less organization its next purchase saves one, with auto top-up on by default", async () => {
-    await renderBilling({ bucket: readOk(freeNoCardBucket()) });
-    const topup = section("Auto top-up");
-    expect(topup.querySelector("[data-card=none]")).toHaveTextContent(
-      /^no saved payment method — your next purchase saves one, and auto top-up runs from then on$/,
-    );
-    expect(within(topup).getByRole("switch")).toBeChecked();
-    expect(within(topup).getByRole("spinbutton")).toHaveValue(1);
-  });
-
-  it("says no top-up has run this month", async () => {
-    await renderBilling();
-    expect(
-      section("Auto top-up").querySelector("[data-attempt=none]"),
-    ).toHaveTextContent(/^No auto top-up has run this month\.$/);
-  });
-
-  it.each([
-    ["paid", "Last top-up Sep 14, 2026: paid"],
-    ["open", "Last top-up Sep 14, 2026: open, its invoice is under Invoices"],
-    ["failed", "Last top-up Sep 14, 2026: failed"],
-  ] as const)("prints a %s last attempt", async (status, text) => {
-    await renderBilling({
-      bucket: readOk(
-        prepaidBucket(
-          {},
-          { lastAttempt: { at: "2026-09-14T10:02:00.000Z", status } },
-        ),
-      ),
-    });
-    expect(
-      section("Auto top-up").querySelector(`[data-attempt=${status}]`),
-    ).toHaveTextContent(text);
-  });
-
-  it("is not drawn for an invoice-billed organization (negative)", async () => {
-    await renderBilling({ bucket: readOk(invoiceBucket()) });
-    expect(screen.queryByRole("region", { name: "Auto top-up" })).toBeNull();
   });
 });
 

@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import {
+  consequenceTagSchema,
+  measureDeclarationsSchema,
+} from "../mandates/schemas";
 import { toolDeclarationPublish } from "./tool.declaration.publish";
 
 const publishInput = toolDeclarationPublish.input.shape;
@@ -21,7 +25,7 @@ const publishInput = toolDeclarationPublish.input.shape;
  *
  * Registers directly. The pull-request path the mockup shows (declarations
  * written to `.oxagen/tools/` on a branch) needs a bound repository, which no
- * capability records today; it lands with the lane that binds one (ADR-065).
+ * capability records today; it lands with the lane that binds one (ADR-068).
  */
 /**
  * The input's base object, before the one-of rule: MCP tools spread `.shape`
@@ -52,6 +56,14 @@ export const toolImportInputObject = z
             risk_grade: publishInput.risk_grade,
             policy_group: publishInput.policy_group,
             manifest: publishInput.manifest,
+            // Safety classification (§6.9 part 1, ADR-059 decision 6), carried
+            // by reference from `publish_tool_declaration`. It is what the
+            // mandate gate reads off the active version at decision time, so
+            // an imported declaration that cannot state it would leave every
+            // mandate over this tool unable to measure or settle a call.
+            consequence_tags: publishInput.consequence_tags,
+            measures: publishInput.measures,
+            effect_id_path: publishInput.effect_id_path,
           })
           .strict(),
       )
@@ -107,6 +119,15 @@ export const toolImport = registerCapability({
         version: z.number().int().positive(),
         checksum: z.string(),
         schemaOrigin: z.enum(["declared", "imported"]),
+        /**
+         * The safety classification frozen onto this version, echoed back so
+         * an import of forty tools says what each one is now classified as —
+         * an origin `imported` row lands unclassified, and the caller has no
+         * other way to read what was stored.
+         */
+        consequenceTags: z.array(consequenceTagSchema),
+        measures: measureDeclarationsSchema,
+        effectIdPath: z.string().nullable(),
         /** True when this import created the version; false when it was already there. */
         published: z.boolean(),
       }),

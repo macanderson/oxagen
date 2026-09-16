@@ -1,5 +1,5 @@
 // tool.classification.set.ts — handler for the set_tool_classification
-// capability (MC spec §6.9 part 1, ADR-065, #2958).
+// capability (MC spec §6.9 part 1, ADR-068, #2958).
 //
 // Flow:
 //   1. Role gate — org Owner or Admin (assertOrgRole, INV-29).

@@ -1,5 +1,5 @@
 // kill_switch.set.ts — handler for the set_kill_switch capability (MC spec
-// §6.11, ARCHITECTURE.md §1.3, ADR-065, #2958).
+// §6.11, ARCHITECTURE.md §1.3, ADR-068, #2958).
 //
 // Flow:
 //   1. Role gate — org Owner or Admin (assertOrgRole, INV-29).
