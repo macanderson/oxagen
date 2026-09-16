@@ -140,6 +140,18 @@ export const routes = {
     view: { tab: string; drill?: string },
   ): SafePath =>
     withQuery(pathOf(org, ws, "spend"), { tab: view.tab, drill: view.drill }),
+  /** Steering; a tab, a kind, a page offset and a selected proposal are query values on the one route. */
+  steering: (
+    org: string,
+    ws: string,
+    q: { tab?: string; kind?: string; offset?: string; proposal?: string } = {},
+  ): SafePath =>
+    withQuery(pathOf(org, ws, "steering"), {
+      tab: q.tab,
+      kind: q.kind,
+      offset: q.offset,
+      proposal: q.proposal,
+    }),
 };
 
 /**

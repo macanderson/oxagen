@@ -206,6 +206,7 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: { members: refuse },
+    steering: { records: refuse, proposals: refuse, contextPr: refuse },
   };
   return { source, calls };
 }

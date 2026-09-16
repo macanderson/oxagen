@@ -250,6 +250,7 @@ export function agentsSource(reads: AgentReads) {
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: { members: refuse },
+    steering: { records: refuse, proposals: refuse, contextPr: refuse },
   };
   return { source, calls };
 }

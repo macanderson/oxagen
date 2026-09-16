@@ -139,6 +139,11 @@ export const runGet = registerCapability({
     .object({
       run: runItemSchema,
       frames: runFramePageSchema,
+      /**
+       * The worker run this run witnessed (spec §8.5 "Stamping"; ADR-064): a
+       * witness run renders its own tab set. Null for every other run.
+       */
+      witnessFor: runPublicIdSchema.nullable(),
     })
     .strict(),
 });

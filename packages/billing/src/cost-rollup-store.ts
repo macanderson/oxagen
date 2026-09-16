@@ -8,7 +8,12 @@
  * derived index is rebuilt for a tenant, never read as one. Handlers read the
  * rows through withTenantDb in their own modules.
  */
-import { schema, withSystemDb } from "@oxagen/database";
+import {
+  readRunVerdict,
+  readWitnessedRunId,
+  schema,
+  withSystemDb,
+} from "@oxagen/database";
 import {
   readModelCallFrames,
   readTachoToolCallFrames,
@@ -245,7 +250,10 @@ function toFrame(row: ModelCallFrameRow): ModelCallFrame {
 }
 
 /** The reads a run rollup makes; production defaults, tests inject fakes. */
-interface RunRollupDeps {
+/** A tenant a run belongs to. */
+type RollupScope = { orgId: string; workspaceId: string };
+
+export interface RunRollupDeps {
   loadRunSource: (publicId: string) => Promise<RunSource | null>;
   readModelCalls: (args: {
     orgId: string;
@@ -255,10 +263,17 @@ interface RunRollupDeps {
   loadPriceBook: (args: { orgId: string }) => Promise<PriceBook>;
   readCarried: (
     runId: string,
-  ) => Promise<Pick<
-    RunTotalsRecord,
-    "verdict" | "accepted" | "productiveRatio"
-  > | null>;
+  ) => Promise<Pick<RunTotalsRecord, "accepted" | "productiveRatio"> | null>;
+  /** The run's witness verdict (ADR-064), aggregated from its verdict rows. */
+  readVerdict: (
+    scope: RollupScope,
+    runId: string,
+  ) => Promise<RunTotalsRecord["verdict"]>;
+  /** The worker run a witness run reported on; null for any other run. */
+  readWitnessedRun: (
+    scope: RollupScope,
+    runId: string,
+  ) => Promise<string | null>;
   write: (record: RunTotalsRecord, rolledUpAt: Date) => Promise<void>;
   now: () => Date;
 }
@@ -369,13 +384,14 @@ async function upsertRunTotals(
     enforcementTier: record.enforcementTier,
     replayGrade: record.replayGrade,
     breakdown: serializeBreakdown(record.breakdown),
+    verdict: record.verdict,
     rolledUpAt,
   };
-  // The proof and value columns belong to other lanes: a first insert carries
-  // what the rollup read (null until those lanes write), and a rebuild leaves
-  // the row's own values in place rather than replaying a stale read.
+  // The value columns belong to other lanes: a first insert carries what the
+  // rollup read (null until those lanes write), and a rebuild leaves the row's
+  // own values in place rather than replaying a stale read. The verdict is
+  // rebuilt with the rest, from the run's verdict rows (ADR-064).
   const carried = {
-    verdict: record.verdict,
     accepted: record.accepted,
     productiveRatio:
       record.productiveRatio === null
@@ -394,7 +410,6 @@ async function readCarried(runId: string) {
   const rows = await withSystemDb((tx) =>
     tx
       .select({
-        verdict: totals.verdict,
         accepted: totals.accepted,
         productiveRatio: totals.productiveRatio,
       })
@@ -405,7 +420,6 @@ async function readCarried(runId: string) {
   const row = rows[0];
   if (!row) return null;
   return {
-    verdict: row.verdict,
     accepted: row.accepted,
     productiveRatio:
       row.productiveRatio === null ? null : Number(row.productiveRatio),
@@ -429,6 +443,10 @@ const productionRunRollupDeps: RunRollupDeps = {
         }),
   loadPriceBook,
   readCarried,
+  readVerdict: (scope, runId) =>
+    withSystemDb((tx) => readRunVerdict(tx, scope, runId)),
+  readWitnessedRun: (scope, runId) =>
+    withSystemDb((tx) => readWitnessedRunId(tx, scope, runId)),
   write: upsertRunTotals,
   now: () => new Date(),
 };
@@ -444,18 +462,39 @@ export async function rebuildRunTotals(
 ): Promise<RunTotalsRecord | null> {
   const source = await deps.loadRunSource(publicId);
   if (!source) return null;
-  const [modelCalls, toolCalls, book, carried] = await Promise.all([
-    deps.readModelCalls({ orgId: source.meta.orgId, run: source.frames }),
-    deps.readToolCalls(source),
-    deps.loadPriceBook({ orgId: source.meta.orgId }),
-    deps.readCarried(publicId),
-  ]);
+  const scope = {
+    orgId: source.meta.orgId,
+    workspaceId: source.meta.workspaceId,
+  };
+  const [modelCalls, toolCalls, book, carried, verdict, workerId] =
+    await Promise.all([
+      deps.readModelCalls({ orgId: source.meta.orgId, run: source.frames }),
+      deps.readToolCalls(source),
+      deps.loadPriceBook({ orgId: source.meta.orgId }),
+      deps.readCarried(publicId),
+      deps.readVerdict(scope, publicId),
+      deps.readWitnessedRun(scope, publicId),
+    ]);
+  // A witness run is a run of its own whose cost belongs to the worker's
+  // operator (spec §8.5 "Stamping"), so its row names that operator.
+  const worker = workerId === null ? null : await deps.loadRunSource(workerId);
+  const meta = worker
+    ? {
+        ...source.meta,
+        operatorPrincipalId: worker.meta.operatorPrincipalId,
+        operatorKey: worker.meta.operatorKey,
+      }
+    : source.meta;
   const record = rollupRun({
-    meta: source.meta,
+    meta,
     modelCalls,
     toolCalls,
     book,
-    ...(carried ? { carried } : {}),
+    carried: {
+      verdict,
+      accepted: carried?.accepted ?? null,
+      productiveRatio: carried?.productiveRatio ?? null,
+    },
   });
   await deps.write(record, deps.now());
   return record;

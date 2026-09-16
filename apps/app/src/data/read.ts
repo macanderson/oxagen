@@ -45,6 +45,7 @@ export type PageKey =
   | "organization"
   | "billing"
   | "spend"
+  | "steering"
   | "shell";
 
 type PageFailure = {
@@ -87,6 +88,12 @@ export const PAGE_FAILURES = {
   spend: {
     error: { code: "rollup_rebuild_in_progress", status: 504 },
     permission: "spend.read",
+  },
+  // The published records and the proposals are one record index; a member
+  // without the workspace's steering read is denied on it.
+  steering: {
+    error: { code: "record_index_unavailable", status: 503 },
+    permission: "steering.read",
   },
   // The shell's one read fails with the control plane and needs organization
   // membership alone.

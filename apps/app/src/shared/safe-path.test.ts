@@ -133,6 +133,14 @@ describe("routes", () => {
     expect(routes.billing("acme", { checkout: "cancel" })).toBe(
       "/acme/billing?checkout=cancel",
     );
+    expect(routes.steering("acme", "core")).toBe("/acme/core/steering");
+    expect(
+      routes.steering("acme", "core", {
+        tab: "prs",
+        offset: "50",
+        proposal: "prp_1&x",
+      }),
+    ).toBe("/acme/core/steering?tab=prs&offset=50&proposal=prp_1%26x");
   });
 
   it("percent-encodes every segment, so a slug cannot add a segment or a host", () => {
