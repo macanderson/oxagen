@@ -127,7 +127,7 @@ describe("MandateBar", () => {
   // `update_mandate_limits` may lower a limit under authority already drawn,
   // so the two ratios can total more than one. Clamping each on its own and
   // letting flex resolve the overflow rescaled both, drawing a half-used bar
-  // over a limit that is fully settled and overcommitted.
+  // over a limit the ledger has already drawn past.
   it("draws an over-limit period as full, not as a balanced bar (negative)", async () => {
     const { container } = draw(
       <MandateBar
@@ -154,12 +154,12 @@ describe("MandateBar", () => {
       expect(part.className).toContain("shrink-0");
     }
     expect(bar()).toHaveAttribute("data-over", "true");
-    expect(screen.getByText(/fully settled and overcommitted/)).toHaveAttribute(
+    expect(screen.getByText(/past this limit/)).toHaveAttribute(
       "data-state",
       "over-limit",
     );
     expect(meter()).toHaveAccessibleName(
-      expect.stringContaining("overcommitted"),
+      expect.stringContaining("past this limit"),
     );
     await expectNoAxe(container);
   });
@@ -183,10 +183,47 @@ describe("MandateBar", () => {
       />,
     );
     expect(bar()).toHaveAttribute("data-over", "true");
-    expect(screen.getByText(/fully settled and overcommitted/)).toHaveAttribute(
+    expect(screen.getByText(/past this limit/)).toHaveAttribute(
       "data-state",
       "over-limit",
     );
+  });
+
+  // The message names the excess and not where it sits, because `overLimit` is
+  // the sum: with nothing settled and an open reservation past the limit,
+  // saying "fully settled" would report an effect that has not happened.
+  it("does not call a reservation-only excess settled", () => {
+    draw(
+      <MandateBar
+        authority={authority({
+          perPeriod: money("500000000"),
+          settled: money("0"),
+          reserved: money("600000000"),
+          remaining: null,
+          settledRatio: 0,
+          reservedRatio: 1,
+          overLimit: true,
+        })}
+      />,
+    );
+    const stated = screen.getByText(/past this limit/);
+    expect(stated).toHaveAttribute("data-state", "over-limit");
+    // It may point at the settled figure; it may not claim the limit is settled.
+    expect(stated.textContent).not.toMatch(
+      /fully settled|has settled|is settled/,
+    );
+    expect(meter()).toHaveAccessibleName(
+      expect.stringContaining("past this limit"),
+    );
+    // The split the message declines to assert is on the bar and in the figures.
+    const parts = [...bar().querySelectorAll("i")].map((part) => [
+      part.dataset.part,
+      part.style.width,
+    ]);
+    expect(parts).toEqual([
+      ["settled", "0%"],
+      ["reserved", "100%"],
+    ]);
   });
 
   it("says nothing when the ledger is exactly at the limit (negative)", () => {
@@ -204,13 +241,13 @@ describe("MandateBar", () => {
       />,
     );
     expect(bar()).not.toHaveAttribute("data-over");
-    expect(screen.queryByText(/overcommitted/)).toBeNull();
+    expect(screen.queryByText(/past this limit/)).toBeNull();
   });
 
   it("leaves a period inside its limit unmarked and unshrunk", () => {
     draw(<MandateBar authority={authority()} />);
     expect(bar()).not.toHaveAttribute("data-over");
-    expect(screen.queryByText(/overcommitted/)).toBeNull();
+    expect(screen.queryByText(/past this limit/)).toBeNull();
   });
 
   it("gives the reservation only the room settlement leaves", () => {

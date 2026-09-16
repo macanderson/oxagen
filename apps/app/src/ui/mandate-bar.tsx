@@ -17,7 +17,16 @@
 // lowered to 500 draws an even split, reading as a bar half used. So the
 // reservation takes the room settlement leaves and neither segment shrinks.
 //
-// Saying: the fact of the excess is not recoverable from the ratios, because
+// Saying: the message names the excess and not where it sits. `overLimit` is
+// the sum against the limit, so it is true when settlement alone carries the
+// excess, when an open reservation alone does, and when the two together do —
+// and this surface teaches elsewhere that settled means completed effects and
+// reserved means calls still in flight. Calling a reservation-only excess
+// "fully settled" would tell the accountable reader an effect had happened
+// that has not. The bar and the figures beneath it already show the split, so
+// the sentence states the fact and points at them.
+//
+// The fact of the excess is not recoverable from the ratios, because
 // `ratioOfIntegers` clamps each to 1 — 600 settled against a limit of 500
 // arrives as 1, and 1 + 0 is not greater than 1, so a sum of ratios would miss
 // a single-component excess entirely and quantization could round a small
