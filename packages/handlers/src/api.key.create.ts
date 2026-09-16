@@ -11,11 +11,12 @@
 //   5. Emit api_key.created security event (fire-and-forget).
 //   6. Return the rawKey — it will never be recoverable again.
 
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { apiKeyCreate } from "@oxagen/oxagen/contracts/api.key.create";
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
+import { and, eq } from "drizzle-orm";
 import {
   API_KEY_AUTHORIZED_ROLES as AUTHORIZED_ROLES,
   resolveActorOrgRole as resolveActorRole,
@@ -136,8 +137,45 @@ export const apiKeyCreateHandler: CapabilityHandler<
     );
   }
 
-  const [inserted] = await withTenantDb((tx) =>
-    tx
+  const [inserted] = await withTenantDb(async (tx) => {
+    // An archived workspace is wound down. Its existing keys keep
+    // authenticating — `resolveApiKey` never consults archival — and the
+    // Organization › API keys page lists them for exactly one reason, which it
+    // states: so they can be revoked. Minting a new one there would be fresh
+    // machine access introduced after the workspace was closed, against a page
+    // that promises the opposite.
+    //
+    // Checked inside the insert's own transaction, so a workspace archived
+    // between a check and the write cannot let a key through, and refused the
+    // way `workspace.settings.write` refuses an edit to an archived workspace.
+    const [workspace] = await tx
+      .select({
+        name: schema.workspaces.name,
+        archivedAt: schema.workspaces.archivedAt,
+      })
+      .from(schema.workspaces)
+      .where(
+        and(
+          eq(schema.workspaces.id, ctx.workspaceId),
+          eq(schema.workspaces.orgId, ctx.orgId),
+        ),
+      )
+      .limit(1);
+    if (!workspace) {
+      throw new HandlerError({
+        code: "not_found",
+        reason: "workspace_not_found",
+        message: "Not found: this workspace does not exist in this org",
+      });
+    }
+    if (workspace.archivedAt !== null) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "workspace_archived",
+        message: `${workspace.name} was archived on ${workspace.archivedAt.toISOString()}; a key cannot be created in an archived workspace`,
+      });
+    }
+    return tx
       .insert(schema.apiKeys)
       .values({
         orgId: ctx.orgId,
@@ -157,8 +195,8 @@ export const apiKeyCreateHandler: CapabilityHandler<
         keyPrefix: schema.apiKeys.keyPrefix,
         expiresAt: schema.apiKeys.expiresAt,
         createdAt: schema.apiKeys.createdAt,
-      }),
-  );
+      });
+  });
 
   if (!inserted) {
     throw new Error("Internal error: failed to create API key row");

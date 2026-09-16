@@ -166,6 +166,7 @@ function ApiKeysView({
               keys={read.value}
               org={orgSlug}
               ws={current}
+              archived={chosen?.archivedAt != null}
               now={now}
               here={routes.apiKeys(orgSlug, { workspace: current })}
             />
@@ -256,6 +257,7 @@ function Keys({
   keys,
   org,
   ws,
+  archived,
   now,
   here,
 }: {
@@ -263,6 +265,14 @@ function Keys({
   org: string;
   /** The workspace the keys belong to, and the one a new key is minted in. */
   ws: string;
+  /**
+   * Whether that workspace is archived. No key is minted into one: its
+   * existing keys keep authenticating and are listed so they can be revoked,
+   * which is the opposite of issuing another. `create_api_key` refuses it
+   * (`conflict` / `workspace_archived`) and that refusal is the guarantee;
+   * withholding the control is the courtesy.
+   */
+  archived: boolean;
   now: number;
   /** This page, reloaded after a key was minted, rotated or revoked. */
   here: SafePath;
@@ -274,9 +284,16 @@ function Keys({
   return (
     <div className="flex flex-col gap-3">
       <p className="max-w-prose text-sm text-muted-foreground">{t("lead")}</p>
-      <div className="flex justify-end">
-        <CreateKeyDialog org={org} ws={ws} listedIds={listedIds} after={here} />
-      </div>
+      {archived ? null : (
+        <div className="flex justify-end">
+          <CreateKeyDialog
+            org={org}
+            ws={ws}
+            listedIds={listedIds}
+            after={here}
+          />
+        </div>
+      )}
       {keys.length === 0 ? (
         <p className={emptyLine}>{t("empty")}</p>
       ) : (

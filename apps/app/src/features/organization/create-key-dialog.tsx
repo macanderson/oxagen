@@ -63,6 +63,10 @@ function useFailureText(): (failure: Failure) => string {
         // judges against its own and is the authority (INV-29's shape: the
         // refusal is the guarantee, the control is a courtesy).
         if (failure.code === "api_key_expired") return t("keyExpired");
+        // The page withholds Create in an archived workspace, so this is the
+        // race: archived after the render, refused by the handler.
+        if (failure.code === "workspace_archived")
+          return t("workspaceArchived");
         return t("refused", { code: failure.code });
       case "invalid":
         switch (failure.code) {

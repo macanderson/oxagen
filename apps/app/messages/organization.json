@@ -171,7 +171,8 @@
           "refused": "The change was refused: {code}. Nothing was changed.",
           "invalid": "The request was refused as invalid. Nothing was changed.",
           "pendingApproval": "The change is waiting for approval, request {accessRequestId}.",
-          "unavailable": "The change could not be made: {code}. Nothing was changed."
+          "unavailable": "The change could not be made: {code}. Nothing was changed.",
+          "workspaceArchived": "That workspace was archived while this page was open. Its keys are listed so they can be revoked; no new key is issued into it."
         }
       },
       "status": {
@@ -182,7 +183,7 @@
       "workspace": {
         "label": "Workspace",
         "archived": "{name} (archived)",
-        "archivedNote": "This workspace is archived. Its keys still authenticate, so they are listed here until they are revoked."
+        "archivedNote": "This workspace is archived. Its keys still authenticate, so they are listed here until they are revoked — but no new key is issued into it."
       },
       "noWorkspace": {
         "title": "A key needs a workspace",

@@ -357,8 +357,42 @@ describe("the workspace a key names", () => {
       </IntlProvider>,
     );
     expect(screen.getByTestId("api-keys-archived-workspace")).toHaveTextContent(
-      "Its keys still authenticate, so they are listed here until they are revoked.",
+      "Its keys still authenticate, so they are listed here until they are revoked — but no new key is issued into it.",
     );
+  });
+
+  it("offers no Create in an archived workspace, and says the page will not issue one (negative)", async () => {
+    // The page lists an archived workspace's keys for one reason and says so:
+    // they still authenticate and have to be revocable. Minting another there
+    // is the opposite of winding down, and `create_api_key` refuses it
+    // (conflict / workspace_archived) — this is the courtesy above it.
+    const ctx = unsafeMint(WsCtx, {
+      ...ORG_FIELDS,
+      orgRole: "owner",
+      workspaceId: "7a000000-0000-4000-8000-0000000000c4",
+      wsSlug: "sunset",
+      wsName: "Sunset",
+    });
+    const { source } = orgSource({ apiKeys: readOk([live]) });
+    const view = render(
+      <IntlProvider>
+        {await ApiKeys({ ctx, source, workspaces: readOk(list(sunset)) })}
+      </IntlProvider>,
+    );
+    expect(screen.queryByRole("button", { name: "Create a key" })).toBeNull();
+    expect(screen.getByTestId("api-keys-archived-workspace")).toHaveTextContent(
+      "no new key is issued into it",
+    );
+    // The keys themselves are still listed, with Revoke, which is the point.
+    expect(keysTable()).toBeInTheDocument();
+    await expectNoAxe(view.container);
+  });
+
+  it("offers Create in a workspace still in use", async () => {
+    await renderApiKeys(readOk([live]));
+    expect(
+      screen.getByRole("button", { name: "Create a key" }),
+    ).toBeInTheDocument();
   });
 
   it("reads no key at all when the viewer may enter no workspace (negative)", async () => {

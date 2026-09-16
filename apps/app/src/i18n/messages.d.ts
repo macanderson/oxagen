@@ -1240,6 +1240,7 @@ type Messages = {
           invalid: string;
           pendingApproval: string;
           unavailable: string;
+          workspaceArchived: string;
         };
       };
       status: {

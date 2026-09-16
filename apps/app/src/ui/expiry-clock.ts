@@ -19,7 +19,7 @@
 import { useEffect, useState } from "react";
 
 /** How long a row waits before it re-reads the clock. */
-export const EXPIRY_TICK_MS = 30_000;
+const EXPIRY_TICK_MS = 30_000;
 
 /**
  * The server's instant, then the browser's once this row has an expiry to
