@@ -20,7 +20,7 @@
 --      import_tools.
 --   4. mcp.credential_grants: one row per credential the broker put to use for
 --      a tool server on behalf of a run (spec §6.8, App. A.5). RLS for it is
---      in 20260915203100_rls_credential_grants.sql (generated from the tenant
+--      in 20260915210100_rls_credential_grants.sql (generated from the tenant
 --      policy manifest).
 --   5. iam.emergency_denies gains target_kind, target_id and flipped_by_user_id
 --      so a deny written by set_kill_switch names what it stops, and one

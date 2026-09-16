@@ -62,13 +62,32 @@ describe("get_run contract", () => {
       startedAt: "2026-09-08T10:06:03.000Z",
       sealedAt: null,
       replayGrade: null,
+      verdict: null,
       name: null,
       summary: null,
     };
     expect(
-      runGet.output.safeParse({ run, frames: { frames: [], cursor: null } })
-        .success,
+      runGet.output.safeParse({
+        run,
+        frames: { frames: [], cursor: null },
+        witnessFor: null,
+      }).success,
     ).toBe(true);
+    // A witness run names the worker run it reported on (ADR-064).
+    expect(
+      runGet.output.safeParse({
+        run,
+        frames: { frames: [], cursor: null },
+        witnessFor: "tse_4q8r1t6v3x5z0b2d7h2k9m",
+      }).success,
+    ).toBe(true);
+    expect(
+      runGet.output.safeParse({
+        run,
+        frames: { frames: [], cursor: null },
+        witnessFor: "wit_01K5RQ8M4",
+      }).success,
+    ).toBe(false);
     expect(runGet.output.safeParse({ run, frames: null }).success).toBe(false);
     expect(runGet.output.safeParse({ run, frames: [] }).success).toBe(false);
   });

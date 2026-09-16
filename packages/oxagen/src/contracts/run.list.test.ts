@@ -15,6 +15,7 @@ const item = {
   startedAt: "2026-09-08T10:06:03.000Z",
   sealedAt: "2026-09-08T10:06:30.000Z",
   replayGrade: null,
+  verdict: null,
   name: null,
   summary: null,
 };
@@ -90,5 +91,29 @@ describe("list_runs contract", () => {
     expect(
       runItemSchema.safeParse({ ...item, status: "running" }).success,
     ).toBe(false);
+  });
+});
+
+describe("list_runs verdict (ADR-064)", () => {
+  it("carries each witness verdict word or null, and refuses any other word (negative)", () => {
+    for (const verdict of [
+      null,
+      "flipped",
+      "failing",
+      "unmoved",
+      "unsatisfied",
+      "tampered",
+      "unverified",
+      "waived",
+    ])
+      expect(runItemSchema.safeParse({ ...item, verdict }).success).toBe(true);
+    expect(runItemSchema.safeParse({ ...item, verdict: "none" }).success).toBe(
+      false,
+    );
+    expect(
+      runItemSchema.safeParse({ ...item, verdict: "proven" }).success,
+    ).toBe(false);
+    const { verdict: _dropped, ...withoutVerdict } = item;
+    expect(runItemSchema.safeParse(withoutVerdict).success).toBe(false);
   });
 });
