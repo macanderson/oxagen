@@ -95,7 +95,7 @@ describe("ok", () => {
     expect(row).toHaveTextContent("ox_liveliveli");
     expect(row).toHaveTextContent("Sep 13, 2026");
     expect(row).toHaveTextContent("Sep 14, 2026");
-    expect(within(keysTable()).getByText("Sep 13, 2026")).toHaveAttribute(
+    expect(within(row).getByText("Sep 13, 2026")).toHaveAttribute(
       "datetime",
       "2026-09-13T10:00:00.000Z",
     );
