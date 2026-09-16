@@ -40,6 +40,7 @@ export async function loadDeclaredTool(
       slug: schema.tools.slug,
       version: schema.toolVersions.versionNumber,
       riskGrade: schema.toolVersions.riskGrade,
+      classifiedRiskGrade: schema.toolVersions.classifiedRiskGrade,
       consequenceTags: schema.toolVersions.consequenceTags,
       measures: schema.toolVersions.measures,
       effectIdPath: schema.toolVersions.effectIdPath,
@@ -62,7 +63,18 @@ export async function loadDeclaredTool(
   return {
     slug: row.slug,
     version: row.version,
-    riskGrade: row.riskGrade,
+    // The effective grade, not the declared one. `risk_grade` is what the
+    // manifest declared and is part of the version checksum;
+    // `classified_risk_grade` is what an administrator set with
+    // `set_tool_classification` and is deliberately outside the checksum, so
+    // reclassifying does not make an unchanged manifest look changed. The
+    // registry already shows `classifiedRiskGrade ?? riskGrade`
+    // (tool.version.list.ts), and the critical_hazard floor has to agree with
+    // the page: reading only the declared column means an administrator who
+    // classifies a version `critical` over a lower declared grade never
+    // raises the floor, and the call can skip a person. A floor that fails
+    // open is worse than no floor, because the record says a rule judged it.
+    riskGrade: row.classifiedRiskGrade ?? row.riskGrade,
     consequenceTags: row.consequenceTags,
     measures: measureDeclarationsSchema.parse(row.measures),
     effectIdPath: row.effectIdPath,

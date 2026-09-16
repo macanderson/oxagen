@@ -34,6 +34,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const { buildAutoApprovalSubject, inputDigest } = await import(
       "./call-facts"
     );
+    const { evaluateAutoApproval, REASON } = await import("./auto-approval");
     const { decideMandate } = await import("./mandates");
     const { clearDecisionRulesCache, loadWorkspaceRuleSet } = await import(
       "./rule-store"
@@ -282,6 +283,67 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(subject.tainted).toBe(false);
       expect(subject.standingApprovalAt?.toISOString()).toBe(
         "2026-09-16T09:00:00.000Z",
+      );
+    });
+
+    it("reads the classified risk grade over the declared one, so an administrator can raise the critical_hazard floor", async () => {
+      // `set_tool_classification` writes classified_risk_grade and leaves
+      // risk_grade — the manifest's own, checksummed — alone, and the tool
+      // registry shows `classifiedRiskGrade ?? riskGrade`. The floor has to
+      // read the same effective grade, or classifying a version `critical`
+      // over a lower declared grade is ignored by the decision and the call
+      // skips a person while the record says a rule judged it.
+      // The three classification columns move together — the row's own CHECK
+      // says all null or all set — and the version is shared by every test in
+      // this file, so the classification is put back in `finally`.
+      const classify = (on: boolean) =>
+        withSystemDb((tx) =>
+          tx
+            .update(schema.toolVersions)
+            .set({
+              classification: on ? { sideEffectClass: "external" } : null,
+              classifiedRiskGrade: on ? "critical" : null,
+              classifiedAt: on ? new Date("2026-09-16T08:00:00.000Z") : null,
+            })
+            .where(eq(schema.toolVersions.id, versionId)),
+        );
+      await classify(true);
+      try {
+        const subject = await inScope(() =>
+          withTenantDb((tx) =>
+            buildAutoApprovalSubject(tx, {
+              capability: "stripe__create_payment",
+              input: CALL,
+              workspaceId,
+              now: NOW,
+            }),
+          ),
+        );
+        // The declared grade is still "high" on the row; the subject carries
+        // the classified one.
+        expect(subject.tool?.riskGrade).toBe("critical");
+        const judged = evaluateAutoApproval([RULE], subject);
+        expect(judged?.ok).toBe(false);
+        expect(judged?.floor).toBe(true);
+        expect(judged?.reasons).toContain(REASON.criticalHazard);
+      } finally {
+        await classify(false);
+      }
+      // Back to the declared grade: the floor does not fire and the same rule
+      // qualifies, so nothing leaks into the tests after this one.
+      const restored = await inScope(() =>
+        withTenantDb((tx) =>
+          buildAutoApprovalSubject(tx, {
+            capability: "stripe__create_payment",
+            input: CALL,
+            workspaceId,
+            now: NOW,
+          }),
+        ),
+      );
+      expect(restored.tool?.riskGrade).toBe("high");
+      expect(evaluateAutoApproval([RULE], restored)?.reasons).not.toContain(
+        REASON.criticalHazard,
       );
     });
 
