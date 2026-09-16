@@ -52,6 +52,10 @@ export const auditEventsExport = registerCapability({
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
+    // An export answers for the whole organization, so no workspace role
+    // grants it; `query_audit_log` admits a workspace Owner because it can be
+    // narrowed to one workspace, and this cannot.
+    workspace: {},
   },
   input: z
     .object({
