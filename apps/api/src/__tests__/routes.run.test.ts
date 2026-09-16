@@ -120,6 +120,22 @@ interface RouteCase {
 
 const CASES: RouteCase[] = [
   {
+    path: "/runs/proof",
+    contract: "get_run_proof",
+    input: { runId: TACHO_ID },
+    output: {
+      runId: TACHO_ID,
+      verdict: null,
+      witnesses: [],
+      witnessRuns: [],
+      disclosureGrain: "L0",
+    },
+    refused: {
+      "run id of neither store": { runId: "wit_01K5RQ8M4" },
+      "unknown field": { runId: TACHO_ID, witnessId: "wit_1" },
+    },
+  },
+  {
     path: "/runs/frame-body",
     contract: "get_run_frame_body",
     input: { runId: LEDGER_ID, seq: "7" },
