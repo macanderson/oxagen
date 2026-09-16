@@ -28,6 +28,7 @@ type Messages = {
     steering: string;
     spend: string;
     people: string;
+    roles: string;
     apiKeys: string;
     billing: string;
     audit: string;
@@ -1068,6 +1069,7 @@ type Messages = {
     tabs: {
       label: string;
       people: string;
+      roles: string;
       apiKeys: string;
     };
     roles: {
@@ -1087,7 +1089,55 @@ type Messages = {
       empty: string;
     };
     actions: {
+      readOnly: string;
       denied: string;
+      fields: {
+        name: string;
+        description: string;
+        scope: string;
+        slug: string;
+        slugHint: string;
+        permissions: string;
+        roleNameHint: string;
+      };
+      createRole: {
+        open: string;
+        title: string;
+        confirm: string;
+        pending: string;
+      };
+      editRole: {
+        open: string;
+        title: string;
+        confirm: string;
+        pending: string;
+      };
+      deleteRole: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+      };
+      createWorkspace: {
+        open: string;
+        title: string;
+        confirm: string;
+        pending: string;
+      };
+      editWorkspace: {
+        open: string;
+        title: string;
+        confirm: string;
+        pending: string;
+      };
+      archiveWorkspace: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+      };
       role: {
         open: string;
         title: string;
@@ -1104,16 +1154,25 @@ type Messages = {
         pending: string;
       };
       failure: {
-        lastOwner: string;
-        targetNotMember: string;
-        roleNotFound: string;
-        roleNotGrantable: string;
-        insufficientRole: string;
+        orgRoleRequired: string;
         noPrincipal: string;
-        refused: string;
+        delegationCeiling: string;
+        roleExists: string;
+        roleNotFound: string;
+        roleInUse: string;
+        systemRoleReadonly: string;
+        slugTaken: string;
+        workspaceNotFound: string;
+        alreadyArchived: string;
+        workspaceHasAgents: string;
         invalid: string;
         pendingApproval: string;
         unavailable: string;
+        refused: string;
+        lastOwner: string;
+        targetNotMember: string;
+        roleNotGrantable: string;
+        insufficientRole: string;
       };
     };
     invitations: {
@@ -1138,6 +1197,7 @@ type Messages = {
       };
       status: {
         live: string;
+        expired: string;
         revoked: string;
       };
       never: string;
@@ -1168,6 +1228,60 @@ type Messages = {
       title: string;
       body: string;
     };
+    roleCatalog: {
+      title: string;
+      lead: string;
+      enforcement: {
+        enforced: string;
+        recorded: string;
+      };
+      tableLabel: string;
+      columns: {
+        role: string;
+        kind: string;
+        scope: string;
+        permissions: string;
+        heldBy: string;
+        origin: string;
+        actions: string;
+      };
+      kind: {
+        human: string;
+        agent: string;
+      };
+      scope: {
+        org: string;
+        workspace: string;
+      };
+      origin: {
+        builtIn: string;
+        createdBy: string;
+        custom: string;
+      };
+      noPermissions: string;
+      empty: string;
+      catalog: {
+        title: string;
+        lead: string;
+        covers: string;
+      };
+    };
+    workspaces: {
+      title: string;
+      tableLabel: string;
+      columns: {
+        workspace: string;
+        role: string;
+        status: string;
+        actions: string;
+      };
+      status: {
+        live: string;
+        archived: string;
+      };
+      noRole: string;
+      empty: string;
+    };
   };
   shell: {
     skipToContent: string;
@@ -1190,6 +1304,7 @@ type Messages = {
       organization: string;
       billing: string;
       audit: string;
+      roles: string;
       apiKeys: string;
     };
     switcher: {

@@ -3,10 +3,11 @@
 - **Status:** Accepted
 - **Date:** 2026-09-16
 - **Owners:** platform, app
-- **Related:** ADR-068 (the org-only workspace sentinel is shared; the write
-  side of the same rule), ADR-069 (an API key names a workspace),
+- **Related:** ADR-068 (one org-only workspace sentinel, shared by every
+  surface — this ADR enforces the rule stated there), ADR-073 (an API key names
+  a workspace; #3116, not yet landed),
   ADR-054 (the migration connection carries the RLS bypass),
-  `packages/tenancy/src/scope.ts` (`ORG_ONLY_WORKSPACE_ID`),
+  `packages/oxagen/src/types.ts` (`ORG_ONLY_WORKSPACE_ID`),
   `packages/database/src/tenant-policy.manifest.ts`,
   `tools/scripts/gen-rls-migration.ts`,
   `tools/scripts/check-org-sentinel-reads.mjs`,
@@ -66,15 +67,30 @@ table by table. The sentinel itself made this worse: it was redeclared as a
 local `const ORG_ONLY_WS` in more than thirty files, so one copy carried the
 reasoning in a comment and the next carried none.
 
-ADR-068 settled the write side of the same rule. Nothing enforced the read side.
+ADR-068 settled all of this in prose. Its Context sets out what each policy
+class does under the sentinel, names `workspace_nullable` as "the quiet one",
+and §6 states the rule outright: an org-wide read of such a table goes through
+`withSystemDb` with an explicit `org_id` fence. It found one instance —
+`delete_role` counting a role's holders — and fixed it, and it holds the write
+side against a real Postgres in
+`packages/database/integration/org-only-scope-writes.test.ts`.
+
+What it did not do is check the rest of the tree. The six sites above were all
+live on `app-rebuild` while that ADR was being written, every one of them the
+`workspace_nullable` or `standard` read it warns about. A rule that is correct,
+written down, and unenforced is worth what the next author happens to remember
+of it. This ADR is the enforcement.
 
 ## Decision
 
-1. **The sentinel has one home.** `ORG_ONLY_WORKSPACE_ID` is defined in
-   `@oxagen/tenancy`, the package that owns the scope, with the table above in
-   its doc comment. `@oxagen/oxagen/contracts/audit.log.query` re-exports it, so
-   no import path changes and ADR-068's work is unaffected. New code imports it
-   rather than writing the literal.
+1. **The sentinel keeps the home ADR-068 gave it**, `packages/oxagen/src/types.ts`,
+   exported from `@oxagen/oxagen`. An earlier draft of this change moved it to
+   `@oxagen/tenancy`, where the scope lives; ADR-068 decision 2 rules that out
+   by name, because `apps/app/src/**` may not import `@oxagen/tenancy`
+   (ARCHITECTURE.md §2, INV-03) and a definition there could not be shared with
+   the app. Nothing here moves it. New code imports that constant rather than
+   writing the literal, which is what the thirty-odd files carrying a local
+   `const ORG_ONLY_WS` did.
 
 2. **An organization-level surface reaches a table that is not `org_only` in one
    of two ways, and never by leaving RLS to narrow it.**
@@ -83,10 +99,12 @@ ADR-068 settled the write side of the same rule. Nothing enforced the read side.
      do over these same tables. The fence is then application code, so a read
      that must be whole also asserts what it can check about its own answer —
      the audit export checks the org fence on the rows that come back and
-     refuses to sign a set truncated at `maxRows`.
-   - Re-entering a real workspace's scope, when the record names one. The
-     tokens panel's revoke and rotate resolve the key's own workspace and invoke
-     inside it, which leaves the handlers' `withTenantDb` correct and untouched.
+     refuses to sign a set truncated at `maxRows`. This is ADR-068 §6's rule,
+     unchanged.
+   - Re-entering a real workspace's scope, when the record names one — ADR-068
+     §5's move, applied to a read. The tokens panel's revoke and rotate resolve
+     the key's own workspace and invoke inside it, which leaves the handlers'
+     `withTenantDb` correct and untouched.
 
 3. **`pnpm check:org-sentinel-reads` enforces it.** The check resolves every
    table a sentinel-scoped tenant read touches through the policy manifest and
@@ -95,6 +113,13 @@ ADR-068 settled the write side of the same rule. Nothing enforced the read side.
    takes:
    - **co-located** — a `runInTenantScope({ …, workspaceId: <sentinel> })` whose
      body reaches `withTenantDb`, which is the app-page and server-action form;
+   - **not scanned at all** — `*.test.ts` and `*.test.tsx`. A test naming the
+     sentinel is not a production read, and a fixture that builds a sentinel ctx
+     to exercise a handler is the normal way to test one. This exemption is
+     load-bearing for code arriving beside this ADR: of the four PRs open
+     against `app-rebuild` when it was written, #3116's
+     `apps/app/src/features/organization/actions.test.ts` is the only file that
+     names the sentinel at all, and it is exempt for this reason.
    - **cross-surface** — a sentinel ctx handed to `invoke()`, resolved through
      `packages/handlers/src/register.ts` to the handler and the tables it reads,
      which is the form the kernel sets up and no lint rule can see, because the
@@ -154,6 +179,17 @@ directly — so it needs the check anyway.
   sentinel somewhere and also reads a workspace-scoped table under a real
   workspace elsewhere is reported. That over-reports rather than under-reports,
   and the remedy — scoping the sentinel read correctly — is the same either way.
+- **The near-instance worth naming**, because it is the clearest argument for
+  the gate preceding the surface. `packages/handlers/src/notification.list.ts`
+  and `packages/agent/src/handlers/agent.approval.resolve.ts` (both arriving
+  with #3055) read `notification.notifications`, which is `workspace_nullable`.
+  Every caller today passes a real workspace, so the check reports nothing and
+  there is no defect to fix. An organization-level notifications surface built
+  on `list_notifications` — a reasonable thing to build — would silently be
+  answered only the rows carrying no workspace, which is finding 1 again in a
+  different table. The check fails the moment that caller exists. That is the
+  whole value of landing it before the surface rather than after.
+
 - Two of the sites this decision was written for are on `main` and not on
   `app-rebuild`: `get_action_usage`, whose per-capability breakdown over
   `security.security_events` contradicted its own header — the rows are "an

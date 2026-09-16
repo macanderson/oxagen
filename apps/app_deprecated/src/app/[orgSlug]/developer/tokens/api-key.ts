@@ -61,14 +61,14 @@ async function resolveKeyWorkspaceId(
 /**
  * The workspace a newly minted key belongs to.
  *
- * ADR-069 settled that an API key names a workspace: create_api_key persists
- * ctx.workspaceId, and the sentinel satisfied the `standard` policy's WITH
- * CHECK (the row carried the sentinel too), so the insert succeeded and the
- * secret shown once named a workspace no row answers to. Such a key
- * authenticates into nothing — resolveApiKey hands its callers a scope in
- * which every `standard` table is empty.
+ * ADR-073 (#3116, not yet landed) settles that an API key names a workspace.
+ * create_api_key persists ctx.workspaceId, and the sentinel satisfied the
+ * `standard` policy's WITH CHECK (the row carried the sentinel too), so the
+ * insert succeeded and the secret shown once named a workspace no row answers
+ * to. Such a key authenticates into nothing — resolveApiKey hands its callers
+ * a scope in which every `standard` table is empty.
  *
- * ADR-069's answer is that the page names the workspace; the rebuilt Mission
+ * Its answer is that the page names the workspace; the rebuilt Mission
  * Control page does that with a `?workspace=` picker. This page is the
  * retiring app and has no picker, so it mints into the oldest workspace of
  * this org that the acting user is a member of — the same membership boundary

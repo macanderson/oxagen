@@ -64,6 +64,26 @@ const revoked = apiKey({
   lastUsedAt: null,
   revokedAt: "2026-09-10T08:00:00.000Z",
 });
+// Never revoked, but its expiry is behind us: the platform already refuses to
+// authenticate it (`expiresAt IS NULL OR expiresAt > now()` in tacho-host.ts
+// and telemetry.stella.ingest.ts), so the page must not call it live.
+const expired = apiKey({
+  id: "aky_1a2b3c4d5e6f7g8h9j0k1m",
+  name: "Old CI runner",
+  prefix: "ox_expexpexpe",
+  lastUsedAt: null,
+  expiresAt: "2026-01-04T00:00:00.000Z",
+});
+// Revocation is a decision and outranks the clock: an expiry behind us does not
+// turn a revoked key into an expired one.
+const revokedAndExpired = apiKey({
+  id: "aky_2b3c4d5e6f7g8h9j0k1m2n",
+  name: "Retired bot",
+  prefix: "ox_retretretr",
+  lastUsedAt: null,
+  expiresAt: "2026-01-04T00:00:00.000Z",
+  revokedAt: "2026-09-10T08:00:00.000Z",
+});
 
 const keysTable = () => screen.getByRole("table", { name: "API keys" });
 const rowFor = (key: ApiKey) => {
@@ -75,7 +95,7 @@ const rowFor = (key: ApiKey) => {
 };
 
 describe("API keys tabs", () => {
-  it("link People and API keys by URL, API keys marked as the current page", async () => {
+  it("link People, Roles and API keys by URL, API keys marked as the current page", async () => {
     await renderApiKeys(readOk([live]));
     const tabs = screen.getByRole("navigation", { name: "Organization" });
     const people = within(tabs).getByRole("link", { name: "People" });
@@ -84,6 +104,19 @@ describe("API keys tabs", () => {
     expect(people).not.toHaveAttribute("aria-current");
     expect(keys).toHaveAttribute("href", "/acme/api-keys");
     expect(keys).toHaveAttribute("aria-current", "page");
+  });
+
+  // This page rendered its own two-entry copy of the strip, so the Roles tab
+  // was unreachable from here the moment Roles was added (#3110). It takes the
+  // shared component now: one place decides which tabs exist, and the next tab
+  // appears on every Organization page at once.
+  it("carry Roles, the same strip every other Organization page shows", async () => {
+    await renderApiKeys(readOk([live]));
+    const tabs = screen.getByRole("navigation", { name: "Organization" });
+    const roles = within(tabs).getByRole("link", { name: "Roles" });
+    expect(roles).toHaveAttribute("href", "/acme/roles");
+    expect(roles).not.toHaveAttribute("aria-current");
+    expect(within(tabs).getAllByRole("link")).toHaveLength(3);
   });
 });
 
@@ -109,14 +142,31 @@ describe("ok", () => {
     expect(rowFor(live)).not.toHaveTextContent("Never used");
   });
 
-  it("marks a key live or revoked off its recorded revocation, as a dot and a word", async () => {
-    await renderApiKeys(readOk([live, revoked]));
-    expect(
-      within(rowFor(live)).getByText("live").closest("[data-status]"),
-    ).toHaveAttribute("data-status", "live");
-    expect(
-      within(rowFor(revoked)).getByText("revoked").closest("[data-status]"),
-    ).toHaveAttribute("data-status", "revoked");
+  it("marks a key live, expired or revoked off the instants it records, as a dot and a word", async () => {
+    await renderApiKeys(
+      readOk([live, unused, expired, revoked, revokedAndExpired]),
+    );
+    const statusOf = (key: ApiKey) =>
+      rowFor(key).querySelector("[data-status]")?.getAttribute("data-status") ??
+      null;
+
+    expect(statusOf(live)).toBe("live");
+    // An expiry still ahead of us is live.
+    expect(statusOf(unused)).toBe("live");
+    expect(statusOf(expired)).toBe("expired");
+    expect(statusOf(revoked)).toBe("revoked");
+    expect(statusOf(revokedAndExpired)).toBe("revoked");
+
+    expect(within(rowFor(live)).getByText("live")).toBeInTheDocument();
+    expect(within(rowFor(expired)).getByText("expired")).toBeInTheDocument();
+    expect(within(rowFor(revoked)).getByText("revoked")).toBeInTheDocument();
+  });
+
+  it("does not print the word live beside an Expires date already behind us (negative)", async () => {
+    await renderApiKeys(readOk([expired]));
+    expect(within(rowFor(expired)).queryByText("live")).toBeNull();
+    // The Expires column still prints the recorded instant beside it.
+    expect(rowFor(expired)).toHaveTextContent("2026");
   });
 
   it("says what a key can do, and renders no secret and no lifecycle control (negative)", async () => {

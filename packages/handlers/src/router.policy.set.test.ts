@@ -15,7 +15,7 @@
  * (./lib/routing-policy.ts). These tests are why the guard stays.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/tenancy";
+import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));

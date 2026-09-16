@@ -25,17 +25,15 @@ const SECURITY_OUTCOMES = ["allow", "deny", "error", "success"] as const;
 const auditSource = z.enum(["all", "security"]);
 
 /**
- * The workspace id an organization-level invoke carries. It names no
- * workspace, so a call carrying it is treated as having no workspace scope:
+ * Re-exported from `../types`, which holds the one definition (ADR-068
+ * decision 1). It stays reachable from this path because every surface that
+ * mounts `query_audit_log` or `export_audit_events` org-wide imports it from
+ * beside the contracts, and a second literal is a pair of constants that must
+ * never diverge. A call carrying it is treated as having no workspace scope:
  * `query_audit_log` answers for the whole organization and
- * `export_audit_events` signs the whole organization's record. Re-exported
- * here, where the surfaces that mount those two contracts org-wide already
- * import from, but defined in `@oxagen/tenancy` — it is a property of the
- * tenant scope rather than of these contracts, and that module's doc comment
- * carries what the sentinel does to each table policy class and how an
- * organization-level read reaches a workspace-scoped table.
+ * `export_audit_events` signs the whole organization's record.
  */
-export { ORG_ONLY_WORKSPACE_ID } from "@oxagen/tenancy";
+export { ORG_ONLY_WORKSPACE_ID } from "../types";
 
 /**
  * The filters `query_audit_log` and `export_audit_events` share, so the rows a

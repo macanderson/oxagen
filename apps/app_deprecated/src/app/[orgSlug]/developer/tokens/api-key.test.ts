@@ -137,7 +137,7 @@ describe("createApiKeyAction", () => {
   // satisfies the `standard` policy's WITH CHECK because the row carries the
   // same value the GUC holds — so the insert succeeded and the secret shown
   // once named a workspace no row answers to. Such a key authenticates into
-  // nothing (ADR-069).
+  // nothing (ADR-073, #3116).
   it("mints into a real workspace, never the org-only sentinel", async () => {
     await createApiKeyAction({ orgSlug: "acme", name: "Key" });
     const [, , ctx] = vi.mocked(invoke).mock.calls[0]!;

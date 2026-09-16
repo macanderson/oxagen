@@ -1,8 +1,7 @@
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { ORG_ONLY_WORKSPACE_ID, type CapabilityHandler } from "@oxagen/oxagen";
 import { routerPolicySet } from "@oxagen/oxagen/contracts/router.policy.set";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
-import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/tenancy";
 import { normalizeRoutingMode } from "./lib/routing-policy";
 import { logger } from "./logger";
 

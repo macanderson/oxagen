@@ -7,6 +7,7 @@ import { z } from "zod";
 import {
   RESERVED_ORG_SLUGS,
   RESERVED_WORKSPACE_SLUGS,
+  WORKSPACE_SLUG_PATTERN,
 } from "@oxagen/oxagen/contracts/org.create";
 
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
@@ -36,13 +37,13 @@ const ORG_FORM_ERROR_KEYS = [
 ] as const;
 export type OrgFormErrorKey = (typeof ORG_FORM_ERROR_KEYS)[number];
 
-const slug = (key: OrgFormErrorKey) =>
+const slug = (key: OrgFormErrorKey, pattern: RegExp = SLUG_PATTERN) =>
   z
     .string()
     .trim()
     .min(2, { error: key })
     .max(40, { error: key })
-    .regex(SLUG_PATTERN, { error: key });
+    .regex(pattern, { error: key });
 
 export const OrganizationForm = z.object({
   name: z
@@ -58,7 +59,9 @@ export const OrganizationForm = z.object({
     .trim()
     .min(1, { error: "workspaceNameRequired" })
     .max(80, { error: "workspaceNameTooLong" }),
-  workspaceSlug: slug("workspaceSlugInvalid").refine(
+  // The contract's own spelling, so a doubled hyphen is named here as an
+  // invalid address rather than refused by `create_org` after the form passed.
+  workspaceSlug: slug("workspaceSlugInvalid", WORKSPACE_SLUG_PATTERN).refine(
     (s) => !RESERVED_WORKSPACE_SLUGS.has(s),
     {
       error: "workspaceSlugReserved",

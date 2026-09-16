@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { auditLogQuery } from "./audit.log.query";
+import {
+  auditLogQuery,
+  ORG_ONLY_WORKSPACE_ID as fromContract,
+} from "./audit.log.query";
 import { getCapability } from "../registry";
+import { ORG_ONLY_WORKSPACE_ID as fromTypes } from "../types";
 
 describe("audit.log.query capability", () => {
   // ── registration / metadata ───────────────────────────────────────────────
@@ -152,5 +156,17 @@ describe("audit.log.query capability", () => {
         offset: 0,
       }),
     ).toThrow();
+  });
+
+  // ── the org-only sentinel ────────────────────────────────────────────────
+
+  it("re-exports the one sentinel rather than declaring a second literal", () => {
+    // This file used to carry its own `ORG_ONLY_WORKSPACE_ID`, while ADR-068
+    // decision 1 names `packages/oxagen/src/types.ts` as "the one definition".
+    // `auditLogQueryHandler` compares against the value reached from here and
+    // `audit.events.export`'s route injects it, so two literals were two
+    // constants that had to stay equal by hand. Identity, not equality: a
+    // re-export is the same binding, a copied literal only ever looks like one.
+    expect(fromContract).toBe(fromTypes);
   });
 });
