@@ -25,6 +25,7 @@ export function mandateAuthority(
     remaining: money("615820000"),
     settledRatio: 0.60209,
     reservedRatio: 0.09,
+    overLimit: false,
     ...overrides,
   };
 }

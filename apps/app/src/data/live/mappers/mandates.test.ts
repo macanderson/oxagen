@@ -76,6 +76,7 @@ describe("toMandateList", () => {
       },
       settledRatio: 0.60209,
       reservedRatio: 0.09,
+      overLimit: false,
     });
   });
 
@@ -251,5 +252,51 @@ describe("toMandateList asOf", () => {
     const asOf = Date.parse(toMandateList(mandateListOutput([]), 100).asOf);
     expect(asOf).toBeGreaterThanOrEqual(before);
     expect(asOf).toBeLessThanOrEqual(Date.now());
+  });
+});
+
+describe("toMandateList overLimit", () => {
+  const of = (settled: string, reserved: string, perPeriod: string | null) =>
+    firstMeasure(
+      MandateList.parse(
+        toMandateList(
+          mandateListOutput([
+            mandateOutput({
+              authority: [
+                authorityOutput({
+                  settled,
+                  reserved,
+                  perPeriod,
+                  remaining: null,
+                }),
+              ],
+            }),
+          ]),
+          100,
+        ),
+      ).mandates,
+    );
+
+  // `update_mandate_limits` may lower a limit under authority already drawn.
+  // The ratios cannot carry this: both clamp to 1.
+  it("marks an excess carried by settlement alone", () => {
+    const measure = of("600000000", "0", "500000000");
+    expect(measure.overLimit).toBe(true);
+    expect(measure.settledRatio).toBe(1);
+    expect(measure.reservedRatio).toBe(0);
+  });
+
+  it("marks an excess carried by the two together", () => {
+    expect(of("500000000", "500000000", "500000000").overLimit).toBe(true);
+  });
+
+  it("marks a limit drawn exactly to its edge as within it (negative)", () => {
+    const measure = of("500000000", "0", "500000000");
+    expect(measure.overLimit).toBe(false);
+    expect(measure.settledRatio).toBe(1);
+  });
+
+  it("marks a measure with no per-period limit as not over it (negative)", () => {
+    expect(of("600000000", "600000000", null).overLimit).toBe(false);
   });
 });

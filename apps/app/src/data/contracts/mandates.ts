@@ -56,6 +56,16 @@ export const MandateAuthority = z.object({
   /** settled ÷ perPeriod, and reserved ÷ perPeriod, each 0…1; null without a per-period limit. */
   settledRatio: z.number().min(0).max(1).nullable(),
   reservedRatio: z.number().min(0).max(1).nullable(),
+  /**
+   * Whether the ledger holds more than the per-period limit now allows, which
+   * `update_mandate_limits` does by lowering a limit under authority already
+   * drawn. Carried as its own fact because the ratios cannot answer it: they
+   * are clamped to 0…1 for drawing, so a settlement of 600 against a limit of
+   * 500 arrives as 1 and reads as exactly full. Taken on the recorded integers
+   * (`sumExceeds`) before anything is clamped or quantized. False when there
+   * is no per-period limit, since there is then nothing to exceed.
+   */
+  overLimit: z.boolean(),
 });
 export type MandateAuthority = z.infer<typeof MandateAuthority>;
 
@@ -122,7 +132,7 @@ const ACCOUNTABLE_READERS: readonly OrgRole[] = [
 ];
 
 /** Whether this reader's answer covers every mandate, or only their own agents'. */
-export function readsEveryMandate(role: OrgRole): boolean {
+function readsEveryMandate(role: OrgRole): boolean {
   return ACCOUNTABLE_READERS.includes(role);
 }
 
@@ -144,4 +154,32 @@ export function isEffective(mandate: MandateRow, at: Date): boolean {
   return (
     Date.parse(mandate.validFrom) <= now && now <= Date.parse(mandate.validTo)
   );
+}
+
+/**
+ * Why this answer cannot establish that no authority exists, or null when it
+ * can. Two different things make an empty result something other than an empty
+ * ledger, and a surface that asserts absence has to have ruled out both:
+ *
+ * - `reader_scope` — `list_mandates` narrows a reader without an accountable
+ *   org role to the agents they created, and reports the narrowing as a
+ *   successful, shorter list.
+ * - `truncated` — the read stopped at the bound it asked for, newest first, so
+ *   a mandate still in effect may simply be older than the page. A hundred
+ *   newer drafts push it off, and the rows that came back authorize nothing.
+ *
+ * This is the same failure as the clamped ratio that `overLimit` exists for: a
+ * lossy intermediate cannot be asked a question about what it lost. Both are
+ * answered from the thing that still holds the evidence — here the reader's
+ * role and `truncatedAt`, there the recorded integers.
+ */
+export type MandateBlindSpot = "reader_scope" | "truncated";
+
+export function blindSpotOf(
+  list: MandateList,
+  role: OrgRole,
+): MandateBlindSpot | null {
+  if (!readsEveryMandate(role)) return "reader_scope";
+  if (list.truncatedAt !== null) return "truncated";
+  return null;
 }

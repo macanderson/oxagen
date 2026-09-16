@@ -457,6 +457,7 @@ type Messages = {
       noneVisible: string;
       noneVisibleDetail: string;
       noneEffective: string;
+      noneTruncated: string;
     };
   };
   audit: {

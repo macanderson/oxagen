@@ -30,6 +30,7 @@ function authority(
     remaining: money("615820000"),
     settledRatio: 0.60209,
     reservedRatio: 0.09,
+    overLimit: false,
     ...overrides,
   };
 }
@@ -137,6 +138,7 @@ describe("MandateBar", () => {
           remaining: null,
           settledRatio: 1,
           reservedRatio: 1,
+          overLimit: true,
         })}
       />,
     );
@@ -160,6 +162,49 @@ describe("MandateBar", () => {
       expect.stringContaining("overcommitted"),
     );
     await expectNoAxe(container);
+  });
+
+  // The ratios cannot answer this. `ratioOfIntegers` clamps each to 1, so 600
+  // settled with nothing reserved against a limit lowered to 500 arrives as
+  // 1 + 0, which is not greater than 1 — a sum of ratios misses a
+  // single-component excess entirely. The flag is taken on the integers.
+  it("marks an excess carried by settlement alone, which no ratio sum can see", () => {
+    draw(
+      <MandateBar
+        authority={authority({
+          perPeriod: money("500000000"),
+          settled: money("600000000"),
+          reserved: money("0"),
+          remaining: null,
+          settledRatio: 1,
+          reservedRatio: 0,
+          overLimit: true,
+        })}
+      />,
+    );
+    expect(bar()).toHaveAttribute("data-over", "true");
+    expect(screen.getByText(/fully settled and overcommitted/)).toHaveAttribute(
+      "data-state",
+      "over-limit",
+    );
+  });
+
+  it("says nothing when the ledger is exactly at the limit (negative)", () => {
+    draw(
+      <MandateBar
+        authority={authority({
+          perPeriod: money("500000000"),
+          settled: money("500000000"),
+          reserved: money("0"),
+          remaining: money("0"),
+          settledRatio: 1,
+          reservedRatio: 0,
+          overLimit: false,
+        })}
+      />,
+    );
+    expect(bar()).not.toHaveAttribute("data-over");
+    expect(screen.queryByText(/overcommitted/)).toBeNull();
   });
 
   it("leaves a period inside its limit unmarked and unshrunk", () => {

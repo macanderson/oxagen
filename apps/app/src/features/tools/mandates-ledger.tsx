@@ -17,9 +17,9 @@
 import { useFormatter, useTranslations } from "next-intl";
 import type { OrgRole } from "@/data/contracts/common";
 import {
+  blindSpotOf,
   type MandateList,
   type MandateRow,
-  readsEveryMandate,
 } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import { mono, panel } from "@/ui/control-styles";
@@ -141,8 +141,8 @@ export function MandatesLedger({
 }) {
   const t = useTranslations("tools.mandates");
   const title = t("title");
-  /** An empty answer is proof of an empty ledger only for a reader who sees it all. */
-  const complete = readsEveryMandate(orgRole);
+  /** Why an empty answer would not establish an empty ledger, or null when it would. */
+  const blindSpot = read.ok ? blindSpotOf(read.value, orgRole) : null;
   return (
     <section aria-labelledby="tools-mandates" className={`${panel} p-4`}>
       <h2 id="tools-mandates" className="text-base font-semibold">
@@ -156,11 +156,11 @@ export function MandatesLedger({
           <ReadFailure read={read} section={title} />
         ) : read.value.mandates.length === 0 ? (
           <div className="flex flex-col gap-1 text-sm">
-            <p data-state="empty">
-              {complete ? t("empty") : t("emptyVisible")}
+            <p data-state="empty" data-blind-spot={blindSpot ?? undefined}>
+              {blindSpot === null ? t("empty") : t("emptyVisible")}
             </p>
             <p className="text-xs text-muted-foreground">
-              {complete ? t("emptyDetail") : t("emptyVisibleDetail")}
+              {blindSpot === null ? t("emptyDetail") : t("emptyVisibleDetail")}
             </p>
           </div>
         ) : (

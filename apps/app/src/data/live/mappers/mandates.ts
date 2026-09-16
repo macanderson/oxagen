@@ -20,6 +20,7 @@ import {
   isCurrencyCode,
   moneyFromMicros,
   ratioOfIntegers,
+  sumExceeds,
 } from "@/data/contracts/money";
 import type { ContractOutput } from "@/server/kernel";
 
@@ -56,6 +57,12 @@ function toAuthority(
       perPeriod === null
         ? null
         : ratioOfIntegers(authority.reserved, perPeriod),
+    // Taken here, on the recorded integers, because the two ratios above are
+    // clamped and quantized and cannot be asked this afterwards.
+    overLimit:
+      perPeriod === null
+        ? false
+        : sumExceeds(authority.settled, authority.reserved, perPeriod),
   };
 }
 

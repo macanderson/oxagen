@@ -258,6 +258,41 @@ describe("Agents › Mandates", () => {
     ).toBeNull();
   });
 
+  // The page is newest-first and stops at its bound, so a hundred newer drafts
+  // can push the one mandate still in effect off it. Every row present
+  // authorizes nothing, and saying "No mandate" from that is asserting a fact
+  // about the agent from the place the read happened to stop.
+  it("will not say the agent holds none when the page was truncated (negative)", async () => {
+    // Truncation is "the answer filled the page it asked for", so three rows
+    // and a bound of three is the same state as a hundred and a hundred.
+    await renderMandates(
+      mandateList(
+        Array.from({ length: 3 }, () => mandateRow({ status: "draft" })),
+        3,
+      ),
+    );
+    const section = held();
+    const state = within(section).getByText(/may be older than the page/);
+    expect(state).toHaveAttribute("data-state", "empty");
+    expect(state).toHaveAttribute("data-blind-spot", "truncated");
+    expect(state.textContent).toContain("3");
+    expect(
+      within(section).queryByText(/cannot carry a consequence/),
+    ).toBeNull();
+  });
+
+  it("says it plainly when nothing is in effect and nothing is missing", async () => {
+    await renderMandates(mandateList([mandateRow({ status: "draft" })]));
+    const state = within(held()).getByText(/cannot carry a consequence/);
+    expect(state).toHaveAttribute("data-state", "empty");
+    expect(state).not.toHaveAttribute("data-blind-spot");
+  });
+
+  it("stays quiet about the page bound while a mandate is in effect", async () => {
+    await renderMandates(mandateList([mandateRow()], 100));
+    expect(within(held()).queryByText(/may be older than the page/)).toBeNull();
+  });
+
   // Two measures in one currency are two dollar figures, and which budget each
   // governs is the question the accountable reader is asking.
   it("names each measure when a mandate limits more than one", async () => {

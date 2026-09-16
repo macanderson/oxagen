@@ -406,8 +406,9 @@
       "truncated": "The newest {shown} mandates this agent holds. It holds at least that many, and older ones are not listed here.",
       "noneVisibleTitle": "No mandate listed",
       "noneVisible": "No mandate for this agent is listed for you. That is not the same as the agent holding none: you see the mandates of the agents you created, and this list is empty either way.",
-      "noneVisibleDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate in the workspace and can say whether this agent holds one. Ask one of them, or read the Tools ledger with that role.",
-      "noneEffective": "No mandate this agent holds is in effect, so it cannot carry a consequence. The rows below are a request awaiting a decision, or history."
+      "noneVisibleDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate in the workspace. Ask one of them whether this agent holds authority, or read the Tools ledger with that role.",
+      "noneEffective": "No mandate this agent holds is in effect, so it cannot carry a consequence. The rows below are a request awaiting a decision, or history.",
+      "noneTruncated": "No mandate listed for this agent is in effect. The read stops at the newest {shown}, so a mandate still in effect may be older than the page and not listed here."
     }
   }
 }

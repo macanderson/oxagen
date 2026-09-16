@@ -8,6 +8,7 @@ import {
   isCurrencyCode,
   Money,
   microsFromDecimal,
+  sumExceeds,
   moneyFromMicros,
   mulMicros,
   ratioOfIntegers,
@@ -211,5 +212,30 @@ describe("ratioOfIntegers", () => {
 
   it("refuses a figure that is not an integer string (negative)", () => {
     expect(() => ratioOfIntegers("1.5", "50")).toThrow(/integer string/);
+  });
+});
+
+describe("sumExceeds", () => {
+  // The question `ratioOfIntegers` destroys: it clamps to 1, so an excess
+  // carried by one component alone is indistinguishable from exactly full.
+  it.each([
+    ["600", "0", "500", true],
+    ["0", "600", "500", true],
+    ["500", "500", "500", true],
+    ["500", "0", "500", false],
+    ["250", "250", "500", false],
+    ["1", "0", "0", true],
+    ["0", "0", "0", false],
+  ])("%s + %s against %s is %s", (a, b, whole, expected) => {
+    expect(sumExceeds(a, b, whole)).toBe(expected);
+  });
+
+  it("is exact past what a double holds", () => {
+    expect(sumExceeds("9007199254740993", "0", "9007199254740992")).toBe(true);
+    expect(sumExceeds("9007199254740992", "0", "9007199254740993")).toBe(false);
+  });
+
+  it("refuses a figure that is not an integer string (negative)", () => {
+    expect(() => sumExceeds("1.5", "0", "5")).toThrow();
   });
 });

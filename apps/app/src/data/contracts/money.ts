@@ -122,6 +122,21 @@ export function ratioOfIntegers(part: string, whole: string): number {
 }
 
 /**
+ * Whether `a` and `b` together are past `whole`, on the bare integer strings.
+ * The pair to `ratioOfIntegers`, and the reason it has to exist separately:
+ * that function clamps to 0…1, because a bar wider than its track is not a
+ * reading — so by the time a caller holds two ratios, the fact that either
+ * exceeded the whole is gone. 600 of a limit of 500 is a ratio of 1,
+ * indistinguishable from exactly 500, and summing two clamped ratios cannot
+ * recover it. The ratios are for drawing; this is for saying. The comparison
+ * is BigInt on the digits the ledger recorded, with nothing clamped, rounded
+ * or scaled before it is asked.
+ */
+export function sumExceeds(a: string, b: string, whole: string): boolean {
+  return toBigInt(a) + toBigInt(b) > toBigInt(whole);
+}
+
+/**
  * A decimal amount a person typed ("500", "0.25", "12.000001") as integer
  * micros, or null for anything else: a sign, a grouping separator, more than
  * six fractional digits, or more than twelve whole digits. The conversion is

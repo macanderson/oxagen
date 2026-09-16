@@ -12,7 +12,12 @@
 // tell them apart. The "No mandate" state says a call carrying a consequence
 // is denied before dispatch, which is a statement about the agent's authority
 // and not about this list, so it is shown only to a reader whose answer covers
-// every mandate. Everyone else is told what the view cannot show.
+// every mandate. A truncated page is the second reason, and it bites the other
+// way round: a hundred newer drafts can push the one mandate still in effect
+// off a newest-first read, so rows are present and none of them authorize
+// anything. `blindSpotOf` answers both from the evidence that still holds them
+// — the reader's role and `truncatedAt` — because neither is visible in the
+// rows. Everyone else is told what the view cannot establish.
 //
 // The warning is driven by authority and not by row count. A draft, a revoked
 // row and an expired one all authorize nothing, and `request_mandate` writes a
@@ -23,9 +28,9 @@
 import { useFormatter, useTranslations } from "next-intl";
 import type { OrgRole } from "@/data/contracts/common";
 import {
+  blindSpotOf,
   isEffective,
   type MandateList,
-  readsEveryMandate,
 } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import { mono, panel } from "@/ui/control-styles";
@@ -58,15 +63,19 @@ export function MandatesSection({
   const asOf = read.ok ? new Date(read.value.asOf) : null;
   const effective =
     asOf === null ? [] : held.filter((mandate) => isEffective(mandate, asOf));
-  /** An empty answer is proof of no authority only for a reader who sees them all. */
-  const complete = readsEveryMandate(orgRole);
+  /**
+   * Why an empty `effective` would not establish that the agent holds nothing,
+   * or null when it would. A narrowed reader and a truncated page are both
+   * reasons, and neither is visible in the rows themselves.
+   */
+  const blindSpot = read.ok ? blindSpotOf(read.value, orgRole) : null;
   return (
     <section aria-labelledby="agent-mandates" className={`${panel} p-4`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="agent-mandates" className="text-base font-semibold">
             {read.ok && effective.length === 0
-              ? complete
+              ? blindSpot === null
                 ? t("noneTitle")
                 : t("noneVisibleTitle")
               : title}
@@ -89,15 +98,21 @@ export function MandatesSection({
           <div className="flex flex-col gap-3">
             {effective.length > 0 ? null : (
               <div className="flex flex-col gap-2 text-sm">
-                <p data-state="empty">
-                  {complete
-                    ? held.length === 0
-                      ? t("none")
-                      : t("noneEffective")
-                    : t("noneVisible")}
+                <p data-state="empty" data-blind-spot={blindSpot ?? undefined}>
+                  {blindSpot === "reader_scope"
+                    ? t("noneVisible")
+                    : blindSpot === "truncated"
+                      ? t("noneTruncated", {
+                          shown: String(read.value.truncatedAt),
+                        })
+                      : held.length === 0
+                        ? t("none")
+                        : t("noneEffective")}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {complete ? t("noneDetail") : t("noneVisibleDetail")}
+                  {blindSpot === null
+                    ? t("noneDetail")
+                    : t("noneVisibleDetail")}
                 </p>
               </div>
             )}

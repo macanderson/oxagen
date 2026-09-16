@@ -8,13 +8,21 @@
 // when `reserved` is above zero; a measure with no per-period limit has no
 // denominator and so no bar.
 //
-// The two ratios can sum past one, because `update_mandate_limits` may lower a
-// limit under authority already drawn. Clamping each segment on its own and
-// letting flex resolve the overflow would rescale both — 500 settled and 500
-// reserved against a limit lowered to 500 would draw an even split, reading as
-// a bar half used. So the reservation is drawn in the room settlement leaves,
-// neither segment shrinks, and the overcommitment is said in words rather than
-// disappearing into a bar that looks balanced.
+// `update_mandate_limits` may lower a limit under authority already drawn, so
+// the drawn figures can exceed the limit they are drawn against. Two separate
+// things go wrong there and each needs its own answer.
+//
+// Drawing: clamping each segment on its own and letting flex resolve the
+// overflow rescales both — 500 settled and 500 reserved against a limit
+// lowered to 500 draws an even split, reading as a bar half used. So the
+// reservation takes the room settlement leaves and neither segment shrinks.
+//
+// Saying: the fact of the excess is not recoverable from the ratios, because
+// `ratioOfIntegers` clamps each to 1 — 600 settled against a limit of 500
+// arrives as 1, and 1 + 0 is not greater than 1, so a sum of ratios would miss
+// a single-component excess entirely and quantization could round a small
+// combined one away. The view model carries `overLimit`, taken on the recorded
+// integers before any of that.
 import { useTranslations } from "next-intl";
 import type { MandateAuthority } from "@/data/contracts/mandates";
 import { eyebrow } from "./control-styles";
@@ -39,8 +47,8 @@ export function MandateBar({ authority }: { authority: MandateAuthority }) {
   // left of the track, so the two never total more than the limit they draw.
   const settledWidth = Math.min(1, Math.max(0, settledRatio));
   const reservedWidth = Math.min(Math.max(0, reservedRatio), 1 - settledWidth);
-  /** Drawn authority past the limit: the ledger holds more than the limit allows. */
-  const over = settledRatio + reservedRatio > 1;
+  /** Answered from the ledger's integers (`sumExceeds`), never from the clamped ratios. */
+  const over = authority.overLimit;
   const label = t(showReserved ? "labelReserved" : "label", {
     settled: text(authority.settled),
     reserved: text(authority.reserved),

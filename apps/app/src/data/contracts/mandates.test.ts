@@ -5,41 +5,8 @@
 // not evidence of an empty ledger and no surface may present it as one.
 import { describe, expect, it } from "vitest";
 import type { OrgRole } from "./common";
-import { mandateRow } from "@/test/mandate-views";
-import { isEffective, readsEveryMandate } from "./mandates";
-
-describe("readsEveryMandate", () => {
-  it.each([["owner"], ["admin"], ["billing"], ["compliance"]] as const)(
-    "%s is answered every mandate, so an empty answer is an empty ledger",
-    (role) => {
-      expect(readsEveryMandate(role)).toBe(true);
-    },
-  );
-
-  it.each([["member"], ["viewer"]] as const)(
-    "%s is answered a narrowed list, so an empty answer proves nothing (negative)",
-    (role) => {
-      expect(readsEveryMandate(role)).toBe(false);
-    },
-  );
-
-  it("mirrors ACCOUNTABLE_ORG_ROLES and admits no role outside the enum", () => {
-    const every: readonly OrgRole[] = [
-      "owner",
-      "admin",
-      "member",
-      "billing",
-      "compliance",
-      "viewer",
-    ];
-    expect(every.filter(readsEveryMandate)).toEqual([
-      "owner",
-      "admin",
-      "billing",
-      "compliance",
-    ]);
-  });
-});
+import { mandateList, mandateRow } from "@/test/mandate-views";
+import { blindSpotOf, isEffective } from "./mandates";
 
 describe("isEffective", () => {
   const at = new Date("2026-09-16T12:00:00.000Z");
@@ -68,5 +35,55 @@ describe("isEffective", () => {
     expect(
       isEffective(row({ validTo: to }), new Date("2026-09-17T00:00:00.000Z")),
     ).toBe(false);
+  });
+});
+
+describe("blindSpotOf", () => {
+  const listOf = (rows: number, truncatedAt: number | null = null) => {
+    const read = mandateList(
+      Array.from({ length: rows }, () => mandateRow()),
+      truncatedAt,
+    );
+    if (!read.ok) throw new Error("builder answered a failure");
+    return read.value;
+  };
+
+  it("is null for an accountable reader answered the whole set", () => {
+    expect(blindSpotOf(listOf(0), "owner")).toBeNull();
+    expect(blindSpotOf(listOf(3), "compliance")).toBeNull();
+  });
+
+  it.each([["member"], ["viewer"]] as const)(
+    "is reader_scope for a %s, whose answer is narrowed silently",
+    (role) => {
+      expect(blindSpotOf(listOf(0), role)).toBe("reader_scope");
+    },
+  );
+
+  it("is truncated when the read stopped at the bound it asked for", () => {
+    expect(blindSpotOf(listOf(100, 100), "owner")).toBe("truncated");
+  });
+
+  // A narrowed reader is the stronger statement: the rows themselves are not
+  // the whole set, so naming the page bound would understate it.
+  it("names the reader's scope first when both hold", () => {
+    expect(blindSpotOf(listOf(100, 100), "member")).toBe("reader_scope");
+  });
+
+  // The mirrored set, pinned over the whole enum. It tracks
+  // ACCOUNTABLE_ORG_ROLES in packages/handlers/src/_mandate.ts, which the app
+  // may not import, so this is where a drift is caught.
+  it("treats exactly the four accountable org roles as complete readers", () => {
+    const every: readonly OrgRole[] = [
+      "owner",
+      "admin",
+      "member",
+      "billing",
+      "compliance",
+      "viewer",
+    ];
+    expect(
+      every.filter((role) => blindSpotOf(listOf(0), role) === null),
+    ).toEqual(["owner", "admin", "billing", "compliance"]);
   });
 });
