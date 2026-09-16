@@ -110,12 +110,16 @@ function makeInsertTx(
       returning: vi.fn().mockResolvedValue(rows),
     }),
   });
+  // The workspace read takes a row lock; `lock` records the mode it asked for,
+  // so a test can hold the guard to its mechanism and not only its answer.
+  const lock = vi.fn().mockResolvedValue(workspace ? [workspace] : []);
   return {
     insert,
+    lock,
     select: vi.fn().mockReturnValue({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue(workspace ? [workspace] : []),
+          limit: vi.fn().mockReturnValue({ for: lock }),
         }),
       }),
     }),
@@ -533,6 +537,32 @@ describe("api.key.create handler — archived workspace", () => {
         e.reason === "workspace_not_found",
     );
     expect(insertTx.insert).not.toHaveBeenCalled();
+  });
+
+  it("takes a row lock on the workspace, which is what makes the check hold", async () => {
+    // The guard's correctness is not "the check is inside the transaction" —
+    // that only makes the statements atomic with respect to failure. Under
+    // READ COMMITTED an unlocked SELECT snapshots at statement start and
+    // `archive_workspace` can commit before the write, so the check would pass
+    // on precisely the interleaving its comment claims to prevent.
+    //
+    // The lock is the mechanism, so it is what the test pins: a future reader
+    // deleting `.for("update")` as redundant fails here rather than silently
+    // reopening the race.
+    const insertTx = makeInsertTx([INSERTED_ROW]);
+    let callCount = 0;
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1) {
+          return fn(makeRoleResolutionTx("principal-uuid-1", "Owner"));
+        }
+        return fn(insertTx);
+      },
+    );
+
+    await apiKeyCreateHandler(BASE_INPUT, makeCTX());
+    expect(insertTx.lock).toHaveBeenCalledWith("update");
   });
 
   it("mints into a live workspace, as before", async () => {

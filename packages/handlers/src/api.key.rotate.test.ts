@@ -108,22 +108,24 @@ function makeRotateTx(
   workspace: WorkspaceRow = LIVE_WORKSPACE,
 ) {
   // Two selects, in the order the handler makes them: the key being rotated,
-  // then the workspace its replacement would be minted into.
+  // then the workspace its replacement would be minted into. Only the second
+  // takes a row lock; `lock` records the mode it asked for, so a test can hold
+  // the guard to its mechanism and not only its answer.
+  const lock = vi
+    .fn()
+    .mockImplementation(() => Promise.resolve(workspace ? [workspace] : []));
   let selects = 0;
   return {
+    lock,
     select: () => {
       selects++;
-      const rows =
-        selects === 1
-          ? oldRow
-            ? [oldRow]
-            : []
-          : workspace
-            ? [workspace]
-            : [];
+      const first = selects === 1;
+      const rows = first ? (oldRow ? [oldRow] : []) : [];
       return {
         from: () => ({
-          where: () => ({ limit: () => Promise.resolve(rows) }),
+          where: () => ({
+            limit: () => (first ? Promise.resolve(rows) : { for: lock }),
+          }),
         }),
       };
     },
@@ -454,11 +456,14 @@ describe("api.key.rotate handler — archived workspace", () => {
   // This does not close the access hole: the key being rotated still
   // authenticates into the archived workspace (#3123). Revoke is the path that
   // helps there, and it carries no archival check.
-  function setupArchived(workspace: WorkspaceRow, spies: {
-    valuesSpy: ReturnType<typeof vi.fn>;
-    insertSpy: ReturnType<typeof vi.fn>;
-    updateSpy: ReturnType<typeof vi.fn>;
-  }) {
+  function setupArchived(
+    workspace: WorkspaceRow,
+    spies: {
+      valuesSpy: ReturnType<typeof vi.fn>;
+      insertSpy: ReturnType<typeof vi.fn>;
+      updateSpy: ReturnType<typeof vi.fn>;
+    },
+  ) {
     let call = 0;
     mocks.withTenantDb.mockImplementation(
       (fn: (tx: unknown) => Promise<unknown>) => {
@@ -490,9 +495,7 @@ describe("api.key.rotate handler — archived workspace", () => {
     );
     mocks.emitSecurityEvent.mockClear();
 
-    await expect(
-      apiKeyRotateHandler(BASE_INPUT, makeCTX()),
-    ).rejects.toSatisfy(
+    await expect(apiKeyRotateHandler(BASE_INPUT, makeCTX())).rejects.toSatisfy(
       (e: unknown) =>
         isHandlerError(e) &&
         e.code === "conflict" &&
@@ -514,9 +517,7 @@ describe("api.key.rotate handler — archived workspace", () => {
     };
     setupArchived(null, spies);
 
-    await expect(
-      apiKeyRotateHandler(BASE_INPUT, makeCTX()),
-    ).rejects.toSatisfy(
+    await expect(apiKeyRotateHandler(BASE_INPUT, makeCTX())).rejects.toSatisfy(
       (e: unknown) =>
         isHandlerError(e) &&
         e.code === "not_found" &&
@@ -524,6 +525,42 @@ describe("api.key.rotate handler — archived workspace", () => {
     );
     expect(spies.insertSpy).not.toHaveBeenCalled();
     expect(spies.updateSpy).not.toHaveBeenCalled();
+  });
+
+  it("takes a row lock on the workspace, which is what makes the check hold", async () => {
+    // The guard's correctness is not "the check is inside the transaction" —
+    // that only makes the statements atomic with respect to failure. Under
+    // READ COMMITTED an unlocked SELECT snapshots at statement start and
+    // `archive_workspace` can commit before the write, so the check would pass
+    // on precisely the interleaving its comment claims to prevent.
+    //
+    // The lock is the mechanism, so it is what the test pins: a future reader
+    // deleting `.for("update")` as redundant fails here rather than silently
+    // reopening the race.
+    const spies = {
+      valuesSpy: vi.fn(),
+      insertSpy: vi.fn(),
+      updateSpy: vi.fn(),
+    };
+    const tx = makeRotateTx(
+      OLD_ROW,
+      NEW_ROW,
+      spies.valuesSpy,
+      spies.insertSpy,
+      spies.updateSpy,
+      LIVE_WORKSPACE,
+    );
+    let call = 0;
+    mocks.withTenantDb.mockImplementation(
+      (fn: (t: unknown) => Promise<unknown>) => {
+        call++;
+        if (call === 1) return fn(makeRoleResolutionTx("principal-1", "Owner"));
+        return fn(tx);
+      },
+    );
+
+    await apiKeyRotateHandler(BASE_INPUT, makeCTX());
+    expect(tx.lock).toHaveBeenCalledWith("update");
   });
 
   it("rotates in a workspace still in use, as before", async () => {

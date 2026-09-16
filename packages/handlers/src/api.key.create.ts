@@ -145,9 +145,22 @@ export const apiKeyCreateHandler: CapabilityHandler<
     // machine access introduced after the workspace was closed, against a page
     // that promises the opposite.
     //
-    // Checked inside the insert's own transaction, so a workspace archived
-    // between a check and the write cannot let a key through, and refused the
-    // way `workspace.settings.write` refuses an edit to an archived workspace.
+    // Refused the way `workspace.settings.write` refuses an edit to an
+    // archived workspace.
+    //
+    // The `.for("update")` is load-bearing; do not remove it as redundant.
+    // Being inside one transaction makes these two statements atomic with
+    // respect to *failure* — it does nothing about a concurrent writer to a
+    // row nobody locked. Postgres runs READ COMMITTED here, so an unlocked
+    // SELECT takes its snapshot at statement start and `archive_workspace`
+    // could commit in the window before the insert, which would then land in a
+    // workspace that is archived by the time it commits.
+    //
+    // The row lock closes exactly that: `archive_workspace` updates this row
+    // (`workspace.archive.ts`), so it either blocks until this transaction
+    // commits — archiving a workspace that has just issued a key, which is the
+    // honest ordering — or commits first, and this select re-reads the latest
+    // committed version, sees `archived_at` and refuses.
     const [workspace] = await tx
       .select({
         name: schema.workspaces.name,
@@ -160,7 +173,8 @@ export const apiKeyCreateHandler: CapabilityHandler<
           eq(schema.workspaces.orgId, ctx.orgId),
         ),
       )
-      .limit(1);
+      .limit(1)
+      .for("update");
     if (!workspace) {
       throw new HandlerError({
         code: "not_found",
