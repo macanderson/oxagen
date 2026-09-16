@@ -191,3 +191,50 @@ export function blindSpotOf(
   if (list.truncatedAt !== null) return "truncated";
   return null;
 }
+
+// ── The contract bounds this app mirrors ──────────────────────────────────
+//
+// §2 keeps `@oxagen/oxagen/mandates/schemas` out of the app, so every bound the
+// request form applies is a copy, and a copy is where a bound drifts from the
+// rule it came from in silence. Each one below names the rule it mirrors and is
+// pinned by `mandates.test.ts`. A bound that is deliberately narrower than its
+// rule says so and why; a bound nobody can trace to a rule does not belong here.
+//
+// The failure this prevents is specific: an app bound tighter than the contract
+// refuses or truncates a request the platform would have accepted, and a
+// truncated consequence set is still syntactically valid — so it is requested,
+// granted exactly as submitted, and covers no tool.
+
+/** `consequenceTagSchema`: snake_case, 2 to 64 characters. */
+export const CONSEQUENCE_TAG = /^[a-z][a-z0-9_]{1,63}$/;
+
+/** `consequenceTagSchema`'s length ceiling, for the field that collects them. */
+const CONSEQUENCE_TAG_MAX = 64;
+
+/** `mandateSchema.consequenceTags`: `.min(1).max(16)`. */
+export const MAX_CONSEQUENCE_TAGS = 16;
+
+/**
+ * `MEASURE_VALUE`: an integer string of up to thirty digits, no leading zero.
+ * Every limit figure the form writes is checked against this — the measure's
+ * and the built-in `calls` one alike, since `calls` is a measure limit like any
+ * other and a tighter rule for it refuses a cap the ledger can hold.
+ */
+export const MEASURE_VALUE = /^(0|[1-9][0-9]{0,29})$/;
+
+/** `measureNameSchema`: snake_case, up to 64 characters. */
+export const MEASURE_NAME_MAX = 64;
+
+/** `mandateLimitSchema.currencyOrUnit`: `.min(1).max(32)`. */
+export const UNIT_MAX = 32;
+
+/** `mandateSchema.purpose`: `.min(1).max(2000)`. */
+export const PURPOSE_MAX = 2000;
+
+/**
+ * The longest legal value of the free consequence field: every tag at its
+ * ceiling, comma-and-space separated. Derived rather than chosen, because a
+ * chosen number is the bound that drifts.
+ */
+export const CONSEQUENCE_OTHER_MAX =
+  MAX_CONSEQUENCE_TAGS * CONSEQUENCE_TAG_MAX + (MAX_CONSEQUENCE_TAGS - 1) * 2;

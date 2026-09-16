@@ -30,6 +30,12 @@
 // scale, and a money limit is asked for over the API or MCP by a caller that
 // holds the declaration. `requestMandate` in actions.ts carries the reasoning.
 import { useTranslations } from "next-intl";
+import {
+  CONSEQUENCE_OTHER_MAX,
+  MEASURE_NAME_MAX,
+  PURPOSE_MAX,
+  UNIT_MAX,
+} from "@/data/contracts/mandates";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import { buttonSecondary, inputBase } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
@@ -206,7 +212,7 @@ export function RequestMandate({
             <input
               id={id("consequenceOther")}
               name="consequenceOther"
-              maxLength={256}
+              maxLength={CONSEQUENCE_OTHER_MAX}
               className={inputBase}
             />
             <p className="text-xs text-muted-foreground">
@@ -217,7 +223,7 @@ export function RequestMandate({
             <input
               id={id("measure")}
               name="measure"
-              maxLength={64}
+              maxLength={MEASURE_NAME_MAX}
               className={inputBase}
             />
           </Field>
@@ -225,7 +231,7 @@ export function RequestMandate({
             <input
               id={id("unit")}
               name="unit"
-              maxLength={32}
+              maxLength={UNIT_MAX}
               className={inputBase}
             />
           </Field>
@@ -284,7 +290,7 @@ export function RequestMandate({
               id={id("purpose")}
               name="purpose"
               required
-              maxLength={2000}
+              maxLength={PURPOSE_MAX}
               rows={2}
               className={inputBase}
             />

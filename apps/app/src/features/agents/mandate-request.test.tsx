@@ -148,6 +148,23 @@ describe("RequestMandate", () => {
     }
   });
 
+  // Every cap on this form is derived from a contract rule, because a cap
+  // chosen by hand is the one that drifts — and a truncated consequence set is
+  // still syntactically valid, so it would be requested, granted, and cover
+  // nothing.
+  it("caps each field where its contract rule does", async () => {
+    draw();
+    await open();
+    const form = dialog();
+    const cap = (label: RegExp | string) =>
+      within(form).getByLabelText(label).getAttribute("maxlength");
+    expect(cap("Measure")).toBe("64"); // measureNameSchema
+    expect(cap("Unit")).toBe("32"); // currencyOrUnit.max(32)
+    expect(cap("Purpose")).toBe("2000"); // purpose.max(2000)
+    // 16 tags at 64 characters, comma-and-space separated.
+    expect(cap(/Others the tools declare/)).toBe("1054");
+  });
+
   it("sends a workspace tag typed beside the boxes", async () => {
     requestMandate.mockResolvedValue({
       ok: true,

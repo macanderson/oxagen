@@ -391,6 +391,8 @@ describe("requestMandate", () => {
     [{ perCall: "1,250" }, "perCall"],
     [{ perPeriod: "-5" }, "perPeriod"],
     [{ callsPerDay: "many" }, "callsPerDay"],
+    [{ callsPerDay: "-5" }, "callsPerDay"],
+    [{ callsPerDay: "1.5" }, "callsPerDay"],
     [{ tools: " , " }, "tools"],
     [{ purpose: "   " }, "purpose"],
     [{ validFrom: "01/09/2026" }, "validFrom"],
@@ -606,6 +608,58 @@ describe("requestMandate", () => {
       }),
     ).toMatchObject({ ok: false, field: "perPeriod" });
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  // `calls` is a measure limit like any other, so `measureValueSchema` governs
+  // its figure: thirty digits, not nine. The old nine-digit rule refused a cap
+  // the ledger would have held.
+  it.each([["1000000000"], ["9".repeat(30)]])(
+    "accepts a calls cap of %s, past what nine digits hold",
+    async (cap) => {
+      invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
+      expect(
+        await requestMandate("acme", "core-platform", {
+          ...good,
+          callsPerDay: cap,
+        }),
+      ).toMatchObject({ ok: true });
+      expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+        limits: { calls: { perPeriod: cap } },
+      });
+    },
+  );
+
+  it("refuses a calls cap past what the ledger's figure holds (negative)", async () => {
+    expect(
+      await requestMandate("acme", "core-platform", {
+        ...good,
+        callsPerDay: "9".repeat(31),
+      }),
+    ).toMatchObject({ ok: false, field: "callsPerDay" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  // The longest legal consequence set: sixteen tags at sixty-four characters.
+  // A field that could not hold it truncated in the browser, and the truncated
+  // set was still valid — requested, granted, covering nothing.
+  it("accepts every consequence tag at its ceiling", async () => {
+    invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
+    // 62 + 2 = 64, the ceiling, and distinct for 00 through 15.
+    const tags = Array.from(
+      { length: 16 },
+      (_, i) => `${"a".repeat(62)}${String(i).padStart(2, "0")}`,
+    );
+    expect(new Set(tags).size).toBe(16);
+    expect(tags.every((tag) => tag.length === 64)).toBe(true);
+    expect(
+      await requestMandate("acme", "core-platform", {
+        ...good,
+        consequenceTags: tags.join(", "),
+      }),
+    ).toMatchObject({ ok: true });
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+      consequenceTags: tags,
+    });
   });
 
   it("returns a denial as denied (negative)", async () => {

@@ -11,6 +11,11 @@ import { agentDefinitionCommit } from "@oxagen/oxagen/contracts/agent.definition
 import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
 import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
 import { mandateRequest } from "@oxagen/oxagen/contracts/mandate.request";
+import {
+  CONSEQUENCE_TAG,
+  MAX_CONSEQUENCE_TAGS,
+  MEASURE_VALUE,
+} from "@/data/contracts/mandates";
 import { isCurrencyCode } from "@/data/contracts/money";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
@@ -136,14 +141,14 @@ export type MandateDraft = {
   validTo: string;
 };
 
+/**
+ * The day a date input gives. Deliberately narrower than the contract, which
+ * takes an instant: the form collects days and widens each to the start and the
+ * end of its own, so the window is inclusive at both ends. Every other bound
+ * this action applies is a mirror of a contract rule and lives beside its rule
+ * in `data/contracts/mandates.ts`.
+ */
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-/** `consequenceTagSchema` (packages/oxagen/src/mandates/schemas.ts), which §2 keeps out of the app. */
-const CONSEQUENCE_TAG = /^[a-z][a-z0-9_]{1,63}$/;
-/** `mandateSchema.consequenceTags.max(16)`. */
-const MAX_CONSEQUENCE_TAGS = 16;
-const WHOLE = /^\d{1,9}$/;
-/** A limit: whole units, up to what the measure-value regex admits. */
-const WHOLE_UNITS = /^(0|[1-9][0-9]{0,29})$/;
 
 /**
  * The one built-in measure (`CALLS_MEASURE`, packages/oxagen/src/mandates/
@@ -239,16 +244,19 @@ export async function requestMandate(
   )
     return refuse("consequenceTags");
 
-  // Verbatim: `WHOLE_UNITS` admits "0" and a figure with no leading zero, so
+  // Verbatim: `MEASURE_VALUE` admits "0" and a figure with no leading zero, so
   // what passes is already the digits the ledger records and there is nothing
   // to normalise. The figure typed is the figure stored.
   const limitValue = (typed: string): string | null =>
-    WHOLE_UNITS.test(typed) ? typed : null;
+    MEASURE_VALUE.test(typed) ? typed : null;
 
   const perCall = draft.perCall.trim();
   const perPeriod = draft.perPeriod.trim();
+  // The same rule as any other limit, because it is one: `calls` is a measure
+  // limit and `measureValueSchema` governs its figure. A nine-digit cap here
+  // refused a ceiling of a billion calls that the ledger would have held.
   const callsPerDay = draft.callsPerDay.trim();
-  if (callsPerDay !== "" && !WHOLE.test(callsPerDay))
+  if (callsPerDay !== "" && !MEASURE_VALUE.test(callsPerDay))
     return refuse("callsPerDay");
 
   // A mandate over the built-in measure alone is a legitimate shape and the
