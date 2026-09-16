@@ -109,10 +109,16 @@ export const routes = {
   /** The agent's definition file in the source editor. */
   agentSource: (org: string, ws: string, agent: string): SafePath =>
     pathOf(org, ws, "agents", agent, "source"),
-  /** Billing; `cursor` opens a later page of its invoices, `checkout` is where a Stripe Checkout returns. */
+  /**
+   * Billing; `cursor` opens a later page of its invoices, `checkout` is where
+   * a Stripe Checkout returns. The two meters return to different values —
+   * `success` for a governed-action-unit purchase, `credits` for a usage
+   * credit top-up — so the page can name the meter the payment landed on;
+   * `cancel` is shared, because nothing was charged on either.
+   */
   billing: (
     org: string,
-    q?: { cursor: string } | { checkout: "success" | "cancel" },
+    q?: { cursor: string } | { checkout: "success" | "cancel" | "credits" },
   ): SafePath =>
     withQuery(pathOf(org, "billing"), {
       cursor: q !== undefined && "cursor" in q ? q.cursor : undefined,
@@ -121,13 +127,17 @@ export const routes = {
   /** A run opened from a list (a run id is a public id, never a raw row id). */
   run: (org: string, ws: string, run: string): SafePath =>
     pathOf(org, ws, "runs", run),
-  /** Spend on one tab, or one key's drill on it; a tab is a query, not a route (§1.2). */
+  /** Spend on one tab, with one key's drill or one finding's evidence open; a tab is a query, not a route (§1.2). */
   spend: (
     org: string,
     ws: string,
-    view: { tab: string; drill?: string },
+    view: { tab: string; drill?: string; finding?: string },
   ): SafePath =>
-    withQuery(pathOf(org, ws, "spend"), { tab: view.tab, drill: view.drill }),
+    withQuery(pathOf(org, ws, "spend"), {
+      tab: view.tab,
+      drill: view.drill,
+      finding: view.finding,
+    }),
   /** Skills; `cursor` opens a later page of the inventory. */
   skills: (org: string, ws: string, q?: { cursor: string }): SafePath =>
     withQuery(pathOf(org, ws, "skills"), { cursor: q?.cursor }),

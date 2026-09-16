@@ -30,6 +30,7 @@ import { getCapability } from "@oxagen/oxagen";
 
 const ROLE_CHECKED_CONTRACTS = [
   "authorize_cli",
+  "purchase_credits",
   "register_agent",
   "rotate_agent_credential",
   "suspend_agent",
@@ -382,6 +383,7 @@ describe("INV-29: every role gate acts as the resolved user", () => {
         "agent/src/handlers/agent.approval.resolve.ts",
         "agent/src/handlers/agent.role.assign.ts",
         "agent/src/handlers/agent.role.revoke.ts",
+        "handlers/src/billing.credits.purchase.ts",
         "handlers/src/billing.gau_bucket.purchase.ts",
         "handlers/src/billing.invoice.list.ts",
         "handlers/src/context.pr.open.ts",

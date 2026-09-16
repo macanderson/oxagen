@@ -592,6 +592,7 @@ type Messages = {
     checkout: {
       success: string;
       cancel: string;
+      credits: string;
     };
     plan: {
       title: string;
@@ -715,6 +716,26 @@ type Messages = {
       pager: string;
       older: string;
       newest: string;
+    };
+    usageCredits: {
+      title: string;
+      balance: string;
+      faceValue: string;
+      credits: string;
+      basis: string;
+      exhausted: string;
+      presets: string;
+      amount: string;
+      min: string;
+      submit: string;
+      submitting: string;
+      denied: string;
+      planDenied: string;
+      errors: {
+        invalid: string;
+        denied: string;
+        unavailable: string;
+      };
     };
     failure: {
       denied: string;
@@ -1029,6 +1050,7 @@ type Messages = {
     };
     tabs: {
       label: string;
+      findings: string;
       operator: string;
       agent: string;
       tool: string;
@@ -1038,6 +1060,94 @@ type Messages = {
     actions: {
       exportReport: string;
       setBudget: string;
+    };
+    findings: {
+      eyebrow: string;
+      heroTitle: string;
+      saving: string;
+      savingNote: string;
+      share: string;
+      shareNote: string;
+      annualised: string;
+      annualisedNote: string;
+      spend: string;
+      spendNote: string;
+      strip: {
+        label: string;
+        tail: string;
+      };
+      facts: string;
+      note: string;
+      list: string;
+      emptyTitle: string;
+      empty: string;
+      rank: string;
+      kind: {
+        cache_writes_never_read: string;
+        duplicate_tool_calls: string;
+        repeated_shell_commands: string;
+        unpaged_results: string;
+      };
+      level: {
+        tool: string;
+        agent: string;
+        operator: string;
+        workspace: string;
+      };
+      confidence: {
+        high: string;
+        medium: string;
+      };
+      why: string;
+      fixLabel: string;
+      cites: string;
+      shareOfIdentified: string;
+      shareUnknown: string;
+      evidence: {
+        open: string;
+        eyebrow: string;
+        back: string;
+        atStake: string;
+        atStakeNote: string;
+        confidence: string;
+        covered: string;
+        coveredValue: string;
+        coveredNote: string;
+        tokens: string;
+        tokensValue: string;
+        tokensNote: string;
+        measured: string;
+        counterfactual: string;
+        runs: string;
+        runsEmpty: string;
+        columns: {
+          run: string;
+          startedAt: string;
+          measured: string;
+          counterfactual: string;
+        };
+        note: string;
+      };
+      fix: {
+        open: string;
+        title: string;
+        body: string;
+        record: string;
+        recording: string;
+        dismiss: string;
+        dismissing: string;
+        dismissNote: string;
+        failure: {
+          orgRoleRequired: string;
+          noPrincipal: string;
+          notOpen: string;
+          notFound: string;
+          pendingApproval: string;
+          invalid: string;
+          refused: string;
+          unavailable: string;
+        };
+      };
     };
     strip: {
       spend: string;

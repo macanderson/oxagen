@@ -30,6 +30,7 @@ const source = {
   shell: { context: vi.fn() },
   billing: {
     plan: vi.fn(),
+    usageCredits: vi.fn(),
     bucket: vi.fn(),
     contractRate: vi.fn(),
     invoices: vi.fn(),
@@ -48,6 +49,8 @@ const source = {
     drill: vi.fn(),
     waste: vi.fn(),
     budgets: vi.fn(),
+    findings: vi.fn(),
+    findingEvidence: vi.fn(),
   },
   org: { members: vi.fn(), apiKeys: vi.fn() },
   skills: { inventory: vi.fn() },

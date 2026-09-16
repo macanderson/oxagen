@@ -29,9 +29,9 @@ describe("ApiKey", () => {
       "expiresAt",
       "revokedAt",
     ]);
-    expect(Object.keys(ApiKey.shape).filter((f) => SECRET_SHAPED.test(f))).toEqual(
-      [],
-    );
+    expect(
+      Object.keys(ApiKey.shape).filter((f) => SECRET_SHAPED.test(f)),
+    ).toEqual([]);
   });
 
   it("drops a field it does not name, so a secret the contract grows cannot reach the page (negative)", () => {
@@ -54,8 +54,8 @@ describe("ApiKey", () => {
   });
 
   it("refuses an instant that is not a timestamp (negative)", () => {
-    expect(ApiKeyList.safeParse([{ ...stored, createdAt: "yesterday" }]).success).toBe(
-      false,
-    );
+    expect(
+      ApiKeyList.safeParse([{ ...stored, createdAt: "yesterday" }]).success,
+    ).toBe(false);
   });
 });

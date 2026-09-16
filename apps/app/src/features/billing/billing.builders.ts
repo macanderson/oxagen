@@ -1,7 +1,7 @@
 // Typed Billing values for the Billing component tests (ARCHITECTURE.md §5): a
 // subscription, a prepaid bucket, a Free bucket with no card, an invoice-billed
 // bucket, a negotiated and a published-tier rate, invoice rows and a
-// DataSource that answers the four Billing reads with what a test hands it.
+// DataSource that answers the five Billing reads with what a test hands it.
 // Importable from tests only.
 import type {
   ContractRate,
@@ -9,6 +9,7 @@ import type {
   InvoicePage,
   InvoiceRow,
   PlanCard,
+  UsageCredits,
 } from "@/data/contracts/billing";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
@@ -123,6 +124,17 @@ export const PUBLISHED_BUILD: ContractRate = {
   effectiveTo: null,
 };
 
+/** A usage credit balance of 4,200 credits — $42.00 at 1 credit = $0.01. */
+export function usageCredits(balanceCredits = 4200): UsageCredits {
+  return {
+    balanceCredits,
+    balance: {
+      micros: String(balanceCredits * 10000),
+      currency: "USD",
+    },
+  };
+}
+
 export function invoiceRow(overrides: Partial<InvoiceRow> = {}): InvoiceRow {
   return {
     id: "inv_7Hc2",
@@ -150,15 +162,17 @@ export type BillingReads = {
   bucket: Read<GauBucket>;
   rate: Read<ContractRate>;
   invoices: Read<InvoicePage>;
+  usageCredits: Read<UsageCredits>;
 };
 
-/** A DataSource answering the four Billing reads; `calls` records their arguments. */
+/** A DataSource answering the five Billing reads; `calls` records their arguments. */
 export function billingSource(overrides: Partial<BillingReads> = {}) {
   const reads: BillingReads = {
     plan: readOk({ subscription: SUBSCRIPTION }),
     bucket: readOk(prepaidBucket()),
     rate: readOk(contractRate()),
     invoices: invoicePage([invoiceRow()]),
+    usageCredits: readOk(usageCredits()),
     ...overrides,
   };
   const calls: Record<keyof BillingReads, unknown[][]> = {
@@ -166,6 +180,7 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
     bucket: [],
     rate: [],
     invoices: [],
+    usageCredits: [],
   };
   const refuse = () => Promise.reject(new Error("not a Billing read"));
   const source: DataSource = {
@@ -196,6 +211,10 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
         calls.invoices.push(args);
         return Promise.resolve(reads.invoices);
       },
+      usageCredits: (...args) => {
+        calls.usageCredits.push(args);
+        return Promise.resolve(reads.usageCredits);
+      },
     },
     spend: {
       byGroup: refuse,
@@ -203,6 +222,8 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
       drill: refuse,
       waste: refuse,
       budgets: refuse,
+      findings: refuse,
+      findingEvidence: refuse,
     },
     org: { members: refuse, apiKeys: refuse },
     skills: { inventory: refuse },

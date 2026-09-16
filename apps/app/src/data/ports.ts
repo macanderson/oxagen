@@ -17,6 +17,7 @@ import type {
   GauBucket,
   InvoicePage,
   PlanCard,
+  UsageCredits,
 } from "./contracts/billing";
 import type { ApiKey, MemberList } from "./contracts/org";
 import type { RunPage } from "./contracts/runs";
@@ -32,6 +33,8 @@ import type {
   SpendBudgets,
   SpendDrill,
   SpendDrillKind,
+  SpendFindingEvidence,
+  SpendFindings,
   SpendGroupKind,
   SpendReport,
   SpendWaste,
@@ -62,12 +65,18 @@ export interface DataSource {
   /** list_orgs + list_workspaces; caller: features/shell/source.ts. */
   shell: { context(ctx: OrgCtx): Promise<Read<ShellContext>> };
   /**
-   * The Billing page's four noBillingGate reads, each Owner, Admin or Billing
+   * The Billing page's five noBillingGate reads, each Owner, Admin or Billing
    * (checked in its handler); caller: features/billing/billing.tsx.
    */
   billing: {
     /** get_subscription */
     plan(ctx: OrgCtx): Promise<Read<PlanCard>>;
+    /**
+     * get_subscription again, for the second meter's balance (§3.9). The two
+     * reads are separate because a `Read<T>` carries one view model, and the
+     * plan card is deliberately blind to the credit balance (INV-25).
+     */
+    usageCredits(ctx: OrgCtx): Promise<Read<UsageCredits>>;
     /** get_gau_bucket: mode, meter, invoice thresholds, auto top-up state */
     bucket(ctx: OrgCtx): Promise<Read<GauBucket>>;
     /** get_contract_rate */
@@ -133,6 +142,13 @@ export interface DataSource {
     waste(ctx: WsCtx, period: DayRange): Promise<Read<SpendWaste>>;
     /** get_spend_budget */
     budgets(ctx: WsCtx): Promise<Read<SpendBudgets>>;
+    /** list_findings over the open findings (#2963): the Findings section's cards and the totals above them */
+    findings(ctx: WsCtx): Promise<Read<SpendFindings>>;
+    /** get_finding_evidence: the runs, calls and prices one finding cites */
+    findingEvidence(
+      ctx: WsCtx,
+      findingId: string,
+    ): Promise<Read<SpendFindingEvidence>>;
   };
   /**
    * The Organization page's two tabs, each an Owner-or-Admin read checked in
