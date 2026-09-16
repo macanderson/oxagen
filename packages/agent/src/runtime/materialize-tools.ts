@@ -495,6 +495,12 @@ export async function materializeTools(
                     messageId: ctx.messageId!,
                     capabilityName: cap.name,
                     inputPreview: input,
+                    // The same `input` object is handed to invoke() below, so
+                    // its digest is exactly what the decision path computes
+                    // for this call. The external-tool card further down does
+                    // NOT pass one: invoke() never dispatches those, so the
+                    // gate never reads a window for them.
+                    digestInput: input,
                     riskLevel,
                   }),
               );

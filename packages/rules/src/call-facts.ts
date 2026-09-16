@@ -149,10 +149,25 @@ function canonicalize(v: unknown): unknown {
   if (v === null) return null;
   switch (typeof v) {
     case "string":
-    case "number":
     case "boolean":
-    case "undefined":
       return v;
+    case "number":
+      // NaN and the infinities are not JSON: `JSON.stringify` writes them as
+      // `null`, so every one of them would share a digest with each other and
+      // with a literal null. They have no business in a capability input, so
+      // this refuses rather than inventing an encoding for them.
+      if (!Number.isFinite(v)) {
+        throw new UndigestibleInputError(`the non-finite number ${String(v)}`);
+      }
+      return v;
+    case "undefined":
+      // Encoded, not dropped. `JSON.stringify` removes an undefined property
+      // and rewrites an undefined array element as `null`, so `{ x: undefined }`
+      // hashed as `{}` and `[undefined]` as `[null]`. Unlike the non-finite
+      // numbers this one is reachable from ordinary validated output, so it
+      // gets an encoding rather than a refusal — unforgeable under the same
+      // escaping rule as the others.
+      return { $undefined: true };
     case "bigint":
       // JSON.stringify throws on a BigInt, so this was never a silent
       // collision — it is encoded by value so the call works at all.
@@ -162,7 +177,11 @@ function canonicalize(v: unknown): unknown {
     case "symbol":
       throw new UndigestibleInputError("a symbol");
   }
-  if (Array.isArray(v)) return v.map(canonicalize);
+  // `Array.from`, not `.map`: a sparse array's holes are SKIPPED by `.map`
+  // and survive to `JSON.stringify` as `null`, so `[1, , 3]` hashed the same
+  // as `[1, null, 3]`. `Array.from` materialises a hole as undefined, which
+  // the branch above then encodes.
+  if (Array.isArray(v)) return Array.from(v, (x) => canonicalize(x));
   if (v instanceof Date) {
     if (Number.isNaN(v.getTime())) {
       throw new UndigestibleInputError("an invalid Date");

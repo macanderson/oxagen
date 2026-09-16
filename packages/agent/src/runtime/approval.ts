@@ -1,4 +1,5 @@
 import { withTenantDb, schema } from "@oxagen/database";
+import { inputDigest } from "@oxagen/rules";
 import { eq, and, sql } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
 import postgres from "postgres";
@@ -19,6 +20,17 @@ export interface CreateApprovalArgs {
   messageId: string;
   capabilityName: string;
   inputPreview: unknown;
+  /**
+   * The capability input this approval is for, when it is the value `invoke()`
+   * will receive. Its canonical digest is what a rule's standing window is
+   * keyed on, so a person approving THIS card can satisfy a later window for
+   * the same call.
+   *
+   * Pass it only where the value provably matches what the decision path
+   * digests. Omit it and the row stores a null digest, which is what it did
+   * before: no standing match, and the next call asks a person again.
+   */
+  digestInput?: unknown;
   riskLevel: "low" | "medium" | "high";
   executionStepId?: string | null;
   toolCallId?: string | null;
@@ -99,6 +111,25 @@ export async function createApprovalRequest(
   args: CreateApprovalArgs,
 ): Promise<{ approvalId: string }> {
   const expiresAt = new Date(Date.now() + (args.ttlMs ?? DEFAULT_TTL_MS));
+  // An ordinary approval row used to store no digest at all, so a person's
+  // decision here could never satisfy a rule's standing window and the next
+  // identical call asked again. That is friction rather than exposure, which
+  // is why it is safe to fix — and why the fix must not overshoot: a digest
+  // computed over a DIFFERENT value than the decision path digests would
+  // produce a false match, turning the friction into a skipped person.
+  //
+  // `inputDigest` refuses a value it cannot encode (see its contract), and a
+  // refusal here must not stop an approval card from being written. A throw
+  // leaves the digest null, which is exactly the old behaviour: no standing
+  // match, a person is asked.
+  let digest: string | null = null;
+  if (args.digestInput !== undefined) {
+    try {
+      digest = inputDigest(args.digestInput);
+    } catch {
+      digest = null;
+    }
+  }
   const [row] = await withTenantDb((tx) =>
     tx
       .insert(schema.approvalRequests)
@@ -111,6 +142,7 @@ export async function createApprovalRequest(
         riskLevel: args.riskLevel,
         executionStepId: args.executionStepId ?? null,
         toolCallId: args.toolCallId ?? null,
+        inputDigest: digest,
         expiresAt,
       })
       .returning({ id: schema.approvalRequests.id }),

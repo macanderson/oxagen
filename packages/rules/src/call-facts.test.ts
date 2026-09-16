@@ -146,6 +146,46 @@ describe("inputDigest", () => {
     expect(inputDigest({ a$b: 1 })).not.toBe(inputDigest({ a$$b: 1 }));
   });
 
+  it("does not let JSON erase a value into a collision", () => {
+    // A third axis, and different from the first two: these are not values
+    // colliding with a marker, they are values JSON DELETES. The escaping
+    // property does not cover them because the loss happens before any marker
+    // is involved. The rule is the same one extended — every value either has
+    // an unforgeable encoding or fails closed.
+    //
+    // `JSON.stringify` drops an undefined property and rewrites an undefined
+    // array element as null, so all of these used to collide.
+    expect(inputDigest({})).not.toBe(inputDigest({ x: undefined }));
+    expect(inputDigest({ x: undefined })).not.toBe(inputDigest({ x: null }));
+    expect(inputDigest([undefined])).not.toBe(inputDigest([null]));
+    // A sparse array's hole is skipped by .map and survives as null. Built
+    // rather than written as a literal, so the file needs no lint exemption
+    // for the sparseness that is the point of the case.
+    const sparse: unknown[] = [1];
+    sparse.length = 2;
+    sparse.push(3);
+    expect(inputDigest(sparse)).not.toBe(inputDigest([1, null, 3]));
+    // Equal shapes still agree, so this is not just "everything differs".
+    expect(inputDigest({ x: undefined })).toBe(inputDigest({ x: undefined }));
+
+    // The encoding is unforgeable like the rest: a user object shaped like it
+    // escapes clear of it.
+    expect(inputDigest({ x: undefined })).not.toBe(
+      inputDigest({ x: { $undefined: true } }),
+    );
+
+    // Non-finite numbers all serialise as null, so they are refused rather
+    // than given an encoding — they have no business in a capability input.
+    for (const bad of [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ]) {
+      expect(() => inputDigest({ n: bad })).toThrow(UndigestibleInputError);
+    }
+    expect(() => inputDigest({ n: Number.NaN })).toThrow(/non-finite/);
+  });
+
   it("still digests an object with a null prototype", () => {
     const bare = Object.create(null) as Record<string, unknown>;
     bare.a = 1;
