@@ -91,6 +91,7 @@ export function fleetSource(reads: FleetReads) {
     },
     billing: {
       plan: refuse,
+      usageCredits: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,
@@ -101,9 +102,12 @@ export function fleetSource(reads: FleetReads) {
       drill: refuse,
       waste: refuse,
       budgets: refuse,
+      findings: refuse,
+      findingEvidence: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: { members: refuse, apiKeys: refuse },
+    audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },
   };

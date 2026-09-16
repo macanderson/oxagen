@@ -71,6 +71,7 @@ const source: DataSource = {
   shell: { context: vi.fn() },
   billing: {
     plan: vi.fn(),
+    usageCredits: vi.fn(),
     bucket: vi.fn(),
     contractRate: vi.fn(),
     invoices: vi.fn(),
@@ -89,10 +90,13 @@ const source: DataSource = {
     drill: vi.fn(),
     waste: vi.fn(),
     budgets: vi.fn(),
+    findings: vi.fn(),
+    findingEvidence: vi.fn(),
   },
   onboarding: { state: vi.fn(), firstFrame: vi.fn() },
   org: { members: vi.fn(), apiKeys: vi.fn() },
   skills: { inventory: read },
+  audit: { events: vi.fn(), exportEvents: vi.fn() },
   steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
 };
 

@@ -5,6 +5,8 @@
 // rounds or fills a figure the contract did not carry. The one derived figure
 // is Fleet's cache hit rate, a ratio of the token counts the rows carry.
 import type { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
+import type { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
+import type { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import type { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import type { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import type { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
@@ -13,6 +15,9 @@ import type {
   FleetSpend,
   SpendBudgets,
   SpendDrill,
+  SpendFinding,
+  SpendFindingEvidence,
+  SpendFindings,
   SpendReport,
   SpendWaste,
 } from "@/data/contracts/spend";
@@ -103,6 +108,71 @@ export function toSpendWaste(
       wasted: cause.wasted,
       runs: cause.runs,
       provingRuns: cause.runIds,
+    })),
+  };
+}
+
+type FindingOut = ContractOutput<typeof findingList>["findings"][number];
+
+/**
+ * One finding as the page reads it. The saving and its basis are the findings
+ * job's, copied whole; the decision fields the contract also carries are not
+ * read here, since the section lists open findings alone.
+ */
+function toFinding(finding: FindingOut): z.input<typeof SpendFinding> {
+  return {
+    id: finding.id,
+    kind: finding.kind,
+    level: finding.level,
+    subject: finding.subject,
+    saving: finding.saving,
+    confidence: finding.confidence,
+    window: finding.window,
+    why: finding.why,
+    fix: finding.fix,
+    runs: finding.runs,
+    calls: finding.calls,
+  };
+}
+
+export function toSpendFindings(
+  out: ContractOutput<typeof findingList>,
+): z.input<typeof SpendFindings> {
+  return {
+    window: out.window,
+    saving: out.saving,
+    spend: out.spend,
+    share: out.share,
+    annualised: out.annualised,
+    counts: {
+      findings: out.counts.findings,
+      high: out.counts.high,
+      medium: out.counts.medium,
+      operators: out.counts.operators,
+    },
+    findings: out.findings.map(toFinding),
+  };
+}
+
+export function toSpendFindingEvidence(
+  out: ContractOutput<typeof findingEvidenceGet>,
+): z.input<typeof SpendFindingEvidence> {
+  return {
+    finding: toFinding(out.finding),
+    calls: out.evidence.calls,
+    coveredCalls: out.evidence.coveredCalls,
+    measuredTokens: out.evidence.measuredTokens,
+    counterfactualTokens: out.evidence.counterfactualTokens,
+    measured: out.evidence.measured,
+    counterfactual: out.evidence.counterfactual,
+    runs: out.evidence.runs.map((run) => ({
+      runId: run.runId,
+      startedAt: run.startedAt,
+      calls: run.calls,
+      measuredTokens: run.measuredTokens,
+      counterfactualTokens: run.counterfactualTokens,
+      measured: run.measured,
+      counterfactual: run.counterfactual,
     })),
   };
 }

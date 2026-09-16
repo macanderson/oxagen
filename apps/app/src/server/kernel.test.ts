@@ -181,6 +181,17 @@ describe("kernelRead", () => {
     expect(captureError).not.toHaveBeenCalled();
   });
 
+  // The per-request read table comes from React `cache`. Outside a request
+  // React hands back a fresh table each call, so nothing is shared between
+  // tests or across requests and every read still reaches invoke. The sharing
+  // itself is covered in kernel-read-memo.test.ts, which stands a request up.
+  it("does not share a read outside a request scope", async () => {
+    invoke.mockResolvedValue(members);
+    expect(await kernelRead(orgCtx, membersCall)).toEqual(readOk(members));
+    expect(await kernelRead(orgCtx, membersCall)).toEqual(readOk(members));
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
+
   it("carries the workspace of a WsCtx", async () => {
     invoke.mockResolvedValue(members);
     await kernelRead(wsCtx, membersCall);

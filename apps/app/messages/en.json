@@ -26,7 +26,8 @@
     "spend": "Spend",
     "people": "Organization",
     "apiKeys": "API keys",
-    "billing": "Billing"
+    "billing": "Billing",
+    "audit": "Audit"
   },
   "unrecorded": {
     "tools": "The tool registry, connections, kill switches, and auto-approval rules are not recorded here yet.",

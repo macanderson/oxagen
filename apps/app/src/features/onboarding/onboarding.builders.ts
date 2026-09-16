@@ -101,6 +101,7 @@ export function onboardingSource(reads: Reads): {
     approvals: { pending: refuse("approvals.pending") },
     billing: {
       plan: refuse("billing.plan"),
+      usageCredits: refuse("billing.usageCredits"),
       bucket: refuse("billing.bucket"),
       contractRate: refuse("billing.contractRate"),
       invoices: refuse("billing.invoices"),
@@ -111,6 +112,12 @@ export function onboardingSource(reads: Reads): {
       drill: refuse("spend.drill"),
       waste: refuse("spend.waste"),
       budgets: refuse("spend.budgets"),
+      findings: refuse("spend.findings"),
+      findingEvidence: refuse("spend.findingEvidence"),
+    },
+    audit: {
+      events: refuse("audit.events"),
+      exportEvents: refuse("audit.exportEvents"),
     },
     org: { members: refuse("org.members"), apiKeys: refuse("org.apiKeys") },
     skills: { inventory: refuse("skills.inventory") },

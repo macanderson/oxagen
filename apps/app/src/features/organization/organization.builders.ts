@@ -48,6 +48,7 @@ export function orgSource(reads: OrgReads): {
     shell: { context: refuse },
     billing: {
       plan: refuse,
+      usageCredits: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,
@@ -66,12 +67,15 @@ export function orgSource(reads: OrgReads): {
       drill: refuse,
       waste: refuse,
       budgets: refuse,
+      findings: refuse,
+      findingEvidence: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: {
       members: answer(reads.members, "members"),
       apiKeys: answer(reads.apiKeys, "apiKeys"),
     },
+    audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },
   };

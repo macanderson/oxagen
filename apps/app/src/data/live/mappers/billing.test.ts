@@ -16,6 +16,7 @@ import {
   toGauBucket,
   toInvoicePage,
   toPlanCard,
+  toUsageCredits,
 } from "./billing";
 
 /** The micros per GAU of every ACTION_RATE_BANDS band: $N per 1,000 is N × 1,000 micros per GAU. */
@@ -89,6 +90,43 @@ describe("toPlanCard", () => {
     expect(toPlanCard(subscriptionOutput({ subscription: null }))).toEqual({
       subscription: null,
     });
+  });
+});
+
+describe("toUsageCredits", () => {
+  // One credit is $0.01, which is 10,000 micro-dollars. The balance and its
+  // face value are the same figure in the page's two units, so the conversion
+  // is the whole of this mapper.
+  it("prices the balance at face value: micros are the credits times 10,000", () => {
+    const out = subscriptionOutput();
+    const view = toUsageCredits(out);
+    expect(view.balanceCredits).toBe(out.creditBalanceCents);
+    expect(view.balance).toEqual({
+      micros: String(out.creditBalanceCents * 10_000),
+      currency: "USD",
+    });
+    expect(view.balance.micros).toBe("42000000");
+  });
+
+  it("carries a balance spent to zero as zero", () => {
+    expect(toUsageCredits({ creditBalanceCents: 0 })).toEqual({
+      balanceCredits: 0,
+      balance: { micros: "0", currency: "USD" },
+    });
+  });
+
+  it("carries an overdrawn balance as stored, not clamped", () => {
+    expect(toUsageCredits({ creditBalanceCents: -150 })).toEqual({
+      balanceCredits: -150,
+      balance: { micros: "-1500000", currency: "USD" },
+    });
+  });
+
+  it("carries the balance and nothing else: no token usage reaches the page", () => {
+    expect(Object.keys(toUsageCredits(subscriptionOutput())).sort()).toEqual([
+      "balance",
+      "balanceCredits",
+    ]);
   });
 });
 

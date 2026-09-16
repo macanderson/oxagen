@@ -11,6 +11,7 @@
     },
     "tabs": {
       "label": "Spend views",
+      "findings": "Findings",
       "operator": "By operator",
       "agent": "By agent",
       "tool": "By tool",
@@ -20,6 +21,94 @@
     "actions": {
       "exportReport": "Export report",
       "setBudget": "Set a budget"
+    },
+    "findings": {
+      "eyebrow": "Savings identified",
+      "heroTitle": "Savings identified in this workspace",
+      "saving": "Savings identified",
+      "savingNote": "measured minus counterfactual over the runs each finding cites",
+      "share": "Share of priced spend",
+      "shareNote": "the annualised saving against the spend this window priced",
+      "annualised": "A year at this run rate",
+      "annualisedNote": "each saving scaled from its own window to 365 days",
+      "spend": "Priced spend in this window",
+      "spendNote": "the span the listed findings cover",
+      "strip": {
+        "label": "Share of the identified savings by finding",
+        "tail": "{count} smaller findings"
+      },
+      "facts": "{findings} findings · {operators} operators involved · {high} high confidence · {medium} medium",
+      "note": "Each saving is measured minus counterfactual over the runs it cites, at the price each call paid. Evidence opens those runs and the arithmetic; Fix opens the change that removes it.",
+      "list": "Findings, largest saving first",
+      "emptyTitle": "No finding is open",
+      "empty": "The detectors run after each run seals and again nightly. A finding is written only with the runs that prove it, so an empty list means nothing in the window was proven, not that nothing was looked for.",
+      "rank": "#{rank}",
+      "kind": {
+        "cache_writes_never_read": "Cache written and never read",
+        "duplicate_tool_calls": "Duplicate tool calls",
+        "repeated_shell_commands": "Repeated shell commands",
+        "unpaged_results": "Unpaged results"
+      },
+      "level": {
+        "tool": "tool",
+        "agent": "agent",
+        "operator": "operator",
+        "workspace": "workspace"
+      },
+      "confidence": {
+        "high": "high confidence",
+        "medium": "medium confidence"
+      },
+      "why": "Why it costs money:",
+      "fixLabel": "The fix:",
+      "cites": "{runs} runs · {calls} calls",
+      "shareOfIdentified": "{share} of the identified savings",
+      "shareUnknown": "share not comparable",
+      "evidence": {
+        "open": "Evidence",
+        "eyebrow": "Evidence",
+        "back": "Back to the findings",
+        "atStake": "At stake",
+        "atStakeNote": "measured minus counterfactual",
+        "confidence": "Confidence",
+        "covered": "Calls the counterfactual prices",
+        "coveredValue": "{covered} of {calls}",
+        "coveredNote": "the rest are cited and add nothing to the saving",
+        "tokens": "Tokens",
+        "tokensValue": "{measured} measured · {counterfactual} counterfactual",
+        "tokensNote": "what the covered calls carried, against the alternative",
+        "measured": "What the cited calls cost",
+        "counterfactual": "What the alternative would have cost",
+        "runs": "The cited runs with the largest saving",
+        "runsEmpty": "The evidence lists no run for this finding.",
+        "columns": {
+          "run": "Run",
+          "startedAt": "Started",
+          "measured": "Measured",
+          "counterfactual": "Counterfactual"
+        },
+        "note": "Every run above is a sealed record. Open one to read the frames the arithmetic came from."
+      },
+      "fix": {
+        "open": "Fix",
+        "title": "Fix this finding",
+        "body": "The fix is in the agent’s own code, harness or tool configuration, which Oxagen does not hold. Record the change once you have made it: the finding is marked applied with this call’s request id, and later passes cite only runs that start afterwards, so the saving shows on this page.",
+        "record": "Record the fix as applied",
+        "recording": "Recording the change",
+        "dismiss": "Dismiss this finding",
+        "dismissing": "Dismissing the finding",
+        "dismissNote": "A dismissed finding keeps its evidence and the decision. The job opens it again only on runs that start after it.",
+        "failure": {
+          "orgRoleRequired": "Your organization role cannot decide a finding. An organization owner or admin records a fix or dismisses it.",
+          "noPrincipal": "The request carried no signed-in user. Sign in and try again.",
+          "notOpen": "This finding was already decided. Nothing was changed.",
+          "notFound": "This finding no longer exists. Nothing was changed.",
+          "pendingApproval": "The decision is waiting for approval, request {accessRequestId}.",
+          "invalid": "The decision was refused as invalid. Nothing was changed.",
+          "refused": "The decision was refused: {code}. Nothing was changed.",
+          "unavailable": "The decision could not be recorded: {code}. Nothing was changed."
+        }
+      }
     },
     "strip": {
       "spend": "Spend",

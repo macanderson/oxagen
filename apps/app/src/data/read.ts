@@ -45,6 +45,7 @@ export type PageKey =
   | "organization"
   | "billing"
   | "spend"
+  | "audit"
   | "skills"
   | "steering"
   | "shell";
@@ -89,6 +90,12 @@ export const PAGE_FAILURES = {
   spend: {
     error: { code: "rollup_rebuild_in_progress", status: 504 },
     permission: "spend.read",
+  },
+  // The organization's audit record: a member without an owner or admin role
+  // is denied rather than shown an empty record.
+  audit: {
+    error: { code: "audit_store_unavailable", status: 503 },
+    permission: "org.admin",
   },
   // The session inventory is a control-plane table read (tacho.sessions).
   skills: {
