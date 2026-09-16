@@ -31,6 +31,11 @@ import {
   type ContributedRawTool,
 } from "./plugin-type";
 import { getOxagenRegistry, type RegistryCapability } from "../registry-loader";
+import {
+  createKillSwitchGate,
+  KillSwitchDeniedError,
+  type KillSwitchGate,
+} from "./kill-switch-gate";
 import { decideCapabilityForBelt, decideMcpToolForBelt } from "./toolbelt";
 // Side-effect imports register the plugin-type contributors.
 import "./plugin-types/mcp";
@@ -164,6 +169,8 @@ export interface MaterializeOptions {
    * until the consent TTL expires.
    */
   onConsentRequired?: (event: ConsentRequiredEvent) => void;
+  /** Seam for tests; defaults to the Postgres-backed gate. */
+  killSwitchGate?: KillSwitchGate;
 }
 
 // Result of materializeTools: the Vercel AI SDK tool map keyed by *model-safe*
@@ -288,6 +295,13 @@ export async function materializeTools(
 
   const mutatingToolNames: string[] = [];
   const governance: Record<string, ToolGovernance> = {};
+
+  // Kill switches (spec §6.11): one gate per materialization, consulted in
+  // every execute closure below. A non-read-only call re-reads the deny
+  // generation before it runs and reloads the switches when it moved, so a
+  // flip takes effect at the next call boundary for every tool on the belt.
+  const killSwitches: KillSwitchGate =
+    opts.killSwitchGate ?? createKillSwitchGate(ctx);
 
   // Register a tool under a model-safe alias and record the reverse mapping.
   // Sanitizing collapses distinct chars to "_", so two real names could in
@@ -435,6 +449,26 @@ export async function materializeTools(
           const startedAt = Date.now();
           const inputBytes = byteSize(input);
           try {
+            // Kill switch (spec §6.11): a switch on this version, the agent,
+            // the operator, the workspace, the organisation or a class this
+            // version carries stops the call at this boundary. Checked before
+            // an approval card opens and again once it is approved, so a
+            // switch flipped during the wait stops the call (§7.4).
+            //
+            // `readOnly` decides whether the gate re-reads the deny generation
+            // first. A read-only capability is checked against the turn's
+            // snapshot, which is what §7.4's guarantee column grants
+            // ("guaranteed for non-read-only tools"): a switch flipped
+            // mid-turn stops every mutation immediately and stops reads from
+            // the next turn. That is the intent, not an oversight.
+            const refuseIfKilled = async () => {
+              const killed = await killSwitches.check({
+                capabilityId: cap.name,
+                readOnly: !isMutatingCapability(cap),
+              });
+              if (killed !== null) throw new KillSwitchDeniedError(killed);
+            };
+            await refuseIfKilled();
             // Approval gate. Only fires when the capability declares
             // `requiresApproval: true` AND we have a `messageId` to attach the
             // request to in the chat DAG. Direct API / MCP callers skip the
@@ -481,6 +515,7 @@ export async function materializeTools(
                   `approval ${resolution.resolution} for ${cap.name}`,
                 );
               }
+              await refuseIfKilled();
             }
             const result = await invoke(cap.name, input, ctx, {
               surface: "agent",
@@ -608,6 +643,7 @@ export async function materializeTools(
     try {
       contributed = await contributor.contributeTools(ctx, {
         serverAllowlist: opts.serverAllowlist,
+        killSwitches,
       });
     } catch (err) {
       logger.error(
@@ -673,6 +709,55 @@ export async function materializeTools(
           execute: async (input: unknown) => {
             const invocationId = crypto.randomUUID();
             const startedAt = Date.now();
+
+            // ── Kill switch (spec §6.11) ────────────────────────────────────
+            // A switch on this version, its server, the connection it was
+            // reached with, a class its version carries, the agent, the
+            // operator, the workspace or the organisation stops the call. An
+            // external tool's semantics are unknown, so every call re-reads
+            // the deny generation (§7.4: non-read-only). Checked again before
+            // the transport when the call waited on a person (an agent-consent
+            // or first-use consent card), so a switch flipped during the wait
+            // stops the call.
+            const refuseIfKilled = async (): Promise<string | null> => {
+              const killed = await killSwitches.check({
+                capabilityId: capturedKey,
+                serverId: externalServerId,
+                connectionId: raw.externalConnectionId ?? null,
+                readOnly: false,
+              });
+              if (killed === null) return null;
+              // The capability path throws and the generic catch records
+              // `err.name`. This path returns a message to the model instead
+              // of throwing, so it records the same class off the same object
+              // — one `error_class` counts every kill-switch refusal.
+              const denied = new KillSwitchDeniedError(killed);
+              try {
+                await insertToolInvocation(
+                  buildInvocationPayload(
+                    {
+                      invocationId,
+                      ctx,
+                      capabilityName: capturedKey,
+                      externalServerId,
+                      inputBytes: byteSize(input),
+                    },
+                    {
+                      status: "failed",
+                      outputBytes: 0,
+                      latencyMs: Date.now() - startedAt,
+                      errorClass: denied.name,
+                    },
+                  ),
+                );
+              } catch {
+                /* telemetry must never fail the call */
+              }
+              return denied.message;
+            };
+            const killedBeforeGates = await refuseIfKilled();
+            if (killedBeforeGates !== null) return killedBeforeGates;
+            let waitedOnPerson = false;
 
             // ── IAM gate (GAP-4) ────────────────────────────────────────────
             // capturedKey is the synthetic capability id, e.g.
@@ -871,6 +956,7 @@ export async function materializeTools(
                     approvalId,
                     CONSENT_PROMPT_TTL_MS,
                   );
+                  waitedOnPerson = true;
                   const askGranted = askResolution.resolution === "approved";
                   await runInTenantScope(
                     { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
@@ -987,6 +1073,7 @@ export async function materializeTools(
                   approvalId,
                   CONSENT_PROMPT_TTL_MS,
                 );
+                waitedOnPerson = true;
                 const granted = resolution.resolution === "approved";
                 // Persist the durable grant/denial so the next call is inline.
                 await runInTenantScope(
@@ -1031,6 +1118,11 @@ export async function materializeTools(
               }
             }
             // ── End consent gate ────────────────────────────────────────────
+
+            if (waitedOnPerson) {
+              const killedDuringWait = await refuseIfKilled();
+              if (killedDuringWait !== null) return killedDuringWait;
+            }
 
             // ── OTEL span: covers external MCP tool call duration ──────────
             // Started inside any active kernel/stream span so the parent
