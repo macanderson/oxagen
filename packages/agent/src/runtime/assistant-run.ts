@@ -41,6 +41,7 @@ import {
 import { STELLA_SERVE_PINNED_VERSION } from "@oxagen/stella-engine-client";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, isNull } from "drizzle-orm";
+import pino from "pino";
 import type {
   TurnLedger,
   TurnLedgerModelCall,
@@ -83,6 +84,11 @@ export const ASSISTANT_ENGINE: ResolvedEngineIdentity = {
 };
 
 /** A run's goal is the turn's instruction, bounded to the spec's ceiling. */
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { pkg: "agent.assistant-run" },
+});
+
 const GOAL_MAX_CHARS = 8192;
 
 /**
@@ -473,37 +479,86 @@ export async function openAssistantRun(
         repositoryBindingRowId: null,
       }),
     );
-    const attempt = await inScope(() =>
-      store.createAttempt({
-        runId: run.runId,
-        producerId: ASSISTANT_PRINCIPAL_NAME,
-        engine: ASSISTANT_ENGINE,
-      }),
-    );
+    // From here the run row exists and the caller does not hold a recorder it
+    // could seal, so every later step is guarded: a transient ledger failure
+    // during admission itself would otherwise leave the run — and its attempt,
+    // if it got that far — open for ever, which is the same defect as a
+    // preflight refusal after admission (assistant-turn.ts) and is the reason
+    // this is a guard around the whole tail rather than a fix at one step.
+    let attempt: Awaited<ReturnType<typeof store.createAttempt>>;
+    try {
+      attempt = await inScope(() =>
+        store.createAttempt({
+          runId: run.runId,
+          producerId: ASSISTANT_PRINCIPAL_NAME,
+          engine: ASSISTANT_ENGINE,
+        }),
+      );
+    } catch (err) {
+      // No attempt exists, so there is nothing to seal: drive the run itself
+      // to `failed`, which is what `finishRun` is for.
+      await terminalizeUnattemptedRun(store, inScope, run.runId, err);
+      throw err;
+    }
     const recorder = new Recorder(store, inScope, now, run, attempt.attemptId, {
       agentId: identity.agentId,
       agentVersionId: identity.agentVersionId,
     });
-    await recorder.append({
-      eventType: "admission.run_admitted",
-      payload: {
-        attempt_public_id: attempt.attemptPublicId,
-        attempt_number: attempt.attemptNumber,
-        max_attempts: attempt.maxAttempts,
-        spec_digest: run.specDigest,
-        authorization_snapshot_digest: snapshot.snapshotDigest,
-        grant_ceiling_digest: snapshot.grantCeilingDigest,
-        engine_name: ASSISTANT_ENGINE.name,
-        engine_version: ASSISTANT_ENGINE.version,
-        engine_build_digest: ASSISTANT_ENGINE.buildDigest,
-      },
-    });
+    try {
+      await recorder.append({
+        eventType: "admission.run_admitted",
+        payload: {
+          attempt_public_id: attempt.attemptPublicId,
+          attempt_number: attempt.attemptNumber,
+          max_attempts: attempt.maxAttempts,
+          spec_digest: run.specDigest,
+          authorization_snapshot_digest: snapshot.snapshotDigest,
+          grant_ceiling_digest: snapshot.grantCeilingDigest,
+          engine_name: ASSISTANT_ENGINE.name,
+          engine_version: ASSISTANT_ENGINE.version,
+          engine_build_digest: ASSISTANT_ENGINE.buildDigest,
+        },
+      });
+    } catch (err) {
+      // The attempt exists, so sealing it is the terminal record — and the
+      // seal drives the run terminal too.
+      await recorder
+        .seal({ status: "failed", error: errorMessage(err) })
+        .catch((sealErr: unknown) => {
+          logger.error(
+            { err: sealErr, runId: run.publicId },
+            "admission failed and the attempt could not be sealed; run left open",
+          );
+        });
+      throw err;
+    }
     return recorder;
   } catch (err) {
     throw new AssistantRunNotRecordedError(
       "ledger_refused",
       errorMessage(err),
       err,
+    );
+  }
+}
+
+/**
+ * A run admitted with no attempt behind it. `sealAttempt` cannot reach it, so
+ * the run is finished directly; a failure here is logged with the run's public
+ * id, because the alternative is losing the only handle on an open run.
+ */
+async function terminalizeUnattemptedRun(
+  store: RunStore,
+  inScope: <T>(fn: () => Promise<T>) => Promise<T>,
+  runId: string,
+  cause: unknown,
+): Promise<void> {
+  try {
+    await inScope(() => store.finishRun(runId, "failed", errorMessage(cause)));
+  } catch (err) {
+    logger.error(
+      { err, runId },
+      "admission could not create an attempt and the run could not be finished; run left open",
     );
   }
 }

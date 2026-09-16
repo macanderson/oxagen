@@ -187,7 +187,14 @@ function setup(overrides: Partial<World> = {}): {
  * The real store's density rule (`planAttemptBatch`, `sealAttempt`): an event
  * whose seq is not one past the last durable event is refused.
  */
-function fakeStore(options: { failAppendCall?: number } = {}) {
+function fakeStore(
+  options: { failAppendCall?: number; failCreateAttempt?: boolean } = {},
+) {
+  const finishedRuns: Array<{
+    runId: string;
+    status: string;
+    error: string | null;
+  }> = [];
   const runs: CreateRunInput[] = [];
   const attempts: CreateAttemptInput[] = [];
   const batches: AppendAttemptBatchInput[] = [];
@@ -200,6 +207,10 @@ function fakeStore(options: { failAppendCall?: number } = {}) {
     }
   };
   const store: RunStore = {
+    finishRun: async (runId, status, error) => {
+      finishedRuns.push({ runId, status, error });
+      return true;
+    },
     createRun: async (input) => {
       runs.push(input);
       return {
@@ -209,6 +220,7 @@ function fakeStore(options: { failAppendCall?: number } = {}) {
       };
     },
     createAttempt: async (input) => {
+      if (options.failCreateAttempt) throw new Error("attempt insert failed");
       attempts.push(input);
       return {
         attemptId: "attempt-uuid",
@@ -253,7 +265,7 @@ function fakeStore(options: { failAppendCall?: number } = {}) {
     setRunSummary: async () => false,
     getFinalizationHandle: async () => null,
   };
-  return { store, runs, attempts, batches, seals };
+  return { store, runs, attempts, batches, seals, finishedRuns };
 }
 
 const SNAPSHOT = {
@@ -628,6 +640,59 @@ describe("openAssistantRun", () => {
           (s.terminalEvent!.payload as { reason_code: string }).reason_code,
       ),
     ).toEqual(["engine_aborted", "turn_failed"]);
+  });
+
+  it("seals the attempt when the admission event cannot be appended", async () => {
+    // createRun and createAttempt succeeded, so the rows exist, and the caller
+    // never receives a recorder it could seal: without this the run and its
+    // attempt stay open for ever on a transient ledger failure during
+    // admission itself.
+    setupRun();
+    const ledger = fakeStore({ failAppendCall: 1 });
+    await expect(
+      openAssistantRun({
+        ...SCOPE,
+        userId: USER,
+        surface: "chat",
+        instruction: "a",
+        maxSteps: 1,
+        toolAllowlist: ["recall_memory"],
+        store: ledger.store,
+      }),
+    ).rejects.toSatisfy(
+      (e) =>
+        e instanceof AssistantRunNotRecordedError &&
+        e.reason === "ledger_refused",
+    );
+    expect(ledger.seals).toHaveLength(1);
+    expect(ledger.seals[0]).toMatchObject({ terminalStatus: "failed" });
+    expect(ledger.finishedRuns).toEqual([]);
+  });
+
+  it("finishes the run as failed when no attempt could be created", async () => {
+    // Nothing to seal in this one — sealAttempt cannot reach a run with no
+    // attempt — so the run itself is driven terminal.
+    setupRun();
+    const ledger = fakeStore({ failCreateAttempt: true });
+    await expect(
+      openAssistantRun({
+        ...SCOPE,
+        userId: USER,
+        surface: "chat",
+        instruction: "a",
+        maxSteps: 1,
+        toolAllowlist: ["recall_memory"],
+        store: ledger.store,
+      }),
+    ).rejects.toSatisfy(
+      (e) =>
+        e instanceof AssistantRunNotRecordedError &&
+        e.reason === "ledger_refused",
+    );
+    expect(ledger.seals).toEqual([]);
+    expect(ledger.finishedRuns).toEqual([
+      { runId: "run-uuid", status: "failed", error: "attempt insert failed" },
+    ]);
   });
 
   it("rejects the receipt whose append failed, gives its seq to the next event, and seals densely", async () => {

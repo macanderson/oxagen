@@ -581,18 +581,35 @@ export async function runGovernedTurn(
     signal: turnAbort.signal,
     handlers: {
       onProviderRequest: async (request, context) => {
-        if (budgetGuard && (await budgetGuard(hostUsage)) === "stop") {
-          turnAbort.abort();
-          throw Object.assign(new Error("turn budget exhausted"), {
-            name: "AbortError",
-          });
-        }
         const receipt = {
           seq: request.seq,
           requestId: request.request_id,
           role: request.role,
           provider: request.provider_id,
         };
+        if (budgetGuard && (await budgetGuard(hostUsage)) === "stop") {
+          // The request that hit the budget is the evidence for why the run
+          // stopped. Aborting before writing it sealed the run `cancelled`
+          // with no record of the request that caused it, so "the budget
+          // stopped this turn" was unprovable — and that is precisely what a
+          // customer disputing a bill asks us to show. The event schema
+          // already carries `cancelled`; the model is the configured one
+          // because the request never reached the provider, the same as the
+          // failure path below.
+          if (ledger) {
+            await recorded(() =>
+              ledger.modelCall({
+                ...receipt,
+                model: modelId,
+                outcome: "cancelled",
+              }),
+            );
+          }
+          turnAbort.abort();
+          throw Object.assign(new Error("turn budget exhausted"), {
+            name: "AbortError",
+          });
+        }
         let result: CompletionResult;
         try {
           result = await provider(request, context);

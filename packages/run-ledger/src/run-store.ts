@@ -472,6 +472,20 @@ export interface RunStore {
   sealAttempt(input: SealAttemptInput): Promise<SealedAttemptHandle>;
 
   /**
+   * Drive a run straight to a terminal status without a seal, for the one
+   * case a seal cannot reach: admission failed after `createRun` and before
+   * any attempt existed, so there is nothing to seal and the run would
+   * otherwise stay open for ever. Never a substitute for `sealAttempt` — a
+   * run that has an attempt is terminalized by sealing that attempt, which
+   * also writes the evidence. Returns false when no run matched.
+   */
+  finishRun(
+    runId: string,
+    status: "completed" | "failed" | "cancelled",
+    error: string | null,
+  ): Promise<boolean>;
+
+  /**
    * Look up a run's public projection by its `arun_…` public id. Tenant-scoped
    * through RLS, so a cross-tenant public id resolves to `null`, never another
    * org's row.
@@ -2062,6 +2076,15 @@ export function createPostgresRunStore(
         // run row never survives.
         assertRunRowMatchesSpec(mapRunV2IdentityRow(row), input.spec);
         return { runId: row.id, publicId: row.public_id, specDigest };
+      });
+    },
+
+    async finishRun(runId, status, error) {
+      return withTenantDb(async (tx: Tx) => {
+        const rows = (await tx.execute(
+          buildFinishRunSql(runId, status, null, error),
+        )) as unknown as Array<{ id: string }>;
+        return rows.length > 0;
       });
     },
 

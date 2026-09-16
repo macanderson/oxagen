@@ -403,6 +403,38 @@ describe("runGovernedTurn on the engine", () => {
     });
   });
 
+  it("records the provider request the budget stopped, as cancelled", async () => {
+    // A run sealed `cancelled` with no receipt for the request that hit the
+    // budget cannot show why it stopped, which is the one thing a customer
+    // disputing a bill asks for. The event schema already carries `cancelled`.
+    const { client } = setup();
+    const modelCalls: TurnLedgerModelCall[] = [];
+    const outcomes: TurnLedgerOutcome[] = [];
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {},
+      budgetGuard: () => "stop",
+      engine: client,
+      ledger: {
+        modelCall: async (record) => {
+          modelCalls.push(record);
+        },
+        toolCall: async () => undefined,
+        seal: async (outcome) => {
+          outcomes.push(outcome);
+        },
+      },
+    });
+    await drain(result);
+    expect(modelCalls).toHaveLength(1);
+    expect(modelCalls[0]).toMatchObject({ outcome: "cancelled" });
+    expect(modelCalls[0]!.requestId).toBeTruthy();
+    expect(outcomes.map((o) => o.status)).toEqual(["aborted"]);
+  });
+
   it("cancels the engine turn when the caller aborts, and ends the stream", async () => {
     const { client } = setup();
     const controller = new AbortController();
