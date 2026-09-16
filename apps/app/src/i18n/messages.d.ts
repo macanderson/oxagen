@@ -1916,6 +1916,7 @@ type Messages = {
         remaining: string;
         validTo: string;
         status: string;
+        tools: string;
       };
       status: {
         draft: string;
@@ -1927,6 +1928,13 @@ type Messages = {
       partial: string;
       emptyListed: string;
       emptyListedDetail: string;
+      everyTool: string;
+      window: string;
+      period: {
+        daily: string;
+        weekly: string;
+        monthly: string;
+      };
     };
   };
   ui: {

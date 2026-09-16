@@ -18,7 +18,8 @@
         "reserved": "Reserved",
         "remaining": "Remaining",
         "validTo": "Valid to",
-        "status": "Status"
+        "status": "Status",
+        "tools": "Tools"
       },
       "status": {
         "draft": "requested",
@@ -29,7 +30,14 @@
       "truncated": "The newest {shown} mandates. This workspace has recorded at least that many, and older ones are not listed here.",
       "partial": "You see the mandates of the agents you created. This ledger is not every mandate this workspace has recorded.",
       "emptyListed": "No mandate is listed here. The ledger above is not complete, so that is not a statement that the workspace has recorded none.",
-      "emptyListedDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate this workspace has recorded. This ledger is written for that office."
+      "emptyListedDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate this workspace has recorded. This ledger is written for that office.",
+      "everyTool": "every tool",
+      "window": "per {period} · {periodKey}",
+      "period": {
+        "daily": "day",
+        "weekly": "week",
+        "monthly": "month"
+      }
     }
   }
 }

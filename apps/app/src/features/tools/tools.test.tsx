@@ -268,4 +268,47 @@ describe("Tools › mandates ledger", () => {
       "tax",
     );
   });
+
+  // Two mandates differing only in tool scope rendered as the same row, on the
+  // page an accountable reader uses to review what they granted.
+  it("shows which tools a mandate covers", async () => {
+    await renderTools(
+      mandateList([
+        mandateRow({ tools: ["payments.read@*", "payments.list@2"] }),
+      ]),
+    );
+    const row = within(ledger()).getByTestId("mandate");
+    expect(row.textContent).toContain("payments.read@*");
+    expect(row.textContent).toContain("payments.list@2");
+    expect(within(row).queryByText("every tool")).toBeNull();
+  });
+
+  // `*` is the difference between one tool and everything, and a reader should
+  // not have to notice one character to see it.
+  it("calls out an unrestricted mandate rather than printing an asterisk", async () => {
+    const { container } = await renderTools(
+      mandateList([mandateRow({ tools: ["*"] })]),
+    );
+    const row = within(ledger()).getByTestId("mandate");
+    const badge = within(row).getByText("every tool");
+    expect(badge).toHaveAttribute("data-scope", "every-tool");
+    await expectNoAxe(container);
+  });
+
+  // A daily 100 and a monthly 100 are different authorities, and the
+  // settled/reserved/remaining figures mean nothing until the window is named.
+  it("names the accounting window each limit is counted over", async () => {
+    await renderTools(
+      mandateList([
+        mandateRow({
+          authority: [mandateAuthority(), callsAuthority()],
+        }),
+      ]),
+    );
+    const row = within(ledger()).getByTestId("mandate");
+    expect(row.textContent).toContain("per month · 2026-09");
+    // A mandate may cap calls daily and money monthly; each window sits with
+    // the limit it belongs to.
+    expect(row.textContent).toContain("per day");
+  });
 });
