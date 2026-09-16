@@ -1,6 +1,6 @@
 ---
 title: RBAC and roles
-description: "Oxagen's role-based access control model: built-in roles, how the IAM resolver decides a capability call, and where to see who holds what."
+description: "Oxagen's role-based access control: built-in roles, how the IAM resolver decides a capability call, and where to see who holds what."
 ---
 
 ## Built-in roles
@@ -9,10 +9,10 @@ description: "Oxagen's role-based access control model: built-in roles, how the 
 
 | Role | Capabilities |
 |---|---|
-| **Owner** | Everything: including billing, org deletion, and ownership transfer. |
-| **Admin** | All operations except destructive org-level actions (delete org, transfer ownership). |
-| **Compliance** | Security and privacy policy management; no access to operational surfaces or billing. |
-| **Billing** | Billing and subscription management only. No access to operational surfaces or IAM. |
+| **Owner** | Everything, including billing, org deletion, and ownership transfer. |
+| **Admin** | All operations except destructive org-level actions (deleting the org and transferring ownership). |
+| **Compliance** | Security and privacy policy management. Cannot reach operational surfaces or billing. |
+| **Billing** | Billing and subscription management only. Cannot reach operational surfaces or IAM. |
 
 Org roles govern the organization-level surfaces: members, access (IAM), security, billing, and developer settings.
 
@@ -20,15 +20,15 @@ Org roles govern the organization-level surfaces: members, access (IAM), securit
 
 | Role | Capabilities |
 |---|---|
-| **Owner** | Manage grants within this workspace; workspace settings; full operational access. |
-| **Member** | Run agents, resolve approvals, edit memories, configure agent triggers. |
+| **Owner** | Manage grants within this workspace, workspace settings, and full operational access. |
+| **Member** | Run agents, resolve approvals, edit memories, and configure agent triggers. |
 | **Viewer** | Read-only across the workspace. |
 
-Workspace roles are assigned per workspace. A user can be a **Member** in one workspace and a **Viewer** in another within the same organization.
+Workspace roles are assigned per workspace. A person can be a **Member** in one workspace and a **Viewer** in another within the same organization.
 
 ## IAM resolution order
 
-When a principal invokes a capability, the IAM resolver (`packages/oxagen/src/iam/resolve.ts`) decides it. This is the path a live request takes today:
+When a principal calls a capability, the IAM resolver (`packages/oxagen/src/iam/resolve.ts`) decides it. This is the path a live request takes today:
 
 <Mermaid
   chart={`
@@ -46,32 +46,32 @@ flowchart TD
 
 What the chart shows and leaves out:
 
-- **The resolver runs for Enterprise organizations.** On Free, Build, and Scale, a human or API-key call is allowed at the IAM layer without consulting grants, and the audit record names `tier_gate` as the deciding rule. Surfaces that must stay Owner- or Admin-only on those tiers carry their own checks (see [Gate functions](#gate-functions)). Agent principals skip the tier gate and are resolved on every plan.
-- **An API key acts as the user who created it.** If that user cannot be resolved in the org, the call is denied outright rather than falling through to the contract default.
-- **Across roles, deny wins.** A principal in several roles with conflicting grants for one capability gets deny over require-approval over allow. A role grant is decided on its effect alone; conditions such as time windows or IP ranges are not evaluated.
-- **Owner is a floor, not an override.** The Owner rule applies only to the system-provisioned org Owner role (`isSystemDefault=true`), and only when no role grant decided. An explicit deny on one of the principal's roles still binds an Owner; a user-created role named "Owner" gets nothing from this rule.
-- **The last step is per capability.** Most contracts declare `defaultEffect: "deny"`; some declare `allow` or `require_approval`.
-- **Direct grants and org policies are not live.** The resolver still contains rules for workspace grants, org-enforced policies and org grants (rules 1–6), but the tables behind them were removed, so they decide nothing on a live request. The one exception is internal: when the IAM tables are missing or an API key's creator cannot be resolved, the resolver is handed a synthetic org-enforced deny so the call fails closed.
+- **The resolver runs for Enterprise organizations.** On Free, Build, and Scale, the IAM layer allows a human or API-key call without consulting grants, and the audit record names `tier_gate` as the deciding rule. Surfaces that must stay Owner- or Admin-only on those tiers carry their own checks (see [Gate functions](#gate-functions)). Agent principals skip the tier gate, and the resolver decides them on every plan.
+- **An Oxagen API key acts as the person who created it.** If the resolver cannot find that person in the org, it denies the call outright rather than falling through to the contract default.
+- **Across roles, deny wins.** A principal in several roles with conflicting grants for one capability gets deny over require-approval over allow. The resolver decides a role grant on its effect alone. It does not evaluate conditions such as time windows or IP ranges.
+- **Owner is a floor, not an override.** The Owner rule applies only to the system-provisioned org Owner role (`isSystemDefault=true`), and only when no role grant decided. An explicit deny on one of the principal's roles still binds an Owner. A user-created role named "Owner" gets nothing from this rule.
+- **The last step is per capability.** Most contracts declare `defaultEffect: "deny"`. Some declare `allow` or `require_approval`.
+- **Direct grants and org policies are not live.** The resolver still contains rules for workspace grants, org-enforced policies, and org grants (rules 1–6), but the tables behind them were removed, so they decide nothing on a live request. The one exception is internal. When the IAM tables are missing, or the resolver cannot find an API key's creator, it receives a synthetic org-enforced deny so the call fails closed.
 
-The resolver returns a structured trace alongside the decision. The trace is stored in the audit record and is viewable in **Organization → Security → Audit** for every `capability.invoke_denied` event.
+The resolver returns a structured decision log alongside the decision. Oxagen stores it in the `trace_jsonb` field of the ClickHouse `audit_events` row. The app does not show ClickHouse rows, so query `audit_events` directly to read it. See [Audit logging](/docs/security/audit-logging).
 
 ## Capability domains
 
-Capabilities are organized into domains. Role grants are listed by domain:
+Capabilities are organized into domains, and role grants are listed by domain:
 
 | Domain | Example capabilities |
 |---|---|
-| `agent.*` | Define, deploy, and govern agents; recall and write memory; resolve approvals |
-| `chat.*` | Send messages, manage conversations |
-| `knowledge.*` | Manage graph, sources, memories |
-| `billing.*` | Purchase credits, change subscription |
+| `agent.*` | Define, deploy, and govern agents, recall and write memory, and resolve approvals |
+| `chat.*` | Send messages and manage conversations |
+| `knowledge.*` | Manage the graph, sources, and memories |
+| `billing.*` | Purchase credits and change the subscription |
 | `org.*` | Manage members, roles, and org settings |
-| `workspace.*` | Create workspaces, manage workspace settings |
+| `workspace.*` | Create workspaces and manage workspace settings |
 | `plugin.*` | Install, enable, and govern plugins |
 
 ## Agents as principals
 
-Every agent configuration is also a principal with its own grant matrix. An agent run is resolved against two principals at once, the agent's own, and the authenticated human who started the run, and the more restrictive outcome wins:
+Every agent configuration is also a principal with its own grant matrix. The resolver decides an agent's request against two principals at once, the agent's own and the authenticated person who started the run, and the more restrictive answer wins:
 
 <Mermaid
   chart={`
@@ -84,36 +84,36 @@ flowchart LR
 `}
 />
 
-The human side is the user who started this run, never the agent's creator: otherwise anyone able to trigger an agent would borrow its creator's access. A run with no initiating user resolves the human side as a principal with no roles and no grants, which can only narrow the result. A subagent is further narrowed by its parent run's scope. Both principals are recorded in the audit event.
+The human side is the person who started this run, never the agent's creator. Otherwise anyone able to trigger an agent would borrow its creator's grants. A run with no initiating person resolves the human side as a principal with no roles and no grants, which can only narrow the result. A subagent is further narrowed by its parent run's scope. The audit event records both principals.
 
-Agents get their own roles, separate from the human ones above: three built-in postures, intersected with the agent's own configuration, and bounded by a delegation ceiling so an agent can never outgrow the person it acts for. See [Agent roles](/docs/governance/agent-roles).
+Agents get their own roles, separate from the human ones above. There are three built-in postures, intersected with the agent's own configuration and bounded by a delegation ceiling, so an agent can never outgrow the person it acts for. See [Agent roles](/docs/governance/agent-roles).
 
-This is what makes AI automation auditable: every action is attributable to either a human chain of custody or a configured service identity.
+This is what makes agent work auditable. Every action leads back to the person who started it, or to a configured identity for an automated trigger.
 
 ## Seeing and changing access
 
 ### Roles and grants
 
-**Governance → Policies** lists every role in the org and the capability grants each one carries. The list is read-only: there is no in-app editor for roles, custom roles, or grants yet, and changes are made by provisioning. A member's org role is changed from **Organization → Members**.
+**Governance → Policies** lists every role in the org and the capability grants each one carries. The list is read-only. There is no in-app editor for roles, custom roles, or grants yet, and changes are made by provisioning. Change a member's org role from **Organization → Members**.
 
 ### Approval requests
 
-When the resolver returns `require approval`, the call is refused with `pending_approval` and the kernel records an access request (`arq_…`) naming the principal and capability. There is no in-app screen for approving these requests yet.
+When the deciding grant's effect is require approval, the kernel refuses the call with `pending_approval` and records an access request (`arq_…`) naming the principal and capability. There is no in-app screen for answering these requests yet.
 
 ### Access reviews
 
-**Organization → Access → Reviews** lists every member with their role and last activity. **Confirm** records `access.member_access_confirmed`; **Revoke** removes the member and records `org.member_removed` and `access.review_completed`. Use it as the evidence for a quarterly access review.
+**Organization → Access → Reviews** lists every member with their role and last activity. **Confirm** records `access.member_access_confirmed`. **Revoke** removes the member and records `org.member_removed` and `access.review_completed`. Use the page as the evidence for a quarterly access review.
 
 ## Gate functions
 
-`apps/app` exposes five app-layer guard functions for sensitive server paths. These are **not** part of the `@oxagen/iam` kernel: they query `org_users.role` directly and bypass the full IAM resolver chain. Each takes `(orgId: string, userId: string)` and calls `notFound()` on failure (404, not 403: to avoid existence leaks).
+`apps/app` exposes five app-layer guard functions for sensitive server paths. They are **not** part of the `@oxagen/iam` kernel. They query `org_users.role` directly and bypass the full IAM resolver chain. Each takes `(orgId: string, userId: string)` and calls `notFound()` on failure. They return 404 rather than 403 so a probe cannot learn that the resource exists.
 
 - `assertOrgMember(orgId, userId)`: confirms the principal is a member of the org.
-- `assertBillingManager(orgId, userId)`: confirms the principal holds Owner, Admin, or Billing role.
-- `assertMcpManager(orgId, userId)`: confirms the principal holds Owner or Admin role for plugin governance.
+- `assertBillingManager(orgId, userId)`: confirms the principal holds the Owner, Admin, or Billing role.
+- `assertMcpManager(orgId, userId)`: confirms the principal holds the Owner or Admin role for plugin governance.
 - `assertWorkspaceMember(workspaceId, userId)`: confirms the principal is a member of the given workspace.
-- `assertSecurityManager(orgId, userId)`: confirms the principal holds Owner or Admin role for audit evidence export.
+- `assertSecurityManager(orgId, userId)`: confirms the principal holds the Owner or Admin role for audit evidence export.
 
 ## SSO and directory sync
 
-SSO (SAML 2.0 or OIDC) and SCIM 2.0 directory sync are planned **Enterprise-tier** features and are not yet implemented. Contact support@oxagen.ai if your organization requires SSO or automated provisioning.
+SSO (SAML 2.0 or OIDC) and SCIM 2.0 directory sync are not available. Contact support@oxagen.ai if your organization requires SSO or automated provisioning.

@@ -1,11 +1,11 @@
 ---
 title: Model governance
-description: Which models are available on each plan, how workspace model defaults work, and who pays for tokens.
+description: Which models each plan offers, how workspace model defaults work, and who pays for tokens.
 ---
 
 ## Model access by plan
 
-Oxagen routes all AI inference through the Vercel AI Gateway. No direct provider API keys are held in the Oxagen codebase: the gateway handles provider authentication. By default your organisation runs on Oxagen's gateway key. You can bring your own key instead; see [Bring your own key](#bring-your-own-key-byok) below.
+Oxagen routes all model inference through a model gateway (OpenRouter or the Vercel AI Gateway). The Oxagen codebase holds no direct provider API keys, because the gateway handles provider authentication. By default your organisation runs on Oxagen's gateway key. You can bring your own model key instead. See [Bring your own key](#bring-your-own-key-byok) below.
 
 Available models depend on your subscription tier:
 
@@ -15,13 +15,13 @@ Available models depend on your subscription tier:
 | Claude Sonnet 4.6 | Yes | Yes | Yes | Yes |
 | Claude Opus 4.8 | none | Yes | Yes | Yes |
 | Image generation (gpt-image-1, flux-2-max) | none | Yes | Yes | Yes |
-| Video generation (veo-3.0) | none |: | Yes | Yes |
+| Video generation (veo-3.0) | none | none | Yes | Yes |
 
-All model calls are metered in credits at the per-token rate defined in the billing pricing table. See the [full cost table](/docs/enterprise/use-cases#metered-spend) for per-model credit rates.
+Every model call is metered in credits at the per-token rate in the billing pricing table. See the [full cost table](/docs/enterprise/use-cases#metered-spend) for per-model credit rates.
 
 ## Workspace model defaults
 
-A workspace Owner or Admin sets the workspace's default text tier and default text model with `update_model_settings`. Image and video defaults no longer exist; ADR-043 removed media generation. A user can also set their own defaults.
+A workspace Owner or Admin sets the workspace's default text tier and default text model with `update_model_settings`. Image and video defaults no longer exist, because ADR-043 removed media generation. A person can also set their own defaults.
 
 **To configure workspace model defaults:**
 
@@ -29,7 +29,7 @@ A workspace Owner or Admin sets the workspace's default text tier and default te
 2. Set the default text tier, the default text model, or both.
 3. Save.
 
-Tier and model resolve on two separate chains, workspace first, then user, and a chat turn then prefers a model over a tier:
+Tier and model resolve on two separate chains, workspace first, then person. A chat turn then prefers a model over a tier:
 
 ```text
 model = workspace model ?? user model
@@ -37,20 +37,15 @@ tier  = workspace tier  ?? user tier
 turn uses model if set, otherwise tier
 ```
 
-So a workspace that sets only a tier does not override a user who picked a specific model. To pin a workspace to one model, set the default **model**, not only the tier.
+So a workspace that sets only a tier does not override a person who picked a specific model. To pin a workspace to one model, set the default **model**, not only the tier.
 
-## The assistant runs on Stella
+## The in-app agent runs on Stella
 
-The in-app assistant is a turn on Stella's headless engine, running as a
-container beside the platform. The engine holds no model key and runs no
-tool. Every completion it needs comes back to Oxagen, which answers it on
-the key your funding source names, and every tool call comes back through
-the same gates as any other governed action. If the engine is down, the
-assistant says so rather than answering from a fallback.
+The in-app agent is a turn on Stella's headless engine, running as a container beside the platform. The engine holds no model key and runs no tool. Every completion it needs comes back to Oxagen, which answers it on the key your funding source names. Every tool call comes back through the same gates as any other governed action. If the engine is down, the agent says so rather than answering from a fallback.
 
 ## Bring your own key (BYOK)
 
-An organisation can pay its model vendor directly instead of buying tokens through Oxagen. You store your own API key once, at the organisation level, and the in-app assistant runs on it from the next turn on.
+An organisation can pay its model vendor directly instead of buying tokens through Oxagen. You store your own model key once, at the organisation level, and the in-app agent runs on it from the next turn on. The key stays in Oxagen, and the agent never sees it.
 
 **Who pays for tokens:**
 
@@ -61,7 +56,7 @@ An organisation can pay its model vendor directly instead of buying tokens throu
 
 Governed actions are billed the same way either way. The key only changes who pays for tokens.
 
-Oxagen decides who pays once per turn, before any model call, and the same answer picks the key the call is made on and whether the tokens are billed:
+Oxagen decides who pays once per turn, before any model call. The same answer picks the key the call is made on and whether the tokens are billed:
 
 <Mermaid
   chart={`
@@ -83,12 +78,12 @@ flowchart TD
 
 Two branches are easy to miss:
 
-- **A stored key that cannot be used falls back to Oxagen's key.** If an operator has disabled the key, or the server cannot decrypt it, the turn runs on Oxagen's key and is billed as assistant usage rather than failing on your key. A failure to *read* the credential is the opposite case: the turn fails, so an outage never quietly moves you onto Oxagen's billed key.
+- **A stored key that cannot be used falls back to Oxagen's key.** If an operator has disabled the key, or the server cannot decrypt it, the turn runs on Oxagen's key and is billed as assistant usage rather than failing on your key. A failure to *read* the credential is the opposite case. The turn fails, so an outage never quietly moves you onto Oxagen's billed key.
 - **Your own key still needs a positive credit balance.** Tool calls and other governed actions consume credits whoever pays for tokens, so the credit check runs on every turn.
 
 **Two providers today:**
 
-- **OpenRouter.** One key reaches every model in the catalog. OpenRouter does not serve embeddings, so under an OpenRouter key embeddings stay on Oxagen's key and are billed as assistant usage.
+- **OpenRouter.** One key reaches every model in the catalog. OpenRouter does not serve embeddings, so under an OpenRouter key, embeddings stay on Oxagen's key and are billed as assistant usage.
 - **Vercel AI Gateway.** One key reaches every model and serves embeddings too.
 
 Direct Anthropic and OpenAI keys are not supported yet.
@@ -98,11 +93,11 @@ Direct Anthropic and OpenAI keys are not supported yet.
 1. Go to **Organisation settings → Model funding**. You need the org Owner or Admin role.
 2. Choose the provider and paste the key.
 3. Test the key. Oxagen asks the vendor whether it accepts the key. This check spends no tokens.
-4. Save. The key is encrypted before it is stored. Nobody can read it back, not even an Owner. The page shows only its last four characters, when it was last tested, and when it was last changed.
+4. Save. Oxagen encrypts the key before storing it. Nobody can read it back, not even an Owner. The page shows only its last four characters, when it was last tested, and when it was last changed.
 
 Setting a new key replaces the old one. Clearing the key returns your organisation to Oxagen's key.
 
-**The monthly spend cap.** While your organisation is on Oxagen's key, its assistant usage is capped each month. The default cap is 2000 credits ($20). Once the month's platform-paid usage reaches the cap, the next turn is refused before it starts, and the message names the cap. The check runs when a turn starts, so the turn that crosses the cap is allowed to finish. An Owner or Admin can raise the cap, or remove it, on the same page. The cap does not apply while your own key is stored, because Oxagen is not paying for those tokens.
+**The monthly spend cap.** While your organisation is on Oxagen's key, its assistant usage is capped each month. The default cap is 2000 credits ($20). Once the month's platform-paid usage reaches the cap, Oxagen refuses the next turn before it starts, and the message names the cap. The check runs when a turn starts, so the turn that crosses the cap is allowed to finish. An Owner or Admin can raise the cap, or remove it, on the same page. The cap does not apply while your own key is stored, because Oxagen is not paying for those tokens.
 
 **From the API.** The same settings are available at `/v1/:org/:workspace/org/model-credential`:
 
@@ -172,13 +167,13 @@ stored = requests.put(base, headers=headers, json=body).json()
 }
 ```
 
-The verify call returns `ok`, `provider`, `latencyMs`, and `error`, where `error` is the vendor's own reason when it refuses the key. The store call returns the redacted view above. `lastVerifiedAt` is `null` on a freshly stored key: storing does not verify, so send `POST .../verify` with `{}` afterwards to verify the stored key and stamp it.
+The verify call returns `ok`, `provider`, `latencyMs`, and `error`, where `error` is the vendor's own reason when it refuses the key. The store call returns the redacted view above. `lastVerifiedAt` is `null` on a freshly stored key, because storing does not verify. Send `POST .../verify` with `{}` afterwards to verify the stored key and record the time.
 
-Every set and clear is recorded in the audit log. The key itself never appears there.
+The audit log records every set and clear. The key itself never appears there.
 
 ## Restricting model access per workspace
 
-There is no per-workspace model allowlist yet: no setting blocks a model the subscription tier allows. The closest control today is the workspace default: a workspace Owner or Admin sets the default text tier and model at **Workspace settings → Agent Defaults** (`update_model_settings`): which chooses a model but does not forbid others.
+There is no per-workspace model allowlist yet, and no setting blocks a model the subscription tier allows. The closest control is the workspace default. A workspace Owner or Admin sets the default text tier and model at **Workspace settings → Agent Defaults** (`update_model_settings`). The default chooses a model but does not forbid others.
 
 ## Model governance and org-enforced policies
 
@@ -186,6 +181,6 @@ Org-enforced policies on model access are not available. The IAM resolver has no
 
 ## Model handle stability
 
-Oxagen uses model handles (e.g., `claude-sonnet-5`) rather than hard-coded model slugs. Handles are resolved to the current gateway slug at request time via `modelIdOf()`. This insulates your agents from model naming changes in the underlying provider APIs.
+Oxagen uses model handles (for example, `claude-sonnet-5`) rather than hard-coded model slugs. `modelIdOf()` resolves a handle to the current gateway slug at request time, so a provider renaming a model does not break your agents.
 
-If a gateway model slug is updated or renamed, handle resolution is updated centrally: your agents and playbooks continue to work without changes.
+If a gateway model slug changes, Oxagen updates handle resolution in one place, and your agents keep working without changes.

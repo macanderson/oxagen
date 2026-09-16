@@ -8,9 +8,9 @@ import { CopyCommand } from "@/components/landing/copy-command";
 import { HexField } from "@/components/ui/hex-field";
 
 export const metadata: Metadata = {
-  title: "Oxagen docs: the control plane for agent work",
+  title: "Oxagen docs: the agent control plane",
   description:
-    "Wrap the agents you already run, put every run on the record with its cost, and decide what each agent may do before it does it. Docs for the CLI, the REST API, the MCP server, and Mission Control.",
+    "Oxagen governs and operates the autonomous agents an enterprise runs: one mandate per agent, enforced on every call, and one fleet on one page. Docs for the CLI, the REST API, the MCP server, and Mission Control.",
 };
 
 /* What the control plane holds, mirrored from docs.oxagen.sh/docs. */
@@ -23,13 +23,13 @@ const FOUR_JOBS = [
   },
   {
     title: "Govern",
-    body: "Every agent has an identity, a role, and a budget. Every capability, whether a model call, a tool call, or a memory write, passes one invoke() boundary that checks it against those before it runs. There is no second path.",
+    body: "Every agent holds an identity and a mandate, and nothing else. When a task needs a model call, a tool call, or a memory write, the agent asks through one invoke() boundary, and a rule you wrote answers: allowed, denied, or routed to a person. There is no second path.",
     href: "/docs/governance/overview",
     cta: "Roles and RBAC",
   },
   {
     title: "Record",
-    body: "Every run is saved next to the data it touched: who asked, what the agent read, what it changed, and what it cost. Two audit stores, one with chain-hash tamper evidence.",
+    body: "Every run leaves one record beside the data it touched: who started it, what the agent read, what it changed, and what it cost. The record lives in two audit stores, and one of them hash-chains every entry to the one before it.",
     href: "/docs/security/audit-logging",
     cta: "Audit logging",
   },
@@ -50,7 +50,7 @@ const SURFACES = [
   },
   {
     title: "CLI",
-    body: "Query the graph, cap spend, read a run, and manage keys from the terminal. Stella runs the agent; Oxagen governs the run.",
+    body: "Query the graph, cap spend, read a run, and manage credentials from the terminal. Stella runs the agent. Oxagen governs the run.",
     href: "/docs/cli",
   },
   {
@@ -60,12 +60,12 @@ const SURFACES = [
   },
   {
     title: "MCP server",
-    body: "Connect at /mcp over streamable HTTP; org + workspace scope carried by your API key.",
+    body: "Reach /mcp over streamable HTTP. Your Oxagen API key carries the organization and workspace scope.",
     href: "/docs/mcp/overview",
   },
   {
     title: "In-app agent",
-    body: "A governed turn loop over the fleet record and the knowledge graph: what your agents did, what context they had, what it cost, what is waiting on approval.",
+    body: "A governed turn loop over the fleet record and the knowledge graph: what your agents did, what context they had, what it cost, and what is waiting on a person.",
     href: "/docs/agent/overview",
   },
   {
@@ -105,19 +105,20 @@ export default function HomePage(): ReactNode {
           <div className="flex flex-col items-start text-left">
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
               <span className="ox-eyebrow !text-[11px] !tracking-[0.14em]">
-                Define done before the agent starts. Prove it after.
+                The agent control plane
               </span>
             </span>
 
             <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-              The control plane{" "}
-              <span className="lp-grad-text">for agent work</span>.
+              Run your agents{" "}
+              <span className="lp-grad-text">as a fleet</span>.
             </h1>
 
             <p className="mt-5 max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
-              Oxagen sits beside the agents you already run. It records every
-              run frame by frame with its cost, and decides what each agent may
-              do before it does it. These docs cover the CLI, the REST API, the
+              Oxagen governs and operates the autonomous agents you run. Each
+              agent works under one mandate, set by security, FinOps, and
+              engineering, and enforced on every call. Every run is on the
+              record with its cost. These docs cover the CLI, the REST API, the
               MCP server, and Mission Control, all behind one audited{" "}
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 invoke()
@@ -159,14 +160,15 @@ export default function HomePage(): ReactNode {
           <div>
             <span className="ox-eyebrow">The knowledge graph</span>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-              A graph, not a <span className="lp-grad-text">fine-tune</span>.
+              Never re-explain yourself{" "}
+              <span className="lp-grad-text">to AI ever again</span>.
             </h2>
             <p className="mt-5 max-w-lg text-base text-muted-foreground">
-              Grounding an agent in your business does not mean training a
-              model. It means handing the agent a typed knowledge graph at run
-              time. The naive pattern stuffs every document into the prompt
-              until the window saturates. Oxagen retrieves only the authorized
-              slice the task needs, so the window stays open and the model stays
+              Taught once, known by every agent you run. Oxagen hands the agent
+              a typed knowledge graph at run time instead of training a model.
+              Stuffing every document into the prompt saturates the window.
+              Oxagen retrieves only the slice the task needs and the agent&apos;s
+              mandate lets it read, so the window stays open and the model stays
               sharp.
             </p>
             <ul className="mt-7 space-y-3 text-sm">
@@ -176,12 +178,12 @@ export default function HomePage(): ReactNode {
                   "Entities and relationships in Neo4j. Retrieval targets meaning, not a wall of text.",
                 ],
                 [
-                  "RBAC-scoped retrieval",
-                  "The graph returns only what the caller is authorized to see. Isolation is enforced, not hoped for.",
+                  "Scoped by the mandate",
+                  "The graph returns only what the agent's mandate lets it read, and the scope is checked on every query.",
                 ],
                 [
-                  "Metered + instrumented",
-                  "Every retrieval and model call records context tokens used, latency, and surface of origin.",
+                  "Metered on every call",
+                  "Every retrieval and model call records the context tokens it used, its latency, and the surface it came from.",
                 ],
               ].map(([t, d]) => (
                 <li key={t} className="flex gap-3">
@@ -286,12 +288,13 @@ export default function HomePage(): ReactNode {
         <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center px-6 py-24 text-center">
           <OxagenIcon className="size-12" />
           <h2 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Put your first run{" "}
-            <span className="lp-grad-text">on the record</span>.
+            Can you explain your AI bill?{" "}
+            <span className="lp-grad-text">Neither can your provider</span>.
           </h2>
           <p className="mt-4 max-w-xl text-base text-muted-foreground">
             Install the CLI and wrap one machine, or read the getting-started
-            guide to stand up an organization and workspace.
+            guide to stand up an organization and workspace. The first screen
+            shows your own numbers.
           </p>
           <div className="mt-8">
             <CopyCommand command={INSTALL_CMD} />
@@ -307,7 +310,7 @@ export default function HomePage(): ReactNode {
               href={APP_URL}
               className="inline-flex h-11 items-center rounded-lg border border-border bg-card/60 px-6 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:border-[var(--_ember-b,#D6962C)]/60"
             >
-              Open Oxagen
+              See your fleet
             </a>
           </div>
         </div>
