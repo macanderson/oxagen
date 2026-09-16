@@ -59,6 +59,11 @@ import type {
   RecordKind,
   RecordPage,
 } from "./contracts/steering";
+import type {
+  CredentialGrantPage,
+  KillSwitchBoard,
+  ToolVersionPage,
+} from "./contracts/tools";
 import type { Read } from "./read";
 
 export interface DataSource {
@@ -236,5 +241,23 @@ export interface DataSource {
     proposals(ctx: WsCtx, q: { offset: number }): Promise<Read<ProposalPage>>;
     /** get_context_pr: one proposal's state machine, checks and what merge will do */
     contextPr(ctx: WsCtx, proposalId: string): Promise<Read<ContextPr>>;
+  };
+  /**
+   * The Tools page's three noBillingGate reads on the workspace (#2958), each
+   * role-checked in its handler (INV-29); caller: features/tools/tools.tsx.
+   */
+  tools: {
+    /** list_tool_versions: one cursor page of the registry, optionally one consequence tag */
+    versions(
+      ctx: WsCtx,
+      q: { category: string | null; cursor: string | null },
+    ): Promise<Read<ToolVersionPage>>;
+    /** list_credential_grants: one cursor page of the broker's grants, newest first */
+    grants(
+      ctx: WsCtx,
+      q: { cursor: string | null },
+    ): Promise<Read<CredentialGrantPage>>;
+    /** list_kill_switches: the switches reaching this workspace, with the deny generation */
+    killSwitches(ctx: WsCtx): Promise<Read<KillSwitchBoard>>;
   };
 }

@@ -165,6 +165,26 @@ export const routes = {
   /** Skills; `cursor` opens a later page of the inventory. */
   skills: (org: string, ws: string, q?: { cursor: string }): SafePath =>
     withQuery(pathOf(org, ws, "skills"), { cursor: q?.cursor }),
+  /**
+   * Tools; a tab, a category chip, the API-names toggle and a cursor are query
+   * values on the one route (#2958 adds no route, ARCHITECTURE.md §1.2).
+   */
+  tools: (
+    org: string,
+    ws: string,
+    q: {
+      tab?: string;
+      category?: string;
+      names?: string;
+      cursor?: string;
+    } = {},
+  ): SafePath =>
+    withQuery(pathOf(org, ws, "tools"), {
+      tab: q.tab,
+      category: q.category,
+      names: q.names,
+      cursor: q.cursor,
+    }),
   /** Steering; a tab, a kind, a page offset and a selected proposal are query values on the one route. */
   steering: (
     org: string,

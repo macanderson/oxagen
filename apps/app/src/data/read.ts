@@ -48,6 +48,7 @@ export type PageKey =
   | "audit"
   | "skills"
   | "steering"
+  | "tools"
   | "shell";
 
 type PageFailure = {
@@ -107,6 +108,13 @@ export const PAGE_FAILURES = {
   steering: {
     error: { code: "record_index_unavailable", status: 503 },
     permission: "steering.read",
+  },
+  // The registry, the credential grants and the kill switches are one read
+  // path: a member whose roles do not carry the workspace's tool read is
+  // denied on it rather than shown an empty registry (#2958).
+  tools: {
+    error: { code: "tool_registry_unavailable", status: 503 },
+    permission: "tools.read",
   },
   // The shell's one read fails with the control plane and needs organization
   // membership alone.
