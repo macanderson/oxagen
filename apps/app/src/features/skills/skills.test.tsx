@@ -92,6 +92,7 @@ const source: DataSource = {
   },
   org: { members: vi.fn() },
   skills: { inventory: read },
+  steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
 };
 
 function withIntl(element: ReactNode) {

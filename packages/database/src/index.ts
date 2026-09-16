@@ -26,6 +26,7 @@ export {
 } from "./data-plane-pool";
 export { recordIfUnscoped, __unscopedCountForTests } from "./unscoped-meter";
 export { isUniqueViolation } from "./errors";
+export { readRunVerdict, readWitnessedRunId } from "./proof";
 export {
   deriveNamespace,
   normalizeNamespaceSeed,

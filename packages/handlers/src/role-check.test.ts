@@ -47,6 +47,8 @@ const ROLE_CHECKED_CONTRACTS = [
   "dismiss_proposal",
   "open_context_pr",
   "list_skills",
+  "get_run_proof",
+  "set_disclosure_grain",
 ] as const;
 
 const AGENT_ROLE_CHECKED_CONTRACTS = [

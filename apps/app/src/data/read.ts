@@ -45,6 +45,7 @@ export type PageKey =
   | "billing"
   | "spend"
   | "skills"
+  | "steering"
   | "shell";
 
 type PageFailure = {
@@ -85,6 +86,12 @@ export const PAGE_FAILURES = {
   skills: {
     error: { code: "session_store_unavailable", status: 503 },
     permission: "skills.read",
+  },
+  // The published records and the proposals are one record index; a member
+  // without the workspace's steering read is denied on it.
+  steering: {
+    error: { code: "record_index_unavailable", status: 503 },
+    permission: "steering.read",
   },
   // The shell's one read fails with the control plane and needs organization
   // membership alone.

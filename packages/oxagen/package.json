@@ -35,6 +35,7 @@
   "dependencies": {
     "@opentelemetry/api": "1.9.1",
     "@oxagen/config": "workspace:*",
+    "@oxagen/run-evidence": "workspace:*",
     "@oxagen/tacho": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "zod": "3.25.76"

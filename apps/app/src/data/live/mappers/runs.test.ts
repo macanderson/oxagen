@@ -22,6 +22,7 @@ const ledgerRun: Run = {
   startedAt: "2026-09-15T08:00:00.000Z",
   sealedAt: "2026-09-15T08:40:00.000Z",
   replayGrade: null,
+  verdict: null,
   name: null,
   summary: null,
 };
@@ -40,6 +41,7 @@ const unpricedSession: Run = {
   startedAt: "2026-09-15T08:55:00.000Z",
   sealedAt: null,
   replayGrade: null,
+  verdict: null,
   name: null,
   summary: null,
 };

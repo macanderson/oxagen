@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**287 capabilities across 43 domains.**
+**289 capabilities across 43 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -185,6 +185,10 @@ Capabilities granted to an agent as a set have a page of their own:
 - [environment.set_default](environment.set_default.md) — Promote an environment to the workspace default via an atomic swap
 - [environment.update](environment.update.md) — Update a workspace environment's name, slug, description, or active state; the default cannot be deactivated
 
+## Evidence (1)
+
+- [evidence.disclosure_grain.set](evidence.disclosure_grain.set.md) — Set the workspace's witness disclosure grain, from L0 (the worker hears only pass or fail) to L3, recorded as a security event
+
 ## Finding (4)
 
 - [finding.dismiss](finding.dismiss.md) — Dismiss an open finding without applying its fix (org Owner or Admin); later passes cite only runs that start after the dismissal
@@ -320,7 +324,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [router.policy.set](router.policy.set.md) — Set the market-router policy for this org or workspace (partial update) — mode, thresholds, and tier-escalation; changes model spend behavior, Owner/Admin only
 - [router.stats.list](router.stats.list.md) — List observed outcomes per (task class, model) — samples, verified rate, cost, latency — plus the cheapest model currently clearing the bar per class
 
-## Run (9)
+## Run (10)
 
 - [run.bisect](run.bisect.md) — Align two runs frame by frame on each frame's kind and call identity and answer the first sequence at which they diverge, with both keys there; null when they agree throughout
 - [run.cost](run.cost.md) — Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps, model and tool calls, and the per-model and per-tool breakdown; null until the rollup has rebuilt the run from its frames
@@ -329,6 +333,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [run.frame_body.get](run.frame_body.get.md) — Read the redacted body of one frame of a run by its sequence: the content type and bytes when the workspace retained bodies, the digest and no bytes under digest_only
 - [run.get](run.get.md) — Read one run's header and one page of its frames, each with its body reference, from an opaque cursor, optionally waiting for a new frame
 - [run.list](run.list.md) — List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, status, counts and metered cost each row recorded
+- [run.proof.get](run.proof.get.md) — Read one run's proof record: every witness that reported on it with each attempt's target and head results, fingerprints and attestation, the run's verdict, the cost of each witness run, and the workspace's disclosure grain
 - [run.summarize](run.summarize.md) — Queue a fast-tier model to read a sealed run's transcript and write its generated name and summary; refused on a live run and on a digest_only recording
 - [run.transcript.get](run.transcript.get.md) — Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies, with the cost each entry folds
 

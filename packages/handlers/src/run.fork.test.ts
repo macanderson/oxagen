@@ -116,7 +116,8 @@ function harness(over: {
         over.events ?? [1, 2, 3].map((n) => event(n, { body: retained })),
       ),
     },
-    readRunCosts: stores.readRunCosts,
+    readRunRollups: stores.readRunRollups,
+    readWitnessFor: stores.readWitnessFor,
     tachoFrames: memoryTachoFrames("none", []),
     attempts: {
       listRunAttempts: () => Promise.resolve(over.attempts ?? [attempt()]),
