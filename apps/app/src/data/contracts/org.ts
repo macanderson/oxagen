@@ -26,3 +26,18 @@ export const MemberList = z.object({
   invitations: z.array(Invitation),
 });
 export type MemberList = z.infer<typeof MemberList>;
+
+/**
+ * The roles `change_member_role` can grant. `bootstrapOrgIAM` seeds four
+ * org-scoped roles (`ORG_ROLES`, packages/handlers/src/iam-provision.ts:55-60)
+ * and the handler resolves `newRole` against that set; `member` and `viewer`
+ * are workspace-scoped names the roster prints for rows written by the
+ * onboarding path, and no org-scoped role of either name exists to grant.
+ */
+export const GrantableOrgRole = z.enum([
+  "owner",
+  "admin",
+  "billing",
+  "compliance",
+]);
+export type GrantableOrgRole = z.infer<typeof GrantableOrgRole>;

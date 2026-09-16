@@ -67,6 +67,18 @@ vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
     Promise.resolve(translator(namespace)),
 }));
+// People is the one feature this file renders for real, so its client island
+// comes with it. The island imports the two server actions, and those import
+// the kernel seam, which loads both handler registries on import (§3.2) — a
+// graph no page test needs and one that never settles under jsdom. The writes
+// have their own tests; here the roster only has to render.
+vi.mock("@/features/organization/actions", () => ({
+  changeMemberRole: vi.fn(),
+  removeOrgMember: vi.fn(),
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+}));
 
 beforeEach(() => {
   requireViewer.mockReset();
