@@ -71,6 +71,26 @@ export function isWrapped(harness: Harness): boolean {
   return HARNESS_TIER[harness] === "harness";
 }
 
+/**
+ * The subset of a selection that `tacho verify` can actually run.
+ *
+ * `verify` drives one headless turn and waits for the hook chain it seals, so
+ * it has nothing to do for a connected app — a GUI bundle with no headless
+ * mode and no hook — and returns `ok: false` saying exactly that. Handing it
+ * one anyway turned the wizard's "record a first run" step into a red
+ * "failed · claude-desktop is a connected app" for the whole flow, and on a
+ * machine where Claude Desktop is the only registered app that was the only
+ * line the operator ever saw: a failure report for something that cannot
+ * succeed and did not go wrong.
+ *
+ * A connected app is not dropped from the screen — it is registered and the
+ * operator should see it — only from the list of things a first run is
+ * attempted on. It reports the first time they use it.
+ */
+export function verifiable(harnesses: readonly Harness[]): Harness[] {
+  return harnesses.filter(isWrapped);
+}
+
 /** Whether a harness is connected through the local MCP gateway. */
 export function isConnected(harness: Harness): boolean {
   return HARNESS_TIER[harness] === "gateway";

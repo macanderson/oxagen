@@ -4,6 +4,7 @@ import {
   HARNESS_TIER,
   isConnected,
   isWrapped,
+  verifiable,
   TIER_LABEL,
   TIER_OMITS,
   TIER_RECORDS,
@@ -298,6 +299,21 @@ describe("wizard and de-register", () => {
     }
     expect(HARNESS_TIER["claude-code"]).toBe("harness");
     expect(HARNESS_TIER["claude-desktop"]).toBe("gateway");
+  });
+
+  it("keeps connected apps out of the list tacho verify is run on", () => {
+    // `verify` drives a headless turn and waits for the sealed hook chain, so
+    // it returns ok:false for a connected app by design. The wizard used to
+    // hand it every registered app, which on a Claude-Desktop-only machine made
+    // the one line in "record a first run" read "failed" for something that
+    // cannot succeed and did not go wrong.
+    expect(verifiable(HARNESSES)).toEqual(HARNESSES.filter(isWrapped));
+    expect(verifiable(["claude-desktop"])).toEqual([]);
+    expect(verifiable(["claude-code", "claude-desktop"])).toEqual([
+      "claude-code",
+    ]);
+    expect(verifiable([])).toEqual([]);
+    for (const h of verifiable(HARNESSES)) expect(isConnected(h)).toBe(false);
   });
 
   it("says what each tier records and what it does not, for both tiers", () => {

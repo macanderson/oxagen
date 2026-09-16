@@ -57,7 +57,9 @@ import {
   needsWorkspacePick,
   pendingChange,
   reassignArgs,
+  isConnected,
   unenrollArgs,
+  verifiable,
   wizardStep,
   workspaceUrl,
 } from "./commands";
@@ -379,7 +381,8 @@ export function App() {
           ok: true,
           detail: `Registered ${joinLabels(chosen)} with Oxagen.`,
         });
-        setRunPicks(chosen);
+        // Only the wrapped ones: `tacho verify` cannot drive a connected app.
+        setRunPicks(verifiable(chosen));
       },
       (result) => {
         const lines = result.stderr.trim().split("\n").filter(Boolean);
@@ -394,7 +397,9 @@ export function App() {
   };
 
   async function runConnect(only?: Harness[]) {
-    const picks = only ?? runPicks ?? hostHarnesses;
+    // `verifiable` again at the call site, not only where runPicks is set: a
+    // connected app must never reach `tacho verify`, whichever path asked.
+    const picks = verifiable(only ?? runPicks ?? hostHarnesses);
     if (picks.length === 0) return;
     setBusy("connect");
     setError(null);
@@ -728,7 +733,7 @@ export function App() {
   const stepClass = (n: number) =>
     `step ${step === n ? "active" : step > n ? "done" : "todo"}`;
   const stepMark = (n: number) => (step > n ? "✓" : String(n));
-  const runList = runPicks ?? hostHarnesses;
+  const runList = verifiable(runPicks ?? hostHarnesses);
 
   // ── First run: the wizard ────────────────────────────────────────────────
   const wizard = (
@@ -1028,59 +1033,71 @@ export function App() {
             {step === 5 && host ? (
               <>
                 <p className="sub">
-                  Oxagen sends each registered agent one small prompt ("reply
-                  OK") and confirms the run was recorded and sealed. That is
-                  your first data in the workspace.
+                  {runList.length > 0
+                    ? `Oxagen sends each wrapped agent one small prompt ("reply OK") and confirms the run was recorded and sealed. That is your first data in the workspace.`
+                    : `Nothing here to drive: every app you registered is a connected app, which Oxagen governs through its own MCP gateway rather than through a hook. There is no headless prompt to send one. It reports the first time you use it — open the workspace and watch it arrive.`}
                 </p>
                 <div className="agents">
                   {hostHarnesses.map((h) => (
                     <div key={h} className="agent">
-                      <label className="check">
-                        <input
-                          type="checkbox"
-                          id={`run-${h}`}
-                          checked={runList.includes(h)}
-                          disabled={busy !== null}
-                          onChange={(e) =>
-                            setRunPicks(
-                              e.target.checked
-                                ? [...new Set([...runList, h])]
-                                : runList.filter((x) => x !== h),
-                            )
-                          }
-                        />
+                      {isConnected(h) ? (
+                        // Registered, so it shows; not verifiable, so it gets
+                        // no checkbox. `tacho verify` returns ok:false for a
+                        // connected app by design — offering it as a target
+                        // reported a failure for something that cannot succeed.
                         <span className="name">{labelOf(h)}</span>
-                      </label>
+                      ) : (
+                        <label className="check">
+                          <input
+                            type="checkbox"
+                            id={`run-${h}`}
+                            checked={runList.includes(h)}
+                            disabled={busy !== null}
+                            onChange={(e) =>
+                              setRunPicks(
+                                e.target.checked
+                                  ? [...new Set([...runList, h])]
+                                  : runList.filter((x) => x !== h),
+                              )
+                            }
+                          />
+                          <span className="name">{labelOf(h)}</span>
+                        </label>
+                      )}
                       <span className="meta">
-                        {runs[h]
-                          ? runs[h].ok
-                            ? `recorded · ${runs[h].seq ?? "?"} events sealed`
-                            : `failed · ${runs[h].detail}`
-                          : busy === "connect"
-                            ? "running…"
-                            : "ready"}
+                        {isConnected(h)
+                          ? "connected · reports when you use it"
+                          : runs[h]
+                            ? runs[h].ok
+                              ? `recorded · ${runs[h].seq ?? "?"} events sealed`
+                              : `failed · ${runs[h].detail}`
+                            : busy === "connect"
+                              ? "running…"
+                              : "ready"}
                       </span>
                     </div>
                   ))}
                 </div>
                 <div className="row">
+                  {runList.length > 0 ? (
+                    <button
+                      type="button"
+                      className={ranOnce ? "" : "primary"}
+                      onClick={() => runConnect()}
+                      disabled={busy !== null}
+                    >
+                      {busy === "connect"
+                        ? "Running…"
+                        : ranOnce
+                          ? "Run again"
+                          : "Yes, run the connect prompt"}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
-                    className={ranOnce ? "" : "primary"}
-                    onClick={() => runConnect()}
-                    disabled={busy !== null || runList.length === 0}
-                  >
-                    {busy === "connect"
-                      ? "Running…"
-                      : ranOnce
-                        ? "Run again"
-                        : "Yes, run the connect prompt"}
-                  </button>
-                  <button
-                    type="button"
-                    className={ranOnce ? "primary" : ""}
+                    className={ranOnce || runList.length === 0 ? "primary" : ""}
                     onClick={openWorkspace}
-                    disabled={!ranOnce}
+                    disabled={!ranOnce && runList.length > 0}
                   >
                     Open this workspace in Oxagen
                   </button>

@@ -576,7 +576,18 @@ export async function startDaemon(
   const api: CollectorApi = {
     localToken: host.local_token,
     enrollmentId: host.host_enrollment_id,
-    mcp: (body, context) => serial.run(() => gateway.handle(body, context)),
+    // Deliberately NOT on `serial`. A gateway call is a round trip to the
+    // control plane with a 30-second timeout, and the queue it used to sit in
+    // is the same one `PreToolUse` hooks, OTel ingestion and spool draining
+    // wait on: one connected app's slow tool call held every wrapped agent on
+    // this machine past its 5-10 second decision budget, and held every other
+    // MCP client behind it too. Nothing is lost by taking it off. The only
+    // shared state the gateway touches is `recordGatewayCall`, which is
+    // synchronous end to end — `sealCollectorEvent` advances the chain and
+    // `wal.append` appends, neither with an await inside — so it cannot
+    // interleave with a queued task however many forwards are in flight. The
+    // queue was never protecting the forward; it was only ever costing.
+    mcp: (body, context) => gateway.handle(body, context),
     mcpClose: (sessionId) => gateway.forget(sessionId),
     handleHook: (envelope) =>
       serial.run(async () => {
