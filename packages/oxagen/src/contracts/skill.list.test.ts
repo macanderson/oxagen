@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { skillList } from "./skill.list";
+import { SKILL_CURSOR_MAX, skillList } from "./skill.list";
 
 const row = {
   name: "release-notes",
@@ -34,6 +34,27 @@ describe("list_skills contract", () => {
     expect(skillList.input.safeParse({ windowDays: 91 }).success).toBe(false);
     expect(skillList.input.safeParse({ windowDays: 0 }).success).toBe(false);
     expect(skillList.input.safeParse({ limit: 5 }).success).toBe(false);
+  });
+
+  it("admits the longest cursor the handler can write", () => {
+    // A page whose last name is 512 units that each JSON-escape to `\uXXXX`:
+    // the worst case `nextCursor` a page of names can end on.
+    const cursor = Buffer.from(
+      JSON.stringify([
+        "2026-08-16T00:00:00.000Z",
+        "2026-09-15T00:00:00.000Z",
+        "".repeat(512),
+      ]),
+      "utf8",
+    ).toString("base64url");
+    expect(cursor.length).toBeGreaterThan(1024);
+    expect(cursor.length).toBeLessThanOrEqual(SKILL_CURSOR_MAX);
+    expect(skillList.input.safeParse({ cursor }).success).toBe(true);
+    expect(
+      skillList.input.safeParse({ cursor: "a".repeat(SKILL_CURSOR_MAX + 1) })
+        .success,
+    ).toBe(false);
+    expect(skillList.input.safeParse({ cursor: "" }).success).toBe(false);
   });
 
   it("carries a null reported count when no session reported an inventory", () => {

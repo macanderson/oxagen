@@ -21,7 +21,7 @@ The skills this workspace's harness sessions reported when they started, over a 
 | Field | Type | Required | Constraint |
 |---|---|---|---|
 | `windowDays` | integer | no | 1 to 90, default 30: sessions started in the last N days |
-| `cursor` | string | no | the previous page's `nextCursor`; it carries that page's window, so `windowDays` is ignored beside it. A cursor this capability did not write is `invalid_input` |
+| `cursor` | string | no | the previous page's `nextCursor`; it carries that page's window, so `windowDays` is ignored beside it. A cursor this capability did not write, or one whose window is longer than the 90 days `windowDays` allows, is `invalid_input` |
 
 ## Output
 
@@ -41,4 +41,4 @@ A session whose `skills_available` is null (or anything but a JSON array) did no
 | Code | When |
 |---|---|
 | `forbidden` (`org_role_required`, `no_principal`) | the acting user holds none of the roles above, or an API key has no creator |
-| `invalid_input` (`invalid_cursor`) | the cursor was not written by this capability |
+| `invalid_input` (`invalid_cursor`) | the cursor was not written by this capability, or its window is longer than the 90 days `windowDays` allows |

@@ -182,6 +182,21 @@ describe("the cursor", () => {
     const raw = encodeSkillCursor({ window: windowEndingAt(NOW, 1), after: "" });
     expect(decodeSkillCursor(raw)).toBeNull();
   });
+
+  it("refuses a hand-made window longer than windowDays allows (negative)", () => {
+    const encoded = (days: number) =>
+      Buffer.from(
+        JSON.stringify([
+          new Date(NOW.getTime() - days * 86_400_000).toISOString(),
+          NOW.toISOString(),
+          "release-notes",
+        ]),
+        "utf8",
+      ).toString("base64url");
+    expect(decodeSkillCursor(encoded(91))).toBeNull();
+    expect(decodeSkillCursor(encoded(3650))).toBeNull();
+    expect(decodeSkillCursor(encoded(90))).not.toBeNull();
+  });
 });
 
 describe("toInventoryRow", () => {

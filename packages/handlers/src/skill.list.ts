@@ -32,6 +32,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
   SKILL_PAGE_SIZE,
+  SKILL_WINDOW_DAYS_MAX,
   type SkillInventoryRow,
   skillList,
   type SkillListOutput,
@@ -66,7 +67,14 @@ export function encodeSkillCursor(cursor: SkillCursor): string {
   ).toString("base64url");
 }
 
-/** Null for anything that is not a cursor this handler wrote. */
+/**
+ * Null for anything that is not a cursor this handler wrote, including a
+ * cursor whose window is longer than `windowDays` may ask for. The window
+ * rides in the cursor and replaces `windowDays`, so without this bound any
+ * caller could base64url-encode an ordered pair of dates and read a range the
+ * input schema refuses — the whole of a workspace's history, scanned by the
+ * counts and the lateral skill expansion alike.
+ */
 export function decodeSkillCursor(raw: string): SkillCursor | null {
   try {
     const value: unknown = JSON.parse(
@@ -86,7 +94,8 @@ export function decodeSkillCursor(raw: string): SkillCursor | null {
     if (
       Number.isNaN(from.getTime()) ||
       Number.isNaN(to.getTime()) ||
-      from >= to
+      from >= to ||
+      to.getTime() - from.getTime() > SKILL_WINDOW_DAYS_MAX * DAY_MS
     )
       return null;
     return { window: { from, to }, after: value[2] };

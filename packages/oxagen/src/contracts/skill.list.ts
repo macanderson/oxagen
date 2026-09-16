@@ -20,6 +20,14 @@ export const SKILL_WINDOW_DAYS_MAX = 90;
 export const SKILL_WINDOW_DAYS_DEFAULT = 30;
 /** Skill names per page. */
 export const SKILL_PAGE_SIZE = 100;
+/**
+ * The longest cursor a read may carry. A cursor base64url-encodes JSON holding
+ * the window's two instants and a skill name of up to 512 UTF-16 units; a name
+ * whose every unit JSON-escapes to `\uXXXX` is 3072 bytes, so the encoding tops
+ * out near 4.2k characters. The bound therefore admits every cursor the handler
+ * can write — a smaller one would reject the handler's own next page.
+ */
+export const SKILL_CURSOR_MAX = 8192;
 
 export const skillInventoryRowSchema = z
   .object({
@@ -62,7 +70,7 @@ export const skillList = registerCapability({
         .max(SKILL_WINDOW_DAYS_MAX)
         .default(SKILL_WINDOW_DAYS_DEFAULT),
       /** The `nextCursor` of the previous page; it carries that page's window. */
-      cursor: z.string().min(1).max(1024).optional(),
+      cursor: z.string().min(1).max(SKILL_CURSOR_MAX).optional(),
     })
     .strict(),
   output: z
