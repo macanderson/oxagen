@@ -1,0 +1,69 @@
+{
+  "name": "set_preferences",
+  "domain": "user",
+  "description": "Set the calling user's account preferences — locale, theme, timezone — as a partial write, and return the whole set after it.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "locale": {
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 35
+      },
+      "theme": {
+        "type": "string",
+        "enum": [
+          "system",
+          "light",
+          "dark"
+        ]
+      },
+      "timezone": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "locale": {
+        "type": "string"
+      },
+      "theme": {
+        "type": "string",
+        "enum": [
+          "system",
+          "light",
+          "dark"
+        ]
+      },
+      "timezone": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "locale",
+      "theme",
+      "timezone"
+    ],
+    "additionalProperties": false
+  }
+}

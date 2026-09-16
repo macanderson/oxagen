@@ -4,7 +4,7 @@ import type { AgentMemoryRecallOutput } from "@oxagen/oxagen/contracts/agent.mem
 import {
   formatRecalledMemories,
   recallWorkspaceMemoryMessage,
-} from "./chat-memory";
+} from "./assistant-recall";
 
 type Mem = AgentMemoryRecallOutput["memories"][number];
 

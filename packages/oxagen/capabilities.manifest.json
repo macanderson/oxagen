@@ -1134,6 +1134,40 @@
       }
     },
     {
+      "name": "ask_assistant",
+      "file": "assistant.ask.ts",
+      "domain": "assistant",
+      "mode": "async",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_assistant_engine",
+      "file": "assistant.engine.get.ts",
+      "domain": "assistant",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "query_audit_log",
       "file": "audit.log.query.ts",
       "domain": "audit",
@@ -3946,6 +3980,23 @@
       }
     },
     {
+      "name": "list_recent_runs",
+      "file": "run.recent.list.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "summarize_run",
       "file": "run.summarize.ts",
       "domain": "run",
@@ -4529,6 +4580,23 @@
       }
     },
     {
+      "name": "get_nav_counts",
+      "file": "shell.nav_counts.get.ts",
+      "domain": "shell",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_spend_drill",
       "file": "spend.drill.ts",
       "domain": "spend",
@@ -4899,6 +4967,42 @@
       }
     },
     {
+      "name": "load_tools",
+      "file": "tools.load.ts",
+      "domain": "tools",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "search_tools",
+      "file": "tools.search.ts",
+      "domain": "tools",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_user_preferences",
       "file": "user.preferences.read.ts",
       "domain": "user",
@@ -4917,22 +5021,20 @@
       }
     },
     {
-      "name": "update_user_preferences",
-      "file": "user.preferences.write.ts",
+      "name": "set_preferences",
+      "file": "user.preferences.set.ts",
       "domain": "user",
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp",
-        "agent"
+        "mcp"
       ],
       "layers": {
         "schema": true,
         "api": true,
-        "docs": true,
         "mcp": true,
         "unit": true,
-        "app": true
+        "docs": true
       }
     },
     {

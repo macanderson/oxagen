@@ -87,6 +87,15 @@ import { runExport } from "./run.export";
 import { runBisect } from "./run.bisect";
 import { runFork } from "./run.fork";
 import { runSummarize } from "./run.summarize";
+import { runRecentList } from "./run.recent.list";
+// The shell (#2968): the in-app agent on stella-serve, the command menu, the
+// sidebar counts and the account preferences.
+import { assistantAsk } from "./assistant.ask";
+import { assistantEngineGet } from "./assistant.engine.get";
+import { toolsSearch } from "./tools.search";
+import { toolsLoad } from "./tools.load";
+import { shellNavCountsGet } from "./shell.nav_counts.get";
+import { userPreferencesSet } from "./user.preferences.set";
 import { agentMcpList } from "./agent.mcp.list";
 import { agentMcpResolve } from "./agent.mcp.resolve";
 import { agentMcpRegister } from "./agent.mcp.register";
@@ -149,7 +158,6 @@ import { workspaceList } from "./workspace.list";
 import { workspaceArchive } from "./workspace.archive";
 import { systemInstallInstructions } from "./system.install.instructions";
 import { userPreferencesRead } from "./user.preferences.read";
-import { userPreferencesWrite } from "./user.preferences.write";
 import { userWorkspacePreferencesRead } from "./user.workspace_preferences.read";
 import { userWorkspacePreferencesWrite } from "./user.workspace_preferences.write";
 import { budgetPolicyRead } from "./budget.policy.read";
@@ -583,6 +591,13 @@ export {
   runBisect,
   runFork,
   runSummarize,
+  runRecentList,
+  assistantAsk,
+  assistantEngineGet,
+  toolsSearch,
+  toolsLoad,
+  shellNavCountsGet,
+  userPreferencesSet,
   runCostGet,
   spendGet,
   spendDrill,
@@ -629,7 +644,6 @@ export {
   workspaceArchive,
   systemInstallInstructions,
   userPreferencesRead,
-  userPreferencesWrite,
   userWorkspacePreferencesRead,
   userWorkspacePreferencesWrite,
   budgetPolicyRead,
@@ -887,6 +901,13 @@ export const contracts: readonly CapabilityDeclaration[] = [
   runBisect,
   runFork,
   runSummarize,
+  runRecentList,
+  assistantAsk,
+  assistantEngineGet,
+  toolsSearch,
+  toolsLoad,
+  shellNavCountsGet,
+  userPreferencesSet,
   runCostGet,
   spendGet,
   spendDrill,
@@ -933,7 +954,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   workspaceArchive,
   systemInstallInstructions,
   userPreferencesRead,
-  userPreferencesWrite,
   userWorkspacePreferencesRead,
   userWorkspacePreferencesWrite,
   budgetPolicyRead,

@@ -1,7 +1,7 @@
 // create_org against a real Postgres: a signed-in user with no memberships
 // creates an organization and, in one call, holds the owner membership, the
-// IAM bootstrap and the first workspace, and no billing.* row exists for the
-// new org. Runs wherever DATABASE_URL points at a migrated database — CI's
+// IAM bootstrap, the first workspace and the $5 signup grant, and no other
+// billing.* row exists for the new org. Runs wherever DATABASE_URL points at a migrated database — CI's
 // `test` job migrates Postgres with Atlas before `turbo run build test:unit`
 // and carries DATABASE_URL in turbo's globalEnv; a local run without one is
 // skipped, not red. Every row it writes is removed in afterAll.
@@ -92,6 +92,15 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
         await tx
           .delete(schema.securityEvents)
           .where(eq(schema.securityEvents.orgId, orgId));
+        await tx
+          .delete(schema.creditLots)
+          .where(eq(schema.creditLots.orgId, orgId));
+        await tx
+          .delete(schema.creditLedger)
+          .where(eq(schema.creditLedger.orgId, orgId));
+        await tx
+          .delete(schema.creditBalances)
+          .where(eq(schema.creditBalances.orgId, orgId));
         await tx
           .delete(schema.orgUsers)
           .where(eq(schema.orgUsers.orgId, orgId));
@@ -218,10 +227,16 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
     );
     expect(registries).toEqual([{ isDefault: true }]);
 
-    // Nothing billing-shaped: every billing.* table keyed by org_id has no
-    // row for the new org. Enumerated from the catalog so a table added later
-    // (contract_terms, gau_buckets, gau_settlements) is covered without an
-    // edit here.
+    // The $5 signup grant and nothing else billing-shaped: the grant's
+    // ledger row, lot and balance mirror hold one row each, and every other
+    // billing.* table keyed by org_id has no row for the new org. Enumerated
+    // from the catalog so a table added later (contract_terms, gau_buckets,
+    // gau_settlements) is covered without an edit here.
+    const GRANT_TABLES = new Set([
+      "credit_balances",
+      "credit_ledger",
+      "credit_lots",
+    ]);
     const billingTables = await withSystemDb((tx) =>
       tx.execute<{ table_name: string }>(sql`
         select table_name from information_schema.columns
@@ -244,8 +259,25 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
           sql`select count(*)::int as n from billing.${sql.identifier(name)} where org_id = ${org.id}`,
         ),
       );
-      expect([...rows][0]?.n, `billing.${name}`).toBe(0);
+      expect([...rows][0]?.n, `billing.${name}`).toBe(
+        GRANT_TABLES.has(name) ? 1 : 0,
+      );
     }
+    const [lot] = await withSystemDb((tx) =>
+      tx
+        .select({
+          source: schema.creditLots.source,
+          remainingCents: schema.creditLots.remainingCents,
+          expiresAt: schema.creditLots.expiresAt,
+        })
+        .from(schema.creditLots)
+        .where(eq(schema.creditLots.orgId, org.id)),
+    );
+    expect(lot).toEqual({
+      source: "free_grant",
+      remainingCents: 500n,
+      expiresAt: null,
+    });
     // The IAM bootstrap seeds role_grants one insert per capability role
     // (iam-provision.ts step d): 3.8 s on a loaded CI runner at app-rebuild
     // 340420f10 and past the 5 s default on the next two runs.

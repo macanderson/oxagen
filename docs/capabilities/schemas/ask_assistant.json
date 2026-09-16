@@ -1,0 +1,158 @@
+{
+  "name": "ask_assistant",
+  "domain": "assistant",
+  "description": "Take one turn with the in-app agent: append the message to a conversation, record the turn as a run of its own, drive it on the assistant engine with every completion and tool call answered by Oxagen, and return the reply with the run it was recorded as.",
+  "mode": "async",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "conversation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "conversationId": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "content": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 32768
+      },
+      "pageContext": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "route": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "orgSlug": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "workspaceSlug": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "entityId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              }
+            },
+            "required": [
+              "route",
+              "orgSlug",
+              "workspaceSlug"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      }
+    },
+    "required": [
+      "content"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "conversationId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "userMessageId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "assistantMessageId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "runId": {
+        "type": "string"
+      },
+      "reply": {
+        "type": "string"
+      },
+      "parkedCard": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "approvalId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "capability": {
+                "type": "string",
+                "minLength": 1
+              },
+              "expiresAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "approvalId",
+              "capability",
+              "expiresAt"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "conversationId",
+      "userMessageId",
+      "assistantMessageId",
+      "runId",
+      "reply",
+      "parkedCard"
+    ],
+    "additionalProperties": false
+  }
+}

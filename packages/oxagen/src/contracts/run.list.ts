@@ -6,6 +6,11 @@
  * wrapped agents. Root sessions only: a subagent chain is part of its parent's
  * run. Newest first, keyset-paged on an opaque cursor.
  *
+ * The in-app agent's turns are runs too, admitted on the `chat` and
+ * `api-chat` surfaces; they are excluded from this list, because the
+ * assistant is Oxagen's and never the customer's (Mockups `71bc546`). `get_run`
+ * still opens one by id.
+ *
  * A console read is never a governed action (§1.5, ADR-052 exclusion 2):
  * `noBillingGate: true` keeps a page load off the GAU meter and reachable at
  * `remaining = 0`.
@@ -18,6 +23,13 @@ import { REPLAY_GRADES } from "@oxagen/tacho";
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { costSchema } from "./spend.shared";
+
+/**
+ * The surfaces an in-app agent turn is admitted on (`agent_runs.surface`;
+ * `PlatformSurface` in @oxagen/run-ledger). Runs on these surfaces are the
+ * assistant's own and stay out of the tenant's run lists.
+ */
+export const IN_APP_AGENT_SURFACES = ["chat", "api-chat"] as const;
 
 /** A public id either store mints: the prefix names the store. */
 export const runPublicIdSchema = z
@@ -105,7 +117,7 @@ export const runList = registerCapability({
   name: "list_runs",
   domain: "run",
   description:
-    "List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, status, counts and metered cost each row recorded.",
+    "List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, status, counts and metered cost each row recorded. The in-app agent's own turns are not listed.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs"],

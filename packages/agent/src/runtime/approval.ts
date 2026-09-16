@@ -1,5 +1,6 @@
 import { withTenantDb, schema } from "@oxagen/database";
-import { eq, and, sql } from "drizzle-orm";
+import { APPROVAL_RESOLVER_ROLES } from "./approval-roles";
+import { eq, and, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
 import postgres from "postgres";
 import pino from "pino";
@@ -99,8 +100,8 @@ export async function createApprovalRequest(
   args: CreateApprovalArgs,
 ): Promise<{ approvalId: string }> {
   const expiresAt = new Date(Date.now() + (args.ttlMs ?? DEFAULT_TTL_MS));
-  const [row] = await withTenantDb((tx) =>
-    tx
+  const approvalId = await withTenantDb(async (tx) => {
+    const [row] = await tx
       .insert(schema.approvalRequests)
       .values({
         orgId: args.orgId,
@@ -113,10 +114,77 @@ export async function createApprovalRequest(
         toolCallId: args.toolCallId ?? null,
         expiresAt,
       })
-      .returning({ id: schema.approvalRequests.id }),
-  );
-  if (!row) throw new Error("approval insert failed");
-  return { approvalId: row.id };
+      .returning({ id: schema.approvalRequests.id });
+    if (!row) throw new Error("approval insert failed");
+
+    // MC spec §7.7 approval.requested: one feed row per person who may
+    // resolve it, written with the approval so neither exists without the other.
+    const approvers = await approverUserIds(tx, args.orgId, args.workspaceId);
+    if (approvers.length > 0) {
+      await tx.insert(schema.notifications).values(
+        approvers.map((userId) => ({
+          orgId: args.orgId,
+          workspaceId: args.workspaceId,
+          userId,
+          kind: "approval" as const,
+          event: "approval.requested" as const,
+          title: `Approval requested: ${args.capabilityName}`,
+          body: `Risk ${args.riskLevel}. Expires ${expiresAt.toISOString()}.`,
+          deepLink: null,
+        })),
+      );
+    }
+    return row.id;
+  });
+  return { approvalId };
+}
+
+type Tx = Parameters<Parameters<typeof withTenantDb>[0]>[0];
+
+/**
+ * The people resolve_approval admits, resolved the way its gate resolves
+ * them (`assertOrgRole` in @oxagen/iam): an active human principal in the
+ * org holding an undeleted, unexpired assignment of an admitted role, either
+ * org-wide (`workspace_id IS NULL`) or on this workspace.
+ */
+async function approverUserIds(
+  tx: Tx,
+  orgId: string,
+  workspaceId: string,
+): Promise<string[]> {
+  const p = schema.principals;
+  const pra = schema.principalRoleAssignments;
+  const roles = schema.roles;
+  const rows = await tx
+    .select({ userId: p.parentUserId })
+    .from(p)
+    .innerJoin(pra, eq(pra.principalId, p.id))
+    .innerJoin(roles, eq(roles.id, pra.roleId))
+    .where(
+      and(
+        eq(p.orgId, orgId),
+        eq(p.kind, "human"),
+        eq(p.status, "active"),
+        eq(pra.orgId, orgId),
+        isNull(pra.deletedAt),
+        or(isNull(pra.expiresAt), gt(pra.expiresAt, new Date())),
+        or(
+          and(
+            eq(roles.scopeKind, "org"),
+            isNull(pra.workspaceId),
+            inArray(roles.name, APPROVAL_RESOLVER_ROLES.org),
+          ),
+          and(
+            eq(roles.scopeKind, "workspace"),
+            eq(pra.workspaceId, workspaceId),
+            inArray(roles.name, APPROVAL_RESOLVER_ROLES.workspace),
+          ),
+        ),
+      ),
+    );
+  return [
+    ...new Set(rows.flatMap((r) => (r.userId === null ? [] : [r.userId]))),
+  ];
 }
 
 // Pauses execution until the approval resolves (via PG NOTIFY) or the

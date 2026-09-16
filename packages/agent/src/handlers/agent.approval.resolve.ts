@@ -25,6 +25,8 @@
 //      item 15).
 //   5. `approved` leaves the reservation held for the agent's retry, whose
 //      receipt settles it. The output reports the settlement.
+//   6. A matched row writes the approval.resolved feed row for the person
+//      whose message parked the call, in the same transaction.
 
 import { withTenantDb, schema, type Tx } from "@oxagen/database";
 import {
@@ -37,6 +39,7 @@ import { HandlerError, type CheckedContext } from "@oxagen/oxagen";
 import { lockMandate, parseMandateRow, release } from "@oxagen/rules";
 import { and, eq, sql } from "drizzle-orm";
 import { notifyResolution } from "../runtime/approval";
+import { APPROVAL_RESOLVER_ROLES } from "../runtime/approval-roles";
 import { approvalIdCondition } from "../runtime/approval-id";
 import type {
   AgentApprovalResolveInput,
@@ -52,7 +55,7 @@ export async function agentApprovalResolveHandler(
   const actingUserId = await resolveActingUserId(ctx);
   await assertOrgRole(
     { ...ctx, userId: actingUserId },
-    { org: ["Owner", "Admin"], workspace: ["Owner", "Member"] },
+    APPROVAL_RESOLVER_ROLES,
   );
 
   // `approvalId` arrives as the public id (apr_…) or the row uuid (#2906).
@@ -134,8 +137,43 @@ export async function agentApprovalResolveHandler(
         note: input.note ?? null,
       })
       .where(pending)
-      .returning({ id: schema.approvalRequests.id });
+      .returning({
+        id: schema.approvalRequests.id,
+        messageId: schema.approvalRequests.messageId,
+        capabilityName: schema.approvalRequests.capabilityName,
+      });
     if (!updated) throw expired();
+
+    // MC spec §7.7 approval.resolved: the person whose message parked the
+    // call hears the decision, written with the decision. A person who
+    // resolves their own approval already knows.
+    const [requester] = await tx
+      .select({ userId: schema.conversations.userId })
+      .from(schema.messages)
+      .innerJoin(
+        schema.conversations,
+        eq(schema.conversations.id, schema.messages.conversationId),
+      )
+      .where(
+        and(
+          eq(schema.messages.id, updated.messageId),
+          eq(schema.messages.orgId, ctx.orgId),
+          eq(schema.messages.workspaceId, ctx.workspaceId),
+        ),
+      )
+      .limit(1);
+    if (requester && requester.userId !== actingUserId) {
+      await tx.insert(schema.notifications).values({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        userId: requester.userId,
+        kind: "approval",
+        event: "approval.resolved",
+        title: `Approval ${input.decision}: ${updated.capabilityName}`,
+        body: input.note ?? null,
+        deepLink: null,
+      });
+    }
     return { rowId: updated.id, mandate };
   });
 

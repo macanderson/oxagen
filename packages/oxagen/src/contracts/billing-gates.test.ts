@@ -58,6 +58,16 @@ const CONSOLE_CONTRACTS = [
   "create_workspace",
   "update_workspace_settings",
   "archive_workspace",
+  // The shell's reads and its one settings write (#2968): the engine probe,
+  // the command menu, the sidebar counts, the account preferences.
+  "get_assistant_engine",
+  "search_tools",
+  "load_tools",
+  "get_nav_counts",
+  "list_recent_runs",
+  "list_notifications",
+  "mark_notification",
+  "set_preferences",
   // The #2962 lane: the Spend page's reads, its ceiling write and its
   // statement export (ADR-052 exclusion 2: reading and capping your own spend).
   "get_spend",
@@ -90,6 +100,10 @@ describe("INV-28 — no console read is a governed action", () => {
 
   it(`${GOVERNED_ACTION} does not declare the flag: it is the governed action`, () => {
     expect(flagOf(GOVERNED_ACTION)).not.toBe(true);
+  });
+
+  it("ask_assistant declares the flag: the turn is free to the customer (#2968 decision 3), and each tool call inside it is its own governed action (kernel.usage-recorder.test.ts)", () => {
+    expect(flagOf("ask_assistant")).toBe(true);
   });
 
   it("the lists and the governed action are disjoint", () => {

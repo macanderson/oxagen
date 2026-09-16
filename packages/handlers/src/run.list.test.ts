@@ -83,6 +83,65 @@ describe("list_runs", () => {
     expect(out.nextCursor).toBeNull();
   });
 
+  it("never lists the in-app agent's turns, and lists every other surface (negative)", async () => {
+    const { list } = handlerOver(
+      [
+        ledgerRun({ publicId: "arun_external", runId: RUN_A }),
+        ledgerRun({
+          publicId: "arun_assistant_app",
+          runId: "0192d4a8-7c1e-7a00-8000-0000000000a3",
+          surface: "chat",
+          run: {
+            runId: "0192d4a8-7c1e-7a00-8000-0000000000a3",
+            publicId: "arun_assistant_app",
+            status: "completed",
+            createdAt: at("2026-09-11T12:00:00.000Z"),
+            startedAt: at("2026-09-11T12:00:01.000Z"),
+            name: null,
+            summary: null,
+            summaryGeneratedAt: null,
+            summaryModel: null,
+          },
+        }),
+        ledgerRun({
+          publicId: "arun_assistant_api",
+          runId: "0192d4a8-7c1e-7a00-8000-0000000000a4",
+          surface: "api-chat",
+          run: {
+            runId: "0192d4a8-7c1e-7a00-8000-0000000000a4",
+            publicId: "arun_assistant_api",
+            status: "completed",
+            createdAt: at("2026-09-11T12:30:00.000Z"),
+            startedAt: at("2026-09-11T12:30:01.000Z"),
+            name: null,
+            summary: null,
+            summaryGeneratedAt: null,
+            summaryModel: null,
+          },
+        }),
+        ledgerRun({
+          publicId: "arun_a2a",
+          runId: RUN_B,
+          surface: "a2a",
+          run: {
+            runId: RUN_B,
+            publicId: "arun_a2a",
+            status: "completed",
+            createdAt: at("2026-09-11T13:00:00.000Z"),
+            startedAt: at("2026-09-11T13:00:01.000Z"),
+            name: null,
+            summary: null,
+            summaryGeneratedAt: null,
+            summaryModel: null,
+          },
+        }),
+      ],
+      [],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    expect(out.runs.map((r) => r.id)).toEqual(["arun_a2a", "arun_external"]);
+  });
+
   it("costs a run from its rollup row with the basis the row recorded, and leaves an unrolled one null", async () => {
     const { list, stores } = handlerOver(
       [
@@ -592,6 +651,14 @@ describe("list_runs queries name the tenant", () => {
     expect(tachoSessionQuery(db, SCOPE, "tse_a").toSQL().sql).toMatch(
       /"parent_session_uuid" is null/,
     );
+  });
+
+  it("keeps the in-app agent's surfaces out of the page and leaves get_run's identity read open to them", () => {
+    const ledger = ledgerPageQuery(db, SCOPE, page).toSQL();
+    expect(ledger.sql).toMatch(/"surface" not in \(\$\d+, \$\d+\)/);
+    expect(ledger.params).toEqual(expect.arrayContaining(["chat", "api-chat"]));
+    const identity = ledgerIdentityQuery(db, SCOPE, RUN).toSQL();
+    expect(identity.sql).not.toMatch(/"surface"/);
   });
 
   it("applies the cursor at millisecond precision with byte-order ties, reading one row past the page", () => {

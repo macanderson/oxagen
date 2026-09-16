@@ -198,6 +198,20 @@ import { iamRoleGrantsSetRoute } from "./iam.role.grants.set";
 import { iamRoleDeleteRoute } from "./iam.role.delete";
 import { workspaceArchiveRoute } from "./workspace.archive";
 import { tachoIncidentListRoute } from "./tacho.incident.list";
+import { assistantAsk } from "@oxagen/oxagen/contracts/assistant.ask";
+import { assistantEngineGet } from "@oxagen/oxagen/contracts/assistant.engine.get";
+import { toolsSearch } from "@oxagen/oxagen/contracts/tools.search";
+import { toolsLoad } from "@oxagen/oxagen/contracts/tools.load";
+import { shellNavCountsGet } from "@oxagen/oxagen/contracts/shell.nav_counts.get";
+import { runRecentList } from "@oxagen/oxagen/contracts/run.recent.list";
+import { userPreferencesSet } from "@oxagen/oxagen/contracts/user.preferences.set";
+import { assistantAskRoute } from "./assistant.ask";
+import { assistantEngineGetRoute } from "./assistant.engine.get";
+import { toolsSearchRoute } from "./tools.search";
+import { toolsLoadRoute } from "./tools.load";
+import { shellNavCountsGetRoute } from "./shell.nav_counts.get";
+import { runRecentListRoute } from "./run.recent.list";
+import { userPreferencesSetRoute } from "./user.preferences.set";
 import { onboardingAdvanceRoute } from "./onboarding.advance";
 import { onboardingFirstFrameGetRoute } from "./onboarding.first_frame.get";
 import { onboardingStateGetRoute } from "./onboarding.state.get";
@@ -930,6 +944,75 @@ const ROUTES: ThinRoute[] = [
     expectedInput: { runId: "tse_a1b2c3", limit: 50 },
     invalidBody: { runId: "not-a-run-id" },
     jsonGuard: true,
+    status: 200,
+  },
+  // The shell (#2968): the in-app agent's turn and engine probe, the command
+  // menu's search, belt definitions and recent runs, the sidebar counts, the
+  // account preferences.
+  {
+    file: "assistant.ask",
+    route: assistantAskRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: assistantAsk.name,
+    body: { content: "explain this run" },
+    expectedInput: {
+      content: "explain this run",
+      conversationId: null,
+      pageContext: null,
+    },
+    invalidBody: { content: "" },
+    status: 200,
+  },
+  {
+    file: "assistant.engine.get",
+    route: assistantEngineGetRoute as unknown as Hono<never>,
+    method: "GET",
+    capability: assistantEngineGet.name,
+    body: {},
+    status: 200,
+  },
+  {
+    file: "tools.search",
+    route: toolsSearchRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolsSearch.name,
+    body: { query: "budget", kinds: ["tool"] },
+    invalidBody: { query: "budget", kinds: ["node"] },
+    status: 200,
+  },
+  {
+    file: "tools.load",
+    route: toolsLoadRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolsLoad.name,
+    body: { names: ["list_runs"] },
+    invalidBody: { names: [] },
+    status: 200,
+  },
+  {
+    file: "shell.nav_counts.get",
+    route: shellNavCountsGetRoute as unknown as Hono<never>,
+    method: "GET",
+    capability: shellNavCountsGet.name,
+    body: {},
+    status: 200,
+  },
+  {
+    file: "run.recent.list",
+    route: runRecentListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: runRecentList.name,
+    body: { limit: 5 },
+    invalidBody: { limit: 50 },
+    status: 200,
+  },
+  {
+    file: "user.preferences.set",
+    route: userPreferencesSetRoute as unknown as Hono<never>,
+    method: "PATCH",
+    capability: userPreferencesSet.name,
+    body: { theme: "dark" },
+    invalidBody: { theme: "sepia" },
     status: 200,
   },
   {

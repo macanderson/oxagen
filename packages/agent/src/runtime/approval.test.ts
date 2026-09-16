@@ -21,8 +21,30 @@ const valuesMock = vi.fn((v: unknown) => {
 const insertMock = vi.fn(() => ({ values: valuesMock }));
 
 const limitMock = vi.fn(async () => [{ id: "appr_123", orgId: "ten_1" }]);
-const whereMock = vi.fn(() => ({ limit: limitMock }));
-const fromMock = vi.fn(() => ({ where: whereMock }));
+// The approver read (principals ⨝ assignments ⨝ roles) resolves on `where`
+// with `approverRows`; readApproval continues to `limit`.
+let approverRows: Array<{ userId: string | null }> = [];
+let fromTable: unknown = null;
+const joinedTables: unknown[] = [];
+const whereConds: SQL[] = [];
+const whereMock = vi.fn((cond: SQL) => {
+  whereConds.push(cond);
+  return Object.assign(
+    Promise.resolve(fromTable === schema.principals ? approverRows : []),
+    { limit: limitMock },
+  );
+});
+const fromMock = vi.fn((table: unknown) => {
+  fromTable = table;
+  const chain = {
+    innerJoin: (joined: unknown) => {
+      joinedTables.push(joined);
+      return chain;
+    },
+    where: whereMock,
+  };
+  return chain;
+});
 const selectMock = vi.fn(() => ({ from: fromMock }));
 
 const fakeDb = {
@@ -56,6 +78,9 @@ vi.mock("postgres", () => ({
   default: vi.fn(() => ({ listen: listenMock })),
 }));
 
+import { schema } from "@oxagen/database";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import {
   createApprovalRequest,
   notifyResolution,
@@ -66,6 +91,10 @@ import {
 describe("approval runtime", () => {
   beforeEach(() => {
     insertedValues.length = 0;
+    approverRows = [];
+    fromTable = null;
+    joinedTables.length = 0;
+    whereConds.length = 0;
     // listenHandlers is intentionally NOT cleared: the NOTIFY listener is a
     // per-process singleton registered exactly once by the first
     // waitForApproval. ensureListener short-circuits on every later call, so the
@@ -106,6 +135,98 @@ describe("approval runtime", () => {
     const delta = row.expiresAt.getTime() - before;
     expect(delta).toBeGreaterThanOrEqual(10_000 - 50);
     expect(delta).toBeLessThanOrEqual(10_000 + 1000);
+  });
+
+  it("createApprovalRequest writes one approval.requested row per person who may resolve it", async () => {
+    // One row per qualifying assignment: a person holding both an org and a
+    // workspace role appears twice, and is told once.
+    approverRows = [
+      { userId: "u_owner" },
+      { userId: "u_both" },
+      { userId: "u_both" },
+      { userId: "u_member" },
+    ];
+    await createApprovalRequest({
+      orgId: "ten_1",
+      workspaceId: "ws_1",
+      messageId: "msg_1",
+      capabilityName: "set_budget",
+      inputPreview: {},
+      riskLevel: "high",
+    });
+    expect(insertMock).toHaveBeenCalledTimes(2);
+    expect(insertMock).toHaveBeenLastCalledWith(schema.notifications);
+    const rows = insertedValues[1] as Array<Record<string, unknown>>;
+    expect(rows.map((r) => r.userId)).toEqual([
+      "u_owner",
+      "u_both",
+      "u_member",
+    ]);
+    for (const r of rows) {
+      expect(r).toMatchObject({
+        orgId: "ten_1",
+        workspaceId: "ws_1",
+        kind: "approval",
+        event: "approval.requested",
+        title: "Approval requested: set_budget",
+      });
+    }
+  });
+
+  it("createApprovalRequest reads recipients the way resolve_approval's gate admits them: active human principals with an unexpired, undeleted IAM assignment of an admitted role (negative: no membership table)", async () => {
+    await createApprovalRequest({
+      orgId: "ten_1",
+      workspaceId: "ws_1",
+      messageId: "msg_1",
+      capabilityName: "set_budget",
+      inputPreview: {},
+      riskLevel: "high",
+    });
+    expect(fromMock).not.toHaveBeenCalledWith(schema.orgUsers);
+    expect(fromMock).not.toHaveBeenCalledWith(schema.workspaceUsers);
+    expect(fromMock).toHaveBeenCalledWith(schema.principals);
+    expect(joinedTables).toEqual([
+      schema.principalRoleAssignments,
+      schema.roles,
+    ]);
+    const { sql, params } = new PgDialect().sqlToQuery(whereConds[0]!);
+    // A suspended principal, a service principal, a revoked assignment and
+    // an expired one are each excluded by the predicate.
+    expect(sql).toMatch(/"principals"\."kind" = \$\d+/);
+    expect(sql).toMatch(/"principals"\."status" = \$\d+/);
+    expect(sql).toMatch(/"principal_role_assignments"\."deleted_at" is null/);
+    expect(sql).toMatch(
+      /\("iam"\."principal_role_assignments"\."expires_at" is null or "iam"\."principal_role_assignments"\."expires_at" > \$\d+\)/,
+    );
+    // Org roles only on org-wide assignments; workspace roles only on this workspace.
+    expect(sql).toMatch(/"principal_role_assignments"\."workspace_id" is null/);
+    expect(params).toEqual(
+      expect.arrayContaining([
+        "ten_1",
+        "ws_1",
+        "human",
+        "active",
+        "org",
+        "workspace",
+        "Owner",
+        "Admin",
+        "Member",
+      ]),
+    );
+    expect(params).not.toContain("Viewer");
+  });
+
+  it("createApprovalRequest writes no feed row when nobody may resolve it (negative)", async () => {
+    await createApprovalRequest({
+      orgId: "ten_1",
+      workspaceId: "ws_1",
+      messageId: "msg_1",
+      capabilityName: "set_budget",
+      inputPreview: {},
+      riskLevel: "low",
+    });
+    expect(insertMock).toHaveBeenCalledTimes(1);
+    expect(insertMock).not.toHaveBeenCalledWith(schema.notifications);
   });
 
   it("notifyResolution issues pg_notify on the approval channel", async () => {
