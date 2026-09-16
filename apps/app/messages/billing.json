@@ -6,7 +6,8 @@
     "range": "{start} – {end}",
     "checkout": {
       "success": "Checkout finished. The governed action units you bought are added to the bucket once Stripe confirms the payment.",
-      "cancel": "Checkout was cancelled. Nothing was charged."
+      "cancel": "Checkout was cancelled. Nothing was charged.",
+      "credits": "Checkout finished. The usage credits you bought are added to the balance once Stripe confirms the payment."
     },
     "plan": {
       "title": "Plan",
@@ -144,6 +145,7 @@
       "submit": "Continue to Checkout",
       "submitting": "Opening Checkout…",
       "denied": "An owner or a billing member can top up usage credits.",
+      "planDenied": "Usage credits need a Build plan or above. Subscribe first and the top-up opens here.",
       "errors": {
         "invalid": "Enter a whole dollar amount of at least ${min}.",
         "denied": "Your role cannot top up usage credits. An owner or a billing member can.",

@@ -15,6 +15,7 @@
  *  - `requireTier` throws a `TierDeniedError` (typed, narrowable) — callers
  *    can catch it and return an appropriate HTTP/MCP error.
  */
+import { canTierBuyCredits } from "@oxagen/oxagen/contracts/billing.credits.purchase";
 import type { PlanTier } from "@oxagen/oxagen/types";
 
 // ── Tier ordering ─────────────────────────────────────────────────────────────
@@ -121,7 +122,12 @@ export function canAccessAuditLog(tier: PlanTier): boolean {
 /**
  * Whether the org can purchase one-time credit packs.
  * Free orgs cannot buy packs — they must subscribe to Build or above first.
+ *
+ * The rule itself is `canTierBuyCredits` on the purchase contract, which the
+ * Billing page reads to decide whether to offer the top-up form; deciding it
+ * twice is how the page came to offer a Free organization a form whose every
+ * submission this gate refused.
  */
 export function canBuyCredits(tier: PlanTier): boolean {
-  return tier !== "free";
+  return canTierBuyCredits(tier);
 }

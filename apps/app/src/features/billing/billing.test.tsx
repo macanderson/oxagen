@@ -14,6 +14,7 @@ import { IntlProvider } from "@/test/intl";
 import {
   type BillingReads,
   billingSource,
+  contractRate,
   freeNoCardBucket,
   invoiceBucket,
   invoicePage,
@@ -156,6 +157,40 @@ describe("In-app AI usage", () => {
       expect(within(credits()).queryByRole("spinbutton")).toBeNull();
     },
   );
+
+  // purchase_credits refuses a Free organization at the checkout whatever the
+  // role, so offering its owner the form gives them one that cannot succeed.
+  it("sends an owner of a Free organization to the subscription, not the form (negative)", async () => {
+    await renderBilling(
+      {
+        rate: readOk(contractRate({ source: "published_tier", tier: "free" })),
+      },
+      { role: "owner" },
+    );
+    expect(credits()).toHaveAttribute("data-state", "plan");
+    expect(credits()).toHaveTextContent(
+      "Usage credits need a Build plan or above.",
+    );
+    expect(within(credits()).queryByRole("spinbutton")).toBeNull();
+  });
+
+  it.each(["build", "scale", "enterprise"] as const)(
+    "offers the top-up on the paid tier %s",
+    async (tier) => {
+      await renderBilling(
+        { rate: readOk(contractRate({ tier })) },
+        { role: "owner" },
+      );
+      expect(credits()).toHaveAttribute("data-state", "ok");
+    },
+  );
+
+  // A rate the page could not read says nothing about the tier, so the form
+  // stays offered and the handler stays the authority on it.
+  it("still offers the top-up when the rate could not be read", async () => {
+    await renderBilling({ rate: DOWN }, { role: "owner" });
+    expect(credits()).toHaveAttribute("data-state", "ok");
+  });
 });
 
 describe("Buy governed action units", () => {
@@ -195,6 +230,13 @@ describe("checkout banner", () => {
       "Checkout finished. The governed action units you bought are added to the bucket once Stripe confirms the payment.",
     ],
     ["cancel", "Checkout was cancelled. Nothing was charged."],
+    // The two meters are bought separately and confirmed separately: a credit
+    // top-up returns to ?checkout=credits so the line names the balance it
+    // landed on rather than the governed action unit bucket (§3.9).
+    [
+      "credits",
+      "Checkout finished. The usage credits you bought are added to the balance once Stripe confirms the payment.",
+    ],
   ])("says what ?checkout=%s means", async (checkout, text) => {
     await renderBilling({}, { checkout });
     const status = screen.getByRole("status");

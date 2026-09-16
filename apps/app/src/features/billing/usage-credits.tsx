@@ -10,7 +10,10 @@
 // token count and no per-call cost appears here (§1.4).
 //
 // Owners and billing members top up; anyone else who can read the balance sees
-// who can. The presets and the minimum arrive as props. They are the
+// who can. A Free organization cannot top up at any role — the checkout
+// refuses it — so it is shown the subscription it needs first rather than a
+// form whose every submission would fail. The presets and the minimum arrive
+// as props. They are the
 // CREDIT_PACKS prices carried on the purchase contract, which billing.tsx
 // reads on the server and hands down, the way it hands the GAU purchase form
 // its maximum: a contract module registers its capability when it loads, so
@@ -121,17 +124,24 @@ function TopUpForm({
   );
 }
 
+/**
+ * Whether this viewer is offered the top-up, and when not, what refused it:
+ * `role` for a viewer who is neither an owner nor a billing member, `plan` for
+ * a Free organization, whose checkout is refused whatever the role.
+ */
+export type TopUpState = "ok" | "role" | "plan";
+
 export function UsageCreditsSection({
   org,
   credits,
-  allowed,
+  topUp,
   presetsUsd,
   minUsd,
 }: {
   org: string;
   credits: Read<UsageCredits>;
-  /** Owner and Billing top up; the handler checks it again. */
-  allowed: boolean;
+  /** Owner and Billing on a paid plan top up; the handler checks both again. */
+  topUp: TopUpState;
   /** The CREDIT_PACKS prices, in whole dollars of face value. */
   presetsUsd: readonly number[];
   /** The smallest top-up the contract accepts, in whole dollars. */
@@ -152,7 +162,7 @@ export function UsageCreditsSection({
     <Section
       id="billing-usage-credits"
       title={title}
-      data-state={allowed ? "ok" : "denied"}
+      data-state={topUp === "ok" ? "ok" : topUp === "plan" ? "plan" : "denied"}
     >
       <Facts>
         <Fact name="balance" term={t("balance")}>
@@ -170,10 +180,12 @@ export function UsageCreditsSection({
           {t("exhausted")}
         </p>
       ) : null}
-      {allowed ? (
+      {topUp === "ok" ? (
         <TopUpForm org={org} presetsUsd={presetsUsd} minUsd={minUsd} />
       ) : (
-        <p className="text-sm text-muted-foreground">{t("denied")}</p>
+        <p className="text-sm text-muted-foreground">
+          {t(topUp === "plan" ? "planDenied" : "denied")}
+        </p>
       )}
     </Section>
   );

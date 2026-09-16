@@ -123,7 +123,9 @@ export async function purchaseGau(
  * minimum; anything else is `invalid` on the `amountUsd` field and no
  * capability runs. `purchase_credits` takes absolute return URLs rather than
  * app-relative paths, so the two are built here from the billing route on
- * NEXT_PUBLIC_APP_URL. The handler checks the role again, and the browser is
+ * NEXT_PUBLIC_APP_URL. Success returns to `?checkout=credits`, the usage
+ * credit meter's outcome, so the banner names the balance the payment lands on
+ * rather than the governed action unit bucket (§3.9). The handler checks the role again, and the browser is
  * sent on only to a URL parseCheckoutUrl accepts.
  */
 export async function purchaseCredits(
@@ -157,7 +159,7 @@ export async function purchaseCredits(
 
   const result = await kernelWrite(ctx, billingCreditsPurchase, {
     amountUsd,
-    successUrl: `${origin}${routes.billing(ctx.orgSlug, { checkout: "success" })}`,
+    successUrl: `${origin}${routes.billing(ctx.orgSlug, { checkout: "credits" })}`,
     cancelUrl: `${origin}${routes.billing(ctx.orgSlug, { checkout: "cancel" })}`,
   });
   if (!result.ok) return result;

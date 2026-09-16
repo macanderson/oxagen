@@ -591,6 +591,7 @@ type Messages = {
     checkout: {
       success: string;
       cancel: string;
+      credits: string;
     };
     plan: {
       title: string;
@@ -728,6 +729,7 @@ type Messages = {
       submit: string;
       submitting: string;
       denied: string;
+      planDenied: string;
       errors: {
         invalid: string;
         denied: string;

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import type { PlanTier } from "../types";
 
 // Initiate a dynamic usage-credit purchase via Stripe Checkout.
 // The customer specifies how much usage (in USD) they want to buy; the volume
@@ -24,6 +25,22 @@ export const MIN_CREDIT_TOPUP_USD = 5;
  * depends on oxagen, so reading the packs here would be a cycle.
  */
 export const CREDIT_TOPUP_PRESETS_USD: readonly number[] = [10, 50, 200];
+
+/**
+ * Whether an organization on `tier` may buy usage credits at all. A Free
+ * organization may not: it subscribes to Build or above first, so a top-up it
+ * starts is refused by `createUsageCreditCheckout` before Stripe is reached.
+ *
+ * The rule lives on the contract for the same reason the presets do — the
+ * Billing page has to know it to decide whether to offer the top-up or the
+ * upgrade path, and `apps/app` may import `@oxagen/oxagen/contracts/*` and
+ * nothing else from the platform (§2, INV-03). `canBuyCredits` in
+ * `@oxagen/billing`, which the handler's checkout path consults, delegates
+ * here, so the page and the checkout cannot answer differently.
+ */
+export function canTierBuyCredits(tier: PlanTier): boolean {
+  return tier !== "free";
+}
 
 export const billingCreditsPurchase = registerCapability({
   name: "purchase_credits",

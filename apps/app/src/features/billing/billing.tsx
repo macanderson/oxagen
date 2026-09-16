@@ -5,6 +5,7 @@
 // second meter (§3.9). The page makes five reads; money appears only in the
 // rate block, the purchase total, the invoices and the credit balance.
 import {
+  canTierBuyCredits,
   CREDIT_TOPUP_PRESETS_USD,
   MIN_CREDIT_TOPUP_USD,
 } from "@oxagen/oxagen/contracts/billing.credits.purchase";
@@ -42,6 +43,18 @@ export async function Billing({
     source.billing.usageCredits(ctx),
   ]);
   const buys = ctx.orgRole === "owner" || ctx.orgRole === "billing";
+  // Two things decide whether the top-up is offered, and the section says
+  // which one refused. `purchase_credits` needs the role, and its checkout
+  // refuses a Free organization outright (canTierBuyCredits), so offering an
+  // owner of a Free org the form gives them one that cannot succeed. The tier
+  // is the contracted rate's, the same figure resolveContractTerms answers the
+  // checkout with. A rate the page could not read proves nothing about the
+  // tier, so the form stays offered and the handler remains the authority.
+  const topUp = !buys
+    ? "role"
+    : rate.ok && !canTierBuyCredits(rate.value.tier)
+      ? "plan"
+      : "ok";
   return (
     <div className="flex flex-col gap-6">
       <CheckoutBanner outcome={checkoutOutcome(checkout)} />
@@ -66,7 +79,7 @@ export async function Billing({
       <UsageCreditsSection
         org={ctx.orgSlug}
         credits={credits}
-        allowed={buys}
+        topUp={topUp}
         presetsUsd={CREDIT_TOPUP_PRESETS_USD}
         minUsd={MIN_CREDIT_TOPUP_USD}
       />

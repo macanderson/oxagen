@@ -109,10 +109,16 @@ export const routes = {
   /** The agent's definition file in the source editor. */
   agentSource: (org: string, ws: string, agent: string): SafePath =>
     pathOf(org, ws, "agents", agent, "source"),
-  /** Billing; `cursor` opens a later page of its invoices, `checkout` is where a Stripe Checkout returns. */
+  /**
+   * Billing; `cursor` opens a later page of its invoices, `checkout` is where
+   * a Stripe Checkout returns. The two meters return to different values —
+   * `success` for a governed-action-unit purchase, `credits` for a usage
+   * credit top-up — so the page can name the meter the payment landed on;
+   * `cancel` is shared, because nothing was charged on either.
+   */
   billing: (
     org: string,
-    q?: { cursor: string } | { checkout: "success" | "cancel" },
+    q?: { cursor: string } | { checkout: "success" | "cancel" | "credits" },
   ): SafePath =>
     withQuery(pathOf(org, "billing"), {
       cursor: q !== undefined && "cursor" in q ? q.cursor : undefined,

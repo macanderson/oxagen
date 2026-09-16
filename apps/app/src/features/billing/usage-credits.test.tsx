@@ -27,17 +27,21 @@ const { purchaseCredits } = vi.hoisted(() => ({
 vi.mock("./actions", () => ({ purchaseCredits }));
 
 const { UsageCreditsSection } = await import("./usage-credits");
+type TopUpState = import("./usage-credits").TopUpState;
 
 function renderSection({
   credits = readOk(usageCredits()),
-  allowed = true,
-}: { credits?: Read<UsageCredits>; allowed?: boolean } = {}) {
+  topUp = "ok",
+}: {
+  credits?: Read<UsageCredits>;
+  topUp?: TopUpState;
+} = {}) {
   render(
     <IntlProvider>
       <UsageCreditsSection
         org="acme"
         credits={credits}
-        allowed={allowed}
+        topUp={topUp}
         presetsUsd={CREDIT_TOPUP_PRESETS_USD}
         minUsd={MIN_CREDIT_TOPUP_USD}
       />
@@ -125,9 +129,7 @@ describe("In-app AI usage", () => {
     renderSection();
     expect(amount()).toHaveAttribute("min", "5");
     expect(amount()).toHaveAttribute("step", "1");
-    expect(amount()).toHaveAccessibleDescription(
-      "whole dollars, at least $5",
-    );
+    expect(amount()).toHaveAccessibleDescription("whole dollars, at least $5");
   });
 
   it("hands the action the organization and the amount", async () => {
@@ -164,18 +166,37 @@ describe("In-app AI usage", () => {
       { ok: false, reason: "unavailable", code: "checkout_url_refused" },
       "Checkout could not be opened. Nothing was charged.",
     ],
-  ])("says why a top-up was refused: %s (negative)", async (_case, result, copy) => {
-    purchaseCredits.mockResolvedValue(result);
-    renderSection();
-    await submit();
-    expect(await screen.findByTestId("credits-error")).toHaveTextContent(copy);
-  });
+  ])(
+    "says why a top-up was refused: %s (negative)",
+    async (_case, result, copy) => {
+      purchaseCredits.mockResolvedValue(result);
+      renderSection();
+      await submit();
+      expect(await screen.findByTestId("credits-error")).toHaveTextContent(
+        copy,
+      );
+    },
+  );
 
   it("shows an admin who can top up, with no amount, presets or button (negative)", () => {
-    renderSection({ allowed: false });
+    renderSection({ topUp: "role" });
     expect(region()).toHaveAttribute("data-state", "denied");
     expect(region()).toHaveTextContent(
       "An owner or a billing member can top up usage credits.",
+    );
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
+    // The balance still reads, so its face value is still the one money here.
+    expect(within(region()).getAllByTestId("money")).toHaveLength(1);
+  });
+
+  // A Free organization's checkout is refused whatever the role, so the owner
+  // of one is told what it needs first rather than handed a form that fails.
+  it("sends a Free organization to the subscription instead of the form (negative)", () => {
+    renderSection({ topUp: "plan" });
+    expect(region()).toHaveAttribute("data-state", "plan");
+    expect(region()).toHaveTextContent(
+      "Usage credits need a Build plan or above. Subscribe first and the top-up opens here.",
     );
     expect(screen.queryByRole("spinbutton")).toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
