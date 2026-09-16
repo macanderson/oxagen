@@ -64,7 +64,10 @@ function renderForm() {
   );
 }
 
-function renderWrap(gated: boolean, harness: "claude-code" | "claude-agent-sdk") {
+function renderWrap(
+  gated: boolean,
+  harness: "claude-code" | "claude-agent-sdk",
+) {
   render(
     <IntlProvider>
       <WrapAgent
@@ -81,7 +84,10 @@ function renderWrap(gated: boolean, harness: "claude-code" | "claude-agent-sdk")
   );
 }
 
-function renderRun(repository: { owner: string; name: string } | null) {
+function renderRun(
+  repository: { owner: string; name: string } | null,
+  host: { hostEnrollmentId: string } | null = null,
+) {
   render(
     <IntlProvider>
       <FirstFrameStep
@@ -89,14 +95,29 @@ function renderRun(repository: { owner: string; name: string } | null) {
         ws={WS}
         workspace="Core platform"
         agentKey="acme.core.release-bot"
-        host={null}
+        host={
+          host === null
+            ? null
+            : {
+                hostEnrollmentId: host.hostEnrollmentId,
+                enrolledAt: "2026-09-15T14:00:00.000Z",
+                lastHeartbeatAt: null,
+                hooksOk: null,
+              }
+        }
         here={HERE}
         repository={
           repository === null
             ? null
-            : { provider: "github", owner: repository.owner, name: repository.name }
+            : {
+                provider: "github",
+                owner: repository.owner,
+                name: repository.name,
+              }
         }
-        provisionalUntil={repository === null ? null : "2026-09-29T00:00:00.000Z"}
+        provisionalUntil={
+          repository === null ? null : "2026-09-29T00:00:00.000Z"
+        }
       />
     </IntlProvider>,
   );
@@ -260,9 +281,23 @@ describe("the run step", () => {
   it("does not poll while no host has enrolled, and re-reads when asked", async () => {
     const user = userEvent.setup();
     renderRun(null);
-    expect(router.replace).not.toHaveBeenCalled();
+    expect(router.refresh).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Check again" }));
-    expect(router.replace).toHaveBeenCalledWith(HERE);
+    expect(router.refresh).toHaveBeenCalledTimes(1);
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("asks for one wait per enrolled host, not one per render", async () => {
+    const user = userEvent.setup();
+    renderRun(null, { hostEnrollmentId: "hen_1" });
+    // The effect fires for the record, not for the render. Clicking adds one
+    // ask, and the re-render its pending state causes adds none: `waitMs` is
+    // 20 s per invoke, so a per-render effect would spend the budget several
+    // times over on one click (ARCHITECTURE.md §3.5).
+    expect(router.refresh).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "Check again" }));
+    expect(router.refresh).toHaveBeenCalledTimes(2);
+    expect(router.replace).not.toHaveBeenCalled();
   });
 
   it("binds the detected repository and re-reads the step", async () => {
@@ -278,7 +313,9 @@ describe("the run step", () => {
     const user = userEvent.setup();
     renderRun({ owner: "acme", name: "platform" });
     await user.click(
-      screen.getByRole("button", { name: "Bind acme/platform as the main repo" }),
+      screen.getByRole("button", {
+        name: "Bind acme/platform as the main repo",
+      }),
     );
     expect(bindMainRepository).toHaveBeenCalledWith(ORG, WS, {
       owner: "acme",
@@ -296,7 +333,9 @@ describe("the run step", () => {
     const user = userEvent.setup();
     renderRun({ owner: "acme", name: "platform" });
     await user.click(
-      screen.getByRole("button", { name: "Bind acme/platform as the main repo" }),
+      screen.getByRole("button", {
+        name: "Bind acme/platform as the main repo",
+      }),
     );
     expect(screen.getByTestId("bind-failure")).toHaveTextContent(
       "No GitHub App installation reaches this workspace",

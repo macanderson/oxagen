@@ -833,6 +833,7 @@ type Messages = {
         title: string;
         body: string;
         detected: string;
+        binding: string;
         noRepository: string;
       };
       firstRun: {

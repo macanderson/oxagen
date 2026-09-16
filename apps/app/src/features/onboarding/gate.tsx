@@ -16,6 +16,7 @@ import { routes } from "@/shared/safe-path";
 import { linkText, mono, panel } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { Rail, type RailStep } from "./rail";
+import { BindRepository } from "./ui/bind-repository";
 import { gateRail, type GateStep } from "./steps";
 
 function Banner({
@@ -77,9 +78,7 @@ function GateRail({
     >
       <div className="flex flex-col gap-0.5">
         <h2 className="text-base font-semibold">{t("title")}</h2>
-        <p className="max-w-prose text-xs text-muted-foreground">
-          {t("lead")}
-        </p>
+        <p className="max-w-prose text-xs text-muted-foreground">{t("lead")}</p>
       </div>
       <Rail label={t("railLabel")} steps={steps} />
     </section>
@@ -110,15 +109,21 @@ function Provisional({
       title={t("title", { workspace, until })}
       action={
         repository === null ? undefined : (
-          <SafeLink
-            to={routes.register(org, ws, "run")}
-            className={linkText}
-            data-testid="bind-main-repo"
-          >
-            {t("detected", {
+          // Binding happens here rather than behind a link to the register
+          // flow's run step: that step needs the identity in its URL and the
+          // gate record carries no agent id, so a link could only land on "no
+          // agent to wrap yet". `bind_main_repository` needs the workspace and
+          // the repository, both of which the banner already holds.
+          <BindRepository
+            org={org}
+            ws={ws}
+            repository={repository}
+            label={t("detected", {
               repository: `${repository.owner}/${repository.name}`,
             })}
-          </SafeLink>
+            pendingLabel={t("binding")}
+            testId="bind-main-repo"
+          />
         )
       }
     >

@@ -39,7 +39,9 @@ function HostFacts({ host }: { host: NonNullable<FirstFrame["host"]> }) {
           ? t("noHeartbeat")
           : t("heartbeat", { at: at(host.lastHeartbeatAt) })}
       </li>
-      <li data-hooks={host.hooksOk === null ? "unreported" : String(host.hooksOk)}>
+      <li
+        data-hooks={host.hooksOk === null ? "unreported" : String(host.hooksOk)}
+      >
         {host.hooksOk === null
           ? t("hooksUnreported")
           : host.hooksOk
@@ -152,14 +154,22 @@ export function FirstFrameStep({
   // The server render already waited out the contract's budget. With a host
   // enrolled there is something to wait for, so ask for the next wait; with
   // none, nothing would change and the operator asks.
+  //
+  // The dependency is the enrolment id rather than the `host` object, and
+  // `useNavigate` is memoised on the router, so the effect fires when the
+  // record changes rather than after every render — each stray fire was a
+  // 20-second `get_first_frame`, against the one-invoke-per-wait budget
+  // (§3.5). The poll refreshes rather than replacing, because the address is
+  // the one already showing and `replace` fetches it twice.
+  const enrolment = host?.hostEnrollmentId ?? null;
   useEffect(() => {
-    if (host === null) return;
-    navigate.replace(here);
-  }, [host, here, navigate]);
+    if (enrolment === null) return;
+    navigate.refresh();
+  }, [enrolment, navigate]);
 
   function again() {
     setWaiting(true);
-    navigate.replace(here);
+    navigate.refresh();
   }
 
   return (
@@ -180,7 +190,10 @@ export function FirstFrameStep({
           {t("waiting.body")}
         </p>
         {host === null ? (
-          <p data-testid="first-frame-no-host" className="text-xs text-muted-foreground">
+          <p
+            data-testid="first-frame-no-host"
+            className="text-xs text-muted-foreground"
+          >
             {t("host.none")}
           </p>
         ) : (

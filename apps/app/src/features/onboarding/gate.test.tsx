@@ -5,6 +5,7 @@
 // gate, a bound workspace and a refused read each draw nothing, with an axe
 // check in every state.
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError } from "@/data/read";
@@ -12,11 +13,17 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { onboardingGate, onboardingSource } from "./onboarding.builders";
 
+const { router, bindMainRepository } = vi.hoisted(() => ({
+  router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+  bindMainRepository: vi.fn(),
+}));
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
     <a {...rest}>{children}</a>
   ),
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
+vi.mock("./actions", () => ({ bindMainRepository }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
@@ -82,6 +89,49 @@ describe("OnboardingGate", () => {
     expect(screen.getByTestId("bind-main-repo")).toHaveTextContent(
       "Bind acme/platform",
     );
+  });
+
+  it("binds the reported repository from the banner itself", async () => {
+    // The banner used to link at the register flow's run step with no agent in
+    // the URL, where that step answers "No agent to wrap yet" — so the only
+    // Bind control on Fleet could never bind and the workspace stayed
+    // provisional until the window expired. The action takes the workspace and
+    // the repository, both of which the banner holds.
+    bindMainRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        fullName: "acme/platform",
+        defaultRef: "main",
+        boundAt: "2026-09-15T14:10:00.000Z",
+        provisionalClosed: true,
+      },
+    });
+    const user = userEvent.setup();
+    await renderGate({ state: { ok: true, value: onboardingGate() } });
+    await user.click(
+      screen.getByRole("button", { name: "Bind acme/platform" }),
+    );
+    expect(bindMainRepository).toHaveBeenCalledWith("acme", "core-platform", {
+      owner: "acme",
+      name: "platform",
+    });
+    expect(router.refresh).toHaveBeenCalled();
+  });
+
+  it("names a refused bind and leaves the banner standing (negative)", async () => {
+    bindMainRepository.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "github_not_connected",
+    });
+    const user = userEvent.setup();
+    await renderGate({ state: { ok: true, value: onboardingGate() } });
+    await user.click(
+      screen.getByRole("button", { name: "Bind acme/platform" }),
+    );
+    expect(screen.getByTestId("bind-main-repo-failure")).toBeInTheDocument();
+    expect(screen.getByTestId("onboarding-provisional")).toBeInTheDocument();
+    expect(router.refresh).not.toHaveBeenCalled();
   });
 
   it("says a workspace with no reported remote has nothing to bind here (negative)", async () => {

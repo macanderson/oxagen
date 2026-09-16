@@ -57,6 +57,7 @@
         "title": "{workspace} is provisional until {until}",
         "body": "Runs record and spend counts. Steering, context records and agent definitions stay off until a main repo is bound, because there is nowhere to publish them to.",
         "detected": "Bind {repository}",
+        "binding": "Binding…",
         "noRepository": "No enrolled host has reported a GitHub remote for this workspace. Bind a repository from the register flow once one has."
       },
       "firstRun": {
