@@ -58,6 +58,7 @@ const source: DataSource = {
     waste: refuse,
     budgets: refuse,
   },
+  onboarding: { state: refuse, firstFrame: refuse },
   org: { members: refuse },
 };
 

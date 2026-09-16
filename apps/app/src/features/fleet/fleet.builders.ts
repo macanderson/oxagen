@@ -102,6 +102,7 @@ export function fleetSource(reads: FleetReads) {
       waste: refuse,
       budgets: refuse,
     },
+    onboarding: { state: refuse, firstFrame: refuse },
     org: { members: refuse },
   };
   return { source, calls };

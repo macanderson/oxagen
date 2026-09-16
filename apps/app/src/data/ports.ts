@@ -18,6 +18,7 @@ import type {
   InvoicePage,
   PlanCard,
 } from "./contracts/billing";
+import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
 import type { MemberList } from "./contracts/org";
 import type { RunPage } from "./contracts/runs";
 import type {
@@ -126,6 +127,23 @@ export interface DataSource {
     waste(ctx: WsCtx, period: DayRange): Promise<Read<SpendWaste>>;
     /** get_spend_budget */
     budgets(ctx: WsCtx): Promise<Read<SpendBudgets>>;
+  };
+  /**
+   * The onboarding gate and the register flow (#2967, ADR-065).
+   * `get_onboarding_state` (`scoped: false`) answers where the organization
+   * stands, read by features/onboarding/gate.tsx on Fleet and by the register
+   * stepper; `get_first_frame` long-polls one registered agent's first frame,
+   * caller features/onboarding/register.tsx.
+   */
+  onboarding: {
+    /** get_onboarding_state */
+    state(ctx: OrgCtx): Promise<Read<OnboardingGate>>;
+    /** get_first_frame, waiting up to `waitMs` inside the one invoke (§3.5) */
+    firstFrame(
+      ctx: WsCtx,
+      agent: string,
+      q: { waitMs: number },
+    ): Promise<Read<FirstFrame>>;
   };
   /** list_members {scope:"org"}; caller: features/organization/people.tsx. */
   org: { members(ctx: OrgCtx): Promise<Read<MemberList>> };

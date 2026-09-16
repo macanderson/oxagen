@@ -49,6 +49,7 @@ const source = {
     waste: vi.fn(),
     budgets: vi.fn(),
   },
+  onboarding: { state: vi.fn(), firstFrame: vi.fn() },
   org: { members: vi.fn() },
 };
 
