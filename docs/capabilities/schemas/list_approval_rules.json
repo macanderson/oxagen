@@ -3,7 +3,10 @@
   "domain": "approval_rule",
   "description": "List the workspace's auto-approval rules, with the calls each released and held in the last 30 days",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -110,7 +113,12 @@
                       "type": "string"
                     }
                   },
-                  "required": ["timezone", "days", "start", "end"],
+                  "required": [
+                    "timezone",
+                    "days",
+                    "start",
+                    "end"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -159,7 +167,10 @@
         "minimum": 0
       }
     },
-    "required": ["items", "windowDays"],
+    "required": [
+      "items",
+      "windowDays"
+    ],
     "additionalProperties": false
   }
 }

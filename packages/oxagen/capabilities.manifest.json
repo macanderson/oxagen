@@ -1127,8 +1127,8 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
-        "docs": false
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -1145,8 +1145,8 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
-        "docs": false
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -1163,8 +1163,8 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
-        "docs": false
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -1180,8 +1180,8 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
-        "docs": false
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -1198,8 +1198,8 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
-        "docs": false
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -4640,6 +4640,23 @@
         "agent"
       ],
       "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_skills",
+      "file": "skill.list.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
         "api": true,
         "mcp": true,
         "unit": true,

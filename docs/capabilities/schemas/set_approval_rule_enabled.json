@@ -3,7 +3,11 @@
   "domain": "approval_rule",
   "description": "Switch one auto-approval rule on or off",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -29,7 +33,10 @@
         "type": "boolean"
       }
     },
-    "required": ["ruleId", "enabled"],
+    "required": [
+      "ruleId",
+      "enabled"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -120,7 +127,12 @@
                       "type": "string"
                     }
                   },
-                  "required": ["timezone", "days", "start", "end"],
+                  "required": [
+                    "timezone",
+                    "days",
+                    "start",
+                    "end"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -169,7 +181,10 @@
         "minimum": 0
       }
     },
-    "required": ["items", "windowDays"],
+    "required": [
+      "items",
+      "windowDays"
+    ],
     "additionalProperties": false
   }
 }

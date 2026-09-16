@@ -3,7 +3,10 @@
   "domain": "agent",
   "description": "List the workspace's pending tool-call approvals, soonest expiry first, cursor-paged, optionally narrowed to one run",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -115,7 +118,12 @@
                       "type": "boolean"
                     }
                   },
-                  "required": ["ruleId", "ok", "reasons", "floor"],
+                  "required": [
+                    "ruleId",
+                    "ok",
+                    "reasons",
+                    "floor"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -147,7 +155,10 @@
                   ]
                 }
               },
-              "required": ["agentKey", "rule"],
+              "required": [
+                "agentKey",
+                "rule"
+              ],
               "additionalProperties": false
             }
           },
@@ -176,7 +187,10 @@
         ]
       }
     },
-    "required": ["items", "nextCursor"],
+    "required": [
+      "items",
+      "nextCursor"
+    ],
     "additionalProperties": false
   }
 }

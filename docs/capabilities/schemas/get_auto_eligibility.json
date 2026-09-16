@@ -3,7 +3,10 @@
   "domain": "approval_rule",
   "description": "The auto-approval evaluation recorded for one approval request, and who resolved it",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -24,7 +27,9 @@
         "type": "string"
       }
     },
-    "required": ["approvalId"],
+    "required": [
+      "approvalId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -69,7 +74,12 @@
                 "type": "boolean"
               }
             },
-            "required": ["ruleId", "ok", "reasons", "floor"],
+            "required": [
+              "ruleId",
+              "ok",
+              "reasons",
+              "floor"
+            ],
             "additionalProperties": false
           },
           {
@@ -78,7 +88,11 @@
         ]
       }
     },
-    "required": ["approvalId", "resolvedBy", "eligibility"],
+    "required": [
+      "approvalId",
+      "resolvedBy",
+      "eligibility"
+    ],
     "additionalProperties": false
   }
 }

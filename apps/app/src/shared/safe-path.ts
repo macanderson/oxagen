@@ -128,6 +128,9 @@ export const routes = {
     view: { tab: string; drill?: string },
   ): SafePath =>
     withQuery(pathOf(org, ws, "spend"), { tab: view.tab, drill: view.drill }),
+  /** Skills; `cursor` opens a later page of the inventory. */
+  skills: (org: string, ws: string, q?: { cursor: string }): SafePath =>
+    withQuery(pathOf(org, ws, "skills"), { cursor: q?.cursor }),
   /** Steering; a tab, a kind, a page offset and a selected proposal are query values on the one route. */
   steering: (
     org: string,

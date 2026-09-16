@@ -3,7 +3,11 @@
   "domain": "approval_rule",
   "description": "Remove one auto-approval rule from the workspace's rule set",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -26,7 +30,9 @@
         "maxLength": 128
       }
     },
-    "required": ["ruleId"],
+    "required": [
+      "ruleId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -117,7 +123,12 @@
                       "type": "string"
                     }
                   },
-                  "required": ["timezone", "days", "start", "end"],
+                  "required": [
+                    "timezone",
+                    "days",
+                    "start",
+                    "end"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -166,7 +177,10 @@
         "minimum": 0
       }
     },
-    "required": ["items", "windowDays"],
+    "required": [
+      "items",
+      "windowDays"
+    ],
     "additionalProperties": false
   }
 }

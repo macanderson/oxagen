@@ -3,7 +3,11 @@
   "domain": "org",
   "description": "Remove a member from the org. Revokes their role assignments and deactivates their principal. Blocked if the target is the last org owner. Audited as org.member_removed.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -26,7 +30,9 @@
         "description": "The user to remove: their public id (usr_…) or their user uuid"
       }
     },
-    "required": ["targetUserId"],
+    "required": [
+      "targetUserId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -43,7 +49,11 @@
         "type": "string"
       }
     },
-    "required": ["removed", "targetUserId", "orgId"],
+    "required": [
+      "removed",
+      "targetUserId",
+      "orgId"
+    ],
     "additionalProperties": false
   }
 }

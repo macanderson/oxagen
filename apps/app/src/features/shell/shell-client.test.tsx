@@ -137,7 +137,7 @@ describe("the shell on /{org}/{ws}", () => {
 });
 
 describe("sidebar", () => {
-  it("renders exactly the mockup's seven links with Agent IAM naming and the current page", () => {
+  it("renders exactly the mockup's eight links with Agent IAM naming and the current page", () => {
     renderShell(shellData());
     const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
     const main = within(sidebar).getByRole("navigation", { name: "Main" });
@@ -146,6 +146,7 @@ describe("sidebar", () => {
       ["Fleet", "/acme/core-platform"],
       ["Agent IAM", "/acme/core-platform/agents"],
       ["Tools", "/acme/core-platform/tools"],
+      ["Skills", "/acme/core-platform/skills"],
       ["Steering", "/acme/core-platform/steering"],
       ["Spend", "/acme/core-platform/spend"],
       ["Organization", "/acme"],
@@ -168,7 +169,7 @@ describe("sidebar", () => {
     nav.pathname = "/acme/billing";
     renderShell(shellData());
     const main = screen.getByRole("navigation", { name: "Main" });
-    expect(within(main).getAllByRole("link")).toHaveLength(7);
+    expect(within(main).getAllByRole("link")).toHaveLength(8);
     expect(within(main).getByRole("link", { name: "Billing" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -236,6 +237,7 @@ describe("command menu", () => {
       "Fleet",
       "Agent IAM",
       "Tools",
+      "Skills",
       "Steering",
       "Spend",
       "Organization",

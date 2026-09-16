@@ -3,7 +3,11 @@
   "domain": "approval_rule",
   "description": "Replace the workspace's auto-approval rules — the conditions under which a call a policy sent to a person may skip them",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -104,7 +108,12 @@
                       "type": "string"
                     }
                   },
-                  "required": ["timezone", "days", "start", "end"],
+                  "required": [
+                    "timezone",
+                    "days",
+                    "start",
+                    "end"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -114,12 +123,18 @@
               "default": null
             }
           },
-          "required": ["id", "name", "tools"],
+          "required": [
+            "id",
+            "name",
+            "tools"
+          ],
           "additionalProperties": false
         }
       }
     },
-    "required": ["rules"],
+    "required": [
+      "rules"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -210,7 +225,12 @@
                       "type": "string"
                     }
                   },
-                  "required": ["timezone", "days", "start", "end"],
+                  "required": [
+                    "timezone",
+                    "days",
+                    "start",
+                    "end"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -259,7 +279,10 @@
         "minimum": 0
       }
     },
-    "required": ["items", "windowDays"],
+    "required": [
+      "items",
+      "windowDays"
+    ],
     "additionalProperties": false
   }
 }
