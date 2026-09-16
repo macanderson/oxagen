@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // Every route under /[org] renders between WL-08 and its page item
-// (ARCHITECTURE.md §8): the gap-lane pages still waiting on their lane render
-// their one UNRECORDED row under the title, and the other rev1 pages render the
-// title alone. Each page names itself once from its pages.* key (§1.2), resolves
+// (ARCHITECTURE.md §8): Tools renders the mandates ledger its lane landed
+// (#2957) and, under it, the UNRECORDED row naming the tabs #2958 still owes;
+// the other rev1 pages render the title alone. Each page names itself once from its pages.* key (§1.2), resolves
 // its viewer first and renders nothing for a person requireViewer refuses.
 // Fleet hands its viewer, the data source and the runs cursor to the Fleet
 // feature (WL-34) and renders the cost rollup's two tiles under its title
@@ -32,6 +32,7 @@ const {
   Steering,
   Spend,
   FleetSpendTiles,
+  Tools,
   members,
   source,
 } = vi.hoisted(() => {
@@ -43,6 +44,9 @@ const {
     Agents: vi.fn((_props: Record<string, unknown>) => null),
     Agent: vi.fn((_props: Record<string, unknown>) => null),
     AgentSource: vi.fn((_props: Record<string, unknown>) => null),
+    Tools: vi.fn((_props: Record<string, unknown>) => (
+      <p data-testid="tools-body" />
+    )),
     Steering: vi.fn((props: { searchParams: Record<string, string> }) => (
       <p data-testid="steering-body" data-tab={props.searchParams.tab} />
     )),
@@ -61,6 +65,7 @@ vi.mock("@/features/billing", () => ({ Billing }));
 vi.mock("@/features/fleet", () => ({ Fleet }));
 vi.mock("@/features/agents", () => ({ Agents, Agent, AgentSource }));
 vi.mock("@/features/steering", () => ({ Steering }));
+vi.mock("@/features/tools", () => ({ Tools }));
 vi.mock("@/features/spend", () => ({ Spend, FleetSpendTiles }));
 vi.mock("@/data/source", () => ({ dataSource: () => source }));
 vi.mock("next-intl/server", () => ({
@@ -98,9 +103,7 @@ const ORG = ["acme"];
 const WS = ["acme", "core-platform"];
 const title = translator("pages");
 
-const GAP_LANE: [string, Load][] = [
-  ["tools", () => import("./[ws]/tools/page")],
-];
+const TOOLS: Load = () => import("./[ws]/tools/page");
 
 const STEERING: Load = () => import("./[ws]/steering/page");
 
@@ -117,19 +120,20 @@ const REV1: [string, string[], Load][] = [
 
 const BILLING: Load = () => import("./billing/page");
 
-describe("gap-lane pages", () => {
-  it.each(GAP_LANE)(
-    "pages.%s resolves the workspace viewer, names the page once and renders its one NotRecorded row",
-    async (key, load) => {
-      await expectPageTitle(await load(), routeProps(SEGMENTS), title(key));
-      expect(requireViewer).toHaveBeenCalledWith(...WS);
-      expect(screen.getByRole("main")).toBeInTheDocument();
-      expect(screen.getByTestId("not-recorded")).toHaveAttribute(
-        "data-section",
-        key,
-      );
-    },
-  );
+describe("the Tools page", () => {
+  it("resolves the workspace viewer, names the page once, hands the viewer and the data source to Tools, and says what the page still owes", async () => {
+    const ctx = { orgSlug: "acme", wsSlug: "core-platform" };
+    requireViewer.mockResolvedValue(ctx);
+    await expectPageTitle(await TOOLS(), routeProps(SEGMENTS), title("tools"));
+    expect(requireViewer).toHaveBeenCalledWith(...WS);
+    expect(Tools).toHaveBeenCalledOnce();
+    expect(Tools.mock.calls[0]?.[0]).toEqual({ ctx, source });
+    expect(screen.getByTestId("tools-body")).toBeInTheDocument();
+    expect(screen.getByTestId("not-recorded")).toHaveAttribute(
+      "data-section",
+      "tools",
+    );
+  });
 });
 
 describe("the Billing page", () => {
@@ -349,7 +353,7 @@ describe("Organization › People", () => {
 
 describe("a person requireViewer refuses", () => {
   it.each([
-    ...GAP_LANE.map(([key, load]) => [key, load] as const),
+    ["tools", TOOLS] as const,
     ["billing", BILLING] as const,
     ["steering", STEERING] as const,
     ["fleet", FLEET] as const,
