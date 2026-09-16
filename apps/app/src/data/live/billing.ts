@@ -7,7 +7,6 @@ import { billingGauBucketGet } from "@oxagen/oxagen/contracts/billing.gau_bucket
 import { billingInvoiceList } from "@oxagen/oxagen/contracts/billing.invoice.list";
 import { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscription.read";
 import { captureError } from "@oxagen/telemetry";
-import { cache } from "react";
 import type { z } from "zod";
 import {
   ContractRate,
@@ -19,7 +18,6 @@ import {
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
-import type { OrgCtx } from "@/server/viewer";
 import {
   toContractRate,
   toGauBucket,
@@ -46,33 +44,27 @@ function parsed<T>(
   return readError("record_unmappable", 502);
 }
 
-/**
- * get_subscription, read once per render pass.
- *
- * Two of the page's five reads are mapped from this one record — the plan card
- * and the usage credit balance (§3.9's two meters are billed apart but read
- * together) — and the handler aggregates token usage over ClickHouse on every
- * invocation. `cache` is keyed on the argument, and billing.tsx hands both
- * reads the same `ctx`, so the page pays for the aggregation once. A caller
- * outside that pass simply reads again, which is correct, only not shared.
- */
-const readSubscription = cache((ctx: OrgCtx) =>
-  kernelRead(ctx, {
-    contract: billingSubscriptionRead,
-    input: {},
-    page: "billing",
-  }),
-);
-
 export const billing: DataSource["billing"] = {
   async plan(ctx) {
-    const read = await readSubscription(ctx);
+    const read = await kernelRead(ctx, {
+      contract: billingSubscriptionRead,
+      input: {},
+      page: "billing",
+    });
     return read.ok
       ? parsed(PlanCard, toPlanCard(read.value), ctx.orgId, "plan")
       : read;
   },
+  // The plan card and the credit balance are two mappings of one record, so
+  // this repeats the read the plan made. The kernel seam serves a repeated
+  // read once per request (§3.2), which is where the dedup is allowed to live:
+  // INV-06 requires this method to make its own kernelRead call.
   async usageCredits(ctx) {
-    const read = await readSubscription(ctx);
+    const read = await kernelRead(ctx, {
+      contract: billingSubscriptionRead,
+      input: {},
+      page: "billing",
+    });
     return read.ok
       ? parsed(
           UsageCredits,
