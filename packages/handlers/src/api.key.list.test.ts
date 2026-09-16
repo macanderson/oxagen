@@ -128,11 +128,35 @@ function makeRoleResolutionTx(
  * test proves which columns the handler asked for, and captures the
  * projection so a test can assert key_hash is not among them.
  */
-function makeListTx(stored: StoredKey[], seen: { projection?: object }) {
+function makeListTx(
+  stored: StoredKey[],
+  seen: { projection?: object },
+  // The workspace the keys live in. `rotatable` is not answerable without it —
+  // `rotate_api_key` refuses an archived workspace whatever the key — so the
+  // handler reads it beside the keys and the mock has to serve it. Null stands
+  // for a workspace row that is not there, which fails closed.
+  workspace: { name: string; archivedAt: Date | null } | null = {
+    name: "Core platform",
+    archivedAt: null,
+  },
+) {
+  let selects = 0;
   return {
     select: vi
       .fn()
       .mockImplementation((projection: Record<string, unknown>) => {
+        selects++;
+        // Second select is the workspace, and it ends in `limit` rather than
+        // `orderBy` — one row, not a roster.
+        if (selects > 1) {
+          return {
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue(workspace ? [workspace] : []),
+              }),
+            }),
+          };
+        }
         seen.projection = projection;
         const columnNames = Object.fromEntries(
           Object.entries(projection).map(([out, col]) => [
@@ -163,6 +187,10 @@ function setup(
   roleName: string | null,
   stored: StoredKey[] = [LIVE, REVOKED],
   principalId: string | null = "principal-uuid-1",
+  workspace: { name: string; archivedAt: Date | null } | null = {
+    name: "Core platform",
+    archivedAt: null,
+  },
 ) {
   const seen: { projection?: object } = {};
   let callCount = 0;
@@ -171,7 +199,7 @@ function setup(
       callCount++;
       if (callCount === 1)
         return fn(makeRoleResolutionTx(principalId, roleName));
-      return fn(makeListTx(stored, seen));
+      return fn(makeListTx(stored, seen, workspace));
     },
   );
   return seen;
@@ -307,6 +335,40 @@ describe("list_api_keys — read", () => {
     expect(result.items.map((i) => [i.publicId, i.rotatable])).toEqual([
       ["aky_live", true],
       ["aky_old", false],
+    ]);
+  });
+
+  it("reports a live key in an ARCHIVED workspace as not rotatable", async () => {
+    // The mirror of the archived-workspace finding on the page. `key-row.tsx`
+    // withholds Rotate because it is handed a separate `archived` prop, so the
+    // app was right by accident of having a second source of truth. The API and
+    // MCP have only `rotatable`, and it said true for a key that
+    // `rotate_api_key` refuses unconditionally with conflict /
+    // workspace_archived — a read model advertising an operation guaranteed to
+    // fail.
+    //
+    // Archival is a property of the workspace, not the key, so nothing about
+    // these rows changes: the same key is rotatable in a live workspace and not
+    // in an archived one. That is why the fixture differs only in the
+    // workspace.
+    setup("Owner", [LIVE], "principal-uuid-1", {
+      name: "Sunset",
+      archivedAt: new Date("2026-09-01T00:00:00.000Z"),
+    });
+    const result = await apiKeyListHandler({}, TEST_CTX);
+    expect(result.items.map((i) => [i.publicId, i.rotatable])).toEqual([
+      ["aky_live", false],
+    ]);
+  });
+
+  it("reports keys as not rotatable when the workspace row is missing (fails closed)", async () => {
+    // rotate_api_key answers not_found for a workspace that is not there, so
+    // the honest `rotatable` is false. Failing closed here means the roster
+    // never offers a rotation the handler will refuse.
+    setup("Owner", [LIVE], "principal-uuid-1", null);
+    const result = await apiKeyListHandler({}, TEST_CTX);
+    expect(result.items.map((i) => [i.publicId, i.rotatable])).toEqual([
+      ["aky_live", false],
     ]);
   });
 

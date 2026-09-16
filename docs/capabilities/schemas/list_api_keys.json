@@ -77,7 +77,7 @@
             },
             "rotatable": {
               "type": "boolean",
-              "description": "Whether rotate_api_key will replace this key. False for a key an enrollment or a login flow owns, whose lifecycle belongs to that service. Revocation is always available."
+              "description": "Whether rotate_api_key will replace this key, as at the instant of this read. False for a key an enrollment or a login flow owns, whose lifecycle belongs to that service; false for an expired or revoked key; and false for every key in an archived workspace, because a rotation mints fresh secret material and archival exists to stop that. Revocation is always available."
             }
           },
           "required": [

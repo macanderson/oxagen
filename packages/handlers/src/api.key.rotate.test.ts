@@ -108,23 +108,32 @@ function makeRotateTx(
   workspace: WorkspaceRow = LIVE_WORKSPACE,
 ) {
   // Two selects, in the order the handler makes them: the key being rotated,
-  // then the workspace its replacement would be minted into. Only the second
-  // takes a row lock; `lock` records the mode it asked for, so a test can hold
-  // the guard to its mechanism and not only its answer.
+  // then the workspace its replacement would be minted into. BOTH take a row
+  // lock, and each records the mode it asked for, so a test can hold the guard
+  // to its mechanism and not only its answer.
+  //
+  // `keyLock` is what stops a concurrent revoke ending the key while this
+  // transaction queues on the workspace; `lock` is the workspace lock that
+  // stops a concurrent archive. They are separate spies because they close
+  // different races and a test that conflated them could not tell which one
+  // had been deleted.
+  const keyLock = vi
+    .fn()
+    .mockImplementation(() => Promise.resolve(oldRow ? [oldRow] : []));
   const lock = vi
     .fn()
     .mockImplementation(() => Promise.resolve(workspace ? [workspace] : []));
   let selects = 0;
   return {
+    keyLock,
     lock,
     select: () => {
       selects++;
       const first = selects === 1;
-      const rows = first ? (oldRow ? [oldRow] : []) : [];
       return {
         from: () => ({
           where: () => ({
-            limit: () => (first ? Promise.resolve(rows) : { for: lock }),
+            limit: () => ({ for: first ? keyLock : lock }),
           }),
         }),
       };
@@ -561,6 +570,81 @@ describe("api.key.rotate handler — archived workspace", () => {
 
     await apiKeyRotateHandler(BASE_INPUT, makeCTX());
     expect(tx.lock).toHaveBeenCalledWith("update");
+    // The key row is locked too, which is what keeps `scope` and `deleted_at`
+    // trustworthy across the wait for the workspace lock.
+    expect(tx.keyLock).toHaveBeenCalledWith("update");
+  });
+
+  it("refuses a key that expires WHILE the transaction waits for the workspace lock", async () => {
+    // The lock added above is a blocking lock, and that turned every check
+    // before it into a check-before-wait. This is the one that bites: the
+    // expiry check runs before the lock, so a key live when it ran can expire
+    // while this transaction queues behind a concurrent create, rotation or
+    // archival. Proceeding would revoke a working credential and hand back a
+    // replacement carrying an expiry already in the past — the operator loses a
+    // live key and gets a dead one.
+    //
+    // The wait is simulated where the real wait happens: the workspace lock is
+    // the thing that blocks, so the mock advances the clock past the key's
+    // expiry before it resolves. Nothing else about the handler is touched.
+    //
+    // A test that merely rotates an already-expired key would pass with or
+    // without the re-check, because the check before the lock already refuses
+    // that one. This one fails if the re-check is deleted.
+    vi.useFakeTimers();
+    try {
+      const base = new Date("2026-06-16T00:00:00.000Z");
+      vi.setSystemTime(base);
+
+      const expiringRow: OldRow = {
+        ...OLD_ROW,
+        // Live at the first check, 60s from now.
+        expiresAt: new Date(base.getTime() + 60_000),
+      };
+      const spies = {
+        valuesSpy: vi.fn(),
+        insertSpy: vi.fn(),
+        updateSpy: vi.fn(),
+      };
+      const tx = makeRotateTx(
+        expiringRow,
+        NEW_ROW,
+        spies.valuesSpy,
+        spies.insertSpy,
+        spies.updateSpy,
+        LIVE_WORKSPACE,
+      );
+      // Blocking for two minutes behind another writer: long enough that the
+      // key expires in the window.
+      tx.lock.mockImplementation(() => {
+        vi.setSystemTime(new Date(base.getTime() + 120_000));
+        return Promise.resolve([LIVE_WORKSPACE]);
+      });
+      let call = 0;
+      mocks.withTenantDb.mockImplementation(
+        (fn: (t: unknown) => Promise<unknown>) => {
+          call++;
+          if (call === 1)
+            return fn(makeRoleResolutionTx("principal-1", "Owner"));
+          return fn(tx);
+        },
+      );
+
+      await expect(
+        apiKeyRotateHandler(BASE_INPUT, makeCTX()),
+      ).rejects.toSatisfy(
+        (e: unknown) =>
+          isHandlerError(e) &&
+          e.code === "conflict" &&
+          e.reason === "api_key_expired",
+      );
+      // Nothing was minted and nothing was revoked on the way to the refusal:
+      // the operator keeps the key they had.
+      expect(spies.insertSpy).not.toHaveBeenCalled();
+      expect(spies.updateSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rotates in a workspace still in use, as before", async () => {

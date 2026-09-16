@@ -18,7 +18,10 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq, isNull } from "drizzle-orm";
 import { actorCanManageApiKeys, generateApiKey } from "./lib/api-key-authz";
-import { rotationRefusalFor } from "./lib/api-key-rotatable";
+import {
+  archivalRefusalFor,
+  rotationRefusalFor,
+} from "./lib/api-key-rotatable";
 import { logger } from "./logger";
 
 export const apiKeyRotateHandler: CapabilityHandler<
@@ -80,7 +83,19 @@ export const apiKeyRotateHandler: CapabilityHandler<
           isNull(schema.apiKeys.deletedAt),
         ),
       )
-      .limit(1);
+      .limit(1)
+      // Locked for the same reason the workspace row below is, and it is this
+      // lock that makes the refusal check beneath safe to run before the
+      // workspace lock is taken: `scope` and `deleted_at` are read here and
+      // used after a wait, so without it a concurrent `revoke_api_key` could
+      // end this key while this transaction queued on the workspace, and the
+      // rotation would mint a replacement for a key that no longer exists.
+      //
+      // Lock order is api_keys then workspaces, and nothing takes them the
+      // other way round — `create_api_key` locks the workspace and then INSERTs
+      // a new key row, which locks no existing key — so the two cannot
+      // deadlock.
+      .for("update");
 
     if (!oldKey) {
       throw new HandlerError({
@@ -91,10 +106,15 @@ export const apiKeyRotateHandler: CapabilityHandler<
       });
     }
 
-    // The whole answer to "may this key be rotated" (lib/api-key-rotatable.ts),
+    // The key's own answer to "may this be rotated" (lib/api-key-rotatable.ts),
     // which list_api_keys reads too so its `rotatable` and this refusal cannot
     // disagree. This is the enforcement: the app, the API and MCP all arrive
     // here, and a page's own check is a courtesy that can be stale.
+    //
+    // Run here to fail fast and to keep the key's own reasons ranked ahead of
+    // the workspace's, but it is NOT the last word — see the re-check after the
+    // workspace lock, which is what covers an expiry that passes while this
+    // transaction waits for that lock.
     const refusal = rotationRefusalFor(oldKey, Date.now());
     if (refusal) {
       logger.warn(
@@ -166,11 +186,51 @@ export const apiKeyRotateHandler: CapabilityHandler<
         message: "Not found: this workspace does not exist in this org",
       });
     }
-    if (workspace.archivedAt !== null) {
+    const archived = archivalRefusalFor(workspace);
+    if (archived && archived.kind !== "denied") {
+      logger.warn(
+        { orgId: ctx.orgId, keyPublicId: oldKey.publicId },
+        archived.log,
+      );
       throw new HandlerError({
-        code: "conflict",
-        reason: "workspace_archived",
-        message: `${workspace.name} was archived on ${workspace.archivedAt.toISOString()}; a key cannot be rotated in an archived workspace`,
+        code: archived.kind,
+        reason: archived.reason,
+        message: archived.message,
+      });
+    }
+
+    // The lock above is a BLOCKING lock, and that is what makes this re-check
+    // necessary rather than belt-and-braces. Acquiring it can wait an unbounded
+    // time behind a concurrent create, rotation or archival, and adding that
+    // wait turned every precondition read before it into a check-before-wait.
+    //
+    // `scope` and `deleted_at` survive the wait because the key row is locked
+    // too, so nothing can change them. The clock is the one thing no lock
+    // holds: a key live when the refusal above ran can expire while this
+    // transaction queues, and proceeding would revoke a working credential and
+    // hand back a replacement that inherited an expiry already in the past —
+    // the operator loses a live key and gets a dead one.
+    //
+    // Re-running the whole predicate rather than just the expiry branch keeps
+    // one answer to "may this be rotated"; the other two branches are
+    // idempotent here precisely because the row is locked.
+    const stale = rotationRefusalFor(oldKey, Date.now());
+    if (stale) {
+      logger.warn(
+        { orgId: ctx.orgId, keyPublicId: oldKey.publicId },
+        stale.log,
+      );
+      if (stale.kind === "denied") {
+        throw new CapabilityError(
+          "rotate_api_key",
+          "authz_denied",
+          stale.denial,
+        );
+      }
+      throw new HandlerError({
+        code: stale.kind,
+        reason: stale.reason,
+        message: stale.message,
       });
     }
 

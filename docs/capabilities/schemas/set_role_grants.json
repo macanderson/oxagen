@@ -1,7 +1,7 @@
 {
   "name": "set_role_grants",
   "domain": "iam",
-  "description": "Replace a custom IAM role's grants with a set of permissions from the catalogue. System roles are read-only; the new set is refused above the granter's own permissions and for a tier the kernel does not enforce roles on.",
+  "description": "Replace a custom IAM role's grants with a set of permissions from the catalogue. System roles are read-only; the new set is refused above the granter's own permissions.",
   "mode": "sync",
   "surfaces": [
     "api",

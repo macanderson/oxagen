@@ -90,8 +90,22 @@ export const apiKeyListHandler: CapabilityHandler<typeof apiKeyList> = async (
 
   // ── Read (the explicit org + workspace filter matches the RLS policy on
   // auth.api_keys, so the result is the same whether or not RLS is enforced) ─
-  const rows = await withTenantDb((tx) =>
-    tx
+  //
+  // The workspace is read beside the keys, in the same transaction, because
+  // `rotatable` is not answerable without it: `rotate_api_key` refuses an
+  // archived workspace unconditionally, so a roster that does not know whether
+  // this workspace is archived reports a rotation that can only fail. One row
+  // for the whole page — every key here is in this one workspace, so archival
+  // is a single fact rather than a per-key one.
+  //
+  // No `.for("update")` on either read. This is a read model with nothing to
+  // protect: it takes no action on what it sees, so a workspace archived a
+  // moment after this snapshot merely makes the page briefly optimistic, and
+  // the handler — which does lock — is the thing that refuses. Locking rows on
+  // a list would put an unbounded wait behind every page load and block
+  // archival behind it.
+  const { rows, workspace } = await withTenantDb(async (tx) => {
+    const keys = await tx
       .select({
         publicId: schema.apiKeys.publicId,
         name: schema.apiKeys.name,
@@ -109,12 +123,36 @@ export const apiKeyListHandler: CapabilityHandler<typeof apiKeyList> = async (
           eq(schema.apiKeys.workspaceId, workspaceId),
         ),
       )
-      .orderBy(desc(schema.apiKeys.createdAt), desc(schema.apiKeys.id)),
-  );
+      .orderBy(desc(schema.apiKeys.createdAt), desc(schema.apiKeys.id));
+
+    const [ws] = await tx
+      .select({
+        name: schema.workspaces.name,
+        archivedAt: schema.workspaces.archivedAt,
+      })
+      .from(schema.workspaces)
+      .where(
+        and(
+          eq(schema.workspaces.id, workspaceId),
+          eq(schema.workspaces.orgId, orgId),
+        ),
+      )
+      .limit(1);
+
+    return { rows: keys, workspace: ws };
+  });
 
   // One instant for the whole page, so two rows of the same list cannot be
   // judged against different clocks.
   const now = Date.now();
+  // A workspace row that is not there fails closed. `rotate_api_key` answers
+  // `not_found` for it, so the honest `rotatable` is false; the sentinel date
+  // only has to be non-null, because nothing renders it — the page reads the
+  // boolean, and the handler composes its own message from the row it locked.
+  const rotationWorkspace = workspace ?? {
+    name: "",
+    archivedAt: new Date(0),
+  };
   return {
     items: rows.map((row) => ({
       publicId: row.publicId,
@@ -131,6 +169,7 @@ export const apiKeyListHandler: CapabilityHandler<typeof apiKeyList> = async (
           revokedAt: row.revokedAt,
         },
         now,
+        rotationWorkspace,
       ),
     })),
   };

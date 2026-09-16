@@ -137,6 +137,24 @@ export const apiKeyCreateHandler: CapabilityHandler<
     );
   }
 
+  // Audited when the workspace lock below was added, because a blocking lock
+  // turns every check that precedes it into a check-before-wait. `rotate_api_key`
+  // needed a re-check after the lock for exactly that reason. This handler does
+  // not, and the enumeration is the argument:
+  //
+  //   - the principal, `orgId` and `workspaceId` guards read `ctx`, which is
+  //     fixed for the request;
+  //   - the four reserved-purpose refusals read `input.scope`, also fixed;
+  //   - `expiresAt` is parsed from input and never compared to the clock here,
+  //     so unlike a rotation there is no time-dependent precondition to go
+  //     stale while this transaction queues;
+  //   - the key material above is random bytes, and nothing is persisted or
+  //     returned unless the insert commits.
+  //
+  // That leaves the org role, which is read before the transaction. It can be
+  // revoked mid-request here as in every other handler in this package; the wait
+  // widens that window rather than creating it, and narrowing it belongs to
+  // whatever makes role checks transactional everywhere, not to this capability.
   const [inserted] = await withTenantDb(async (tx) => {
     // An archived workspace is wound down. Its existing keys keep
     // authenticating — `resolveApiKey` never consults archival — and the

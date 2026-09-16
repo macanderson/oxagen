@@ -11,7 +11,7 @@
  *   - `list_api_keys` reports `rotatable`, so a page does not offer a control
  *     that can only fail.
  *
- * The two reasons:
+ * The reasons — three about the key, one about the workspace it lives in:
  *
  *   - **A server-owned scope purpose.** A key minted by an enrollment or a
  *     login flow carries a reserved `purpose`, and the service that issued it
@@ -25,6 +25,12 @@
  *     the same transaction and mints one that is already expired, spending the
  *     one display of a secret nobody can use. The row is still there —
  *     `deleted_at` is null — so the not-found guard does not catch it.
+ *   - **An archived workspace** (`archivalRefusalFor`). A rotation mints fresh
+ *     secret material, which is the thing archival exists to stop, so
+ *     `rotate_api_key` refuses one whatever the key. This arrived late: the
+ *     read model answered `rotatable` without it, and so advertised a rotation
+ *     that could only fail on every surface except the app — which was right
+ *     only because `key-row.tsx` carries a separate `archived` prop.
  *
  * The clock is passed in rather than read here, so the caller decides which
  * instant it is judging against and a test does not depend on the clock the
@@ -41,6 +47,24 @@ export interface RotationCandidate {
   readonly expiresAt: Date | null;
   /** `deleted_at`. Null for a key that is still live. */
   readonly revokedAt: Date | null;
+}
+
+/**
+ * The workspace a rotation would mint the replacement into.
+ *
+ * Archival is a property of the workspace rather than of the key, so it is a
+ * second argument rather than a field of the candidate — but it decides
+ * rotatability just as much, and it has to be answered in this file for the
+ * same reason the rest is: `rotate_api_key` refuses an archived workspace
+ * unconditionally, so a read model that does not know about archival advertises
+ * a rotation that can only fail. The app happened to be right about this
+ * because `key-row.tsx` has its own `archived` prop; the API and MCP have only
+ * `rotatable`, and it lied to them.
+ */
+export interface RotationWorkspace {
+  readonly name: string;
+  /** `archived_at`. Null for a workspace still in use. */
+  readonly archivedAt: Date | null;
 }
 
 /**
@@ -124,16 +148,56 @@ export function rotationRefusalFor(
 }
 
 /**
- * Whether `rotate_api_key` will replace this key at `now`.
+ * The refusal `rotate_api_key` owes the workspace a replacement would land in,
+ * or null when that workspace is still in use.
  *
- * The three reasons here are every reason that is a property of the key. The
- * rest are properties of the actor — no principal, no org, the org role — and
- * `list_api_keys` is gated on the same role in the same place, so a caller who
- * can read the roster can rotate what the roster says is rotatable.
+ * Separate from `rotationRefusalFor` because the two are established at
+ * different moments and under different locks: the key's own disqualifiers come
+ * off a row the handler has already read, while archival is only trustworthy
+ * once the workspace row is locked (`.for("update")`), which is what stops an
+ * `archive_workspace` committing between the check and the write.
+ *
+ * Ranked after the key's own reasons by every caller, so an expired or
+ * service-owned key in an archived workspace still answers with the reason that
+ * is about the key.
+ */
+export function archivalRefusalFor(
+  workspace: RotationWorkspace,
+): RotationRefusal | null {
+  if (workspace.archivedAt === null) return null;
+  return {
+    kind: "conflict",
+    log: "api.key.rotate: rejected — the workspace is archived",
+    reason: "workspace_archived",
+    message: `${workspace.name} was archived on ${workspace.archivedAt.toISOString()}; a key cannot be rotated in an archived workspace`,
+  };
+}
+
+/**
+ * Whether `rotate_api_key` will replace this key at `now`, in this workspace.
+ *
+ * The reasons are every reason that is a property of the key or of the
+ * workspace it lives in. The rest are properties of the actor — no principal,
+ * no org, the org role — and `list_api_keys` is gated on the same role in the
+ * same place, so a caller who can read the roster can rotate what the roster
+ * says is rotatable.
+ *
+ * `workspace` is required rather than optional on purpose. It was added because
+ * `list_api_keys` reported `rotatable: true` for a live key in an archived
+ * workspace that `rotate_api_key` refuses unconditionally; making it required
+ * means the compiler, not a reviewer, is what stops a caller answering this
+ * question without archival in hand.
  *
  * `revoke_api_key` is unaffected by all of it: it ends a key whatever its
- * purpose and whatever its expiry.
+ * purpose, whatever its expiry, and whatever its workspace.
  */
-export function isRotatableKey(key: RotationCandidate, now: number): boolean {
-  return rotationRefusalFor(key, now) === null;
+export function isRotatableKey(
+  key: RotationCandidate,
+  now: number,
+  workspace: RotationWorkspace,
+): boolean {
+  return (
+    rotationRefusalFor(key, now) === null &&
+    archivalRefusalFor(workspace) === null
+  );
 }
