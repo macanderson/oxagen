@@ -162,10 +162,106 @@ fn write_json_object(path: &Path, obj: &Map<String, Value>) -> Result<(), String
     fs::write(path, text).map_err(|e| e.to_string())
 }
 
-/// Pure: whether automatic linking is enabled, defaulting to on for a
-/// config file that doesn't mention it yet.
+/// Pure: whether automatic linking is enabled, given an explicit setting and,
+/// when there is none, whether this machine looks like a developer's.
+///
+/// The default used to be unconditional on. That was right when the app only
+/// wrapped coding agents: anyone installing it already had a terminal and a
+/// harness on PATH. It is wrong now that the app also connects apps like
+/// Claude Desktop (ADR-069), because the person connecting one may never open
+/// a terminal, and linking two binaries into `~/.local/bin` and editing their
+/// shell profile to reach them is a change they did not ask for and cannot
+/// evaluate.
+///
+/// So the default follows the machine: on where a coding agent is already
+/// installed, off otherwise. Either way it is a *default* — an explicit
+/// `autoLinkCli` in `desktop.json` always wins, in both directions, so
+/// "Remove links" stays removed and "Link into PATH" stays linked.
+pub fn auto_link_cli_default(developer_harness_present: bool) -> bool {
+    developer_harness_present
+}
+
+/// Pure: whether automatic linking is enabled, resolving an absent setting
+/// through `auto_link_cli_default`.
+pub fn auto_link_cli_enabled_with(
+    config: &Map<String, Value>,
+    developer_harness_present: bool,
+) -> bool {
+    config
+        .get("autoLinkCli")
+        .and_then(Value::as_bool)
+        .unwrap_or_else(|| auto_link_cli_default(developer_harness_present))
+}
+
+/// Pure: whether automatic linking is enabled. Kept for callers that have
+/// already resolved the machine question; prefer `auto_link_cli_enabled_with`.
 pub fn auto_link_cli_enabled(config: &Map<String, Value>) -> bool {
-    config.get("autoLinkCli").and_then(Value::as_bool).unwrap_or(true)
+    auto_link_cli_enabled_with(config, true)
+}
+
+/// The coding agents whose presence makes this a developer's machine. Matches
+/// the harnesses Tacho wraps with a hook (`WRAPPED_HARNESSES` in
+/// `packages/tacho/src/wire.ts`); a connected app is deliberately not on this
+/// list, because someone who has only Claude Desktop is exactly the person
+/// this default exists for.
+const DEVELOPER_BINARIES: [&str; 3] = ["claude", "codex", "stella"];
+
+/// Pure: does any of the well-known install directories hold a coding agent?
+/// Takes the directory list and an existence probe so a test is not answered
+/// by whatever happens to be installed on the machine running it.
+pub fn developer_harness_in(
+    dirs: &[PathBuf],
+    exists: &dyn Fn(&Path) -> bool,
+) -> bool {
+    for dir in dirs {
+        for name in DEVELOPER_BINARIES {
+            if exists(&dir.join(exe(name))) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Where the harness installers put their binaries. Mirrors
+/// `wellKnownBinDirs` in `packages/tacho/src/cli/deps.ts`: the app launches
+/// from Finder with the bare system PATH, and Claude Code's PATH line lives
+/// in `.zshrc`, which no non-interactive shell reads — so this is a disk
+/// check, not a PATH check.
+pub fn well_known_harness_dirs() -> Vec<PathBuf> {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    if cfg!(windows) {
+        let app_data = std::env::var_os("APPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join("AppData").join("Roaming"));
+        let local = std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join("AppData").join("Local"));
+        vec![
+            app_data.join("npm"),
+            local.join("Programs").join("claude"),
+            home.join(".local").join("bin"),
+            home.join(".codex").join("bin"),
+            home.join(".cargo").join("bin"),
+        ]
+    } else {
+        vec![
+            home.join(".local").join("bin"),
+            home.join(".claude").join("local"),
+            home.join(".codex").join("bin"),
+            home.join(".cargo").join("bin"),
+            PathBuf::from("/opt/homebrew/bin"),
+            PathBuf::from("/usr/local/bin"),
+            home.join(".npm-global").join("bin"),
+            home.join(".volta").join("bin"),
+            home.join(".bun").join("bin"),
+        ]
+    }
+}
+
+/// Whether this machine has a coding agent installed.
+pub fn developer_harness_present() -> bool {
+    developer_harness_in(&well_known_harness_dirs(), &|p: &Path| p.exists())
 }
 
 /// Pure: merge `autoLinkCli` into an existing config map, keeping every
@@ -184,7 +280,10 @@ pub(crate) fn write_auto_link_cli(enabled: bool) -> Result<(), String> {
 /// The persisted `autoLinkCli` preference. `remove_local_data` reads it
 /// before it deletes the directory the file lives in.
 pub(crate) fn read_auto_link_cli() -> bool {
-    auto_link_cli_enabled(&read_json_object(&desktop_config_path()))
+    auto_link_cli_enabled_with(
+        &read_json_object(&desktop_config_path()),
+        developer_harness_present(),
+    )
 }
 
 // ---------------------------------------------------------------------
@@ -1496,6 +1595,49 @@ mod tests {
     #[test]
     fn auto_link_defaults_to_enabled_when_unset() {
         assert!(auto_link_cli_enabled(&Map::new()));
+    }
+
+    /// ADR-069: a machine with no coding agent on it belongs to someone who
+    /// may never open a terminal, and linking two binaries into ~/.local/bin
+    /// and editing their shell profile is a change they did not ask for.
+    #[test]
+    fn linking_defaults_off_on_a_machine_with_no_coding_agent() {
+        assert!(!auto_link_cli_default(false));
+        assert!(auto_link_cli_default(true));
+        assert!(!auto_link_cli_enabled_with(&Map::new(), false));
+        assert!(auto_link_cli_enabled_with(&Map::new(), true));
+    }
+
+    #[test]
+    fn an_explicit_setting_beats_the_machine_in_both_directions() {
+        // "Remove links" has to stay removed on a developer's machine, and
+        // "Link into PATH" has to stay linked on anyone else's.
+        let off = set_auto_link_cli(Map::new(), false);
+        assert!(!auto_link_cli_enabled_with(&off, true));
+        let on = set_auto_link_cli(Map::new(), true);
+        assert!(auto_link_cli_enabled_with(&on, false));
+    }
+
+    #[test]
+    fn a_coding_agent_in_any_well_known_directory_counts() {
+        let dirs = vec![PathBuf::from("/opt/homebrew/bin"), PathBuf::from("/nope")];
+        assert!(!developer_harness_in(&dirs, &|_p: &Path| false));
+        let claude = PathBuf::from("/opt/homebrew/bin").join(exe("claude"));
+        assert!(developer_harness_in(&dirs, &|p: &Path| p == claude));
+        // Stella from cargo, in a directory that is not first in the list.
+        let stella = PathBuf::from("/nope").join(exe("stella"));
+        assert!(developer_harness_in(&dirs, &|p: &Path| p == stella));
+        // A connected app is not a coding agent: someone who has only Claude
+        // Desktop is exactly who the off-by-default is for.
+        let desktop = PathBuf::from("/opt/homebrew/bin").join(exe("claude-desktop"));
+        assert!(!developer_harness_in(&dirs, &|p: &Path| p == desktop));
+    }
+
+    #[test]
+    fn the_well_known_directories_are_real_absolute_paths() {
+        let dirs = well_known_harness_dirs();
+        assert!(dirs.len() >= 5);
+        assert!(dirs.iter().all(|d| d.is_absolute()));
     }
 
     #[test]
