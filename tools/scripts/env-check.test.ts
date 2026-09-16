@@ -226,6 +226,46 @@ describe("scanSourceReferences", () => {
       ).toBe(false);
   });
 
+  it("resolves a read that goes through a module constant", () => {
+    // A handler that returns the variable's NAME to a caller (Tacho and Stella
+    // put it in the enrollment document as verification_secret_env) holds it in
+    // a constant and subscripts with that. Without this, two live secrets were
+    // reported as dead registry keys, and the advice printed with the failure —
+    // delete the entry or clear its services — would have un-deployed them.
+    const dir = mkdtempSync(join(tmpdir(), "env-check-test-"));
+    try {
+      writeFileSync(
+        join(dir, "handler.ts"),
+        [
+          'const SIGNING_SECRET_ENV = "TACHO_ENROLLMENT_SIGNING_SECRET";',
+          'export const KEY_ENV = "TACHO_BUNDLE_SIGNING_PRIVATE_KEY";',
+          'const NOT_AN_ENV_READ = "SOME_OTHER_CONSTANT";',
+          "const secret = process.env[SIGNING_SECRET_ENV];",
+          "const pem = process.env[KEY_ENV];",
+          "export const label = NOT_AN_ENV_READ;",
+          "",
+        ].join("\n"),
+      );
+      const result = scanSourceReferences([dir]);
+      expect(result.referenced.has("TACHO_ENROLLMENT_SIGNING_SECRET")).toBe(
+        true,
+      );
+      expect(result.referenced.has("TACHO_BUNDLE_SIGNING_PRIVATE_KEY")).toBe(
+        true,
+      );
+      // The location is the read, not the declaration: that is the line a
+      // person needs when the key turns out to be missing.
+      expect(
+        result.referenced.get("TACHO_ENROLLMENT_SIGNING_SECRET")?.[0],
+      ).toMatch(/handler\.ts:4$/);
+      // A string constant that is never used as an env subscript is not a
+      // reference; counting one would make any SCREAMING_CASE string look live.
+      expect(result.referenced.has("SOME_OTHER_CONSTANT")).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
   it("finds process.env.KEY references and records file:line", () => {
     const dir = mkdtempSync(join(tmpdir(), "env-check-test-"));
     try {

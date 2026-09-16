@@ -308,6 +308,22 @@ const RE_ENV_MEMBER =
 const RE_ENV_SUBSCRIPT =
   /(?:^|[^\w$])[\w$]*[Ee]nv(?:\([^()]*\))?\[\s*['"]([A-Z][A-Z0-9_]+)['"]\s*\]/g;
 
+/**
+ * `const SIGNING_SECRET_ENV = "TACHO_ENROLLMENT_SIGNING_SECRET"` — a module
+ * constant holding an env-var name, so the read below is `process.env[IDENT]`.
+ * The name is exported and reused (a handler returns it to the host as
+ * `verification_secret_env`), which is why it is a constant rather than a
+ * literal at the read. Resolving it is still static and file-local: the key is
+ * only recorded once the identifier is actually used as an env subscript, so a
+ * plain string constant that names nothing is not mistaken for a read.
+ */
+const RE_ENV_NAME_CONST =
+  /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::\s*[^=]+)?=\s*['"]([A-Z][A-Z0-9_]+)['"]/g;
+
+/** process.env[IDENT] — the indirect read the constant above feeds. */
+const RE_ENV_SUBSCRIPT_IDENT =
+  /(?:^|[^\w$])[\w$]*[Ee]nv(?:\([^()]*\))?\[\s*([A-Za-z_$][\w$]*)\s*\]/g;
+
 /** os.environ["KEY"], os.environ.get("KEY"), os.getenv("KEY"). */
 const RE_PYTHON_ENV =
   /os\.(?:environ(?:\.get)?\(?\[?|getenv\()\s*['"]([A-Z][A-Z0-9_]+)['"]/g;
@@ -424,6 +440,13 @@ export function scanSourceReferences(roots: string[]): ScanResult {
 
       const isShell = file.endsWith(".sh");
       const isPython = file.endsWith(".py");
+      // ident → env-var name, for reads that go through a module constant.
+      const envNameConsts = new Map<string, string>();
+      if (!isShell && !isPython) {
+        for (const m of content.matchAll(RE_ENV_NAME_CONST)) {
+          envNameConsts.set(m[1]!, m[2]!);
+        }
+      }
       const assigned = isShell
         ? shellAssignedNames(content)
         : new Set<string>();
@@ -451,6 +474,10 @@ export function scanSourceReferences(roots: string[]): ScanResult {
         }
         for (const m of line.matchAll(RE_ENV_MEMBER)) record(m[1]!, loc);
         for (const m of line.matchAll(RE_ENV_SUBSCRIPT)) record(m[1]!, loc);
+        for (const m of line.matchAll(RE_ENV_SUBSCRIPT_IDENT)) {
+          const key = envNameConsts.get(m[1]!);
+          if (key) record(key, loc);
+        }
       }
 
       if (isShell || isPython) continue;
