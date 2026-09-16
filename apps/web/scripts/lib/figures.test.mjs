@@ -14,6 +14,7 @@ import {
   Schema,
   Timeline,
   valueText,
+  visibleTicks,
 } from "./figures.mjs";
 import { renderMdx } from "./mdx.mjs";
 
@@ -404,6 +405,44 @@ describe("Timeline", () => {
       rows: [{ label: "Undated", when: "Unknown", ended: true }],
     });
     expect(noInterval).toContain("<td>Unknown</td><td>No longer holds</td>");
+  });
+
+  it("drops a tick the marker's own label would sit on top of", () => {
+    // Jan/Apr/Jul/Oct quarters with a marker just short of Oct: the two labels
+    // are centred 4.2 percent apart on one absolutely positioned axis, so the
+    // page rendered "TodayOct". Jan, Apr and Jul are far enough to keep.
+    const html = render(Timeline, {
+      start: 0,
+      end: 12,
+      ticks: [
+        { at: 0, label: "Jan" },
+        { at: 3, label: "Apr" },
+        { at: 6, label: "Jul" },
+        { at: 9, label: "Oct" },
+      ],
+      marker: { at: 8.5, label: "Today" },
+      rows: [{ label: "a", when: "w", from: 0, to: 12 }],
+    });
+    expect(html).not.toContain("Oct");
+    expect(html).toContain("Jan");
+    expect(html).toContain("Jul");
+    expect(html).toContain(
+      '<span class="fig-marker-label" style="left:70.83%">Today</span>',
+    );
+    // The screen-reader table is unaffected: it never draws the axis.
+    expect(html).toContain('<th scope="col">Status (Today)</th>');
+  });
+
+  it("keeps every tick when there is no marker to collide with", () => {
+    const ticks = [
+      { at: 0, label: "Jan" },
+      { at: 9, label: "Oct" },
+    ];
+    expect(visibleTicks(ticks, undefined, 0, 12)).toEqual(ticks);
+    // A marker far from both keeps both.
+    expect(visibleTicks(ticks, { at: 4, label: "As of" }, 0, 12)).toEqual(
+      ticks,
+    );
   });
 
   it("draws no marker when none is given", () => {

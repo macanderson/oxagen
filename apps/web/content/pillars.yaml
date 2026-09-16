@@ -65,3 +65,15 @@ pillars:
       and what governing a system that changes itself has to look like.
     order: 5
     treatment: gate
+
+  - slug: autonomous-agents
+    name: Autonomous agents
+    tagline: Work that runs for days without you watching.
+    description: >-
+      The horizon an agent can hold is getting longer, and the practices that
+      worked at ten minutes do not survive a week. What the measurements show
+      about long runs, why they come apart, and what an operator has to set
+      before starting one: the context an agent is handed, the steering it
+      runs under, and the record it leaves.
+    order: 6
+    treatment: ledger
