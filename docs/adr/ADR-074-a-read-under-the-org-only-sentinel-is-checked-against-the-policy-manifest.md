@@ -328,16 +328,17 @@ and the answer should be written rather than assumed.
 
 ### This check is best-effort, and it does not converge
 
-Six failures were found in it during one review cycle. **Every one reported
+Eight failures were found in it during one review cycle. **Every one reported
 clean rather than erroring**, which is the property that makes a green
 mandatory check worse than no check: it turns "nobody has verified this" into
-"CI says it is fine". They fall on three axes, and the axes are the point.
+"CI says it is fine". They fall on four axes, and the axes are the point.
 
 | # | axis | what it could not do |
 |---|---|---|
 | 1-4 | which call sites carry a sentinel context | read a helper, `kernelRead`, `capabilityContext`, an inline object |
-| 5 | whether a predicate pins the statement it belongs to | it compared totals across a file |
+| 5, 8 | whether a predicate constrains the statement it belongs to | it compared totals across a file; it accepted an `isNull` inside an `or`, which is an alternative rather than a constraint |
 | 6 | which table a read touches | it matched the literal identifier `schema` |
+| 7 | **which handlers exist at all** | it read one registry; `@oxagen/agent` registers 45 more and none had ever been examined |
 
 Each was closed. Closing axis 1 took the call-site analysis from regexes to a
 TypeScript parse. Closing axis 3 — resolving `import { schema as db }` and
@@ -348,6 +349,18 @@ handler. Knowing which branch a sentinel-scoped call takes means evaluating a
 condition on an input supplied in another file: path sensitivity, then
 interprocedural constant propagation. A fourth axis, opened by closing the
 third.
+
+**Number seven is a different kind and is worth separating.** The first six and
+the eighth are the check looking at something and reading it wrong. The seventh
+was the check never looking: `readHandlerModules` parsed
+`packages/handlers/src/register.ts` alone, so every capability registered by
+`@oxagen/agent` — its registry, approval, MCP, memory, role and trace handlers,
+45 of them — resolved to no module, and `handlerFindings` returned an empty
+array for each. **An empty array is indistinguishable from "looked and found
+nothing."** That is a coverage hole, it was cheap to close by parsing the second
+registry, and an unresolvable handler module is now an error rather than an
+empty result, because that is the one condition under which this check's silence
+means nothing.
 
 **That is the answer to whether this converges: it does not.** The residual is
 structural, not a backlog:
@@ -364,6 +377,11 @@ structural, not a backlog:
   first four.
 - **Which code actually runs.** Branching, and anything that depends on a value
   from another module.
+- **What a predicate guarantees.** The pin must be a mandatory conjunct — true
+  on every path — and `isMandatoryPin` propagates through `and` and refuses
+  `or`. That is right for the shapes Drizzle produces, and it is still a
+  syntactic reading of a boolean expression rather than a decision procedure
+  for one.
 
 A `ts.createProgram` with the real type checker would close the alias and
 import-resolution cases by construction and move the frontier. It would not
@@ -392,7 +410,10 @@ ones. Those call sites have to be converted first.
 **That reframes what this check is for.** Its durable value is not as a
 permanent gate but as the instrument that enumerates the call sites so the
 runtime refusal can be turned on — and then it becomes redundant, which is the
-right end for it. Until that lands it is worth keeping, because a net with a
+right end for it. Tracked as #3132, whose definition of done includes deleting
+this script and its baseline. That is also why closing the coverage hole
+mattered more than the precision gaps: the agent package's call sites were
+invisible, so a conversion driven by this inventory would have missed all 45. Until that lands it is worth keeping, because a net with a
 known mesh catches more than no net. It should not be read as proof that the
 tree is clean. It is best-effort, its limits are listed above and asserted in
 its tests, and `check-org-sentinel-reads` reporting clean means "none of the
@@ -461,9 +482,9 @@ directly — so it needs the check anyway.
   anything outside Postgres, since Neo4j and ClickHouse scoping is a separate
   seam. It is a net with a known mesh, not a proof.
 
-- **Six failures were found after the check was first written. All six were
+- **Eight failures were found after the check was first written. All eight were
   closed; the count of KNOWN blind spots shrank each round and the rate of
-  discovery did not.** Six rounds in, there is no evidence the set is finite,
+  discovery did not.** Eight rounds in, there is no evidence the set is finite,
   and the section above says plainly that it is not. An earlier draft of this
   ADR claimed the incompleteness was "written down and shrinking"; the writing
   is accurate, the shrinking is not a claim this can support, and the sentence

@@ -518,6 +518,57 @@ describe("pinsNullWorkspace", () => {
     ).toBe(true);
   });
 
+  it("does not accept a pin inside an `or`, which is an alternative not a constraint", () => {
+    // `where(or(isNull(t.workspaceId), eq(t.workspaceId, requested)))` reads the
+    // org-wide rows AND one workspace's on purpose, and the sentinel still
+    // truncates the second branch. Presence in the AST is not the same as being
+    // true on every path.
+    const sf = parse(
+      `withTenantDb((tx) =>
+         tx.select().from(schema.securityEvents).where(
+           or(isNull(schema.securityEvents.workspaceId), eq(schema.securityEvents.workspaceId, requested)),
+         ),
+       );`,
+    );
+    expect(
+      pinsNullWorkspace(
+        "securityEvents",
+        tenantDbRegions(sf),
+        tableResolver(sf),
+      ),
+    ).toBe(false);
+  });
+
+  it("accepts a pin nested in `and`, which does propagate", () => {
+    const sf = parse(
+      `withTenantDb((tx) =>
+         tx.select().from(schema.securityEvents).where(
+           and(eq(schema.securityEvents.orgId, o), and(isNull(schema.securityEvents.workspaceId), gt(a, b))),
+         ),
+       );`,
+    );
+    expect(
+      pinsNullWorkspace(
+        "securityEvents",
+        tenantDbRegions(sf),
+        tableResolver(sf),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not accept a statement with no where clause at all", () => {
+    const sf = parse(
+      `withTenantDb((tx) => tx.select().from(schema.securityEvents));`,
+    );
+    expect(
+      pinsNullWorkspace(
+        "securityEvents",
+        tenantDbRegions(sf),
+        tableResolver(sf),
+      ),
+    ).toBe(false);
+  });
+
   it("does not let a pinned read in one scope exempt an unpinned read in another", () => {
     // Pass A pools the regions of every sentinel-carrying scope in a file, so
     // the same leak ran across scopes until the judgement went per statement.

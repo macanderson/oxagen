@@ -536,21 +536,61 @@ function statementRoot(node) {
 export function pinsNullWorkspace(name, roots, resolver) {
   const tableIs = (arg) => resolver.tableOf(arg) === name;
 
+  /** Is this node exactly `isNull(<table>.workspaceId)`? */
+  const isThePin = (n) => {
+    if (calleeText(n) !== "isNull") return false;
+    const arg = n.arguments[0];
+    return (
+      arg !== undefined &&
+      ts.isPropertyAccessExpression(arg) &&
+      arg.name.text === "workspaceId" &&
+      tableIs(arg.expression)
+    );
+  };
+
+  /**
+   * Is the pin a MANDATORY CONJUNCT of this predicate — true on every path
+   * through it — rather than merely present somewhere in its AST?
+   *
+   * `where(or(isNull(t.workspaceId), eq(t.workspaceId, requested)))` reads both
+   * the org-wide rows and one workspace's on purpose, and the sentinel still
+   * truncates the second branch. Asking whether an `isNull` call appears
+   * anywhere exempted that query; an `isNull` inside an `or` is an alternative,
+   * not a constraint. Only `and` propagates the guarantee.
+   */
+  const isMandatoryPin = (n) => {
+    if (n === undefined) return false;
+    if (isThePin(n)) return true;
+    if (ts.isCallExpression(n) && calleeText(n) === "and") {
+      return n.arguments.some((a) => isMandatoryPin(a));
+    }
+    if (ts.isParenthesizedExpression(n)) return isMandatoryPin(n.expression);
+    return false;
+  };
+
   /** Does this one statement pin workspace_id IS NULL on `name`? */
   const pinnedIn = (root) => {
+    const predicates = [];
     for (const n of nodes(root)) {
-      if (calleeText(n) !== "isNull") continue;
-      const arg = n.arguments[0];
+      // `.where(<predicate>)`
       if (
-        arg !== undefined &&
-        ts.isPropertyAccessExpression(arg) &&
-        arg.name.text === "workspaceId" &&
-        tableIs(arg.expression)
+        ts.isCallExpression(n) &&
+        ts.isPropertyAccessExpression(n.expression) &&
+        n.expression.name.text === "where"
       ) {
-        return true;
+        // Every argument of a where() is a conjunct.
+        predicates.push(...n.arguments);
+      }
+      // `tx.query.t.findFirst({ where: <predicate> })`
+      if (
+        ts.isPropertyAssignment(n) &&
+        ts.isIdentifier(n.name) &&
+        n.name.text === "where"
+      ) {
+        predicates.push(n.initializer);
       }
     }
-    return false;
+    return predicates.some((predicate) => isMandatoryPin(predicate));
   };
 
   const statements = [];
@@ -762,16 +802,34 @@ export function passAppKernelSeam(
 
 /** capability name -> handler module path, from register.ts. */
 export function readHandlerModules(root = ROOT) {
-  const src = readFileSync(
-    join(root, "packages/handlers/src/register.ts"),
-    "utf8",
-  );
   const out = new Map();
-  for (const m of src.matchAll(
-    /registerHandler\(\s*"([\w.]+)"\s*,[\s\S]*?import\("(\.[^"]+)"\)/g,
-  )) {
-    out.set(m[1], m[2]);
+
+  // packages/handlers: registerHandler("name", () => import("./module"))
+  const handlers = join(root, "packages/handlers/src/register.ts");
+  if (existsSync(handlers)) {
+    const src = readFileSync(handlers, "utf8");
+    for (const m of src.matchAll(
+      /registerHandler\(\s*"([\w.]+)"\s*,[\s\S]*?import\("(\.[^"]+)"\)/g,
+    )) {
+      out.set(m[1], { base: "packages/handlers/src", module: m[2] });
+    }
   }
+
+  // packages/agent: a LOADERS map, registered in bulk by ./register.ts. A whole
+  // package — agent registry, approval, MCP, memory, role, trace — was outside
+  // this check until this was added, because it read only the handlers
+  // registry. That is a coverage hole rather than an analysis limit: the check
+  // was not looking, not looking and reading wrong.
+  const agent = join(root, "packages/agent/src/handlers/index.ts");
+  if (existsSync(agent)) {
+    const src = readFileSync(agent, "utf8");
+    for (const m of src.matchAll(
+      /([\w]+):\s*\(\)\s*=>\s*import\("(\.[^"]+)"\)/g,
+    )) {
+      out.set(m[1], { base: "packages/agent/src/handlers", module: m[2] });
+    }
+  }
+
   return out;
 }
 
@@ -799,10 +857,18 @@ export function readContractNames(root = ROOT) {
 }
 
 /** The handler module's own source plus its direct relative imports. */
-export function handlerSources(modulePath, root = ROOT) {
-  const base = join(root, "packages/handlers/src");
-  const entry = join(base, `${modulePath.replace(/^\.\//, "")}.ts`);
-  if (!existsSync(entry)) return [];
+export function handlerSources(entryRef, root = ROOT) {
+  const base = join(root, entryRef.base);
+  const entry = join(base, `${entryRef.module.replace(/^\.\//, "")}.ts`);
+  if (!existsSync(entry)) {
+    // An empty result here would be indistinguishable from "looked and found
+    // nothing", which is the failure shape this whole check exists to refuse.
+    // A capability whose module cannot be found is the one condition under
+    // which the check's silence means nothing, so it is loud.
+    throw new Error(
+      `check-org-sentinel-reads: registered handler module not found: ${entryRef.base}/${entryRef.module}.ts — the registry names it but the file is not there, so this capability would be silently unexamined.`,
+    );
+  }
   const head = readFileSync(entry, "utf8");
   const sources = [{ src: head, file: entry }];
   for (const m of head.matchAll(/from\s+"(\.\/[^"]+)"/g)) {
@@ -826,10 +892,10 @@ function handlerFindings(
   root,
   shape,
 ) {
-  const modulePath = handlerModules.get(capability);
-  if (modulePath === undefined) return [];
+  const entryRef = handlerModules.get(capability);
+  if (entryRef === undefined) return [];
   const out = [];
-  for (const { src, file } of handlerSources(modulePath, root)) {
+  for (const { src, file } of handlerSources(entryRef, root)) {
     const sourceFile = parse(src, file);
     const regions = tenantDbRegions(sourceFile);
     if (regions.length === 0) continue;
@@ -845,7 +911,7 @@ function handlerFindings(
       out.push({
         ...shape,
         capability,
-        handler: `packages/handlers/src/${modulePath.replace(/^\.\//, "")}.ts`,
+        handler: `${entryRef.base}/${entryRef.module.replace(/^\.\//, "")}.ts`,
         tables: bad,
       });
     }
