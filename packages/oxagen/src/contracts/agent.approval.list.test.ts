@@ -10,6 +10,7 @@ const item = {
   createdAt: "2026-09-13T10:00:00.000Z",
   expiresAt: "2026-09-13T10:05:00.000Z",
   mandateId: null,
+  autoEligibility: null,
   chain: { agentKey: null, rule: null },
 };
 
@@ -74,6 +75,7 @@ describe("list_approvals contract", () => {
       }).success,
     ).toBe(false);
     expect(Object.keys(approvalListItem.shape).sort()).toEqual([
+      "autoEligibility",
       "chain",
       "createdAt",
       "expiresAt",
@@ -115,6 +117,57 @@ describe("list_approvals contract", () => {
     );
     expect(
       approvalListItem.safeParse({ ...item, createdAt: "yesterday" }).success,
+    ).toBe(false);
+  });
+
+  it("carries the eligibility line the evaluation recorded, and null when no rule covered the call", () => {
+    // The row is the record of what the rule said when the call was parked
+    // (ADR-070): the app prints it rather than re-judging a stale call.
+    const judged = approvalListItem.parse({
+      ...item,
+      autoEligibility: {
+        ruleId: "spend.under-100",
+        ok: false,
+        reasons: ["measure_above_ceiling:amount", "critical_hazard"],
+        floor: true,
+      },
+    });
+    expect(judged.autoEligibility).toEqual({
+      ruleId: "spend.under-100",
+      ok: false,
+      reasons: ["measure_above_ceiling:amount", "critical_hazard"],
+      floor: true,
+    });
+    // A mandate outranks a workspace rule, so `ok: true` and a parked row
+    // coexist (spec §6.9 part 3).
+    expect(
+      approvalListItem.parse({
+        ...item,
+        mandateId: "mnd_0123456789abcdefghjkmn",
+        autoEligibility: {
+          ruleId: "spend.under-100",
+          ok: true,
+          reasons: [],
+          floor: false,
+        },
+      }).autoEligibility?.ok,
+    ).toBe(true);
+    // No rule covered the call.
+    expect(approvalListItem.parse(item).autoEligibility).toBeNull();
+    // The field is required, and the eligibility line is strict.
+    const { autoEligibility: _omitted, ...withoutField } = item;
+    expect(approvalListItem.safeParse(withoutField).success).toBe(false);
+    expect(
+      approvalListItem.safeParse({
+        ...item,
+        autoEligibility: {
+          ruleId: "spend.under-100",
+          ok: true,
+          reasons: [],
+          floor: false,
+          verdict: "allow",
+        },
+      }).success,
     ).toBe(false);
   });
 });
