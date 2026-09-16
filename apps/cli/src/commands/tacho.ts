@@ -31,7 +31,7 @@ export interface TachoEnrollOptions {
   port?: number;
   service?: boolean;
   force?: boolean;
-  /** `claude-code`, `codex`, or a comma list. */
+  /** `claude-code`, `codex`, `stella`, or a comma list. */
   harness?: string;
   verify?: boolean;
 }

@@ -8,6 +8,7 @@ import { codexHookPresence, mergeCodexHooks } from "../host/codex-writer";
 import { ControlError } from "../host/control-client";
 import { loadOrCreateDeviceKey } from "../host/device-key";
 import { ensureDir } from "../host/fs";
+import { mergeStellaHooks, stellaHookPresence } from "../host/stella-writer";
 import {
   HOST_FILE_SCHEMA,
   type HostFile,
@@ -22,6 +23,7 @@ import {
 import { toProtocolTimestamp } from "../timestamp";
 import {
   enrollmentResponseSchema,
+  TACHO_HARNESS_LABELS,
   type TachoHarness,
   tachoHarnessSchema,
 } from "../wire";
@@ -46,7 +48,8 @@ export interface EnrollOptions extends CredentialOptions {
 }
 
 /**
- * Parse a `--harness` flag (`claude-code`, `codex`, or a comma list). An
+ * Parse a `--harness` flag (`claude-code`, `codex`, `stella`, or a comma
+ * list). An
  * unknown name is a one-line error naming the choices, not a ZodError
  * (whose message is the JSON issues array) — both CLIs print it verbatim.
  */
@@ -91,6 +94,13 @@ function versionWithin(
   };
   const v = parts(version);
   return cmp(v, parts(range.min)) >= 0 && cmp(v, parts(range.max)) <= 0;
+}
+
+/** "Claude Code", "Claude Code and Codex", "Claude Code, Codex and Stella". */
+function listLabels(harnesses: readonly TachoHarness[]): string {
+  const labels = harnesses.map((harness) => TACHO_HARNESS_LABELS[harness]);
+  if (labels.length <= 1) return labels.join("");
+  return `${labels.slice(0, -1).join(", ")} and ${labels.at(-1) ?? ""}`;
 }
 
 async function callEnrollment(
@@ -251,6 +261,7 @@ export async function enroll(
 
     const claude = deps.claude();
     const codex = harnesses.includes("codex") ? deps.codex() : {};
+    const stella = harnesses.includes("stella") ? deps.stella() : {};
     step(
       3,
       `Enrolling ${deps.hostname} in ${credentials.org}/${credentials.workspace} for ${harnesses.join(", ")}`,
@@ -349,6 +360,12 @@ export async function enroll(
         ? {
             codex_version: codex.version ?? null,
             codex_execpath: codex.path ?? null,
+          }
+        : {}),
+      ...(harnesses.includes("stella")
+        ? {
+            stella_version: stella.version ?? null,
+            stella_execpath: stella.path ?? null,
           }
         : {}),
       wrapper_version: deps.wrapperVersion,
@@ -452,6 +469,24 @@ export async function enroll(
         deps.out("      already present; nothing to change");
       }
     }
+    if (harnesses.includes("stella")) {
+      const file = deps.readStellaHooks();
+      deps.out(`      Stella: ${file.path}`);
+      const merged = mergeStellaHooks(file, hookConfig);
+      if (!merged.ok) {
+        // Nothing is written: a stella.toml Stella cannot parse would stop
+        // every Stella session, which is worse than an unhooked one.
+        warnings.push(`Stella hooks not written: ${merged.error}`);
+        deps.out("      not written (see the warning below)");
+      } else if (merged.changed) {
+        deps.writeStellaHooks(merged.file);
+        deps.out(
+          `      hooks written for ${stellaHookPresence(merged.file, host.host_enrollment_id).present.length} events (${file.format === "toml" ? "a managed block at the end of stella.toml; the rest of the file is untouched" : "command hooks in settings.json"}; Stella has no SessionEnd, so tachod seals a session when the stella process exits)`,
+        );
+      } else {
+        deps.out("      already present; nothing to change");
+      }
+    }
     if (options.managed === true) {
       managedSettings = renderManagedSettings(hookConfig);
       deps.out(
@@ -462,20 +497,24 @@ export async function enroll(
   }
 
   step(6, "Verifying");
-  const claude = deps.claude();
-  if (claude.path === undefined) {
-    warnings.push(
-      "`claude` is not on PATH; hooks will apply once it is installed",
-    );
-  } else if (
-    claude.version !== undefined &&
-    !versionWithin(claude.version, TESTED_CLAUDE_RANGE)
-  ) {
-    warnings.push(
-      `Claude Code ${claude.version} is outside the tested range ${TESTED_CLAUDE_RANGE.min}..${TESTED_CLAUDE_RANGE.max}`,
-    );
-  } else {
-    deps.out(`      claude ${claude.version ?? "?"} at ${claude.path}`);
+  // Only the harnesses this host hooks: a Codex- or Stella-only host has no
+  // reason to hear that `claude` is missing.
+  if (harnesses.includes("claude-code")) {
+    const claude = deps.claude();
+    if (claude.path === undefined) {
+      warnings.push(
+        "`claude` is not on PATH; hooks will apply once it is installed",
+      );
+    } else if (
+      claude.version !== undefined &&
+      !versionWithin(claude.version, TESTED_CLAUDE_RANGE)
+    ) {
+      warnings.push(
+        `Claude Code ${claude.version} is outside the tested range ${TESTED_CLAUDE_RANGE.min}..${TESTED_CLAUDE_RANGE.max}`,
+      );
+    } else {
+      deps.out(`      claude ${claude.version ?? "?"} at ${claude.path}`);
+    }
   }
   if (harnesses.includes("codex")) {
     const codex = deps.codex();
@@ -484,6 +523,14 @@ export async function enroll(
         "`codex` is not on PATH; hooks will apply once it is installed",
       );
     else deps.out(`      codex ${codex.version ?? "?"} at ${codex.path}`);
+  }
+  if (harnesses.includes("stella")) {
+    const stella = deps.stella();
+    if (stella.path === undefined)
+      warnings.push(
+        "`stella` is not on PATH; hooks will apply once it is installed",
+      );
+    else deps.out(`      stella ${stella.version ?? "?"} at ${stella.path}`);
   }
   if (options.service !== false) {
     let healthy = false;
@@ -509,7 +556,7 @@ export async function enroll(
     warnings.push("device key missing after enrollment");
   for (const warning of warnings) deps.err(`warning: ${warning}`);
   deps.out(
-    `Done. This machine reports to Oxagen as ${host.agent_key}; every ${harnesses.map((h) => (h === "codex" ? "Codex" : "Claude Code")).join(" and ")} session from now on is recorded${host.bundle.mode === "enforce" ? " and gated" : " (observe mode)"}.`,
+    `Done. This machine reports to Oxagen as ${host.agent_key}; every ${listLabels(harnesses)} session from now on is recorded${host.bundle.mode === "enforce" ? " and gated" : " (observe mode)"}.`,
   );
   return {
     ok: true,

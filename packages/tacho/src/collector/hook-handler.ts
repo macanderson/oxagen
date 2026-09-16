@@ -1,5 +1,5 @@
 /**
- * `handleHookEvent`: one Claude Code hook payload in, the chained Tacho
+ * `handleHookEvent`: one Claude Code-shaped hook payload in, the chained Tacho
  * events and the hook's JSON answer out (spec section 5.4). Pure over its
  * dependencies: the registry, the current policy view, a clock, and an
  * optional bundle refresh for the `defer` path. The daemon, the spool
@@ -13,7 +13,12 @@ import {
 import { digestText } from "../claude-code/context";
 import type { TachoEvent } from "../envelope";
 import { toProtocolTimestamp } from "../timestamp";
-import type { DenyGeneration, PolicyBundle, TachoHarness } from "../wire";
+import {
+  customAgentNameProblem,
+  type DenyGeneration,
+  type PolicyBundle,
+  type TachoHarness,
+} from "../wire";
 import {
   type Evaluation,
   evaluatePreToolUse,
@@ -94,11 +99,20 @@ function policyAttrs(
   };
 }
 
-function pidFromEnv(
+/**
+ * The harness process pid: Claude Code exports `CLAUDE_PID`; for a harness
+ * that exports nothing (Stella) `tacho-hook` finds the process itself and
+ * passes it as `TACHO_HARNESS_PID`. The registry sweep seals the chain when
+ * that process is gone.
+ */
+export function pidFromEnv(
   env: Record<string, string | undefined>,
 ): number | undefined {
-  const pid = env["CLAUDE_PID"];
-  return pid !== undefined && /^\d+$/.test(pid) ? Number(pid) : undefined;
+  for (const name of ["CLAUDE_PID", "TACHO_HARNESS_PID"]) {
+    const pid = env[name];
+    if (pid !== undefined && /^\d+$/.test(pid)) return Number(pid);
+  }
+  return undefined;
 }
 
 function operatorBlock(
@@ -160,19 +174,35 @@ function drainMessages(
   return texts;
 }
 
-/** Map one hook payload to its events and its answer. */
+/**
+ * Map one hook payload to its events and its answer. `agent` names a custom
+ * agent (`tacho hook --agent <name>`): its payload is Claude Code's shape and
+ * its session is labelled `runtime: "custom"`, `harness: <name>`.
+ */
 export async function handleHookEvent(
   raw: unknown,
   env: Record<string, string | undefined>,
   deps: HookHandlerDeps,
   replay?: HookReplay,
   harness?: TachoHarness,
+  agent?: string,
 ): Promise<HookOutcome> {
   const input = hookInputSchema.parse(raw);
+  // The daemon checks again: anything holding the local token can post an
+  // envelope without going through `tacho-hook`.
+  const agentProblem =
+    agent !== undefined ? customAgentNameProblem(agent) : undefined;
+  if (agentProblem !== undefined) {
+    throw new Error(
+      `invalid custom agent name ${JSON.stringify(agent)}; ${agentProblem}`,
+    );
+  }
   const at = replay?.receivedAt ?? toProtocolTimestamp(deps.now());
   const { record } = deps.registry.ensure(input.session_id, {
     ambient: false,
+    lastHookEvent: input.hook_event_name,
     ...(harness !== undefined ? { harness } : {}),
+    ...(agent !== undefined ? { customAgent: agent } : {}),
     ...(input.transcript_path !== undefined
       ? { transcriptPath: input.transcript_path }
       : {}),
@@ -442,7 +472,7 @@ export async function handleHookEvent(
 
     case "SessionEnd": {
       events.push(...record.recorder.ingestHook(raw, env, at, withReplay));
-      deps.registry.seal(input.session_id);
+      deps.registry.seal(record);
       return { events, response: {}, record };
     }
 

@@ -70,12 +70,12 @@ class Tacho < Formula
       Sign in, then enroll this machine (installs the tachod user service
       and the hooks for the harnesses you name):
         oxagen login
-        tacho enroll --harness claude-code,codex
+        tacho enroll --harness claude-code,codex,stella
 
       Before `brew uninstall tacho`, run `tacho unenroll` so the hooks, the
       service and the enrollment on the control plane are removed with it.
       Managed machines enroll without a browser:
-        tacho enroll --token <apiKey> --org <org> --workspace <ws> --managed --harness claude-code,codex
+        tacho enroll --token <apiKey> --org <org> --workspace <ws> --managed --harness claude-code,codex,stella
     EOS
   end
 

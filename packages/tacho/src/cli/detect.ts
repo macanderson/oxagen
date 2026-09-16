@@ -6,7 +6,7 @@
  * from Finder with the bare system PATH.
  */
 import { readHostFile } from "../host/host-file";
-import type { TachoHarness } from "../wire";
+import { TACHO_HARNESS_LABELS, type TachoHarness } from "../wire";
 import type { CliDeps, HarnessFacts } from "./deps";
 
 export interface DetectedHarness {
@@ -24,11 +24,6 @@ export interface DetectReport {
   harnesses: DetectedHarness[];
 }
 
-const LABEL: Record<TachoHarness, string> = {
-  "claude-code": "Claude Code",
-  codex: "Codex",
-};
-
 function entry(
   harness: TachoHarness,
   facts: HarnessFacts,
@@ -36,7 +31,7 @@ function entry(
 ): DetectedHarness {
   return {
     harness,
-    label: LABEL[harness],
+    label: TACHO_HARNESS_LABELS[harness],
     installed: facts.path !== undefined,
     ...(facts.path !== undefined ? { path: facts.path } : {}),
     ...(facts.version !== undefined ? { version: facts.version } : {}),
@@ -55,6 +50,7 @@ export function detect(
     harnesses: [
       entry("claude-code", deps.claude(), enrolledList),
       entry("codex", deps.codex(), enrolledList),
+      entry("stella", deps.stella(), enrolledList),
     ],
   };
   if (options.json === true) {

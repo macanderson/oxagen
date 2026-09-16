@@ -23,8 +23,8 @@
  *      … --harness …` (default: every detected harness);
  *   4. `tacho status --json`: enrollment, service, hooks per harness;
  *   5. with --enroll, `tacho verify --harness <h> --json` per registered
- *      harness — one headless turn, confirmed sealed — and the Mission
- *      Control URL for the workspace.
+ *      harness — one headless turn, confirmed sealed — and the workspace's
+ *      URL in the app.
  *
  * Exit 0 when every step that ran passed. Nothing here needs the repo: copy
  * the file to the test machine and run it with any Node >= 18.
@@ -266,12 +266,16 @@ if (status?.enrolled) {
     status.codexHooks
       ? `codex hooks ${status.codexHooks.complete ? "complete" : `${status.codexHooks.missing?.length} missing`}`
       : null,
+    status.stellaHooks
+      ? `stella hooks ${status.stellaHooks.complete ? "complete" : `${status.stellaHooks.missing?.length} missing`}`
+      : null,
   ].filter(Boolean);
   record(
     "tacho status",
     Boolean(status.service?.running) &&
       (status.hooks?.complete ?? true) &&
-      (status.codexHooks?.complete ?? true),
+      (status.codexHooks?.complete ?? true) &&
+      (status.stellaHooks?.complete ?? true),
     `${status.host?.agent_key} → ${status.host?.org_slug}/${status.host?.workspace_slug}; service ${status.service?.kind} ${status.service?.running ? "running" : "NOT running"}; ${hooks.join("; ")}`,
   );
 } else {
@@ -284,7 +288,7 @@ if (status?.enrolled) {
   );
 }
 
-// 5. First run per harness + Mission Control.
+// 5. First run per harness + the workspace in the app.
 if (has("--enroll") && status?.enrolled) {
   for (const h of status.host?.harnesses ?? []) {
     const verify = run("tacho", ["verify", "--harness", h, "--json"]);
@@ -297,8 +301,10 @@ if (has("--enroll") && status?.enrolled) {
         : verify.stderr.trim().slice(0, 200),
     );
   }
+  // Not /runs: apps/app has no such route under [orgSlug]/[workspaceSlug];
+  // the workspace root is what exists and what the desktop app links to.
   console.log(
-    `\nMission Control: ${appUrl}/${status.host.org_slug}/${status.host.workspace_slug}/runs`,
+    `\nWorkspace: ${appUrl}/${status.host.org_slug}/${status.host.workspace_slug}`,
   );
 }
 

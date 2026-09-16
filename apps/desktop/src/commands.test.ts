@@ -3,7 +3,10 @@ import {
   ago,
   defaultRegistration,
   deregisterArgs,
-  missionControlUrl,
+  describeCliInstall,
+  HARNESS_LABEL,
+  HARNESSES,
+  workspaceUrl,
   wizardStep,
   enrollArgs,
   loginArgs,
@@ -256,12 +259,110 @@ describe("wizard and de-register", () => {
     });
   });
 
-  it("links Mission Control for the workspace the host reports to", () => {
-    expect(missionControlUrl("https://app.oxagen.sh/", "acme", "core")).toBe(
-      "https://app.oxagen.sh/acme/core/runs",
+  it("links the workspace root the host reports to, not the nonexistent /runs", () => {
+    expect(workspaceUrl("https://app.oxagen.sh/", "acme", "core")).toBe(
+      "https://app.oxagen.sh/acme/core",
     );
-    expect(missionControlUrl("https://app.oxagen.sh", "a b", "c/d")).toBe(
-      "https://app.oxagen.sh/a%20b/c%2Fd/runs",
+    expect(workspaceUrl("https://app.oxagen.sh", "a b", "c/d")).toBe(
+      "https://app.oxagen.sh/a%20b/c%2Fd",
     );
+  });
+
+  it("lists every harness the app knows how to wrap, labeled", () => {
+    expect(HARNESSES).toEqual(["claude-code", "codex", "stella"]);
+    for (const h of HARNESSES) expect(HARNESS_LABEL[h]).toBeTruthy();
+    expect(HARNESS_LABEL.stella).toBe("Stella");
+  });
+});
+
+describe("describeCliInstall", () => {
+  it("has nothing to say when the build predates the field", () => {
+    expect(describeCliInstall(null)).toBeNull();
+    expect(describeCliInstall(undefined)).toBeNull();
+  });
+
+  it("describes what the launch-time link did, per state", () => {
+    const base = {
+      dir: "/Users/a/.local/bin",
+      files: ["oxagen", "tacho"],
+      skipped: [],
+      profile: null,
+      note: "",
+    };
+    expect(
+      describeCliInstall({ ...base, state: "linked", profile: "~/.zshrc" }),
+    ).toBe(
+      "Linked oxagen, tacho into /Users/a/.local/bin on launch. Updated ~/.zshrc.",
+    );
+    expect(
+      describeCliInstall({
+        ...base,
+        state: "linked",
+        skipped: ["stella (already a symlink to another install)"],
+      }),
+    ).toBe(
+      "Linked oxagen, tacho into /Users/a/.local/bin on launch. Skipped stella (already a symlink to another install).",
+    );
+    // The Rust side never populates `files` for "already" (nothing needed
+    // linking), so the copy must not depend on it or read "nothing already
+    // on PATH".
+    expect(describeCliInstall({ ...base, files: [], state: "already" })).toBe(
+      "Already on PATH in /Users/a/.local/bin.",
+    );
+    // "linked" can also carry an empty `files` list (every link was already
+    // correct on launch): the same "nothing to report" copy, not "Linked
+    // nothing into ...". The profile check still runs every launch, so a
+    // set profile still shows even when nothing needed linking.
+    expect(
+      describeCliInstall({
+        ...base,
+        files: [],
+        state: "linked",
+        profile: "~/.zshrc",
+      }),
+    ).toBe("Already on PATH in /Users/a/.local/bin. Updated ~/.zshrc.");
+    expect(
+      describeCliInstall({
+        ...base,
+        files: [],
+        state: "already",
+        skipped: ["stella (already a symlink to another install)"],
+      }),
+    ).toBe(
+      "Already on PATH in /Users/a/.local/bin. Skipped stella (already a symlink to another install).",
+    );
+    expect(
+      describeCliInstall({
+        ...base,
+        state: "skipped",
+        note: "no writable bin dir",
+      }),
+    ).toBe("Skipped linking on launch: no writable bin dir");
+    expect(
+      describeCliInstall({
+        ...base,
+        state: "opted_out",
+        note: "OXAGEN_NO_PATH_LINK set",
+      }),
+    ).toBe("Not linked: you opted out. OXAGEN_NO_PATH_LINK set");
+    expect(
+      describeCliInstall({
+        ...base,
+        state: "failed",
+        note: "permission denied",
+      }),
+    ).toBe("Could not link into /Users/a/.local/bin: permission denied");
+    expect(describeCliInstall({ ...base, state: "pending" })).toBe(
+      "Linking on launch…",
+    );
+    // An unrecognized state (a newer CLI, an older app) falls back to its note.
+    expect(
+      describeCliInstall({
+        ...base,
+        // @ts-expect-error exercising the unrecognized-state fallback
+        state: "future-state",
+        note: "see the log",
+      }),
+    ).toBe("see the log");
   });
 });

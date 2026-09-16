@@ -4,7 +4,7 @@
  * First run (no enrollment on this machine): a five-step wizard — sign in,
  * pick the org and workspace the operator can see, register the agents the
  * machine has (Claude Code, Codex; detected, all ticked by default), the
- * outcome, then a recorded first run and the door to Mission Control.
+ * outcome, then a recorded first run and the door to the workspace in Oxagen.
  *
  * Every later run (the machine is enrolled): the management pane — what the
  * host reports to, one de-register per wrapped agent, change of workspace,
@@ -17,7 +17,14 @@
  */
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { Update } from "@tauri-apps/plugin-updater";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { computeAgentRows, HEALTH_LABEL, summarizeAgents } from "./agents";
 import {
   type ConnectResult,
   connectRun,
@@ -41,18 +48,31 @@ import {
   ago,
   defaultRegistration,
   deregisterArgs,
+  describeCliInstall,
   enrollArgs,
   HARNESS_LABEL,
+  HARNESSES,
   type Harness,
   loginArgs,
-  missionControlUrl,
   needsWorkspacePick,
   pendingChange,
   reassignArgs,
   unenrollArgs,
   wizardStep,
+  workspaceUrl,
 } from "./commands";
 import { checkForUpdate, describeCheck, installUpdate } from "./updater";
+
+const WRAP_AGENT_URL = "https://docs.oxagen.sh/docs/cli/wrap-an-agent";
+const DESKTOP_GUIDE_URL = "https://docs.oxagen.sh/docs/cli/desktop";
+
+/** Claude Code and Codex are npm packages; Stella installs from a script. */
+const INSTALL_HINT: Record<Harness, string> = {
+  "claude-code": "npm i -g @anthropic-ai/claude-code",
+  codex: "npm i -g @openai/codex",
+  stella:
+    "curl -fsSL https://raw.githubusercontent.com/macanderson/stella/main/install.sh | sh",
+};
 
 interface LogLine {
   text: string;
@@ -70,9 +90,14 @@ function isUnauthorized(e: unknown): boolean {
   return /^401\b/.test(text);
 }
 
-const HARNESSES: Harness[] = ["claude-code", "codex"];
 const labelOf = (h: string) => HARNESS_LABEL[h as Harness] ?? h;
 const joinLabels = (list: readonly string[]) => list.map(labelOf).join(" and ");
+
+/** Open a docs URL in the system browser instead of navigating the webview. */
+const openDocs = (url: string) => (e: MouseEvent) => {
+  e.preventDefault();
+  void openUrl(url);
+};
 
 export function App() {
   const [state, setState] = useState<DesktopState | null>(null);
@@ -396,14 +421,10 @@ export function App() {
     await refresh(true);
   }
 
-  const openMissionControl = () => {
+  const openWorkspace = () => {
     if (!state || !host) return;
     void openUrl(
-      missionControlUrl(
-        state.config.app_url,
-        host.org_slug,
-        host.workspace_slug,
-      ),
+      workspaceUrl(state.config.app_url, host.org_slug, host.workspace_slug),
     );
   };
 
@@ -487,6 +508,23 @@ export function App() {
     try {
       const r = await installCli();
       setNotice(`${r.files.length} links in ${r.dir}. ${r.note}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+      await refresh();
+    }
+  }
+  async function doRemoveCliLinks() {
+    setBusy("cli-remove");
+    setError(null);
+    try {
+      const removed = await uninstallCli();
+      setNotice(
+        removed.length > 0
+          ? `Removed PATH links: ${removed.join(", ")}.`
+          : "No PATH links to remove.",
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -595,6 +633,19 @@ export function App() {
     : daemonUp && host.host_status === "active"
       ? "on"
       : "half";
+  const agentRows = state ? computeAgentRows(state, tacho, Date.now()) : [];
+  const cliInstallNote = describeCliInstall(state?.cli_install);
+  // Whether there is anything for "Remove links" to remove. The two
+  // `*_on_path` fields answer a different question: they resolve against the
+  // running process's PATH, and a GUI launch never sources a login profile,
+  // so they stay null on macOS and Linux even in the moment after the app
+  // linked both tools. Only fall back to them on a build whose Rust shell
+  // does not report `cli_links_present` yet.
+  const cliLinksPresent =
+    state === null
+      ? false
+      : (state.cli_links_present ??
+        (state.oxagen_on_path !== null || state.tacho_on_path !== null));
 
   const orgPicker = (
     <select
@@ -839,10 +890,14 @@ export function App() {
                   !detecting &&
                   detected.harnesses.every((d) => !d.installed) && (
                     <div className="notice">
-                      Neither Claude Code nor Codex was found on your PATH.
-                      Install one (
-                      <code>npm i -g @anthropic-ai/claude-code</code> or{" "}
-                      <code>npm i -g @openai/codex</code>), then rescan.
+                      None of Claude Code, Codex, or Stella was found on your
+                      PATH. Install one, then rescan:{" "}
+                      {HARNESSES.map((h, i) => (
+                        <span key={h}>
+                          {i > 0 && " · "}
+                          <code>{INSTALL_HINT[h]}</code>
+                        </span>
+                      ))}
                     </div>
                   )}
                 {toolsTransient && (
@@ -883,6 +938,13 @@ export function App() {
                     Rescan
                   </button>
                 </div>
+                <p className="sub">
+                  Running something else?{" "}
+                  <a href="#" onClick={openDocs(WRAP_AGENT_URL)}>
+                    Wrap your own agent
+                  </a>{" "}
+                  with <code>tacho hook</code> once this machine is set up.
+                </p>
                 {outcome && !outcome.ok && (
                   <div className="result fail" role="alert">
                     <span className="glyph" aria-hidden="true">
@@ -965,7 +1027,7 @@ export function App() {
                 <p className="sub">
                   Oxagen sends each registered agent one small prompt ("reply
                   OK") and confirms the run was recorded and sealed. That is
-                  your first data in Mission Control.
+                  your first data in the workspace.
                 </p>
                 <div className="agents">
                   {hostHarnesses.map((h) => (
@@ -1014,10 +1076,10 @@ export function App() {
                   <button
                     type="button"
                     className={ranOnce ? "primary" : ""}
-                    onClick={openMissionControl}
+                    onClick={openWorkspace}
                     disabled={!ranOnce}
                   >
-                    Open Mission Control
+                    Open this workspace in Oxagen
                   </button>
                   <button
                     type="button"
@@ -1072,6 +1134,8 @@ export function App() {
               ? ` · ${tacho.service.kind} ${tacho.service.running ? "running" : tacho.service.installed ? "installed, stopped" : "not installed"}`
               : ""}
           </dd>
+          <dt>Agents</dt>
+          <dd>{summarizeAgents(agentRows)}</dd>
           <dt>Signed in</dt>
           <dd>
             {loggedIn
@@ -1082,8 +1146,8 @@ export function App() {
           </dd>
         </dl>
         <div className="row">
-          <button type="button" onClick={openMissionControl}>
-            Open Mission Control
+          <button type="button" onClick={openWorkspace}>
+            Open this workspace in Oxagen
           </button>
           {loggedIn ? (
             <button
@@ -1112,42 +1176,39 @@ export function App() {
           Wrapped agents
         </p>
         <p className="sub">
-          Each agent Oxagen records on this machine. De-registering removes
-          Oxagen's hooks from that agent's settings; the last one also stops the
-          collector and deletes the host credentials.
+          Every agent Oxagen records on this machine, and any script or in-house
+          agent reporting through <code>tacho hook</code>. De-registering
+          removes Oxagen's hooks from that agent's settings. The last one also
+          stops the collector and deletes the host credentials.
         </p>
         <div className="agents">
-          {HARNESSES.map((h) => {
-            const enrolled = hostHarnesses.includes(h);
-            const presence =
-              h === "claude-code" ? tacho?.hooks : tacho?.codexHooks;
-            const version =
-              h === "claude-code" ? host.claude_version : host.codex_version;
-            const key = `dereg-${h}`;
-            const meta = enrolled
-              ? [
-                  version ?? "",
-                  presence
-                    ? presence.complete
-                      ? "hooks complete"
-                      : `${presence.missing.length} hooks missing`
-                    : "",
-                  runs[h]?.ok ? "first run recorded" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" · ")
-              : "not wrapped";
+          {agentRows.map((row) => {
+            const confirmKey = `dereg-${row.key}`;
+            const meta = [row.summary, ...row.details]
+              .filter(Boolean)
+              .join(" · ");
             return (
-              <div key={h} className={`agent ${enrolled ? "" : "absent"}`}>
-                <span className="name">{labelOf(h)}</span>
+              <div
+                key={row.key}
+                className={`agent ${row.wrapped ? "" : "absent"}`}
+              >
+                <span className="name">{row.label}</span>
+                <span
+                  className={`badge health-${row.health}`}
+                  aria-label={`Status: ${HEALTH_LABEL[row.health]}`}
+                >
+                  {HEALTH_LABEL[row.health]}
+                </span>
                 <span className="meta">{meta}</span>
-                {enrolled ? (
-                  confirming === key ? (
+                {row.kind === "custom" ? (
+                  <span className="pill">reports through tacho hook</span>
+                ) : row.wrapped ? (
+                  confirming === confirmKey ? (
                     <>
                       <button
                         type="button"
                         className="danger"
-                        onClick={() => deregister(h)}
+                        onClick={() => deregister(row.key as Harness)}
                         disabled={busy !== null}
                       >
                         Confirm de-register
@@ -1165,7 +1226,7 @@ export function App() {
                       <button
                         type="button"
                         className="quiet"
-                        onClick={() => runConnect([h])}
+                        onClick={() => runConnect([row.key as Harness])}
                         disabled={busy !== null}
                         title="Send one small prompt and confirm it was recorded"
                       >
@@ -1174,7 +1235,7 @@ export function App() {
                       <button
                         type="button"
                         className="danger"
-                        onClick={() => setConfirming(key)}
+                        onClick={() => setConfirming(confirmKey)}
                         disabled={busy !== null}
                       >
                         De-register…
@@ -1184,7 +1245,7 @@ export function App() {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => addHarness(h)}
+                    onClick={() => addHarness(row.key as Harness)}
                     disabled={busy !== null || !loggedIn}
                     title={loggedIn ? undefined : "Sign in first"}
                   >
@@ -1195,6 +1256,13 @@ export function App() {
             );
           })}
         </div>
+        <p className="sub">
+          Running something else?{" "}
+          <a href="#" onClick={openDocs(WRAP_AGENT_URL)}>
+            Wrap your own agent
+          </a>{" "}
+          with <code>tacho hook</code>. No new install is needed.
+        </p>
       </section>
 
       <section className="panel" aria-labelledby="ws">
@@ -1255,9 +1323,10 @@ export function App() {
           Command line
         </p>
         <p className="sub">
-          <code>oxagen</code> and <code>tacho</code> ship inside the app;
-          linking puts them on your PATH.
+          <code>oxagen</code> and <code>tacho</code> ship inside the app.
+          Linking puts them on your PATH.
         </p>
+        {cliInstallNote && <p className="sub">{cliInstallNote}</p>}
         <dl className="kv">
           <dt>oxagen</dt>
           <dd>
@@ -1278,8 +1347,16 @@ export function App() {
         </dl>
         <div className="row">
           <button type="button" onClick={doInstallCli} disabled={busy !== null}>
-            {state?.oxagen_on_path ? "Relink" : "Link into"}{" "}
+            {cliLinksPresent ? "Relink" : "Link into"}{" "}
             <code>{state?.cli_install_dir}</code>
+          </button>
+          <button
+            type="button"
+            className="quiet"
+            onClick={doRemoveCliLinks}
+            disabled={busy !== null || !cliLinksPresent}
+          >
+            {busy === "cli-remove" ? "Removing…" : "Remove links"}
           </button>
         </div>
       </section>
@@ -1383,6 +1460,13 @@ export function App() {
               : "enrolled · collector not answering"}
           {state ? ` · v${state.app_version}` : ""}
         </span>
+        <a
+          className="guide-link"
+          href="#"
+          onClick={openDocs(DESKTOP_GUIDE_URL)}
+        >
+          Desktop app guide
+        </a>
         <span className="updates">
           {update.caption && (
             <span className="sub" role="status">

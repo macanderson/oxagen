@@ -1,10 +1,11 @@
 /**
  * `tacho verify` (spec section 5.1 step 6, `--verify`): run one headless
- * Claude Code turn and confirm the daemon chained its `agent_start` and
+ * harness turn and confirm the daemon chained its `agent_start` and
  * `agent_stop`. Proves the hooks, the socket, and the recorder end to end
  * on this machine; the control plane's copy is checked by `oxagen tacho`.
  */
 import { readHostFile } from "../host/host-file";
+import { isInternalSession } from "../collector/registry";
 import type { TachoHarness } from "../wire";
 import type { CliDeps } from "./deps";
 
@@ -17,10 +18,28 @@ export interface VerifyOptions {
 
 const DEFAULT_PROMPT = "Reply with exactly the word OK and nothing else.";
 
+const BINARY: Record<TachoHarness, string> = {
+  "claude-code": "claude",
+  codex: "codex",
+  stella: "stella",
+};
+
+/**
+ * How long to wait for a sealed chain. Stella sends no SessionEnd: its chain
+ * is sealed by the daemon's sweep (every 30 s) once the `stella` process has
+ * exited, so it needs longer than a harness that ends its own session.
+ */
+const DEFAULT_TIMEOUT_MS: Record<TachoHarness, number> = {
+  "claude-code": 15_000,
+  codex: 15_000,
+  stella: 45_000,
+};
+
 /**
  * One headless turn per harness. Claude Code prints a JSON result carrying
- * its session id; Codex CLI (`codex exec`) prints prose, so its session is
- * matched as the daemon's newest non-internal chain instead.
+ * its session id; Codex CLI (`codex exec`) and Stella (`stella run`) print
+ * prose, so their session is matched as a chain the daemon did not have
+ * before the turn ran, carrying the harness label.
  */
 function headlessTurn(
   harness: TachoHarness,
@@ -31,6 +50,9 @@ function headlessTurn(
       args: ["exec", "--skip-git-repo-check", prompt],
       parsesSession: false,
     };
+  }
+  if (harness === "stella") {
+    return { args: ["run", prompt], parsesSession: false };
   }
   return {
     args: ["-p", prompt, "--max-turns", "1", "--output-format", "json"],
@@ -51,6 +73,20 @@ interface DaemonSession {
   session_uuid: string;
   sealed: boolean;
   seq: number;
+  /** Absent from a daemon older than the harness label on `/sessions`. */
+  harness?: string;
+}
+
+function factsFor(harness: TachoHarness, deps: CliDeps) {
+  if (harness === "codex") return deps.codex();
+  if (harness === "stella") return deps.stella();
+  return deps.claude();
+}
+
+function configPathFor(harness: TachoHarness, deps: CliDeps): string {
+  if (harness === "codex") return deps.paths.codexHooks;
+  if (harness === "stella") return deps.readStellaHooks().path;
+  return deps.paths.claudeSettings;
 }
 
 export async function verify(
@@ -71,11 +107,28 @@ export async function verify(
     };
   }
   const harness = options.harness ?? "claude-code";
-  const facts = harness === "codex" ? deps.codex() : deps.claude();
-  const name = harness === "codex" ? "codex" : "claude";
+  const facts = factsFor(harness, deps);
+  const name = BINARY[harness];
   if (facts.path === undefined)
     return { ok: false, detail: `\`${name}\` is not on PATH` };
   const turn = headlessTurn(harness, options.prompt ?? DEFAULT_PROMPT);
+  // Every chain the daemon already holds. A turn whose own session id cannot
+  // be read is matched by what appears after it: the busiest chain is not the
+  // newest one, and a sealed chain retained from a real session would
+  // otherwise report success while this turn's hooks never fired.
+  const priorListing = (await deps.daemonGet("/sessions")) as
+    | { sessions?: DaemonSession[] }
+    | undefined;
+  if (priorListing?.sessions === undefined && !turn.parsesSession) {
+    return {
+      ok: false,
+      detail:
+        "tachod did not list its sessions, so this turn's chain could not be told from the ones already recorded",
+    };
+  }
+  const before = new Set(
+    (priorListing?.sessions ?? []).map((session) => session.session_uuid),
+  );
   deps.out(
     `Running ${name} ${turn.args[0]} (one headless turn) with hooks installed...`,
   );
@@ -92,10 +145,11 @@ export async function verify(
       const parsed = JSON.parse(run.stdout) as { session_id?: string };
       sessionId = parsed.session_id;
     } catch {
-      // Fall through: the daemon's newest session is the best guess.
+      // Fall through: a chain the daemon did not hold before this turn.
     }
   }
-  const deadline = deps.now() + (options.timeoutMs ?? 15_000);
+  const deadline =
+    deps.now() + (options.timeoutMs ?? DEFAULT_TIMEOUT_MS[harness]);
   let found: DaemonSession | undefined;
   while (deps.now() < deadline) {
     const listing = (await deps.daemonGet("/sessions")) as
@@ -106,7 +160,12 @@ export async function verify(
       sessionId !== undefined
         ? sessions.find((s) => s.session_id === sessionId)
         : sessions
-            .filter((s) => !s.session_id.startsWith("tachod-"))
+            .filter(
+              (s) =>
+                !before.has(s.session_uuid) &&
+                !isInternalSession(s.session_id) &&
+                (s.harness === undefined || s.harness === harness),
+            )
             .sort((a, b) => b.seq - a.seq)[0];
     if (found?.sealed === true) break;
     await deps.sleep(500);
@@ -115,8 +174,7 @@ export async function verify(
     return {
       ok: false,
       ...(sessionId !== undefined ? { sessionId } : {}),
-      detail:
-        "the daemon never saw the session; are the hooks installed and is claude reading ~/.claude/settings.json?",
+      detail: `the daemon never saw the session; are the hooks installed and is ${name} reading ${configPathFor(harness, deps)}?`,
     };
   }
   if (!found.sealed) {
@@ -125,7 +183,10 @@ export async function verify(
       sessionId: found.session_id,
       sessionUuid: found.session_uuid,
       seq: found.seq,
-      detail: "session started but SessionEnd never arrived within the timeout",
+      detail:
+        harness === "stella"
+          ? "session started but was not sealed within the timeout; Stella sends no SessionEnd, so tachod seals the chain once the stella process has exited and its sweep has run"
+          : "session started but SessionEnd never arrived within the timeout",
     };
   }
   deps.out(
