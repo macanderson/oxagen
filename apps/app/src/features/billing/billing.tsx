@@ -44,6 +44,7 @@ export async function Billing({
         bucket={bucket}
         blockSizeGau={rate.ok ? rate.value.blockSizeGau : null}
         editable={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
+        org={ctx.orgSlug}
       />
       <ContractRateBlock rate={rate} />
       <PurchaseForm
