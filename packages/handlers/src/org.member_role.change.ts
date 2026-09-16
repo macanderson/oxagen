@@ -46,6 +46,13 @@ async function resolveActorPrincipalAndRole(
         eq(schema.principals.orgId, orgId),
         eq(schema.principals.parentUserId, userId),
         eq(schema.principals.kind, "human"),
+        // A member's principal is org-level: iam-provision creates it with no
+        // workspace, and an agent principal that shares the same
+        // parent_user_id is what the kind filter above excludes. Pinning
+        // workspace_id IS NULL says so in the query rather than relying on it,
+        // and keeps the read identical under an org-only scope, where
+        // iam.principals (workspace_nullable) admits exactly the NULL rows.
+        isNull(schema.principals.workspaceId),
         eq(schema.principals.status, "active"),
       ),
     )
@@ -212,6 +219,13 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
               eq(schema.principals.orgId, ctx.orgId),
               eq(schema.principals.parentUserId, target),
               eq(schema.principals.kind, "human"),
+              // A member's principal is org-level: iam-provision creates it with no
+              // workspace, and an agent principal that shares the same
+              // parent_user_id is what the kind filter above excludes. Pinning
+              // workspace_id IS NULL says so in the query rather than relying on it,
+              // and keeps the read identical under an org-only scope, where
+              // iam.principals (workspace_nullable) admits exactly the NULL rows.
+              isNull(schema.principals.workspaceId),
             ),
           )
           .limit(1);
@@ -283,6 +297,13 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
           eq(schema.principals.orgId, ctx.orgId),
           eq(schema.principals.parentUserId, target),
           eq(schema.principals.kind, "human"),
+          // A member's principal is org-level: iam-provision creates it with no
+          // workspace, and an agent principal that shares the same
+          // parent_user_id is what the kind filter above excludes. Pinning
+          // workspace_id IS NULL says so in the query rather than relying on it,
+          // and keeps the read identical under an org-only scope, where
+          // iam.principals (workspace_nullable) admits exactly the NULL rows.
+          isNull(schema.principals.workspaceId),
         ),
       )
       .limit(1);

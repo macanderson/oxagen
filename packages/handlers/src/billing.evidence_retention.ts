@@ -16,11 +16,23 @@
  * accounting job measures evidence bytes per organisation. It returns null with
  * `storedGbMeasured: false` rather than zero, because zero is a claim ("you are
  * storing nothing") and null is the truth ("nobody has counted").
+ *
+ * WHY withSystemDb AND NOT withTenantDb: the policy read below is deliberately
+ * organisation-wide — "the longest window ANY pinned policy declares" — and
+ * `evidence.retention_policy_versions` is policy class `standard`
+ * (packages/database/src/tenant-policy.manifest.ts), so its RLS USING clause
+ * requires workspace_id to equal the workspace GUC. This capability is invoked
+ * from the organisation's billing page under the org-only workspace sentinel,
+ * where that predicate matches nothing. `max()` over the empty set is SQL NULL,
+ * which the mapping below reads as "no policy pinned" — so an organisation with
+ * a policy pinned in every workspace was reported as having none, and RLS
+ * raised nothing to say so. Tenant isolation is enforced here explicitly
+ * instead: every query below carries eq(orgId).
  */
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingEvidenceRetention } from "@oxagen/oxagen/contracts/billing.evidence_retention";
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withSystemDb } from "@oxagen/database";
 import { and, eq, gte, lt, sql } from "drizzle-orm";
 import {
   CREDIT_REASONS,
@@ -39,7 +51,7 @@ export const billingEvidenceRetentionHandler: CapabilityHandler<
   const periodStart = actionPeriodStart(new Date());
   const periodEnd = new Date(Date.UTC(periodStart.getUTCFullYear() + 1, 0, 1));
 
-  const [settingsRows, policyRows, ledgerRows] = await withTenantDb(
+  const [settingsRows, policyRows, ledgerRows] = await withSystemDb(
     async (tx) => {
       const settings = await tx
         .select({

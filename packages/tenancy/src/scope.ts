@@ -35,6 +35,41 @@ export interface TenantScope extends Partial<PrincipalAttribution> {
   readonly workspaceId: string;
 }
 
+/**
+ * The workspace id an organisation-level surface carries when it has no
+ * workspace: the nil uuid, which is a valid uuid and so passes the scope
+ * validation below, and which no workspace row ever holds.
+ *
+ * It lives here, in the package that owns the scope, because it is a property
+ * of the scope and not of any one capability. It had been redeclared as a
+ * local `const ORG_ONLY_WS` in more than thirty files, which is how the rule
+ * about what it may touch spread unevenly — one file's copy carries the
+ * reasoning in a comment and the next file's copy carries none.
+ *
+ * WHAT IT MEANS FOR A READ. `tools/scripts/gen-rls-migration.ts` generates a
+ * table's tenant_isolation policy from its class in
+ * `packages/database/src/tenant-policy.manifest.ts`, and only the `org_only`
+ * class ignores the workspace GUC. Under this sentinel:
+ *
+ *   - an `org_only` table answers in full;
+ *   - a `workspace_nullable` table answers PARTIALLY, with only the rows whose
+ *     workspace_id IS NULL;
+ *   - a `standard` or `workspace_only` table answers EMPTILY.
+ *
+ * RLS hides rather than refuses, so none of that raises and no `catch` can see
+ * it. An organisation-level surface therefore reaches anything but an
+ * `org_only` table either through `withSystemDb` with an explicit
+ * `eq(table.orgId, orgId)` fence, or by re-entering a real workspace's scope.
+ * `pnpm check:org-sentinel-reads` enforces that and names the table and its
+ * class when it fails.
+ */
+export const ORG_ONLY_WORKSPACE_ID = "00000000-0000-0000-0000-000000000000";
+
+/** Whether a scope names no workspace (the {@link ORG_ONLY_WORKSPACE_ID}). */
+export function isOrgOnlyWorkspace(workspaceId: string | null): boolean {
+  return workspaceId === null || workspaceId === ORG_ONLY_WORKSPACE_ID;
+}
+
 const als = new AsyncLocalStorage<TenantScope>();
 
 const UUID_RE =

@@ -355,7 +355,10 @@ describe("orgMemberRemoveHandler", () => {
     mockTx.update = vi.fn();
 
     await expectHandlerError(
-      orgMemberRemoveHandler({ targetUserId: "usr_0000000000000000000000" }, makeCtx()),
+      orgMemberRemoveHandler(
+        { targetUserId: "usr_0000000000000000000000" },
+        makeCtx(),
+      ),
       "not_found",
       "target_not_member",
     );

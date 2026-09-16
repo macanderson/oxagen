@@ -1,4 +1,6 @@
 export {
+  ORG_ONLY_WORKSPACE_ID,
+  isOrgOnlyWorkspace,
   runInTenantScope,
   runWithPrincipal,
   getScope,

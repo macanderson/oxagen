@@ -28,11 +28,14 @@ const auditSource = z.enum(["all", "security"]);
  * The workspace id an organization-level invoke carries. It names no
  * workspace, so a call carrying it is treated as having no workspace scope:
  * `query_audit_log` answers for the whole organization and
- * `export_audit_events` signs the whole organization's record. Declared beside
- * the contracts because every surface that mounts one org-wide has to send it
- * — `scoped: true` needs a uuid, and "" is not one.
+ * `export_audit_events` signs the whole organization's record. Re-exported
+ * here, where the surfaces that mount those two contracts org-wide already
+ * import from, but defined in `@oxagen/tenancy` — it is a property of the
+ * tenant scope rather than of these contracts, and that module's doc comment
+ * carries what the sentinel does to each table policy class and how an
+ * organization-level read reaches a workspace-scoped table.
  */
-export const ORG_ONLY_WORKSPACE_ID = "00000000-0000-0000-0000-000000000000";
+export { ORG_ONLY_WORKSPACE_ID } from "@oxagen/tenancy";
 
 /**
  * The filters `query_audit_log` and `export_audit_events` share, so the rows a
