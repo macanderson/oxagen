@@ -1,0 +1,133 @@
+---
+title: "What an agent should be told before it starts"
+description: "A prompt is a bad container for a standing rule. It has no owner, no date, no scope, and no record that the agent read it. Context records fix the container."
+date: 2026-09-16
+authors:
+  - Oxagen Research
+pillars:
+  - autonomous-agents
+  - ai-agents
+tags:
+  - context
+  - memory
+  - context-records
+  - prompting
+  - provenance
+draft: false
+---
+
+Every team that runs agents ends up with a file. It starts as four lines about the test command, grows a section on which directory things go in, picks up a paragraph someone added at 2am after an incident, and within a quarter it is 600 lines that nobody has read top to bottom since March.
+
+The file is doing real work. It is also the wrong shape for the work. It has one author who happens to be whoever edited it last, no scope, no dates, no way to say that rule three applies to this repository and rule nine applies to everyone, and no record anywhere of whether the agent that just spent four hours in your codebase actually read line 412. When something goes wrong, you cannot answer what the agent was told. You can only show what the file says now.
+
+## The prompt is not a container
+
+Two research findings between them rule out the obvious fix, which is to write more into the file.
+
+Liu and colleagues measured how models use long inputs and found a U-shaped curve: accuracy is highest when the relevant passage sits near the beginning or the end, and drops when it sits in the middle, a pattern that holds even for models built for long contexts.[^1] A rule's position in your file determines how well it lands, and its position is a function of when somebody added it. That is not a policy. That is a filing accident.
+
+The second finding removes the other fix, which is to say it again during the run. Laban and colleagues compared a fully specified instruction delivered at once against the same instruction spread across a conversation and found an average drop of 39 percent across six generation tasks, driven mainly by an increase in unreliability rather than a loss of capability.[^2] Models commit to an assumption early and over-rely on it. Telling an agent at hour six what you should have told it at hour zero is the worst of the available options.
+
+So the standing rules have to be in before the run starts, and they have to be positioned rather than appended. That is already more structure than a text file has.
+
+## What the memory research settled
+
+The agent-memory literature converged some time ago on the idea that an agent's context should be compiled rather than pasted.
+
+Sumers and colleagues proposed CoALA, which draws on cognitive architectures to describe a language agent as modular memory components plus a structured action space over internal memory and external environments.[^3] The framing matters more than the specific modules: an agent's knowledge is several different kinds of thing with different lifetimes, and treating them as one undifferentiated transcript throws away the distinctions that decide what should be resident.
+
+Packer and colleagues built MemGPT around the same observation, borrowing hierarchical memory from operating systems: manage tiers of memory so that a limited context window holds the right subset, and move things in and out under control.[^4] Park and colleagues stored a complete record of an agent's experiences in natural language, synthesised higher-level reflections over them, and retrieved them dynamically at planning time rather than keeping them all resident.[^5] In each case, something decides what the agent sees this turn, and that something is a component with rules, not an author with a text editor.
+
+Wang and colleagues showed what durable, retrievable knowledge is worth when it accumulates. Voyager pairs an exploration curriculum with an ever-growing library of executable skills that the agent stores and retrieves.[^6]
+
+<Bars
+  title="Voyager against the prior state of the art, with a persistent skill library"
+  unit="x"
+  head={["Measure", "Improvement"]}
+  data={[
+    { label: "Unique items collected", value: 3.3, display: "3.3x" },
+    { label: "Distance travelled", value: 2.3, display: "2.3x" },
+    { label: "Tech tree milestones unlocked", value: 15.3, display: "up to 15.3x faster", emph: true },
+    ]}
+  caption="Source: Wang et al. (2023), Voyager in Minecraft against prior state-of-the-art agents. The authors also report that the learned skill library transfers to new worlds, where competing approaches struggled."
+/>
+
+The transfer result is the one to keep. The library worked in worlds it was not built in. Knowledge that is stored as a retrievable, named thing survives a change of task; knowledge that lives in a prompt for one run does not.
+
+## A rule needs the things a rule has
+
+Take the file apart and ask what each line would need to be a rule rather than a sentence.
+
+It needs an owner, because someone has to be answerable for it. It needs a scope, because the rule about the staging database is not the rule about every repository in the organisation. It needs a date and a way to stop applying, because half of what is in that file describes a system that no longer exists. It needs provenance, because the most useful thing about a rule is usually the incident that caused it. And it needs a way to be entered into force that is not one person editing a line, because a rule an agent can rewrite is not a rule.
+
+In Oxagen that object is a **context record**. A record holds one thing an agent or a person asserts, learns, proposes, or decides. It is immutable and content-addressed: the record is hashed over its canonical form, so two copies are the same record or they are visibly different ones. It carries a scope, from a single user up to the whole organisation. It carries provenance back to the frame of the run that taught it, so the rule and the incident that produced it are one link apart.
+
+<Timeline
+  title="Three records over the same repository, read as of today"
+  start={0}
+  end={12}
+  ticks={[
+    { at: 0, label: "Jan" },
+    { at: 3, label: "Apr" },
+    { at: 6, label: "Jul" },
+    { at: 9, label: "Oct" },
+  ]}
+  marker={{ at: 8.5, label: "Today" }}
+  rows={[
+    { label: "Migrations run against the shared plane", when: "Jan to Jun", from: 0, to: 6, ended: true },
+    { label: "Each organisation resolves its own store", when: "Jun onward", from: 6, to: 12 },
+    { label: "Release notes wait for a named approver", when: "Mar onward", from: 3, to: 12 },
+  ]}
+  caption="Illustrative. A record has a beginning and can be retracted, so what the agent was told in April is answerable separately from what it would be told now."
+/>
+
+The point of the middle two rows is that they contradict each other and both are correct, at different times. A text file cannot hold that. It can only hold the winner, which means the record of what the agent was operating under in April is gone the moment somebody edits the line.
+
+## An agent proposes, a person merges
+
+The part that makes records work as governance rather than as storage is where they live and how they become active.
+
+Records for a workspace live as files in the linked repository, and a record becomes active only through a pull request. An agent that learns something during a run can propose a record. It cannot enact one. The proposal opens a pull request, the checks run against it, a person reviews it under whichever review mode the workspace is set to, and the merge is what puts it into force. Git decides what is in force, which means the question "what rules were active on the 14th" has the same answer as "what was in the tree on the 14th", and that is a question your existing tools already answer.
+
+<Flow
+  title="How a proposed record becomes one the agent runs under"
+  steps={[
+    { label: "Propose", detail: "An agent or a person writes a record, with its scope and its provenance." },
+    { label: "Check", detail: "Schema, lineage, hash recompute, secret scan, conflict against active records." },
+    { label: "Review", detail: "A person approves under the workspace's review mode.", emph: true },
+    { label: "Merge", detail: "The commit is what puts the record into force." },
+    { label: "Promote", detail: "A promotion event lands in a hash-chained ledger." },
+    { label: "Deliver", detail: "The record reaches the next run as compiled context." },
+  ]}
+  caption="The Context PR path. The review step is the one that makes the difference between a record and a note an agent wrote to itself."
+/>
+
+That constraint is the answer to a question this pillar keeps arriving at. If an agent can write its own standing rules, then the self-conditioning problem gets a permanent home: one wrong conclusion at hour three becomes a rule that shapes every run afterward. Requiring a merge does not make the agent's proposals better. It makes them reviewable while they are still proposals.
+
+## Delivery is a decision, not a paste
+
+Records reach a run in a way that answers the positional problem directly rather than hoping around it.
+
+What must hold is compiled into the stable part of the system context, at the front, where the attention research says a constraint survives. Lower-priority records are selected for the run by relevance rather than shipped wholesale, because a budget that admits everything is not a budget. Records that arrive between turns are injected as a volatile message immediately after the cached system block rather than being edited into it, which keeps the cached prefix stable across runs. And a record can be served as a context frame with provenance pointing back at the record and the commit that activated it, so an answer can cite the rule it came from.
+
+<Callout kind="note" title="Why position is a design decision">
+Liu and colleagues found accuracy highest at the beginning and end of a long input and lowest in the middle. If your standing rules are a file, their position is whatever order they were written in. If they are records with a priority, position is something a compiler decides, and the rule that must hold is the rule that sits where the model reads best.
+</Callout>
+
+Two things follow that are worth stating plainly. A record delivered is not a record obeyed; nothing here makes a model comply, and the check that the work was right still has to come from outside the model, as Huang and colleagues found when unaided self-correction sometimes made answers worse.[^7] And a record is only as good as its scope: a rule promoted to the whole organisation because it was easier than scoping it is a rule that will be wrong somewhere.
+
+## Where this meets Oxagen
+
+Oxagen is Mission Control for your autonomous agents. Context records are part of the equipment clause of an agent's mandate: the business context it is permitted to read and the steering it runs under, set by the engineers accountable for it. The scope on the record and the scope in the mandate are the same mechanism, so an agent is handed what its work requires rather than everything the organisation knows.
+
+What that buys an operator is a question with an answer. When a run goes wrong, "what was this agent told" resolves to a set of records with owners, scopes, hashes, and the commits that activated them, rather than to a file whose history is a series of edits by whoever was on call. When an agent learns something worth keeping, it proposes rather than decides. And when a rule turns out to be wrong, retracting it is a pull request, which means the retraction is dated too.
+
+The next post takes the other half: what to do when the run has already started and it is going the wrong way.
+
+[^1]: Liu, N. F., Lin, K., Hewitt, J., Paranjape, A., Bevilacqua, M., Petroni, F., & Liang, P. (2023). *Lost in the Middle: How Language Models Use Long Contexts*. TACL. https://arxiv.org/abs/2307.03172
+[^2]: Laban, P., Hayashi, H., Zhou, Y., & Neville, J. (2025). *LLMs Get Lost In Multi-Turn Conversation*. arXiv. https://arxiv.org/abs/2505.06120
+[^3]: Sumers, T. R., Yao, S., Narasimhan, K., & Griffiths, T. L. (2023). *Cognitive Architectures for Language Agents*. TMLR. https://arxiv.org/abs/2309.02427
+[^4]: Packer, C., Wooders, S., Lin, K., Fang, V., Patil, S. G., Stoica, I., & Gonzalez, J. E. (2023). *MemGPT: Towards LLMs as Operating Systems*. arXiv. https://arxiv.org/abs/2310.08560
+[^5]: Park, J. S., O'Brien, J. C., Cai, C. J., Morris, M. R., Liang, P., & Bernstein, M. S. (2023). *Generative Agents: Interactive Simulacra of Human Behavior*. UIST 2023. https://arxiv.org/abs/2304.03442
+[^6]: Wang, G., Xie, Y., Jiang, Y., Mandlekar, A., Xiao, C., Zhu, Y., Fan, L., & Anandkumar, A. (2023). *Voyager: An Open-Ended Embodied Agent with Large Language Models*. TMLR. https://arxiv.org/abs/2305.16291
+[^7]: Huang, J., Chen, X., Mishra, S., Zheng, H. S., Yu, A. W., Song, X., & Zhou, D. (2023). *Large Language Models Cannot Self-Correct Reasoning Yet*. ICLR 2024. https://arxiv.org/abs/2310.01798
