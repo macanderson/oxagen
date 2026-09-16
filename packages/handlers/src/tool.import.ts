@@ -137,7 +137,10 @@ export function createToolImportHandler(
 ): CapabilityHandler<typeof toolImport> {
   return async (input, ctx) => {
     const actingUserId = await resolveActingUserId(ctx);
-    await assertOrgRole({ ...ctx, userId: actingUserId }, { org: ["Owner", "Admin"], workspace: ["Owner"] });
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner", "Admin"], workspace: ["Owner"] },
+    );
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
 
     const server = await deps.findServer({

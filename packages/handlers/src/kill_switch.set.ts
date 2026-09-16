@@ -397,7 +397,10 @@ export function createKillSwitchSetHandler(
 ): CapabilityHandler<typeof killSwitchSet> {
   return async (input, ctx) => {
     const actingUserId = await resolveActingUserId(ctx);
-    await assertOrgRole({ ...ctx, userId: actingUserId }, { org: ["Owner", "Admin"] });
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner", "Admin"] },
+    );
 
     const switchWorkspaceId = switchWorkspaceOf(
       input.target.kind,

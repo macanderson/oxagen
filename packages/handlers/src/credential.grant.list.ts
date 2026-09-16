@@ -187,7 +187,10 @@ export function createCredentialGrantListHandler(
 ): CapabilityHandler<typeof credentialGrantList> {
   return async (input, ctx) => {
     const actingUserId = await resolveActingUserId(ctx);
-    await assertOrgRole({ ...ctx, userId: actingUserId }, { org: ["Owner", "Admin", "Compliance"] });
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner", "Admin", "Compliance"] },
+    );
 
     const cursor =
       input.cursor === undefined ? null : decodeGrantCursor(input.cursor);

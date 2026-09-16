@@ -282,10 +282,13 @@ export function createToolVersionListHandler(
 ): CapabilityHandler<typeof toolVersionList> {
   return async (input, ctx) => {
     const actingUserId = await resolveActingUserId(ctx);
-    await assertOrgRole({ ...ctx, userId: actingUserId }, {
-      org: ["Owner", "Admin"],
-      workspace: ["Owner", "Member", "Viewer"],
-    });
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      {
+        org: ["Owner", "Admin"],
+        workspace: ["Owner", "Member", "Viewer"],
+      },
+    );
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
 
     const cursor =
