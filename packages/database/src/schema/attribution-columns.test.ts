@@ -1,5 +1,5 @@
 // Attribution columns are `<verb>_by_id` (Mission Control spec App. A.0 as
-// amended 2026-09-15; ADR-065; migration 20260915230000). This test walks
+// amended 2026-09-15; ADR-077; migration 20260915230000). This test walks
 // every table the Drizzle barrel exports and fails on the old spelling, so a
 // lane that hand-rolls `created_by_user_id` on a new table is caught at unit
 // time rather than by `atlas migrate diff` after its migration merged.

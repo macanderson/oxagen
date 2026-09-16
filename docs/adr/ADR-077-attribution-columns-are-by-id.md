@@ -1,4 +1,4 @@
-# ADR-065: Attribution columns are `<verb>_by_id`
+# ADR-077: Attribution columns are `<verb>_by_id`
 
 - **Status:** Accepted
 - **Date:** 2026-09-15

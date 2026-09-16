@@ -1,6 +1,6 @@
 -- Attribution columns are named for the reference they hold, not for the
 -- table they point at: `created_by_id`, `updated_by_id`, `deleted_by_id`
--- (Mission Control spec App. A.0 as amended 2026-09-15; ADR-065). The old
+-- (Mission Control spec App. A.0 as amended 2026-09-15; ADR-077). The old
 -- `*_by_user_id` spelling was the only place in the schema where a foreign
 -- key carried its target table in its name (`org_id`, `user_id`,
 -- `approver_id`, `requester_id` never did), and `createdBy` is already the

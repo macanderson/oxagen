@@ -13,7 +13,7 @@ What this audit changed is in one PR (branch
 
 - The audit trio is `created_by_id` / `updated_by_id` / `deleted_by_id` on
   every table (81 today; 180 columns), in the Drizzle mixins, the handlers,
-  contracts, surfaces, docs and JSON schemas (ADR-065; migration
+  contracts, surfaces, docs and JSON schemas (ADR-077; migration
   `20260915230000_attribution_columns_by_id.sql`, verified by a from-scratch
   replay of all 124 migrations: 180 old-named columns before, 0 after).
 - `billing.payment_methods`, `ingestion.source_connections`,
@@ -93,7 +93,7 @@ settled by the spec.
 
 | # | Finding | Where | Disposition |
 |---|---|---|---|
-| 1 | Audit trio spelled `*_by_user_id`, the only reference columns named for their target table | 81 tables | **fixed** (ADR-065) |
+| 1 | Audit trio spelled `*_by_user_id`, the only reference columns named for their target table | 81 tables | **fixed** (ADR-077) |
 | 2 | Two run models side by side: `agent.agent_executions` / `agent_execution_steps` / `agent_tool_calls` (pre-ADR-043 worker vocabulary, `claimed_by` / `lease_expires_at`, banned word "execution") and `agent.agent_runs` / `agent_run_events` / `agent_run_attempts`. `schema.reconcile.*` still uses `agent_executions` as its job row; `approval_requests.execution_step_id` points into the old model | `agent.*` | **rebuild** (A.10: both become `:Run` / `:Attempt` / `:Frame` graph nodes); the reconcile job needs a home before the drop — see `wrk.repositories.indexing_status` in A.3 |
 | 3 | Four credential stores with two token shapes: `ingestion.oauth_tokens` (per connection) and `ingestion.oauth_accounts` (per org+provider+user) hold the same enveloped token columns; `ingestion.auth_credentials` and `mcp.credentials` hold the same thing keyed differently; `org.model_credentials` is a fifth | `ingestion.*`, `mcp.*`, `org.*` | **rebuild** (A.5: one `tools.connections` table with `kind` = `oauth` / `api_key` / `cloud_role` / `github_app` / `model_provider`) |
 | 4 | Table names that repeat their schema: `agent.agent_*` (all eleven), `mcp.mcp_servers`, `privacy.privacy_*`, `notification.notifications`, `billing.billing_disputes`; and the same bare name in two schemas: `registries` (`mcp`, `schema_registry`), `sessions` (`auth`, `tacho`) | across | **rebuild** (the target uses bare names: `control.commands`, `tools.mandates`, `audit.audit_events` is the one repeat) |
