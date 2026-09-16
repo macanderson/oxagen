@@ -383,8 +383,15 @@ describe("the workspace a key names", () => {
     expect(screen.getByTestId("api-keys-archived-workspace")).toHaveTextContent(
       "no new key is issued into it",
     );
-    // The keys themselves are still listed, with Revoke, which is the point.
+    // The keys themselves are still listed, with Revoke and no Rotate: a
+    // rotation mints fresh material for a workspace meant to be inert, while
+    // revoking is what these keys are listed for.
     expect(keysTable()).toBeInTheDocument();
+    expect(
+      within(rowFor(live))
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Revoke"]);
     await expectNoAxe(view.container);
   });
 

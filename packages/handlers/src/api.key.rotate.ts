@@ -7,7 +7,8 @@
 // Flow:
 //   1. Auth + scope guard — authenticated principal + orgId.
 //   2. Role gate — actor must be org Owner or Admin.
-//   3. One transaction: load old (IDOR-safe) → insert new → soft-delete old.
+//   3. One transaction: load old (IDOR-safe) → refuse an archived workspace →
+//      insert new → soft-delete old.
 //   4. Emit api_key.created + api_key.revoked security events (fire-and-forget).
 
 import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
@@ -111,6 +112,51 @@ export const apiKeyRotateHandler: CapabilityHandler<
         code: refusal.kind,
         reason: refusal.reason,
         message: refusal.message,
+      });
+    }
+
+    // An archived workspace is meant to be inert, and what archival should
+    // prevent is fresh secret material being issued for it. A rotation mints a
+    // new key with a new secret, so it is that act whatever the expiry — the
+    // replacement inheriting the rotated key's `expiresAt` shortens the tail
+    // but does not change what happened. `create_api_key` refuses the same way
+    // and for the same reason; the two read side by side deliberately.
+    //
+    // This does NOT close the access hole. The key being rotated still
+    // authenticates into the archived workspace — `resolveApiKey` never
+    // consults archival (#3123) — so this stops new material being minted and
+    // revokes nothing already live. `revoke_api_key` has no archival check and
+    // must not acquire one: revoking is the path that actually helps an
+    // operator with a compromised key in an archived workspace.
+    //
+    // Read in this same transaction, before any key material is generated, so
+    // a workspace archived between a check and the write cannot let one
+    // through and nothing is minted or revoked on the way to the refusal.
+    const [workspace] = await tx
+      .select({
+        name: schema.workspaces.name,
+        archivedAt: schema.workspaces.archivedAt,
+      })
+      .from(schema.workspaces)
+      .where(
+        and(
+          eq(schema.workspaces.id, oldKey.workspaceId),
+          eq(schema.workspaces.orgId, ctx.orgId),
+        ),
+      )
+      .limit(1);
+    if (!workspace) {
+      throw new HandlerError({
+        code: "not_found",
+        reason: "workspace_not_found",
+        message: "Not found: this workspace does not exist in this org",
+      });
+    }
+    if (workspace.archivedAt !== null) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "workspace_archived",
+        message: `${workspace.name} was archived on ${workspace.archivedAt.toISOString()}; a key cannot be rotated in an archived workspace`,
       });
     }
 

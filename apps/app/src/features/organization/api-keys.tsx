@@ -315,6 +315,7 @@ function Keys({
               apiKey={key}
               org={org}
               ws={ws}
+              archived={archived}
               now={now}
               listedIds={listedIds}
               here={here}

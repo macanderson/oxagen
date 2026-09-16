@@ -47,6 +47,7 @@ export function KeyRow({
   apiKey,
   org,
   ws,
+  archived,
   now,
   listedIds,
   here,
@@ -55,6 +56,14 @@ export function KeyRow({
   org: string;
   /** The workspace the key belongs to, and the one a new key is minted in. */
   ws: string;
+  /**
+   * Whether that workspace is archived. A rotation mints fresh secret material
+   * for it, which is what archival is meant to stop, so `rotate_api_key`
+   * refuses one (`conflict` / `workspace_archived`) and the control is
+   * withheld. Revoke stays: it is the action an archived workspace's keys are
+   * listed for, and the one that helps with a compromised key.
+   */
+  archived: boolean;
   /** The instant the keys were read; this row's clock starts there. */
   now: number;
   listedIds: readonly string[];
@@ -64,8 +73,9 @@ export function KeyRow({
   const current = useExpiryClock(apiKey.expiresAt, now);
   const state = credentialState(apiKey, current);
   // Rotate is offered only where it would work: the key is live on this row's
-  // own clock, and the read said no service owns it.
-  const mayRotate = state === "live" && apiKey.rotatable;
+  // own clock, the read said no service owns it, and the workspace is still in
+  // use.
+  const mayRotate = state === "live" && apiKey.rotatable && !archived;
   return (
     <tr data-api-key={apiKey.id}>
       <td className={`${cell} font-medium text-foreground`}>{apiKey.name}</td>

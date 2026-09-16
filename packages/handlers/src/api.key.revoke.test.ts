@@ -103,6 +103,8 @@ function makeSoftDeleteTx(
         where: vi.fn().mockResolvedValue([]),
       }),
     }),
+    /** How many selects the write transaction made; the key, and nothing else. */
+    selectCalls: () => selectCallCount,
   };
 }
 
@@ -327,5 +329,42 @@ describe("api.key.revoke handler — apiKeyId as actor", () => {
     });
     const result = await apiKeyRevokeHandler(BASE_INPUT, machineCtx);
     expect(result.revoked).toBe(true);
+  });
+});
+
+describe("api.key.revoke handler — an archived workspace changes nothing", () => {
+  // `create_api_key` and `rotate_api_key` refuse an archived workspace,
+  // because both mint fresh secret material for one that is meant to be inert.
+  // Revoke is the opposite act and must never acquire that check by symmetry:
+  // archival revokes nothing on its own (#3123), so an operator dealing with a
+  // compromised key in an archived workspace revokes it, and refusing that
+  // would strand a live credential with no way to end it.
+  //
+  // The handler reads no workspace at all, which is what this pins: the write
+  // transaction makes exactly one select — the key — so a workspace lookup
+  // added later fails here.
+  it("revokes without reading the workspace, so archival cannot stand in the way", async () => {
+    let writeTx: ReturnType<typeof makeSoftDeleteTx> | undefined;
+    let callCount = 0;
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1) {
+          return fn(makeRoleResolutionTx("principal-uuid-1", "Owner"));
+        }
+        writeTx = makeSoftDeleteTx({
+          id: "key-uuid-1",
+          publicId: "aky_test123",
+        });
+        return fn(writeTx);
+      },
+    );
+
+    const out = await apiKeyRevokeHandler(
+      { keyPublicId: "aky_test123" },
+      makeCTX(),
+    );
+    expect(out.revoked).toBe(true);
+    expect(writeTx?.selectCalls()).toBe(1);
   });
 });

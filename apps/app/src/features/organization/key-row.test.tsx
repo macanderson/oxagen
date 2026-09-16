@@ -29,7 +29,7 @@ afterEach(() => {
   cleanup();
 });
 
-function renderRow(key: ApiKey, now = NOW) {
+function renderRow(key: ApiKey, now = NOW, archived = false) {
   render(
     <IntlProvider>
       <table>
@@ -38,6 +38,7 @@ function renderRow(key: ApiKey, now = NOW) {
             apiKey={key}
             org="acme"
             ws="core-platform"
+            archived={archived}
             now={now}
             listedIds={[key.id]}
             here={HERE}
@@ -76,6 +77,17 @@ describe("a row's state and its controls come from one clock", () => {
     const view = renderRow(apiKey({ revokedAt: "2026-09-10T08:00:00.000Z" }));
     expect(view.status()).toBe("revoked");
     expect(view.buttons()).toEqual([]);
+  });
+
+  it("offers Revoke alone on a live key in an archived workspace (negative)", () => {
+    // A rotation mints fresh secret material for a workspace meant to be
+    // inert, so `rotate_api_key` refuses one and the control is withheld.
+    // Revoke stays — it is what the archived workspace's keys are listed for,
+    // and the action that helps with a compromised key. The key still reads
+    // live, because it is: archival revokes nothing (#3123).
+    const view = renderRow(apiKey(), NOW, true);
+    expect(view.status()).toBe("live");
+    expect(view.buttons()).toEqual(["Revoke"]);
   });
 
   it("reads live with Revoke alone for a key a service owns", () => {
