@@ -3,6 +3,7 @@ import { tachoHostList } from "@oxagen/oxagen/contracts/tacho.host.list";
 import type { TachoHostListOutput } from "@oxagen/oxagen/contracts/tacho.host.list";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, desc, eq, lt, or } from "drizzle-orm";
+import { TACHO_HARNESS_TIERS } from "@oxagen/tacho";
 
 type HostRow = typeof schema.tachoHosts.$inferSelect;
 
@@ -25,9 +26,37 @@ function decodeCursor(
   return { createdAt: new Date(createdAt), id };
 }
 
+/**
+ * The enforcement tier each of a host's harnesses reaches (ADR-069). Resolved
+ * here from the harness names the host reported, because the tier is a
+ * property of the harness rather than of the enrollment: the same machine
+ * normally carries both, and which one a given app is does not change.
+ *
+ * An unrecognised name is a harness this build has never heard of, which
+ * today means a custom agent calling `tacho hook --agent <name>`. Those are
+ * wrapped by construction — the hook is how they report at all — so they are
+ * `harness`, and a name that is genuinely new falls on the tier that carries
+ * the client-attestation caveat rather than the one that claims server-side
+ * refusal.
+ */
+export function tiersFor(
+  harnesses: readonly string[],
+): Record<string, "gateway" | "harness"> {
+  const tiers: Record<string, "gateway" | "harness"> = {};
+  for (const harness of harnesses) {
+    tiers[harness] =
+      TACHO_HARNESS_TIERS[harness as keyof typeof TACHO_HARNESS_TIERS] ??
+      "harness";
+  }
+  return tiers;
+}
+
 export function hostSummary(
   row: HostRow,
 ): TachoHostListOutput["hosts"][number] {
+  const harnesses = Array.isArray(row.harnesses)
+    ? (row.harnesses as string[])
+    : [];
   return {
     hostEnrollmentId: row.publicId,
     agentKey: row.agentKey,
@@ -36,7 +65,8 @@ export function hostSummary(
     osUser: row.osUser,
     status: row.status as TachoHostListOutput["hosts"][number]["status"],
     mode: row.mode as "observe" | "enforce",
-    harnesses: Array.isArray(row.harnesses) ? (row.harnesses as string[]) : [],
+    harnesses,
+    tiers: tiersFor(harnesses),
     claudeVersionAtEnroll: row.claudeVersionAtEnroll,
     wrapperVersion: row.wrapperVersion,
     managed: row.managed,
