@@ -399,8 +399,8 @@ export interface CapabilityContext {
    *
    * A capability could not previously tell which execution it was part of, so
    * the sole producer of `skill_loads` wrote `execution_step_id: null` on every
-   * row and the read-side join in `skill-telemetry.ts` had never returned
-   * anything (#2597). The key itself was not missing: each surface already
+   * row and the read-side join over it had never returned anything (#2597;
+   * both were deleted with #3098). The key itself was not missing: each surface already
    * computed one and handed it to the metered AI port, which is what fills
    * `token_usage.execution_step_id`. It simply had no name here, so three
    * surfaces each decided independently that some other id would double as it.
