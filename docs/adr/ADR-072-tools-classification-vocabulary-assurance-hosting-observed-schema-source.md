@@ -1,4 +1,4 @@
-# ADR-068: Tools: classification vocabulary, assurance hosting, observed-schema source
+# ADR-072: Tools: classification vocabulary, assurance hosting, observed-schema source
 
 **Status:** Accepted (2026-09-15)
 **Issue:** #2958 (backend half). Refines the Mission Control spec §6.4, §6.8, §6.9 part 1, §6.11 and App. A.5 for what the tree holds today.

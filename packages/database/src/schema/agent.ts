@@ -1175,7 +1175,7 @@ export const toolVersions = agentSchema.table(
     // Where the schema came from (MC spec App. A.5): 'declared' for a
     // hand-authored manifest (publish_tool_declaration), 'imported' for a
     // server's tools/list (import_tools). The observed origins arrive with the
-    // recorder that captures tool outputs (ADR-068).
+    // recorder that captures tool outputs (ADR-072).
     schemaOrigin: text("schema_origin").notNull().default("declared"),
     // Safety classification (spec §6.9 part 1), the shape of
     // toolClassificationSchema in @oxagen/oxagen/contracts/tool.classification:

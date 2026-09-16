@@ -10,7 +10,7 @@
 // this function and nothing else, so a deny written for `{kind, id}` can never
 // miss the call that targets `{kind, id}`.
 //
-// Which `id` a kind is digested over is fixed here (ADR-068 §4): the value the
+// Which `id` a kind is digested over is fixed here (ADR-072 §4): the value the
 // live check has in hand at the call boundary, so no lookup sits on the hot
 // path.
 

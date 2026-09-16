@@ -25,7 +25,7 @@ const publishInput = toolDeclarationPublish.input.shape;
  *
  * Registers directly. The pull-request path the mockup shows (declarations
  * written to `.oxagen/tools/` on a branch) needs a bound repository, which no
- * capability records today; it lands with the lane that binds one (ADR-068).
+ * capability records today; it lands with the lane that binds one (ADR-072).
  */
 /**
  * The input's base object, before the one-of rule: MCP tools spread `.shape`

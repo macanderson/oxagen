@@ -1,4 +1,4 @@
--- ADR-068 (G2958): the security_events event_type CHECK gains the two tool
+-- ADR-072 (G2958): the security_events event_type CHECK gains the two tool
 -- governance events: tool.kill_switch_flipped and tool.classification_changed
 -- (packages/compliance/src/security-event-types.ts, the taxonomy of record).
 --

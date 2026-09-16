@@ -124,7 +124,7 @@ export const SECURITY_EVENT_TYPES = [
   // key writes nothing and is not audited.
   "model_credential.set",
   "model_credential.revoked",
-  // Tool governance (MC spec §6.9, §6.11, ADR-068, #2958). A kill switch
+  // Tool governance (MC spec §6.9, §6.11, ADR-072, #2958). A kill switch
   // flip is the emergency deny an operator issues against a tool version, a
   // tool server, a connection, an agent, an operator, a workspace, the
   // organisation or a consequence class; every flip, on or off, is recorded

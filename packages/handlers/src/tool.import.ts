@@ -25,7 +25,7 @@
 // and re-running it republishes only what changed.
 //
 // The pull-request path the mockup shows (declarations to `.oxagen/tools/` on
-// a branch) needs a bound repository, which no capability records; ADR-068.
+// a branch) needs a bound repository, which no capability records; ADR-072.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";

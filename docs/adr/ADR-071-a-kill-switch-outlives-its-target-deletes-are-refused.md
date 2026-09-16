@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-16
-- **Supersedes:** nothing. Extends ADR-068 (tools: classification vocabulary, assurance hosting, observed-schema source), which introduced kill switches.
+- **Supersedes:** nothing. Extends ADR-072 (tools: classification vocabulary, assurance hosting, observed-schema source), which introduced kill switches.
 - **Context:** #2958, PR #3025 review
 
 ## Context
@@ -10,7 +10,7 @@
 A kill switch (`set_kill_switch`, MC spec §6.11) is an `iam.emergency_denies`
 row that names its target in `target_kind` / `target_id` — public ids an
 operator recognises — and carries, beside that, the typed deny the live checks
-actually match. ADR-068 §4 fixed what that deny is:
+actually match. ADR-072 §4 fixed what that deny is:
 
 | Target kind | Deny |
 |---|---|
@@ -113,12 +113,12 @@ should not be possible, and the refusal says exactly what to do instead.
 - The guard costs one indexed read per delete
   (`emergency_denies_switch_idx`), on a path that is not hot.
 - A switch naming a row that was deleted **before** this ADR landed stays
-  clearable: the off flip does no lookup (ADR-068 round 4). Nothing has to be
+  clearable: the off flip does no lookup (ADR-072 round 4). Nothing has to be
   backfilled.
 
 ## Related
 
-- ADR-068 — kill switches, the classification vocabulary, and the deny shapes.
+- ADR-072 — kill switches, the classification vocabulary, and the deny shapes.
 - MC spec §6.11 (kill switches), §7.4 (when an authorization change takes
   effect).
 - `packages/iam/src/kill-switch-guard.test.ts`, and the delete-and-recreate

@@ -10,7 +10,7 @@
 
 ## Intent
 
-Set a tool version's safety classification (MC spec §6.9 part 1; ADR-068 §1): the risk grade, the side-effect class, the egress class, the consequence tags (the spec's starter set plus any customer tag), the measures the tool exposes as paths into its input, and the data classes it touches. Classification describes the tool and decides nothing by itself; a class kill switch matches a version by its tags at call time, and later approval rules are written against it.
+Set a tool version's safety classification (MC spec §6.9 part 1; ADR-072 §1): the risk grade, the side-effect class, the egress class, the consequence tags (the spec's starter set plus any customer tag), the measures the tool exposes as paths into its input, and the data classes it touches. Classification describes the tool and decides nothing by itself; a class kill switch matches a version by its tags at call time, and later approval rules are written against it.
 
 The risk grade set here lands on `classified_risk_grade`; the version's declared `risk_grade` and the checksum over its manifest stay as published, so reclassifying never makes an unchanged manifest republish. A changed classification bumps the deny generation in the write's transaction (trigger `tool_versions_classification_deny_generation`), so a kill-switch gate already open for a turn reloads the tags before its next non-read-only call. A new version of the tool (a changed descriptor from `import_tools` or `publish_tool_declaration`) starts with this classification.
 
@@ -45,7 +45,7 @@ Updates `agent.tool_versions` (`classified_risk_grade`, `classification`, `class
 ## Surfaces
 
 - `PUT /v1/{org}/{ws}/tools/versions/classification`
-- MCP tool `set_tool_classification` (an API key acts as its creator at the role gate, ADR-068 decision 8)
+- MCP tool `set_tool_classification` (an API key acts as its creator at the role gate, ADR-072 decision 8)
 
 ## Errors
 

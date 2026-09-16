@@ -137,7 +137,7 @@ describe("tenant policy manifest", () => {
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
     //
-    // 110 as of mcp.credential_grants (ADR-068, #2958), which lands on top of
+    // 110 as of mcp.credential_grants (ADR-072, #2958), which lands on top of
     // the 109 this branch merged. Those 109 were evidence.witnesses,
     // evidence.verdicts and evidence.disclosure_policies (ADR-064, #2955)
     // alongside tools.mandates and tools.mandate_ledger (ADR-059, G2957), both

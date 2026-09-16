@@ -37,7 +37,7 @@ None. Read-only; audit-exempt.
 ## Surfaces
 
 - `POST /v1/{org}/{ws}/kill-switches/list`
-- MCP tool `list_kill_switches` (an API key acts as its creator at the role gate, ADR-068 decision 8)
+- MCP tool `list_kill_switches` (an API key acts as its creator at the role gate, ADR-072 decision 8)
 
 ## Errors
 

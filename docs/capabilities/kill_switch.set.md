@@ -11,7 +11,7 @@
 
 ## Intent
 
-Kill switches at every level of MC spec §6.11 (ADR-068 §4, §5): a tool version, a tool server, a connection, an agent, an operator, a workspace, the organisation, or a class — every tool carrying a consequence tag. A switch is an `iam.emergency_denies` row that names its target; a tool version becomes a `capability` deny on the id its calls are governed under, every other kind a `resource_scope` deny over `resourceScopeDigestOf({ kind, id })`, the same digest the kernel's agent-run check and the tool gateway's gate derive from what a call carries.
+Kill switches at every level of MC spec §6.11 (ADR-072 §4, §5): a tool version, a tool server, a connection, an agent, an operator, a workspace, the organisation, or a class — every tool carrying a consequence tag. A switch is an `iam.emergency_denies` row that names its target; a tool version becomes a `capability` deny on the id its calls are governed under, every other kind a `resource_scope` deny over `resourceScopeDigestOf({ kind, id })`, the same digest the kernel's agent-run check and the tool gateway's gate derive from what a call carries.
 
 The flip takes effect at the next call boundary through the deny generation: the row write bumps `iam.authorization_deny_generations` in the same transaction (the table's trigger), the handler reads the vector back on that transaction, and every cached allow keyed by the old generation is stale. A connection switch revokes the connection's live credential grants in the same transaction, and the tool gateway asks the gate about each server and its connection before the server is reached on later turns, so a connection or tool-server switch leaves the server out of the turn with no connect, no tools/list and no new grant. Every flip that changes a switch is a `tool.kill_switch_flipped` security event carrying the actor and the capability; a flip that finds the switch already on changes nothing and emits none. The row carries what the switch stops, who flipped it on and why (`flipped_by_user_id`, `reason`), and who cleared it and why (`updated_by_user_id`, `cleared_reason`).
 
@@ -64,7 +64,7 @@ Writes `iam.emergency_denies` (insert on; `active = false`, `deactivated_at`, `c
 ## Surfaces
 
 - `PUT /v1/{org}/{ws}/kill-switches`
-- MCP tool `set_kill_switch` (an API key acts as its creator at the role gate, ADR-068 decision 8)
+- MCP tool `set_kill_switch` (an API key acts as its creator at the role gate, ADR-072 decision 8)
 
 ## Errors
 

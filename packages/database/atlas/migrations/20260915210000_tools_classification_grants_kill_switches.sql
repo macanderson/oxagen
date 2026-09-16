@@ -1,4 +1,4 @@
--- ADR-068 (G2958): the tool registry's safety classification, the credential
+-- ADR-072 (G2958): the tool registry's safety classification, the credential
 -- broker's grant log, and kill switches on iam.emergency_denies.
 --
 -- Hand-written from the drizzle schema (packages/database/src/schema/agent.ts,
