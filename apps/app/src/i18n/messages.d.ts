@@ -1845,6 +1845,7 @@ type Messages = {
       connections: string;
       switches: string;
       switchesOn: string;
+      switchesOnAtLeast: string;
     };
     gate: {
       open: string;
@@ -1999,6 +2000,7 @@ type Messages = {
       classHeading: string;
       scopedHeading: string;
       empty: string;
+      truncated: string;
       allowing: string;
       denying: string;
       flippedByUnrecorded: string;

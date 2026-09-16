@@ -3,7 +3,9 @@
 // confirming"). Two shapes, one component:
 //
 //   - opened from the page header with no switch, it names the level and the
-//     target to deny, so a level with no row yet gets one;
+//     target to deny, so a level with no row yet gets one — except at the two
+//     levels whose target is the tenant in view, where it states the target
+//     rather than asking for a uuid this page never prints;
 //   - opened on a card, it flips that card's switch the other way, with the
 //     level and target fixed.
 //
@@ -30,7 +32,12 @@ import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { flipKillSwitch } from "./actions";
-import { type ToolsAt, textValue } from "./view";
+import {
+  SELF_TARGETED_KINDS,
+  switchScopeOf,
+  type ToolsAt,
+  textValue,
+} from "./view";
 
 export function FlipControls({
   at,
@@ -66,23 +73,40 @@ export function FlipControls({
   const turningOn = existing === null ? true : !existing.on;
   /** The header's control, and only the header's, is the page's gold action. */
   const fromHeader = existing === null;
-  const generation =
-    existing?.scope === "workspace"
-      ? denyGeneration.workspace
-      : denyGeneration.org;
+  /**
+   * Which counter this flip advances. A card has a record and the record says
+   * what scope it was written under; the header has none, so the scope comes
+   * from the level chosen — not from the absent record, which would name the
+   * organization counter for every level and be wrong for the four written
+   * under the workspace.
+   */
+  const generation = denyGeneration[existing?.scope ?? switchScopeOf(kind)];
+  /** At these levels the dialog asks for no target: the viewer supplies it. */
+  const selfTargeted = SELF_TARGETED_KINDS.has(kind);
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
     const form = new FormData(event.currentTarget);
-    const rawKind = textValue(form, "kind");
-    const parsedKind = KillSwitchKind.safeParse(rawKind);
+    const parsedKind = KillSwitchKind.safeParse(textValue(form, "kind"));
+    // The card carries no level select, so the level is the one its switch was
+    // recorded at; the header's select names it.
+    const chosen = parsedKind.success ? parsedKind.data : kind;
     setPending(true);
     setFailure(null);
     try {
       const result = await flipKillSwitch(at.org, at.ws, {
-        kind: parsedKind.success ? parsedKind.data : kind,
-        target: existing?.target.ref ?? textValue(form, "target"),
+        kind: chosen,
+        // A card always names the target its switch was recorded against —
+        // including a workspace switch recorded against another workspace, so
+        // clearing it clears that one. Null is the header at a self-targeted
+        // level, where the dialog asked for nothing and the viewer answers.
+        target:
+          existing !== null
+            ? existing.target.ref
+            : SELF_TARGETED_KINDS.has(chosen)
+              ? null
+              : textValue(form, "target"),
         on: turningOn,
         reason: textValue(form, "reason"),
       });
@@ -155,23 +179,36 @@ export function FlipControls({
                   ))}
                 </select>
               </div>
-              <div className="flex min-w-0 flex-col gap-1.5">
-                <label
-                  htmlFor="target"
-                  className="text-sm font-medium text-foreground"
+              {selfTargeted ? (
+                // The organization and the workspace in view are the target,
+                // and the contract wants their database uuids, which this page
+                // never prints (INV-11). Asking for a target here would ask for
+                // something the page refuses to show, so it states it instead.
+                <p
+                  data-testid="tools-flip-self-target"
+                  className="text-sm text-muted-foreground"
                 >
-                  {t("target")}
-                </label>
-                <input
-                  id="target"
-                  name="target"
-                  required
-                  className={`${inputBase} ${mono}`}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t(`targetHint.${kind}`)}
+                  {t("target")} · {t(`targetHint.${kind}`)}
                 </p>
-              </div>
+              ) : (
+                <div className="flex min-w-0 flex-col gap-1.5">
+                  <label
+                    htmlFor="target"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    {t("target")}
+                  </label>
+                  <input
+                    id="target"
+                    name="target"
+                    required
+                    className={`${inputBase} ${mono}`}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t(`targetHint.${kind}`)}
+                  </p>
+                </div>
+              )}
             </>
           ) : (
             <p className="text-sm text-muted-foreground">

@@ -11,6 +11,7 @@ import { useTranslations } from "next-intl";
 import {
   type KillSwitch,
   type KillSwitchBoard,
+  KILL_SWITCH_BOARD_LIMIT,
   KILL_SWITCH_KINDS,
 } from "@/data/contracts/tools";
 import type { Read } from "@/data/read";
@@ -21,36 +22,50 @@ import { ReadFailure } from "./read-failure";
 import { FlipControls } from "./switch-controls";
 import { type ToolsAt, toolsLink } from "./view";
 
-/** How many of the workspace's switches are denying right now: the tab's count. */
+/**
+ * How many of the switches reaching this workspace are denying right now: the
+ * tab's count. It counts what the board holds, so on a truncated board it is a
+ * floor and the tab says so.
+ */
 export function switchesOn(switches: readonly KillSwitch[]): number {
   return switches.filter((s) => s.on).length;
 }
 
 /**
- * The two kinds whose target this page already names: there is one
- * organization and one workspace in view, so their database uuid identifies
- * nothing the heading has not said. Every other kind prints its target — for
- * an operator that uuid is the only identification the record carries.
+ * Whether the heading alone names this switch's target.
+ *
+ * The organization in view is the only one a switch can name, so an org switch
+ * needs no id. A workspace switch is recorded org-wide (it reaches past the
+ * workspace it was flipped in), so the board here also carries the workspace
+ * switches of sibling workspaces — and for those the uuid is the only thing
+ * that says which workspace is denied, so it is printed. Every other kind
+ * prints its target; for an operator that uuid is the only identification the
+ * record carries.
  */
-const SELF_EVIDENT: ReadonlySet<KillSwitch["target"]["kind"]> = new Set([
-  "workspace",
-  "org",
-]);
+function headingNamesTarget(
+  target: KillSwitch["target"],
+  selfWorkspaceId: string,
+): boolean {
+  if (target.kind === "org") return true;
+  return target.kind === "workspace" && target.ref === selfWorkspaceId;
+}
 
 function SwitchCard({
   at,
   denyGeneration,
   item,
   canFlip,
+  selfWorkspaceId,
 }: {
   at: ToolsAt;
   denyGeneration: KillSwitchBoard["denyGeneration"];
   item: KillSwitch;
   canFlip: boolean;
+  selfWorkspaceId: string;
 }) {
   const t = useTranslations("tools.switches");
   const date = useDate();
-  const selfEvident = SELF_EVIDENT.has(item.target.kind);
+  const selfEvident = headingNamesTarget(item.target, selfWorkspaceId);
   return (
     <article
       data-switch={item.id}
@@ -136,11 +151,14 @@ export function Switches({
   at,
   orgRole,
   canFlip,
+  selfWorkspaceId,
   read,
 }: {
   at: ToolsAt;
   orgRole: OrgRole;
   canFlip: boolean;
+  /** The workspace in view, to tell its own switch from a sibling's. */
+  selfWorkspaceId: string;
   read: Read<KillSwitchBoard>;
 }) {
   const t = useTranslations("tools.switches");
@@ -154,7 +172,7 @@ export function Switches({
       />
     );
   }
-  const { denyGeneration, switches } = read.value;
+  const { denyGeneration, switches, truncated } = read.value;
   const classSwitches = switches.filter((s) => s.target.kind === "class");
   const scoped = switches.filter((s) => s.target.kind !== "class");
   return (
@@ -183,6 +201,14 @@ export function Switches({
         <p className="max-w-prose text-xs text-muted-foreground">
           {t("noNames")}
         </p>
+        {truncated ? (
+          <p
+            data-state="truncated"
+            className="max-w-prose rounded-lg border border-destructive/45 bg-destructive/10 px-3 py-2.5 text-sm text-foreground"
+          >
+            {t("truncated", { limit: KILL_SWITCH_BOARD_LIMIT })}
+          </p>
+        ) : null}
         {switches.length === 0 ? (
           <p data-state="empty" className="text-sm text-muted-foreground">
             {t("empty")}
@@ -208,6 +234,7 @@ export function Switches({
                 denyGeneration={denyGeneration}
                 item={item}
                 canFlip={canFlip}
+                selfWorkspaceId={selfWorkspaceId}
               />
             ))}
           </div>
@@ -232,6 +259,7 @@ export function Switches({
                 denyGeneration={denyGeneration}
                 item={item}
                 canFlip={canFlip}
+                selfWorkspaceId={selfWorkspaceId}
               />
             ))}
           </div>

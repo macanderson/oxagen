@@ -8,7 +8,11 @@
 // back. Mandates ledger, Policy and Auto-approvals are their own lanes; each
 // adds its name to TOOLS_TABS and its case to the body, and nothing else here
 // moves.
-import type { ToolVersion } from "@/data/contracts/tools";
+import type {
+  KillSwitch,
+  KillSwitchKind,
+  ToolVersion,
+} from "@/data/contracts/tools";
 import { firstParam, routes, type SafePath } from "@/shared/safe-path";
 
 export const TOOLS_TABS = ["registry", "connections", "switches"] as const;
@@ -74,6 +78,43 @@ export function toolsLink(
     cursor: to.cursor ?? undefined,
   });
 }
+
+/**
+ * The scope a switch at this level is recorded under, as the record scopes it
+ * (`switchWorkspaceOf`, packages/handlers/src/kill_switch.set.ts): a switch
+ * over a tool version, a tool server, a connection or an agent is written
+ * under the caller's workspace; class, organization, workspace and operator
+ * switches are written org-wide, because each of them reaches past one
+ * workspace.
+ *
+ * It is what names the generation a flip advances, so the dialog's preview and
+ * the card's "takes effect" read the same counter for the same level.
+ */
+export function switchScopeOf(kind: KillSwitchKind): KillSwitch["scope"] {
+  switch (kind) {
+    case "tool_version":
+    case "tool_server":
+    case "connection":
+    case "agent":
+      return "workspace";
+    case "class":
+    case "org":
+    case "workspace":
+    case "operator":
+      return "org";
+  }
+}
+
+/**
+ * The two levels whose target the page supplies itself. There is one
+ * organization and one workspace in view; the contract wants their database
+ * uuids, and this page never prints a uuid (INV-11), so the dialog asks for no
+ * target at these levels and the server action fills it in from the viewer.
+ */
+export const SELF_TARGETED_KINDS: ReadonlySet<KillSwitchKind> = new Set([
+  "org",
+  "workspace",
+]);
 
 /** One field's text, or the empty string when the form does not carry it. */
 export function textValue(form: FormData, field: string): string {

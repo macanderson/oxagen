@@ -12,6 +12,7 @@ import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
   CredentialGrantPage,
+  KILL_SWITCH_BOARD_LIMIT,
   KillSwitchBoard,
   ToolVersionPage,
 } from "@/data/contracts/tools";
@@ -77,15 +78,19 @@ export const tools: DataSource["tools"] = {
   },
 
   async killSwitches(ctx) {
+    // `list_kill_switches` has no cursor, so the board asks for the ceiling the
+    // contract offers and the view model carries whether it hit it (#3131):
+    // a switch that is denying and off the end of this read is one the page
+    // would otherwise neither count nor let anyone clear.
     const read = await kernelRead(ctx, {
       contract: killSwitchList,
-      input: {},
+      input: { limit: KILL_SWITCH_BOARD_LIMIT },
       page: "tools",
     });
     if (!read.ok) return read;
     return mapped(
       KillSwitchBoard,
-      toKillSwitchBoard(read.value),
+      toKillSwitchBoard(read.value, KILL_SWITCH_BOARD_LIMIT),
       "tools.killSwitches",
       ctx.orgId,
     );

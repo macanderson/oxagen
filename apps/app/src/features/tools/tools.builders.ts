@@ -14,6 +14,7 @@ import type {
 } from "@/data/contracts/tools";
 import {
   CredentialGrantPage as CredentialGrantPageShape,
+  KILL_SWITCH_BOARD_LIMIT,
   KillSwitchBoard as KillSwitchBoardShape,
   ToolVersionPage as ToolVersionPageShape,
 } from "@/data/contracts/tools";
@@ -42,9 +43,11 @@ export function credentialGrantPage(
 
 export function killSwitchBoard(
   over: Parameters<typeof killSwitchListOutput>[0] = {},
+  /** The limit the read asked for; pass the fixture's own length for a truncated board. */
+  limit: number = KILL_SWITCH_BOARD_LIMIT,
 ): KillSwitchBoard {
   return KillSwitchBoardShape.parse(
-    toKillSwitchBoard(killSwitchListOutput(over)),
+    toKillSwitchBoard(killSwitchListOutput(over), limit),
   );
 }
 

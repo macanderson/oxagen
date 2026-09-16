@@ -323,6 +323,72 @@ describe("flipKillSwitch", () => {
     },
   );
 
+  it.each([
+    ["org", ctx.orgId],
+    ["workspace", ctx.workspaceId],
+  ] as const)(
+    "supplies the %s uuid itself, because the page never prints one",
+    async (kind, id) => {
+      invoke.mockResolvedValue(output);
+      expect(
+        await flipKillSwitch("acme", "core-platform", {
+          kind,
+          target: null,
+          on: true,
+          reason: "Stop everything.",
+        }),
+      ).toEqual({ ok: true, value: output });
+      expect(invoke).toHaveBeenCalledWith(
+        "set_kill_switch",
+        {
+          target: { kind, id },
+          on: true,
+          reason: "Stop everything.",
+        },
+        expect.objectContaining(TENANT),
+      );
+    },
+  );
+
+  it("clears the workspace the card names, not the one in view", async () => {
+    invoke.mockResolvedValue({ ...output, on: false });
+    await flipKillSwitch("acme", "core-platform", {
+      kind: "workspace",
+      target: "7b000000-0000-4000-8000-0000000000ff",
+      on: false,
+      reason: "The sibling workspace is back.",
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "set_kill_switch",
+      {
+        target: {
+          kind: "workspace",
+          id: "7b000000-0000-4000-8000-0000000000ff",
+        },
+        on: false,
+        reason: "The sibling workspace is back.",
+      },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("is refused before the kernel when a level that needs a target got none", async () => {
+    expect(
+      await flipKillSwitch("acme", "core-platform", {
+        kind: "class",
+        target: null,
+        on: true,
+        reason: "Stop money movement.",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "target.id",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it("reports the grants a connection switch revoked", async () => {
     invoke.mockResolvedValue({ ...output, grantsRevoked: 31 });
     const result = await flipKillSwitch("acme", "core-platform", {

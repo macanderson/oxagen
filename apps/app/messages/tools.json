@@ -18,7 +18,8 @@
       "registry": "Registry",
       "connections": "Connections",
       "switches": "Kill switches",
-      "switchesOn": "{count, plural, one {# on} other {# on}}"
+      "switchesOn": "{count, plural, one {# on} other {# on}}",
+      "switchesOnAtLeast": "{count, plural, one {# or more on} other {# or more on}}"
     },
     "gate": {
       "open": "Open",
@@ -173,6 +174,7 @@
       "classHeading": "Class switches · organization-wide, in one action",
       "scopedHeading": "Scoped switches",
       "empty": "No kill switch has ever been flipped in this workspace. Flip one to record the first.",
+      "truncated": "This board shows the {limit} newest switches and the record holds more, so the count on the tab is a floor. An older switch that is still denying is not on this page; flip it through the API or MCP, which name a switch by its target rather than by a page.",
       "allowing": "allowing",
       "denying": "denying",
       "flippedByUnrecorded": "not recorded",

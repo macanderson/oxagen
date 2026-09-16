@@ -85,8 +85,15 @@ export function toCredentialGrantPage(
 
 export function toKillSwitchBoard(
   out: ContractOutput<typeof killSwitchList>,
+  /**
+   * The limit the read asked for. A full answer is the only truncation signal
+   * the contract gives — it carries no cursor and no total — so the limit has
+   * to come in with the record for the board to know it is a page of one.
+   */
+  limit: number,
 ): z.input<typeof KillSwitchBoard> {
   return {
+    truncated: out.switches.length >= limit,
     denyGeneration: {
       org: out.denyGeneration.org,
       workspace: out.denyGeneration.workspace,

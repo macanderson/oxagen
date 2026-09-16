@@ -21,9 +21,32 @@ import { Switches, switchesOn } from "./switches";
 import { ToolsTabs } from "./tabs";
 import { parseToolsView, type ToolsAt, type ToolsView } from "./view";
 
-/** An org Owner or Admin: what `import_tools` and `set_tool_classification` need (INV-29). */
-function canAdminister(ctx: WsCtx): boolean {
+/**
+ * An org Owner or Admin: exactly what `set_tool_classification` and
+ * `set_kill_switch` declare (both grant no workspace role at all), so hiding
+ * their controls from anyone else hides nothing the kernel would have allowed.
+ */
+function canAdministerOrg(ctx: WsCtx): boolean {
   return ctx.orgRole === "owner" || ctx.orgRole === "admin";
+}
+
+/**
+ * The same org roles, for the import control — knowingly narrower than the
+ * capability.
+ *
+ * `import_tools` allows an org Owner or Admin *or a workspace Owner*
+ * (packages/oxagen/src/contracts/tool.import.ts defaultRoles), and the
+ * organization role is the only role `WsCtx` carries, so this gate cannot
+ * represent that third case: a workspace Owner whose org role is `member` is
+ * authorized by the handler and offered no control here. The gate that matches
+ * the capability wants the viewer's workspace role on `WsFields`
+ * (apps/app/src/server/viewer.ts), which `workspace.workspace_users.role`
+ * stores and `systemLookups.workspaceMember` does not select today. Widening
+ * the viewer seam is not this lane's change, so the narrower gate stands and
+ * is named rather than left to look exact.
+ */
+function canImportUnderOrgRole(ctx: WsCtx): boolean {
+  return canAdministerOrg(ctx);
 }
 
 async function TabBody({
@@ -50,8 +73,8 @@ async function TabBody({
           names={view.names}
           category={view.category}
           cursor={view.cursor}
-          canImport={canAdminister(ctx)}
-          canClassify={canAdminister(ctx)}
+          canImport={canImportUnderOrgRole(ctx)}
+          canClassify={canAdministerOrg(ctx)}
           read={read}
         />
       );
@@ -73,7 +96,8 @@ async function TabBody({
         <Switches
           at={at}
           orgRole={ctx.orgRole}
-          canFlip={canAdminister(ctx)}
+          canFlip={canAdministerOrg(ctx)}
+          selfWorkspaceId={ctx.workspaceId}
           read={read}
         />
       );
@@ -100,6 +124,7 @@ export async function Tools({
         at={at}
         current={view.tab}
         switchesOn={board.ok ? switchesOn(board.value.switches) : null}
+        switchesOnIsFloor={board.ok && board.value.truncated}
       />
       {await TabBody({ ctx, source, view, at })}
     </div>

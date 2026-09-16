@@ -61,8 +61,9 @@ function nth<T>(items: readonly T[], index: number, what: string): T {
 const financial = () => nth(toolVersionPage().items, 0, "financial version");
 const plain = () => nth(toolVersionPage().items, 1, "unclassified version");
 const classSwitch = () => nth(killSwitchBoard().switches, 0, "class switch");
+/** Index 2: the tool-server switch, one of the four the record writes under the workspace. */
 const clearedSwitch = () =>
-  nth(killSwitchBoard().switches, 1, "cleared switch");
+  nth(killSwitchBoard().switches, 2, "workspace-scoped switch");
 
 const intl = ({ children }: { children: ReactNode }) => (
   <IntlProvider>{children}</IntlProvider>
@@ -352,7 +353,7 @@ describe("FlipControls", () => {
     });
   });
 
-  it("flips a switch that is off back on, on the workspace's own generation", async () => {
+  it("flips a switch that is off back on, on its own scope's generation", async () => {
     flipKillSwitch.mockResolvedValue({
       ok: false,
       reason: "unavailable",
@@ -365,16 +366,78 @@ describe("FlipControls", () => {
         existing={clearedSwitch()}
       />,
     );
-    fireEvent.click(screen.getByTestId("tools-flip-emd_01k5c2"));
+    fireEvent.click(screen.getByTestId("tools-flip-emd_01k5c3"));
     const dialog = await screen.findByTestId("tools-flip-dialog");
     expect(within(dialog).getByText(/deny generation 4 → 5/)).toBeVisible();
-    fill(/^Reason/, "Halt the workspace.");
+    fill(/^Reason/, "Halt the server.");
     fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
     expect(await screen.findByTestId("tools-flip-failure")).toHaveTextContent(
       "store_down",
     );
     expect(router.replace).not.toHaveBeenCalled();
   });
+
+  it("reads the generation off the level picked, not off the switch it has none of", async () => {
+    withIntl(
+      <FlipControls at={at} denyGeneration={GENERATION} existing={null} />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    // A class switch is recorded org-wide; a tool-server switch under the
+    // workspace. The preview names the counter each one actually advances.
+    expect(within(dialog).getByText(/deny generation 12 → 13/)).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Level"), {
+      target: { value: "tool_server" },
+    });
+    expect(within(dialog).getByText(/deny generation 4 → 5/)).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Level"), {
+      target: { value: "org" },
+    });
+    expect(within(dialog).getByText(/deny generation 12 → 13/)).toBeVisible();
+  });
+
+  it.each([
+    ["org", "This organization."],
+    ["workspace", "This workspace."],
+  ] as const)(
+    "asks for no target at the %s level and lets the viewer supply it",
+    async (kind, stated) => {
+      flipKillSwitch.mockResolvedValue({
+        ok: true,
+        value: {
+          switchId: "emd_new",
+          on: true,
+          changed: true,
+          denyGeneration: { org: 13, workspace: 5 },
+          grantsRevoked: 0,
+        },
+      });
+      withIntl(
+        <FlipControls at={at} denyGeneration={GENERATION} existing={null} />,
+      );
+      fireEvent.click(screen.getByTestId("tools-flip-open"));
+      const dialog = await screen.findByTestId("tools-flip-dialog");
+      fireEvent.change(screen.getByLabelText("Level"), {
+        target: { value: kind },
+      });
+      // The page never prints the tenant's uuid, so it never asks for one.
+      expect(within(dialog).queryByLabelText("Target")).not.toBeInTheDocument();
+      expect(
+        within(dialog).getByTestId("tools-flip-self-target"),
+      ).toHaveTextContent(stated);
+
+      fill(/^Reason/, "Stop everything.");
+      fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
+      await waitFor(() => {
+        expect(flipKillSwitch).toHaveBeenCalledWith("acme", "core-platform", {
+          kind,
+          target: null,
+          on: true,
+          reason: "Stop everything.",
+        });
+      });
+    },
+  );
 });
 
 describe("useActionFailure", () => {

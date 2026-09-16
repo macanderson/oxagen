@@ -5,6 +5,7 @@ import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.l
 import { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
 import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { KILL_SWITCH_BOARD_LIMIT } from "@/data/contracts/tools";
 import {
   credentialGrantListOutput,
   killSwitchListOutput,
@@ -169,17 +170,41 @@ describe("tools.killSwitches", () => {
     const read = await tools.killSwitches(ctx);
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: killSwitchList,
-      input: {},
+      // The contract carries no cursor, so the board asks for its ceiling
+      // rather than taking the default hundred as the whole record.
+      input: { limit: KILL_SWITCH_BOARD_LIMIT },
       page: "tools",
     });
     expect(read.ok).toBe(true);
     if (!read.ok) return;
     expect(read.value.denyGeneration).toEqual({ org: 12, workspace: 4 });
+    expect(read.value.truncated).toBe(false);
     const [cls, workspace] = read.value.switches;
     expect(cls?.target).toEqual({ kind: "class", ref: "moves_money" });
     expect(cls?.flippedByRef).toBe("7c9e6679-7425-40de-944b-e07fc1f90ae7");
     expect(workspace?.target.kind).toBe("workspace");
     expect(workspace?.flippedByRef).toBeNull();
+  });
+
+  it("calls a board that came back at the ceiling truncated", async () => {
+    const [first] = killSwitchListOutput().switches;
+    if (first === undefined) throw new Error("no fixture switch");
+    kernelRead.mockResolvedValue(
+      readOk(
+        killSwitchListOutput({
+          switches: Array.from(
+            { length: KILL_SWITCH_BOARD_LIMIT },
+            (_, index) => ({
+              ...first,
+              id: `emd_${String(index).padStart(5, "0")}`,
+            }),
+          ),
+        }),
+      ),
+    );
+    const read = await tools.killSwitches(ctx);
+    // A full answer is all the page can know: there is no later page to ask for.
+    expect(read.ok && read.value.truncated).toBe(true);
   });
 
   it("passes an error through", async () => {

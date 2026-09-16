@@ -318,6 +318,65 @@ describe("Tools › kill switches", () => {
     expect(within(workspace).getByText("allowing")).toBeInTheDocument();
   });
 
+  it("prints the uuid of a sibling workspace's switch, which the heading does not name", async () => {
+    const sibling = killSwitchBoard({
+      switches: [
+        {
+          id: "emd_01k5c9",
+          target: {
+            kind: "workspace",
+            id: "7b000000-0000-4000-8000-0000000000ff",
+          },
+          // Every workspace switch is recorded org-wide, so one flipped in a
+          // sibling workspace reaches this board too.
+          scope: "org",
+          on: true,
+          reason: "Contained while the incident runs.",
+          flippedBy: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+          flippedAt: "2026-09-11T15:02:00.000Z",
+          clearedAt: null,
+          clearedBy: null,
+        },
+        {
+          id: "emd_01k5ca",
+          target: {
+            kind: "org",
+            id: "7a000000-0000-4000-8000-0000000000a1",
+          },
+          scope: "org",
+          on: true,
+          reason: "Everything stops until the review lands.",
+          flippedBy: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+          flippedAt: "2026-09-11T16:00:00.000Z",
+          clearedAt: null,
+          clearedBy: null,
+        },
+      ],
+    });
+    await renderTools({ killSwitches: readOk(sibling) }, { tab: "switches" });
+    const card = cardOf('[data-switch="emd_01k5c9"]');
+    expect(card.textContent).toContain("7b000000-0000-4000-8000-0000000000ff");
+    // The organization in view is the only one a switch can name, so its uuid
+    // adds nothing the heading has not said.
+    expect(cardOf('[data-switch="emd_01k5ca"]').textContent).not.toContain(
+      "7a000000-0000-4000-8000-0000000000a1",
+    );
+  });
+
+  it("says the board is its newest page when the read came back full, and calls the tab's count a floor", async () => {
+    // The fixture's three switches, read with a limit of three: the contract
+    // carries no cursor, so a full answer is all the page can know.
+    await renderTools(
+      { killSwitches: readOk(killSwitchBoard({}, 3)) },
+      { tab: "switches" },
+    );
+    expect(
+      element(document.querySelector('[data-state="truncated"]'), "truncation"),
+    ).toHaveTextContent("the count on the tab is a floor");
+    const tabs = screen.getByRole("navigation", { name: "Tools sections" });
+    expect(within(tabs).getByText("1 or more on")).toBeInTheDocument();
+  });
+
   it("says nothing has ever been flipped when the board is empty", async () => {
     await renderTools(
       { killSwitches: readOk(killSwitchBoard({ switches: [] })) },

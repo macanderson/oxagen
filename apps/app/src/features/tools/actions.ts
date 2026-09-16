@@ -139,6 +139,38 @@ function targetOf(
 }
 
 /**
+ * The id the flip names.
+ *
+ * The dialog sends null at the organization and workspace levels, where it
+ * asked for no target: the contract wants the tenant's database uuid there and
+ * the page never prints a uuid (INV-11), so the viewer the URL named is the
+ * one answer — without it those two switches, the broadest denies on the
+ * board, could not be flipped at all, because a person typing the slug they
+ * can see is refused by `killSwitchTargetSchema`.
+ *
+ * A card always sends the id its switch was recorded against, including at
+ * those two levels, so a workspace switch recorded against another workspace
+ * is cleared against that workspace and not against this one. At every other
+ * level the dialog asked, and a null there is an id the caller did not supply:
+ * the empty string the contract refuses, which comes back as `invalid`.
+ */
+function targetIdOf(
+  kind: KillSwitchKind,
+  typed: string | null,
+  tenant: { orgId: string; workspaceId: string },
+): string {
+  if (typed !== null) return typed.trim();
+  switch (kind) {
+    case "org":
+      return tenant.orgId;
+    case "workspace":
+      return tenant.workspaceId;
+    default:
+      return "";
+  }
+}
+
+/**
  * Flips a kill switch on or off. It takes effect at the next call boundary by
  * bumping the deny generation in the same transaction; a connection switch
  * revokes its live credential grants.
@@ -148,7 +180,8 @@ export async function flipKillSwitch(
   ws: string,
   flip: {
     kind: KillSwitchKind;
-    target: string;
+    /** Null at a level whose target is the tenant in view; see `targetIdOf`. */
+    target: string | null;
     on: boolean;
     reason: string;
   },
@@ -163,7 +196,7 @@ export async function flipKillSwitch(
 > {
   const ctx = await requireViewer(org, ws);
   const result = await kernelWrite(ctx, killSwitchSet, {
-    target: targetOf(flip.kind, flip.target.trim()),
+    target: targetOf(flip.kind, targetIdOf(flip.kind, flip.target, ctx)),
     on: flip.on,
     reason: flip.reason.trim(),
   });

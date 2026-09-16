@@ -141,16 +141,34 @@ export function killSwitchListOutput(
       },
       {
         id: "emd_01k5c2",
+        // A workspace switch reaches past the workspace it was flipped in, so
+        // the record writes it org-wide — `switchWorkspaceOf`,
+        // packages/handlers/src/kill_switch.set.ts. Its scope is "org" for the
+        // same reason a class switch's is.
         target: {
           kind: "workspace",
           id: "7b000000-0000-4000-8000-000000000001",
         },
-        scope: "workspace",
+        scope: "org",
         on: false,
         reason: "Rotation confirmed; the security owner signed off.",
         flippedBy: null,
         flippedAt: "2026-09-02T08:30:00.000Z",
         clearedAt: "2026-09-03T08:30:00.000Z",
+        clearedBy: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      },
+      {
+        // A tool-server switch is one of the four written under the caller's
+        // workspace, so it is the workspace generation that names when it
+        // takes effect.
+        id: "emd_01k5c3",
+        target: { kind: "tool_server", id: "mcs_01k5s1" },
+        scope: "workspace",
+        on: false,
+        reason: "The vendor rotated the manifest without a pin.",
+        flippedBy: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        flippedAt: "2026-08-20T11:00:00.000Z",
+        clearedAt: "2026-08-21T11:00:00.000Z",
         clearedBy: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
       },
     ],

@@ -136,6 +136,14 @@ export const CredentialGrantPage = z.object({
 });
 export type CredentialGrantPage = z.infer<typeof CredentialGrantPage>;
 
+/**
+ * How many switches the board asks for: the ceiling `list_kill_switches`
+ * offers. The contract has no cursor, so this is the whole read — asking for
+ * its maximum is the most board the page can show, and `truncated` says when
+ * even that was not all of it.
+ */
+export const KILL_SWITCH_BOARD_LIMIT = 200;
+
 /** Every level a deny is available at (spec §6.11), in the order the page draws them. */
 export const KILL_SWITCH_KINDS = [
   "class",
@@ -181,5 +189,15 @@ const DenyGeneration = z.object({ org: Count, workspace: Count });
 export const KillSwitchBoard = z.object({
   denyGeneration: DenyGeneration,
   switches: z.array(KillSwitch),
+  /**
+   * True when the read came back at the ceiling it asked for.
+   *
+   * `list_kill_switches` carries no cursor, so there is no later page to
+   * fetch: a full answer is the newest N switches and not the board. The page
+   * says so where the board is drawn and marks the tab's count as a floor,
+   * because a board that silently drops an older switch that is still denying
+   * is a board nobody can clear it from.
+   */
+  truncated: z.boolean(),
 });
 export type KillSwitchBoard = z.infer<typeof KillSwitchBoard>;
