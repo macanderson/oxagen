@@ -40,8 +40,13 @@ import {
   it,
   vi,
 } from "vitest";
+import { z } from "zod";
 import type { CapabilityContext } from "@oxagen/oxagen";
-import { HandlerError, isHandlerError } from "@oxagen/oxagen";
+import {
+  HandlerError,
+  isHandlerError,
+  registerCapability,
+} from "@oxagen/oxagen";
 
 const doubles = vi.hoisted(() => ({
   roles: new Map<string, string | null>(),
@@ -188,6 +193,34 @@ describe.skipIf(!process.env.DATABASE_URL)(
     }
 
     beforeAll(async () => {
+      // The payment tool this file declares carries `moves_money` and
+      // measures, which makes it a CLASSIFIED declaration — and
+      // `publish_tool_declaration` refuses one whose slug names no registered
+      // capability (`conflict` / `consequence_not_gated`), because the gate
+      // that reads a classification lives inside `invoke()` and finds the tool
+      // by slug. `assertRulesSavable` re-applies that same precondition to a
+      // rule naming the tool (`rule_not_gated`).
+      //
+      // The fixture below inserts the tool row directly rather than through
+      // the publisher, so nothing here would otherwise hold it to a
+      // precondition the real writer enforces, and every case in this file
+      // would be asserting against a tool that cannot exist. Registered
+      // rather than relaxed: the capability is what makes the declaration
+      // legal, so the fixture declares it.
+      registerCapability({
+        name: "stripe__create_payment",
+        domain: "testdom",
+        description: "payment capability the declared fixture tool binds to",
+        mode: "sync",
+        surfaces: ["api", "mcp"],
+        layers: ["api", "mcp", "unit"],
+        scoped: true,
+        sensitivity: "high",
+        defaultEffect: "deny",
+        defaultRoles: { org: { Owner: "allow" }, workspace: {} },
+        input: z.object({}),
+        output: z.object({}),
+      });
       // Owner, not Admin, and that is the point rather than a detail. The
       // payment tool below carries `moves_money`, whose default accountable
       // roles are Owner and Billing (DEFAULT_CONSEQUENCE_ROLES), and
@@ -342,6 +375,83 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await expect(
         set(ownerUserId, [{ ...RULE, tools: ["linear__*"] }]),
       ).rejects.toSatisfy(conflict("no_tool_matches"));
+    });
+
+    it("refuses a rule over a declared tool invoke() does not dispatch", async () => {
+      // The gate asserted here is the one the fixture above satisfies, and it
+      // is asserted FIRING as well as passing: a declared, enabled, matchable
+      // tool whose slug names no registered capability is dispatched by
+      // materialize-tools through `authorizeExternalCapability` and the
+      // transport, never by `invoke()`, so the decision-rules gate never sees
+      // those calls and a rule over them would be stored and never enforced.
+      //
+      // Unclassified on purpose — no tags, no measures — because that is
+      // exactly the declaration `publish_tool_declaration` DOES admit for a
+      // slug naming no capability, so this is a tool an operator really can
+      // have. The rule names no measure, so the refusal cannot be the
+      // measure guard standing in for this one.
+      const externalToolId = randomUUID();
+      const externalVersionId = randomUUID();
+      await withSystemDb(async (tx) => {
+        await tx.insert(schema.tools).values({
+          id: externalToolId,
+          orgId,
+          workspaceId,
+          name: "mcp.acme.charge_card",
+          slug: "mcp.acme.charge_card",
+          source: "mcp",
+          enabled: true,
+        });
+        await tx.insert(schema.toolVersions).values({
+          id: externalVersionId,
+          orgId,
+          workspaceId,
+          toolId: externalToolId,
+          versionNumber: 1,
+          isLatest: true,
+          inputSchema: {},
+          riskGrade: "high",
+          manifest: {},
+          checksum: "1".repeat(64),
+          consequenceTags: [],
+          measures: {},
+        });
+        await tx
+          .update(schema.tools)
+          .set({ activeVersionId: externalVersionId })
+          .where(eq(schema.tools.id, externalToolId));
+      });
+      clearDecisionRulesCache();
+
+      try {
+        const before = await settingsOf();
+        await expect(
+          set(ownerUserId, [
+            {
+              ...RULE,
+              id: "external-charges",
+              tools: ["mcp.acme.charge_card@*"],
+              maxMeasures: {},
+              allowTargets: {},
+            },
+          ]),
+        ).rejects.toSatisfy(conflict("rule_not_gated"));
+        // A refused rule writes nothing, the same as every other guard here.
+        expect(await settingsOf()).toEqual(before);
+        expect(doubles.events).toEqual([]);
+      } finally {
+        // Removed whatever the assertions did, so no later case in this file
+        // reads a workspace this one changed. Tools before versions:
+        // `tools.active_version_id` references `tool_versions.id`.
+        await withSystemDb(async (tx) => {
+          await tx
+            .delete(schema.tools)
+            .where(eq(schema.tools.id, externalToolId));
+          await tx
+            .delete(schema.toolVersions)
+            .where(eq(schema.toolVersions.id, externalVersionId));
+        });
+      }
     });
 
     it("refuses a condition over a measure the matched tool does not declare", async () => {
