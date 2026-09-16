@@ -818,7 +818,38 @@ type Messages = {
       person: string;
       role: string;
       joined: string;
+      actions: string;
       empty: string;
+    };
+    actions: {
+      denied: string;
+      role: {
+        open: string;
+        title: string;
+        body: string;
+        label: string;
+        confirm: string;
+        pending: string;
+      };
+      remove: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+      };
+      failure: {
+        lastOwner: string;
+        targetNotMember: string;
+        roleNotFound: string;
+        roleNotGrantable: string;
+        insufficientRole: string;
+        noPrincipal: string;
+        refused: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
     };
     invitations: {
       title: string;
