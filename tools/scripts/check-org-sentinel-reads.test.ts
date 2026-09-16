@@ -55,6 +55,10 @@ function makeTree(files: Record<string, string>): string {
     "packages/database/src/schema/_schemas.ts": SCHEMAS,
     "packages/database/src/schema/tables.ts": TABLES,
     "packages/handlers/src/register.ts": "",
+    "packages/oxagen/src/contracts/org.member.remove.ts": `export const orgMemberRemove = registerCapability({
+  name: "remove_org_member",
+});
+`,
     ...files,
   };
   for (const [path, contents] of Object.entries(all)) {
@@ -220,6 +224,67 @@ export async function removeMember(orgId: string, targetUserId: string) {
       "apps/app/src/actions.ts": action,
     });
     expect(findSentinelNarrowedReads(root).findings).toEqual([]);
+  });
+
+  it("resolves a contract export, which is how a surface usually names one", () => {
+    const root = makeTree({
+      "packages/handlers/src/register.ts": register,
+      "packages/handlers/src/org.member.remove.ts": handler,
+      "apps/app/src/actions.ts": action.replace(
+        '"remove_org_member"',
+        "orgMemberRemove.name",
+      ),
+    });
+    const { findings } = findSentinelNarrowedReads(root);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({ capability: "remove_org_member" });
+  });
+
+  it("falls back to every capability the file names when the invoke is indirect", () => {
+    // The shape found on `main`: a readCapability(viewer, name, input) helper
+    // holds the sentinel scope and the invoke, and the capability is named at
+    // the helper's call sites. Neither a literal nor a contract export reaches
+    // the invoke itself.
+    const root = makeTree({
+      "packages/handlers/src/register.ts": register,
+      "packages/handlers/src/org.member.remove.ts": handler,
+      "apps/app/src/actions.ts": `import { invoke } from "@oxagen/oxagen";
+const ORG_ONLY_WS = "${SENTINEL}";
+function ctxFor(orgId: string) {
+  return { orgId, workspaceId: ORG_ONLY_WS, userId: null, surface: "app" };
+}
+async function read(orgId: string, name: string, input: unknown) {
+  return invoke(name, input, ctxFor(orgId), { surface: "agent" });
+}
+export const removeMember = (orgId: string, targetUserId: string) =>
+  read(orgId, orgMemberRemove.name, { targetUserId });
+`,
+    });
+    const { findings } = findSentinelNarrowedReads(root);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({ capability: "remove_org_member" });
+  });
+
+  it("merges a file and capability reported more than once into one finding", () => {
+    // A handler and one of its relative imports can each name a narrowed table.
+    const root = makeTree({
+      "packages/handlers/src/register.ts": register,
+      "packages/handlers/src/org.member.remove.ts":
+        handler +
+        `export { helper } from "./lib/helper";
+`,
+      "packages/handlers/src/lib/helper.ts": `import { schema, withTenantDb } from "@oxagen/database";
+export const helper = () =>
+  withTenantDb((tx) => tx.select().from(schema.workspaceUsers));
+`,
+      "apps/app/src/actions.ts": action,
+    });
+    const { findings } = findSentinelNarrowedReads(root);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.tables.map((t: { table: string }) => t.table)).toEqual([
+      "auth.api_keys",
+      "workspace.workspace_users",
+    ]);
   });
 
   it("reads the shared ORG_ONLY_WORKSPACE_ID, not only a local copy", () => {

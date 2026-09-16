@@ -98,7 +98,11 @@ ADR-068 settled the write side of the same rule. Nothing enforced the read side.
    - **cross-surface** — a sentinel ctx handed to `invoke()`, resolved through
      `packages/handlers/src/register.ts` to the handler and the tables it reads,
      which is the form the kernel sets up and no lint rule can see, because the
-     scope and the query are in different packages.
+     scope and the query are in different packages. The capability is resolved
+     whether it is named as a string or as a contract export's `.name`, and
+     when it reaches `invoke()` as neither — behind a
+     `readCapability(viewer, name, input)` helper, as on `main` — every
+     capability the file names in either form is checked instead.
 
 ## Alternatives considered
 
@@ -141,11 +145,23 @@ directly — so it needs the check anyway.
   module nor one of its direct relative imports (it follows one hop, not a call
   graph); a ctx assembled in a file that never names the sentinel; and anything
   outside Postgres, since Neo4j and ClickHouse scoping is a separate seam. It is
-  a net with a known mesh, not a proof.
+  a net with a known mesh, not a proof. One blind spot was found by running it
+  against `main` and closed rather than documented: an `invoke()` behind a
+  helper reported nothing, because the capability is named at the helper's call
+  sites. That is the indirect fallback above, and it is why the check reports
+  twelve sites on `main` where it reported five before.
 - Its co-located pass is file-scoped in one direction: a file that scopes to the
   sentinel somewhere and also reads a workspace-scoped table under a real
   workspace elsewhere is reported. That over-reports rather than under-reports,
   and the remedy — scoping the sentinel read correctly — is the same either way.
+- Two of the sites this decision was written for are on `main` and not on
+  `app-rebuild`: `get_action_usage`, whose per-capability breakdown over
+  `security.security_events` contradicted its own header — the rows are "an
+  UPPER BOUND on billed actions" and RLS inverted that invariant — and the
+  billing page that invoked it and `get_evidence_retention` under the sentinel.
+  #3022 retired `get_action_usage` on this branch and the billing page it was
+  read from does not exist here. The check reports both when run against `main`.
+
 - `evidence.retention_policy_versions` is `standard` and
   `get_evidence_retention` asks for "the longest window ANY pinned policy
   declares" across the organisation. Tenant-scoped it could never answer that

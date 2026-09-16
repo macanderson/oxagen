@@ -312,6 +312,29 @@ export function readHandlerModules(root = ROOT) {
   return out;
 }
 
+/**
+ * Contract export identifier -> capability name, from
+ * packages/oxagen/src/contracts. A surface names a capability as
+ * `<contractExport>.name` at least as often as it spells the string, and the
+ * two forms have to resolve to the same handler or the check sees half the
+ * call sites.
+ */
+export function readContractNames(root = ROOT) {
+  const dir = join(root, "packages/oxagen/src/contracts");
+  const out = new Map();
+  if (!existsSync(dir)) return out;
+  for (const file of readdirSync(dir)) {
+    if (!file.endsWith(".ts") || file.includes(".test.")) continue;
+    const src = readFileSync(join(dir, file), "utf8");
+    for (const m of src.matchAll(
+      /export const (\w+)\s*=\s*registerCapability\(\{\s*\n?\s*name:\s*"([\w.]+)"/g,
+    )) {
+      out.set(m[1], m[2]);
+    }
+  }
+  return out;
+}
+
 /** The handler module's own source plus its direct relative imports. */
 export function handlerSources(modulePath, root = ROOT) {
   const base = join(root, "packages/handlers/src");
@@ -330,6 +353,7 @@ export function passCrossSurface(
   tableNames,
   policyClasses,
   handlerModules,
+  contractNames,
   root = ROOT,
 ) {
   const findings = [];
@@ -349,17 +373,45 @@ export function passCrossSurface(
       else sentinelCtx.add("*"); // returned inline from a ctx builder
     }
     if (sentinelCtx.size === 0) continue;
+
+    // The capabilities this file invokes under a sentinel ctx.
+    const invoked = new Set();
+    // An indirect call — `invoke(name, …)` behind a readCapability(viewer,
+    // name, …) helper — names the capability at the helper's call sites and
+    // not at the invoke. A real one was found on `main`
+    // (apps/app/src/app/[orgSlug]/billing/governed-actions/data.ts), where the
+    // sentinel scope and the invoke are one function and every capability is
+    // named at the helper's call sites three lines away. When the invoke's
+    // first argument resolves to neither a literal nor a contract export,
+    // every capability this file names in either form is checked instead. That
+    // over-approximates — the file could name one it invokes under a real
+    // scope — which is the same direction the co-located pass errs in, and the
+    // remedy is identical either way.
+    let indirect = false;
     for (const m of src.matchAll(
-      /\binvoke\(\s*(?:"([\w.]+)"|(\w+)\.name)\s*,[\s\S]{0,400}?,\s*(?:\{\s*\.\.\.\s*)?(\w+)/g,
+      /\binvoke\(\s*(?:"([\w.]+)"|(\w+)(?:\.name)?)\s*,[\s\S]{0,400}?,\s*(?:\{\s*\.\.\.\s*)?(\w+)/g,
     )) {
-      const capability = m[1] ?? null;
       const ctxName = m[3];
       if (!sentinelCtx.has("*") && !sentinelCtx.has(ctxName)) continue;
       // A call that overrides workspaceId with a real value is the fix, not the
       // defect: `{ ...ctx, workspaceId }`.
       const call = src.slice(m.index, m.index + 400);
       if (/\.\.\.\s*\w+\s*,\s*workspaceId/.test(call)) continue;
-      if (capability === null) continue; // contract object, not resolvable here
+      if (m[1] !== undefined) invoked.add(m[1]);
+      else if (contractNames.has(m[2])) invoked.add(contractNames.get(m[2]));
+      else indirect = true;
+    }
+    if (indirect) {
+      for (const m of src.matchAll(/"([a-z][a-z0-9_]*)"/g)) {
+        if (handlerModules.has(m[1])) invoked.add(m[1]);
+      }
+      for (const m of src.matchAll(/\b(\w+)\.name\b/g)) {
+        const name = contractNames.get(m[1]);
+        if (name !== undefined) invoked.add(name);
+      }
+    }
+
+    for (const capability of invoked) {
       const modulePath = handlerModules.get(capability);
       if (modulePath === undefined) continue;
       for (const handlerSrc of handlerSources(modulePath, root)) {
@@ -397,6 +449,7 @@ export function findSentinelNarrowedReads(root = ROOT) {
   const policyClasses = readPolicyClasses(root);
   const tableNames = readTableNames(root);
   const handlerModules = readHandlerModules(root);
+  const contractNames = readContractNames(root);
 
   const roots = ["apps", "packages", "tools"]
     .map((d) => join(root, d))
@@ -405,22 +458,35 @@ export function findSentinelNarrowedReads(root = ROOT) {
 
   const findings = [
     ...passColocated(files, tableNames, policyClasses, root),
-    ...passCrossSurface(files, tableNames, policyClasses, handlerModules, root),
+    ...passCrossSurface(
+      files,
+      tableNames,
+      policyClasses,
+      handlerModules,
+      contractNames,
+      root,
+    ),
   ];
-  // One file can be reported by both passes for the same table; keep it once.
-  const seen = new Set();
-  const unique = findings.filter((f) => {
-    const key = `${f.pass}:${f.file}:${f.capability ?? ""}:${f.tables
-      .map((t) => t.table)
-      .join(",")}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  // One (file, capability) can be reported more than once — by both passes, or
+  // by a handler and one of its relative imports naming different tables. Merge
+  // them into one finding carrying the union of the tables.
+  const byKey = new Map();
+  for (const f of findings) {
+    const key = `${f.pass}:${f.file}:${f.capability ?? ""}`;
+    const seen = byKey.get(key);
+    if (seen === undefined) {
+      byKey.set(key, { ...f, tables: [...f.tables] });
+      continue;
+    }
+    for (const t of f.tables) {
+      if (!seen.tables.some((x) => x.table === t.table)) seen.tables.push(t);
+    }
+    seen.tables.sort((a, b) => a.table.localeCompare(b.table));
+  }
   return {
     files: files.length,
     policiedTables: policyClasses.size,
-    findings: unique,
+    findings: [...byKey.values()],
   };
 }
 
