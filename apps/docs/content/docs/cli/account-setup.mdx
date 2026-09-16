@@ -1,57 +1,57 @@
 ---
 title: Account setup
-description: Create an Oxagen account, mint a platform API key, and authenticate the CLI.
+description: Create an Oxagen account, mint an Oxagen API key, and authenticate the CLI.
 ---
 
-The CLI needs one credential: an **Oxagen platform token** (an API key, `oxk_live_…`) plus the org and workspace it acts in. It makes no LLM calls of its own, so there is no model provider key to configure.
+The CLI needs one credential: an **Oxagen API key** (`ox_…`) plus the org and workspace it acts in. The key identifies you, the person running the CLI, to the Oxagen API. The CLI makes no LLM calls of its own, so there is no model provider key to configure.
 
-`oxagen cost`, `oxagen logs` and `oxagen telemetry` work with no credential at all; everything else needs the steps below.
+`oxagen cost`, `oxagen logs`, and `oxagen telemetry` work with no credential. Everything else needs the steps below.
 
-## 2. Create your Oxagen account
+## 1. Create your Oxagen account
 
-Creating one takes a minute:
+This takes a minute:
 
 1. Go to [app.oxagen.sh](https://app.oxagen.sh) and click **Sign up**.
-2. Enter your name, email, and a password, or use **Google** / **GitHub** social sign-in. Email verification is not required in the current release; you are signed in immediately.
-3. On the **New organization** screen, enter an organization name (a URL-safe slug is generated; you can edit it) and click **Create organization**. This also creates a default workspace, and you become the **Owner** of both.
+2. Enter your name, email, and a password, or use **Google** or **GitHub** sign-in. Oxagen emails you a verification link. Click it before you sign in.
+3. On the **New organization** screen, enter an organization name and click **Create organization**. Oxagen generates a URL-safe slug, and you can edit it. This also creates a default workspace, and you become the **Owner** of both.
 
-You land at `/{org}/{workspace}/ask`. Note your **org slug** and **workspace slug** from the URL: the CLI needs them.
+The app opens your organization at `/{org}`. Note your **org slug** and **workspace slug**. Workspace pages sit under `/{org}/{workspace}/…`, and the CLI needs both slugs.
 
 For a full tour of the app, see [Getting started](/docs/getting-started).
 
-## 3. Mint a platform API key
+## 2. Mint an Oxagen API key
 
-The CLI authenticates to the platform with an API key (`oxk_live_…`), not your password:
+The CLI authenticates to the platform with an API key (`ox_…`), not your password:
 
 1. In the app, go to **Organization → Developer → Tokens**.
-2. Click **Create API key**, give it a name, and select the scopes it needs (at minimum, the capabilities you'll call: graph read, memory, budgets, environments, secrets).
-3. **Copy the key now**: it is shown only once.
+2. Click **Create API key**, give it a name, and select the scopes it needs (at minimum, the capabilities you call: graph read, memory, budgets, environments, and secrets).
+3. **Copy the key now.** It is shown only once.
 
-API keys carry org and workspace scope and are passed as a Bearer token by the CLI.
+API keys carry org and workspace scope. The CLI sends the key as a Bearer token.
 
-## 4. Authenticate the CLI
+## 3. Authenticate the CLI
 
-Run `oxagen login` to authenticate. The default flow opens a browser-based OAuth page:
+Run `oxagen login`. The default flow opens a browser sign-in page:
 
 ```bash
 oxagen login            # opens a browser — follow the prompt, then pick your org and workspace
 ```
 
-After signing in, the consent page asks which org and workspace the CLI should act in. Both pickers stay open even when you belong to only one. When you approve, the browser lands on `app.oxagen.sh/cli/complete` and the token is already in your terminal. To pre-select the org and workspace and skip the picker:
+After you sign in, the consent page asks which org and workspace the CLI acts in. Both pickers stay open even when you belong to only one. When you approve, the browser lands on `app.oxagen.sh/cli/complete`, and the token is already in your terminal. To preselect the org and workspace and skip the picker:
 
 ```bash
 oxagen login --org your-org-slug --workspace your-workspace-slug
 ```
 
-**For CI / headless environments**, pass the token directly: no browser, no interactive prompts:
+**For CI and headless environments**, pass the key directly. There is no browser and no interactive prompt:
 
 ```bash
-oxagen login --token oxk_live_… --org your-org-slug --workspace your-workspace-slug
+oxagen login --token ox_… --org your-org-slug --workspace your-workspace-slug
 ```
 
 <TuiLogin />
 
-To sign out and clear the stored session:
+To sign out and clear the stored login:
 
 ```bash
 oxagen logout
@@ -63,27 +63,27 @@ Confirm the credentials work:
 oxagen graph search -q "workspace context" --limit 1
 ```
 
-### Using environment variables instead
+### Use environment variables instead
 
-Every value also reads from the environment, which is handy for CI and for provisioning scripts that must not run an interactive flow. Environment variables take precedence over the config file:
+Every value also reads from the environment, which suits CI and provisioning scripts that must not run an interactive flow. Environment variables take precedence over the config file:
 
 ```bash
-export OXAGEN_API_TOKEN="oxk_live_…"
+export OXAGEN_API_TOKEN="ox_…"
 export OXAGEN_ORG_ID="your-org-slug"
 export OXAGEN_WORKSPACE_ID="your-workspace-slug"
 ```
 
-To target a self-hosted or staging API, set `OXAGEN_API_URL`; it defaults to `https://api.oxagen.sh`.
+To target a self-hosted or staging API, set `OXAGEN_API_URL`. It defaults to `https://api.oxagen.sh`.
 
 ## Where credentials live
 
 | File | Contents |
 |---|---|
-| `~/.config/oxagen/config.json` | Platform `token`, `org`, `workspace`, and `api-url`. Written by `oxagen login`. |
-| `<project>/.oxagen/workspace.json` | The project's org + workspace binding, written by `oxagen init`. Contains no secrets and is safe to commit. |
+| `~/.config/oxagen/config.json` | Your Oxagen API key (`token`), `org`, `workspace`, and `api-url`. Written by `oxagen login`. |
+| `<project>/.oxagen/workspace.json` | The project's org and workspace binding, written by `oxagen init`. It contains no secrets and is safe to commit. |
 
-The config file contains a secret. It lives under your home directory with your user permissions: keep it off shared machines and out of version control.
+The config file holds a secret. It lives under your home directory with your user permissions. Keep it off shared machines and out of version control.
 
 ## Next step
 
-You're authenticated. Head to the [CLI quickstart](/docs/cli/quickstart) to link a project and read your first trace.
+You're authenticated. Go to the [CLI quickstart](/docs/cli/quickstart) to link a project and read your first run.

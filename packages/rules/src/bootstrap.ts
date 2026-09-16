@@ -31,6 +31,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { setDecisionRulesGate } from "@oxagen/oxagen/kernel";
 import { eq } from "drizzle-orm";
 import { createDecisionRulesGate } from "./gate";
+import { checkMandate } from "./mandates";
 import { ruleSetSchema } from "./schema";
 import type { RuleSet } from "./types";
 import { logger } from "./logger";
@@ -102,6 +103,8 @@ export function bootstrapDecisionRulesRuntime(): void {
   setDecisionRulesGate(
     createDecisionRulesGate({
       loadRuleSet: loadWorkspaceRuleSet,
+      // The mandate check for agent principals (ADR-059 decision 4).
+      checkMandate,
       // No fact resolver yet: rules over `facts.…` keys parse and load, and
       // their leaves read an absent bag until the aggregate resolver lands
       // with the registry work. Rules over `input.…` and `call.…` bind fully.

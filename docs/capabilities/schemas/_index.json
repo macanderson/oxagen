@@ -1,5 +1,5 @@
 {
-  "generatedCount": 281,
+  "generatedCount": 293,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -44,6 +44,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "advance_onboarding",
+      "domain": "onboarding",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -124,6 +134,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "bind_main_repository",
+      "domain": "repository",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -265,6 +285,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "create_enrollment_token",
+      "domain": "tacho",
+      "surfaces": [
+        "api",
+        "cli"
       ],
       "component": null,
       "produces": [],
@@ -632,6 +663,17 @@
       "consumes": []
     },
     {
+      "name": "enroll_host",
+      "domain": "tacho",
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "erase_data",
       "domain": "privacy",
       "surfaces": [
@@ -956,6 +998,17 @@
       "consumes": []
     },
     {
+      "name": "get_first_frame",
+      "domain": "onboarding",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_gau_bucket",
       "domain": "billing",
       "surfaces": [
@@ -1006,6 +1059,18 @@
     {
       "name": "get_integration_metrics",
       "domain": "integration",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_mandate",
+      "domain": "mandate",
       "surfaces": [
         "api",
         "mcp",
@@ -1083,6 +1148,17 @@
       "domain": "graph",
       "surfaces": [
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_onboarding_state",
+      "domain": "onboarding",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1417,6 +1493,18 @@
       "consumes": []
     },
     {
+      "name": "grant_mandate",
+      "domain": "mandate",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "import_env_secrets",
       "domain": "secret",
       "surfaces": [
@@ -1740,6 +1828,18 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_mandates",
+      "domain": "mandate",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2426,6 +2526,18 @@
       "consumes": []
     },
     {
+      "name": "request_mandate",
+      "domain": "mandate",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "resolve_approval",
       "domain": "agent",
       "surfaces": [
@@ -2520,6 +2632,18 @@
     {
       "name": "revoke_api_key",
       "domain": "api_key",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "revoke_mandate",
+      "domain": "mandate",
       "surfaces": [
         "api",
         "mcp",
@@ -3060,6 +3184,18 @@
     {
       "name": "update_environment",
       "domain": "environment",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "update_mandate_limits",
+      "domain": "mandate",
       "surfaces": [
         "api",
         "mcp",

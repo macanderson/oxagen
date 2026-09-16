@@ -38,5 +38,6 @@ Inserts/updates `agent.context_records` and inserts `agent.context_record_versio
 ## Errors
 
 - Missing workspace scope → error (scoped capability).
+- `conflict: provisional` — the workspace is the onboarding gate's and no main repository is bound yet (`org.onboarding_state.main_repo_bound_at` is null); `bind_main_repository` clears it. Checked before any write. A workspace from before the gate has no row and is never refused here.
 - A record_id reserved by a soft-deleted record → conflict error naming the slug.
 - Two concurrent publishes race safely: the loser republishes onto the winner's row.

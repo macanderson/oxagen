@@ -20,6 +20,8 @@ export type ApprovalListRow = {
   createdAt: Date;
   expiresAt: Date;
   requesterPublicId: string | null;
+  mandatePublicId: string | null;
+  ruleIds: string[];
 };
 
 /**
@@ -60,7 +62,8 @@ export function toApprovalListItem(row: ApprovalListRow): ApprovalListItem {
     requester: row.requesterPublicId,
     createdAt: row.createdAt.toISOString(),
     expiresAt: row.expiresAt.toISOString(),
-    chain: { agentKey: null, rule: null },
+    mandateId: row.mandatePublicId,
+    chain: { agentKey: null, rule: row.ruleIds[0] ?? null },
   };
 }
 
@@ -95,8 +98,11 @@ export async function agentApprovalListHandler(
         createdAt: ar.createdAt,
         expiresAt: ar.expiresAt,
         requesterPublicId: schema.users.publicId,
+        mandatePublicId: schema.mandates.publicId,
+        ruleIds: ar.ruleIds,
       })
       .from(ar)
+      .leftJoin(schema.mandates, eq(schema.mandates.id, ar.mandateId))
       .leftJoin(
         schema.messages,
         and(

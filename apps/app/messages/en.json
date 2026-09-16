@@ -17,6 +17,8 @@
     "fleet": "Fleet",
     "run": "Run",
     "agents": "Agents",
+    "agent": "Agent",
+    "agentSource": "Agent definition",
     "tools": "Tools",
     "steering": "Steering",
     "spend": "Spend",
@@ -25,7 +27,6 @@
     "billing": "Billing"
   },
   "unrecorded": {
-    "agents": "Agent identities, roles, toolbelts, and mandates are not recorded here yet.",
     "tools": "The tool registry, connections, kill switches, and auto-approval rules are not recorded here yet.",
     "steering": "Steering records and proposals are not recorded here yet.",
     "run": {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { CapabilityContext } from "@oxagen/oxagen";
+import { HandlerError, isHandlerError } from "@oxagen/oxagen";
 import { canonicalJson, sha256Hex } from "./registry-digest";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
@@ -13,6 +14,23 @@ import { canonicalJson, sha256Hex } from "./registry-digest";
 //     2. latest-version  → select(...).where(...).limit(1)                → [latest?]
 //     3. (changed only) transaction → update version; insert version
 //                          .returning(); update tools
+// A publish that changes the safety classification reads the workspace's
+// consequence roles (query.workspaces.findFirst) before it writes.
+//
+// Roles (INV-29) are a double of assertOrgRole: the caller's org and
+// workspace role come from `mocks.roles`, and the double refuses a role
+// outside the sets the handler asks for, so each test asserts WHICH roles
+// the handler asks for.
+//   - a Member (org and workspace) → forbidden, nothing read or written
+//   - an org Admin publishes a declaration with no consequence
+//   - changing the classification of a moves_money tool: an org Admin (with
+//     workspace Admin) is refused before any version is written; an org
+//     Owner, and an org Billing user with workspace Admin, publish
+//   - a new tool declaring moves_money needs the moves_money office
+//   - an unchanged classification asks no consequence role
+//   - a classification on a name no capability is registered under is
+//     refused conflict / consequence_not_gated before anything is read; the
+//     same name with no classification publishes
 // Every select shares one queue; the transaction call gets a builder whose
 // inserts/updates resolve via dedicated spies so ordering and shapes can be
 // asserted (same seam as skill.workspace.install.test.ts).
@@ -21,12 +39,45 @@ const mocks = vi.hoisted(() => ({
   insertReturning: [] as Array<() => Promise<unknown>>,
   insertedValues: [] as Array<Record<string, unknown>>,
   updateSets: [] as Array<Record<string, unknown>>,
+  roles: { org: "Owner", workspace: null } as {
+    org: string | null;
+    workspace: string | null;
+  },
+  consequenceRoles: {} as Record<string, string[]>,
+  capabilities: new Set<string>(["read_file"]),
+}));
+
+vi.mock("@oxagen/oxagen", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/oxagen")>();
+  return {
+    ...real,
+    getCapability: (name: string) =>
+      mocks.capabilities.has(name) ? { name } : undefined,
+  };
+});
+
+vi.mock("@oxagen/iam/org-role", () => ({
+  resolveActingUserId: async (ctx: { userId: string | null }) => ctx.userId,
+  assertOrgRole: async (
+    _ctx: unknown,
+    required: { org: readonly string[]; workspace?: readonly string[] },
+  ) => {
+    const { org, workspace } = mocks.roles;
+    if (org && required.org.includes(org)) return org;
+    if (workspace && required.workspace?.includes(workspace)) return workspace;
+    throw new HandlerError({ code: "forbidden", reason: "org_role_required" });
+  },
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
 
   const makeTx = () => ({
+    query: {
+      workspaces: {
+        findFirst: async () => ({ consequenceRoles: mocks.consequenceRoles }),
+      },
+    },
     select: () => ({
       from: () => ({
         where: () => ({
@@ -85,13 +136,19 @@ const INPUT = {
   policy_group: undefined,
   source: "builtin" as const,
   manifest: { name: "read_file" },
+  consequence_tags: [] as string[],
+  measures: {},
+  effect_id_path: undefined,
 };
 
 const EXPECTED_CHECKSUM = sha256Hex(
   canonicalJson({
+    consequence_tags: [],
     description: INPUT.description,
+    effect_id_path: null,
     input_schema: INPUT.input_schema,
     manifest: INPUT.manifest,
+    measures: {},
     name: "read_file",
     policy_group: null,
     read_only: true,
@@ -106,7 +163,14 @@ function queueSelects(...results: unknown[]): void {
   }
 }
 
+const forbidden = (reason: string) => (e: unknown) =>
+  isHandlerError(e) && e.code === "forbidden" && e.reason === reason;
+const conflict = (reason: string) => (e: unknown) =>
+  isHandlerError(e) && e.code === "conflict" && e.reason === reason;
+
 beforeEach(() => {
+  mocks.roles = { org: "Owner", workspace: null };
+  mocks.consequenceRoles = {};
   mocks.selectResults.length = 0;
   mocks.insertReturning.length = 0;
   mocks.insertedValues.length = 0;
@@ -171,7 +235,16 @@ describe("tool.declaration.publish handler", () => {
   it("publishes latest+1 and demotes the previous latest when the checksum changed", async () => {
     queueSelects(
       [{ id: "tool-uuid", publicId: "tol_1", slug: "read_file" }],
-      [{ id: "v2-uuid", versionNumber: 2, checksum: "0".repeat(64) }],
+      [
+        {
+          id: "v2-uuid",
+          versionNumber: 2,
+          checksum: "0".repeat(64),
+          consequenceTags: [],
+          measures: {},
+          effectIdPath: null,
+        },
+      ],
     );
     mocks.insertReturning.push(() => Promise.resolve([{ id: "v3-uuid" }]));
 
@@ -197,5 +270,162 @@ describe("tool.declaration.publish handler", () => {
         workspaceId: undefined as unknown as string,
       }),
     ).rejects.toThrow(/workspaceId is required/);
+  });
+});
+
+describe("tool.declaration.publish roles", () => {
+  const TOOL = { id: "tool-uuid", publicId: "tol_1", slug: "read_file" };
+  const MONEY = {
+    consequenceTags: ["moves_money"],
+    measures: {
+      amount: { path: "amount", type: "amount", unit: "USD", scale: 2 },
+    },
+    effectIdPath: "id",
+  };
+  const MONEY_INPUT = {
+    ...INPUT,
+    consequence_tags: MONEY.consequenceTags,
+    measures: MONEY.measures as typeof INPUT.measures,
+    effect_id_path: MONEY.effectIdPath,
+  };
+  const latestV2 = (classification: object) => ({
+    id: "v2-uuid",
+    versionNumber: 2,
+    checksum: "0".repeat(64),
+    ...classification,
+  });
+
+  it("refuses a Member before anything is read or written", async () => {
+    mocks.roles = { org: "Member", workspace: "Member" };
+    await expect(toolDeclarationPublishHandler(INPUT, CTX)).rejects.toSatisfy(
+      forbidden("org_role_required"),
+    );
+    expect(mocks.selectResults).toHaveLength(0);
+    expect(mocks.insertedValues).toHaveLength(0);
+    expect(mocks.updateSets).toHaveLength(0);
+  });
+
+  it("lets an org Admin publish a declaration that carries no consequence", async () => {
+    mocks.roles = { org: "Admin", workspace: null };
+    queueSelects([]);
+    mocks.insertReturning.push(
+      () => Promise.resolve([TOOL]),
+      () => Promise.resolve([{ id: "version-uuid" }]),
+    );
+    await expect(
+      toolDeclarationPublishHandler(INPUT, CTX),
+    ).resolves.toMatchObject({ published: true, version: 1 });
+  });
+
+  it("refuses an Admin who drops moves_money from a tool: no version row is written", async () => {
+    mocks.roles = { org: "Admin", workspace: "Admin" };
+    queueSelects([TOOL], [latestV2(MONEY)]);
+    await expect(toolDeclarationPublishHandler(INPUT, CTX)).rejects.toSatisfy(
+      forbidden("org_role_required"),
+    );
+    expect(mocks.insertedValues).toHaveLength(0);
+    expect(mocks.updateSets).toHaveLength(0);
+  });
+
+  it("refuses an Admin who re-measures a moves_money tool", async () => {
+    mocks.roles = { org: "Admin", workspace: null };
+    queueSelects(
+      [TOOL],
+      [
+        latestV2({
+          ...MONEY,
+          measures: {
+            amount: { path: "amount", type: "amount", unit: "USD", scale: 6 },
+          },
+        }),
+      ],
+    );
+    await expect(
+      toolDeclarationPublishHandler(MONEY_INPUT, CTX),
+    ).rejects.toSatisfy(forbidden("org_role_required"));
+    expect(mocks.insertedValues).toHaveLength(0);
+  });
+
+  it.each([
+    ["an org Owner", { org: "Owner", workspace: null }],
+    [
+      "an org Billing user with workspace Admin",
+      { org: "Billing", workspace: "Admin" },
+    ],
+  ])("lets %s drop moves_money", async (_label, roles) => {
+    mocks.roles = roles;
+    queueSelects([TOOL], [latestV2(MONEY)]);
+    mocks.insertReturning.push(() => Promise.resolve([{ id: "v3-uuid" }]));
+    await expect(
+      toolDeclarationPublishHandler(INPUT, CTX),
+    ).resolves.toMatchObject({ published: true, version: 3 });
+    expect(mocks.insertedValues[0]).toMatchObject({ consequenceTags: [] });
+  });
+
+  it("asks the workspace's override for the office", async () => {
+    mocks.roles = { org: "Admin", workspace: null };
+    mocks.consequenceRoles = { moves_money: ["Admin"] };
+    queueSelects([TOOL], [latestV2(MONEY)]);
+    mocks.insertReturning.push(() => Promise.resolve([{ id: "v3-uuid" }]));
+    await expect(
+      toolDeclarationPublishHandler(INPUT, CTX),
+    ).resolves.toMatchObject({ published: true });
+  });
+
+  it("a new tool declaring moves_money needs the moves_money office", async () => {
+    mocks.roles = { org: "Admin", workspace: null };
+    queueSelects([]);
+    await expect(
+      toolDeclarationPublishHandler(MONEY_INPUT, CTX),
+    ).rejects.toSatisfy(forbidden("org_role_required"));
+    expect(mocks.insertedValues).toHaveLength(0);
+  });
+
+  it("an unchanged classification asks no consequence role", async () => {
+    mocks.roles = { org: "Admin", workspace: null };
+    queueSelects([TOOL], [latestV2(MONEY)]);
+    mocks.insertReturning.push(() => Promise.resolve([{ id: "v3-uuid" }]));
+    await expect(
+      toolDeclarationPublishHandler(
+        { ...MONEY_INPUT, description: "Pay an invoice, reworded" },
+        CTX,
+      ),
+    ).resolves.toMatchObject({ published: true, version: 3 });
+  });
+
+  it.each([
+    ["consequence_tags", { consequence_tags: ["moves_money"] }],
+    ["measures", { measures: MONEY.measures as typeof INPUT.measures }],
+    ["effect_id_path", { effect_id_path: "id" }],
+  ])(
+    "refuses %s on a name no capability is registered under",
+    async (_field, classification) => {
+      const external = {
+        ...INPUT,
+        name: "stripe__create_payment",
+        source: "mcp" as const,
+        ...classification,
+      };
+      await expect(
+        toolDeclarationPublishHandler(external, CTX),
+      ).rejects.toSatisfy(conflict("consequence_not_gated"));
+      expect(mocks.selectResults).toHaveLength(0);
+      expect(mocks.insertedValues).toHaveLength(0);
+      expect(mocks.updateSets).toHaveLength(0);
+    },
+  );
+
+  it("publishes a name no capability is registered under when it carries no classification", async () => {
+    queueSelects([]);
+    mocks.insertReturning.push(
+      () => Promise.resolve([{ ...TOOL, slug: "stripe__create_payment" }]),
+      () => Promise.resolve([{ id: "version-uuid" }]),
+    );
+    await expect(
+      toolDeclarationPublishHandler(
+        { ...INPUT, name: "stripe__create_payment", source: "mcp" },
+        CTX,
+      ),
+    ).resolves.toMatchObject({ published: true, version: 1 });
   });
 });

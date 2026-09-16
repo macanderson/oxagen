@@ -1,14 +1,14 @@
 ---
 title: Command reference
-description: "Every oxagen command and flag: budgets and cost, run traces, the knowledge graph, agent memory, environments, the credential vault, and the market router."
+description: "Every oxagen command and flag: budgets and cost, runs, the knowledge graph, agent memory, environments, the credential vault, and the market router."
 ---
 
 Run `oxagen --help` for the live list, and append `--help` to any command for its flags.
 
-Every command except `cost`, `logs` and `telemetry` calls the platform and needs an [authenticated CLI](/docs/cli/account-setup).
+Every command except `cost`, `logs`, and `telemetry` calls the platform and needs an [authenticated CLI](/docs/cli/account-setup).
 
 <Callout type="warn">
-**Retired commands.** `sandbox`, `sandbox-template`, `code`, `eval`, `file-lock`, `a2a`, `models`, `skill`, `prompt`, `command`, `rules`, `settings`, `config`, `mcp`, `import`, `pr`, `recover`, `lineage`: plus the interactive surfaces `view`, `agents`, `solve`, `daemon`, `replay`, `fleet` and a bare `oxagen "<prompt>"`: belonged to the agent runtime and were removed. Each is still registered and prints a retirement notice pointing at the `stella` CLI, then exits non-zero.
+**Retired commands.** These commands belonged to the agent runtime and were removed: `sandbox`, `sandbox-template`, `code`, `eval`, `file-lock`, `a2a`, `models`, `skill`, `prompt`, `command`, `rules`, `settings`, `config`, `mcp`, `import`, `pr`, `recover`, and `lineage`. So were the interactive surfaces `view`, `agents`, `solve`, `daemon`, `replay`, and `fleet`, and a bare `oxagen "<prompt>"`. Each one is still registered, prints a retirement notice that points at the `stella` CLI, and exits non-zero.
 </Callout>
 
 ## oxagen budget: spend ceilings
@@ -18,7 +18,7 @@ oxagen budget show [--json]
 oxagen budget set --scope <scope> --period <period> --limit <usd> [flags]
 ```
 
-Hard period-to-date spend ceilings that gate agent runs. `show` lists every configured ceiling with its live burn; `set` creates or replaces one. See [Spend budgets](/docs/cli/budget) for the full model.
+Hard period-to-date spend ceilings that gate agent runs. `show` lists every configured ceiling with its live burn. `set` creates or replaces one. See [Spend budgets](/docs/cli/budget) for the full model.
 
 | Flag (`set`) | Description |
 |---|---|
@@ -26,10 +26,10 @@ Hard period-to-date spend ceilings that gate agent runs. `show` lists every conf
 | `--period <period>` | The accounting period the ceiling resets on. |
 | `--limit <usd>` | The ceiling, in dollars. |
 | `--window-days <n>` | Rolling-window length, for window-based periods. |
-| `--enabled <bool>` | Enable or disable the ceiling without deleting it. |
+| `--enabled <bool>` | Turn the ceiling on or off without deleting it. |
 | `--json` | Machine-readable output. |
 
-`set` requires org **Owner**, **Admin**, or **Billing**: it changes spend behavior.
+`set` requires org **Owner**, **Admin**, or **Billing**, because it changes spend behavior.
 
 ## oxagen cost: project model cost
 
@@ -38,9 +38,9 @@ oxagen cost --in <tokens> --out <tokens> [-m <slug>] [--json]
 oxagen cost --rates [--json]
 ```
 
-Prices a token workload against the rate card baked into the CLI. With no `--model` it compares every priced model cheapest-first and reports the spread; with one it projects that model alone. `--rates` dumps the card.
+Prices a token workload against the rate card built into the CLI. With no `--model`, it compares every priced model, cheapest first, and reports the spread. With one, it projects that model alone. `--rates` prints the card.
 
-This is **projection**, not observation: it makes no network call and needs no credential. For what was actually spent, use `oxagen budget show` (period-to-date burn) or `oxagen trace <executionId>` (per-run spend).
+This is a **projection**, not an observation. It makes no network call and needs no credential. For what was spent, use `oxagen budget show` (period-to-date burn) or `oxagen trace <executionId>` (spend per run).
 
 ```bash
 oxagen cost --in 200000 --out 40000
@@ -48,13 +48,13 @@ oxagen cost --in 200000 --out 40000 -m anthropic/claude-sonnet-5 --json
 oxagen cost --rates
 ```
 
-## oxagen trace: a run as a span tree
+## oxagen trace: one run as a tree
 
 ```bash
 oxagen trace <executionId> [--json]
 ```
 
-Renders one agent run as a span tree: each step, the tool calls it made, and any child executions it spawned, with timing. This is the *explain* surface: the evidence of what an agent did, reconstructed from the run ledger.
+Shows one agent run as a tree: each step, the tool calls it made, and any child runs it started, with timing. `<executionId>` is the run's public id (`aex_…`) or UUID. This is the *explain* surface: the record of what an agent did, read back from the run ledger.
 
 ## oxagen graph: knowledge graph
 
@@ -62,7 +62,7 @@ Renders one agent run as a span tree: each step, the tool calls it made, and any
 oxagen graph search -q "<text>" [-l <labels>] [-n <limit>] [--json] [--quiet]
 ```
 
-Bounded semantic (vector) search across the governed workspace context graph. `-l/--labels` takes a comma-separated list of domain labels (e.g. `Person,Company`); `-n/--limit` accepts 1–50 (default 10). See [Knowledge graph from the CLI](/docs/cli/knowledge-graph).
+Bounded semantic (vector) search across the workspace context graph. `-l/--labels` takes a comma-separated list of domain labels (for example `Person,Company`). `-n/--limit` accepts 1–50 (default 10). See [Knowledge graph from the CLI](/docs/cli/knowledge-graph).
 
 ## oxagen memory & remember: agent memory
 
@@ -71,20 +71,20 @@ oxagen remember "<lesson>" [--class <class>] [--kind <kind>] [--enforcement <n>]
 oxagen memory list|show|edit|salience|promote|demote|dismiss|candidates|citations|rm|import
 ```
 
-The workspace's experiential memory. `remember` captures a lesson and infers its class and kind; the `memory` subtree curates them. See [Memory from the CLI](/docs/cli/memory).
+The workspace's memory of what agents learned. `remember` captures a lesson and infers its class and kind. The `memory` subcommands curate them. See [Memory from the CLI](/docs/cli/memory).
 
 | Subcommand | Description |
 |---|---|
-| `list` | List memories, filtered by `--class`, `--kind`, `--min-enforcement`, `--min-citations`, `--node`, sorted by `--sort`. |
+| `list` | List memories, filtered by `--class`, `--kind`, `--min-enforcement`, `--min-citations`, or `--node`, and sorted by `--sort`. |
 | `show <id>` | One memory in full detail (id or publicId). |
 | `edit <id>` | Change a memory's `--lesson`, `--kind`, or `--source`. |
 | `salience <id>` | Adjust `--confidence`, `--enforcement`, or lifecycle `--status`. |
-| `promote <id> --to <class>` | Raise to RULE or FACT, recording an auditable promotion event. FACT requires human confirmation. |
-| `demote <id> --to <class>` | Lower to RULE or OBSERVATION, recording an auditable demotion event. |
+| `promote <id> --to <class>` | Raise to RULE or FACT and record an audit event. FACT requires human confirmation. |
+| `demote <id> --to <class>` | Lower to RULE or OBSERVATION and record an audit event. |
 | `dismiss <id>` | Remove from the promotion candidate queue (`--restore` puts it back). |
 | `candidates` | Top OBSERVATION memories by citation pressure, ripe for promotion. |
-| `citations` | Workspace citation analytics over `--days`: influence, compliance, most-cited, least-useful, most-violated. |
-| `rm <id>` | Permanently delete a memory. |
+| `citations` | Workspace citation analytics over `--days`: influence, compliance, most-cited, least-useful, and most-violated. |
+| `rm <id>` | Delete a memory permanently. |
 | `import <files...>` | Bulk-import markdown rule docs as memories. Previews unless `--yes`. |
 
 ## oxagen init: link a project
@@ -93,9 +93,9 @@ The workspace's experiential memory. `remember` captures a lesson and infers its
 oxagen init [--no-link] [--json]
 ```
 
-Resolves an org and workspace (picker, or reused from an existing link) and writes `.oxagen/workspace.json`, which every other command reads to scope itself. It then checks the workspace for a GitHub connection and, interactively, offers to create one so the graph has a source to ground on. `--no-link` skips the whole step.
+Resolves an org and workspace (from the picker, or reused from an existing link) and writes `.oxagen/workspace.json`, which every other command reads to scope itself. It then checks the workspace for a GitHub connection and, in an interactive terminal, offers to create one so the graph has a source to ground on. `--no-link` skips that step.
 
-`init` is idempotent: re-running against an already-linked project reuses the existing link.
+`init` is idempotent. Running it again in a linked project reuses the existing link.
 
 ## oxagen agent: the agent identity
 
@@ -106,6 +106,13 @@ oxagen agent unenroll <agent> [--host <tch_id>] [--reason <text>] [--json]
 ```
 
 `register` mints the identity (`register_agent`): the agent row, its delegated principal, the default agent role and one long-lived credential, printed once and never recoverable. The definition is a file, `.oxagen/agents/<slug>.toml`, committed to the workspace repository through `commit_agent_definition`. `status` reads `get_agent`: the identity, its credentials (prefix and dates, never the secret), the roles on its principal, the hosts enrolled under its key and the definition of record the last commit cached. `unenroll` revokes the agent's live host enrollments through `revoke_tacho_enrollment`, or one host with `--host`. `register` and `unenroll` are org Owner/Admin writes: the key `oxagen login` minted authenticates as the user who approved the login, and the handler checks that user's org role. The credential `register` prints is locked to its purpose and is not accepted as a bearer by the API or the MCP server; it is the credential the run-token exchange of the spec consumes.
+## oxagen agent enroll: put this machine under a registered agent's key
+
+```bash
+oxagen agent enroll --token <oxe_1time_…> [--harness claude-code|codex|claude-code,codex] [--port <n>] [--no-service] [--force]
+```
+
+The scripted path of the register flow (Mission Control spec §14.1). The one-time enrollment token (issued once from the Agents page or through `create_enrollment_token`, good for thirty minutes) is the credential, so no `oxagen login` is needed: the control plane resolves the organization, the workspace and the agent from it, and the host file records what it answered. The routine is the one `oxagen tacho enroll` runs: the device key, the host credential, the `tachod` user service and the harness hooks. A token that was already used or has expired is refused (`token_used`, `token_expired`); issue a new one. The git remote of the directory the command runs in is reported so the onboarding gate can offer it as the workspace's main repository.
 
 ## oxagen agent env: bind agents to environments
 
@@ -115,7 +122,7 @@ oxagen agent env unbind <agent> --env <slug> [--json]
 oxagen agent env list <agent> [--json]
 ```
 
-`<agent>` is an agent's public id (`agt_…`), slug, or agent-key. `--env` is an environment slug or `env_` id. The first binding an agent gets becomes its primary; `--primary` atomically demotes the previous one.
+`<agent>` is an agent's public id (`agt_…`), slug, or agent-key. `--env` is an environment slug or `env_` id. An agent's first binding becomes its primary. `--primary` makes the new binding primary and demotes the previous one in the same write.
 
 ## oxagen env: workspace environments
 
@@ -128,7 +135,7 @@ oxagen env rm <idOrSlug>
 oxagen env set-default <idOrSlug>
 ```
 
-Environments are governed configuration records: a named scope that secrets resolve against and agents bind to. The workspace default cannot be deleted.
+Environments are governed configuration records: a named scope that secrets resolve against and agents bind to. You cannot delete the workspace default.
 
 ## oxagen secret: credential vault
 
@@ -141,9 +148,9 @@ oxagen secret import [--env <slug>] [-f <path>] [--yes]
 oxagen secret export [--env <slug>] [-o <path>]
 ```
 
-The workspace's encrypted credential vault. `list` shows masked metadata only. Values are stored per-key with optional per-environment overrides: `--env` targets one environment's override; omit it for the default value.
+The workspace's encrypted credential vault. `list` shows masked metadata only. Values are stored per key, with optional overrides per environment. `--env` targets one environment's override. Omit it for the default value.
 
-`reveal` and `export` return plaintext and are **recorded to the access log**. `import` reads `.env` text from a file or stdin and previews the change unless you pass `--yes`.
+`reveal` and `export` return plaintext, and Oxagen **records each one in the access log**. `import` reads `.env` text from a file or stdin and previews the change unless you pass `--yes`.
 
 ## oxagen router: verified-outcome market router
 
@@ -154,7 +161,7 @@ oxagen router policy get [--json]
 oxagen router policy set [--scope <s>] [--mode <m>] [--threshold <n>] [--min-samples <n>] [--window <days>] [--escalate <bool>] [--json]
 ```
 
-Learned, economic model routing. `stats` reports observed outcomes per (task class, model) and the cheapest model that clears the quality bar in each class. `preview` dry-runs the routing decision for a prompt and changes nothing. `policy set` requires org **Owner** or **Admin**: it changes spend behavior.
+Learned, cost-aware model routing. `stats` reports observed outcomes per task class and model, and the cheapest model that clears the quality bar in each class. `preview` dry-runs the routing decision for a prompt and changes nothing. `policy set` requires org **Owner** or **Admin**, because it changes spend behavior.
 
 ## oxagen conversation: export a conversation
 
@@ -162,7 +169,7 @@ Learned, economic model routing. `stats` reports observed outcomes per (task cla
 oxagen conversation export <id> [--format md|pdf] [-o <file>] [--json]
 ```
 
-Exports a conversation's active branch. Markdown goes to stdout or `-o`; PDF is stored privately and the command prints the serve URL.
+Exports a conversation's active branch. Markdown goes to stdout or to `-o`. A PDF is stored privately, and the command prints the serve URL.
 
 ## oxagen asset: ingest a binary asset
 
@@ -170,7 +177,7 @@ Exports a conversation's active branch. Markdown goes to stdout or `-o`; PDF is 
 oxagen asset upload <url> [--kind <kind>] [--filename <name>] [--conversation <id>] [--json]
 ```
 
-Ingests an asset from a public URL into object storage. With `--conversation`, records it as a private chat attachment linked to that conversation.
+Ingests an asset from a public URL into object storage. With `--conversation`, it records the asset as a private chat attachment linked to that conversation.
 
 ## oxagen logs: CLI debug log
 
@@ -178,7 +185,7 @@ Ingests an asset from a public URL into object storage. With `--conversation`, r
 oxagen logs [-n <lines>] [--category <c>] [-f] [--path] [--clear] [--json]
 ```
 
-Reads the CLI's own log at `~/.oxagen/logs/cli.output`. Every invocation is recorded; set `OXAGEN_CLI_DEBUG=1` for full detail. `--path` prints the log location, `--clear` truncates it, `-f/--follow` tails.
+Reads the CLI's own log at `~/.oxagen/logs/cli.output`. The CLI records every command it runs. Set `OXAGEN_CLI_DEBUG=1` for full detail. `--category` filters by `invoke`, `api`, `llm`, or `error`. `--path` prints the log location, `--clear` truncates it, and `-f/--follow` tails it.
 
 ## oxagen telemetry: anonymous usage telemetry
 
@@ -186,14 +193,14 @@ Reads the CLI's own log at `~/.oxagen/logs/cli.output`. Every invocation is reco
 oxagen telemetry [on|off|status]
 ```
 
-Anonymous usage telemetry: command names, durations, coarse success/error categories, OS/arch. Never code, prompts, file contents, paths, model slugs, or keys. On by default; `DO_NOT_TRACK=1` also disables it.
+Anonymous usage telemetry: command names, durations, coarse success and error categories, and OS and architecture. It never includes code, prompts, file contents, paths, model slugs, or keys. It is on by default. `oxagen telemetry off` or `DO_NOT_TRACK=1` turns it off.
 
 ## Login and logout
 
 ```bash
 oxagen login                                                   # browser OAuth + org/workspace picker
-oxagen login --token oxk_live_… --org acme --workspace main    # CI / headless
-oxagen login --no-browser                                      # print the URL instead of opening it
+oxagen login --token ox_… --org acme --workspace main          # CI / headless
+oxagen login --no-browser                                      # paste a token instead of opening a browser
 oxagen logout                                                  # clear the stored session
 ```
 

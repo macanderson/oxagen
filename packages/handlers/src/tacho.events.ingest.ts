@@ -40,6 +40,7 @@ import {
 import { recordSpend } from "@oxagen/billing";
 import { and, eq, sql } from "drizzle-orm";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
+import { unlockOnboardingGate } from "./lib/onboarding";
 import { eventClient } from "./event-client";
 import {
   type TachoHostRow,
@@ -271,6 +272,10 @@ function genesisRow(
     harnessSessionId: first.session_id,
     hostId: host.id,
     agentKey: first.agent.agent_key,
+    // The registered agent the host enrolled as (enroll_host, #2967); null
+    // for an operator-enrolled host.
+    agentId: host.agentId,
+    agentPrincipalId: host.agentPrincipalId,
     initiatingPrincipalId,
     rootSessionUuid: first.root_session_uuid,
     parentSessionUuid: first.parent_session_uuid ?? null,
@@ -505,6 +510,9 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     const spendDeltas: { micros: number; at: Date }[] = [];
     const sealedRoots: string[] = [];
     let newSessions = 0;
+    // The first root session this batch opened: the run the onboarding gate
+    // records when this is the organization's first frame (#2967).
+    let firstOpenedRunId: string | null = null;
     // Resolved on the first genesis row of the batch; every session a host
     // opens has the same operator, and a batch of continuations never asks.
     let initiatingPrincipalId: string | null | undefined;
@@ -717,6 +725,14 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         columns: { id: true, publicId: true, parentSessionUuid: true },
       });
       const sessionId = sessionRow?.id;
+      if (
+        sessionRow?.publicId &&
+        !existing &&
+        firstOpenedRunId === null &&
+        first.parent_session_uuid == null
+      ) {
+        firstOpenedRunId = sessionRow.publicId;
+      }
       if (sessionId) {
         await rollupModels(tx, ctx, sessionId, fresh, now);
         await rollupFiles(tx, ctx, sessionId, fresh, now);
@@ -739,6 +755,28 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           sessionsCount: sql`${schema.tachoHosts.sessionsCount} + ${newSessions}`,
         })
         .where(eq(schema.tachoHosts.id, host.id));
+    }
+    // The organization's first frame opens the onboarding gate (mockup
+    // obUnlock: the agent and its run exist from this moment). Guarded on the
+    // row's step, so only the first batch to land writes it.
+    if (firstOpenedRunId !== null) {
+      const unlocked = await unlockOnboardingGate(tx, {
+        orgId: ctx.orgId,
+        runPublicId: firstOpenedRunId,
+        agentId: host.agentId,
+        now,
+      });
+      if (unlocked) {
+        logger.info(
+          {
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+            runId: firstOpenedRunId,
+            agentId: host.agentId,
+          },
+          "tacho.events.ingest: first frame received — onboarding gate unlocked",
+        );
+      }
     }
     await touchHost(tx as never, host, input.daemon, now, true);
     const control = await controlEnvelope(tx as never, ctx, host, now);

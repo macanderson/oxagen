@@ -2,6 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { contextRecordPublish } from "@oxagen/oxagen/contracts/context.record.publish";
 import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
+import { assertWorkspaceNotProvisional } from "./lib/onboarding";
 import { logger } from "./logger";
 import { sha256Hex } from "./registry-digest";
 
@@ -28,6 +29,9 @@ export const contextRecordPublishHandler: CapabilityHandler<
 
   const orgId = ctx.orgId;
   const workspaceId = ctx.workspaceId;
+
+  // A provisional workspace has no main repository to publish to (#2967).
+  await assertWorkspaceNotProvisional({ orgId, workspaceId });
 
   const findExisting = async () => {
     const rows = await withTenantDb((tx) =>
