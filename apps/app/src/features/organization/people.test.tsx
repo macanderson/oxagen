@@ -11,6 +11,7 @@ import type { MemberList } from "@/data/contracts/org";
 import type { OrgRole } from "@/server/viewer";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { orgSource } from "./organization.builders";
 
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { href: string; children: ReactNode }) => (
@@ -49,39 +50,12 @@ async function renderPeople(
     orgName: "Acme Robotics",
     orgRole,
   });
-  const members = vi.fn<Members>().mockResolvedValue(read);
-  const source = {
-    pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-    shell: { context: vi.fn() },
-    billing: {
-      plan: vi.fn(),
-      bucket: vi.fn(),
-      contractRate: vi.fn(),
-      invoices: vi.fn(),
-    },
-    runs: { list: vi.fn() },
-    approvals: { pending: vi.fn() },
-    agents: {
-      list: vi.fn(),
-      get: vi.fn(),
-      toolbelt: vi.fn(),
-      incidents: vi.fn(),
-    },
-    spend: {
-      byGroup: vi.fn(),
-      fleet: vi.fn(),
-      drill: vi.fn(),
-      waste: vi.fn(),
-      budgets: vi.fn(),
-    },
-    org: { members },
-    skills: { inventory: vi.fn() },
-    steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
-  };
+  const { source, calls } = orgSource({ members: read });
   const view = render(
     <IntlProvider>{await People({ ctx, source })}</IntlProvider>,
   );
-  expect(members).toHaveBeenCalledWith(ctx);
+  expect(calls.members).toEqual([[ctx]]);
+  expect(calls.apiKeys).toEqual([]);
   await expectNoAxe(view.container);
   return view;
 }

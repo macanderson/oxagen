@@ -5,7 +5,7 @@
 // change role and remove (WL-42) — which an Owner or an Admin makes and every
 // other role sees refused. Invitations are sent from here with the People
 // writes the #2964 lane adds.
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import type { MemberList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
@@ -15,6 +15,7 @@ import { mono } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
 import { RouteTabs } from "@/ui/route-tabs";
 import { MemberRowActions } from "./member-row-actions";
+import { DateCell, emptyLine } from "./parts";
 
 /** The org roles the two membership handlers admit (INV-29). */
 const MEMBERSHIP_WRITERS: readonly OrgRole[] = ["owner", "admin"];
@@ -34,7 +35,6 @@ const sectionTitle = "text-base font-semibold text-foreground";
 const table = "w-full text-left text-sm";
 const headCell = "px-3 py-2 text-xs font-medium text-muted-foreground";
 const cell = "px-3 py-2.5 align-top";
-const emptyLine = "text-sm text-muted-foreground";
 
 function PeopleView({
   orgSlug,
@@ -102,15 +102,6 @@ function PeopleView({
         </OutcomePanel>
       )}
     </div>
-  );
-}
-
-function DateCell({ iso }: { iso: string }) {
-  const format = useFormatter();
-  return (
-    <time dateTime={iso}>
-      {format.dateTime(new Date(iso), { dateStyle: "medium" })}
-    </time>
   );
 }
 
