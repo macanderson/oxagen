@@ -16,7 +16,12 @@ import { fadeInUp } from "../lib/motion";
 const Tabs = TabsPrimitive.Root;
 
 const tabsListVariants = cva(
-  "group/list inline-flex items-center text-tab-fg",
+  // `relative` is load-bearing: TabsIndicator is absolutely positioned with
+  // `[left:var(--active-tab-left)]`, so the list MUST establish its containing
+  // block. Without it the bar resolves against whatever ancestor happens to be
+  // positioned (or the initial containing block) and lands somewhere arbitrary
+  // — a different place per host page.
+  "group/list relative inline-flex items-center text-tab-fg",
   {
     variants: {
       variant: {
