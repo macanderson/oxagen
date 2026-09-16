@@ -55,6 +55,7 @@ import {
   type TurnLedgerModelCall,
   type TurnLedgerOutcome,
   type TurnLedgerToolCall,
+  type TurnLedgerToolIntent,
 } from "./governed-turn";
 import { modelForRole } from "./engine/provider";
 import { LOAD_TOOLS, SEARCH_TOOLS, createToolBelt } from "./tool-belt";
@@ -422,6 +423,7 @@ describe("runGovernedTurn on the engine", () => {
         modelCall: async (record) => {
           modelCalls.push(record);
         },
+        toolCallStarted: async () => undefined,
         toolCall: async () => undefined,
         seal: async (outcome) => {
           outcomes.push(outcome);
@@ -469,6 +471,7 @@ describe("runGovernedTurn on the engine", () => {
         log.push(`model:${record.requestId}`);
         modelCalls.push(record);
       },
+      toolCallStarted: async () => undefined,
       toolCall: async (record) => {
         log.push(`tool:${record.requestId}`);
         toolCalls.push(record);
@@ -545,6 +548,104 @@ describe("runGovernedTurn on the engine", () => {
     ]);
   });
 
+  it("records the intention before the tool runs, under the canonical capability name", async () => {
+    // Two defects in one place. The receipt used to be written only AFTER the
+    // tool had run, so a mutating tool whose side effect committed and whose
+    // receipt then failed to append left evidence asserting it never
+    // happened. And it was keyed on the model-facing alias, which for an
+    // external MCP tool is sanitized and can be collision-suffixed, so the
+    // evidence could not be joined back to the capability that was
+    // authorized.
+    const { client } = setup();
+    const log: string[] = [];
+    const intents: TurnLedgerToolIntent[] = [];
+    const toolCalls: TurnLedgerToolCall[] = [];
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {
+        search_nodes: {
+          description: "d",
+          inputSchema: { type: "object" } as never,
+          execute: async () => {
+            log.push("exec");
+            return "ok";
+          },
+        } as never,
+      },
+      // As materializeTools builds it: alias → canonical capability name.
+      toolNameMap: { search_nodes: "query_ontology" },
+      engine: client,
+      ledger: {
+        modelCall: async () => undefined,
+        toolCallStarted: async (record) => {
+          log.push("start");
+          intents.push(record);
+        },
+        toolCall: async (record) => {
+          log.push("done");
+          toolCalls.push(record);
+        },
+        seal: async () => undefined,
+      },
+    });
+    await drain(result);
+    // The intention is durable before the side effect can happen.
+    expect(log).toEqual(["start", "exec", "done"]);
+    // Identity is the canonical name on both events; the alias rides beside
+    // it and is never the identifier.
+    expect(intents[0]).toMatchObject({
+      toolName: "query_ontology",
+      toolAlias: "search_nodes",
+    });
+    expect(toolCalls[0]).toMatchObject({
+      toolName: "query_ontology",
+      toolAlias: "search_nodes",
+      outcome: "completed",
+    });
+  });
+
+  it("never invokes a tool whose intention could not be recorded", async () => {
+    // The write-ahead guarantee only holds if a failed intention stops the
+    // call: otherwise the mutation happens with nothing durable about it.
+    const { client } = setup();
+    const execute = vi.fn(async () => "ok");
+    const outcomes: TurnLedgerOutcome[] = [];
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {
+        search_nodes: {
+          description: "d",
+          inputSchema: { type: "object" } as never,
+          execute,
+        } as never,
+      },
+      engine: client,
+      ledger: {
+        modelCall: async () => undefined,
+        toolCallStarted: async () => {
+          throw new Error("ledger is read-only");
+        },
+        toolCall: async () => undefined,
+        seal: async (outcome) => {
+          outcomes.push(outcome);
+        },
+      },
+    });
+    await drain(result);
+    // The mutation never happened, which is the guarantee.
+    expect(execute).not.toHaveBeenCalled();
+    // And the turn does not answer: a receipt that cannot be written cancels
+    // the turn and rejects it, the same as every other receipt in this file.
+    expect(outcomes.map((o) => o.status)).toEqual(["aborted"]);
+    await expect(result.finalText).rejects.toThrow("ledger is read-only");
+  });
+
   it("records a refused tool as denied on the ledger", async () => {
     const { client } = setup();
     const toolCalls: TurnLedgerToolCall[] = [];
@@ -565,6 +666,7 @@ describe("runGovernedTurn on the engine", () => {
       engine: client,
       ledger: {
         modelCall: async () => undefined,
+        toolCallStarted: async () => undefined,
         toolCall: async (record) => {
           toolCalls.push(record);
         },
@@ -601,6 +703,7 @@ describe("runGovernedTurn on the engine", () => {
         modelCall: async () => {
           throw new Error("ledger is read-only");
         },
+        toolCallStarted: async () => undefined,
         toolCall: async () => undefined,
         seal: async (outcome) => {
           outcomes.push(outcome);
@@ -658,6 +761,7 @@ describe("runGovernedTurn on the engine", () => {
       ledger: {
         modelCall: async () => undefined,
         // The recorder digests the receipt synchronously while building it.
+        toolCallStarted: async () => undefined,
         toolCall: (record) => {
           receipts.push({
             toolName: record.toolName,
@@ -700,6 +804,7 @@ describe("runGovernedTurn on the engine", () => {
       engine: client,
       ledger: {
         modelCall: async () => undefined,
+        toolCallStarted: async () => undefined,
         toolCall: (record) => {
           digests.push(digestJcs(record.output ?? null));
           return Promise.resolve();
@@ -731,6 +836,7 @@ describe("runGovernedTurn on the engine", () => {
       ledger: {
         modelCall: async () => undefined,
         // Not async: the throw happens before any promise exists.
+        toolCallStarted: async () => undefined,
         toolCall: () => {
           throw new TypeError("$.output must be a plain object");
         },
@@ -778,6 +884,7 @@ describe("runGovernedTurn on the engine", () => {
       engine: flaky,
       ledger: {
         modelCall: async () => undefined,
+        toolCallStarted: async () => undefined,
         toolCall: async () => undefined,
         seal: async (outcome) => {
           outcomes.push(outcome);

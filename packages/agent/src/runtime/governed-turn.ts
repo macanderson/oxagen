@@ -185,6 +185,14 @@ export interface GovernedTurnInput {
    */
   mutatingToolNames?: readonly string[];
   /**
+   * Model-facing alias → canonical capability name, as `materializeTools`
+   * built it. The engine asks for tools by the sanitized alias; the ledger
+   * must attribute the call to the capability the run spec authorized, so
+   * every receipt resolves through this map. A name absent from it is already
+   * canonical (the belt's own meta-tools).
+   */
+  toolNameMap?: Readonly<Record<string, string>>;
+  /**
    * Per-alias governance facts (`materializeTools().governance`), declared to
    * the engine as each tool's contract. A tool with no entry is declared high
    * risk and mutating, which is how the engine treats an undeclared one.
@@ -234,13 +242,37 @@ export interface TurnLedgerModelCall {
   usage?: CompletionUsage;
 }
 
+/**
+ * The host is about to invoke a tool. Written BEFORE the call so a mutation
+ * that commits can never be absent from the record (see
+ * `tool.engine_call_started`).
+ */
+export interface TurnLedgerToolIntent {
+  /** The `tool_request` frame's seq. */
+  seq: number;
+  requestId: string;
+  /** The canonical capability name — the identity the run spec authorized. */
+  toolName: string;
+  /** The model-facing alias, when it differs from the canonical name. */
+  toolAlias?: string;
+  input: unknown;
+}
+
 /** A tool call the host answered, as the ledger records it. */
 export interface TurnLedgerToolCall {
   /** The `tool_request` frame's seq. */
   seq: number;
   requestId: string;
-  /** The model-facing alias the engine asked for. */
+  /**
+   * The canonical capability name. For an external MCP tool the engine asks
+   * by a sanitized, sometimes collision-suffixed alias; recording that alias
+   * here made the evidence impossible to join back to the capability that was
+   * actually authorized, so the identity is always the canonical name and the
+   * alias travels beside it.
+   */
   toolName: string;
+  /** The model-facing alias, when it differs from the canonical name. */
+  toolAlias?: string;
   outcome: "completed" | "failed" | "denied" | "cancelled";
   input: unknown;
   output?: unknown;
@@ -263,6 +295,8 @@ export type TurnLedgerOutcome =
  */
 export interface TurnLedger {
   modelCall(record: TurnLedgerModelCall): Promise<void>;
+  /** Write-ahead: recorded before the tool runs, and never counted as a call. */
+  toolCallStarted(record: TurnLedgerToolIntent): Promise<void>;
   toolCall(record: TurnLedgerToolCall): Promise<void>;
   seal(outcome: TurnLedgerOutcome): Promise<void>;
 }
@@ -639,6 +673,28 @@ export async function runGovernedTurn(
       },
       onToolRequest: async (request, context) => {
         const startedAt = Date.now();
+        // The engine asks by the model-facing alias; the ledger attributes the
+        // call to the capability the run spec authorized. An alias absent from
+        // the map is already canonical (the belt's meta-tools).
+        const canonical = input.toolNameMap?.[request.name] ?? request.name;
+        const alias = canonical === request.name ? undefined : request.name;
+        // Write-ahead. The intention is durable BEFORE the tool runs, so a
+        // side effect that commits can never be missing from the record: if
+        // this append fails, `recorded` aborts the turn and the tool is never
+        // invoked at all. Recording only afterwards meant a transient ledger
+        // failure could commit a mutation and then seal the run failed with
+        // no receipt, leaving evidence that asserted it never happened.
+        if (ledger) {
+          await recorded(() =>
+            ledger.toolCallStarted({
+              seq: request.seq,
+              requestId: request.request_id,
+              toolName: canonical,
+              ...(alias ? { toolAlias: alias } : {}),
+              input: request.input,
+            }),
+          );
+        }
         const execution = await executeToolRequest(
           tools,
           request.name,
@@ -657,7 +713,8 @@ export async function runGovernedTurn(
             ledger.toolCall({
               seq: request.seq,
               requestId: request.request_id,
-              toolName: request.name,
+              toolName: canonical,
+              ...(alias ? { toolAlias: alias } : {}),
               outcome: toolOutcome(execution),
               input: request.input,
               // The receipt digests what the engine is answered with (the

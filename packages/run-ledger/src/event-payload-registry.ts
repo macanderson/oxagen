@@ -353,6 +353,31 @@ const toolEngineCallCompletedSchema = z
   })
   .strict();
 
+/**
+ * Write-ahead intention: the host is about to invoke a tool. Appended BEFORE
+ * the call, so a tool whose side effect commits and whose terminal receipt
+ * then fails to append still leaves proof the call was attempted, with the
+ * input that was about to run. Without it a transient ledger failure produced
+ * a sealed-failed run whose evidence asserted the mutation never happened —
+ * a record that is confidently wrong, which is worse than one with a gap.
+ *
+ * It carries NO `outcome`, deliberately: a started event with no matching
+ * `tool.engine_call_completed` is a dangling intention, and nothing can read
+ * it as a completed call because the field a reader would test does not
+ * exist and the event type differs.
+ */
+const toolEngineCallStartedSchema = z
+  .object({
+    engine_seq: countSchema,
+    tool_call_id: shortLabelSchema,
+    /** The canonical capability name — the identity the allowlist authorized. */
+    tool_name: shortLabelSchema,
+    /** The model-facing alias, when it differs. Debugging only, never identity. */
+    tool_alias: shortLabelSchema.optional(),
+    input_digest: sha256DigestSchema,
+  })
+  .strict();
+
 const toolApprovalRecordedSchema = z
   .object({
     tool_call_id: shortLabelSchema,
@@ -502,6 +527,11 @@ export const EVENT_TYPE_REGISTRY = {
     stage: "tool",
     contentClass: "tool_call",
     schema: toolEngineCallCompletedSchema,
+  },
+  "tool.engine_call_started": {
+    stage: "tool",
+    contentClass: "tool_call",
+    schema: toolEngineCallStartedSchema,
   },
   "tool.approval_recorded": {
     stage: "tool",

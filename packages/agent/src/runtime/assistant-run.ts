@@ -47,6 +47,7 @@ import type {
   TurnLedgerModelCall,
   TurnLedgerOutcome,
   TurnLedgerToolCall,
+  TurnLedgerToolIntent,
 } from "./governed-turn";
 
 /** The service principal every assistant run acts through. */
@@ -666,6 +667,25 @@ class Recorder implements AssistantRunRecorder {
               cached_input_tokens: record.usage.cached_input_tokens ?? 0,
             }
           : {}),
+      },
+    });
+  }
+
+  /**
+   * Write-ahead intention, appended before the tool runs. Deliberately NOT
+   * pushed onto `receipts`: that array is what `stepsFromReceipts` turns into
+   * the turn's `agent_executions` steps, and counting the intention there
+   * would report every tool call twice. The durable evidence is the event.
+   */
+  toolCallStarted(record: TurnLedgerToolIntent): Promise<void> {
+    return this.append({
+      eventType: "tool.engine_call_started",
+      payload: {
+        engine_seq: record.seq,
+        tool_call_id: record.requestId,
+        tool_name: record.toolName,
+        ...(record.toolAlias ? { tool_alias: record.toolAlias } : {}),
+        input_digest: digestJcs(record.input ?? null),
       },
     });
   }

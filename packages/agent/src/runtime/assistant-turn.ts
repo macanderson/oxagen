@@ -486,6 +486,10 @@ async function runPreparedTurn(
       tools: belt.tools,
       modelTools: belt.modelTools,
       mutatingToolNames: materialised.mutatingToolNames,
+      // The engine asks for tools by their model-safe alias; the ledger must
+      // attribute each receipt to the capability the run spec authorized, or
+      // the evidence cannot be joined back to the authorization it ran under.
+      toolNameMap: materialised.nameMap,
       ...(p.effort ? { effort: p.effort } : {}),
       ...(budgetGuard !== undefined ? { budgetGuard } : {}),
       fundedBy: funding.fundedBy,
