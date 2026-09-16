@@ -43,6 +43,15 @@ export interface RecorderOptions {
   harnessSessionId: string;
   /** Host enrollment id (Claude Code hosts) or agent key (SDK agents). */
   scope: string;
+  /**
+   * The custom agent that owns this session, when one does. A harness session
+   * id is unique only within the agent that issued it, and the chain uuid is
+   * derived from that id, so two custom agents handing out the same id would
+   * otherwise derive one uuid and share a chain. Named harnesses (Claude
+   * Code, Codex, Stella) keep deriving from the bare id, so every chain they
+   * have already recorded keeps its uuid.
+   */
+  customAgent?: string;
   parent?: {
     sessionUuid: string;
     rootSessionUuid: string;
@@ -129,12 +138,13 @@ export class SessionRecorder {
   constructor(options: RecorderOptions) {
     this.options = options;
     this.harnessSessionId = options.harnessSessionId;
+    const seed =
+      options.customAgent === undefined
+        ? options.harnessSessionId
+        : `${options.customAgent}/${options.harnessSessionId}`;
     this.sessionUuid = options.parent
-      ? sessionUuid(
-          options.scope,
-          `${options.harnessSessionId}/agent/${options.parent.subagentId}`,
-        )
-      : sessionUuid(options.scope, options.harnessSessionId);
+      ? sessionUuid(options.scope, `${seed}/agent/${options.parent.subagentId}`)
+      : sessionUuid(options.scope, seed);
     this.rootSessionUuid = options.parent?.rootSessionUuid ?? this.sessionUuid;
     this.harnessVersion = options.context.agent.harness_version;
     if (options.context.host) this.host = { ...options.context.host };
@@ -159,6 +169,9 @@ export class SessionRecorder {
         context: this.options.context,
         harnessSessionId: this.harnessSessionId,
         scope: this.options.scope,
+        ...(this.options.customAgent === undefined
+          ? {}
+          : { customAgent: this.options.customAgent }),
         parent: {
           sessionUuid: this.sessionUuid,
           rootSessionUuid: this.rootSessionUuid,
@@ -290,6 +303,9 @@ export class SessionRecorder {
       context: this.options.context,
       harnessSessionId: this.harnessSessionId,
       scope: this.options.scope,
+      ...(this.options.customAgent === undefined
+        ? {}
+        : { customAgent: this.options.customAgent }),
       parent: {
         sessionUuid: this.sessionUuid,
         rootSessionUuid: this.rootSessionUuid,

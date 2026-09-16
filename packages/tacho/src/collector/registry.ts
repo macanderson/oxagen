@@ -313,6 +313,9 @@ export class SessionRegistry {
         ),
         harnessSessionId,
         scope: this.options.scope,
+        ...(facts.customAgent === undefined
+          ? {}
+          : { customAgent: facts.customAgent }),
       }),
       control: { paused: null, cancelled: null, messages: [] },
       startedAt: now,
@@ -423,6 +426,9 @@ export class SessionRegistry {
           ),
           harnessSessionId: persisted.harnessSessionId,
           scope: this.options.scope,
+          ...(persisted.customAgent === undefined
+            ? {}
+            : { customAgent: persisted.customAgent }),
           restore: persisted.recorder,
         }),
         control: persisted.control,
