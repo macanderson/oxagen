@@ -74,7 +74,7 @@ export function formatClock(seconds: number, locale: string): string {
  */
 export function ratioWidth(ratio: number): string {
   const clamped = Math.min(1, Math.max(0, ratio));
-  return `${Math.round(clamped * 1000) / 10}%`;
+  return `${String(Math.round(clamped * 1000) / 10)}%`;
 }
 
 /** A 0..1 ratio (a productive ratio, a cache hit rate) as a percentage with at most one decimal. */

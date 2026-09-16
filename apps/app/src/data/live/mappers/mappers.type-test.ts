@@ -8,10 +8,12 @@ import type { agentApprovalList } from "@oxagen/oxagen/contracts/agent.approval.
 import type { agentGet } from "@oxagen/oxagen/contracts/agent.get";
 import type { agentList } from "@oxagen/oxagen/contracts/agent.list";
 import type { tachoIncidentList } from "@oxagen/oxagen/contracts/tacho.incident.list";
+import type { mandateList } from "@oxagen/oxagen/contracts/mandate.list";
 import type { runList } from "@oxagen/oxagen/contracts/run.list";
 import type { ContractOutput } from "@/server/kernel";
 import type { toAgentDetail, toAgentPage, toIncidentPage } from "./agents";
 import type { toApprovalItems } from "./approvals";
+import type { toMandateList } from "./mandates";
 import type { toRunPage } from "./runs";
 
 /** Each field of View that Out also has may be nullable only where Out's is. */
@@ -37,6 +39,9 @@ type AgentView = ReturnType<typeof toAgentDetail>;
 type IncidentOut = ContractOutput<typeof tachoIncidentList>["items"][number];
 type IncidentView = ReturnType<typeof toIncidentPage>["incidents"][number];
 
+type MandateOut = ContractOutput<typeof mandateList>["items"][number];
+type MandateView = ReturnType<typeof toMandateList>["mandates"][number];
+
 declare const runOut: RunOut;
 declare const runView: RunView;
 declare const approvalView: ApprovalView;
@@ -45,6 +50,7 @@ declare const identityView: AgentView["identity"];
 declare const credentialView: AgentView["credentials"][number];
 declare const hostView: AgentView["hosts"][number];
 declare const incidentView: IncidentView;
+declare const mandateView: MandateView;
 
 // The positives: both mappers keep a field nullable only where the contract does.
 const _runsHold: NullableOnlyWhenSourceIs<RunView, RunOut> = runView;
@@ -66,6 +72,8 @@ const _hostsHold: NullableOnlyWhenSourceIs<
 > = hostView;
 const _incidentsHold: NullableOnlyWhenSourceIs<IncidentView, IncidentOut> =
   incidentView;
+const _mandatesHold: NullableOnlyWhenSourceIs<MandateView, MandateOut> =
+  mandateView;
 
 // @ts-expect-error -- turns may be null on the contract, and frames is required on the view
 const _nullableIntoRequired: Pick<RunView, "frames"> = { frames: runOut.turns };

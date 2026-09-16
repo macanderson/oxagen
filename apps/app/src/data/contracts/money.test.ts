@@ -9,6 +9,7 @@ import {
   microsFromDecimal,
   moneyFromMicros,
   mulMicros,
+  ratioOfIntegers,
 } from "./money";
 
 const usd = (micros: string) => ({ micros, currency: "USD" });
@@ -132,4 +133,36 @@ describe("microsFromDecimal", () => {
       expect(microsFromDecimal(text)).toBeNull();
     },
   );
+});
+
+describe("ratioOfIntegers", () => {
+  it.each([
+    ["1204180000", "2000000000", 0.60209],
+    ["11", "50", 0.22],
+    ["0", "50", 0],
+  ])("reads %s of %s as a fraction", (part, whole, ratio) => {
+    expect(ratioOfIntegers(part, whole)).toBe(ratio);
+  });
+
+  it("holds the fraction at magnitudes a double cannot carry", () => {
+    expect(
+      ratioOfIntegers("500000000000000000000", "1000000000000000000000"),
+    ).toBe(0.5);
+  });
+
+  it("clamps a draw at or past the limit to the whole (negative)", () => {
+    expect(ratioOfIntegers("60", "50")).toBe(1);
+    expect(ratioOfIntegers("50", "50")).toBe(1);
+  });
+
+  it.each([
+    ["5", "0"],
+    ["-5", "50"],
+  ])("answers 0 for %s of %s (negative)", (part, whole) => {
+    expect(ratioOfIntegers(part, whole)).toBe(0);
+  });
+
+  it("refuses a figure that is not an integer string (negative)", () => {
+    expect(() => ratioOfIntegers("1.5", "50")).toThrow(/integer string/);
+  });
 });

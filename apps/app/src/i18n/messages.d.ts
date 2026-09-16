@@ -30,6 +30,7 @@ type Messages = {
     billing: string;
   };
   unrecorded: {
+    tools: string;
     run: {
       frames_wrapped: string;
     };

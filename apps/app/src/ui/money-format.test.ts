@@ -7,6 +7,7 @@ import {
   formatCount,
   formatMoney,
   formatRatio,
+  ratioWidth,
 } from "./money-format";
 
 const usd = (micros: string) => ({ micros, currency: "USD" });
@@ -70,6 +71,19 @@ describe("formatCount", () => {
   });
 });
 
+describe("ratioWidth", () => {
+  it("prints a 0…1 ratio as a CSS length, to a tenth of a percent", () => {
+    expect(ratioWidth(0.4567)).toBe("45.7%");
+    expect(ratioWidth(1)).toBe("100%");
+    expect(ratioWidth(0)).toBe("0%");
+  });
+
+  it("clamps a ratio outside 0…1 (negative)", () => {
+    expect(ratioWidth(1.4)).toBe("100%");
+    expect(ratioWidth(-0.2)).toBe("0%");
+  });
+});
+
 describe("formatClock", () => {
   it("reads whole seconds as m:ss", () => {
     expect(formatClock(0, "en-US")).toBe("0:00");
@@ -87,6 +101,19 @@ describe("formatRatio", () => {
     expect(formatRatio(0.4567, "en-US")).toBe("45.7%");
     expect(formatRatio(0.81, "en-US")).toBe("81%");
     expect(formatRatio(0, "en-US")).toBe("0%");
+  });
+});
+
+describe("ratioWidth", () => {
+  it("prints a 0…1 ratio as a CSS length, to a tenth of a percent", () => {
+    expect(ratioWidth(0.4567)).toBe("45.7%");
+    expect(ratioWidth(1)).toBe("100%");
+    expect(ratioWidth(0)).toBe("0%");
+  });
+
+  it("clamps a ratio outside 0…1 (negative)", () => {
+    expect(ratioWidth(1.4)).toBe("100%");
+    expect(ratioWidth(-0.2)).toBe("0%");
   });
 });
 

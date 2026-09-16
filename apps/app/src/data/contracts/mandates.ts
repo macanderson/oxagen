@@ -15,12 +15,10 @@ import { Money } from "./money";
 const Instant = z.iso.datetime({ offset: true });
 
 /** `tools.mandates.status`; a draft is a request nobody has granted yet. */
-export const MandateStatus = z.enum(["draft", "active", "expired", "revoked"]);
-export type MandateStatus = z.infer<typeof MandateStatus>;
+const MandateStatus = z.enum(["draft", "active", "expired", "revoked"]);
 
 /** The period a per-period limit resets on. */
-export const MandatePeriod = z.enum(["daily", "weekly", "monthly"]);
-export type MandatePeriod = z.infer<typeof MandatePeriod>;
+const MandatePeriod = z.enum(["daily", "weekly", "monthly"]);
 
 /** One measured figure: micros with a currency, or whole units with their name. */
 export const MeasureValue = z.discriminatedUnion("kind", [

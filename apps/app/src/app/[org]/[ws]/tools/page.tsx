@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { dataSource } from "@/data/source";
 import { Tools } from "@/features/tools";
 import { requireViewer } from "@/server/viewer";
+import { NotRecorded } from "@/ui/not-recorded";
 import { PageHeader } from "@/ui/page-header";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -10,8 +11,10 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("tools") };
 }
 
-// The mandates ledger (#2957, ARCHITECTURE.md §1.2); the registry, connections,
-// kill switches and auto-approval rules arrive with the #2958 lane.
+// The mandates ledger (#2957, ARCHITECTURE.md §1.2). The registry,
+// connections, kill switches and auto-approval rules arrive with the #2958
+// lane, and the page says so beneath the section it does have rather than
+// leaving a reader to guess that the rest of Tools is missing.
 export default async function ToolsPage({
   params,
 }: PageProps<"/[org]/[ws]/tools">) {
@@ -25,6 +28,7 @@ export default async function ToolsPage({
     >
       <PageHeader title={t("tools")} />
       <Tools ctx={ctx} source={dataSource()} />
+      <NotRecorded section="tools" />
     </main>
   );
 }

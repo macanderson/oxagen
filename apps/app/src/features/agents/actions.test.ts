@@ -1,8 +1,11 @@
 // The agent writes through the real kernel seam: the viewer resolution and the
 // kernel's invoke() are the only fakes, so each case shows what the person gets
 // back and whether the capability ran — ok, invalid (refused before the kernel)
-// and denied for every action (INV-19).
+// and denied for every action (INV-19). request_mandate converts the amounts a
+// person typed into micros and refuses a figure that is not a plain decimal
+// before anything reaches the kernel.
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { MANDATE_ID, mandateOutput } from "@/test/mandate-outputs";
 
 const { invoke, requireViewer } = vi.hoisted(() => ({
   invoke: vi.fn<typeof import("@oxagen/oxagen").invoke>(),
@@ -28,6 +31,7 @@ const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const {
   commitAgentDefinition,
+  requestMandate,
   retireAgent,
   rotateAgentCredential,
   setAgentSuspended,
@@ -273,5 +277,116 @@ describe("a person the workspace refuses", () => {
     requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
     await expect(run()).rejects.toThrow("NEXT_NOT_FOUND");
     expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("requestMandate", () => {
+  const draft = {
+    agentId: "agt_invoicebot",
+    consequenceTag: "moves_money",
+    measure: "amount",
+    currency: "usd",
+    perCall: "250.00",
+    perPeriod: "2,000.00",
+    period: "monthly" as const,
+    callsPerDay: "50",
+    tools: "stripe__create_payment@*, aws_billing__purchase_savings_plan@2",
+    purpose: "  monthly infrastructure invoices, PO-4471  ",
+    validFrom: "2026-09-01",
+    validTo: "2026-12-31",
+  };
+  const good = { ...draft, perPeriod: "2000.00" };
+
+  it("asks for a draft with the amounts in micros and the tools split", async () => {
+    invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
+    expect(
+      await requestMandate("acme", "core-platform", good),
+    ).toEqual({
+      ok: true,
+      value: { mandateId: MANDATE_ID, status: "draft" },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "request_mandate",
+      {
+        agentId: "agt_invoicebot",
+        consequenceTags: ["moves_money"],
+        limits: {
+          amount: {
+            perCall: "250000000",
+            perPeriod: "2000000000",
+            period: "monthly",
+            currencyOrUnit: "USD",
+          },
+          calls: {
+            perPeriod: "50",
+            period: "daily",
+            currencyOrUnit: "calls",
+          },
+        },
+        targets: {},
+        tools: [
+          "stripe__create_payment@*",
+          "aws_billing__purchase_savings_plan@2",
+        ],
+        approval: { humanAbove: {}, alwaysHumanFor: [], approvers: [] },
+        purpose: "monthly infrastructure invoices, PO-4471",
+        validFrom: "2026-09-01T00:00:00.000Z",
+        validTo: "2026-12-31T00:00:00.000Z",
+      },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("names only the limits the person filled in", async () => {
+    invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
+    await requestMandate("acme", "core-platform", {
+      ...good,
+      perCall: "",
+      callsPerDay: "",
+    });
+    expect(invoke.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        limits: {
+          amount: {
+            perPeriod: "2000000000",
+            period: "monthly",
+            currencyOrUnit: "USD",
+          },
+        },
+      }),
+    );
+  });
+
+  it.each([
+    [{ currency: "dollars" }, "currency"],
+    [{ measure: "  " }, "measure"],
+    [{ consequenceTag: "" }, "consequenceTag"],
+    [{ perCall: "", perPeriod: "" }, "perPeriod"],
+    [{ perCall: "1,250" }, "perCall"],
+    [{ perPeriod: "-5" }, "perPeriod"],
+    [{ callsPerDay: "many" }, "callsPerDay"],
+    [{ tools: " , " }, "tools"],
+    [{ purpose: "   " }, "purpose"],
+    [{ validFrom: "01/09/2026" }, "validFrom"],
+    [{ validTo: "" }, "validTo"],
+    [{ validFrom: "2026-12-31", validTo: "2026-09-01" }, "validTo"],
+  ])("refuses %j before the kernel runs (negative)", async (patch, field) => {
+    expect(
+      await requestMandate("acme", "core-platform", { ...good, ...patch }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field,
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("request_mandate"));
+    expect(await requestMandate("acme", "core-platform", good)).toMatchObject({
+      ok: false,
+      reason: "denied",
+    });
   });
 });

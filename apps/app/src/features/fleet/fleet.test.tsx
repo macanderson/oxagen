@@ -1,15 +1,16 @@
 // @vitest-environment jsdom
 // Fleet over a fake DataSource: the two-tile stat strip, the approvals panel
 // and the runs table, each in its ok, empty, denied and error states, with an
-// axe check in every one. The tiles count the rows the sections render.
+// axe check in every one. The tiles count the rows the sections render, and a
+// card whose parked call drew on a mandate carries the mandate bar.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApprovalItem } from "@/data/contracts/approvals";
-import type { RunPage } from "@/data/contracts/runs";
-import { type Read, readError, readOk } from "@/data/read";
+import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { mandateRow } from "@/test/mandate-views";
 import {
   approvalItem,
   fleetSource,
@@ -51,7 +52,7 @@ const NO_APPROVALS = readOk<ApprovalItem[]>([]);
 const NO_RUNS = runPage([]);
 
 async function renderFleet(
-  reads: { runs: Read<RunPage>; approvals: Read<ApprovalItem[]> },
+  reads: Parameters<typeof fleetSource>[0],
   cursor: string | null = null,
 ) {
   const { source, calls } = fleetSource(reads);
@@ -316,5 +317,54 @@ describe("runs table", () => {
       "Runs could not be loaded: the control plane answered run_index_unavailable.",
     );
     expect(within(runsSection()).queryByRole("table")).toBeNull();
+  });
+});
+
+describe("Fleet approvals › the mandate bar", () => {
+  const parked = approvalItem({ mandateId: "mnd_4f2a9c" });
+
+  it("draws the bar of the mandate a parked call drew on", async () => {
+    const { container, calls } = await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([parked]),
+      mandates: readOk({ mandates: [mandateRow()] }),
+    });
+    expect(calls.mandates).toEqual([[ctx, { agentId: null }]]);
+    const bar = within(approvalsSection()).getByTestId("mandate-bar");
+    expect(bar).toHaveAttribute("data-measure", "amount");
+    expect(bar).toHaveTextContent("$615.82");
+    expect(within(bar).getByRole("img")).toHaveAccessibleName(
+      "$1,204.18 settled, $180.00 reserved by calls in flight, $615.82 remaining of $2,000.00",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("reads no mandate at all when no parked call names one (negative)", async () => {
+    const { calls } = await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([approvalItem()]),
+    });
+    expect(calls.mandates).toEqual([]);
+    expect(within(approvalsSection()).queryByTestId("mandate-bar")).toBeNull();
+  });
+
+  it("draws the card without its bar when the ledger refuses the viewer (negative)", async () => {
+    const { container } = await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([parked]),
+      mandates: { ok: false, reason: "denied", permission: "org.billing" },
+    });
+    expect(within(approvalsSection()).getByTestId("approval")).toBeInTheDocument();
+    expect(within(approvalsSection()).queryByTestId("mandate-bar")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("draws no bar for a call whose mandate the page did not read (negative)", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([approvalItem({ mandateId: "mnd_absent" })]),
+      mandates: readOk({ mandates: [mandateRow()] }),
+    });
+    expect(within(approvalsSection()).queryByTestId("mandate-bar")).toBeNull();
   });
 });
