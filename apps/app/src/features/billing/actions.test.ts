@@ -231,9 +231,9 @@ const creditSession = (url = CHECKOUT) => ({
 describe("purchaseCredits", () => {
   it("sends a signed-out visitor to log in, topping up nothing (negative)", async () => {
     getSession.mockResolvedValue(null);
-    await expect(
-      purchaseCredits("acme", null, amount("50")),
-    ).rejects.toThrow("NEXT_REDIRECT /login");
+    await expect(purchaseCredits("acme", null, amount("50"))).rejects.toThrow(
+      "NEXT_REDIRECT /login",
+    );
     expect(invoke).not.toHaveBeenCalled();
   });
 
@@ -316,16 +316,19 @@ describe("purchaseCredits", () => {
     expect(captureError).toHaveBeenCalledOnce();
   });
 
+  // Success returns to ?checkout=credits, the usage credit meter's outcome, so
+  // the banner names the balance the payment lands on; ?checkout=success is the
+  // governed action unit bucket's. Cancel is shared: nothing was charged.
   it("tops up for the viewer's organization with returns to the checkout banner, and sends the browser to Checkout", async () => {
     invoke.mockResolvedValue(creditSession());
-    await expect(
-      purchaseCredits("acme", null, amount("50")),
-    ).rejects.toThrow(`NEXT_REDIRECT ${CHECKOUT}`);
+    await expect(purchaseCredits("acme", null, amount("50"))).rejects.toThrow(
+      `NEXT_REDIRECT ${CHECKOUT}`,
+    );
     expect(invoke).toHaveBeenCalledWith(
       "purchase_credits",
       {
         amountUsd: 50,
-        successUrl: "https://app.test/acme/billing?checkout=success",
+        successUrl: "https://app.test/acme/billing?checkout=credits",
         cancelUrl: "https://app.test/acme/billing?checkout=cancel",
       },
       expect.objectContaining({ orgId: ORG_ID, userId: "u-owner" }),
@@ -336,14 +339,14 @@ describe("purchaseCredits", () => {
   it("builds the return URLs whatever trailing slash the origin carries", async () => {
     process.env.NEXT_PUBLIC_APP_URL = "https://app.test/";
     invoke.mockResolvedValue(creditSession());
-    await expect(
-      purchaseCredits("acme", null, amount("200")),
-    ).rejects.toThrow(`NEXT_REDIRECT ${CHECKOUT}`);
+    await expect(purchaseCredits("acme", null, amount("200"))).rejects.toThrow(
+      `NEXT_REDIRECT ${CHECKOUT}`,
+    );
     expect(invoke).toHaveBeenCalledWith(
       "purchase_credits",
       expect.objectContaining({
         amountUsd: 200,
-        successUrl: "https://app.test/acme/billing?checkout=success",
+        successUrl: "https://app.test/acme/billing?checkout=credits",
       }),
       expect.anything(),
     );
