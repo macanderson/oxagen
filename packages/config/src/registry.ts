@@ -850,10 +850,15 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "rather than issuing an enrollment no install could verify.",
     secret: true,
     clientExposed: false,
-    // `api` serves create_stella_enrollment; build-env drops a variable no
-    // service claims, so an empty list left the key in Parameter Store and
-    // out of the running process.
-    services: ["api"],
+    // Deliberately unclaimed, unlike its Tacho counterpart. `valueOrigin:
+    // "generate"` means the env-manager deploy path mints a fresh value for
+    // every key in the catalog and never returns it
+    // (tools/env-manager/src/server.ts), and a Stella install verifies
+    // enrollment documents against an out-of-band copy of this exact secret —
+    // so claiming it for a service would rotate the fleet's copy away on the
+    // next deploy. Giving create_stella_enrollment a deployed secret needs a
+    // distribution story first.
+    services: [],
     requiredIn: [],
     valueOrigin: "generate",
   },
@@ -866,7 +871,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "Defaults to the public endpoint; plaintext entries are dropped.",
     secret: false,
     clientExposed: false,
-    services: ["api"],
+    // Unclaimed while STELLA_ENROLLMENT_SIGNING_SECRET is: deploying the
+    // endpoint list alone would not make create_stella_enrollment work.
+    services: [],
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "https://api.oxagen.sh/v1/telemetry/stella/operational",
