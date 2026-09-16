@@ -178,7 +178,7 @@ describe("Agents › Mandates", () => {
         "No mandate listed",
       );
       expect(
-        within(section).getByText(/not every mandate this agent holds/),
+        within(section).getByText(/not every mandate recorded for this agent/),
       ).toHaveAttribute("data-blind-spot", "reader_scope");
       expect(
         within(section).getByText(/not a statement that the agent holds no/),
@@ -209,7 +209,7 @@ describe("Agents › Mandates", () => {
     await renderMandates(mandateList([mandateRow()]), "member");
     const section = held();
     expect(
-      within(section).getByText(/not every mandate this agent holds/),
+      within(section).getByText(/not every mandate recorded for this agent/),
     ).toHaveAttribute("data-blind-spot", "reader_scope");
     // Its authority is established, so nothing claims otherwise.
     expect(within(section).queryByText(/not a statement/)).toBeNull();
@@ -219,7 +219,7 @@ describe("Agents › Mandates", () => {
   it("says nothing of the sort to an accountable reader answered rows", async () => {
     await renderMandates(mandateList([mandateRow()]), "owner");
     expect(
-      within(held()).queryByText(/not every mandate this agent holds/),
+      within(held()).queryByText(/not every mandate recorded for this agent/),
     ).toBeNull();
   });
 
@@ -270,7 +270,7 @@ describe("Agents › Mandates", () => {
     );
     const section = held();
     expect(within(section).getByRole("heading")).toHaveTextContent(
-      "Mandates held",
+      "Mandates recorded",
     );
     expect(
       within(section).queryByText(/cannot carry a consequence/),

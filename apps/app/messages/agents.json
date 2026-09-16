@@ -352,10 +352,10 @@
       }
     },
     "mandates": {
-      "title": "Mandates held",
+      "title": "Mandates recorded",
       "noneTitle": "No mandate",
       "lead": "A mandate is bounded, expiring authority for the consequences it names. Nothing in a role, a grant or a toolbelt substitutes for one.",
-      "none": "This agent holds no mandate, so it cannot carry a consequence.",
+      "none": "No mandate is recorded for this agent — none granted, and none requested — so it cannot carry a consequence.",
       "noneDetail": "A call that carries a consequence tag is denied before dispatch — before any credential is minted and before anything reaches a tool server — whether or not the tool is on this agent's belt.",
       "authority": "Remaining authority is what the ledger says: every draw reserves, then settles against a receipt or releases. The tools a mandate covers appear on the belt gated by mandate and approval, never as plainly allowed.",
       "columns": {
@@ -400,18 +400,18 @@
         "pending": "Requesting",
         "unit": "Unit",
         "unitHint": "What the measure counts, in the name the tool version declares — rows, recipients, messages. Not a currency code: a limit in money is scaled by the tool’s declaration, which nothing here can read, so it is asked for over the API or MCP instead.",
-        "perCallHint": "Whole units of the measure. The figure is recorded exactly as typed and is never scaled, so what is granted is what is asked for.",
+        "perCallHint": "Whole units of the measure. The figure is recorded exactly as typed and is never scaled, so the limit this request carries is the figure entered.",
         "consequenceTags": "Consequences",
         "consequenceTagsHint": "Name every consequence the covered tools declare. A mandate covers a tool only when it names all of them — name one of a tool’s two and the mandate is granted as asked and the call is still denied. The six above are the starter set; a workspace defines its own, and those go in the field beneath.",
         "consequenceOther": "Others the tools declare, separated by commas"
       },
-      "truncated": "The newest {shown} mandates this agent holds. It holds at least that many, and older ones are not listed here.",
-      "noneEffective": "No mandate this agent holds is in effect, so it cannot carry a consequence. The rows below are a request awaiting a decision, or history.",
+      "truncated": "The newest {shown} mandates recorded for this agent. There are at least that many, and older ones are not listed here.",
+      "noneEffective": "No mandate recorded for this agent is in effect, so it cannot carry a consequence. The rows below are a request awaiting a decision, or history.",
       "noneListedTitle": "No mandate listed",
-      "partial": "You see the mandates of the agents you created. This list is not every mandate this agent holds.",
+      "partial": "You see the mandates of the agents you created. This list is not every mandate recorded for this agent.",
       "noneListed": "No mandate listed here is in effect. The list above is not complete, so that is not a statement that the agent holds no authority.",
-      "noneListedDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate in the workspace. Ask one of them whether this agent holds authority, or read the Tools ledger with that role.",
-      "retired": "This agent is retired, so it cannot be given a mandate: its principal is suspended and authority granted now could never be drawn. The mandates it held stay listed."
+      "noneListedDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate recorded in the workspace. Ask one of them whether this agent holds authority, or read the Tools ledger with that role.",
+      "retired": "This agent is retired, so it cannot be given a mandate: its principal is suspended and authority granted now could never be drawn. The mandates recorded for it stay listed."
     }
   }
 }

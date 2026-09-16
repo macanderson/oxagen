@@ -144,11 +144,12 @@ describe("Tools › mandates ledger", () => {
     ).toBeNull();
   });
 
-  it("is empty when the workspace has granted no mandate", async () => {
+  it("says the workspace has recorded no mandate, granted or requested", async () => {
     const { container } = await renderTools(mandateList([]));
-    expect(
-      within(ledger()).getByText(/No mandate has been granted/),
-    ).toHaveAttribute("data-state", "empty");
+    expect(within(ledger()).getByText(/recorded no mandate/)).toHaveAttribute(
+      "data-state",
+      "empty",
+    );
     expect(within(ledger()).queryByRole("table")).toBeNull();
     await expectNoAxe(container);
   });
@@ -186,9 +187,7 @@ describe("Tools › mandates ledger", () => {
       expect(
         within(ledger()).getByText(/not a statement that the workspace/),
       ).toHaveAttribute("data-state", "empty");
-      expect(
-        within(ledger()).queryByText(/No mandate has been granted/),
-      ).toBeNull();
+      expect(within(ledger()).queryByText(/recorded no mandate/)).toBeNull();
       await expectNoAxe(container);
     },
   );
@@ -211,6 +210,34 @@ describe("Tools › mandates ledger", () => {
     },
   );
 
+  // The lead and the caveats describe whatever `list_mandates` returns, and it
+  // returns every status — the table below labels a draft "requested". A lead
+  // saying the workspace *has granted* these is false of a ledger holding only
+  // drafts, which is what "has granted" hid: it carries no quantifier, so a
+  // pass looking for "every" and "all" walked straight past it.
+  it("describes a ledger of drafts without claiming any was granted", async () => {
+    const { container } = await renderTools(
+      mandateList([mandateRow({ status: "draft" })]),
+    );
+    const text = ledger().textContent;
+    expect(text).toContain("has recorded");
+    expect(text).not.toMatch(/has granted/);
+    expect(within(ledger()).getByTestId("mandate").textContent).toContain(
+      "requested",
+    );
+    await expectNoAxe(container);
+  });
+
+  it.each([
+    ["draft" as const],
+    ["active" as const],
+    ["expired" as const],
+    ["revoked" as const],
+  ])("never says a %s row was granted", async (status) => {
+    await renderTools(mandateList([mandateRow({ status })], 100));
+    expect(ledger().textContent).not.toMatch(/has granted/);
+  });
+
   it("says nothing of the sort to an accountable reader answered rows", async () => {
     await renderTools(mandateList([mandateRow()]), "owner");
     expect(
@@ -219,12 +246,13 @@ describe("Tools › mandates ledger", () => {
   });
 
   it.each([["owner" as const], ["admin" as const], ["compliance" as const]])(
-    "tells a %s the workspace has granted none, because their answer is every one",
+    "tells a %s the workspace has recorded none, because their answer is every one",
     async (role) => {
       await renderTools(mandateList([]), role);
-      expect(
-        within(ledger()).getByText(/No mandate has been granted/),
-      ).toHaveAttribute("data-state", "empty");
+      expect(within(ledger()).getByText(/recorded no mandate/)).toHaveAttribute(
+        "data-state",
+        "empty",
+      );
     },
   );
 });
