@@ -32,7 +32,7 @@ pillars:
     description: >-
       The science of agents: planning, tool use, memory, and evaluation. From
       ReAct and Reflexion to the benchmarks that measure whether an agent
-      finishes the job, and the cost of every attempt.
+      finishes the job, and what each run costs.
     order: 2
     treatment: loop
 
