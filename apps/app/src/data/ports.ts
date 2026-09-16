@@ -17,6 +17,7 @@ import type {
   GauBucket,
   InvoicePage,
   PlanCard,
+  UsageCredits,
 } from "./contracts/billing";
 import type { MemberList } from "./contracts/org";
 import type { RunPage } from "./contracts/runs";
@@ -55,12 +56,18 @@ export interface DataSource {
   /** list_orgs + list_workspaces; caller: features/shell/source.ts. */
   shell: { context(ctx: OrgCtx): Promise<Read<ShellContext>> };
   /**
-   * The Billing page's four noBillingGate reads, each Owner, Admin or Billing
+   * The Billing page's five noBillingGate reads, each Owner, Admin or Billing
    * (checked in its handler); caller: features/billing/billing.tsx.
    */
   billing: {
     /** get_subscription */
     plan(ctx: OrgCtx): Promise<Read<PlanCard>>;
+    /**
+     * get_subscription again, for the second meter's balance (§3.9). The two
+     * reads are separate because a `Read<T>` carries one view model, and the
+     * plan card is deliberately blind to the credit balance (INV-25).
+     */
+    usageCredits(ctx: OrgCtx): Promise<Read<UsageCredits>>;
     /** get_gau_bucket: mode, meter, invoice thresholds, auto top-up state */
     bucket(ctx: OrgCtx): Promise<Read<GauBucket>>;
     /** get_contract_rate */

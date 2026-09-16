@@ -131,6 +131,25 @@
       "older": "Older invoices",
       "newest": "Newest invoices"
     },
+    "usageCredits": {
+      "title": "In-app AI usage",
+      "balance": "Balance",
+      "faceValue": "Face value",
+      "credits": "{count} credits",
+      "basis": "Credits pay for the in-app agent's model calls at provider cost times the published markup. 1 credit = $0.01.",
+      "exhausted": "The in-app agent's platform-paid turns stop until a top-up lands.",
+      "presets": "Preset top-up amounts",
+      "amount": "Top-up amount",
+      "min": "whole dollars, at least ${min}",
+      "submit": "Continue to Checkout",
+      "submitting": "Opening Checkout…",
+      "denied": "An owner or a billing member can top up usage credits.",
+      "errors": {
+        "invalid": "Enter a whole dollar amount of at least ${min}.",
+        "denied": "Your role cannot top up usage credits. An owner or a billing member can.",
+        "unavailable": "Checkout could not be opened. Nothing was charged."
+      }
+    },
     "failure": {
       "denied": "You cannot see {section} for this organization. Your role does not include {permission}; an organization owner can grant it.",
       "pendingApproval": "Access to {section} is waiting for approval, request {accessRequestId}.",

@@ -93,6 +93,42 @@ describe("billing.plan", () => {
   });
 });
 
+describe("billing.usageCredits", () => {
+  it("reads get_subscription into the credit balance and its face value", async () => {
+    kernelRead.mockResolvedValue(readOk(subscriptionOutput()));
+    expect(await billing.usageCredits(ctx)).toEqual(
+      readOk({
+        balanceCredits: 4200,
+        balance: { micros: "42000000", currency: "USD" },
+      }),
+    );
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: billingSubscriptionRead,
+      input: {},
+      page: "billing",
+    });
+  });
+
+  it("carries no token usage into the view (negative)", async () => {
+    kernelRead.mockResolvedValue(readOk(subscriptionOutput()));
+    const read = await billing.usageCredits(ctx);
+    expect(JSON.stringify(read)).not.toMatch(/token|cost|plan/i);
+  });
+
+  it("passes a denial through untouched (negative)", async () => {
+    kernelRead.mockResolvedValue(DENIED);
+    expect(await billing.usageCredits(ctx)).toEqual(DENIED);
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("passes an error through untouched (negative)", async () => {
+    kernelRead.mockResolvedValue(readError("stripe_unreachable", 502));
+    expect(await billing.usageCredits(ctx)).toEqual(
+      readError("stripe_unreachable", 502),
+    );
+  });
+});
+
 describe("billing.bucket", () => {
   it("reads get_gau_bucket into the bucket view", async () => {
     kernelRead.mockResolvedValue(readOk(prepaidBucketOutput()));

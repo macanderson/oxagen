@@ -59,7 +59,7 @@ const CHECKOUT =
 
 const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
-const { purchaseGau } = await import("./actions");
+const { purchaseCredits, purchaseGau } = await import("./actions");
 
 function quantity(value: string): FormData {
   const form = new FormData();
@@ -82,6 +82,7 @@ beforeEach(() => {
   getSession.mockResolvedValue({
     user: { id: "u-owner", email: "priya@acme.example" },
   });
+  process.env.NEXT_PUBLIC_APP_URL = "https://app.test";
 });
 
 describe("purchaseGau", () => {
@@ -210,5 +211,141 @@ describe("purchaseGau", () => {
       purchaseGau("acme", 5000, null, quantity("5000")),
     ).rejects.toThrow(`NEXT_REDIRECT ${CHECKOUT}`);
     expect(invoke).toHaveBeenCalledOnce();
+  });
+});
+
+function amount(value: string): FormData {
+  const form = new FormData();
+  form.set("amountUsd", value);
+  return form;
+}
+
+/** What purchase_credits answers: a Checkout URL, the grant and the price. */
+const creditSession = (url = CHECKOUT) => ({
+  url,
+  grantCents: 5000,
+  priceCents: 4850,
+  percent: 3,
+});
+
+describe("purchaseCredits", () => {
+  it("sends a signed-out visitor to log in, topping up nothing (negative)", async () => {
+    getSession.mockResolvedValue(null);
+    await expect(
+      purchaseCredits("acme", null, amount("50")),
+    ).rejects.toThrow("NEXT_REDIRECT /login");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["under the minimum", "4"],
+    ["zero", "0"],
+    ["negative", "-50"],
+    ["a fraction", "50.5"],
+    ["an exponent", "5e1"],
+    ["empty", ""],
+    ["past a safe integer", "90071992547409920"],
+  ])(
+    "refuses an amount %s on the amount field, calling no capability (negative)",
+    async (_case, value) => {
+      expect(await purchaseCredits("acme", null, amount(value))).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "invalid_input",
+        field: "amountUsd",
+      });
+      expect(invoke).not.toHaveBeenCalled();
+      expect(redirect).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refuses a form with no amount field (negative)", async () => {
+    expect(await purchaseCredits("acme", null, new FormData())).toMatchObject({
+      ok: false,
+      reason: "invalid",
+      field: "amountUsd",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns the handler's role refusal to an admin as denied, with no redirect (negative)", async () => {
+    orgRole.mockResolvedValue("admin");
+    // The refusal assertOrgRole throws for a role outside Owner and Billing.
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({
+        code: "forbidden",
+        reason: "org_role_required",
+      }),
+    );
+    expect(await purchaseCredits("acme", null, amount("50"))).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["another host", "https://checkout.stripe.com.evil/c/pay/cs_test_1"],
+    ["plain http", "http://checkout.stripe.com/c/pay/cs_test_1"],
+  ])(
+    "refuses a Checkout URL on %s as unavailable, reports it and sends the browser nowhere (negative)",
+    async (_case, url) => {
+      invoke.mockResolvedValue(creditSession(url));
+      expect(await purchaseCredits("acme", null, amount("50"))).toEqual({
+        ok: false,
+        reason: "unavailable",
+        code: "checkout_url_refused",
+      });
+      expect(redirect).not.toHaveBeenCalled();
+      expect(captureError).toHaveBeenCalledOnce();
+      expect(captureError).toHaveBeenCalledWith(
+        expect.objectContaining({ orgId: ORG_ID }),
+      );
+    },
+  );
+
+  it("refuses to guess the return origin when NEXT_PUBLIC_APP_URL is unset (negative)", async () => {
+    delete process.env.NEXT_PUBLIC_APP_URL;
+    expect(await purchaseCredits("acme", null, amount("50"))).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "app_url_missing",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+
+  it("tops up for the viewer's organization with returns to the checkout banner, and sends the browser to Checkout", async () => {
+    invoke.mockResolvedValue(creditSession());
+    await expect(
+      purchaseCredits("acme", null, amount("50")),
+    ).rejects.toThrow(`NEXT_REDIRECT ${CHECKOUT}`);
+    expect(invoke).toHaveBeenCalledWith(
+      "purchase_credits",
+      {
+        amountUsd: 50,
+        successUrl: "https://app.test/acme/billing?checkout=success",
+        cancelUrl: "https://app.test/acme/billing?checkout=cancel",
+      },
+      expect.objectContaining({ orgId: ORG_ID, userId: "u-owner" }),
+    );
+    expect(redirect).toHaveBeenCalledExactlyOnceWith(CHECKOUT);
+  });
+
+  it("builds the return URLs whatever trailing slash the origin carries", async () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://app.test/";
+    invoke.mockResolvedValue(creditSession());
+    await expect(
+      purchaseCredits("acme", null, amount("200")),
+    ).rejects.toThrow(`NEXT_REDIRECT ${CHECKOUT}`);
+    expect(invoke).toHaveBeenCalledWith(
+      "purchase_credits",
+      expect.objectContaining({
+        amountUsd: 200,
+        successUrl: "https://app.test/acme/billing?checkout=success",
+      }),
+      expect.anything(),
+    );
   });
 });

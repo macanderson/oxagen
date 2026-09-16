@@ -716,6 +716,25 @@ type Messages = {
       older: string;
       newest: string;
     };
+    usageCredits: {
+      title: string;
+      balance: string;
+      faceValue: string;
+      credits: string;
+      basis: string;
+      exhausted: string;
+      presets: string;
+      amount: string;
+      min: string;
+      submit: string;
+      submitting: string;
+      denied: string;
+      errors: {
+        invalid: string;
+        denied: string;
+        unavailable: string;
+      };
+    };
     failure: {
       denied: string;
       pendingApproval: string;

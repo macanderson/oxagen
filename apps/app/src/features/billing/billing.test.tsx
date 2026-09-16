@@ -30,7 +30,11 @@ vi.mock("next/link", () => ({
 // purchase-form.test.tsx). Both mocks live in one factory because a second
 // vi.mock of the same path replaces the first, which left setAutoTopup off
 // the mock and would throw the moment the control read it.
-vi.mock("./actions", () => ({ setAutoTopup: vi.fn(), purchaseGau: vi.fn() }));
+vi.mock("./actions", () => ({
+  setAutoTopup: vi.fn(),
+  purchaseGau: vi.fn(),
+  purchaseCredits: vi.fn(),
+}));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
@@ -91,13 +95,14 @@ afterEach(async () => {
 });
 
 describe("Billing reads", () => {
-  it("reads the plan, the bucket, the rate and the invoices page at the URL's cursor, once each", async () => {
+  it("reads the plan, the credit balance, the bucket, the rate and the invoices page at the URL's cursor, once each", async () => {
     const { ctx, calls } = await renderBilling({}, { cursor: "c2" });
     expect(calls).toEqual({
       plan: [[ctx]],
       bucket: [[ctx]],
       rate: [[ctx]],
       invoices: [[ctx, { cursor: "c2" }]],
+      usageCredits: [[ctx]],
     });
   });
 
@@ -113,8 +118,44 @@ describe("Billing reads", () => {
       "Your contracted rate",
       "Buy governed action units",
       "Invoices",
+      "In-app AI usage",
     ]);
   });
+});
+
+describe("In-app AI usage", () => {
+  const credits = () => screen.getByRole("region", { name: "In-app AI usage" });
+
+  // The second meter is metered apart from governed action units, so unlike
+  // the bucket sections it is drawn whichever way the organization is billed.
+  it.each([
+    ["prepaid", () => prepaidBucket()],
+    ["invoice-billed", () => invoiceBucket()],
+  ])("is drawn for a %s organization", async (_mode, bucket) => {
+    await renderBilling({ bucket: readOk(bucket()) });
+    expect(credits()).toBeInTheDocument();
+    expect(fact(credits(), "balance")).toHaveTextContent(/^4,200 credits$/);
+  });
+
+  it.each(["owner", "billing"] as const)(
+    "offers an %s the top-up",
+    async (role) => {
+      await renderBilling({}, { role });
+      expect(credits()).toHaveAttribute("data-state", "ok");
+      expect(
+        within(credits()).getByRole("spinbutton", { name: "Top-up amount" }),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it.each(["admin", "member", "compliance", "viewer"] as const)(
+    "shows a %s who can top up instead of the form (negative)",
+    async (role) => {
+      await renderBilling({}, { role });
+      expect(credits()).toHaveAttribute("data-state", "denied");
+      expect(within(credits()).queryByRole("spinbutton")).toBeNull();
+    },
+  );
 });
 
 describe("Buy governed action units", () => {
@@ -481,11 +522,18 @@ describe("a read that returns no value", () => {
     "Governed action bucket",
     "Your contracted rate",
     "Invoices",
+    "In-app AI usage",
   ];
 
   it("shows a Member's denial in place of every section's figures, and no auto top-up (negative)", async () => {
     await renderBilling(
-      { plan: DENIED, bucket: DENIED, rate: DENIED, invoices: DENIED },
+      {
+        plan: DENIED,
+        bucket: DENIED,
+        rate: DENIED,
+        invoices: DENIED,
+        usageCredits: DENIED,
+      },
       { role: "member" },
     );
     for (const name of SECTIONS) {
@@ -506,6 +554,7 @@ describe("a read that returns no value", () => {
       bucket: DOWN,
       rate: DOWN,
       invoices: DOWN,
+      usageCredits: DOWN,
     });
     for (const name of SECTIONS) {
       expect(

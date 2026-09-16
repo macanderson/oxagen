@@ -6,6 +6,25 @@ import { registerCapability } from "../registry";
 // discount is applied automatically. They receive the full face-value in credits
 // but pay a discounted price. The Stripe webhook landing at apps/api will
 // deposit the credits after payment via grantCreditPackForCheckout.
+
+/** The smallest top-up, in whole dollars of face value. */
+export const MIN_CREDIT_TOPUP_USD = 5;
+
+/**
+ * The top-up amounts the Billing page offers as presets, in whole dollars of
+ * face value (apps/app/ARCHITECTURE.md §1.4, the In-app AI usage row).
+ *
+ * They are the `CREDIT_PACKS` prices (`packages/billing/src/pricing.ts`), the
+ * one price schedule for usage credits; `pricing.test.ts` compares the two and
+ * fails when they drift, so this list cannot become a second schedule.
+ *
+ * The list lives on the contract because `apps/app` may import
+ * `@oxagen/oxagen/contracts/*` and nothing else from the platform (§2,
+ * INV-03), and `packages/oxagen` cannot import `@oxagen/billing` — billing
+ * depends on oxagen, so reading the packs here would be a cycle.
+ */
+export const CREDIT_TOPUP_PRESETS_USD: readonly number[] = [10, 50, 200];
+
 export const billingCreditsPurchase = registerCapability({
   name: "purchase_credits",
   domain: "billing",
@@ -17,6 +36,12 @@ export const billingCreditsPurchase = registerCapability({
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "medium", category: "billing" },
   sensitivity: "high",
+  // INV-27 (ADR-052 exclusion 2, ARCHITECTURE.md §1.5, §3.9 the second meter):
+  // topping up is never refused for lack of governed action units. Without the
+  // flag a credit top-up is itself a governed action, so a prepaid org whose
+  // GAU bucket is at `remaining <= 0` is refused `gau_exhausted` when it tries
+  // to buy the credits that would let the in-app agent run again.
+  noBillingGate: true,
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Billing: "allow" },
@@ -28,7 +53,10 @@ export const billingCreditsPurchase = registerCapability({
      * purchase, e.g. 50 for $50. Must be ≥ 5 (= $5 minimum).
      * 1 credit = 1¢, so amountUsd * 100 = credits granted.
      */
-    amountUsd: z.number().positive().min(5, "Minimum purchase is $5"),
+    amountUsd: z
+      .number()
+      .positive()
+      .min(MIN_CREDIT_TOPUP_USD, "Minimum purchase is $5"),
     /**
      * Optional Stripe Checkout success redirect URL. When omitted the handler
      * falls back to the billing package default.
