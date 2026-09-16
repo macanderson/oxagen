@@ -83,7 +83,7 @@ import {
   materializeTools,
   type ApprovalRequiredEvent,
 } from "./materialize-tools";
-import { createToolBelt } from "./tool-belt";
+import { createToolBelt, LOAD_TOOLS, SEARCH_TOOLS } from "./tool-belt";
 
 const logger = pino({
   level: process.env.LOG_LEVEL ?? "info",
@@ -343,6 +343,16 @@ async function runPreparedTurn(
           request.activeServerIds && request.activeServerIds.length > 0
             ? new Set(request.activeServerIds)
             : undefined,
+        // `search_tools` and `load_tools` exist twice: as capability contracts
+        // for the API and MCP surfaces, and as the belt's meta-tools. Both
+        // claim the same model-facing alias. Execution resolves
+        // `{...governed, ...meta}` so the meta-tool wins there, but
+        // `modelToolsFor` layers the governed definition OVER meta for
+        // anything pinned or loaded — so the model could be shown the
+        // contract's schema and have the meta-tool run, with different
+        // required fields and a different output shape. Inside a turn the belt
+        // owns the names; the contracts stay for the surfaces outside it.
+        excludeCapabilities: new Set([SEARCH_TOOLS, LOAD_TOOLS]),
         onApprovalRequired,
         approvalMode: "park",
       }),

@@ -27,6 +27,30 @@ describe("StellaEngineClient", () => {
     expect(await c.ready()).toEqual({ state: "draining", ready: false });
   });
 
+  // The caller that gives up on a readiness probe is the one that has to end
+  // it; a probe that times out without aborting leaves the request in flight
+  // against a server that is already struggling.
+  it("passes the caller's abort signal to the readiness request", async () => {
+    let seen: AbortSignal | null | undefined;
+    const c = new StellaEngineClient({
+      baseUrl: "http://engine.test",
+      token: "t",
+      fetchImpl: async (_url, init) => {
+        seen = (init as RequestInit | undefined)?.signal;
+        return new Response(JSON.stringify({ state: "ready" }), {
+          status: 200,
+        });
+      },
+    });
+    const controller = new AbortController();
+    await c.ready({ signal: controller.signal });
+    expect(seen).toBe(controller.signal);
+    // No signal, no `signal` key: an undefined one would defeat a fetch
+    // implementation that checks for the property rather than its value.
+    await c.ready();
+    expect(seen).toBeUndefined();
+  });
+
   it("refuses everything else with a 401 when the token is wrong", async () => {
     const c = client(new FakeEngine(), "wrong-token");
     const err = await c

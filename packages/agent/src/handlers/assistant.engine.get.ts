@@ -15,10 +15,25 @@ import type { CapabilityContext } from "../types";
 export const ENGINE_PROBE_ATTEMPTS = 3;
 export const ENGINE_PROBE_TIMEOUT_MS = 2000;
 
-/** The probe's seams: the client (or none, when unconfigured) and the clock. */
+/**
+ * Backoff between attempts, doubling from here. Three attempts fired back to
+ * back at a two-second ceiling are three requests in six seconds at a server
+ * that is already failing to answer in two; the wait is what makes a retry a
+ * retry rather than a second load.
+ */
+export const ENGINE_PROBE_BACKOFF_MS = 250;
+
+/** Full jitter on the backoff, so N callers probing at once do not re-converge. */
+export const ENGINE_PROBE_JITTER = 0.5;
+
+/** The probe's seams: the client (or none, when unconfigured), the clock, the sleep and the jitter. */
 export interface EngineProbeDeps {
   client: () => StellaEngineClient;
   now: () => Date;
+  /** Test seam; production waits on a timer. */
+  sleep?: (ms: number) => Promise<void>;
+  /** Test seam; production reads Math.random. */
+  random?: () => number;
 }
 
 export function createAssistantEngineProbe(deps: EngineProbeDeps) {
@@ -41,12 +56,19 @@ export function createAssistantEngineProbe(deps: EngineProbeDeps) {
       };
     }
     const endpoint = endpointOf(client.baseUrl);
+    const sleep = deps.sleep ?? defaultSleep;
+    const random = deps.random ?? Math.random;
     let lastError = "unreachable";
     for (let attempt = 1; attempt <= ENGINE_PROBE_ATTEMPTS; attempt += 1) {
+      // A fresh controller per attempt: the timeout branch aborts the request
+      // it gave up on, so a degraded engine answering in ten seconds is not
+      // left holding three orphaned requests per caller.
+      const controller = new AbortController();
       try {
         const ready = await withTimeout(
-          client.ready(),
+          client.ready({ signal: controller.signal }),
           ENGINE_PROBE_TIMEOUT_MS,
+          () => controller.abort(),
         );
         return {
           state: reportedState(ready.state),
@@ -58,6 +80,12 @@ export function createAssistantEngineProbe(deps: EngineProbeDeps) {
         };
       } catch (err) {
         lastError = errorCode(err);
+        if (attempt < ENGINE_PROBE_ATTEMPTS) {
+          const ceiling = ENGINE_PROBE_BACKOFF_MS * 2 ** (attempt - 1);
+          await sleep(
+            Math.round(ceiling * (1 - ENGINE_PROBE_JITTER * random())),
+          );
+        }
       }
     }
     return {
@@ -106,17 +134,29 @@ function errorCode(err: unknown): string {
   return "unreachable";
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Reject on the timer, and tell the caller so it can end the work it is no
+ * longer waiting for. `onTimeout` runs before the rejection: a timeout that
+ * does not abort is a timeout that only hides the request.
+ */
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  onTimeout: () => void,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(
-      () =>
-        reject(
-          Object.assign(new Error(`engine probe timed out after ${ms} ms`), {
-            code: "ETIMEDOUT",
-          }),
-        ),
-      ms,
-    );
+    const timer = setTimeout(() => {
+      onTimeout();
+      reject(
+        Object.assign(new Error(`engine probe timed out after ${ms} ms`), {
+          code: "ETIMEDOUT",
+        }),
+      );
+    }, ms);
     promise.then(
       (value) => {
         clearTimeout(timer);

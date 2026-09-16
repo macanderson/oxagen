@@ -20,19 +20,26 @@ const valuesMock = vi.fn((v: unknown) => {
 });
 const insertMock = vi.fn(() => ({ values: valuesMock }));
 
-const limitMock = vi.fn(async () => [{ id: "appr_123", orgId: "ten_1" }]);
-// The approver read (principals ⨝ assignments ⨝ roles) resolves on `where`
-// with `approverRows`; readApproval continues to `limit`.
+// Three reads share the fake: the approver fan-out (principals ⨝ assignments
+// ⨝ roles), the dedupe read for a live approval on this call, and
+// readApproval. The first two are told apart from readApproval by table and
+// by projection width — the dedupe read asks for `id` alone.
 let approverRows: Array<{ userId: string | null }> = [];
+let liveApprovalRows: Array<{ id: string }> = [];
+let readApprovalRows: Array<Record<string, unknown>> = [];
 let fromTable: unknown = null;
+let projectionKeys = 0;
 const joinedTables: unknown[] = [];
 const whereConds: SQL[] = [];
+const limitMock = vi.fn(async () => {
+  if (fromTable === schema.principals) return approverRows;
+  if (fromTable === schema.approvalRequests)
+    return projectionKeys === 1 ? liveApprovalRows : readApprovalRows;
+  return [];
+});
 const whereMock = vi.fn((cond: SQL) => {
   whereConds.push(cond);
-  return Object.assign(
-    Promise.resolve(fromTable === schema.principals ? approverRows : []),
-    { limit: limitMock },
-  );
+  return Object.assign(Promise.resolve([]), { limit: limitMock });
 });
 const fromMock = vi.fn((table: unknown) => {
   fromTable = table;
@@ -45,7 +52,10 @@ const fromMock = vi.fn((table: unknown) => {
   };
   return chain;
 });
-const selectMock = vi.fn(() => ({ from: fromMock }));
+const selectMock = vi.fn((projection?: Record<string, unknown>) => {
+  projectionKeys = projection ? Object.keys(projection).length : 0;
+  return { from: fromMock };
+});
 
 const fakeDb = {
   insert: insertMock,
@@ -82,6 +92,8 @@ import { schema } from "@oxagen/database";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import {
+  APPROVAL_NOTIFY_CHUNK,
+  APPROVAL_NOTIFY_MAX_RECIPIENTS,
   createApprovalRequest,
   notifyResolution,
   waitForApproval,
@@ -92,7 +104,10 @@ describe("approval runtime", () => {
   beforeEach(() => {
     insertedValues.length = 0;
     approverRows = [];
+    liveApprovalRows = [];
+    readApprovalRows = [{ id: "appr_123", orgId: "ten_1" }];
     fromTable = null;
+    projectionKeys = 0;
     joinedTables.length = 0;
     whereConds.length = 0;
     // listenHandlers is intentionally NOT cleared: the NOTIFY listener is a
@@ -173,6 +188,84 @@ describe("approval runtime", () => {
     }
   });
 
+  // APPROVAL_RESOLVER_ROLES.workspace is Owner and Member — effectively
+  // everyone. An unbounded fan-out writes one row per member inside the
+  // approval's transaction, and near 8,000 people it crosses Postgres's
+  // 65,535 bind-parameter ceiling and takes the approval down with it.
+  it("caps and chunks the fan-out so one approval can never outgrow a statement", async () => {
+    approverRows = Array.from(
+      { length: APPROVAL_NOTIFY_MAX_RECIPIENTS + 37 },
+      (_, i) => ({ userId: `u_${i}` }),
+    );
+    await createApprovalRequest({
+      orgId: "ten_1",
+      workspaceId: "ws_1",
+      messageId: "msg_1",
+      capabilityName: "set_budget",
+      inputPreview: {},
+      riskLevel: "high",
+    });
+    const notificationBatches = insertedValues
+      .slice(1)
+      .map((v) => v as unknown[]);
+    expect(notificationBatches.flat()).toHaveLength(
+      APPROVAL_NOTIFY_MAX_RECIPIENTS,
+    );
+    for (const batch of notificationBatches) {
+      expect(batch.length).toBeLessThanOrEqual(APPROVAL_NOTIFY_CHUNK);
+    }
+    // The approval is still written and still resolvable; only the feed is
+    // truncated, and the truncation is visible.
+    expect(insertedValues[0]).toMatchObject({ capabilityName: "set_budget" });
+    expect(pinoWarnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notified: APPROVAL_NOTIFY_MAX_RECIPIENTS,
+        capabilityName: "set_budget",
+      }),
+      expect.stringContaining("fan-out truncated"),
+    );
+  });
+
+  // approvalMode: "park" throws rather than blocking, so the model sees a
+  // failed tool call and may ask again for the same call. Without a dedupe
+  // each retry writes a fresh approval and another fan-out, and the person is
+  // asked to answer the same write several times.
+  it("reuses a live approval for the same parked call instead of writing another (negative)", async () => {
+    liveApprovalRows = [{ id: "appr_existing" }];
+    approverRows = [{ userId: "u_owner" }];
+    const res = await createApprovalRequest({
+      orgId: "ten_1",
+      workspaceId: "ws_1",
+      messageId: "msg_1",
+      capabilityName: "set_budget",
+      inputPreview: {},
+      riskLevel: "high",
+      toolCallId: "0192d4a8-7c1e-7a00-8000-0000000000f1",
+    });
+    expect(res.approvalId).toBe("appr_existing");
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it("keys the dedupe on the call: the turn's message, the capability and the tool call", async () => {
+    await createApprovalRequest({
+      orgId: "ten_1",
+      workspaceId: "ws_1",
+      messageId: "msg_1",
+      capabilityName: "set_budget",
+      inputPreview: {},
+      riskLevel: "high",
+      toolCallId: "0192d4a8-7c1e-7a00-8000-0000000000f1",
+    });
+    const { sql } = new PgDialect().sqlToQuery(whereConds[0]!);
+    expect(sql).toMatch(/"approval_requests"\."message_id" = \$\d+/);
+    expect(sql).toMatch(/"approval_requests"\."capability_name" = \$\d+/);
+    expect(sql).toMatch(/"approval_requests"\."tool_call_id" = \$\d+/);
+    // Unresolved and unexpired only: a denied call may be asked again, and an
+    // approval past its window is one nobody can answer.
+    expect(sql).toMatch(/"approval_requests"\."resolution" is null/);
+    expect(sql).toMatch(/"approval_requests"\."expires_at" > \$\d+/);
+  });
+
   it("createApprovalRequest reads recipients the way resolve_approval's gate admits them: active human principals with an unexpired, undeleted IAM assignment of an admitted role (negative: no membership table)", async () => {
     await createApprovalRequest({
       orgId: "ten_1",
@@ -189,7 +282,13 @@ describe("approval runtime", () => {
       schema.principalRoleAssignments,
       schema.roles,
     ]);
-    const { sql, params } = new PgDialect().sqlToQuery(whereConds[0]!);
+    // whereConds[0] is now the dedupe read for a live approval on this call;
+    // pick the approver predicate by what it names rather than by position.
+    const dialect = new PgDialect();
+    const rendered = whereConds.map((c) => dialect.sqlToQuery(c));
+    const approverQuery = rendered.find((r) => r.sql.includes('"principals"'));
+    expect(approverQuery, "no approver predicate was built").toBeDefined();
+    const { sql, params } = approverQuery!;
     // A suspended principal, a service principal, a revoked assignment and
     // an expired one are each excluded by the predicate.
     expect(sql).toMatch(/"principals"\."kind" = \$\d+/);

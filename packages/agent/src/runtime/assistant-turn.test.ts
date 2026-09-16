@@ -449,6 +449,15 @@ describe("the prepared turn", () => {
       executionStepId: "msg-user",
     });
     expect(materializeOpts).toMatchObject({ approvalMode: "park" });
+    // The belt owns `search_tools` and `load_tools` inside a turn. Their
+    // capability contracts declare the same names, and `modelToolsFor` layers
+    // the governed definition over the meta-tool for anything pinned or
+    // loaded — the model would be shown the contract's schema while the
+    // meta-tool executes, with different required fields and a different
+    // output shape.
+    expect([...(materializeOpts.excludeCapabilities ?? [])].sort()).toEqual(
+      [LOAD_TOOLS, SEARCH_TOOLS].sort(),
+    );
 
     // The run is admitted for this turn's goal on the app surface.
     expect(mocks.openAssistantRun).toHaveBeenCalledWith({
