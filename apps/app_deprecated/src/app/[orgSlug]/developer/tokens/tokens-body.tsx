@@ -1,7 +1,8 @@
 import { desc, eq } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
 import { logger } from "@oxagen/handlers/logger";
-import { resolveOrg } from "@/lib/resolve-org";
+import { assertOrgAdmin, resolveOrg } from "@/lib/resolve-org";
+import { getSessionOrRedirect } from "@/lib/session";
 import { TokensPanel } from "./tokens-panel";
 
 // WHY withSystemDb AND NOT withTenantDb: `auth.api_keys` is policy class
@@ -17,7 +18,20 @@ import { TokensPanel } from "./tokens-panel";
 // explicitly instead, by the eq(orgId) fence below, and a genuine read failure
 // is now logged rather than swallowed silently.
 export async function DeveloperTokensBody({ orgSlug }: { orgSlug: string }) {
+  const session = await getSessionOrRedirect();
   const tenant = await resolveOrg(orgSlug);
+
+  // Owner/Admin, not membership. The three actions on this panel already gate
+  // here (api-key.ts, buildApiKeyCtx → assertOrgAdmin) because api.key.* is
+  // sensitivity:"high" with defaultRoles.org = { Owner, Admin }. The LISTING
+  // did not, and was kept narrow by Postgres instead: auth.api_keys is
+  // `standard`, so under the org-only workspace sentinel RLS answered it
+  // nothing at all. Reading the org's keys correctly without this gate would
+  // show every member every workspace's key names, prefixes, scopes and
+  // last-used timestamps — the same data list_api_keys classifies as
+  // Owner/Admin. The governed capability is the specification; a read and the
+  // writes beside it answer to the same role.
+  await assertOrgAdmin(tenant.id, session.user.id);
 
   const keys = await (async () => {
     try {

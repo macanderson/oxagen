@@ -15,6 +15,12 @@
  * could not fire and nothing was logged.
  *
  * `withTenantDb` is mocked inert so that regression fails here.
+ *
+ * The page that calls this is gated separately (assertSecurityManager on
+ * security/page.tsx) — see security-page-gate.test.ts. RLS was doing that job
+ * by accident while it was also breaking these figures: read under the
+ * sentinel, an ordinary member saw only the org-wide rows, so nobody noticed
+ * the page checked membership alone.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

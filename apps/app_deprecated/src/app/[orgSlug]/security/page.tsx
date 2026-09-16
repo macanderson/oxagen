@@ -9,7 +9,8 @@
 // and org-wide MFA enforcement is read from the policy the MFA tab writes.
 
 import { loadPosture } from "./posture";
-import { resolveOrg } from "@/lib/resolve-org";
+import { assertSecurityManager, resolveOrg } from "@/lib/resolve-org";
+import { getSessionOrRedirect } from "@/lib/session";
 import { getEnterpriseAccess } from "@/lib/enterprise";
 import { EnterpriseUpsell } from "@/components/security/enterprise-upsell";
 import { loadMfaPolicy } from "./mfa/actions";
@@ -80,7 +81,20 @@ export default async function SecurityOverviewPage({
   params: Promise<{ orgSlug: string }>;
 }) {
   const { orgSlug } = await params;
+  const session = await getSessionOrRedirect();
   const tenant = await resolveOrg(orgSlug);
+
+  // Owner/Admin, not membership. Not flagged in review, but it is the same
+  // shape as the audit viewer beside it: loadPosture now reads the whole
+  // organization's security_events and api_keys, where RLS used to answer it
+  // only the org-wide rows. The figures are counts rather than rows, so the
+  // leak is smaller — but "12 denied invocations and 7 active keys across the
+  // organization" is still the security posture of every workspace, the
+  // governed read behind it (query_audit_log) is org Owner/Admin, and this is
+  // the SOC 2 control dashboard an enterprise buyer opens. It answers to the
+  // same role as the audit feed it summarizes.
+  await assertSecurityManager(tenant.id, session.user.id);
+
   const [posture, access, mfaPolicy] = await Promise.all([
     loadPosture(tenant.id),
     getEnterpriseAccess(tenant.id),

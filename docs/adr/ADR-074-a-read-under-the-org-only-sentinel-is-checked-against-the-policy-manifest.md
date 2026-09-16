@@ -129,6 +129,92 @@ of it. This ADR is the enforcement.
      `readCapability(viewer, name, input)` helper, as on `main` — every
      capability the file names in either form is checked instead.
 
+## The two things RLS was also doing
+
+`withSystemDb` is not "the same read without the workspace narrowing". Row-Level
+Security was providing two properties beyond row-narrowing, and a conversion
+drops both. A security review of this PR found three P1s that are all this one
+root, and the audit one is the sharpest possible version of the lesson the rest
+of this ADR is about: **RLS hiding rows was doing two jobs, and the reason
+nobody noticed it was doing the second is the same reason nobody noticed it was
+breaking the first.**
+
+**1. Confidentiality, by accident.** The audit viewer gated on membership and
+was kept narrow by Postgres. Fixing the read without fixing the gate turned a
+silently-incomplete signed export into a correctly-complete unauthorized read:
+every org member, every workspace's actor identities, IP addresses, user agents,
+request ids and capability outcomes. The signed export beside it had gated on
+Owner/Admin since it was written, and the two share one read path on purpose —
+so the viewer was the half that was wrong, and RLS was covering for it.
+
+**The rule: the governed capability is the specification.** Where a surface's
+own gate and the capability that answers the same question disagree, the surface
+is wrong. `query_audit_log` answers organization-wide only for an org Owner or
+Admin; `list_api_keys` is `sensitivity: "high"`, Owner/Admin. Every converted
+read below now carries the gate its capability requires.
+
+**2. Data-plane resolution.** `withTenantDb` calls `resolveDataPlane` and opens
+the organisation's plane. `withSystemDb` ALWAYS opens the shared-plane
+singleton and never consults the resolver — deliberately, for the three reasons
+in its docblock. ADR-042 §2 puts billing, IAM, auth, org and the plugin catalog
+on the shared plane always, and gives a dedicated plane tenant data only:
+traces, **evidence**, graph, memory, context records, conversations, ingestion
+state. So **`withSystemDb` is the right seam only for shared-plane tables**, and
+that is a load-bearing caveat on the advice this ADR gives. For a table ADR-042
+places on a dedicated plane, an explicit `eq(orgId)` fence does not save it: the
+read is correctly fenced against the wrong database.
+
+### The sweep
+
+Every read this change converts, against both properties. No exceptions,
+including the sites no review flagged.
+
+| converted read | who may see it | which plane |
+|---|---|---|
+| `lib/audit-query.ts` — `security.security_events` | **was membership; now Owner/Admin.** `security/audit/page.tsx` gated with `assertOrgMember`; it now uses `assertSecurityManager`, matching `query_audit_log`'s `ORG_AUDIT_ROLES` and the export route beside it, which already checked `SECURITY_MANAGER_ROLES` | shared. Not named literally by ADR-042 §2, but `emitSecurityEvent` writes it through `withSystemDb` and the governed `audit.log.query` handler reads it through `withSystemDb`: the spine is shared-plane by construction, or nothing written would ever be read |
+| `security/posture.ts` — `security.security_events`, `auth.api_keys` | **was membership; now Owner/Admin.** Not flagged in review. Counts rather than rows, so a smaller leak — but it is still every workspace's posture, and it is the SOC 2 dashboard summarising the feed above. `assertSecurityManager` | shared, as above and `auth` is named by ADR-042 §2 |
+| `developer/tokens/tokens-body.tsx` — `auth.api_keys` | **was membership; now Owner/Admin.** The three actions on the same panel already gated (`buildApiKeyCtx` → `assertOrgAdmin`); the listing did not. `list_api_keys` is high-sensitivity Owner/Admin | shared (`auth`) |
+| `developer/mcp/page.tsx` — `auth.api_keys` | **was membership; now the key is read only for an org admin.** A member keeps the page and the `$OXAGEN_API_KEY` placeholder they already saw, rather than a real prefix from another workspace | shared (`auth`) |
+| `developer/tokens/api-key.ts` — `auth.api_keys`, `workspace.workspaces`, `workspace.workspace_users` | already Owner/Admin: both helpers run after `buildApiKeyCtx`, which calls `assertOrgAdmin` before either | shared. `auth` is named; the two `workspace.*` tables are not named by either list, and this is org structure rather than tenant data — the base's own `new-workspace/actions.ts` creates both through `withSystemDb`. Stated as an inference from that precedent, not a citation |
+| `org.member.remove.ts` — `iam.*`, `org.org_users`, `auth.api_keys`, `workspace.*` | already Owner/Admin: this is the governed capability, and its own actor gate runs before the transaction | shared (`IAM`, `org`, `auth`; `workspace.*` as above) |
+| `billing.evidence_retention.ts` — `billing.org_billing_settings`, `billing.credit_ledger` | governed capability; kernel IAM applies | shared (`billing`) |
+| `billing.evidence_retention.ts` — `evidence.retention_policy_versions` | governed capability | **dedicated, and this is the one that was wrong.** ADR-042 §2 names evidence as tenant data. See below |
+
+### The seam that does not exist
+
+`@oxagen/database` has `withTenantDb` (plane-aware, demands a workspace) and
+`withSystemDb` (needs no workspace, shared-plane by construction). It has no
+plane-aware organisation-wide read, which is exactly what an org-wide aggregate
+over a tenant table needs. Building one is a change to the store client and not
+a handler's to make.
+
+So `get_evidence_retention` resolves the plane and refuses rather than guessing:
+a dedicated-plane organisation gets a typed 5xx naming the gap, and every
+organisation is shared today (ADR-042 §1 — absence of a row means shared, and
+the dedicated mode has no customer yet), so nothing in service reaches the
+refusal. A wrong number that looks right is what that capability exists to
+avoid. **The missing seam is recorded as a gap for the maintainer, not
+improvised here.**
+
+### What the check can and cannot tell you
+
+`check:org-sentinel-reads` answers one question: *is this read narrowed by RLS
+when it should not be.* These findings are a second question in the same
+neighbourhood: *is this read unnarrowed without an authorization gate that
+matches its governed capability, and is it on the right plane.*
+
+The plane half is checkable and worth building: the table is known statically,
+ADR-042 §2's split is a fixed list, and `withSystemDb` against a dedicated-plane
+table is a mechanical finding. The authorization half is not, at least not
+reliably — the gate can be a layout three directories up, a middleware, a role
+derived at runtime, or a capability invoked instead of a direct read, and a
+check that guesses would either miss the audit viewer or flag every correct page
+in the app. **Saying so is the point.** The check drives people toward
+`withSystemDb` and cannot tell them to gate it, which is a sharp edge on the
+advice, and the sweep table above is what covers it for this change. Anyone
+converting a read after this one owes that table two more rows, and the ADR is
+where the obligation is written down rather than in a reviewer's memory.
+
 ## Alternatives considered
 
 **An ESLint rule.** This was the first shape tried and it does not hold. A rule

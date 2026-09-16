@@ -24,7 +24,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   withSystemDb: vi.fn(),
   withTenantDb: vi.fn(() => undefined),
+  resolveDataPlane: vi.fn(),
 }));
+
+vi.mock("@oxagen/tenancy", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/tenancy")>();
+  return { ...real, resolveDataPlane: mocks.resolveDataPlane };
+});
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
@@ -81,6 +87,9 @@ function queueDbReads(resultSets: unknown[][]): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // ADR-042 §1: absence of a binding row means the shared plane, which is what
+  // every organisation is today.
+  mocks.resolveDataPlane.mockResolvedValue({ mode: "shared" });
 });
 
 describe("billingEvidenceRetentionHandler", () => {
@@ -195,5 +204,48 @@ describe("the organisation-wide policy read", () => {
     ]);
     const out = await billingEvidenceRetentionHandler({}, TEST_CTX);
     expect(out.effectiveRetentionDays).toBe(730);
+  });
+});
+
+describe("the data plane the evidence aggregate reads (ADR-042)", () => {
+  it("reads the shared plane, which is where every organisation is today", async () => {
+    queueDbReads([
+      [{ extendedEvidenceRetentionEnabled: true }],
+      [{ maxTtlDays: 365 }],
+      [{ total: "0" }],
+    ]);
+    const out = await billingEvidenceRetentionHandler({}, TEST_CTX);
+    expect(out.effectiveRetentionDays).toBe(365);
+    expect(mocks.resolveDataPlane).toHaveBeenCalledWith(
+      TEST_CTX.orgId,
+      "postgres",
+    );
+  });
+
+  it("refuses for a dedicated plane rather than reporting no policy pinned", async () => {
+    // withSystemDb ALWAYS opens the shared-plane singleton and never consults
+    // the resolver, and ADR-042 §2 names evidence as tenant data a dedicated
+    // plane carries. A shared-plane read for such an organisation finds no
+    // policies, and max() over the empty set is NULL, which this handler
+    // documents as "no policy pinned" — the same wrong answer the workspace
+    // narrowing produced, by a different route.
+    mocks.resolveDataPlane.mockResolvedValue({ mode: "dedicated" });
+    queueDbReads([
+      [{ extendedEvidenceRetentionEnabled: true }],
+      [{ maxTtlDays: 365 }],
+      [{ total: "0" }],
+    ]);
+    await expect(billingEvidenceRetentionHandler({}, TEST_CTX)).rejects.toThrow(
+      /dedicated Postgres plane/,
+    );
+  });
+
+  it("reads nothing at all when it refuses", async () => {
+    mocks.resolveDataPlane.mockResolvedValue({ mode: "dedicated" });
+    queueDbReads([[], [], []]);
+    await expect(
+      billingEvidenceRetentionHandler({}, TEST_CTX),
+    ).rejects.toThrow();
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
   });
 });

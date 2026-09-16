@@ -9,7 +9,7 @@
 import { desc, eq } from "drizzle-orm";
 import { ExternalLink, KeySquare } from "lucide-react";
 import { withSystemDb, schema } from "@oxagen/database";
-import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
+import { assertOrgMember, getOrgRole, resolveOrg } from "@/lib/resolve-org";
 import { getSession } from "@/lib/session";
 import { Panel } from "@/components/ui/panel";
 import { McpInstallTabs } from "./mcp-install-tabs";
@@ -54,7 +54,7 @@ export default async function DeveloperMcpPage({
     await assertOrgMember(org.id, viewerUserId);
   }
 
-  // Read the first active API key for this org.
+  // Read the first active API key for this org, for an org Owner or Admin only.
   //
   // WHY withSystemDb AND NOT withTenantDb: `auth.api_keys` is policy class
   // `standard`, so under the org-only workspace sentinel this page's read
@@ -62,19 +62,32 @@ export default async function DeveloperMcpPage({
   // `$OXAGEN_API_KEY` placeholder to an org that has real keys. The eq(orgId)
   // fence below is the isolation; see the tokens panel
   // (developer/tokens/tokens-body.tsx) for the full reasoning.
+  //
+  // WHY THE ROLE CHECK: this page gates on membership, which was enough while
+  // RLS was answering the read nothing. Reading the org's keys correctly would
+  // otherwise show every member a real key prefix from some other workspace,
+  // and list_api_keys is Owner/Admin. A member keeps the page — the snippets
+  // are what they came for — with the `$OXAGEN_API_KEY` placeholder they saw
+  // before, which is the right thing to paste into a shell anyway.
+  const viewerRole =
+    viewerUserId === "" ? null : await getOrgRole(org.id, viewerUserId);
+  const isOrgAdmin = viewerRole === "owner" || viewerRole === "admin";
+
   let firstKey: string | null = null;
   try {
-    const keys = await withSystemDb((tx) =>
-      tx
-        .select({
-          keyPrefix: schema.apiKeys.keyPrefix,
-          expiresAt: schema.apiKeys.expiresAt,
-        })
-        .from(schema.apiKeys)
-        .where(eq(schema.apiKeys.orgId, org.id))
-        .orderBy(desc(schema.apiKeys.createdAt))
-        .limit(10),
-    );
+    const keys = !isOrgAdmin
+      ? []
+      : await withSystemDb((tx) =>
+          tx
+            .select({
+              keyPrefix: schema.apiKeys.keyPrefix,
+              expiresAt: schema.apiKeys.expiresAt,
+            })
+            .from(schema.apiKeys)
+            .where(eq(schema.apiKeys.orgId, org.id))
+            .orderBy(desc(schema.apiKeys.createdAt))
+            .limit(10),
+        );
     const active = keys.filter((k) => !k.expiresAt || k.expiresAt > new Date());
     if (active[0]) {
       // Show the key prefix only — the full hash is never readable after creation.

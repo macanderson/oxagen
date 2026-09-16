@@ -26,6 +26,11 @@ vi.mock("@oxagen/handlers/logger", () => ({
 
 vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: vi.fn().mockResolvedValue({ id: "org-1", slug: "acme" }),
+  assertOrgAdmin: vi.fn(),
+}));
+
+vi.mock("@/lib/session", () => ({
+  getSessionOrRedirect: vi.fn().mockResolvedValue({ user: { id: "user-1" } }),
 }));
 
 vi.mock("./tokens-panel", () => ({
@@ -70,6 +75,7 @@ vi.mock("@oxagen/database", () => {
 
 import { DeveloperTokensBody } from "./tokens-body";
 import { logger } from "@oxagen/handlers/logger";
+import { assertOrgAdmin } from "@/lib/resolve-org";
 
 function key(publicId: string, workspaceId: string | null) {
   return {
@@ -127,6 +133,27 @@ describe("DeveloperTokensBody", () => {
     const props = await render();
     expect(props.keys[0]?.createdAt).toBe("2026-09-01T00:00:00.000Z");
     expect(props.keys[0]?.expiresAt).toBeNull();
+  });
+
+  // RLS was narrowing this read to nothing, which is also what kept the panel
+  // from showing a member the organization's keys. Reading it correctly without
+  // the gate would have handed every member every workspace's key names,
+  // prefixes, scopes and last-used timestamps — data list_api_keys classifies
+  // as Owner/Admin, and which the three actions on this same panel already
+  // gated for.
+  it("gates on org admin before reading anything", async () => {
+    dbState.rows = [key("key_cli", "ws-1")];
+    await render();
+    expect(assertOrgAdmin).toHaveBeenCalledWith("org-1", "user-1");
+  });
+
+  it("does not read the keys when the admin gate refuses", async () => {
+    const { withSystemDb } = await import("@oxagen/database");
+    vi.mocked(assertOrgAdmin).mockRejectedValueOnce(
+      new Error("NEXT_NOT_FOUND"),
+    );
+    await expect(render()).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(withSystemDb).not.toHaveBeenCalled();
   });
 
   it("logs a genuine read failure rather than rendering it as 'no keys'", async () => {
