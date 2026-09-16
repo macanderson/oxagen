@@ -40,6 +40,7 @@ const source: DataSource = {
   agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
   billing: {
     plan: refuse,
+    usageCredits: refuse,
     bucket: refuse,
     contractRate: refuse,
     invoices: refuse,
@@ -50,9 +51,12 @@ const source: DataSource = {
     drill: refuse,
     waste: refuse,
     budgets: refuse,
+    findings: refuse,
+    findingEvidence: refuse,
   },
   org: { members: refuse, apiKeys: refuse },
   audit: { events: refuse, exportEvents },
+  onboarding: { state: refuse, firstFrame: refuse },
   skills: { inventory: refuse },
   steering: { records: refuse, proposals: refuse, contextPr: refuse },
 };

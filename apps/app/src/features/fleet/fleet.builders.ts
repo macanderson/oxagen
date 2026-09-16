@@ -105,6 +105,7 @@ export function fleetSource(reads: FleetReads) {
       findings: refuse,
       findingEvidence: refuse,
     },
+    onboarding: { state: refuse, firstFrame: refuse },
     org: { members: refuse, apiKeys: refuse },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },

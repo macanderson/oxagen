@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { dataSource } from "@/data/source";
 import { Fleet } from "@/features/fleet";
+import { OnboardingGate } from "@/features/onboarding";
 import { FleetSpendTiles } from "@/features/spend";
 import { requireViewer } from "@/server/viewer";
 import { firstParam } from "@/shared/safe-path";
@@ -28,6 +29,7 @@ export default async function FleetPage({
       className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
     >
       <PageHeader title={t("fleet")} />
+      <OnboardingGate ctx={ctx} source={dataSource()} />
       <FleetSpendTiles ctx={ctx} source={dataSource()} />
       <Fleet
         ctx={ctx}

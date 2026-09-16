@@ -27,6 +27,7 @@ import type {
   PlanCard,
   UsageCredits,
 } from "./contracts/billing";
+import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
 import type { ApiKey, MemberList } from "./contracts/org";
 import type { RunPage } from "./contracts/runs";
 import type {
@@ -157,6 +158,23 @@ export interface DataSource {
       ctx: WsCtx,
       findingId: string,
     ): Promise<Read<SpendFindingEvidence>>;
+  };
+  /**
+   * The onboarding gate and the register flow (#2967, ADR-065).
+   * `get_onboarding_state` (`scoped: false`) answers where the organization
+   * stands, read by features/onboarding/gate.tsx on Fleet and by the register
+   * stepper; `get_first_frame` long-polls one registered agent's first frame,
+   * caller features/onboarding/register.tsx.
+   */
+  onboarding: {
+    /** get_onboarding_state */
+    state(ctx: OrgCtx): Promise<Read<OnboardingGate>>;
+    /** get_first_frame, waiting up to `waitMs` inside the one invoke (§3.5) */
+    firstFrame(
+      ctx: WsCtx,
+      agent: string,
+      q: { waitMs: number },
+    ): Promise<Read<FirstFrame>>;
   };
   /**
    * The Organization page's two tabs, each an Owner-or-Admin read checked in

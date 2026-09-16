@@ -47,8 +47,9 @@ const orgCall = () =>
 /** A call scoped to one workspace: an API key or a workspace page. */
 const wsCall = () => makeCTX({ orgId: ORG, userId: USER, workspaceId: OWN_WS });
 
-const input = (over: Partial<Parameters<typeof auditLogQuery.input.parse>[0]> = {}) =>
-  auditLogQuery.input.parse(over);
+const input = (
+  over: Partial<Parameters<typeof auditLogQuery.input.parse>[0]> = {},
+) => auditLogQuery.input.parse(over);
 
 const read = {
   where: [] as SQL[],
@@ -132,7 +133,10 @@ beforeEach(() => {
 describe("query_audit_log from the organization (the org-only sentinel)", () => {
   it("gives an org Owner the whole organization's feed with every recorded field", async () => {
     roles({ org: "Owner" });
-    stored = [row(1), row(2, { ip: null, userAgent: null, actorPublicId: null })];
+    stored = [
+      row(1),
+      row(2, { ip: null, userAgent: null, actorPublicId: null }),
+    ];
 
     const out = await auditLogQueryHandler(input(), orgCall());
 
@@ -153,9 +157,18 @@ describe("query_audit_log from the organization (the org-only sentinel)", () => 
         userAgent: "Mozilla/5.0",
         requestId: "req_1",
       },
-      expect.objectContaining({ ip: null, userAgent: null, actorPublicId: null }),
+      expect.objectContaining({
+        ip: null,
+        userAgent: null,
+        actorPublicId: null,
+      }),
     ]);
-    expect(out).toMatchObject({ total: 2, hasMore: false, limit: 50, offset: 0 });
+    expect(out).toMatchObject({
+      total: 2,
+      hasMore: false,
+      limit: 50,
+      offset: 0,
+    });
   });
 
   it("gives an org Admin the whole organization's feed", async () => {

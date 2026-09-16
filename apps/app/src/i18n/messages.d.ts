@@ -16,6 +16,7 @@ type Messages = {
     invitation: string;
     invitationNotFound: string;
     newOrganization: string;
+    register: string;
     cliAuthorize: string;
     fleet: string;
     run: string;
@@ -887,6 +888,11 @@ type Messages = {
       workspaceSlugInvalid: string;
       workspaceSlugReserved: string;
       slugTaken: string;
+      agentSlugInvalid: string;
+      agentNameRequired: string;
+      agentNameTooLong: string;
+      agentDescriptionTooLong: string;
+      agentHarnessInvalid: string;
       failed: string;
       denied: string;
     };
@@ -904,6 +910,158 @@ type Messages = {
       creates: string;
       submit: string;
       pending: string;
+    };
+    gate: {
+      title: string;
+      lead: string;
+      railLabel: string;
+      steps: {
+        organization: string;
+        wrap: string;
+        run: string;
+      };
+      subs: {
+        organization: string;
+        wrap: string;
+        run: string;
+      };
+      state: {
+        done: string;
+        current: string;
+        todo: string;
+      };
+      provisional: {
+        badge: string;
+        title: string;
+        body: string;
+        detected: string;
+        binding: string;
+        noRepository: string;
+      };
+      firstRun: {
+        badge: string;
+        title: string;
+        body: string;
+        open: string;
+      };
+    };
+    register: {
+      eyebrow: string;
+      railLabel: string;
+      steps: {
+        name: string;
+        wrap: string;
+        run: string;
+      };
+      state: {
+        done: string;
+        current: string;
+        todo: string;
+      };
+      caption: string;
+      noAgent: {
+        title: string;
+        body: string;
+        start: string;
+      };
+      name: {
+        title: string;
+        lead: string;
+        slug: string;
+        slugHint: string;
+        agentName: string;
+        agentNameHint: string;
+        harness: string;
+        harnessHint: string;
+        description: string;
+        descriptionHint: string;
+        note: string;
+        submit: string;
+        pending: string;
+        registered: {
+          title: string;
+          body: string;
+          expires: string;
+          continue: string;
+        };
+      };
+      wrap: {
+        title: string;
+        lead: string;
+        agentKey: string;
+        harness: string;
+        notRecorded: string;
+        host: {
+          title: string;
+          body: string;
+          mint: string;
+          pending: string;
+          again: string;
+        };
+        sdk: {
+          title: string;
+          body: string;
+          install: string;
+          credential: string;
+        };
+        token: {
+          label: string;
+          once: string;
+          expires: string;
+          command: string;
+        };
+        back: string;
+        continue: string;
+        advancing: string;
+      };
+      run: {
+        title: string;
+        lead: string;
+        waiting: {
+          title: string;
+          body: string;
+          again: string;
+          checking: string;
+        };
+        host: {
+          enrolled: string;
+          none: string;
+          heartbeat: string;
+          noHeartbeat: string;
+          hooksOk: string;
+          hooksMissing: string;
+          hooksUnreported: string;
+        };
+        received: {
+          title: string;
+          body: string;
+          at: string;
+          open: string;
+        };
+        repository: {
+          title: string;
+          body: string;
+          bind: string;
+          binding: string;
+          skip: string;
+        };
+      };
+      failure: {
+        orgRoleRequired: string;
+        noPrincipal: string;
+        agentNotFound: string;
+        slugTaken: string;
+        gateNotFound: string;
+        alreadyUnlocked: string;
+        firstFrameRequired: string;
+        githubNotConnected: string;
+        repositoryNotInstalled: string;
+        mainRepoBound: string;
+        refused: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
     };
   };
   organization: {

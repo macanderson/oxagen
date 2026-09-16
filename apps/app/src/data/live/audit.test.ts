@@ -64,7 +64,13 @@ beforeEach(() => {
 describe("audit.events", () => {
   it("reads one page of the whole organization's security events for the page", async () => {
     kernelRead.mockResolvedValue(
-      readOk({ events: [event], total: 1, hasMore: false, limit: 50, offset: 0 }),
+      readOk({
+        events: [event],
+        total: 1,
+        hasMore: false,
+        limit: 50,
+        offset: 0,
+      }),
     );
     const read = await audit.events(ctx, { ...NO_FILTERS, offset: 0 });
     expect(read.ok && read.value.events).toHaveLength(1);
