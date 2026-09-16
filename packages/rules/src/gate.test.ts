@@ -278,3 +278,84 @@ describe("createDecisionRulesGate — the mandate check", () => {
     ).resolves.toBeUndefined();
   });
 });
+
+/**
+ * The auto-approval clause of the same rule set (ADR-068): what the gate does
+ * with a `require_approval` verdict it is told may skip the person.
+ */
+describe("auto-approval at a require_approval verdict", () => {
+  const parked = {
+    capability: "issue_refund",
+    input: { amount_usd: 100 },
+    ctx: CTX,
+  };
+
+  test("releases the call when a rule qualified, and asks only at that verdict", async () => {
+    const autoApprove = vi.fn(async () => ({ ok: true }));
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => RULES,
+      autoApprove,
+    });
+    await expect(gate(parked)).resolves.toBeUndefined();
+    expect(autoApprove).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capability: "issue_refund",
+        verdict: expect.objectContaining({ ruleId: "approve-medium" }),
+        ctx: { orgId: "org1", workspaceId: "ws1", userId: null },
+      }),
+    );
+
+    // A deny and a call no rule matches never reach it.
+    autoApprove.mockClear();
+    await expect(
+      gate({
+        capability: "issue_refund",
+        input: { amount_usd: 900 },
+        ctx: CTX,
+      }),
+    ).rejects.toThrow(DecisionRuleDeniedError);
+    await expect(
+      gate({ capability: "send_email", input: {}, ctx: CTX }),
+    ).resolves.toBeUndefined();
+    expect(autoApprove).not.toHaveBeenCalled();
+  });
+
+  test("leaves the call with the person when no rule qualified, or none covered it", async () => {
+    for (const outcome of [{ ok: false }, null]) {
+      const gate = createDecisionRulesGate({
+        loadRuleSet: async () => RULES,
+        autoApprove: async () => outcome,
+      });
+      await expect(gate(parked)).rejects.toThrow(
+        DecisionRuleApprovalRequiredError,
+      );
+    }
+  });
+
+  test("a hook that throws leaves the call with the person, and reports it", async () => {
+    const onError = vi.fn();
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => RULES,
+      autoApprove: async () => {
+        throw new Error("approval store down");
+      },
+      onError,
+    });
+    await expect(gate(parked)).rejects.toThrow(
+      DecisionRuleApprovalRequiredError,
+    );
+    expect(onError).toHaveBeenCalledOnce();
+  });
+
+  test("a call with no workspace never auto-approves — the rules are a workspace's", async () => {
+    const autoApprove = vi.fn(async () => ({ ok: true }));
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => RULES,
+      autoApprove,
+    });
+    await expect(
+      gate({ ...parked, ctx: { ...CTX, workspaceId: null } }),
+    ).rejects.toThrow(DecisionRuleApprovalRequiredError);
+    expect(autoApprove).not.toHaveBeenCalled();
+  });
+});

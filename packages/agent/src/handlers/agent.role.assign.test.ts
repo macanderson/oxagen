@@ -308,7 +308,6 @@ describe("agent.role.assign handler", () => {
       /Agent not found/,
     );
   });
-
 });
 
 describe("agent.role.assign — role gate (org Owner or Admin)", () => {

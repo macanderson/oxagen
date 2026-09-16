@@ -168,10 +168,9 @@ describe("kernel governed-action usage recorder", () => {
     // charged the customer twice for one action.
     defineCap({ name: "accrual_unscoped_outer" });
     defineCap({ name: "accrual_unscoped_inner" });
-    registerHandler(
-      "accrual_unscoped_inner",
-      async () => async () => ({ inner: true }),
-    );
+    registerHandler("accrual_unscoped_inner", async () => async () => ({
+      inner: true,
+    }));
     registerHandler("accrual_unscoped_outer", async () => async () => {
       await invoke("accrual_unscoped_inner", {}, ctx, { surface: "api" });
       return { outer: true };
@@ -257,9 +256,14 @@ describe("kernel governed-action usage recorder", () => {
     defineCap({ name: "accrual_no_org" });
     registerHandler("accrual_no_org", async () => async () => ({ ok: true }));
 
-    await invoke("accrual_no_org", {}, { ...ctx, orgId: "" }, {
-      surface: "api",
-    });
+    await invoke(
+      "accrual_no_org",
+      {},
+      { ...ctx, orgId: "" },
+      {
+        surface: "api",
+      },
+    );
 
     expect(recorder).not.toHaveBeenCalled();
   });
@@ -271,10 +275,9 @@ describe("kernel governed-action usage recorder", () => {
     // Failing now would trade a missed charge for a broken request.
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     defineCap({ name: "accrual_recorder_throws" });
-    registerHandler(
-      "accrual_recorder_throws",
-      async () => async () => ({ ok: true }),
-    );
+    registerHandler("accrual_recorder_throws", async () => async () => ({
+      ok: true,
+    }));
     clearUsageRecorder();
     setUsageRecorder(() => {
       throw new Error("ledger is down");
@@ -339,7 +342,10 @@ describe("governedActionUnits", () => {
     // A zero or negative divisor would make the charge infinite or negative.
     for (const unitsPerAction of [0, -1, Number.NaN, 0.5]) {
       expect(
-        governedActionUnits({ unitsFrom: "rows", unitsPerAction }, { rows: 500 }),
+        governedActionUnits(
+          { unitsFrom: "rows", unitsPerAction },
+          { rows: 500 },
+        ),
       ).toBe(1);
     }
   });

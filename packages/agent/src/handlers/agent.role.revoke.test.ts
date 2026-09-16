@@ -132,7 +132,6 @@ describe("agent.role.revoke handler", () => {
     );
     expect(err).toBeInstanceOf(AgentPrincipalMissingError);
   });
-
 });
 
 describe("agent.role.revoke — role gate (org Owner or Admin)", () => {
