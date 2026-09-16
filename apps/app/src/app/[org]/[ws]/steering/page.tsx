@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
+import { dataSource } from "@/data/source";
+import { Steering } from "@/features/steering";
 import { requireViewer } from "@/server/viewer";
-import { NotRecorded } from "@/ui/not-recorded";
 import { PageHeader } from "@/ui/page-header";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -9,20 +10,25 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("steering") };
 }
 
-// One NotRecorded state until the #2961 lane lands its app half (ARCHITECTURE.md §1.2).
+// Records, proposals and the Context PR (#2961, ARCHITECTURE.md §1.2); a tab,
+// a kind, a page and a selected proposal are query values on this one route.
 export default async function SteeringPage({
   params,
+  searchParams,
 }: PageProps<"/[org]/[ws]/steering">) {
   const { org, ws } = await params;
-  await requireViewer(org, ws);
-  const t = await getTranslations("pages");
+  const ctx = await requireViewer(org, ws);
+  const [t, query] = await Promise.all([
+    getTranslations("pages"),
+    searchParams,
+  ]);
   return (
     <main
       id="main"
-      className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-10"
+      className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-10"
     >
       <PageHeader title={t("steering")} />
-      <NotRecorded section="steering" />
+      <Steering ctx={ctx} source={dataSource()} searchParams={query} />
     </main>
   );
 }
