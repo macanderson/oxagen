@@ -24,7 +24,7 @@ import { routes } from "@/shared/safe-path";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { setToolClassification } from "./actions";
 import { Chip, Fact, Facts, useDate } from "./parts";
-import { type ToolsAt, textValue } from "./view";
+import { splitTags, textValue, type ToolsAt, versionLabel } from "./view";
 
 const RISK_GRADES = ToolRiskGrade.options;
 const SIDE_EFFECTS = ToolSideEffect.options;
@@ -38,23 +38,6 @@ function choice<T extends string>(
 ): T {
   const parsed = enumeration.safeParse(raw);
   return parsed.success && parsed.data !== undefined ? parsed.data : fallback;
-}
-
-/** The version's identity on the wire: `slug@version`, the one spelling everywhere. */
-export function versionLabel(version: ToolVersion): string {
-  return `${version.slug}@${String(version.version)}`;
-}
-
-/** A comma- or whitespace-separated list as the tags the contract wants. */
-export function splitTags(raw: string): string[] {
-  return [
-    ...new Set(
-      raw
-        .split(/[\s,]+/)
-        .map((tag) => tag.trim())
-        .filter((tag) => tag !== ""),
-    ),
-  ];
 }
 
 function Select<T extends string>({

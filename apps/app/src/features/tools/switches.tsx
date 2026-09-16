@@ -109,12 +109,7 @@ function SwitchCard({
         )}
       </Facts>
       {canFlip ? (
-        <FlipControls
-          at={at}
-          denyGeneration={denyGeneration}
-          existing={item}
-          tone="card"
-        />
+        <FlipControls at={at} denyGeneration={denyGeneration} existing={item} />
       ) : null}
     </article>
   );
@@ -174,7 +169,6 @@ export function Switches({
               at={at}
               denyGeneration={denyGeneration}
               existing={null}
-              tone="header"
             />
           ) : null
         }

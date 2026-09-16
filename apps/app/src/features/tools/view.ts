@@ -8,6 +8,7 @@
 // back. Mandates ledger, Policy and Auto-approvals are their own lanes; each
 // adds its name to TOOLS_TABS and its case to the body, and nothing else here
 // moves.
+import type { ToolVersion } from "@/data/contracts/tools";
 import { firstParam, routes, type SafePath } from "@/shared/safe-path";
 
 export const TOOLS_TABS = ["registry", "connections", "switches"] as const;
@@ -78,4 +79,24 @@ export function toolsLink(
 export function textValue(form: FormData, field: string): string {
   const value = form.get(field);
   return typeof value === "string" ? value : "";
+}
+
+/**
+ * The version's identity on the wire: `slug@version`, the one spelling
+ * everywhere (the registry table, the tool dialog, a kill switch's target).
+ */
+export function versionLabel(version: ToolVersion): string {
+  return `${version.slug}@${String(version.version)}`;
+}
+
+/** A comma- or whitespace-separated list as the tags the contract wants, each once. */
+export function splitTags(raw: string): string[] {
+  return [
+    ...new Set(
+      raw
+        .split(/[\s,]+/)
+        .map((tag) => tag.trim())
+        .filter((tag) => tag !== ""),
+    ),
+  ];
 }

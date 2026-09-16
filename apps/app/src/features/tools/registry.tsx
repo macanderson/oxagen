@@ -28,8 +28,13 @@ import {
   type Tone,
 } from "./parts";
 import { ReadFailure } from "./read-failure";
-import { ToolDialog, versionLabel } from "./tool-dialog";
-import { type ToolNameStyle, type ToolsAt, toolsLink } from "./view";
+import { ToolDialog } from "./tool-dialog";
+import {
+  type ToolNameStyle,
+  type ToolsAt,
+  toolsLink,
+  versionLabel,
+} from "./view";
 
 const GATE_TONE = {
   open: "ok",

@@ -16,8 +16,7 @@ import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { importTools } from "./actions";
-import { splitTags } from "./tool-dialog";
-import { type ToolsAt, textValue } from "./view";
+import { splitTags, textValue, type ToolsAt } from "./view";
 
 export function ImportControls({ at }: { at: ToolsAt }) {
   const t = useTranslations("tools.import");

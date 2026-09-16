@@ -36,13 +36,19 @@ export function FlipControls({
   at,
   denyGeneration,
   existing,
-  tone,
 }: {
   at: ToolsAt;
   denyGeneration: KillSwitchBoard["denyGeneration"];
-  /** The card's switch, or null when the header opened the dialog. */
+  /**
+   * The card's switch, or null when the section header opened the dialog.
+   *
+   * This one prop settles everything else: where the control sits (the header
+   * or a card), which way the flip goes, and therefore how it is styled — so
+   * there is no second prop to disagree with it. The header carries the page's
+   * one gold action; gold is identity, never state, so a card's control stays
+   * secondary whichever way its switch is pointing.
+   */
   existing: KillSwitch | null;
-  tone: "header" | "card";
 }) {
   const t = useTranslations("tools.switches.dialog");
   const kinds = useTranslations("tools.switches.kinds");
@@ -58,6 +64,8 @@ export function FlipControls({
 
   /** A card flips the other way; the header dialog always denies. */
   const turningOn = existing === null ? true : !existing.on;
+  /** The header's control, and only the header's, is the page's gold action. */
+  const fromHeader = existing === null;
   const generation =
     existing?.scope === "workspace"
       ? denyGeneration.workspace
@@ -96,14 +104,14 @@ export function FlipControls({
       <button
         type="button"
         data-testid={
-          existing === null ? "tools-flip-open" : `tools-flip-${existing.id}`
+          fromHeader ? "tools-flip-open" : `tools-flip-${existing.id}`
         }
-        className={tone === "header" ? buttonPrimary : buttonSecondary}
+        className={fromHeader ? buttonPrimary : buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}
       >
-        {existing === null
+        {fromHeader
           ? t("openHeader")
           : turningOn
             ? t("openDeny")
@@ -119,7 +127,7 @@ export function FlipControls({
         testId="tools-flip-dialog"
       >
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-          {existing === null ? (
+          {fromHeader ? (
             <>
               <div className="flex min-w-0 flex-col gap-1.5">
                 <label

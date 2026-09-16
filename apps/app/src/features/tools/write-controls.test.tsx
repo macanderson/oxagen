@@ -34,7 +34,8 @@ vi.mock("./actions", () => ({
 }));
 
 const { ImportControls } = await import("./import-controls");
-const { ToolDialog, splitTags, versionLabel } = await import("./tool-dialog");
+const { ToolDialog } = await import("./tool-dialog");
+const { splitTags, versionLabel } = await import("./view");
 const { FlipControls } = await import("./switch-controls");
 const { useActionFailure } = await import("./action-failure");
 const { toolVersionPage, killSwitchBoard } = await import("./tools.builders");
@@ -95,6 +96,8 @@ afterEach(async () => {
   }
 });
 
+// splitTags and versionLabel live in view.ts, not in a "use client" module:
+// the registry table is a Server Component and calls versionLabel directly.
 describe("splitTags", () => {
   it("splits on commas and whitespace, drops blanks and keeps each tag once", () => {
     expect(splitTags(" moves_money, destroys_data  moves_money ")).toEqual([
@@ -266,12 +269,7 @@ describe("FlipControls", () => {
       },
     });
     withIntl(
-      <FlipControls
-        at={at}
-        denyGeneration={GENERATION}
-        existing={null}
-        tone="flip"
-      />,
+      <FlipControls at={at} denyGeneration={GENERATION} existing={null} />,
     );
     fireEvent.click(screen.getByTestId("tools-flip-open"));
     const dialog = await screen.findByTestId("tools-flip-dialog");
@@ -302,12 +300,7 @@ describe("FlipControls", () => {
 
   it("changes the blast radius with the level, and names what a connection switch also revokes", async () => {
     withIntl(
-      <FlipControls
-        at={at}
-        denyGeneration={GENERATION}
-        existing={null}
-        tone="flip"
-      />,
+      <FlipControls at={at} denyGeneration={GENERATION} existing={null} />,
     );
     fireEvent.click(screen.getByTestId("tools-flip-open"));
     await screen.findByTestId("tools-flip-dialog");
@@ -340,7 +333,6 @@ describe("FlipControls", () => {
         at={at}
         denyGeneration={GENERATION}
         existing={classSwitch()}
-        tone="clear"
       />,
     );
     fireEvent.click(screen.getByTestId("tools-flip-emd_01k5c1"));
@@ -371,7 +363,6 @@ describe("FlipControls", () => {
         at={at}
         denyGeneration={GENERATION}
         existing={clearedSwitch()}
-        tone="flip"
       />,
     );
     fireEvent.click(screen.getByTestId("tools-flip-emd_01k5c2"));
