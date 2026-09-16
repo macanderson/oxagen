@@ -4,6 +4,7 @@
 // priced is null and the page prints it as not recorded, never as a zero.
 // Proven and accepted spend stay apart (spec §12.8).
 import { z } from "zod";
+import { PublicId } from "./common";
 import { Cost, Money } from "./money";
 
 const Count = z.number().int().nonnegative();
@@ -98,6 +99,95 @@ export const SpendWaste = z.object({
   ),
 });
 export type SpendWaste = z.infer<typeof SpendWaste>;
+
+/** An instant a contract carries as ISO 8601 in UTC. */
+const Instant = z.iso.datetime();
+
+/** The span a finding or a list of findings covers. */
+const FindingWindow = z.object({ from: Instant, to: Instant });
+
+/** The kinds the findings job detects (ADR-062's detector table). */
+const FindingKind = z.enum([
+  "cache_writes_never_read",
+  "duplicate_tool_calls",
+  "repeated_shell_commands",
+  "unpaged_results",
+]);
+
+/** What a finding is about: a tool, an agent, an operator or the workspace. */
+const FindingLevel = z.enum(["tool", "agent", "operator", "workspace"]);
+
+/** The share of the cited calls the counterfactual covers, as the job graded it. */
+const FindingConfidence = z.enum(["high", "medium"]);
+
+/**
+ * One costed finding (`list_findings`): the saving is the job's figure,
+ * measured minus counterfactual over the runs it cites, with the basis those
+ * runs were priced on. The page prints it and computes nothing from it but
+ * each finding's share of the total (INV-09, INV-10).
+ */
+export const SpendFinding = z.object({
+  id: PublicId,
+  kind: FindingKind,
+  level: FindingLevel,
+  /** The level's key: a tool name, an agent key, an operator's `prn_…` or the workspace id. */
+  subject: z.string().min(1),
+  saving: Cost,
+  confidence: FindingConfidence,
+  window: FindingWindow,
+  why: z.string().min(1),
+  fix: z.string().min(1),
+  /** What the finding cites. */
+  runs: Count,
+  calls: Count,
+});
+export type SpendFinding = z.infer<typeof SpendFinding>;
+
+/** `list_findings`: the open findings largest saving first, with the totals the page leads with. */
+export const SpendFindings = z.object({
+  /** The span the listed findings cover; null when none is listed. */
+  window: FindingWindow.nullable(),
+  saving: Cost.nullable(),
+  /** The workspace's priced spend over `window`. */
+  spend: Cost.nullable(),
+  /** The annualised saving over that spend, annualised the same way. */
+  share: z.number().nonnegative().nullable(),
+  annualised: Cost.nullable(),
+  counts: z.object({
+    findings: Count,
+    high: Count,
+    medium: Count,
+    /** Distinct operators whose runs the listed findings cite. */
+    operators: Count,
+  }),
+  findings: z.array(SpendFinding),
+});
+export type SpendFindings = z.infer<typeof SpendFindings>;
+
+/** `get_finding_evidence`: the arithmetic the job wrote with one finding. */
+export const SpendFindingEvidence = z.object({
+  finding: SpendFinding,
+  calls: Count,
+  /** The cited calls the counterfactual prices; the rest add nothing to the saving. */
+  coveredCalls: Count,
+  measuredTokens: Count,
+  counterfactualTokens: Count,
+  measured: Money,
+  counterfactual: Money,
+  /** The cited runs with the largest saving, as the contract ordered them. */
+  runs: z.array(
+    z.object({
+      runId: PublicId,
+      startedAt: Instant,
+      calls: Count,
+      measuredTokens: Count,
+      counterfactualTokens: Count,
+      measured: Money,
+      counterfactual: Money,
+    }),
+  ),
+});
+export type SpendFindingEvidence = z.infer<typeof SpendFindingEvidence>;
 
 /** `get_spend_budget`: each configured ceiling in the active scope with its burn. */
 export const SpendBudgets = z.array(

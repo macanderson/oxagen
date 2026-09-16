@@ -32,6 +32,7 @@ import {
 import type { orgMemberInviteAccept } from "@oxagen/oxagen/contracts/org.member_invite.accept";
 import type { orgMemberInviteDecline } from "@oxagen/oxagen/contracts/org.member_invite.decline";
 import { captureError } from "@oxagen/telemetry";
+import { cache } from "react";
 import { PAGE_FAILURES, type PageKey, type Read, readError } from "@/data/read";
 import { InviteeCtx, OrgCtx, PretenantCtx, WsCtx } from "./viewer";
 
@@ -108,7 +109,6 @@ type Failure =
 
 type Outcome<O> = { ok: true; value: O } | { ok: false; failure: Failure };
 
-
 const EXHAUSTED_CODES: readonly string[] = [
   "gau_exhausted",
   "billing_suspended",
@@ -172,7 +172,7 @@ function report(error: unknown, capability: string): void {
 }
 
 /** A programming error the core refuses before the kernel runs. */
-function refuse<O>(code: string, capability: string): Outcome<O> {
+function refuse(code: string, capability: string): RawOutcome {
   report(new Error(code), capability);
   return { ok: false, failure: { kind: "unavailable", code, status: 500 } };
 }
@@ -224,12 +224,21 @@ function contractRefusal(
   return null;
 }
 
-async function run<O>(
+/**
+ * What the kernel answered, before any contract has parsed it. The raw record
+ * carries no type parameter, which is what lets one read be shared between
+ * callers: each parses it with its own contract's output schema afterwards, so
+ * the sharing never hands anyone a value its contract has not checked.
+ */
+type RawOutcome = { ok: true; raw: unknown } | { ok: false; failure: Failure };
+
+/** Everything up to and including invoke(): the guards, then the kernel. */
+async function invokeKernel(
   ctx: unknown,
-  contract: ToolContract<unknown, O>,
+  contract: ToolContract<unknown, unknown>,
   input: unknown,
   side: "read" | "write",
-): Promise<Outcome<O>> {
+): Promise<RawOutcome> {
   const minted =
     OrgCtx.is(ctx) ||
     PretenantCtx.is(ctx) ||
@@ -250,17 +259,32 @@ async function run<O>(
     }
   }
 
-  let raw: unknown;
   try {
-    raw = await invoke(contract.name, input, capabilityContext(ctx));
+    return {
+      ok: true,
+      raw: await invoke(contract.name, input, capabilityContext(ctx)),
+    };
   } catch (err) {
     const failure = classifyKernelFailure(err);
     if (failure.kind === "unavailable" || failure.kind === "unclassified")
       report(err, contract.name);
     return { ok: false, failure };
   }
+}
 
-  const output = contract.output.safeParse(raw);
+async function run<O>(
+  ctx: unknown,
+  contract: ToolContract<unknown, O>,
+  input: unknown,
+  side: "read" | "write",
+): Promise<Outcome<O>> {
+  const outcome =
+    side === "read"
+      ? await sharedInvoke(ctx, contract, input)
+      : await invokeKernel(ctx, contract, input, side);
+  if (!outcome.ok) return outcome;
+
+  const output = contract.output.safeParse(outcome.raw);
   if (!output.success) {
     report(output.error, contract.name);
     return {
@@ -339,6 +363,79 @@ function toActionResult<O>(outcome: Outcome<O>): ActionResult<O> {
   }
 }
 
+/**
+ * The reads already served in this request, keyed by `readKey`.
+ *
+ * `cache` gives one table per request, the way session.ts and viewer.ts hold
+ * the session and the viewer; outside a request React hands back a fresh table
+ * on every call, so nothing is shared between tests or across requests.
+ *
+ * A read is pure for the length of one render, so a page that reads the same
+ * record twice should pay for it once. The Billing page is the case that
+ * forced it: the plan card and the usage credit balance are two mappings of
+ * one `get_subscription` record, whose handler aggregates token usage over
+ * ClickHouse on every invocation, and INV-06 requires each port method under
+ * src/data/live to make its own `kernelRead` call — so the adapter cannot
+ * dedup and the seam is the layer that can (§3.2, §3.9).
+ *
+ * What is shared is the RawOutcome, before any contract has parsed it: every
+ * caller still parses the record with its own output schema, so sharing never
+ * skips a contract check. The promise is held rather than the value, so two
+ * reads in flight at once share one invoke, and a refusal is shared the same
+ * way — `invokeKernel` resolves rather than rejects, so nothing poisons it.
+ */
+const readsThisRequest = cache(
+  (): Map<string, Promise<RawOutcome>> => new Map(),
+);
+
+/**
+ * The key two reads must share to be the same read: same viewer, same
+ * contract, same input.
+ *
+ * `page` is not part of it: it selects the wording of a refusal, not the
+ * record, and the record is what is shared. The input is compared by its JSON,
+ * so the match is conservative — a value that will not serialise, or one input
+ * spelled with its keys in another order, reads again rather than sharing.
+ * Missing a share costs what the app does today; a wrong share would hand one
+ * caller another's record, so the comparison never widens.
+ */
+function readKey(
+  ctx: OrgCtx | PretenantCtx,
+  contract: { name: string },
+  input: unknown,
+): string | null {
+  let serialised: string;
+  try {
+    serialised = JSON.stringify(input);
+  } catch {
+    // An input with a cycle or a bigint in it is simply not shared.
+    return null;
+  }
+  const viewer = PretenantCtx.is(ctx)
+    ? `pretenant:${ctx.userId}`
+    : `${ctx.userId}:${ctx.orgId}:${WsCtx.is(ctx) ? ctx.workspaceId : ""}`;
+  return [viewer, contract.name, serialised].join("\u0000");
+}
+
+/** `invokeKernel` for a read, served once per request when it can be keyed. */
+async function sharedInvoke(
+  ctx: unknown,
+  contract: ToolContract<unknown, unknown>,
+  input: unknown,
+): Promise<RawOutcome> {
+  const keyable = OrgCtx.is(ctx) || PretenantCtx.is(ctx);
+  const key = keyable ? readKey(ctx, contract, input) : null;
+  if (key === null) return invokeKernel(ctx, contract, input, "read");
+
+  const served = readsThisRequest();
+  const inFlight = served.get(key);
+  if (inFlight !== undefined) return inFlight;
+
+  const pending = invokeKernel(ctx, contract, input, "read");
+  served.set(key, pending);
+  return pending;
+}
+
 export function kernelRead<I, O>(
   ctx: OrgCtx | WsCtx,
   call: { contract: ReadContract<I, O>; input: NoInfer<I>; page: PageKey },
@@ -354,9 +451,9 @@ export function kernelRead<I, O>(
 ): Promise<Read<O>>;
 export async function kernelRead<I, O>(
   ctx: OrgCtx | PretenantCtx,
-  call: { contract: ReadContract<I, O>; input: I; page: PageKey },
+  read: { contract: ReadContract<I, O>; input: I; page: PageKey },
 ): Promise<Read<O>> {
-  return toRead(await run(ctx, call.contract, call.input, "read"), call.page);
+  return toRead(await run(ctx, read.contract, read.input, "read"), read.page);
 }
 
 export function kernelWrite<I, O>(
