@@ -14,7 +14,7 @@
 
 ## Access
 
-Org `Owner` or `Admin`, checked in the handler (INV-29). `noBillingGate`. Sensitivity **high**. No tier gates this write (ADR-067); see `create_role`.
+Org `Owner` or `Admin`, checked in the handler (INV-29). `noBillingGate`. Sensitivity **high**. No tier gates this write (ADR-069); see `create_role`.
 
 | code        | reason                               | when                                                                                                                                       |
 | ----------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |

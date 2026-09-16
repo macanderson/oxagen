@@ -16,7 +16,7 @@
 
 Org `Owner` or `Admin`, checked in the handler (`assertOrgRole`, INV-29) for the signed-in user or, on an API-key (MCP) call, the key's creator (`resolveActingUserId`). `noBillingGate` (a settings write, ADR-052 exclusion 2). Sensitivity **high**.
 
-No tier gates this write (ADR-067, superseding ADR-063 decision 3). `list_iam_roles.enforcement` reports whether the kernel's IAM check runs the resolver for the org, and the Roles page prints that either way. The delegation ceiling reads no tier, so a granter is held to what they hold on every plan.
+No tier gates this write (ADR-069, superseding ADR-063 decision 3). `list_iam_roles.enforcement` reports whether the kernel's IAM check runs the resolver for the org, and the Roles page prints that either way. The delegation ceiling reads no tier, so a granter is held to what they hold on every plan.
 
 The handler refuses, in this order:
 

@@ -1,4 +1,4 @@
-# ADR-067: Roles are editable on every tier
+# ADR-069: Roles are editable on every tier
 
 - **Status:** Accepted
 - **Date:** 2026-09-15

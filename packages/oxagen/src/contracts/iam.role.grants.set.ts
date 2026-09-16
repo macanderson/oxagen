@@ -12,7 +12,7 @@ import { roleRow } from "./iam.role.list";
  * holder's next authorization sees the new set and nothing in between. The
  * handler refuses a system role (`conflict`, `system_role_readonly`) and a
  * granter who does not hold every capability named (the delegation
- * ceiling). No tier gates the write (ADR-067).
+ * ceiling). No tier gates the write (ADR-069).
  */
 export const iamRoleGrantsSet = registerCapability({
   name: "set_role_grants",

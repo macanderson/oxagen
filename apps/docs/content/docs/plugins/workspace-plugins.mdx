@@ -1,44 +1,47 @@
 ---
 title: Workspace plugins
-description: "Manage installed plugins for your workspace: connect, authenticate, monitor health, and enable or disable."
+description: "Manage the plugins installed in your workspace: connections, credentials, health, and enable or disable."
 ---
 
 ## Overview
 
-After installing a plugin from the marketplace, you manage it from **Workspace settings → Plugins**. This page lists all plugins installed in the current workspace, their connection status, and their health.
+After you install a plugin from the marketplace, you manage it under **Tools** in the workspace sidebar. **Tools → MCP Servers** lists every MCP server installed in the current workspace, with its connection status and its health. **Tools → Capabilities** lists installed capability packs.
 
 ## Plugin status
 
-Each installed plugin shows one of the following statuses:
+Each installed MCP server shows one of these statuses:
 
 | Status | Meaning |
 |---|---|
-| **Active** | Installed and available to agents. For MCP servers and integrations, the server is connected and responding. |
-| **Needs Connect** | Installed but not yet connected (MCP servers and integrations only). Run the Connect step to activate. |
-| **Needs re-auth** | OAuth token expired or revoked. Re-authentication required. |
-| **Disabled** | Manually disabled. Tools are not injected into the agent toolchain. |
+| **Connected** | Installed, and Oxagen holds a working credential for it. |
+| **No auth needed** | Installed, and the server needs no credential. |
+| **Needs authentication** | Installed, but OAuth is not done yet. Its tools are not in any agent's tool list. |
+| **Needs re-auth** | The OAuth credential needs a new consent. Click **Re-authenticate**. |
+| **Secret required** | Installed, but no API key is set yet. Its tools are not in any agent's tool list. |
+| **Revoked** | The OAuth token was revoked. Authenticate again. |
+| **Disabled** | Turned off by hand. Its tools are not in any agent's tool list. |
 | **Healthy / Degraded / Unreachable** | Health probe results for connected MCP servers and integrations (see [Health status](#health-status)). |
 
 ## Connecting an MCP server or integration
 
-Agent Skill, Knowledge Source, and Agent Capability plugins activate immediately on install. For `mcp_server` and `integration` plugins, you must complete a Connect step:
+Capability packs work as soon as they install. An `mcp_server` or `integration` plugin that needs authentication also needs a connection step. The credential you supply stays in Oxagen, held by the workspace. The agent never sees it.
 
 ### OAuth
 
-1. Click **Connect** next to the plugin.
-2. You are redirected to the provider's authorization page.
-3. After granting access you are returned with status **Connected**.
-4. Tokens are stored encrypted (AES-256-GCM + KMS). You receive an in-app notification if your token expires.
+1. Click **Authenticate** next to the server.
+2. Oxagen sends you to the provider's authorization page.
+3. Approve Oxagen there. You return with the status **Connected**.
+4. Oxagen stores the tokens encrypted (AES-256-GCM and KMS). Org managers get a notification if the token expires.
 
 ### API key (secret auth)
 
-1. Click **Set secret** next to the plugin.
-2. Paste your API key or bearer token.
-3. Click **Save**. The secret is encrypted at rest and never shown in the UI again.
+1. Click **Enter API key** next to the server.
+2. Paste the API key or bearer token.
+3. Click **Save key**. Oxagen encrypts the secret at rest, and the UI never shows it again.
 
-## Re-authenticating
+## Authenticating again
 
-If an OAuth token expires or is revoked, the plugin's status changes to **Needs re-auth**. A notification appears in the bell menu with a link to re-authenticate. You can also click **Re-authenticate** directly on the plugins page.
+If an OAuth token expires, the server's status changes to **Needs re-auth**. A notification appears in the bell menu with a link to re-authenticate. You can also click **Re-authenticate** directly on the server's row. A revoked token shows **Revoked**, and the row offers **Authenticate**.
 
 ## Health status
 
@@ -46,16 +49,16 @@ Connected MCP server and integration plugins report a live health status:
 
 | Status | Meaning |
 |---|---|
-| Healthy | Server is reachable and responding to health probes. |
-| Degraded | Some MCP calls are failing; tools may be unreliable. |
-| Unreachable | Server did not respond to the last health probe. |
-| Unknown | No health probe has run yet since the server was connected. |
+| Healthy | The server is reachable and answers health probes. |
+| Degraded | Some MCP calls fail, so its tools may not answer. |
+| Unreachable | The server did not answer the last health probe. |
+| Unknown | No health probe has run since the server was connected. |
 
-Agents skip servers with Degraded or Unreachable status and log a warning in execution telemetry.
+An agent's tool list leaves out servers with Degraded or Unreachable status, and Oxagen logs a warning in the run's telemetry.
 
 ## Disabling a plugin
 
-Toggle a plugin off from the installed plugins list at any time. For MCP servers and integrations, this deactivates the workspace server connection: the plugin listing and any stored credentials remain intact and can be re-enabled later.
+Turn a plugin off from its row at any time. For MCP servers and integrations, this deactivates the workspace's server connection. The plugin listing and its stored credential stay in place, and you can turn it back on later.
 
 ## Role requirements
 

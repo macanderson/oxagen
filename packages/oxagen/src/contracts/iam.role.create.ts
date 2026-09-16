@@ -25,7 +25,7 @@ export const rolePermissionsSchema = z
  * The handler refuses a granter who does not hold every one of those
  * capabilities (the delegation ceiling) and a name already taken in the same
  * scope kind or, for a custom role, in either scope kind (`conflict`,
- * `role_exists`). No tier gates the write (ADR-067): `list_iam_roles`
+ * `role_exists`). No tier gates the write (ADR-069): `list_iam_roles`
  * reports whether the resolver runs for the org, and the Roles page says so.
  * Custom roles are agent roles: only `assign_agent_role` binds them.
  */

@@ -25,7 +25,7 @@ export function TuiReplBanner({ className }: { className?: string }) {
   return (
     <TuiFrame
       id="tui-banner"
-      title="~/acme-web — oxagen"
+      title="~/acme-web · oxagen"
       width={560}
       height={222}
       className={className}
@@ -52,7 +52,7 @@ export function TuiReplBanner({ className }: { className?: string }) {
         </tspan>
         <tspan
           fill={tuiColors.dim}
-        >{`  ·  agentic coding CLI  ·  v${CLI_VERSION}`}</tspan>
+        >{`  ·  CLI  ·  v${CLI_VERSION}`}</tspan>
       </text>
 
       {/* Prompt bar */}
