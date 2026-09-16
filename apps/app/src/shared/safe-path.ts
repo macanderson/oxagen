@@ -121,13 +121,17 @@ export const routes = {
   /** A run opened from a list (a run id is a public id, never a raw row id). */
   run: (org: string, ws: string, run: string): SafePath =>
     pathOf(org, ws, "runs", run),
-  /** Spend on one tab, or one key's drill on it; a tab is a query, not a route (§1.2). */
+  /** Spend on one tab, with one key's drill or one finding's evidence open; a tab is a query, not a route (§1.2). */
   spend: (
     org: string,
     ws: string,
-    view: { tab: string; drill?: string },
+    view: { tab: string; drill?: string; finding?: string },
   ): SafePath =>
-    withQuery(pathOf(org, ws, "spend"), { tab: view.tab, drill: view.drill }),
+    withQuery(pathOf(org, ws, "spend"), {
+      tab: view.tab,
+      drill: view.drill,
+      finding: view.finding,
+    }),
   /** Steering; a tab, a kind, a page offset and a selected proposal are query values on the one route. */
   steering: (
     org: string,

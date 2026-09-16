@@ -66,6 +66,25 @@ export function mulMicros(value: Money, quantity: number): Money {
   };
 }
 
+/** The precision `ratioOfMicros` divides at: a ratio carries six decimal places. */
+const RATIO_SCALE = 1_000_000;
+
+/**
+ * `part ÷ whole` as a ratio, or null when the two carry different currencies
+ * or `whole` is zero. The division is BigInt on the micros, scaled first, so a
+ * figure past what a float holds exactly still divides where it should. The
+ * answer is a ratio and never money: the caller prints it through
+ * `formatRatio` (INV-09). A ratio above one or below zero is answered as
+ * measured; nothing here clamps a figure the contract carried.
+ */
+export function ratioOfMicros(part: Money, whole: Money): number | null {
+  if (part.currency !== whole.currency) return null;
+  const divisor = toBigInt(whole.micros);
+  if (divisor === BigInt(0)) return null;
+  const scaled = (toBigInt(part.micros) * BigInt(RATIO_SCALE)) / divisor;
+  return Number(scaled) / RATIO_SCALE;
+}
+
 /**
  * A decimal amount a person typed ("500", "0.25", "12.000001") as integer
  * micros, or null for anything else: a sign, a grouping separator, more than

@@ -1,42 +1,81 @@
-// Which view a Spend request opens: a known tab or the first one, and a drill
-// only where get_spend_drill would accept its key.
+// Which view a Spend request opens: a known tab or the first one, a drill only
+// where get_spend_drill would accept its key, and one finding's evidence only
+// where the finding contracts would accept its id.
 import { describe, expect, it } from "vitest";
 import { dayOf, monthToDate, parseSpendView } from "./view";
 
 describe("parseSpendView", () => {
-  it("opens the operator tab with no drill by default", () => {
-    expect(parseSpendView({})).toEqual({ tab: "operator", drill: null });
+  it("opens the findings tab with nothing selected by default", () => {
+    expect(parseSpendView({})).toEqual({
+      tab: "findings",
+      drill: null,
+      finding: null,
+    });
   });
 
   it("opens a known tab, reading the first of a repeated value", () => {
     expect(parseSpendView({ tab: "waste" })).toEqual({
       tab: "waste",
       drill: null,
+      finding: null,
     });
     expect(parseSpendView({ tab: ["budgets", "agent"] })).toEqual({
       tab: "budgets",
       drill: null,
+      finding: null,
     });
   });
 
   it("opens an operator's, an agent's or a tool's drill", () => {
     expect(
       parseSpendView({ tab: "operator", drill: "prn_marcusbell" }),
-    ).toEqual({ tab: "operator", drill: "prn_marcusbell" });
+    ).toEqual({ tab: "operator", drill: "prn_marcusbell", finding: null });
     expect(
       parseSpendView({ tab: "agent", drill: "acme/core-platform/triage" }),
-    ).toEqual({ tab: "agent", drill: "acme/core-platform/triage" });
+    ).toEqual({
+      tab: "agent",
+      drill: "acme/core-platform/triage",
+      finding: null,
+    });
     expect(parseSpendView({ tab: "tool", drill: "github__merge" })).toEqual({
       tab: "tool",
       drill: "github__merge",
+      finding: null,
+    });
+  });
+
+  it("opens one finding's evidence on the findings tab", () => {
+    expect(
+      parseSpendView({ tab: "findings", finding: "fnd_01k5rtgh" }),
+    ).toEqual({ tab: "findings", drill: null, finding: "fnd_01k5rtgh" });
+  });
+
+  it.each([
+    ["an id that is not a finding's", { finding: "01k5rtgh" }],
+    ["an id of another kind", { finding: "arun_01k5rtgh" }],
+    ["an empty id", { finding: "" }],
+    ["an id carrying a path", { finding: "fnd_01/../x" }],
+  ])("ignores %s, opening the findings tab with none (negative)", (_case, params) => {
+    expect(parseSpendView({ tab: "findings", ...params })).toEqual({
+      tab: "findings",
+      drill: null,
+      finding: null,
+    });
+  });
+
+  it("does not carry a finding onto another tab (negative)", () => {
+    expect(parseSpendView({ tab: "waste", finding: "fnd_01k5rtgh" })).toEqual({
+      tab: "waste",
+      drill: null,
+      finding: null,
     });
   });
 
   it.each([
     [
       "an unknown tab",
-      { tab: "findings", drill: "prn_marcusbell" },
-      "operator",
+      { tab: "reconciliation", drill: "prn_marcusbell" },
+      "findings",
     ],
     ["a drill on a tab that has none", { tab: "waste", drill: "x" }, "waste"],
     [
@@ -51,7 +90,11 @@ describe("parseSpendView", () => {
       "tool",
     ],
   ])("ignores %s (negative)", (_case, params, tab) => {
-    expect(parseSpendView(params)).toEqual({ tab, drill: null });
+    expect(parseSpendView(params)).toEqual({
+      tab,
+      drill: null,
+      finding: null,
+    });
   });
 });
 

@@ -5,6 +5,8 @@
 // an answer the view model refuses is reported once as record_unmappable.
 import "server-only";
 import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
+import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
+import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
@@ -14,6 +16,8 @@ import {
   FleetSpend,
   SpendBudgets,
   SpendDrill,
+  SpendFindingEvidence,
+  SpendFindings,
   SpendReport,
   SpendWaste,
 } from "@/data/contracts/spend";
@@ -24,6 +28,8 @@ import {
   toFleetSpend,
   toSpendBudgets,
   toSpendDrill,
+  toSpendFindingEvidence,
+  toSpendFindings,
   toSpendReport,
   toSpendWaste,
 } from "./mappers/spend";
@@ -100,6 +106,30 @@ export const spend: DataSource["spend"] = {
     return toView(read, SpendBudgets, toSpendBudgets, {
       orgId: ctx.orgId,
       method: "budgets",
+    });
+  },
+  async findings(ctx) {
+    // The section shows what is still open; a finding someone decided leaves
+    // the list and its decision is in the audit record.
+    const read = await kernelRead(ctx, {
+      contract: findingList,
+      input: { status: "open" },
+      page: "spend",
+    });
+    return toView(read, SpendFindings, toSpendFindings, {
+      orgId: ctx.orgId,
+      method: "findings",
+    });
+  },
+  async findingEvidence(ctx, findingId) {
+    const read = await kernelRead(ctx, {
+      contract: findingEvidenceGet,
+      input: { findingId },
+      page: "spend",
+    });
+    return toView(read, SpendFindingEvidence, toSpendFindingEvidence, {
+      orgId: ctx.orgId,
+      method: "findingEvidence",
     });
   },
 };

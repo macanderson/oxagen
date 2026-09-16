@@ -3,6 +3,8 @@
 // so neither a sample the contract would refuse nor a view the page would
 // refuse can make a test pass.
 import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
+import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
+import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
@@ -11,6 +13,8 @@ import {
   FleetSpend,
   SpendBudgets,
   SpendDrill,
+  SpendFindingEvidence,
+  SpendFindings,
   SpendReport,
   SpendWaste,
 } from "@/data/contracts/spend";
@@ -18,6 +22,8 @@ import {
   toFleetSpend,
   toSpendBudgets,
   toSpendDrill,
+  toSpendFindingEvidence,
+  toSpendFindings,
   toSpendReport,
   toSpendWaste,
 } from "./spend";
@@ -249,6 +255,133 @@ describe("toSpendBudgets", () => {
         spent: { micros: "410000000", currency: "USD" },
         ratio: 0.82,
         state: "threshold_80",
+      },
+    ]);
+  });
+});
+
+describe("toSpendFindings", () => {
+  const saving = {
+    micros: "984600000",
+    currency: "USD",
+    basis: "gateway_observed",
+  } as const;
+  const listedFinding = {
+    id: "fnd_01k5rtgh",
+    kind: "unpaged_results",
+    level: "tool",
+    subject: "aws_billing__get_cost_and_usage",
+    saving,
+    confidence: "high",
+    window: {
+      from: "2026-08-16T00:00:00.000Z",
+      to: "2026-09-15T00:00:00.000Z",
+    },
+    why: "Each run requests thirty days of line items unpaged.",
+    fix: "Request grouped totals; page line items only on drill-down.",
+    runs: 88,
+    calls: 3106,
+    status: "open",
+    detectedAt: "2026-09-15T02:00:00.000Z",
+    decidedAt: null,
+    appliedActionId: null,
+  };
+
+  it("copies the totals and every finding with the basis the job recorded", () => {
+    const out = findingList.output.parse({
+      status: "open",
+      window: listedFinding.window,
+      saving,
+      spend: { micros: "18402660000", currency: "USD", basis: "mixed" },
+      share: 0.64,
+      annualised: { ...saving, micros: "17649600000" },
+      counts: { findings: 1, high: 1, medium: 0, operators: 3 },
+      findings: [listedFinding],
+    });
+    const view = SpendFindings.parse(toSpendFindings(out));
+    expect(view.saving).toEqual(saving);
+    expect(view.spend?.basis).toBe("mixed");
+    expect(view.share).toBe(0.64);
+    expect(view.counts).toEqual({
+      findings: 1,
+      high: 1,
+      medium: 0,
+      operators: 3,
+    });
+    expect(view.findings[0]).toEqual({
+      id: "fnd_01k5rtgh",
+      kind: "unpaged_results",
+      level: "tool",
+      subject: "aws_billing__get_cost_and_usage",
+      saving,
+      confidence: "high",
+      window: listedFinding.window,
+      why: listedFinding.why,
+      fix: listedFinding.fix,
+      runs: 88,
+      calls: 3106,
+    });
+  });
+
+  it("keeps a window, a saving and a spend the contract left null null", () => {
+    const out = findingList.output.parse({
+      status: "open",
+      window: null,
+      saving: null,
+      spend: null,
+      share: null,
+      annualised: null,
+      counts: { findings: 0, high: 0, medium: 0, operators: 0 },
+      findings: [],
+    });
+    const view = SpendFindings.parse(toSpendFindings(out));
+    expect(view).toEqual({
+      window: null,
+      saving: null,
+      spend: null,
+      share: null,
+      annualised: null,
+      counts: { findings: 0, high: 0, medium: 0, operators: 0 },
+      findings: [],
+    });
+  });
+
+  it("copies one finding's arithmetic and the runs it cites", () => {
+    const out = findingEvidenceGet.output.parse({
+      finding: listedFinding,
+      evidence: {
+        calls: 3106,
+        coveredCalls: 2980,
+        measuredTokens: 41200,
+        counterfactualTokens: 1900,
+        measured: { micros: "1030400000", currency: "USD" },
+        counterfactual: { micros: "45800000", currency: "USD" },
+        runs: [
+          {
+            runId: "arun_01k5rn8f3j",
+            startedAt: "2026-09-11T06:00:00.000Z",
+            calls: 36,
+            measuredTokens: 41200,
+            counterfactualTokens: 1900,
+            measured: { micros: "24100000", currency: "USD" },
+            counterfactual: { micros: "1120000", currency: "USD" },
+          },
+        ],
+      },
+    });
+    const view = SpendFindingEvidence.parse(toSpendFindingEvidence(out));
+    expect(view.finding.id).toBe("fnd_01k5rtgh");
+    expect(view.coveredCalls).toBe(2980);
+    expect(view.measured).toEqual({ micros: "1030400000", currency: "USD" });
+    expect(view.runs).toEqual([
+      {
+        runId: "arun_01k5rn8f3j",
+        startedAt: "2026-09-11T06:00:00.000Z",
+        calls: 36,
+        measuredTokens: 41200,
+        counterfactualTokens: 1900,
+        measured: { micros: "24100000", currency: "USD" },
+        counterfactual: { micros: "1120000", currency: "USD" },
       },
     ]);
   });

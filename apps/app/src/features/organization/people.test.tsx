@@ -73,6 +73,8 @@ async function renderPeople(
       drill: vi.fn(),
       waste: vi.fn(),
       budgets: vi.fn(),
+      findings: vi.fn(),
+      findingEvidence: vi.fn(),
     },
     org: { members },
     steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },

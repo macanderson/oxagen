@@ -200,6 +200,12 @@ describe("routes", () => {
     ).toBe(
       "/acme/core-platform/spend?tab=agent&drill=acme%2Fcore-platform%2Ftriage%26tab%3Dx",
     );
+    expect(
+      routes.spend("acme", "core-platform", {
+        tab: "findings",
+        finding: "fnd_01k5rtgh",
+      }),
+    ).toBe("/acme/core-platform/spend?tab=findings&finding=fnd_01k5rtgh");
     expect(() => routes.run("", "x", "arun_1")).toThrow("unsafe_path");
   });
 });
