@@ -10,13 +10,9 @@
 // cursor the URL names, to the Agents feature (#2956); Spend hands its viewer,
 // the data source and the query to its body (#2962); Billing hands its viewer,
 // the data source, the checkout outcome and the invoices cursor to the Billing
-// feature (WL-38); People renders its sections from org.members and API keys
-// its table from org.apiKeys. Run gains its body in WL-35.
-// the data source and the query to its body (#2962); Steering hands its viewer,
-// the data source and the query to the Steering feature (#2961); Billing hands
-// its viewer, the data source, the checkout outcome and the invoices cursor to
-// the Billing feature (WL-38); People renders its sections from org.members.
-// Run and API keys gain their bodies in WL-35 and WL-37.
+// feature (WL-38); Steering hands its viewer, the data source and the query to
+// the Steering feature (#2961); People renders its sections from org.members
+// and API keys its table from org.apiKeys. Run gains its body in WL-35.
 import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { translator } from "@/test/intl";
@@ -74,14 +70,20 @@ vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
     Promise.resolve(translator(namespace)),
 }));
-// People is the one feature this file renders for real, so its client island
-// comes with it. The island imports the two server actions, and those import
-// the kernel seam, which loads both handler registries on import (§3.2) — a
-// graph no page test needs and one that never settles under jsdom. The writes
-// have their own tests; here the roster only has to render.
+// People and API keys are the features this file renders for real, so their
+// client islands come with them. Each island imports its server actions, and
+// those import the kernel seam, which loads both handler registries on import
+// (§3.2) — a graph no page test needs and one that never settles under jsdom.
+// The writes have their own tests; here the roster and the table only have to
+// render.
 vi.mock("@/features/organization/actions", () => ({
   changeMemberRole: vi.fn(),
   removeOrgMember: vi.fn(),
+}));
+vi.mock("@/features/organization/api-key-actions", () => ({
+  createApiKey: vi.fn(),
+  revokeApiKey: vi.fn(),
+  rotateApiKey: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
