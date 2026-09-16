@@ -48,6 +48,7 @@ export function orgSource(reads: OrgReads): {
     shell: { context: refuse },
     billing: {
       plan: refuse,
+      usageCredits: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,

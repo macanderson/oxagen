@@ -1,15 +1,19 @@
 // INV-25 (ARCHITECTURE.md §3.9, §4): on the Billing page money renders only in
-// the contracted rate, the invoices and the purchase form's total, and every
+// the contracted rate, the invoices, the purchase form's total and — from
+// WL-67, the second meter — the usage credit balance and its top-up. Every
 // other figure is a GAU count. Three readings of the tree:
 //   - `<Money` JSX under src/features/billing/** appears in contract-rate.tsx,
-//     invoices.tsx and purchase-form.tsx alone;
+//     invoices.tsx, purchase-form.tsx and usage-credits.tsx alone;
 //   - of the zod view models src/data/contracts/billing.ts exports, only
-//     ContractRate and InvoicePage reach `Money`, directly or through a local
-//     schema;
-//   - src/data/live/mappers/billing.ts never names get_subscription's credit
-//     balance or token cost, as an identifier or as a string key. The denylist
-//     is two fixed names, since the mapper reads ratePerGauMicros and
-//     amountDueMicros and a `*Micros*` wildcard would refuse it.
+//     ContractRate, InvoicePage and UsageCredits reach `Money`, directly or
+//     through a local schema;
+//   - src/data/live/mappers/billing.ts never names get_subscription's token
+//     cost, and names its credit balance only inside `toUsageCredits`, the one
+//     mapper that is allowed to read it. Elsewhere in the file — in
+//     `toPlanCard`, say — the balance is still refused, which is what keeps the
+//     plan card blind to it. The denylist is two fixed names, since the mapper
+//     reads ratePerGauMicros and amountDueMicros and a `*Micros*` wildcard
+//     would refuse it.
 import path from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
@@ -32,15 +36,21 @@ const MONEY_COMPONENTS: ReadonlySet<string> = new Set([
   "contract-rate.tsx",
   "invoices.tsx",
   "purchase-form.tsx",
+  "usage-credits.tsx",
 ]);
 const MONEY_VIEW_MODELS: ReadonlySet<string> = new Set([
   "ContractRate",
   "InvoicePage",
+  "UsageCredits",
 ]);
 const DENIED_NAMES: ReadonlySet<string> = new Set([
   "creditBalanceCents",
   "costMicros",
 ]);
+
+/** The credit balance is admitted here and refused everywhere else in the mapper. */
+const CREDIT_BALANCE = "creditBalanceCents";
+const CREDIT_BALANCE_READER = "toUsageCredits";
 
 function moneyJsxViolations(source: SourceText): string[] {
   if (MONEY_COMPONENTS.has(path.posix.basename(source.file))) return [];
@@ -121,18 +131,25 @@ function viewModelViolations(source: SourceText): string[] {
 function mapperViolations(source: SourceText): string[] {
   const sf = parse(source);
   const violations: string[] = [];
-  const visit = (node: ts.Node): void => {
+  const visit = (node: ts.Node, inReader: boolean): void => {
+    const reader =
+      inReader ||
+      (ts.isFunctionDeclaration(node) &&
+        node.name?.text === CREDIT_BALANCE_READER);
     if (
       (ts.isIdentifier(node) || ts.isStringLiteralLike(node)) &&
-      DENIED_NAMES.has(node.text)
+      DENIED_NAMES.has(node.text) &&
+      !(reader && node.text === CREDIT_BALANCE)
     ) {
       violations.push(
         `${RULE} ${source.file}:${String(lineOf(sf, node))} reads:${node.text}`,
       );
     }
-    ts.forEachChild(node, visit);
+    ts.forEachChild(node, (child) => {
+      visit(child, reader);
+    });
   };
-  visit(sf);
+  visit(sf, false);
   return violations;
 }
 
@@ -154,7 +171,7 @@ describe("billing units", () => {
     expect(viewModelViolations(readSource(CONTRACTS_FILE))).toEqual([]);
   });
 
-  it("maps no credit balance and no token cost", () => {
+  it("maps no token cost, and no credit balance outside toUsageCredits", () => {
     expect(mapperViolations(readSource(MAPPER_FILE))).toEqual([]);
   });
 
@@ -186,5 +203,16 @@ describe("billing units", () => {
 
   it("passes a mapper reading ratePerGauMicros and amountDueMicros (negative)", () => {
     expect(mapperViolations(probe("mapper-rates.ts"))).toEqual([]);
+  });
+
+  it("passes the credit balance read inside toUsageCredits (negative)", () => {
+    expect(mapperViolations(probe("mapper-usage-credits.ts"))).toEqual([]);
+  });
+
+  it("fails a token cost inside toUsageCredits: only the balance is admitted there", () => {
+    expect(mapperViolations(probe("mapper-usage-credits-cost.ts"))).toEqual([
+      `${RULE} ${PROBES}/mapper-usage-credits-cost.ts:3 reads:costMicros`,
+      `${RULE} ${PROBES}/mapper-usage-credits-cost.ts:5 reads:costMicros`,
+    ]);
   });
 });

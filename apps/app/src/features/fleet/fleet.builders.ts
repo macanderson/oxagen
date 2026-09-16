@@ -91,6 +91,7 @@ export function fleetSource(reads: FleetReads) {
     },
     billing: {
       plan: refuse,
+      usageCredits: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,

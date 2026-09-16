@@ -89,6 +89,7 @@ const source: DataSource = {
   shell: { context: vi.fn() },
   billing: {
     plan: vi.fn(),
+    usageCredits: vi.fn(),
     bucket: vi.fn(),
     contractRate: vi.fn(),
     invoices: vi.fn(),

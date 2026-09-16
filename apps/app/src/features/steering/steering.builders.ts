@@ -188,6 +188,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     },
     billing: {
       plan: refuse,
+      usageCredits: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,
