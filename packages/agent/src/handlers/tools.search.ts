@@ -24,7 +24,14 @@ import {
   type ToolsSearchOutput,
 } from "@oxagen/oxagen/contracts/tools.search";
 import { and, desc, eq, ilike, isNull, notInArray, or, sql } from "drizzle-orm";
+import {
+  resolveActingUserId,
+  resolveActorOrgRoles,
+  resolveActorWorkspaceRoles,
+} from "@oxagen/iam/org-role";
+import { HandlerError } from "@oxagen/oxagen";
 import { rankBelt } from "../runtime/tool-belt";
+import { maySeeKind, SEARCH_KIND_ROLES } from "./search-kind-roles";
 import type { CapabilityContext } from "../types";
 import { assistantBelt } from "./tools.load";
 
@@ -34,7 +41,25 @@ export async function toolsSearchHandler(
   input: ToolsSearchInput,
   ctx: CapabilityContext,
 ): Promise<ToolsSearchOutput> {
-  const kinds = new Set<SearchKind>(input.kinds ?? SEARCH_KINDS);
+  const asked = new Set<SearchKind>(input.kinds ?? SEARCH_KINDS);
+  // Per-kind authorization. This handler reads the run, agent and approval
+  // tables directly instead of invoking the capabilities that own them, so
+  // its own (broader) roles were the only gate: a workspace Viewer is allowed
+  // search_tools and denied list_runs, and an org Member is allowed
+  // search_tools and denied list_agent_defs. Each kind is now answered only
+  // to an actor the SOURCE capability's contract admits.
+  const kinds = await permittedKinds(asked, ctx);
+  if (kinds.size === 0) {
+    // Narrowing to nothing is only reachable when the caller named kinds and
+    // holds none of them. Answering `rows: []` there would mean "forbidden"
+    // dressed as "no matches", which is the fabricated-empty this repo bans,
+    // so it is a refusal. A caller who named no kinds always keeps `tool`.
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "kind_not_permitted",
+      message: `not permitted to search: ${[...asked].sort().join(", ")}`,
+    });
+  }
   const query = input.query.trim();
   const pattern = `%${escapeLike(query)}%`;
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
@@ -53,6 +78,38 @@ export async function toolsSearchHandler(
   ]);
 
   return { rows: dealAcrossKinds([tools, ...records], SEARCH_ROW_LIMIT) };
+}
+
+/**
+ * The subset of `asked` this caller may see. Roles are resolved once and the
+ * per-kind lists come from each source capability's contract
+ * (`SEARCH_KIND_ROLES`), so tightening `list_runs` tightens search with it.
+ *
+ * An API-key call acts as the key's creator (ADR-067), the same rule the rest
+ * of this branch applies, so a key carries its creator's current roles and no
+ * more. No resolvable actor keeps only the kinds that need no source
+ * capability, which is `tool` — it fails closed.
+ */
+async function permittedKinds(
+  asked: ReadonlySet<SearchKind>,
+  ctx: CapabilityContext,
+): Promise<Set<SearchKind>> {
+  const needsRoles = [...asked].some((k) => SEARCH_KIND_ROLES[k]);
+  if (!needsRoles) return new Set(asked);
+  const userId = await resolveActingUserId({
+    orgId: ctx.orgId,
+    userId: ctx.userId,
+    apiKeyId: ctx.apiKeyId,
+  });
+  if (!userId) {
+    return new Set([...asked].filter((k) => !SEARCH_KIND_ROLES[k]));
+  }
+  const [orgRoles, workspaceRoles] = await Promise.all([
+    resolveActorOrgRoles(ctx.orgId, userId),
+    resolveActorWorkspaceRoles(ctx.orgId, ctx.workspaceId, userId),
+  ]);
+  const actor = { orgRoles, workspaceRoles };
+  return new Set([...asked].filter((k) => maySeeKind(k, actor)));
 }
 
 /**

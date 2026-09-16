@@ -31,6 +31,15 @@ const mocks = vi.hoisted(() => ({
     (_name: string): { id: string } | undefined => undefined,
   ),
   listEntitled: vi.fn(async () => new Set<string>()),
+  resolveActingUserId: vi.fn(async () => "u-1" as string | null),
+  resolveActorOrgRoles: vi.fn(async () => ["Owner"] as string[]),
+  resolveActorWorkspaceRoles: vi.fn(async () => ["Owner"] as string[]),
+}));
+
+vi.mock("@oxagen/iam/org-role", () => ({
+  resolveActingUserId: mocks.resolveActingUserId,
+  resolveActorOrgRoles: mocks.resolveActorOrgRoles,
+  resolveActorWorkspaceRoles: mocks.resolveActorWorkspaceRoles,
 }));
 
 vi.mock("@oxagen/oxagen/plugins", () => ({
@@ -53,6 +62,18 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 import { toolsSearchHandler } from "./tools.search";
+import { SEARCH_KIND_ROLES } from "./search-kind-roles";
+import { runList } from "@oxagen/oxagen/contracts/run.list";
+import { agentDefinitionList } from "@oxagen/oxagen/contracts/agent.definition.list";
+
+/** The `allow` roles of a contract's grant map, as search-kind-roles reads them. */
+function allowed(
+  grants: Readonly<Record<string, string | undefined>> | undefined,
+): string[] {
+  return Object.entries(grants ?? {})
+    .filter(([, effect]) => effect === "allow")
+    .map(([role]) => role);
+}
 
 const dialect = new PgDialect();
 const CTX = {
@@ -134,6 +155,9 @@ beforeEach(() => {
   tachoRows = DEFAULT_TACHO_ROWS;
   mocks.pluginForContract.mockReset().mockReturnValue(undefined);
   mocks.listEntitled.mockReset().mockResolvedValue(new Set<string>());
+  mocks.resolveActingUserId.mockReset().mockResolvedValue("u-1");
+  mocks.resolveActorOrgRoles.mockReset().mockResolvedValue(["Owner"]);
+  mocks.resolveActorWorkspaceRoles.mockReset().mockResolvedValue(["Owner"]);
   mocks.withTenantDb.mockImplementation((fn: (t: unknown) => unknown) =>
     Promise.resolve(fn(tx(captured))),
   );
@@ -279,6 +303,71 @@ describe("search_tools", () => {
     );
     expect(reads).toHaveLength(2);
     for (const read of reads) expect(read.where).not.toMatch(/witness_run_id/);
+  });
+
+  it("answers a workspace Viewer no runs and no agents, and reads neither table", async () => {
+    // `list_runs` does not grant workspace Viewer and `list_agent_defs` does
+    // not grant it either, but `search_tools` does — so before the per-kind
+    // gate a Viewer could read run ids and goals, and agent names and slugs,
+    // straight out of the tables the authoritative capabilities refuse them.
+    mocks.resolveActorOrgRoles.mockResolvedValue([]);
+    mocks.resolveActorWorkspaceRoles.mockResolvedValue(["Viewer"]);
+    const out = await toolsSearchHandler({ query: "" }, CTX);
+    expect(out.rows.map((r) => r.kind)).not.toContain("run");
+    expect(out.rows.map((r) => r.kind)).not.toContain("agent");
+    // Not filtered after the fact — the tables are never read at all.
+    expect(captured.find((c) => c.table === schema.agentRuns)).toBeUndefined();
+    expect(captured.find((c) => c.table === schema.agents)).toBeUndefined();
+    // The kind a Viewer legitimately has is still answered.
+    expect(out.rows.map((r) => r.kind)).toContain("tool");
+  });
+
+  it("answers an org Member no agents, because list_agent_defs is Owner/Admin only", async () => {
+    // A second bypass on the same route: `list_agent_defs` grants org Owner
+    // and Admin only, while `search_tools` grants org Member.
+    mocks.resolveActorOrgRoles.mockResolvedValue(["Member"]);
+    mocks.resolveActorWorkspaceRoles.mockResolvedValue([]);
+    const out = await toolsSearchHandler({ query: "" }, CTX);
+    expect(out.rows.map((r) => r.kind)).not.toContain("agent");
+    expect(captured.find((c) => c.table === schema.agents)).toBeUndefined();
+    // `list_runs` grants org Member, so runs stay.
+    expect(captured.find((c) => c.table === schema.agentRuns)).toBeDefined();
+  });
+
+  it("refuses when the caller named only kinds it may not see", async () => {
+    // Narrowing to nothing would answer `rows: []`, which means "forbidden"
+    // dressed as "no matches" — the fabricated-empty this repo bans.
+    mocks.resolveActorOrgRoles.mockResolvedValue([]);
+    mocks.resolveActorWorkspaceRoles.mockResolvedValue(["Viewer"]);
+    await expect(
+      toolsSearchHandler({ query: "", kinds: ["run"] }, CTX),
+    ).rejects.toSatisfy(
+      (e: unknown) => (e as { code?: string }).code === "forbidden",
+    );
+  });
+
+  it("fails closed when no acting user resolves", async () => {
+    // A deleted API key, or a key with no recorded creator.
+    mocks.resolveActingUserId.mockResolvedValue(null);
+    const out = await toolsSearchHandler({ query: "" }, CTX);
+    expect(out.rows.map((r) => r.kind)).toEqual(["tool", "tool"]);
+    expect(captured).toHaveLength(0);
+  });
+
+  it("derives each kind's roles from the source contract, not a local copy", async () => {
+    // The lists must stay tied to the capabilities that own the tables, so
+    // tightening `list_runs` tightens search in the same commit.
+    expect(SEARCH_KIND_ROLES.run).toEqual({
+      org: allowed(runList.defaultRoles.org),
+      workspace: allowed(runList.defaultRoles.workspace),
+    });
+    expect(SEARCH_KIND_ROLES.agent).toEqual({
+      org: allowed(agentDefinitionList.defaultRoles.org),
+      workspace: allowed(agentDefinitionList.defaultRoles.workspace),
+    });
+    // `tool` has no source capability: the belt is the registry filtered by
+    // entitlement, gated by search_tools' own roles.
+    expect(SEARCH_KIND_ROLES.tool).toBeUndefined();
   });
 
   it("lists no tool claimed by a plugin the org has not installed (negative)", async () => {

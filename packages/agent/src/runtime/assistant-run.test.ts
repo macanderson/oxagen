@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { schema } from "@oxagen/database";
+import { RETENTION_CONTENT_CLASSES } from "@oxagen/run-ledger";
 import type {
   AppendAttemptBatchInput,
   CreateAttemptInput,
@@ -356,7 +357,15 @@ describe("resolveAssistantRunIdentity", () => {
     ]);
   });
 
-  it("pins a digest-only retention policy when the workspace has none", async () => {
+  it("pins the workspace's documented retain-all default when it has none", async () => {
+    // `retention_policy_versions` is read workspace-latest, so the row the
+    // first assistant turn writes becomes the whole workspace's policy. It
+    // used to write `digest_only`/30d, which silently opted every subsequent
+    // Tacho run down to `inspect` with its bodies refused. The literal values
+    // are asserted rather than echoed from ASSISTANT_RETENTION_POLICY: the
+    // previous version of this test read `mode` and `ttl_days` off the
+    // constant, so it would have passed just as green with the unsafe values
+    // in place and proved nothing about what the workspace keeps.
     const { captured } = setup({ retention: null });
     const identity = await mocks.withTenantDb((tx: never) =>
       resolveAssistantRunIdentity(tx, SCOPE, USER),
@@ -366,11 +375,16 @@ describe("resolveAssistantRunIdentity", () => {
     )!;
     expect(insert.values).toMatchObject({
       version: 1,
-      mode: ASSISTANT_RETENTION_POLICY.mode,
-      retainedContentClasses: [],
-      ttlDays: ASSISTANT_RETENTION_POLICY.ttl_days,
+      mode: "content_exact",
+      ttlDays: 2555,
       createdByUserId: USER,
     });
+    // Every content class, so `readWorkspaceRetention` answers exactly what a
+    // workspace with no row answers.
+    expect(insert.values.retainedContentClasses).toEqual([
+      ...RETENTION_CONTENT_CLASSES,
+    ]);
+    expect(ASSISTANT_RETENTION_POLICY.mode).not.toBe("digest_only");
     expect(identity.retention.digest).toBe(insert.values.policyDigest);
   });
 

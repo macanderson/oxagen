@@ -32,6 +32,7 @@ import { digestJcs } from "@oxagen/run-evidence";
 import {
   createPostgresRunStore,
   parseRunSpecV2,
+  RETENTION_CONTENT_CLASSES,
   TERMINAL_EVENT_TYPE,
   type AttemptEventInput,
   type PlatformSurface,
@@ -57,15 +58,30 @@ export const ASSISTANT_PRINCIPAL_NAME = "oxagen.assistant";
 export type AssistantRunSurface = Extract<PlatformSurface, "chat" | "api-chat">;
 
 /**
- * The retention policy an assistant run pins when the workspace has none:
- * digests only, no content class retained, thirty days. Every receipt this
- * recorder writes is already digests and counts, so the policy retains
- * nothing it would not have recorded anyway.
+ * ADR-058 decision 2 as a row: bodies of every content class, seven years
+ * from the seal. `retention_policy_versions` is read workspace-latest
+ * (`readWorkspaceRetention`), and a workspace with no row already behaves
+ * exactly like this — so when the first assistant turn has to pin a policy
+ * because the run spec needs one, this is the only row it can write without
+ * changing what the workspace keeps.
+ *
+ * It used to write `digest_only` with a thirty-day TTL, reasoning that the
+ * assistant's own receipts are digests anyway. That reasoning was sound about
+ * assistant runs and wrong about everything else: the row is the workspace's
+ * latest, so one assistant turn in a workspace that had never configured
+ * retention silently opted the whole workspace down — every subsequent Tacho
+ * run had its bodies refused and its replay grade fall to `inspect`, and
+ * nobody chose it. There is no run-scoped or agent-scoped retention in this
+ * model, so "a policy that is not the workspace's latest" cannot be
+ * expressed; preserving the default is the only correct move.
  */
 export const ASSISTANT_RETENTION_POLICY = {
-  mode: "digest_only",
-  retained_content_classes: [] as string[],
-  ttl_days: 30,
+  mode: "content_exact",
+  retained_content_classes: [...RETENTION_CONTENT_CLASSES] as string[],
+  // Seven years from the seal (ADR-058 decision 2, spec §13.1). The column is
+  // NOT NULL, so the default has to be written as a number rather than left
+  // absent.
+  ttl_days: 365 * 7,
 } as const;
 
 /**
