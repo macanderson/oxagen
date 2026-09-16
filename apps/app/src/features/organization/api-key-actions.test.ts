@@ -142,7 +142,13 @@ describe("createApiKey", () => {
     },
   );
 
-  it.each(["next tuesday", "2027-02-31", "01/03/2027", "2027-03-01T00:00:00Z"])(
+  it.each([
+    "next tuesday",
+    "2027-13-01",
+    "2027-02-31",
+    "01/03/2027",
+    "2027-03-01T00:00:00Z",
+  ])(
     "refuses %o, an expiry that is not a day, before the kernel runs (negative)",
     async (expiresOn) => {
       expect(await createApiKey("acme", "CI runner", expiresOn)).toEqual({

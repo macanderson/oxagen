@@ -203,6 +203,24 @@ describe("create", () => {
     },
   );
 
+  it("forgets a refusal when the dialog is closed, and reloads nothing (negative)", async () => {
+    createApiKey.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "authz_denied",
+    });
+    render(createDialog());
+    const dialog = await openDialog("Create a key", "create-api-key");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Create it" }),
+    );
+    await screen.findByTestId("create-api-key-failure");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(router.replace).not.toHaveBeenCalled();
+    await openDialog("Create a key", "create-api-key");
+    expect(screen.queryByTestId("create-api-key-failure")).toBeNull();
+  });
+
   it("names a write that threw before it answered (negative)", async () => {
     createApiKey.mockRejectedValue(new Error("socket hang up"));
     render(createDialog());
