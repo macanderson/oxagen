@@ -460,6 +460,53 @@ describe("pinsNullWorkspace", () => {
       false,
     );
   });
+
+  it("does not let ONE statement's two predicates cover a second statement", () => {
+    // The aggregate bug, exactly: the totals matched — two statements, two
+    // isNull predicates — while the second statement was entirely unpinned, so
+    // the table was exempted and the check reported clean. Every statement
+    // answers for itself now.
+    const sf = parse(
+      `withTenantDb((tx) => {
+         tx.select().from(schema.securityEvents).where(
+           and(
+             isNull(schema.securityEvents.workspaceId),
+             or(isNull(schema.securityEvents.workspaceId), gt(a, b)),
+           ),
+         );
+         return tx.select().from(schema.securityEvents).where(eq(schema.securityEvents.orgId, orgId));
+       });`,
+    );
+    expect(pinsNullWorkspace("securityEvents", tenantDbRegions(sf))).toBe(
+      false,
+    );
+  });
+
+  it("still exempts a table when every statement pins it", () => {
+    const sf = parse(
+      `withTenantDb((tx) => {
+         tx.select().from(schema.securityEvents).where(isNull(schema.securityEvents.workspaceId));
+         return tx.select().from(schema.securityEvents).where(isNull(schema.securityEvents.workspaceId));
+       });`,
+    );
+    expect(pinsNullWorkspace("securityEvents", tenantDbRegions(sf))).toBe(true);
+  });
+
+  it("does not let a pinned read in one scope exempt an unpinned read in another", () => {
+    // Pass A pools the regions of every sentinel-carrying scope in a file, so
+    // the same leak ran across scopes until the judgement went per statement.
+    const sf = parse(
+      `runInTenantScope(a, () =>
+         withTenantDb((tx) => tx.select().from(schema.securityEvents).where(isNull(schema.securityEvents.workspaceId))),
+       );
+       runInTenantScope(b, () =>
+         withTenantDb((tx) => tx.select().from(schema.securityEvents)),
+       );`,
+    );
+    expect(pinsNullWorkspace("securityEvents", tenantDbRegions(sf))).toBe(
+      false,
+    );
+  });
 });
 
 describe("the apps/app kernel seam, where invoke() is in another file", () => {

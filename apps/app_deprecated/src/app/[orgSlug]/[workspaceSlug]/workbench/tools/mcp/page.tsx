@@ -156,7 +156,7 @@ export default async function AgentToolsMcpPage({
   // authentication. The raw key is shown once at creation and cannot be read
   // back, so `$OXAGEN_API_KEY` is the only thing here that can be right. Same
   // reasoning as the org-level page at ../../../developer/mcp/page.tsx.
-  const snippetDefs = buildSnippets("$OXAGEN_API_KEY");
+  const snippetDefs = buildSnippets();
   const entries: McpTabEntry[] = await Promise.all(
     snippetDefs.map(async (s) => ({
       ...s,
@@ -277,10 +277,13 @@ export default async function AgentToolsMcpPage({
           <div className="flex items-start gap-2 rounded-xl border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
             <KeySquare className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <span>
-              The snippets below name{" "}
-              <code className="font-mono text-xs">$OXAGEN_API_KEY</code>.
-              Replace it with the key value you saved when the key was created —
-              it is shown once and cannot be read back. Create one on the{" "}
+              The Claude Code command names{" "}
+              <code className="font-mono text-xs">$OXAGEN_API_KEY</code>, which
+              your shell expands. The JSON configs cannot expand anything, so
+              replace{" "}
+              <code className="font-mono text-xs">&lt;your-api-key&gt;</code> in
+              them with the key value you saved when the key was created — it is
+              shown once and cannot be read back. Create one on the{" "}
               <a
                 href={`/${orgSlug}/developer/tokens`}
                 className="font-medium underline underline-offset-2 hover:no-underline"

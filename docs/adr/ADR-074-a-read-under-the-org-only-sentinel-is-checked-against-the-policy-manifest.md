@@ -299,6 +299,33 @@ file: `_shared/conversation-page.tsx` scopes one `org_only` `credit_lots` read
 to the sentinel and everything else to the real workspace, and the file-level
 answer called that a finding when it is not one.
 
+### Per unit, not in aggregate
+
+The fifth failure was on a different axis from the first four. They were about
+*which call sites the check can read*; this was about *how it associates a fact
+with the thing the fact belongs to*.
+
+`pinsNullWorkspace` counted two totals across a whole file — how many statements
+touched the table, how many `isNull(schema.<table>.workspaceId)` predicates
+appeared — and inferred a per-statement property from the pair. One query
+carrying the predicate twice, which `and(isNull(x), or(isNull(x), …))` does
+naturally, made the totals match while a second, entirely unpinned
+organisation-wide read of the same table went unreported. The same pooling
+leaked across scopes, because the co-located pass hands it the regions of every
+sentinel-carrying scope in the file at once.
+
+It now walks out to each statement's own Drizzle chain and asks that chain
+whether it pins the predicate. Every statement answers for itself, and the
+table is exempt only when all of them do.
+
+**The rest of the checker was audited for the same shape and no other instance
+was found.** The remaining `.length` comparisons are existence checks
+(`regions.length === 0`, `bad.length > 0`) or exact set differences (the stale
+waiver list, the waived count), and `offenders` judges each table on its own
+policy class with nothing pooled. Recorded because "are there other places this
+reasons in aggregate" is the question worth asking after a finding like this,
+and the answer should be written rather than assumed.
+
 ### What the check can and cannot tell you
 
 `check:org-sentinel-reads` answers one question: *is this read narrowed by RLS
@@ -362,11 +389,15 @@ directly — so it needs the check anyway.
   anything outside Postgres, since Neo4j and ClickHouse scoping is a separate
   seam. It is a net with a known mesh, not a proof.
 
-- **Four blind spots were found after the check was first written, and all four
-  were closed rather than documented.** The fourth was not a new surface at all
-  but the check failing to parse a shape its own documentation claimed to cover,
-  which is why the call-site analysis is now a parse and why every row of the
-  wrapper table names the file it was verified on. Against `main`, an
+- **Five failures were found after the check was first written, and all five
+  were closed rather than documented. Every one of them reported CLEAN rather
+  than erroring**, which is the property that makes a green CI check worse than
+  no check: it converts "nobody has verified this" into "CI says it is fine".
+  Four were about which call sites it could read — closed by the parse, and by
+  the wrapper table whose rows each name the file they were verified on. The
+  fifth was on a different axis, aggregate counting where per-statement
+  reasoning was needed, and is why the section above audits the rest of the
+  checker for that shape instead of fixing only the instance. Against `main`, an
   `invoke()` behind a `readCapability(viewer, name, input)` helper reported
   nothing, because the capability is named at the helper's call sites; that is
   the indirect fallback, and it took `main` from five sites to twelve. Against

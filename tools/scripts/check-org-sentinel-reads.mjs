@@ -401,21 +401,46 @@ export function tablesNamed(roots) {
 }
 
 /**
- * Whether every statement in these subtrees that touches `name` already pins
+ * The outermost expression of the Drizzle chain this node sits in — the
+ * statement it belongs to. `.from(t)` and the `.where(…)` that qualifies it are
+ * links on one chain, so walking out to the root and searching THAT subtree
+ * associates a predicate with its own statement instead of with the file.
+ */
+function statementRoot(node) {
+  let current = node;
+  while (
+    current.parent !== undefined &&
+    (ts.isPropertyAccessExpression(current.parent) ||
+      ts.isCallExpression(current.parent) ||
+      ts.isAwaitExpression(current.parent) ||
+      ts.isParenthesizedExpression(current.parent))
+  ) {
+    current = current.parent;
+  }
+  return current;
+}
+
+/**
+ * Whether EVERY statement in these subtrees that touches `name` pins
  * `workspace_id IS NULL`.
  *
  * This is the one exemption, and it applies only to `workspace_nullable`. That
  * class's policy admits exactly the rows whose workspace_id IS NULL plus the
  * ones matching the workspace GUC, so a query that already asks for the NULL
  * rows and nothing else gets the same answer under the sentinel as it would
- * under any scope. Counting rather than merely looking for one `isNull` keeps a
- * second, unpinned read of the same table from riding the first one's
- * exemption. An INSERT that names no workspaceId writes NULL, which the class's
- * WITH CHECK accepts under any scope, so it counts as pinned.
+ * under any scope. An INSERT that names no workspaceId writes NULL, which the
+ * class's WITH CHECK accepts under any scope, so it counts as pinned.
+ *
+ * PER STATEMENT, NOT IN AGGREGATE. This compared two totals once — how many
+ * statements touched the table, how many `isNull` predicates appeared anywhere
+ * near them — and inferred a per-statement property from the pair. A single
+ * query carrying the predicate twice (`and(isNull(x), or(isNull(x), …))`) made
+ * the totals match while a second, entirely unpinned organisation-wide read of
+ * the same table went unreported, and the check said clean. Pooling regions
+ * from different `runInTenantScope` callbacks leaked the same way across
+ * scopes. Every statement now answers for itself.
  */
 export function pinsNullWorkspace(name, roots) {
-  let statements = 0;
-  let pinned = 0;
   const tableIs = (arg) =>
     arg !== undefined &&
     ts.isPropertyAccessExpression(arg) &&
@@ -423,47 +448,8 @@ export function pinsNullWorkspace(name, roots) {
     arg.expression.text === "schema" &&
     arg.name.text === name;
 
-  for (const root of [roots].flat()) {
-    for (const n of nodes(root)) {
-      if (!ts.isCallExpression(n)) continue;
-      const callee = n.expression;
-      if (!ts.isPropertyAccessExpression(callee)) continue;
-      const method = callee.name.text;
-
-      if (
-        ["from", "update", "delete"].includes(method) &&
-        tableIs(n.arguments[0])
-      ) {
-        statements += 1;
-        continue;
-      }
-
-      if (method === "insert" && tableIs(n.arguments[0])) {
-        statements += 1;
-        // `.insert(t).values({ … })` — the values() call is the one further out
-        // on the chain whose own callee subtree contains this insert. An INSERT
-        // that names no workspaceId writes NULL, which the class's WITH CHECK
-        // accepts under any scope; one that names a value must account for it.
-        let values;
-        for (const x of nodes(root)) {
-          if (!ts.isCallExpression(x)) continue;
-          if (!ts.isPropertyAccessExpression(x.expression)) continue;
-          if (x.expression.name.text !== "values") continue;
-          if ([...nodes(x.expression)].includes(n)) {
-            values = x;
-            break;
-          }
-        }
-        const obj = values?.arguments?.[0];
-        const ws =
-          obj !== undefined && ts.isObjectLiteralExpression(obj)
-            ? workspaceOfObject(obj, new Set())
-            : null;
-        if (ws === null || ws === "sentinel") pinned += 1;
-        continue;
-      }
-    }
-
+  /** Does this one statement pin workspace_id IS NULL on `name`? */
+  const pinnedIn = (root) => {
     for (const n of nodes(root)) {
       if (calleeText(n) !== "isNull") continue;
       const arg = n.arguments[0];
@@ -473,11 +459,44 @@ export function pinsNullWorkspace(name, roots) {
         arg.name.text === "workspaceId" &&
         tableIs(arg.expression)
       ) {
-        pinned += 1;
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const statements = [];
+  for (const region of [roots].flat()) {
+    for (const n of nodes(region)) {
+      if (!ts.isCallExpression(n)) continue;
+      const callee = n.expression;
+      if (!ts.isPropertyAccessExpression(callee)) continue;
+      if (!tableIs(n.arguments[0])) continue;
+      const method = callee.name.text;
+      if (["from", "update", "delete", "insert"].includes(method)) {
+        statements.push({ method, node: n });
       }
     }
   }
-  return statements > 0 && pinned >= statements;
+  if (statements.length === 0) return false;
+
+  return statements.every(({ method, node }) => {
+    const root = statementRoot(node);
+    if (method === "insert") {
+      // `.insert(t).values({ … })` — the values object is on this same chain.
+      for (const x of nodes(root)) {
+        if (!ts.isCallExpression(x)) continue;
+        if (!ts.isPropertyAccessExpression(x.expression)) continue;
+        if (x.expression.name.text !== "values") continue;
+        const obj = x.arguments[0];
+        if (obj === undefined || !ts.isObjectLiteralExpression(obj)) continue;
+        const ws = workspaceOfObject(obj, new Set());
+        return ws === null || ws === "sentinel";
+      }
+      return true; // no values() found: nothing names a workspace
+    }
+    return pinnedIn(root);
+  });
 }
 
 /** The offending (export, table, class) triples among the names given. */
