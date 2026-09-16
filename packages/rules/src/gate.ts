@@ -148,7 +148,19 @@ export function createDecisionRulesGate(
       userId: ctx.userId,
       requestId: ctx.requestId,
     });
-    await record(options, commit);
+    // By here the mandate has reserved authority in the ledger, and the only
+    // thing that gives it back is the settlement the kernel applies to the
+    // settlement this gate RETURNS. A throw from here never returns it, so
+    // the reservation would sit open forever: no approval row names the call,
+    // so neither the expiry sweep nor a revoke would ever find it, and the
+    // mandate's remaining authority would shrink on every failed call. The
+    // release happens here instead, before the failure propagates.
+    try {
+      await record(options, commit);
+    } catch (error) {
+      await releaseReservation(options, settlement);
+      throw error;
+    }
     return settlement;
   };
 }
@@ -198,6 +210,25 @@ async function skipsThePerson(
   } catch (error) {
     options.onError?.(error);
     return undefined;
+  }
+}
+
+/**
+ * Give back what a mandate reserved for a call that is not going to happen.
+ *
+ * Reported and swallowed: it runs while another error is already on its way
+ * up, and losing that error to a secondary failure would hide why the call
+ * was refused. The same posture `applyDecisionSettlement` takes in the kernel.
+ */
+async function releaseReservation(
+  options: DecisionRulesGateOptions,
+  settlement: void | DecisionSettlement,
+): Promise<void> {
+  if (!settlement) return;
+  try {
+    await settlement.release();
+  } catch (error) {
+    options.onError?.(error);
   }
 }
 

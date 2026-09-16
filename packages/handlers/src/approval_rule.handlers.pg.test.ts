@@ -341,6 +341,24 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).rejects.toSatisfy(conflict("measure_not_declared"));
     });
 
+    it("refuses a condition over a measure declared as the other kind", async () => {
+      // `counterparty` is text and `amount` is an amount. A ceiling over text
+      // and an allow list over a number both read as unreadable on every call,
+      // so the rule would save cleanly and never fire.
+      await expect(
+        set(adminUserId, [
+          { ...RULE, maxMeasures: { counterparty: "10" }, allowTargets: {} },
+        ]),
+      ).rejects.toSatisfy(conflict("measure_wrong_type"));
+      await expect(
+        set(adminUserId, [
+          { ...RULE, maxMeasures: {}, allowTargets: { amount: ["1*"] } },
+        ]),
+      ).rejects.toSatisfy(conflict("measure_wrong_type"));
+      // The right way round still saves.
+      await expect(set(adminUserId, [RULE])).resolves.toBeDefined();
+    });
+
     it("refuses a caller who does not hold the role accountable for the tool's consequence", async () => {
       // moves_money defaults to Owner and Billing; Compliance is an org role
       // and still may not widen what an agent may do with money.
@@ -468,6 +486,26 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ),
       );
       expect(on.items[0]!.enabled).toBe(true);
+    });
+
+    it("keeps both of two rules switched off at once, against a concurrent write", async () => {
+      // The lost update this guards: both calls read the same array, each
+      // changes its own rule, and the second stores a copy that still has the
+      // first rule on. The row lock serialises them, so both stick.
+      await set(adminUserId, [RULE, { ...RULE, id: "release-tooling" }]);
+      const toggle = (ruleId: string) =>
+        inScope(() =>
+          approvalRuleEnabledSetHandler(
+            { ruleId, enabled: false },
+            ctx(adminUserId),
+          ),
+        );
+      await Promise.all([toggle(RULE.id), toggle("release-tooling")]);
+      const after = await list(adminUserId);
+      expect(after.items.map((r) => [r.id, r.enabled])).toEqual([
+        [RULE.id, false],
+        ["release-tooling", false],
+      ]);
     });
 
     it("refuses to switch a rule that is not there", async () => {

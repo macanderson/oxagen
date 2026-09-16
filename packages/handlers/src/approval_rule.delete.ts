@@ -11,6 +11,7 @@ import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { approvalRuleDelete } from "@oxagen/oxagen/contracts/approval_rule.delete";
 import {
+  lockWorkspaceRuleSet,
   readRules,
   requireRule,
   requireWorkspace,
@@ -29,6 +30,9 @@ export const approvalRuleDeleteHandler: CapabilityHandler<
   );
 
   const out = await withTenantDb(async (tx) => {
+    // Serialises with every other rule write on this workspace, so a delete
+    // and a concurrent toggle cannot each store a copy of the same stale set.
+    await lockWorkspaceRuleSet(tx, workspaceId);
     const rules = await readRules(tx, workspaceId);
     requireRule(rules, input.ruleId);
     const kept = rules.filter((r) => r.id !== input.ruleId);

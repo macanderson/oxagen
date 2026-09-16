@@ -441,4 +441,63 @@ describe("the auto-approval receipt is written after every later check", () => {
     );
     expect(onError).toHaveBeenCalledOnce();
   });
+
+  test("a receipt that cannot be written gives the mandate's reservation back", async () => {
+    // The mandate reserved before the receipt was attempted, and a throw from
+    // here never returns the settlement to the kernel — so nothing else would
+    // ever release it, and the mandate's remaining authority would shrink on
+    // every failed call.
+    const release = vi.fn(async () => {});
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => RULES,
+      autoApprove: async () => ({
+        ok: true,
+        commit: async () => {
+          throw new Error("approval insert failed");
+        },
+      }),
+      checkMandate: async () => ({ settle: async () => {}, release }),
+      onError: vi.fn(),
+    });
+    await expect(gate(parkedByAgent)).rejects.toThrow(
+      /auto_approval_not_recorded/,
+    );
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  test("a release that itself fails is reported and does not replace the refusal", async () => {
+    const onError = vi.fn();
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => RULES,
+      autoApprove: async () => ({
+        ok: true,
+        commit: async () => {
+          throw new Error("approval insert failed");
+        },
+      }),
+      checkMandate: async () => ({
+        settle: async () => {},
+        release: async () => {
+          throw new Error("ledger unreachable");
+        },
+      }),
+      onError,
+    });
+    // The caller still learns why the call was refused, not why the cleanup was.
+    await expect(gate(parkedByAgent)).rejects.toThrow(
+      /auto_approval_not_recorded/,
+    );
+    expect(onError).toHaveBeenCalledTimes(2);
+  });
+
+  test("a receipt that is written keeps the reservation, for the handler to settle", async () => {
+    const release = vi.fn(async () => {});
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => RULES,
+      autoApprove: async () => ({ ok: true, commit: async () => {} }),
+      checkMandate: async () => ({ settle: async () => {}, release }),
+    });
+    await expect(gate(parkedByAgent)).resolves.toBeDefined();
+    expect(release).not.toHaveBeenCalled();
+  });
 });

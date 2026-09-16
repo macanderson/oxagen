@@ -15,6 +15,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { approvalRuleEnabledSet } from "@oxagen/oxagen/contracts/approval_rule.enabled.set";
 import {
   assertRulesSavable,
+  lockWorkspaceRuleSet,
   readRules,
   requireRule,
   requireWorkspace,
@@ -33,6 +34,11 @@ export const approvalRuleEnabledSetHandler: CapabilityHandler<
   );
 
   const out = await withTenantDb(async (tx) => {
+    // Serialises with every other rule write on this workspace. Two operators
+    // switching off two DIFFERENT rules at once both stick; without the lock
+    // the second write would carry a stale copy of the first's rule and undo
+    // it, on the one capability that is reached for during an incident.
+    await lockWorkspaceRuleSet(tx, workspaceId);
     const rules = await readRules(tx, workspaceId);
     const rule = requireRule(rules, input.ruleId);
     if (input.enabled) await assertRulesSavable(tx, ctx, workspaceId, [rule]);

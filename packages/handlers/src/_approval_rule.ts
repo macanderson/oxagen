@@ -41,6 +41,38 @@ export function requireWorkspace(ctx: CheckedContext, name: string): string {
   return ctx.workspaceId;
 }
 
+/**
+ * Take the row lock every rule write serialises on.
+ *
+ * The three writes are read-modify-write over one JSONB document: read the
+ * clause, change one rule, store the whole array back. Without the lock two
+ * operators who toggle DIFFERENT rules at the same time both read the same
+ * original array and both store their own copy, and the second silently
+ * undoes the first. That is worst for the one capability an operator reaches
+ * for during an incident: switching a rule off, seeing it succeed, and having
+ * a colleague's unrelated toggle switch it back on.
+ *
+ * Same idiom as the mandate ledger's `lockMandate`: `SELECT … FOR UPDATE` on
+ * the row the document lives in, taken before the read, held to commit.
+ */
+export async function lockWorkspaceRuleSet(
+  tx: Tx,
+  workspaceId: string,
+): Promise<void> {
+  const [row] = await tx
+    .select({ id: schema.workspaces.id })
+    .from(schema.workspaces)
+    .where(eq(schema.workspaces.id, workspaceId))
+    .for("update");
+  if (!row) {
+    throw new HandlerError({
+      code: "not_found",
+      reason: "workspace_not_found",
+      message: "The workspace is not readable in this scope",
+    });
+  }
+}
+
 /** The stored rule set of a workspace, or null when it has none. */
 async function readStoredSet(
   tx: Tx,
@@ -214,6 +246,42 @@ async function declaredTools(
  *    grant authority over a consequence may not write the rule that lets a
  *    call carrying it skip a person either.
  */
+/** What a condition reads off the call: a value to compare, or a target to match. */
+type ConditionKind = "value" | "target";
+
+/** The measure kinds `readDeclaredMeasures` files under each of the two. */
+const DECLARED_AS: Record<ConditionKind, readonly string[]> = {
+  value: ["amount", "count"],
+  target: ["text"],
+};
+
+/** Refuse a condition whose measure the tool does not declare, or declares as the other kind. */
+function assertDeclaredAs(
+  tool: DeclaredTool,
+  measure: string,
+  kind: ConditionKind,
+): void {
+  const declaration = tool.measures[measure];
+  const at = `${tool.slug}@${tool.version}`;
+  if (declaration === undefined) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "measure_not_declared",
+      message: `${at} declares no measure "${measure}" for the condition the rule names`,
+    });
+  }
+  if (!DECLARED_AS[kind].includes(declaration.type)) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "measure_wrong_type",
+      message:
+        kind === "value"
+          ? `${at} declares "${measure}" as ${declaration.type}; a ceiling needs an amount or a count`
+          : `${at} declares "${measure}" as ${declaration.type}; an allow list needs a text measure`,
+    });
+  }
+}
+
 export async function assertRulesSavable(
   tx: Tx,
   ctx: CheckedContext,
@@ -238,17 +306,19 @@ export async function assertRulesSavable(
         });
       }
       for (const tool of matched) {
-        for (const measure of [
-          ...Object.keys(rule.maxMeasures),
-          ...Object.keys(rule.allowTargets),
-        ]) {
-          if (tool.measures[measure] === undefined) {
-            throw new HandlerError({
-              code: "conflict",
-              reason: "measure_not_declared",
-              message: `${tool.slug}@${tool.version} declares no measure "${measure}" for the condition the rule names`,
-            });
-          }
+        // A ceiling is measured against a value, and an allow list is matched
+        // against a target, so each condition needs its measure declared AND
+        // declared as the right kind. `readDeclaredMeasures` files an amount
+        // or a count as a value and text as a target; a ceiling over a text
+        // measure, or an allow list over a numeric one, would read as
+        // unreadable on every call and the rule would never fire. A rule that
+        // saves cleanly and can never fire is worse than a refused one,
+        // because nothing on the page says why.
+        for (const measure of Object.keys(rule.maxMeasures)) {
+          assertDeclaredAs(tool, measure, "value");
+        }
+        for (const measure of Object.keys(rule.allowTargets)) {
+          assertDeclaredAs(tool, measure, "target");
         }
         for (const tag of tool.consequenceTags) tags.add(tag);
       }

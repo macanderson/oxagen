@@ -20,6 +20,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { approvalRuleSet } from "@oxagen/oxagen/contracts/approval_rule.set";
 import {
   assertRulesSavable,
+  lockWorkspaceRuleSet,
   publicUserId,
   requireWorkspace,
   stamp,
@@ -39,6 +40,8 @@ export const approvalRuleSetHandler: CapabilityHandler<
 
   const at = new Date();
   const out = await withTenantDb(async (tx) => {
+    // Serialises with every other rule write on this workspace.
+    await lockWorkspaceRuleSet(tx, workspaceId);
     await assertRulesSavable(tx, ctx, workspaceId, input.rules);
     const author = await publicUserId(tx, actingUserId);
     const rules = input.rules.map((rule) => stamp(rule, author, at));
