@@ -534,6 +534,7 @@ describe("Organization › API keys", () => {
           lastUsedAt: null,
           expiresAt: null,
           revokedAt: null,
+          rotatable: true,
         },
       ],
     });

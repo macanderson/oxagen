@@ -3,86 +3,14 @@
 // the policy bundle it last fetched. A report the daemon has not sent reads
 // "not recorded".
 //
-// The status cell prints the status column and then what ended the enrollment.
-// `packages/handlers/src/lib/tacho-host.ts:110-115` refuses a revoked host and
-// then an expired one, and every enrollment carries an expiry, so a cell that
-// read only the revocation would print a stored status over a host whose every
-// request is refused.
-import { useLocale, useTranslations } from "next-intl";
+// A row is its own client component (`host-row.tsx`) because its state turns
+// on a clock that has to keep running; this section is the server half.
+import { useTranslations } from "next-intl";
 import type { AgentDetail } from "@/data/contracts/agents";
-import { credentialState } from "@/shared/credential-state";
 import { mono } from "@/ui/control-styles";
-import { formatCount } from "@/ui/money-format";
-import { cell, Table } from "@/ui/table";
-import { Instant, NotRecordedValue, Panel } from "./parts";
-
-type Host = AgentDetail["hosts"][number];
-
-function hooksKey(ok: boolean | null) {
-  if (ok === null) return "unreported";
-  return ok ? "ok" : "missing";
-}
-
-function HostRow({ host, now }: { host: Host; now: number }) {
-  const t = useTranslations("agents.detail.enrollment");
-  const locale = useLocale();
-  const state = credentialState(host, now);
-  return (
-    <tr data-testid="host-row">
-      <td className={cell}>
-        {host.hostname}
-        <span className={`${mono} block text-xs text-muted-foreground`}>
-          {host.platform}
-        </span>
-      </td>
-      <td className={cell} data-state={state}>
-        <span className={mono}>{host.status}</span>
-        {state === "revoked" && host.revokedAt !== null ? (
-          <span className="block text-xs text-muted-foreground">
-            {t("revoked")} <Instant at={host.revokedAt} />
-          </span>
-        ) : null}
-        {state === "expired" ? (
-          <span className="block text-xs text-muted-foreground">
-            {t("expired")} <Instant at={host.expiresAt} />
-          </span>
-        ) : null}
-      </td>
-      <td className={cell}>
-        <span className={mono}>{host.mode}</span>
-      </td>
-      <td className={cell}>
-        {host.collectorVersion === null ? (
-          <NotRecordedValue />
-        ) : (
-          <span className={mono}>{host.collectorVersion}</span>
-        )}
-      </td>
-      <td className={cell} data-hooks={hooksKey(host.hooksOk)}>
-        {t(`hooks.${hooksKey(host.hooksOk)}`)}
-      </td>
-      <td className={cell}>
-        {host.bundleVersionServed === null ? (
-          <NotRecordedValue />
-        ) : (
-          t("bundleVersion", {
-            version: formatCount(host.bundleVersionServed, locale),
-          })
-        )}
-      </td>
-      <td className={cell}>
-        <span className={`${mono} break-all`}>{host.deviceKeyFingerprint}</span>
-      </td>
-      <td className={cell}>
-        {host.lastSeenAt === null ? (
-          t("never")
-        ) : (
-          <Instant at={host.lastSeenAt} />
-        )}
-      </td>
-    </tr>
-  );
-}
+import { Table } from "@/ui/table";
+import { HostRow } from "./host-row";
+import { Panel } from "./parts";
 
 export function EnrollmentSection({
   hosts,

@@ -8,10 +8,12 @@
 // gave a row that contradicted itself: Rotate withdrawn while the status still
 // said "live".
 //
+// The clock itself is `@/ui/expiry-clock`, shared with the agent credential
+// and host rows, which derive their own state from the same captured instant.
+//
 // This is the courtesy. `rotate_api_key` refuses an expired key and that
 // refusal is the guarantee, on the API and MCP as well as here.
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
 import type { ApiKey } from "@/data/contracts/org";
 import {
   credentialState,
@@ -19,31 +21,10 @@ import {
 } from "@/shared/credential-state";
 import type { SafePath } from "@/shared/safe-path";
 import { mono } from "@/ui/control-styles";
+import { useExpiryClock } from "@/ui/expiry-clock";
 import { cell } from "@/ui/table";
 import { KeyRowActions } from "./create-key-dialog";
 import { DateCell } from "./parts";
-
-/** How long a row waits before it re-reads the clock. */
-const EXPIRY_TICK_MS = 30_000;
-
-/**
- * The server's instant, then the browser's once this row has an expiry to
- * cross. A row with no expiry, or one already past it, sets no timer.
- */
-function useExpiryClock(expiresAt: string | null, now: number): number {
-  const [current, setCurrent] = useState(now);
-  const pending = expiresAt !== null && Date.parse(expiresAt) > current;
-  useEffect(() => {
-    if (!pending) return;
-    const timer = setInterval(() => {
-      setCurrent(Date.now());
-    }, EXPIRY_TICK_MS);
-    return () => {
-      clearInterval(timer);
-    };
-  }, [pending]);
-  return current;
-}
 
 /** The key's state as a dot and a word. */
 function KeyStatus({ state }: { state: CredentialState }) {

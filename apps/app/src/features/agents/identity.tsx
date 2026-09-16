@@ -1,15 +1,16 @@
 // The Identity section: the principal as Postgres records it, the roles on it
 // and the long-lived credentials it holds (prefix and dates, never a secret).
 //
-// A credential's state is read off both fields that disqualify it. Revocation
-// is recorded and expiry is judged, so a row whose expiry has passed says
-// "expired" rather than "active": the claim this page makes is what authority
-// the agent actually holds, and a credential past its expiry holds none.
+// A credential row is its own client component (`credential-row.tsx`): its
+// state is read off both fields that disqualify it, and the expiry half is
+// judged against a clock that keeps running, so a row whose expiry passes
+// while the page is open says "expired" rather than "active". The claim this
+// page makes is what authority the agent actually holds.
 import { useTranslations } from "next-intl";
 import type { AgentDetail } from "@/data/contracts/agents";
-import { credentialState } from "@/shared/credential-state";
 import { mono } from "@/ui/control-styles";
 import { cell, Table } from "@/ui/table";
+import { CredentialRow } from "./credential-row";
 import {
   AgentStatusBadge,
   Facts,
@@ -81,66 +82,16 @@ function Credentials({
           ]}
         >
           {credentials.map((credential) => (
-            <tr key={credential.id} data-testid="credential-row">
-              <td className={cell}>
-                <span className={mono}>{credential.prefix}</span>
-                <span className="block text-xs text-muted-foreground">
-                  {credential.name}
-                </span>
-              </td>
-              <td className={cell}>
-                <Instant at={credential.createdAt} />
-              </td>
-              <td className={cell}>
-                {credential.lastUsedAt === null ? (
-                  t("never")
-                ) : (
-                  <Instant at={credential.lastUsedAt} />
-                )}
-              </td>
-              <td className={cell}>
-                {credential.expiresAt === null ? (
-                  t("noExpiry")
-                ) : (
-                  <Instant at={credential.expiresAt} />
-                )}
-              </td>
-              <td
-                className={cell}
-                data-state={credentialState(credential, now)}
-              >
-                <CredentialState credential={credential} now={now} />
-              </td>
-            </tr>
+            <CredentialRow
+              key={credential.id}
+              credential={credential}
+              now={now}
+            />
           ))}
         </Table>
       )}
     </Panel>
   );
-}
-
-/**
- * The word for a credential's state, with the instant that ended it where the
- * table does not already print one: the revocation instant is recorded nowhere
- * else on the row, the expiry sits in the column beside this one.
- */
-function CredentialState({
-  credential,
-  now,
-}: {
-  credential: AgentDetail["credentials"][number];
-  now: number;
-}) {
-  const t = useTranslations("agents.detail.credentials");
-  const state = credentialState(credential, now);
-  if (state === "revoked" && credential.revokedAt !== null) {
-    return (
-      <>
-        {t("revoked")} <Instant at={credential.revokedAt} />
-      </>
-    );
-  }
-  return <>{t(state === "expired" ? "expired" : "active")}</>;
 }
 
 export function IdentitySection({
