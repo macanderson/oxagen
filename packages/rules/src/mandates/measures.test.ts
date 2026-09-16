@@ -162,3 +162,75 @@ describe("integer-string arithmetic", () => {
     );
   });
 });
+
+describe("readMeasure keeps a count exact", () => {
+  const rows = { path: "rows", type: "count", unit: "rows" } as const;
+
+  // The defect: `Number("9007199254740995")` is 9007199254740996, so a call
+  // one unit over its mandate was admitted and nothing logged a conflict.
+  it("carries a string count past MAX_SAFE_INTEGER digit for digit", () => {
+    for (const n of [
+      "9007199254740993",
+      "9007199254740995",
+      "999999999999999999999999999999",
+    ]) {
+      expect(readMeasure({ rows: n }, rows)).toEqual({
+        ok: true,
+        measure: { kind: "value", value: n },
+      });
+    }
+  });
+
+  it("never yields scientific notation, which BigInt would throw on", () => {
+    const read = readMeasure({ rows: "1".repeat(30) }, rows);
+    if (!read.ok || read.measure.kind !== "value") throw new Error("unread");
+    // Bound before the closure: the narrowing does not survive into it.
+    const value = read.measure.value;
+    expect(value).not.toContain("e");
+    expect(() => BigInt(value)).not.toThrow();
+  });
+
+  it("still reads an ordinary count, as a string or a number", () => {
+    expect(readMeasure({ rows: "42" }, rows)).toEqual({
+      ok: true,
+      measure: { kind: "value", value: "42" },
+    });
+    expect(readMeasure({ rows: 42 }, rows)).toEqual({
+      ok: true,
+      measure: { kind: "value", value: "42" },
+    });
+  });
+
+  // A JSON number past the safe range was already inexact when parsed, so no
+  // reading of it is the figure the tool meant; the gate refuses rather than
+  // enforcing a number nobody reported.
+  it("refuses a JSON number the parser could not hold exactly (negative)", () => {
+    expect(readMeasure({ rows: 9007199254740995 }, rows)).toEqual({
+      ok: false,
+      reason: "not_a_number",
+    });
+    expect(readMeasure({ rows: 1e30 }, rows)).toEqual({
+      ok: false,
+      reason: "not_a_number",
+    });
+  });
+
+  it("refuses the shapes it always refused (negative)", () => {
+    expect(readMeasure({ rows: "007" }, rows)).toEqual({
+      ok: false,
+      reason: "not_a_number",
+    });
+    expect(readMeasure({ rows: "1.5" }, rows)).toEqual({
+      ok: false,
+      reason: "not_a_number",
+    });
+    expect(readMeasure({ rows: -5 }, rows)).toEqual({
+      ok: false,
+      reason: "negative",
+    });
+    expect(readMeasure({ rows: true }, rows)).toEqual({
+      ok: false,
+      reason: "not_a_number",
+    });
+  });
+});

@@ -88,15 +88,29 @@ export function readMeasure(
       return { ok: true, measure: { kind: "value", value: micros } };
     }
     case "count": {
-      const n =
-        typeof raw === "number"
-          ? raw
-          : typeof raw === "string" && MEASURE_VALUE.test(raw)
-            ? Number(raw)
-            : Number.NaN;
-      if (!Number.isInteger(n)) return { ok: false, reason: "not_a_number" };
-      if (n < 0) return { ok: false, reason: "negative" };
-      return { ok: true, measure: { kind: "value", value: String(n) } };
+      // A count is enforced on BigInt (`exceeds`), so it has to reach that
+      // comparison as the digits the tool reported. Routing it through
+      // `Number` rounded 9007199254740995 to …96 — a call one unit over its
+      // mandate admitted, with the gate and the ledger each believing they
+      // agreed — and turned a large value into scientific notation that
+      // `BigInt` then threw on. Money has been micros-and-BigInt for exactly
+      // this reason (INV-09); a count is the same rule one column over.
+      if (typeof raw === "string") {
+        if (!MEASURE_VALUE.test(raw))
+          return { ok: false, reason: "not_a_number" };
+        return { ok: true, measure: { kind: "value", value: raw } };
+      }
+      if (typeof raw !== "number" || !Number.isInteger(raw))
+        return { ok: false, reason: "not_a_number" };
+      if (raw < 0) return { ok: false, reason: "negative" };
+      // A JSON number past the safe range was already inexact when it was
+      // parsed, so no reading of it is the figure the tool meant. The gate
+      // refuses rather than enforcing a number nobody reported — a tool that
+      // needs to report a count this large reports it as a string, which the
+      // branch above carries exactly.
+      if (!Number.isSafeInteger(raw))
+        return { ok: false, reason: "not_a_number" };
+      return { ok: true, measure: { kind: "value", value: String(raw) } };
     }
     case "text": {
       if (typeof raw !== "string") return { ok: false, reason: "not_a_string" };
