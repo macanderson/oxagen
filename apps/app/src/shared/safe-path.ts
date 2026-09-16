@@ -89,7 +89,7 @@ export const routes = {
   /** Organization › People is the organization's root. */
   people: (org: string): SafePath => pathOf(org),
   /**
-   * Organization › API keys. A key names a workspace (ADR-069), so the
+   * Organization › API keys. A key names a workspace (ADR-073), so the
    * workspace in scope is a query value on this one route rather than a route
    * of its own; left off, the page takes the viewer's first workspace.
    */

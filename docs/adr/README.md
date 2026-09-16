@@ -94,4 +94,4 @@ first. Move a row into its epic when one fits.
 - [ADR-065](./ADR-065-onboarding-gate-shape-installer-path-provisional-workspace.md) — Onboarding: the gate is state on the organization (`org.onboarding_state`) and a rail over real pages, opened by `create_org` and closed only by the first frame; the installer is the CLI path with a single-use enrollment token (`enroll_host`); the provisional workspace ships and the conversion offer waits
 - [ADR-066](./ADR-066-two-names-agent-control-plane-and-agent-fleet-management.md) — Oxagen has two names, the agent control plane and agent fleet management; spend is part of the fleet; the agent asks for the keys
 - [ADR-067](./ADR-067-an-oxagen-login-key-acts-for-its-creator-on-host-enrollment.md) — An `oxagen login` key acts for its creator on Tacho host enrollment; machine-bound keys never do
-- [ADR-069](./ADR-069-an-api-key-names-a-workspace.md) — An API key names a workspace, and so does the page that mints it
+- [ADR-073](./ADR-073-an-api-key-names-a-workspace.md) — An API key names a workspace, and so does the page that mints it

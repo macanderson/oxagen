@@ -95,9 +95,16 @@ describe("create", () => {
     render(createDialog());
     const dialog = await openDialog("Create a key", "create-api-key");
     await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
-    fireEvent.change(within(dialog).getByLabelText("Expires on (optional)"), {
-      target: { value: "2027-03-01" },
-    });
+    fireEvent.change(
+      within(dialog).getByLabelText(
+        "Expires at the end of this day, UTC (optional)",
+      ),
+      { target: { value: "2027-03-01" } },
+    );
+    // The control carries no timezone, so the note says what will be stored.
+    expect(dialog).toHaveTextContent(
+      "The key stops working at 2027-03-01T23:59:59.999Z.",
+    );
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Create it" }),
     );
@@ -133,6 +140,45 @@ describe("create", () => {
     });
     expect(screen.queryByText(SECRET)).toBeNull();
     expect(screen.queryByTestId("create-api-key")).toBeNull();
+  });
+
+  it("says the day is read in UTC before one is picked", async () => {
+    render(createDialog());
+    const dialog = await openDialog("Create a key", "create-api-key");
+    expect(dialog).toHaveTextContent(
+      "The day is read in UTC, not your local time.",
+    );
+    expect(
+      within(dialog).getByLabelText(
+        "Expires at the end of this day, UTC (optional)",
+      ),
+    ).toHaveAttribute("aria-describedby", "api-key-expires-note");
+  });
+
+  it("drops the secret when the roster first lists the key, so a later roster cannot bring it back (negative)", async () => {
+    // Switching the workspace picker re-renders this island against another
+    // workspace's roster, which does not list the key. A secret still held in
+    // state would be shown a second time by that render.
+    createApiKey.mockResolvedValue({ ok: true, value: minted });
+    const view = render(createDialog([]));
+    const dialog = await openDialog("Create a key", "create-api-key");
+    await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Create it" }),
+    );
+    expect(await screen.findByTestId("api-key-secret")).toBeInTheDocument();
+
+    view.rerender(createDialog([KEY]));
+    await waitFor(() => {
+      expect(screen.queryByTestId("api-key-secret")).toBeNull();
+    });
+
+    view.rerender(createDialog([]));
+    view.rerender(createDialog(["aky_0a1b2c3d4e5f6g7h8j9k0m"]));
+    expect(screen.queryByTestId("api-key-secret")).toBeNull();
+    expect(screen.queryByText(SECRET)).toBeNull();
+    expect(screen.queryByTestId("create-api-key")).toBeNull();
+    expect(document.body).not.toHaveTextContent(SECRET);
   });
 
   it("reloads the page when the person closes the secret, and shows it no more", async () => {

@@ -48,7 +48,7 @@ const ctx = unsafeMint(WsCtx, {
   wsName: "Core platform",
 });
 
-/** The workspace the page named; a key names one (ADR-069). */
+/** The workspace the page named; a key names one (ADR-073). */
 const WS = "core-platform";
 
 /** A day well clear of any clock this suite runs on, and the instant it ends. */
@@ -63,7 +63,7 @@ const SECRET = "ox_3fa85f64571b4c62a0f5e8c9d1b2a3f4";
  * The CapabilityContext these writes reach the kernel with: the workspace the
  * page named, never the org-only sentinel. `auth.api_keys` is policy class
  * `standard`, so a key minted under the sentinel names a workspace that does
- * not exist and the secret shown once authenticates into nothing (ADR-069).
+ * not exist and the secret shown once authenticates into nothing (ADR-073).
  */
 const TENANT = {
   orgId: ctx.orgId,

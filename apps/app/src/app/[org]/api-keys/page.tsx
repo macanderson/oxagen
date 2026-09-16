@@ -11,7 +11,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("apiKeys") };
 }
 
-// Organization › API keys. A key names a workspace (ADR-069), so the page does
+// Organization › API keys. A key names a workspace (ADR-073), so the page does
 // too: `?workspace=` picks one of the workspaces the viewer may enter, and the
 // keys are read and written in that workspace's scope. With no such workspace
 // the organization viewer is handed through and the section says why it lists

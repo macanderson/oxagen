@@ -885,6 +885,8 @@ type Messages = {
           body: string;
           name: string;
           expires: string;
+          expiresUtc: string;
+          expiresAt: string;
           confirm: string;
           pending: string;
         };

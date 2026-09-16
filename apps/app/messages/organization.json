@@ -78,7 +78,9 @@
           "title": "Create an API key",
           "body": "The key acts as you. Oxagen shows the secret once and stores only its prefix and a hash, so a lost key is rotated, never recovered.",
           "name": "Name",
-          "expires": "Expires on (optional)",
+          "expires": "Expires at the end of this day, UTC (optional)",
+          "expiresUtc": "Leave this empty for a key that does not expire. The day is read in UTC, not your local time.",
+          "expiresAt": "The key stops working at {at}.",
           "confirm": "Create it",
           "pending": "Creating"
         },

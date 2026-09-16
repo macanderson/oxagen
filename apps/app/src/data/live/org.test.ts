@@ -2,7 +2,7 @@
 // People tab, one of list_workspaces for the API keys tab's workspace picker
 // and one of list_api_keys for its table, each mapped into its view model, with
 // a refusal passed through and an unmappable answer reported once. The keys are
-// read through a WsCtx: a key names a workspace (ADR-069).
+// read through a WsCtx: a key names a workspace (ADR-073).
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";

@@ -63,7 +63,7 @@ const {
   };
 });
 // `WsCtx.is` is how the API keys section tells a workspace scope from an
-// organization one (ADR-069); the viewer classes are branded, so the stub
+// organization one (ADR-073); the viewer classes are branded, so the stub
 // stands in for the brand with the field these fixtures carry.
 vi.mock("@/server/viewer", () => ({
   requireViewer,
@@ -378,7 +378,7 @@ describe("Organization › API keys", () => {
   });
 
   it("resolves the workspace the URL names and renders the keys org.apiKeys read in it", async () => {
-    // A key names a workspace (ADR-069): the page resolves one before it reads.
+    // A key names a workspace (ADR-073): the page resolves one before it reads.
     const ctx = {
       orgSlug: "acme",
       orgRole: "owner",

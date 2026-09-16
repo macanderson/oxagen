@@ -1,4 +1,4 @@
-# ADR-069: An API key names a workspace, and so does the page that mints it
+# ADR-073: An API key names a workspace, and so does the page that mints it
 
 - **Status:** Accepted
 - **Date:** 2026-09-16

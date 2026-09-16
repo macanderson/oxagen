@@ -5,7 +5,7 @@
 // denied, pending-approval and error states that replace the table. Every state
 // is checked with axe.
 //
-// The page names a workspace (ADR-069). It reads keys through a WsCtx and never
+// The page names a workspace (ADR-073). It reads keys through a WsCtx and never
 // through an OrgCtx: `auth.api_keys` is policy class `standard`, so the org-only
 // sentinel lists no key that exists and mints one into a workspace that does
 // not. With no workspace the viewer may enter, the section says so and reads

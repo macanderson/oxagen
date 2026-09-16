@@ -5,7 +5,7 @@
 // and the members and keys reads are refused by their handler for anyone below
 // org Admin.
 //
-// `apiKeys` takes a WsCtx. An API key names a workspace (ADR-069):
+// `apiKeys` takes a WsCtx. An API key names a workspace (ADR-073):
 // `auth.api_keys` is policy class `standard`, so under the org-only sentinel
 // the list matches no key that exists and a mint writes one into a workspace
 // that does not. The page picks a workspace and resolves into it first.

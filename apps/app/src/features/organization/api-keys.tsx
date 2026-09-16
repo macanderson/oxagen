@@ -1,6 +1,6 @@
 // Organization › API keys (ARCHITECTURE.md §1.2): the keys of one workspace,
 // from list_api_keys, under the tabs that link People and API keys. A key names
-// a workspace (ADR-069) — `auth.api_keys` is policy class `standard`, so the
+// a workspace (ADR-073) — `auth.api_keys` is policy class `standard`, so the
 // org-only sentinel lists no key that exists and mints one into a workspace
 // that does not — and the page therefore names one too: a `?workspace=` query
 // value on this one route, picked from the workspaces the viewer may enter.
@@ -197,7 +197,7 @@ function Refused({
   );
 }
 
-/** The workspaces the viewer may enter, as links on this one route (ADR-069). */
+/** The workspaces the viewer may enter, as links on this one route (ADR-073). */
 function WorkspacePicker({
   orgSlug,
   workspaces,

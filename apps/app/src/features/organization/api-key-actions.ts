@@ -7,10 +7,15 @@
 //
 // Each takes an organization slug and a workspace slug and resolves both
 // through `requireViewer`, which is where membership is checked. A key names a
-// workspace (ADR-069): `auth.api_keys` is policy class `standard`, so a write
+// workspace (ADR-073): `auth.api_keys` is policy class `standard`, so a write
 // under the org-only sentinel mints a credential bound to a workspace that
 // does not exist and the secret it shows authenticates into nothing. Slugs
 // only — no action reads an org or workspace id off its input (INV-19).
+//
+// The expiry a person picks is the end of that day in UTC. `<input type="date">`
+// carries no timezone, so the field is labelled UTC and the dialog shows the
+// instant it encodes rather than leaving the reader to guess (ADR-073's page is
+// the one that mints; `shared/expiry-day.ts` has the reasoning).
 //
 // `create_api_key` and `rotate_api_key` return the raw key once and store only
 // its prefix and a SHA-256 hash, so the secret exists nowhere but the value
@@ -23,6 +28,7 @@ import { apiKeyRotate } from "@oxagen/oxagen/contracts/api.key.rotate";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
+import { endOfUtcDay } from "@/shared/expiry-day";
 
 /**
  * A key as it exists for the one moment it is shown: what the roster will call
@@ -36,27 +42,6 @@ export type NewApiKey = {
   readonly secret: string;
   readonly expiresAt: string | null;
 };
-
-/** A date the picker produced, as a day and nothing finer. */
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
-
-/**
- * The instant the contract takes for a key that expires on the chosen day, or
- * null when the field is not a day this calendar has. `new Date` rolls a
- * February 31st forward, so the round trip is what rejects it.
- *
- * The instant is the *end* of the chosen day. Midnight at its start would put
- * a key picked for today in the past before it was minted, and `resolveApiKey`
- * refuses an expired key (`packages/auth/src/resolvers/api-key.ts:144-145`) —
- * so the one showing of the secret would be spent on a key that never worked.
- */
-function expiryInstant(day: string): string | null {
-  if (!DAY.test(day)) return null;
-  const instant = new Date(`${day}T23:59:59.999Z`);
-  if (Number.isNaN(instant.getTime())) return null;
-  const iso = instant.toISOString();
-  return iso.startsWith(day) ? iso : null;
-}
 
 /** A refusal the form names on a field, before any capability runs. */
 function invalid(code: string, field: string): ActionResult<never> {
@@ -79,7 +64,10 @@ export async function createApiKey(
   if (label === "") return invalid("name_required", "name");
   let expiresAt: string | undefined;
   if (expiresOn !== "") {
-    const instant = expiryInstant(expiresOn);
+    // The chosen day is a UTC day, which is what the field says it is
+    // (`shared/expiry-day.ts`), and the dialog prints the instant beneath the
+    // control so the label and the stored value are the same thing on screen.
+    const instant = endOfUtcDay(expiresOn);
     if (instant === null) return invalid("expiry_not_a_day", "expiresAt");
     // A day already over mints a key that is expired on arrival. Refused here,
     // with the secret unspent, rather than shown once and never usable.

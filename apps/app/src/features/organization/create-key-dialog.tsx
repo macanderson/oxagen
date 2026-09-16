@@ -9,13 +9,15 @@
 //
 // A minted secret exists only here. `createApiKey` and `rotateApiKey` return it
 // once and no read can bring it back, so the dialog holds it in client state
-// until the roster the server sends names the new key. What the panel shows is
-// derived from that roster rather than stored, so a re-render from server data
-// ends the showing on its own.
+// until the roster the server sends names the new key — and drops it then, on
+// the render that first lists the key. It is dropped rather than hidden: a
+// value still held can be shown again by any later roster that does not list
+// the key, and the workspace picker sends exactly that.
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { ActionResult } from "@/server/kernel";
 import type { SafePath } from "@/shared/safe-path";
+import { endOfUtcDay } from "@/shared/expiry-day";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -104,9 +106,10 @@ function SecretPanel({ secret }: { secret: NewApiKey }) {
  * carries a secret replaces it with the one showing, and an answer that does
  * not closes the dialog. Closing reloads the roster when something changed.
  *
- * `listedIds` is the roster the server last sent. When it names the key whose
- * secret is on screen, the reload has landed, the panel is not rendered again
- * and the dialog closes with it.
+ * `listedIds` is the roster the server last sent. The first render on which it
+ * names the key whose secret is on screen, the reload has landed: the secret is
+ * cleared out of state and the dialog closes with it, so no later render can
+ * bring it back.
  */
 function KeyWriteDialog({
   open: openLabel,
@@ -138,12 +141,21 @@ function KeyWriteDialog({
   const [failure, setFailure] = useState<string | null>(null);
   const [written, setWritten] = useState<NewApiKey | null>(null);
 
-  // The showing is over the moment the roster the server sent names the key.
-  // Both of these are derived, never stored, so a re-render from server data
-  // takes the panel off the screen and closes the dialog with it.
-  const secret =
-    written !== null && !listedIds.includes(written.id) ? written : null;
-  const showing = open && (written === null || secret !== null);
+  // The showing is over the moment the roster the server sent names the key,
+  // and the secret leaves this component with it — cleared, not hidden. Holding
+  // the value and deriving `null` around it means any later roster that does
+  // not list the key brings it back, and switching the workspace picker sends
+  // exactly such a roster (its keys are another workspace's). A secret shown
+  // once has to be unrecoverable afterwards, not merely not on screen, so the
+  // clearing happens here, during render, the way React adjusts state when a
+  // prop changes.
+  const listed = written !== null && listedIds.includes(written.id);
+  if (listed) {
+    setWritten(null);
+    setOpen(false);
+  }
+  const secret = listed ? null : written;
+  const showing = open && !listed;
 
   function openChange(next: boolean) {
     setOpen(next);
@@ -230,7 +242,7 @@ export function CreateKeyDialog({
   after,
 }: {
   org: string;
-  /** The workspace the key is minted in; a key names one (ADR-069). */
+  /** The workspace the key is minted in; a key names one (ADR-073). */
   ws: string;
   listedIds: readonly string[];
   after: SafePath;
@@ -238,6 +250,10 @@ export function CreateKeyDialog({
   const t = useTranslations("organization.apiKeys.actions.create");
   const [name, setName] = useState("");
   const [expiresOn, setExpiresOn] = useState("");
+  // The control carries no timezone, so the note under it prints the instant
+  // the chosen day encodes. The action encodes with the same function, so the
+  // label and the stored value cannot drift (`shared/expiry-day.ts`).
+  const stored = expiresOn === "" ? null : endOfUtcDay(expiresOn);
   return (
     <KeyWriteDialog
       open={t("open")}
@@ -267,11 +283,15 @@ export function CreateKeyDialog({
         id="api-key-expires"
         type="date"
         value={expiresOn}
+        aria-describedby="api-key-expires-note"
         className={inputBase}
         onChange={(event) => {
           setExpiresOn(event.currentTarget.value);
         }}
       />
+      <p id="api-key-expires-note" className="text-sm text-muted-foreground">
+        {stored === null ? t("expiresUtc") : t("expiresAt", { at: stored })}
+      </p>
       <p className="text-sm text-muted-foreground">{t("body")}</p>
     </KeyWriteDialog>
   );
@@ -287,7 +307,7 @@ export function KeyRowActions({
   after,
 }: {
   org: string;
-  /** The workspace the key belongs to; a key names one (ADR-069). */
+  /** The workspace the key belongs to; a key names one (ADR-073). */
   ws: string;
   keyId: string;
   keyName: string;
