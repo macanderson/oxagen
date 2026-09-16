@@ -25,7 +25,10 @@ function WindowLines({ inventory }: { inventory: SkillInventory }) {
   const day = (iso: string) =>
     format.dateTime(new Date(iso), { dateStyle: "medium" });
   return (
-    <div data-window="" className="flex flex-col gap-0.5 text-sm text-muted-foreground">
+    <div
+      data-window=""
+      className="flex flex-col gap-0.5 text-sm text-muted-foreground"
+    >
       <p>
         {t("window", {
           from: day(inventory.window.from),
@@ -54,7 +57,11 @@ export function SkillsInventory({
   const format = useFormatter();
   if (inventory.skills.length === 0)
     return (
-      <section data-state="empty" aria-labelledby="skills-empty" className={box}>
+      <section
+        data-state="empty"
+        aria-labelledby="skills-empty"
+        className={box}
+      >
         <h2 id="skills-empty" className="text-base font-semibold">
           {t("empty.title")}
         </h2>
@@ -111,7 +118,10 @@ export function SkillsInventory({
                   })}
                 </span>
               </p>
-              <ul aria-label={t("row.harnesses")} className="flex flex-wrap gap-1.5">
+              <ul
+                aria-label={t("row.harnesses")}
+                className="flex flex-wrap gap-1.5"
+              >
                 {skill.harnesses.map((harness) => (
                   <li
                     key={harness}

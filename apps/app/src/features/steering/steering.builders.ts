@@ -199,7 +199,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       waste: refuse,
       budgets: refuse,
     },
-    org: { members: refuse },
+    org: { members: refuse, apiKeys: refuse },
     mandates: { list: refuse },
     skills: { inventory: refuse },
     steering: {

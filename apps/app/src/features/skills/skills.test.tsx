@@ -90,7 +90,7 @@ const source: DataSource = {
     waste: vi.fn(),
     budgets: vi.fn(),
   },
-  org: { members: vi.fn() },
+  org: { members: vi.fn(), apiKeys: vi.fn() },
   skills: { inventory: read },
   mandates: { list: vi.fn() },
   steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
@@ -145,9 +145,9 @@ describe("Skills › loaded", () => {
     const list = screen.getByRole("list", {
       name: "Skills reported in this window",
     });
-    const rows = within(list).getAllByRole("listitem").filter((li) =>
-      li.hasAttribute("data-skill"),
-    );
+    const rows = within(list)
+      .getAllByRole("listitem")
+      .filter((li) => li.hasAttribute("data-skill"));
     expect(rows.map((row) => row.dataset.skill)).toEqual([
       "release-notes",
       "triage",

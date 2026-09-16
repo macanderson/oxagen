@@ -111,7 +111,7 @@ export function fleetSource(reads: FleetReads) {
       waste: refuse,
       budgets: refuse,
     },
-    org: { members: refuse },
+    org: { members: refuse, apiKeys: refuse },
     mandates: {
       list: (...args) => {
         calls.mandates.push(args);
