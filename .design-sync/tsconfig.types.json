@@ -1,0 +1,18 @@
+{
+  "extends": "../packages/ui/tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationMap": false,
+    "outDir": "../packages/ui/dist/types",
+    "rootDir": "../packages/ui/src",
+    "skipLibCheck": true
+  },
+  "include": ["../packages/ui/src/**/*.ts", "../packages/ui/src/**/*.tsx"],
+  "exclude": [
+    "../packages/ui/src/**/*.stories.tsx",
+    "../packages/ui/src/**/*.test.tsx",
+    "../packages/ui/src/**/*.test.ts"
+  ]
+}

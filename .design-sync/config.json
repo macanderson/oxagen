@@ -1,0 +1,25 @@
+{
+  "projectId": "f3a06086-f960-4be5-a06c-e5cdd416ade7",
+  "shape": "storybook",
+  "pkg": "@oxagen/ui",
+  "globalName": "OxagenUI",
+  "entry": "packages/ui/src/index.ts",
+  "storybookStatic": ".design-sync/sb-reference",
+  "storybookConfigDir": "packages/ui/.storybook",
+  "titleMap": {
+    "Marks": "OxagenWordmark",
+    "Toast": "ToastProvider"
+  },
+  "provider": {
+    "component": "ThemeProvider",
+    "props": {
+      "initialTheme": "light",
+      "defaultTheme": "light",
+      "disableTransitionOnChange": true
+    }
+  },
+  "guidelinesGlob": [
+    "THEME.md"
+  ],
+  "readmeHeader": ".design-sync/conventions.md"
+}
