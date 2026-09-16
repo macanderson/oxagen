@@ -6,9 +6,16 @@ import { userWorkspacePreferencesRead } from "../user.workspace_preferences.read
 import { pluginSettingsSetAuthAlerts } from "../plugin.settings.set_auth_alerts";
 
 /**
- * Appendix E: `set_preferences`. Absorbs `update_user_preferences`,
+ * Appendix E: `set_preferences`. Absorbs the v1 `set_preferences`,
  * `get_user_preferences`, `update_workspace_user_preferences`,
  * `get_workspace_user_preferences` and `set_auth_alerts`.
+ *
+ * The account write is named `set_preferences` and not `update_user_preferences`
+ * because the v1 contract was rewritten under its Appendix E name (ADR-069) and
+ * `update_user_preferences` no longer exists. Naming the live contract matters
+ * to more than tidiness: `exhaustive.test.ts` skips the field-by-field carry
+ * when an absorbed name is absent from its file, so an absorbs entry pointing
+ * at a deleted name is an entry that proves nothing.
  *
  * **The reads fold in as the return value.** Appendix E's drop list ends with
  * "reads folded into the objects above", and this is that pattern at its
@@ -50,17 +57,25 @@ export const setPreferences = defineTool({
    */
   surfaces: ["api"],
   layers: ["schema", "api", "docs", "unit"],
-  // `update_user_preferences` is unscoped (account-level); the other four are
+  // The account write is unscoped (account-level); the other four are
   // workspace- or org-scoped. Scoped carries: two of the three groups cannot be
   // resolved without a workspace.
   scoped: true,
 
   absorbs: [
-    "update_user_preferences",
+    "set_preferences",
     "get_user_preferences",
     "update_workspace_user_preferences",
     "get_workspace_user_preferences",
     "set_auth_alerts",
+  ],
+  renames: [
+    {
+      source: "set_preferences",
+      from: "locale",
+      to: "language",
+      why: "the v1 account write calls the BCP 47 tag `locale`; the row's column, the read contract's output and this tool's account group all call it `language`. One name wins and it is the column's.",
+    },
   ],
   drops: [
     {
@@ -127,6 +142,8 @@ export const setPreferences = defineTool({
         defaultTextModel: z.string().min(1).nullable().optional(),
         timezone: z.string().min(1).optional(),
         language: z.string().min(2).optional(),
+        /** `system` follows the device; the v1 write and read both carry it. */
+        theme: z.enum(["system", "light", "dark"]).optional(),
       })
       .optional(),
 
@@ -179,6 +196,7 @@ export const setPreferences = defineTool({
       defaultTextModel: userPreferencesRead.output.shape.defaultTextModel,
       timezone: userPreferencesRead.output.shape.timezone,
       language: userPreferencesRead.output.shape.language,
+      theme: userPreferencesRead.output.shape.theme,
     }),
 
     workspace: z.object({

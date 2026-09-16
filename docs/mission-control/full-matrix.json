@@ -1176,7 +1176,7 @@
       "tool": "send_message",
       "grade": "NEW",
       "group": "Wrapping and control",
-      "does": "message to `@<agent-slug>`, `@agents`, or a run id, with a delivery mode; reaches `applied` at the model request that carried it (§7.3, §7.6)",
+      "does": "message to `@<agent-slug>`, `@agents`, or a run id, with a delivery mode; reaches `applied` at the model request that carried it (\u00a77.3, \u00a77.6)",
       "absorbs": [],
       "unresolved": [],
       "screens": [
@@ -1955,7 +1955,7 @@
       "tool": "propose_ontology_version",
       "grade": "INHERIT",
       "group": "Ontology and knowledge",
-      "does": "profiler plus author; opens the pull request on the main repo (merge activates, §11.8)",
+      "does": "profiler plus author; opens the pull request on the main repo (merge activates, \u00a711.8)",
       "absorbs": [
         {
           "name": "recommend_schema",
@@ -2877,7 +2877,7 @@
       "tool": "set_event_subscription",
       "grade": "NEW",
       "group": "Audit and compliance",
-      "does": "event kinds, filters, delivery mode; returns the unique endpoint (§7.7)",
+      "does": "event kinds, filters, delivery mode; returns the unique endpoint (\u00a77.7)",
       "absorbs": [],
       "unresolved": [],
       "screens": [
@@ -3006,7 +3006,7 @@
       "does": "",
       "absorbs": [
         {
-          "name": "update_user_preferences",
+          "name": "set_preferences",
           "file": "user.preferences.set.ts"
         },
         {
@@ -3164,7 +3164,7 @@
     },
     {
       "screen": "Run",
-      "job": "A frame-by-frame player for one run. It shows the transcript at three zoom levels (turns, steps, everything) under a transport, the playback controls (scrub, step, play, pause, ×1 to ×4). It also shows what the agent was told, each model exchange, tool calls with their validation results, policy decisions, proof, a cost strip, and chain status",
+      "job": "A frame-by-frame player for one run. It shows the transcript at three zoom levels (turns, steps, everything) under a transport, the playback controls (scrub, step, play, pause, \u00d71 to \u00d74). It also shows what the agent was told, each model exchange, tool calls with their validation results, policy decisions, proof, a cost strip, and chain status",
       "actions": [
         "steer (with a delivery mode)",
         "pause",
