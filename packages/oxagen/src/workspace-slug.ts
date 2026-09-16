@@ -19,13 +19,30 @@
 // Both rules now live here, and every contract that accepts a workspace slug
 // takes `workspaceSlug`. A third divergence cannot be introduced by writing a
 // regex in a fourth place, because there is nowhere to write it.
+//
+// This module has no entry in the package's `exports` map, deliberately. It is
+// reached from inside the package by relative import, and from `apps/app`
+// through `contracts/org.create`, which re-exports the two names the
+// onboarding form needs — because the app may import platform code only under
+// `@oxagen/oxagen/contracts/*` (ARCHITECTURE.md §2, INV-03).
 import { z } from "zod";
 
 /**
  * Org-level route segments a workspace slug may not take: a workspace at
  * `/{org}/{slug}` would shadow `/{org}/<segment>`. The set is the union of the
- * rev1 org pages (`api-keys`, `billing`, `audit`) and the org sections of
- * `apps/app_deprecated`, which serves production until cutover.
+ * rev1 org pages (`api-keys`, `billing`, `audit`, `roles`) and the org sections
+ * of `apps/app_deprecated`.
+ *
+ * This set is enforced on the way IN. It does not repair rows already stored:
+ * before #3110 neither `create_workspace` nor `update_workspace_settings`
+ * consulted it, so an organization may hold a workspace slugged with one of
+ * these. Where that segment is also a static route the workspace's ROOT url
+ * opens the org page instead — its sub-pages still resolve, because the org
+ * routes are leaf `page.tsx` files and only the root segment collides.
+ * Re-slugging a stored workspace changes a customer's urls, so it is a
+ * maintainer decision rather than a migration this validator can imply; see
+ * the issue linked from PR #3110. `apps/app/src/shared/reserved-route-segments.test.ts`
+ * is what stops a NEW org page taking an unreserved segment.
  */
 export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "access",

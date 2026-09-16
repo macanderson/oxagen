@@ -88,7 +88,14 @@ beforeEach(() => {
 });
 
 describe("listAgentRoleOptions", () => {
-  it("returns the three system roles (spec descriptions + resource scopes, grants from list_iam_roles) on a non-enterprise tier", async () => {
+  // ADR-069: custom roles carry no tier gate. `assign_agent_role` binds them on
+  // every tier, so a picker that hid them below enterprise offered less than
+  // the handler accepts — the operator could create a role in the editor and
+  // never find it here. What stays tier-dependent is the delegation-ceiling
+  // PRE-CHECK, which resolves the viewer through the pure resolver and would
+  // disable every option below enterprise, where checkIAM's fast-path allows
+  // without consulting a grant.
+  it("returns the system roles AND the org's custom roles on a non-enterprise tier, with no ceiling pre-check", async () => {
     resolveOrgTier.mockResolvedValue("pro");
     canAccessACL.mockReturnValue(false);
     invoke.mockResolvedValue({
@@ -111,11 +118,20 @@ describe("listAgentRoleOptions", () => {
       ctx,
       { surface: "agent" },
     );
-    expect(res.customRolesAvailable).toBe(false);
-    expect(res.options.map((o) => o.roleName)).toEqual(
-      AGENT_ROLE_SPECS.map((s) => s.name),
-    );
-    for (const [i, option] of res.options.entries()) {
+    expect(res.options.map((o) => o.roleName)).toEqual([
+      ...AGENT_ROLE_SPECS.map((s) => s.name),
+      "Release Ops",
+    ]);
+    // The human org role is still never a candidate.
+    expect(res.options.map((o) => o.roleName)).not.toContain("Owner");
+    // No ceiling pre-check ran, so nothing is disabled on this tier.
+    expect(res.options.every((o) => o.withinCeiling)).toBe(true);
+    expect(assertWithinDelegationCeiling).not.toHaveBeenCalled();
+    // The spec wording applies to the system roles; the custom row carries the
+    // org's own description and is checked below.
+    for (const [i, option] of res.options
+      .slice(0, AGENT_ROLE_SPECS.length)
+      .entries()) {
       expect(option.description).toBe(AGENT_ROLE_SPECS[i]!.description);
       expect(option.resourceScope).toEqual(AGENT_ROLE_SPECS[i]!.resourceScope);
       expect(option.grants).toEqual([
@@ -172,7 +188,6 @@ describe("listAgentRoleOptions", () => {
 
     const res = await listAgentRoleOptions(ctx);
 
-    expect(res.customRolesAvailable).toBe(true);
     const names = res.options.map((o) => o.roleName);
     expect(names).toContain("Release Ops");
 

@@ -19,7 +19,6 @@
     "./capability-meta": "./src/capability-meta.ts",
     "./lib/relationship-type-pattern": "./src/lib/relationship-type-pattern.ts",
     "./types": "./src/types.ts",
-    "./workspace-slug": "./src/workspace-slug.ts",
     "./iam": "./src/iam/index.ts",
     "./contracts": "./src/contracts/index.ts",
     "./plugins": "./src/plugins/index.ts",

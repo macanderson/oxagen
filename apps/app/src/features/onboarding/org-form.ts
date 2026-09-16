@@ -4,11 +4,11 @@
 // reserved org and workspace slug sets and derives the immutable namespace
 // from the address.
 import { z } from "zod";
-import { RESERVED_ORG_SLUGS } from "@oxagen/oxagen/contracts/org.create";
 import {
+  RESERVED_ORG_SLUGS,
   RESERVED_WORKSPACE_SLUGS,
   WORKSPACE_SLUG_PATTERN,
-} from "@oxagen/oxagen/workspace-slug";
+} from "@oxagen/oxagen/contracts/org.create";
 
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 

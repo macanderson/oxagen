@@ -53,11 +53,18 @@ export const RESERVED_ORG_SLUGS: ReadonlySet<string> = new Set([
 
 /**
  * Re-exported from `../workspace-slug`, which holds the one definition and the
- * one slug shape every workspace-slug field is built from. It stays reachable
- * from this path because the onboarding form and this contract's own tests
- * import it from here.
+ * one slug shape every workspace-slug field is built from.
+ *
+ * They stay reachable from THIS path on purpose: `apps/app` may import platform
+ * code only through `@oxagen/oxagen/contracts/*` (ARCHITECTURE.md §2, INV-03,
+ * enforced by `apps/app/src/test/arch/import-graph.test.ts`), so a contract
+ * file is the app's doorway to a shared shape. The onboarding form reads both
+ * from here, and the definition is still in one place.
  */
-export { RESERVED_WORKSPACE_SLUGS } from "../workspace-slug";
+export {
+  RESERVED_WORKSPACE_SLUGS,
+  WORKSPACE_SLUG_PATTERN,
+} from "../workspace-slug";
 
 const slugShape = z
   .string()
