@@ -11,7 +11,7 @@ export function TuiLogin({ className }: { className?: string }) {
   return (
     <TuiFrame
       id="tui-login"
-      title="~/acme-web — oxagen"
+      title="~/acme-web · oxagen"
       width={560}
       height={226}
       className={className}

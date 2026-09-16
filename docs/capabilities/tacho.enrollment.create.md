@@ -13,7 +13,7 @@ Refuses when `TACHO_ENROLLMENT_SIGNING_SECRET` or `TACHO_BUNDLE_SIGNING_PRIVATE_
 ## Surface
 
 - API only: `POST /v1/:org_slug/:workspace_slug/tacho/enrollments`
-- Authentication: session (org Owner or Admin)
+- Authentication: org Owner or Admin, by session or by the API key `oxagen login` minted for them (what `tacho enroll` and the desktop app send); a key bound to an enrolled machine is refused (ADR-067)
 - Capability name: `create_tacho_enrollment`
 - Not billed (`noBillingGate: true`); IAM default-deny; high sensitivity for the enrollment, ingest, bundle, and command capabilities, medium for the reads
 

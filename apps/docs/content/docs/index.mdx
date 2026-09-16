@@ -1,11 +1,13 @@
 ---
 title: Oxagen docs
-description: Oxagen is the control plane for agent work. Wrap the agents you already run, put every run on the record with its cost, and decide what each agent may do before it does it.
+description: Oxagen governs and operates the autonomous agents an enterprise runs. It is the agent control plane and agent fleet management, with one mandate per agent, enforced on every run.
 ---
+
+Oxagen governs and operates the autonomous agents your organization runs. It is your organization's agent control plane, and your operator's agent fleet management. Every agent operates under a mandate: its access, its budget, its tools, and its rules, set by the teams accountable for it and enforced on every run. Security writes the access clause. When a task needs a system, the agent asks, a rule you wrote answers, and the record keeps the answer.
 
 ## Where you are
 
-Your team runs coding agents in terminals today. Each one holds a key, acts as whoever installed it, and reports done when it decides it is done. Afterward, nobody can say what it read, what it changed, or what it cost.
+Your team runs coding agents in terminals today. Each one runs on a token somebody pasted in, acts as whoever installed it, and reports done when it decides it is done. Afterward, nobody can say what it read, what it changed, or what it cost.
 
 ## What Oxagen does
 
@@ -13,11 +15,11 @@ Oxagen sits beside the agents you already run. It does not run them and it does 
 
 ### Wrap
 
-`oxagen tacho enroll` installs hooks in Claude Code and Codex on one machine. From then on, every run on that machine is recorded as a hash-chained sequence of frames and shipped to your workspace: what the agent was told, every tool call, every model call, every decision. The hooks answer in under 50 milliseconds and keep answering if the collector is down. See [the Oxagen app](/docs/cli/desktop) and [the CLI](/docs/cli).
+`oxagen tacho enroll` installs hooks in Claude Code and Codex on one machine. From then on, Oxagen records every run on that machine as a hash-chained sequence of frames and ships it to your workspace: what the agent was told, every tool call, every model call, and every decision. The hooks answer in under 50 milliseconds and keep answering if the collector is down. See [the Oxagen app](/docs/cli/desktop) and [the CLI](/docs/cli).
 
 ### Govern
 
-Every agent has an identity, a role, and a budget. Every capability, whether a model call, a tool call, or a memory write, passes one `invoke()` boundary that checks identity, role, budget, and entitlement before the handler runs, then writes the audit record. There is no second path, so a new integration cannot skip it by accident. See [governance and RBAC](/docs/governance/overview).
+Every agent has an identity, a role, and a budget, and holds no standing grant to anything else. Every capability, whether a model call, a tool call, or a memory write, passes one `invoke()` boundary. The boundary checks identity, role, budget, and entitlement before the handler runs, then writes the audit record. The answer is one of three: allowed, denied, or routed to a person. There is no second path, so a new surface cannot skip the boundary by accident. See [governance and RBAC](/docs/governance/overview).
 
 <Mermaid chart={`
 flowchart TD
@@ -30,15 +32,15 @@ flowchart TD
   O --> A[capability.invoke_allowed + trace]
 `} />
 
-*The order `invoke()` runs in. Every gate sits before the handler, so a refused call never touches data, and both outcomes leave an audit record.*
+*The order `invoke()` runs in. Every gate sits before the handler, so a denied call never touches data, and both answers leave an audit record.*
 
 ### Record
 
-Every run is saved next to the data it touched: who asked, what the agent read, what it changed, and what it cost. Two audit stores hold it, one in Postgres with seven-year retention and one in ClickHouse with chain-hash tamper evidence. See [audit logging](/docs/security/audit-logging).
+Oxagen saves every run next to the data it touched: who asked, what the agent read, what it changed, and what it cost. Two audit stores hold the record. Postgres keeps it for seven years. ClickHouse keeps a chain hash on every row as tamper evidence. See [audit logging](/docs/security/audit-logging).
 
 ### Spend
 
-Every model call and tool call is priced by token class and attributed to an operator, an agent, a run, a turn, and a step. Hard ceilings per organization and per workspace stop a run between steps, never mid-tool. See [billing](/docs/billing) and [budgets](/docs/cli/budget).
+Oxagen prices every model call and tool call by token class and attributes it to an operator, an agent, a run, a turn, and a step. Hard ceilings per organization and per workspace stop a run between steps, never mid-tool. See [billing](/docs/billing) and [budgets](/docs/cli/budget).
 
 ### Ground
 
@@ -46,11 +48,11 @@ A typed knowledge graph hands an agent your company's facts and rules at run tim
 
 ### Remember
 
-What a run learned is written back as memory the next run reads, with a count of how often each memory fired and what it cost. See [agent memory](/docs/agent/memory).
+Oxagen writes what a run learned back as memory the next run reads. Each memory carries a count of how often it fired and what it cost. See [agent memory](/docs/agent/memory).
 
 ## One capability model, three surfaces
 
-Every capability is declared once in the contract registry and exposed identically across the REST API (`/v1/…`), the MCP server (streamable HTTP at `/mcp`), and the in-app agent. Running a compliance check, firing an automation, or writing agent memory produces the same audit record whichever surface the action came from.
+The contract registry declares every capability once. Oxagen exposes it the same way on the REST API (`/v1/…`), the MCP server (streamable HTTP at `/mcp`), and the in-app agent. Querying the audit log, running a compliance check, or writing agent memory leaves the same audit record whichever surface the call came from.
 
 <Mermaid chart={`
 flowchart LR
@@ -66,24 +68,24 @@ flowchart LR
 
 ### Tenant isolation with row-level security
 
-Every row in every tenant-scoped table carries `org_id` and `workspace_id`, and Postgres row-level security is enforced by the database itself, not by application predicates a developer might forget. The `oxagen_app` role has no `BYPASSRLS` privilege. A query without an active tenant scope returns zero rows.
+Every row in every tenant-scoped table carries `org_id` and `workspace_id`. Postgres enforces row-level security itself, not through application predicates a developer might forget. The `oxagen_app` role has no `BYPASSRLS` privilege. A query without an active tenant scope returns zero rows.
 
-The same rule holds in Neo4j (a scoped session guard), ClickHouse (org-scoped inserts and selects), and blob storage (access-controlled asset routes). See [tenant isolation](/docs/security/tenant-isolation-rls).
+The same rule holds in Neo4j (a scoped query guard), ClickHouse (org-scoped inserts and selects), and blob storage (access-controlled asset routes). See [tenant isolation](/docs/security/tenant-isolation-rls).
 
 ### SOC 2 controls
 
-The Trust Service Criteria are architectural requirements, not a retrofit:
+The Trust Service Criteria map to properties of the architecture:
 
-- **CC6 (access control):** role-based IAM with org roles (Owner, Admin, Compliance, Billing) and workspace roles (Owner, Member, Viewer), resolved per capability at the `invoke()` boundary, recorded access requests for approval-gated capabilities, member access reviews, and force-revoke on any login session.
-- **CC7 (monitoring):** two independent audit stores covering 40 typed event kinds from every auth, billing, and capability call.
-- **CC8 (change management):** versioned migrations, expand-then-contract schema changes, CI-gated deploys.
-- **CC9 (risk mitigation):** Oxagen governs agents and does not run them, so there is no first-party agent runtime to compromise. Capabilities with a high blast radius need explicit approval before they run.
+- **CC6 (access control):** role-based IAM with org roles (Owner, Admin, Compliance, and Billing) and workspace roles (Owner, Member, and Viewer), resolved per capability at the `invoke()` boundary. It also covers recorded access requests for capabilities that need a person's approval, member access reviews, and forced sign-out of any login.
+- **CC7 (monitoring):** two independent audit stores covering 54 typed event kinds from auth, billing, and capability calls.
+- **CC8 (change management):** versioned migrations, expand-then-contract schema changes, and CI-gated deploys.
+- **CC9 (risk mitigation):** Oxagen governs agents and does not run them, so there is no first-party agent runtime to compromise. A capability with a high blast radius waits for a person's approval before it runs.
 
 See [the SOC 2 controls mapping](/docs/security/soc2).
 
 ## Where to start
 
-- [Getting started](/docs/getting-started): sign up, create your organization and workspace, wrap one machine.
-- [The CLI](/docs/cli): query the graph, cap spend, read a run, and manage keys from the terminal.
+- [Getting started](/docs/getting-started): sign up, create your organization and workspace, and wrap one machine.
+- [The CLI](/docs/cli): query the graph, cap spend, read a run, and manage your Oxagen API keys from the terminal.
 - [Security overview](/docs/security/overview): the full controls picture for your security team.
 - [Enterprise use cases](/docs/enterprise/use-cases): what a CIO uses Oxagen for.
