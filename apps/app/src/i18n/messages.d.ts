@@ -632,6 +632,11 @@ type Messages = {
       blocks: string;
       perTopup: string;
       readOnly: string;
+      save: string;
+      saving: string;
+      saved: string;
+      invalidBlocks: string;
+      failed: string;
       savedCard: string;
       savedCardUnlabelled: string;
       noCard: string;
