@@ -3,7 +3,11 @@
   "domain": "org",
   "description": "Accept a pending org invitation. Creates the membership row and provisions least-privilege IAM.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -25,7 +29,9 @@
         "minLength": 1
       }
     },
-    "required": ["invitationPublicId"],
+    "required": [
+      "invitationPublicId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -45,7 +51,12 @@
         "type": "string"
       }
     },
-    "required": ["orgUserId", "orgId", "role", "joinedAt"],
+    "required": [
+      "orgUserId",
+      "orgId",
+      "role",
+      "joinedAt"
+    ],
     "additionalProperties": false
   }
 }

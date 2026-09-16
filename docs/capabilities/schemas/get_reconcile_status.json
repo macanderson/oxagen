@@ -3,7 +3,11 @@
   "domain": "schema",
   "description": "Poll the status of a schema reconciliation job.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "cli"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -26,7 +30,9 @@
         "description": "aex_… agent_executions public_id"
       }
     },
-    "required": ["executionId"],
+    "required": [
+      "executionId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -35,7 +41,13 @@
     "properties": {
       "status": {
         "type": "string",
-        "enum": ["planning", "running", "completed", "failed", "cancelled"]
+        "enum": [
+          "planning",
+          "running",
+          "completed",
+          "failed",
+          "cancelled"
+        ]
       },
       "totalNodes": {
         "type": "number"

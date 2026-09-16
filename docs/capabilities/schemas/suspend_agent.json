@@ -3,7 +3,9 @@
   "domain": "agent",
   "description": "Suspend or resume an agent identity: a suspended principal anchors no governed run and its belt is empty; resuming restores it without re-issuing anything.",
   "mode": "sync",
-  "surfaces": ["api"],
+  "surfaces": [
+    "api"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -34,7 +36,9 @@
         "maxLength": 512
       }
     },
-    "required": ["agentId"],
+    "required": [
+      "agentId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -46,13 +50,20 @@
       },
       "status": {
         "type": "string",
-        "enum": ["suspended", "active"]
+        "enum": [
+          "suspended",
+          "active"
+        ]
       },
       "changedAt": {
         "type": "string"
       }
     },
-    "required": ["agentId", "status", "changedAt"],
+    "required": [
+      "agentId",
+      "status",
+      "changedAt"
+    ],
     "additionalProperties": false
   }
 }

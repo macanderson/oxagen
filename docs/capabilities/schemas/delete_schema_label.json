@@ -3,7 +3,11 @@
   "domain": "schema",
   "description": "Remove a node label and its properties from the draft.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "cli"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -29,7 +33,10 @@
         "minLength": 1
       }
     },
-    "required": ["schemaName", "name"],
+    "required": [
+      "schemaName",
+      "name"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -43,7 +50,10 @@
         "type": "string"
       }
     },
-    "required": ["deleted", "labelName"],
+    "required": [
+      "deleted",
+      "labelName"
+    ],
     "additionalProperties": false
   }
 }

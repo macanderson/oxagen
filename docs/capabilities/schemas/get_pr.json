@@ -3,7 +3,11 @@
   "domain": "repo",
   "description": "Read a GitHub pull request's summary, diff stats, comments, and CI status.",
   "mode": "sync",
-  "surfaces": ["agent", "api", "mcp"],
+  "surfaces": [
+    "agent",
+    "api",
+    "mcp"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -33,7 +37,11 @@
         "description": "Pull request number"
       }
     },
-    "required": ["owner", "repo", "number"],
+    "required": [
+      "owner",
+      "repo",
+      "number"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -54,7 +62,11 @@
       },
       "state": {
         "type": "string",
-        "enum": ["open", "closed", "merged"],
+        "enum": [
+          "open",
+          "closed",
+          "merged"
+        ],
         "description": "Effective state (merged distinguished from closed)"
       },
       "draft": {
@@ -190,7 +202,10 @@
             },
             "kind": {
               "type": "string",
-              "enum": ["issue", "review"],
+              "enum": [
+                "issue",
+                "review"
+              ],
               "description": "issue = conversation comment, review = inline code comment"
             },
             "path": {
@@ -223,7 +238,13 @@
         "properties": {
           "overall": {
             "type": "string",
-            "enum": ["passing", "failing", "pending", "neutral", "unknown"]
+            "enum": [
+              "passing",
+              "failing",
+              "pending",
+              "neutral",
+              "unknown"
+            ]
           },
           "counts": {
             "type": "object",
@@ -268,7 +289,11 @@
                 },
                 "status": {
                   "type": "string",
-                  "enum": ["queued", "in_progress", "completed"],
+                  "enum": [
+                    "queued",
+                    "in_progress",
+                    "completed"
+                  ],
                   "description": "Lifecycle status of the check"
                 },
                 "conclusion": {
@@ -356,7 +381,11 @@
             }
           }
         },
-        "required": ["overall", "counts", "runs"],
+        "required": [
+          "overall",
+          "counts",
+          "runs"
+        ],
         "additionalProperties": false,
         "description": "CI status for the PR head (CiStatus without ref/sha)"
       }

@@ -243,7 +243,7 @@ describe("provisionWebhookSubscription — expiry normalisation", () => {
     expect(result.expiresAt).toBeNull();
   });
 
-  it('reports an unparseable date as null rather than "Invalid Date"', async () => {
+  it("reports an unparseable date as null rather than \"Invalid Date\"", async () => {
     makeDb([
       [connectionRow],
       [{ id: "whs-uuid", expires_at: new Date("not a date") }],

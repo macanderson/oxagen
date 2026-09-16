@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "Remove an agent's binding to an environment. When the removed binding was primary, resolution falls back to the workspace default environment and its default template.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -29,7 +33,10 @@
         "minLength": 1
       }
     },
-    "required": ["agentId", "environmentId"],
+    "required": [
+      "agentId",
+      "environmentId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -40,7 +47,9 @@
         "type": "boolean"
       }
     },
-    "required": ["ok"],
+    "required": [
+      "ok"
+    ],
     "additionalProperties": false
   }
 }

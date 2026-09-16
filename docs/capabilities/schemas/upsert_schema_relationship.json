@@ -3,7 +3,12 @@
   "domain": "schema",
   "description": "Create/update a relationship type on a schema within the draft version.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "cli", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -41,7 +46,11 @@
       },
       "cardinality": {
         "type": "string",
-        "enum": ["one_to_one", "one_to_many", "many_to_many"]
+        "enum": [
+          "one_to_one",
+          "one_to_many",
+          "many_to_many"
+        ]
       },
       "description": {
         "type": "string",
@@ -117,12 +126,19 @@
               "type": "string"
             }
           },
-          "required": ["key", "dataType"],
+          "required": [
+            "key",
+            "dataType"
+          ],
           "additionalProperties": false
         }
       }
     },
-    "required": ["schemaName", "name", "displayName"],
+    "required": [
+      "schemaName",
+      "name",
+      "displayName"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -136,7 +152,10 @@
         "type": "boolean"
       }
     },
-    "required": ["relationshipTypeId", "created"],
+    "required": [
+      "relationshipTypeId",
+      "created"
+    ],
     "additionalProperties": false
   }
 }

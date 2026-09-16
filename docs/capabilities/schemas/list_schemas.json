@@ -3,7 +3,12 @@
   "domain": "schema",
   "description": "List the workspace's schemas with per-schema enabled state.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "cli", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -39,7 +44,11 @@
             },
             "source": {
               "type": "string",
-              "enum": ["user", "connector", "recommended"]
+              "enum": [
+                "user",
+                "connector",
+                "recommended"
+              ]
             },
             "connectorId": {
               "anyOf": [
@@ -55,12 +64,19 @@
               "type": "boolean"
             }
           },
-          "required": ["schemaName", "displayName", "source", "enabled"],
+          "required": [
+            "schemaName",
+            "displayName",
+            "source",
+            "enabled"
+          ],
           "additionalProperties": false
         }
       }
     },
-    "required": ["schemas"],
+    "required": [
+      "schemas"
+    ],
     "additionalProperties": false
   }
 }

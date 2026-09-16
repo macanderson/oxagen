@@ -3,7 +3,11 @@
   "domain": "integration",
   "description": "Get sync statistics and metrics for a plugin instance.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -25,7 +29,9 @@
         "description": "Plugin instance ID"
       }
     },
-    "required": ["integrationId"],
+    "required": [
+      "integrationId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -43,7 +49,12 @@
       },
       "status": {
         "type": "string",
-        "enum": ["active", "paused", "failed", "pending_setup"]
+        "enum": [
+          "active",
+          "paused",
+          "failed",
+          "pending_setup"
+        ]
       },
       "entityCount": {
         "type": "number"

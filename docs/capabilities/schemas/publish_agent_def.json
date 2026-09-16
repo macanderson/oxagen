@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "Publish an agent version — marks it isPublished, computes a SHA-256 checksum over its canonical config, and sets it as the agent's active version. A published version is immutable thereafter",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -29,7 +33,9 @@
         "minimum": 0
       }
     },
-    "required": ["agentId"],
+    "required": [
+      "agentId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -50,7 +56,12 @@
         "type": "string"
       }
     },
-    "required": ["agentId", "version", "checksum", "activeVersionId"],
+    "required": [
+      "agentId",
+      "version",
+      "checksum",
+      "activeVersionId"
+    ],
     "additionalProperties": false
   }
 }

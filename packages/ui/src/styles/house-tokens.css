@@ -11,36 +11,29 @@
  */
 
 :root {
-  --ox-gold: #d6962c; /* the metal: identity, one action per screen */
-  --ox-gold-bright: #f1c364; /* the shimmer highlight; hover on ink */
-  --ox-gold-deep: #8b5e1a; /* gold as text on paper; small gold details there */
-  --ox-ink: #10100f; /* the dark canvas */
-  --ox-void: #0a0a09; /* below the canvas */
+  --ox-gold: #D6962C; /* the metal: identity, one action per screen */
+  --ox-gold-bright: #F1C364; /* the shimmer highlight; hover on ink */
+  --ox-gold-deep: #8B5E1A; /* gold as text on paper; small gold details there */
+  --ox-ink: #10100F; /* the dark canvas */
+  --ox-void: #0A0A09; /* below the canvas */
   --ox-panel: #181715; /* panels, cards, code blocks */
-  --ox-hl: #201f1c; /* a lifted row or line */
+  --ox-hl: #201F1C; /* a lifted row or line */
   --ox-border: #292722; /* hairlines on ink */
-  --ox-rule: #34322d; /* a heavier rule on ink */
-  --ox-paper: #f2eee5; /* the warm light canvas */
-  --ox-paper-panel: #f8f5ee; /* light panel */
-  --ox-paper-border: #d8cdbd; /* hairlines on paper */
-  --ox-paper-rule: #c9bfae; /* a heavier rule on paper */
-  --ox-text: #f2eee5; /* primary text on ink */
-  --ox-text-body: #ddd8cd; /* body text on ink */
-  --ox-muted: #9b958a; /* secondary text on ink */
-  --ox-dim: #6e6a62; /* the quietest text on ink */
-  --ox-text-ink: #10100f; /* primary text on paper */
-  --ox-text-ink-body: #2a2823; /* body text on paper */
-  --ox-muted-ink: #6b665c; /* secondary text on paper */
-  --ox-dim-ink: #8c877c; /* the quietest text on paper */
+  --ox-rule: #34322D; /* a heavier rule on ink */
+  --ox-paper: #F2EEE5; /* the warm light canvas */
+  --ox-paper-panel: #F8F5EE; /* light panel */
+  --ox-paper-border: #D8CDBD; /* hairlines on paper */
+  --ox-paper-rule: #C9BFAE; /* a heavier rule on paper */
+  --ox-text: #F2EEE5; /* primary text on ink */
+  --ox-text-body: #DDD8CD; /* body text on ink */
+  --ox-muted: #9B958A; /* secondary text on ink */
+  --ox-dim: #6E6A62; /* the quietest text on ink */
+  --ox-text-ink: #10100F; /* primary text on paper */
+  --ox-text-ink-body: #2A2823; /* body text on paper */
+  --ox-muted-ink: #6B665C; /* secondary text on paper */
+  --ox-dim-ink: #8C877C; /* the quietest text on paper */
 
-  --ox-gold-sheen: linear-gradient(
-    45deg,
-    #8b5e1a 0%,
-    #d6962c 38%,
-    #f1c364 56%,
-    #d6962c 74%,
-    #8b5e1a 100%
-  );
+  --ox-gold-sheen: linear-gradient(45deg, #8B5E1A 0%, #D6962C 38%, #F1C364 56%, #D6962C 74%, #8B5E1A 100%);
 
   --ox-font: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
   --ox-weight-display: 700;

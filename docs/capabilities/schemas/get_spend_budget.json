@@ -3,7 +3,12 @@
   "domain": "billing",
   "description": "Read the hard period-to-date spend ceilings governing the active scope — the org-level ceiling (covers every workspace) and this workspace's own ceiling, if configured — each with its live burn in micro-units: period-to-date spend, projection to the period end, the percent-of-ceiling reached, and whether the gate is currently denying. Reading your own budget is never blocked by being over it.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent", "cli"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -33,7 +38,10 @@
           "properties": {
             "scope": {
               "type": "string",
-              "enum": ["org", "workspace"]
+              "enum": [
+                "org",
+                "workspace"
+              ]
             },
             "publicId": {
               "anyOf": [
@@ -50,7 +58,10 @@
             },
             "period": {
               "type": "string",
-              "enum": ["monthly", "rolling"]
+              "enum": [
+                "monthly",
+                "rolling"
+              ]
             },
             "windowDays": {
               "anyOf": [
@@ -75,7 +86,10 @@
                       "type": "string"
                     }
                   },
-                  "required": ["micros", "currency"],
+                  "required": [
+                    "micros",
+                    "currency"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -93,7 +107,10 @@
                   "type": "string"
                 }
               },
-              "required": ["micros", "currency"],
+              "required": [
+                "micros",
+                "currency"
+              ],
               "additionalProperties": false
             },
             "projected": {
@@ -106,7 +123,10 @@
                   "type": "string"
                 }
               },
-              "required": ["micros", "currency"],
+              "required": [
+                "micros",
+                "currency"
+              ],
               "additionalProperties": false
             },
             "ratio": {
@@ -153,7 +173,9 @@
         }
       }
     },
-    "required": ["budgets"],
+    "required": [
+      "budgets"
+    ],
     "additionalProperties": false
   }
 }

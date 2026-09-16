@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "Suggest short, context-grounded rationales for promoting or demoting a memory, drafted by a low-cost model from the memory's lesson and citation signals.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -27,7 +31,11 @@
       },
       "toClass": {
         "type": "string",
-        "enum": ["RULE", "FACT", "OBSERVATION"],
+        "enum": [
+          "RULE",
+          "FACT",
+          "OBSERVATION"
+        ],
         "description": "The class change being considered (promotion or demotion target)"
       },
       "count": {
@@ -37,7 +45,10 @@
         "default": 4
       }
     },
-    "required": ["memoryId", "toClass"],
+    "required": [
+      "memoryId",
+      "toClass"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -54,7 +65,9 @@
         "description": "Candidate rationales, most fitting first"
       }
     },
-    "required": ["rationales"],
+    "required": [
+      "rationales"
+    ],
     "additionalProperties": false
   }
 }

@@ -3,7 +3,10 @@
   "domain": "spend",
   "description": "Read one operator, agent or tool's spend over a trailing window in this workspace: the daily series, the average per call and per run, its share of the workspace's spend, and the tools its runs called, every figure in micros with its basis.",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "medium",
   "agent": null,
   "chain": {
@@ -18,7 +21,11 @@
     "properties": {
       "kind": {
         "type": "string",
-        "enum": ["operator", "agent", "tool"]
+        "enum": [
+          "operator",
+          "agent",
+          "tool"
+        ]
       },
       "key": {
         "type": "string",
@@ -32,7 +39,10 @@
         "default": 30
       }
     },
-    "required": ["kind", "key"],
+    "required": [
+      "kind",
+      "key"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -41,7 +51,11 @@
     "properties": {
       "kind": {
         "type": "string",
-        "enum": ["operator", "agent", "tool"]
+        "enum": [
+          "operator",
+          "agent",
+          "tool"
+        ]
       },
       "key": {
         "type": "string"
@@ -56,7 +70,10 @@
             "type": "string"
           }
         },
-        "required": ["from", "to"],
+        "required": [
+          "from",
+          "to"
+        ],
         "additionalProperties": false
       },
       "total": {
@@ -83,7 +100,11 @@
                     ]
                   }
                 },
-                "required": ["micros", "currency", "basis"],
+                "required": [
+                  "micros",
+                  "currency",
+                  "basis"
+                ],
                 "additionalProperties": false
               },
               {
@@ -111,7 +132,10 @@
                     "type": "string"
                   }
                 },
-                "required": ["micros", "currency"],
+                "required": [
+                  "micros",
+                  "currency"
+                ],
                 "additionalProperties": false
               },
               {
@@ -131,7 +155,10 @@
                     "type": "string"
                   }
                 },
-                "required": ["micros", "currency"],
+                "required": [
+                  "micros",
+                  "currency"
+                ],
                 "additionalProperties": false
               },
               {
@@ -191,7 +218,11 @@
                       ]
                     }
                   },
-                  "required": ["micros", "currency", "basis"],
+                  "required": [
+                    "micros",
+                    "currency",
+                    "basis"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -208,7 +239,12 @@
               "minimum": 0
             }
           },
-          "required": ["day", "cost", "calls", "runs"],
+          "required": [
+            "day",
+            "cost",
+            "calls",
+            "runs"
+          ],
           "additionalProperties": false
         }
       },
@@ -227,7 +263,10 @@
                     "type": "string"
                   }
                 },
-                "required": ["micros", "currency"],
+                "required": [
+                  "micros",
+                  "currency"
+                ],
                 "additionalProperties": false
               },
               {
@@ -247,7 +286,10 @@
                     "type": "string"
                   }
                 },
-                "required": ["micros", "currency"],
+                "required": [
+                  "micros",
+                  "currency"
+                ],
                 "additionalProperties": false
               },
               {
@@ -256,7 +298,10 @@
             ]
           }
         },
-        "required": ["perCall", "perRun"],
+        "required": [
+          "perCall",
+          "perRun"
+        ],
         "additionalProperties": false
       },
       "share": {
@@ -288,7 +333,11 @@
               "minimum": 0
             }
           },
-          "required": ["name", "calls", "runs"],
+          "required": [
+            "name",
+            "calls",
+            "runs"
+          ],
           "additionalProperties": false
         }
       }

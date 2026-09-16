@@ -3,7 +3,11 @@
   "domain": "workspace",
   "description": "Archive a workspace: it leaves the workspace lists, its slug stays taken and everything recorded in it stays readable. Refused when already archived or while an agent is registered in it; deregister or move those agents first.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -25,7 +29,9 @@
         "description": "Public workspace id (wrk_…)"
       }
     },
-    "required": ["workspaceId"],
+    "required": [
+      "workspaceId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -47,7 +53,12 @@
         "description": "ISO-8601"
       }
     },
-    "required": ["id", "slug", "name", "archivedAt"],
+    "required": [
+      "id",
+      "slug",
+      "name",
+      "archivedAt"
+    ],
     "additionalProperties": false
   }
 }

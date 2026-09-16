@@ -3,7 +3,10 @@
   "domain": "agent",
   "description": "Register an agent identity in this workspace: its principal, default role and a long-lived credential shown once. The definition is committed to the repository separately.",
   "mode": "sync",
-  "surfaces": ["api", "cli"],
+  "surfaces": [
+    "api",
+    "cli"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -36,7 +39,12 @@
       },
       "harness": {
         "type": "string",
-        "enum": ["stella", "claude-code", "claude-agent-sdk", "custom"]
+        "enum": [
+          "stella",
+          "claude-code",
+          "claude-agent-sdk",
+          "custom"
+        ]
       },
       "validityDays": {
         "type": "integer",
@@ -45,7 +53,11 @@
         "default": 180
       }
     },
-    "required": ["slug", "name", "harness"],
+    "required": [
+      "slug",
+      "name",
+      "harness"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -86,11 +98,21 @@
             "type": "string"
           }
         },
-        "required": ["id", "secret", "expiresAt"],
+        "required": [
+          "id",
+          "secret",
+          "expiresAt"
+        ],
         "additionalProperties": false
       }
     },
-    "required": ["agentId", "slug", "agentKey", "principalId", "credential"],
+    "required": [
+      "agentId",
+      "slug",
+      "agentKey",
+      "principalId",
+      "credential"
+    ],
     "additionalProperties": false
   }
 }

@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "Write a batch of confirmed draft memories into the workspace AgentMemory graph. Per-item error capture — not all-or-nothing. Backs the bulk-import button.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -33,7 +37,11 @@
             },
             "memoryClass": {
               "type": "string",
-              "enum": ["OBSERVATION", "RULE", "FACT"],
+              "enum": [
+                "OBSERVATION",
+                "RULE",
+                "FACT"
+              ],
               "default": "OBSERVATION"
             },
             "memoryKind": {
@@ -69,13 +77,18 @@
               "default": false
             }
           },
-          "required": ["lesson", "memoryKind"],
+          "required": [
+            "lesson",
+            "memoryKind"
+          ],
           "additionalProperties": false
         },
         "description": "The confirmed draft memories to persist (max 200 per call)"
       }
     },
-    "required": ["drafts"],
+    "required": [
+      "drafts"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -115,7 +128,12 @@
               ]
             }
           },
-          "required": ["lesson", "ok", "memoryId", "error"],
+          "required": [
+            "lesson",
+            "ok",
+            "memoryId",
+            "error"
+          ],
           "additionalProperties": false
         },
         "description": "Positional results — results[i] corresponds to drafts[i]"
@@ -129,7 +147,11 @@
         "description": "Count of drafts that failed to write"
       }
     },
-    "required": ["results", "imported", "failed"],
+    "required": [
+      "results",
+      "imported",
+      "failed"
+    ],
     "additionalProperties": false
   }
 }

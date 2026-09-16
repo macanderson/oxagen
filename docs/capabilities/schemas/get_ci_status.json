@@ -3,7 +3,11 @@
   "domain": "repo",
   "description": "Read CI check-run and commit-status results for a ref in a GitHub repository.",
   "mode": "sync",
-  "surfaces": ["agent", "api", "mcp"],
+  "surfaces": [
+    "agent",
+    "api",
+    "mcp"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -33,7 +37,11 @@
         "description": "Branch name, commit SHA, or PR head ref to read CI for"
       }
     },
-    "required": ["owner", "repo", "ref"],
+    "required": [
+      "owner",
+      "repo",
+      "ref"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -56,7 +64,13 @@
       },
       "overall": {
         "type": "string",
-        "enum": ["passing", "failing", "pending", "neutral", "unknown"],
+        "enum": [
+          "passing",
+          "failing",
+          "pending",
+          "neutral",
+          "unknown"
+        ],
         "description": "Aggregated CI verdict"
       },
       "counts": {
@@ -103,7 +117,11 @@
             },
             "status": {
               "type": "string",
-              "enum": ["queued", "in_progress", "completed"],
+              "enum": [
+                "queued",
+                "in_progress",
+                "completed"
+              ],
               "description": "Lifecycle status of the check"
             },
             "conclusion": {
@@ -192,7 +210,13 @@
         "description": "Every check run and legacy status"
       }
     },
-    "required": ["ref", "sha", "overall", "counts", "runs"],
+    "required": [
+      "ref",
+      "sha",
+      "overall",
+      "counts",
+      "runs"
+    ],
     "additionalProperties": false
   }
 }

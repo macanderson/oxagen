@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "Permanently delete an AgentMemory node (and its edges) by id. Destructive — prefer agent.memory.update to lower salience when you only want it to stop surfacing.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": true,
@@ -26,7 +30,9 @@
         "description": "The AgentMemory node id (not publicId) to delete"
       }
     },
-    "required": ["memoryId"],
+    "required": [
+      "memoryId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -41,7 +47,10 @@
         "type": "string"
       }
     },
-    "required": ["deleted", "memoryId"],
+    "required": [
+      "deleted",
+      "memoryId"
+    ],
     "additionalProperties": false
   }
 }

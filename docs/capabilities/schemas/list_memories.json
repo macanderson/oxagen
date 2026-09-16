@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "List the workspace's AgentMemory nodes with optional weight/kind/node/citation filters and sort by recency or citation count; non-semantic browse counterpart to agent.memory.recall",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -25,7 +29,11 @@
       },
       "memoryClass": {
         "type": "string",
-        "enum": ["OBSERVATION", "RULE", "FACT"]
+        "enum": [
+          "OBSERVATION",
+          "RULE",
+          "FACT"
+        ]
       },
       "memoryKind": {
         "type": "string",
@@ -44,12 +52,18 @@
       },
       "sort": {
         "type": "string",
-        "enum": ["createdAt", "citationCount"],
+        "enum": [
+          "createdAt",
+          "citationCount"
+        ],
         "default": "createdAt"
       },
       "sortDir": {
         "type": "string",
-        "enum": ["asc", "desc"],
+        "enum": [
+          "asc",
+          "desc"
+        ],
         "default": "desc"
       },
       "limit": {
@@ -86,7 +100,11 @@
             },
             "memoryClass": {
               "type": "string",
-              "enum": ["OBSERVATION", "RULE", "FACT"]
+              "enum": [
+                "OBSERVATION",
+                "RULE",
+                "FACT"
+              ]
             },
             "memoryKind": {
               "type": "string",
@@ -120,7 +138,12 @@
             },
             "status": {
               "type": "string",
-              "enum": ["ACTIVE", "SUPERSEDED", "RETRACTED", "ARCHIVED"]
+              "enum": [
+                "ACTIVE",
+                "SUPERSEDED",
+                "RETRACTED",
+                "ARCHIVED"
+              ]
             },
             "subjectHint": {
               "type": "string"
@@ -155,7 +178,11 @@
             },
             "createdByKind": {
               "type": "string",
-              "enum": ["AGENT", "USER", "SYSTEM"]
+              "enum": [
+                "AGENT",
+                "USER",
+                "SYSTEM"
+              ]
             },
             "createdById": {
               "anyOf": [
@@ -171,7 +198,11 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": ["AGENT", "USER", "SYSTEM"]
+                  "enum": [
+                    "AGENT",
+                    "USER",
+                    "SYSTEM"
+                  ]
                 },
                 {
                   "type": "null"
@@ -236,7 +267,10 @@
         "description": "Total matching memories for the tenant, ignoring limit/offset"
       }
     },
-    "required": ["memories", "total"],
+    "required": [
+      "memories",
+      "total"
+    ],
     "additionalProperties": false
   }
 }

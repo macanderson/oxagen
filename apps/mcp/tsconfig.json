@@ -6,10 +6,5 @@
     "module": "ESNext",
     "moduleResolution": "Bundler"
   },
-  "include": [
-    "src/**/*.ts",
-    "xmcp.config.ts",
-    "vitest.config.ts",
-    "vitest.setup.ts"
-  ]
+  "include": ["src/**/*.ts", "xmcp.config.ts", "vitest.config.ts", "vitest.setup.ts"]
 }

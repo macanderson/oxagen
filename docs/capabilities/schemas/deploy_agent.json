@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "Set an agent's deployment posture. Activating requires a published active version (else a typed error); deactivating is always allowed and makes the agent's triggers dormant",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -26,10 +30,16 @@
       },
       "deploymentStatus": {
         "type": "string",
-        "enum": ["inactive", "active"]
+        "enum": [
+          "inactive",
+          "active"
+        ]
       }
     },
-    "required": ["agentId", "deploymentStatus"],
+    "required": [
+      "agentId",
+      "deploymentStatus"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -41,10 +51,16 @@
       },
       "deploymentStatus": {
         "type": "string",
-        "enum": ["inactive", "active"]
+        "enum": [
+          "inactive",
+          "active"
+        ]
       }
     },
-    "required": ["agentId", "deploymentStatus"],
+    "required": [
+      "agentId",
+      "deploymentStatus"
+    ],
     "additionalProperties": false
   }
 }

@@ -3,7 +3,11 @@
   "domain": "workspace",
   "description": "Read the workspace prompt configuration: appended instructions, content-prompt overrides, and the auto-improve-prompts toggle.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -55,7 +59,11 @@
         "type": "boolean"
       }
     },
-    "required": ["additionalInstructions", "overrides", "autoImprovePrompts"],
+    "required": [
+      "additionalInstructions",
+      "overrides",
+      "autoImprovePrompts"
+    ],
     "additionalProperties": false
   }
 }

@@ -3,7 +3,11 @@
   "domain": "plugin",
   "description": "List MCP registries for the workspace.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -47,12 +51,20 @@
               "type": "boolean"
             }
           },
-          "required": ["id", "name", "baseUrl", "enabled", "isDefault"],
+          "required": [
+            "id",
+            "name",
+            "baseUrl",
+            "enabled",
+            "isDefault"
+          ],
           "additionalProperties": false
         }
       }
     },
-    "required": ["registries"],
+    "required": [
+      "registries"
+    ],
     "additionalProperties": false
   }
 }

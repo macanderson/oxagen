@@ -3,7 +3,11 @@
   "domain": "schema",
   "description": "List versions (number, label, status, published_at, change_summary).",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "cli"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -51,7 +55,10 @@
             },
             "status": {
               "type": "string",
-              "enum": ["draft", "published"]
+              "enum": [
+                "draft",
+                "published"
+              ]
             },
             "label": {
               "anyOf": [
@@ -103,7 +110,10 @@
         "type": "number"
       }
     },
-    "required": ["versions", "total"],
+    "required": [
+      "versions",
+      "total"
+    ],
     "additionalProperties": false
   }
 }

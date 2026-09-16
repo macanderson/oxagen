@@ -3,7 +3,11 @@
   "domain": "environment",
   "description": "Update a workspace environment's name, slug, description, or active state. The default environment cannot be deactivated.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -46,7 +50,9 @@
         "type": "boolean"
       }
     },
-    "required": ["environmentId"],
+    "required": [
+      "environmentId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -93,7 +99,9 @@
         "additionalProperties": false
       }
     },
-    "required": ["environment"],
+    "required": [
+      "environment"
+    ],
     "additionalProperties": false
   }
 }

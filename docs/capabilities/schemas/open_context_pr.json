@@ -3,7 +3,9 @@
   "domain": "context",
   "description": "Open the Context PR for a proposal: branch context/<lineage> from the production branch, the single record file under .oxagen/rules/, the PR body with rationale, supporting records and evidence, then the six checks one at a time as GitHub check runs. Re-runs the checks when the PR is already open.",
   "mode": "sync",
-  "surfaces": ["api"],
+  "surfaces": [
+    "api"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -24,7 +26,9 @@
         "type": "string"
       }
     },
-    "required": ["proposalId"],
+    "required": [
+      "proposalId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -53,7 +57,11 @@
         "anyOf": [
           {
             "type": "string",
-            "enum": ["solo", "team", "regulated"]
+            "enum": [
+              "solo",
+              "team",
+              "regulated"
+            ]
           },
           {
             "type": "null"
@@ -135,13 +143,21 @@
               },
               "force": {
                 "type": "string",
-                "enum": ["must", "should", "may", "info"]
+                "enum": [
+                  "must",
+                  "should",
+                  "may",
+                  "info"
+                ]
               },
               "constraintEffect": {
                 "anyOf": [
                   {
                     "type": "string",
-                    "enum": ["require", "forbid"]
+                    "enum": [
+                      "require",
+                      "forbid"
+                    ]
                   },
                   {
                     "type": "null"
@@ -150,7 +166,10 @@
               },
               "sharingScope": {
                 "type": "string",
-                "enum": ["repository", "workspace"]
+                "enum": [
+                  "repository",
+                  "workspace"
+                ]
               },
               "statement": {
                 "type": "string"
@@ -200,7 +219,12 @@
             },
             "status": {
               "type": "string",
-              "enum": ["pending", "running", "passed", "failed"]
+              "enum": [
+                "pending",
+                "running",
+                "passed",
+                "failed"
+              ]
             },
             "summary": {
               "type": "string"
@@ -260,7 +284,10 @@
                 "type": "string"
               }
             },
-            "required": ["lineageId", "path"],
+            "required": [
+              "lineageId",
+              "path"
+            ],
             "additionalProperties": false
           },
           "bundleVersion": {
@@ -273,7 +300,10 @@
                 "type": "integer"
               }
             },
-            "required": ["current", "afterMerge"],
+            "required": [
+              "current",
+              "afterMerge"
+            ],
             "additionalProperties": false
           },
           "review": {
@@ -287,7 +317,11 @@
             ]
           }
         },
-        "required": ["publishes", "bundleVersion", "review"],
+        "required": [
+          "publishes",
+          "bundleVersion",
+          "review"
+        ],
         "additionalProperties": false
       },
       "merged": {

@@ -3,7 +3,12 @@
   "domain": "schema",
   "description": "Create/update a property on a node label or relationship type in the draft.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "cli", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -22,7 +27,10 @@
     "properties": {
       "ownerKind": {
         "type": "string",
-        "enum": ["node", "relationship"],
+        "enum": [
+          "node",
+          "relationship"
+        ],
         "description": "Whether the property belongs to a node label or relationship type"
       },
       "ownerName": {
@@ -95,7 +103,12 @@
         "type": "string"
       }
     },
-    "required": ["ownerKind", "ownerName", "key", "dataType"],
+    "required": [
+      "ownerKind",
+      "ownerName",
+      "key",
+      "dataType"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -109,7 +122,10 @@
         "type": "boolean"
       }
     },
-    "required": ["propertyId", "created"],
+    "required": [
+      "propertyId",
+      "created"
+    ],
     "additionalProperties": false
   }
 }

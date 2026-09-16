@@ -3,67 +3,97 @@
     "append_record": [
       {
         "source": "save_memory",
-        "fields": ["text", "source", "relatedNodeIds"]
+        "fields": [
+          "text",
+          "source",
+          "relatedNodeIds"
+        ]
       },
       {
         "source": "write_memory",
-        "fields": ["lesson", "source", "relatedNodeIds"]
+        "fields": [
+          "lesson",
+          "source",
+          "relatedNodeIds"
+        ]
       }
     ],
     "list_connections": [
       {
         "source": "list_connections",
-        "fields": ["connectorId"]
+        "fields": [
+          "connectorId"
+        ]
       }
     ],
     "list_records": [
       {
         "source": "list_memory_citations",
-        "fields": ["executionId"]
+        "fields": [
+          "executionId"
+        ]
       }
     ],
     "propose_record": [
       {
         "source": "promote_context_record",
-        "fields": ["policy_version"]
+        "fields": [
+          "policy_version"
+        ]
       },
       {
         "source": "promote_memory",
-        "fields": ["basedOnEvidenceIds"]
+        "fields": [
+          "basedOnEvidenceIds"
+        ]
       },
       {
         "source": "suggest_promotion_rationales",
-        "fields": ["count"]
+        "fields": [
+          "count"
+        ]
       }
     ],
     "register_tool_server": [
       {
         "source": "set_mcp_enabled",
-        "fields": ["mcpServerId"]
+        "fields": [
+          "mcpServerId"
+        ]
       }
     ],
     "remove_tool_server": [
       {
         "source": "delete_mcp_server",
-        "fields": ["mcpServerId"]
+        "fields": [
+          "mcpServerId"
+        ]
       }
     ],
     "set_connection": [
       {
         "source": "set_model_credential",
-        "fields": ["apiKey"]
+        "fields": [
+          "apiKey"
+        ]
       },
       {
         "source": "set_secret_value",
-        "fields": ["value"]
+        "fields": [
+          "value"
+        ]
       },
       {
         "source": "upsert_secret_key",
-        "fields": ["key"]
+        "fields": [
+          "key"
+        ]
       },
       {
         "source": "verify_model_credential",
-        "fields": ["apiKey"]
+        "fields": [
+          "apiKey"
+        ]
       }
     ]
   },
@@ -71,85 +101,132 @@
     "ask_assistant": [
       {
         "source": "add_conversation_attachment",
-        "fields": ["assetPublicId"]
+        "fields": [
+          "assetPublicId"
+        ]
       }
     ],
     "dispatch_command": [
       {
         "source": "dispatch_tacho_command",
-        "fields": ["sessionUuid"]
+        "fields": [
+          "sessionUuid"
+        ]
       }
     ],
     "get_install_instructions": [
       {
         "source": "get_install_instructions",
-        "fields": ["client"]
+        "fields": [
+          "client"
+        ]
       },
       {
         "source": "get_install_instructions",
-        "fields": ["client"]
+        "fields": [
+          "client"
+        ]
       }
     ],
     "get_policy_bundle": [
       {
         "source": "get_registry_config",
-        "fields": ["enforcementMode", "conformanceFloor"]
+        "fields": [
+          "enforcementMode",
+          "conformanceFloor"
+        ]
       },
       {
         "source": "get_tacho_bundle",
-        "fields": ["host_enrollment_id"]
+        "fields": [
+          "host_enrollment_id"
+        ]
       }
     ],
     "get_run": [
       {
         "source": "get_execution_trace",
-        "fields": ["executionId"]
+        "fields": [
+          "executionId"
+        ]
       },
       {
         "source": "get_tacho_session",
-        "fields": ["sessionUuid"]
+        "fields": [
+          "sessionUuid"
+        ]
       }
     ],
     "ingest_frames": [
       {
         "source": "ingest_stella_operational_telemetry",
-        "fields": ["schema", "events"]
+        "fields": [
+          "schema",
+          "events"
+        ]
       },
       {
         "source": "ingest_tacho_events",
-        "fields": ["schema", "host_enrollment_id", "events", "daemon"]
+        "fields": [
+          "schema",
+          "host_enrollment_id",
+          "events",
+          "daemon"
+        ]
       }
     ],
     "list_conversations": [
       {
         "source": "archive_conversation",
-        "fields": ["conversationIds", "archived"]
+        "fields": [
+          "conversationIds",
+          "archived"
+        ]
       },
       {
         "source": "delete_conversation",
-        "fields": ["conversationIds"]
+        "fields": [
+          "conversationIds"
+        ]
       },
       {
         "source": "export_conversation",
-        "fields": ["conversationId", "format"]
+        "fields": [
+          "conversationId",
+          "format"
+        ]
       },
       {
         "source": "list_conversation_files",
-        "fields": ["conversationId", "kind", "limit", "cursor"]
+        "fields": [
+          "conversationId",
+          "kind",
+          "limit",
+          "cursor"
+        ]
       },
       {
         "source": "list_conversations",
-        "fields": ["filter", "limit", "cursor"]
+        "fields": [
+          "filter",
+          "limit",
+          "cursor"
+        ]
       },
       {
         "source": "rename_conversation",
-        "fields": ["conversationId", "title"]
+        "fields": [
+          "conversationId",
+          "title"
+        ]
       }
     ],
     "set_preferences": [
       {
         "source": "update_workspace_user_preferences",
-        "fields": ["defaultRepoSlug"]
+        "fields": [
+          "defaultRepoSlug"
+        ]
       }
     ]
   },
@@ -157,13 +234,17 @@
     "create_workspace": [
       {
         "source": "configure_repo",
-        "fields": ["repoId"]
+        "fields": [
+          "repoId"
+        ]
       }
     ],
     "set_member_role": [
       {
         "source": "change_member_role",
-        "fields": ["newRole"]
+        "fields": [
+          "newRole"
+        ]
       }
     ]
   },
@@ -171,37 +252,55 @@
     "get_ontology": [
       {
         "source": "diff_schema_versions",
-        "fields": ["fromVersionId"]
+        "fields": [
+          "fromVersionId"
+        ]
       }
     ],
     "list_sources": [
       {
         "source": "get_integration_metrics",
-        "fields": ["integrationId"]
+        "fields": [
+          "integrationId"
+        ]
       },
       {
         "source": "get_integration",
-        "fields": ["integrationId"]
+        "fields": [
+          "integrationId"
+        ]
       }
     ],
     "remove_source": [
       {
         "source": "delete_connection",
-        "fields": ["connectionId"]
+        "fields": [
+          "connectionId"
+        ]
       }
     ],
     "update_ontology": [
       {
         "source": "delete_schema_label",
-        "fields": ["schemaName", "name"]
+        "fields": [
+          "schemaName",
+          "name"
+        ]
       },
       {
         "source": "delete_schema_property",
-        "fields": ["ownerKind", "ownerName", "key"]
+        "fields": [
+          "ownerKind",
+          "ownerName",
+          "key"
+        ]
       },
       {
         "source": "delete_schema_relationship",
-        "fields": ["schemaName", "name"]
+        "fields": [
+          "schemaName",
+          "name"
+        ]
       },
       {
         "source": "upsert_schema_label",
@@ -242,23 +341,33 @@
     "update_source": [
       {
         "source": "pause_connection",
-        "fields": ["connectionId"]
+        "fields": [
+          "connectionId"
+        ]
       },
       {
         "source": "preview_connection",
-        "fields": ["connectionId"]
+        "fields": [
+          "connectionId"
+        ]
       },
       {
         "source": "set_connection_mappings",
-        "fields": ["connectionId"]
+        "fields": [
+          "connectionId"
+        ]
       },
       {
         "source": "suggest_connection_mappings",
-        "fields": ["connectionId"]
+        "fields": [
+          "connectionId"
+        ]
       },
       {
         "source": "update_connection",
-        "fields": ["connectionId"]
+        "fields": [
+          "connectionId"
+        ]
       }
     ]
   },
@@ -266,7 +375,9 @@
     "set_model_route": [
       {
         "source": "preview_routing_decision",
-        "fields": ["prompt"]
+        "fields": [
+          "prompt"
+        ]
       }
     ]
   }

@@ -3,7 +3,11 @@
   "domain": "plugin",
   "description": "List installed plugins for this workspace.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -202,7 +206,9 @@
         }
       }
     },
-    "required": ["listings"],
+    "required": [
+      "listings"
+    ],
     "additionalProperties": false
   }
 }

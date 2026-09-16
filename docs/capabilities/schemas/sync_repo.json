@@ -3,7 +3,12 @@
   "domain": "repo",
   "description": "Trigger incremental or full re-index of a repository connection.",
   "mode": "async",
-  "surfaces": ["api", "mcp", "cli", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -26,7 +31,10 @@
       },
       "mode": {
         "type": "string",
-        "enum": ["incremental", "full"],
+        "enum": [
+          "incremental",
+          "full"
+        ],
         "default": "incremental"
       },
       "recordTypes": {
@@ -36,7 +44,9 @@
         }
       }
     },
-    "required": ["repoId"],
+    "required": [
+      "repoId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -52,14 +62,22 @@
       },
       "mode": {
         "type": "string",
-        "enum": ["incremental", "full"]
+        "enum": [
+          "incremental",
+          "full"
+        ]
       },
       "estimatedRecords": {
         "type": "number",
         "description": "Estimated number of records to process"
       }
     },
-    "required": ["jobId", "status", "mode", "estimatedRecords"],
+    "required": [
+      "jobId",
+      "status",
+      "mode",
+      "estimatedRecords"
+    ],
     "additionalProperties": false
   }
 }

@@ -3,7 +3,10 @@
   "domain": "run",
   "description": "Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies, with the cost each entry folds.",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "high",
   "agent": null,
   "chain": {
@@ -21,10 +24,17 @@
       },
       "zoom": {
         "type": "string",
-        "enum": ["turns", "steps", "everything"]
+        "enum": [
+          "turns",
+          "steps",
+          "everything"
+        ]
       }
     },
-    "required": ["runId", "zoom"],
+    "required": [
+      "runId",
+      "zoom"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -33,7 +43,11 @@
     "properties": {
       "zoom": {
         "type": "string",
-        "enum": ["turns", "steps", "everything"]
+        "enum": [
+          "turns",
+          "steps",
+          "everything"
+        ]
       },
       "entries": {
         "type": "array",
@@ -51,7 +65,12 @@
             },
             "kind": {
               "type": "string",
-              "enum": ["turn", "model_call", "tool_call", "frame"]
+              "enum": [
+                "turn",
+                "model_call",
+                "tool_call",
+                "frame"
+              ]
             },
             "type": {
               "type": "string"
@@ -75,7 +94,10 @@
             },
             "fidelity": {
               "type": "string",
-              "enum": ["full", "digest_only"]
+              "enum": [
+                "full",
+                "digest_only"
+              ]
             },
             "frames": {
               "type": "integer",
@@ -102,7 +124,11 @@
                       ]
                     }
                   },
-                  "required": ["micros", "currency", "basis"],
+                  "required": [
+                    "micros",
+                    "currency",
+                    "basis"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -131,7 +157,11 @@
         "type": "boolean"
       }
     },
-    "required": ["zoom", "entries", "complete"],
+    "required": [
+      "zoom",
+      "entries",
+      "complete"
+    ],
     "additionalProperties": false
   }
 }

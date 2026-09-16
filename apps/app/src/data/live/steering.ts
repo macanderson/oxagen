@@ -60,7 +60,12 @@ export const steering: DataSource["steering"] = {
       page: "steering",
     });
     return read.ok
-      ? parsed(ProposalPage, toProposalPage(read.value), ctx.orgId, "proposals")
+      ? parsed(
+          ProposalPage,
+          toProposalPage(read.value),
+          ctx.orgId,
+          "proposals",
+        )
       : read;
   },
   async contextPr(ctx, proposalId) {

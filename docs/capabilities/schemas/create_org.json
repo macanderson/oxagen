@@ -3,7 +3,11 @@
   "domain": "org",
   "description": "Create a new organization with a globally-unique slug, its owner membership, IAM bootstrap and first workspace",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -36,7 +40,10 @@
       },
       "type": {
         "type": "string",
-        "enum": ["personal", "business"],
+        "enum": [
+          "personal",
+          "business"
+        ],
         "default": "business"
       },
       "website": {
@@ -101,7 +108,10 @@
             "maxLength": 40
           }
         },
-        "required": ["name", "slug"],
+        "required": [
+          "name",
+          "slug"
+        ],
         "additionalProperties": false,
         "default": {
           "name": "Default",
@@ -109,7 +119,10 @@
         }
       }
     },
-    "required": ["name", "slug"],
+    "required": [
+      "name",
+      "slug"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -141,11 +154,21 @@
             "type": "string"
           }
         },
-        "required": ["publicId", "slug"],
+        "required": [
+          "publicId",
+          "slug"
+        ],
         "additionalProperties": false
       }
     },
-    "required": ["publicId", "name", "slug", "type", "createdAt", "workspace"],
+    "required": [
+      "publicId",
+      "name",
+      "slug",
+      "type",
+      "createdAt",
+      "workspace"
+    ],
     "additionalProperties": false
   }
 }

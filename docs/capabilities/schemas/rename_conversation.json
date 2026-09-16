@@ -3,7 +3,11 @@
   "domain": "conversation",
   "description": "Rename a conversation (set its title)",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -30,7 +34,10 @@
         "maxLength": 200
       }
     },
-    "required": ["conversationId", "title"],
+    "required": [
+      "conversationId",
+      "title"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -44,7 +51,10 @@
         "type": "string"
       }
     },
-    "required": ["publicId", "title"],
+    "required": [
+      "publicId",
+      "title"
+    ],
     "additionalProperties": false
   }
 }

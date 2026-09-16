@@ -3,7 +3,10 @@
   "domain": "run",
   "description": "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps, model and tool calls, and the per-model and per-tool breakdown; null until the rollup has rebuilt the run from its frames.",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "medium",
   "agent": null,
   "chain": {
@@ -20,7 +23,9 @@
         "type": "string"
       }
     },
-    "required": ["runId"],
+    "required": [
+      "runId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -56,7 +61,11 @@
                         ]
                       }
                     },
-                    "required": ["micros", "currency", "basis"],
+                    "required": [
+                      "micros",
+                      "currency",
+                      "basis"
+                    ],
                     "additionalProperties": false
                   },
                   {
@@ -203,7 +212,11 @@
                               ]
                             }
                           },
-                          "required": ["micros", "currency", "basis"],
+                          "required": [
+                            "micros",
+                            "currency",
+                            "basis"
+                          ],
                           "additionalProperties": false
                         },
                         {
@@ -250,7 +263,13 @@
                       "additionalProperties": false
                     }
                   },
-                  "required": ["model", "provider", "calls", "cost", "tokens"],
+                  "required": [
+                    "model",
+                    "provider",
+                    "calls",
+                    "cost",
+                    "tokens"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -267,7 +286,10 @@
                       "minimum": 0
                     }
                   },
-                  "required": ["name", "calls"],
+                  "required": [
+                    "name",
+                    "calls"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -304,7 +326,10 @@
         ]
       }
     },
-    "required": ["runId", "rollup"],
+    "required": [
+      "runId",
+      "rollup"
+    ],
     "additionalProperties": false
   }
 }

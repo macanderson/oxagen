@@ -3,7 +3,11 @@
   "domain": "connection",
   "description": "Preview sample records from a data source connection. Used in the setup wizard to show what data will be ingested.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": false,
@@ -26,7 +30,9 @@
         "description": "Public ID or internal UUID of the connection"
       }
     },
-    "required": ["connectionId"],
+    "required": [
+      "connectionId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -78,7 +84,9 @@
         }
       }
     },
-    "required": ["recordTypes"],
+    "required": [
+      "recordTypes"
+    ],
     "additionalProperties": false
   }
 }

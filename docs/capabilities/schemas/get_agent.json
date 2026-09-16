@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "Read one agent identity: principal, harness, operator and status; its long-lived credentials; the roles on its principal; the hosts enrolled under it; and the definition of record the last commit cached.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "cli"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -26,7 +30,9 @@
         "maxLength": 128
       }
     },
-    "required": ["agentId"],
+    "required": [
+      "agentId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -69,7 +75,12 @@
           },
           "harness": {
             "type": "string",
-            "enum": ["stella", "claude-code", "claude-agent-sdk", "custom"]
+            "enum": [
+              "stella",
+              "claude-code",
+              "claude-agent-sdk",
+              "custom"
+            ]
           },
           "principalId": {
             "anyOf": [
@@ -93,7 +104,12 @@
           },
           "status": {
             "type": "string",
-            "enum": ["unenrolled", "enrolled", "suspended", "retired"]
+            "enum": [
+              "unenrolled",
+              "enrolled",
+              "suspended",
+              "retired"
+            ]
           },
           "registeredAt": {
             "type": "string"
@@ -199,7 +215,10 @@
             },
             "scopeKind": {
               "type": "string",
-              "enum": ["org", "workspace"]
+              "enum": [
+                "org",
+                "workspace"
+              ]
             },
             "isSystemDefault": {
               "type": "boolean"
@@ -242,15 +261,27 @@
             },
             "platform": {
               "type": "string",
-              "enum": ["darwin", "linux", "win32"]
+              "enum": [
+                "darwin",
+                "linux",
+                "win32"
+              ]
             },
             "status": {
               "type": "string",
-              "enum": ["active", "paused", "suspended", "revoked"]
+              "enum": [
+                "active",
+                "paused",
+                "suspended",
+                "revoked"
+              ]
             },
             "mode": {
               "type": "string",
-              "enum": ["observe", "enforce"]
+              "enum": [
+                "observe",
+                "enforce"
+              ]
             },
             "harnesses": {
               "type": "array",
@@ -386,7 +417,13 @@
         ]
       }
     },
-    "required": ["identity", "credentials", "roles", "hosts", "definition"],
+    "required": [
+      "identity",
+      "credentials",
+      "roles",
+      "hosts",
+      "definition"
+    ],
     "additionalProperties": false
   }
 }

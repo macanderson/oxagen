@@ -3,7 +3,11 @@
   "domain": "user",
   "description": "Read the calling user's saved per-turn budget: whether a dollar ceiling is enforced on each agent turn, the limit in USD, the enforcement mode (grace = allow overage within a grace window; prompt = ask to continue; enforce = hard stop), and the grace-window cushion.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -41,13 +45,22 @@
       },
       "mode": {
         "type": "string",
-        "enum": ["grace", "prompt", "enforce"]
+        "enum": [
+          "grace",
+          "prompt",
+          "enforce"
+        ]
       },
       "graceOveragePct": {
         "type": "number"
       }
     },
-    "required": ["enabled", "limitUsd", "mode", "graceOveragePct"],
+    "required": [
+      "enabled",
+      "limitUsd",
+      "mode",
+      "graceOveragePct"
+    ],
     "additionalProperties": false
   }
 }

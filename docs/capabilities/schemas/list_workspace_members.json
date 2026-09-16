@@ -3,7 +3,10 @@
   "domain": "workspace",
   "description": "List members of a workspace",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -45,7 +48,12 @@
           "type": "string"
         }
       },
-      "required": ["id", "email", "role", "joined_at"],
+      "required": [
+        "id",
+        "email",
+        "role",
+        "joined_at"
+      ],
       "additionalProperties": false
     }
   }

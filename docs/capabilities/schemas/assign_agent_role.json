@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "Assign an IAM role to an agent's delegated principal. System agent roles (Agent Observer/Contributor/Operator) are assignable at every tier; custom roles are enterprise-only. Rejected when the role's grants exceed the assigning user's own effective grants (delegation ceiling). Audited with principal_kind='agent'.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -31,7 +35,10 @@
         "description": "IAM role name to attach (e.g. 'Agent Contributor' or a custom role name)"
       }
     },
-    "required": ["agentId", "roleName"],
+    "required": [
+      "agentId",
+      "roleName"
+    ],
     "additionalProperties": false
   },
   "output": {

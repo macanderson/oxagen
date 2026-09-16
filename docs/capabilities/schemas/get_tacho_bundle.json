@@ -3,7 +3,9 @@
   "domain": "tacho",
   "description": "Fetch the signed policy bundle an enrolled Tacho host caches and evaluates locally.",
   "mode": "sync",
-  "surfaces": ["api"],
+  "surfaces": [
+    "api"
+  ],
   "sensitivity": "high",
   "agent": null,
   "chain": {
@@ -24,7 +26,9 @@
         "maxLength": 128
       }
     },
-    "required": ["host_enrollment_id"],
+    "required": [
+      "host_enrollment_id"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -65,7 +69,12 @@
               },
               "host_status": {
                 "type": "string",
-                "enum": ["active", "paused", "suspended", "revoked"]
+                "enum": [
+                  "active",
+                  "paused",
+                  "suspended",
+                  "revoked"
+                ]
               },
               "deny_generation": {
                 "type": "object",
@@ -79,7 +88,10 @@
                     "minimum": 0
                   }
                 },
-                "required": ["org", "workspace"],
+                "required": [
+                  "org",
+                  "workspace"
+                ],
                 "additionalProperties": false
               },
               "permissions": {
@@ -107,7 +119,11 @@
                     }
                   }
                 },
-                "required": ["allow", "deny", "ask"],
+                "required": [
+                  "allow",
+                  "deny",
+                  "ask"
+                ],
                 "additionalProperties": false
               },
               "tools": {
@@ -117,7 +133,12 @@
                   "properties": {
                     "risk_grade": {
                       "type": "string",
-                      "enum": ["low", "medium", "high", "critical"]
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "critical"
+                      ]
                     },
                     "read_only": {
                       "type": "boolean"
@@ -127,7 +148,10 @@
                       "maxLength": 256
                     }
                   },
-                  "required": ["risk_grade", "read_only"],
+                  "required": [
+                    "risk_grade",
+                    "read_only"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -144,10 +168,15 @@
                   },
                   "mode": {
                     "type": "string",
-                    "enum": ["observed", "enforced"]
+                    "enum": [
+                      "observed",
+                      "enforced"
+                    ]
                   }
                 },
-                "required": ["mode"],
+                "required": [
+                  "mode"
+                ],
                 "additionalProperties": false
               },
               "context": {
@@ -165,7 +194,9 @@
                     ]
                   }
                 },
-                "required": ["system"],
+                "required": [
+                  "system"
+                ],
                 "additionalProperties": false
               },
               "retention": {
@@ -173,7 +204,10 @@
                 "properties": {
                   "mode": {
                     "type": "string",
-                    "enum": ["digest_only", "content_exact"]
+                    "enum": [
+                      "digest_only",
+                      "content_exact"
+                    ]
                   },
                   "classes": {
                     "type": "array",
@@ -183,12 +217,18 @@
                     }
                   }
                 },
-                "required": ["mode", "classes"],
+                "required": [
+                  "mode",
+                  "classes"
+                ],
                 "additionalProperties": false
               },
               "mode": {
                 "type": "string",
-                "enum": ["observe", "enforce"]
+                "enum": [
+                  "observe",
+                  "enforce"
+                ]
               },
               "signature": {
                 "type": "object",
@@ -205,7 +245,11 @@
                     "minLength": 1
                   }
                 },
-                "required": ["key_id", "alg", "sig"],
+                "required": [
+                  "key_id",
+                  "alg",
+                  "sig"
+                ],
                 "additionalProperties": false
               }
             },
@@ -234,7 +278,11 @@
         ]
       }
     },
-    "required": ["not_modified", "etag", "bundle"],
+    "required": [
+      "not_modified",
+      "etag",
+      "bundle"
+    ],
     "additionalProperties": false
   }
 }

@@ -3,7 +3,10 @@
   "domain": "control",
   "description": "The delivery report for one run: every command addressed to it, newest first, with its status, the requested and achieved delivery mode, and the frame an applied command landed on.",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -30,7 +33,9 @@
         "default": 50
       }
     },
-    "required": ["runId"],
+    "required": [
+      "runId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -77,7 +82,11 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": ["next_step", "interrupt", "turn_boundary"]
+                  "enum": [
+                    "next_step",
+                    "interrupt",
+                    "turn_boundary"
+                  ]
                 },
                 {
                   "type": "null"
@@ -88,7 +97,11 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": ["next_step", "interrupt", "turn_boundary"]
+                  "enum": [
+                    "next_step",
+                    "interrupt",
+                    "turn_boundary"
+                  ]
                 },
                 {
                   "type": "null"
@@ -200,7 +213,9 @@
         }
       }
     },
-    "required": ["commands"],
+    "required": [
+      "commands"
+    ],
     "additionalProperties": false
   }
 }

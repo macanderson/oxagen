@@ -3,7 +3,10 @@
   "domain": "org",
   "description": "List the members of the organization with its pending invitations, or the members of the current workspace.",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -22,7 +25,10 @@
     "properties": {
       "scope": {
         "type": "string",
-        "enum": ["org", "workspace"],
+        "enum": [
+          "org",
+          "workspace"
+        ],
         "default": "workspace"
       }
     },
@@ -67,7 +73,13 @@
                   "description": "ISO 8601"
                 }
               },
-              "required": ["id", "name", "email", "role", "joinedAt"],
+              "required": [
+                "id",
+                "name",
+                "email",
+                "role",
+                "joinedAt"
+              ],
               "additionalProperties": false
             }
           },
@@ -102,12 +114,22 @@
                   ]
                 }
               },
-              "required": ["id", "email", "role", "invitedAt", "expiresAt"],
+              "required": [
+                "id",
+                "email",
+                "role",
+                "invitedAt",
+                "expiresAt"
+              ],
               "additionalProperties": false
             }
           }
         },
-        "required": ["scope", "members", "invitations"],
+        "required": [
+          "scope",
+          "members",
+          "invitations"
+        ],
         "additionalProperties": false
       },
       {
@@ -146,12 +168,21 @@
                   "description": "ISO 8601"
                 }
               },
-              "required": ["id", "name", "email", "role", "joinedAt"],
+              "required": [
+                "id",
+                "name",
+                "email",
+                "role",
+                "joinedAt"
+              ],
               "additionalProperties": false
             }
           }
         },
-        "required": ["scope", "members"],
+        "required": [
+          "scope",
+          "members"
+        ],
         "additionalProperties": false
       }
     ]

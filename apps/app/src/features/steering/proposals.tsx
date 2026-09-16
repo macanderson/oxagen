@@ -33,13 +33,7 @@ function SupportList({ term, items }: { term: string; items: string[] }) {
   );
 }
 
-function ProposalItem({
-  at,
-  proposal,
-}: {
-  at: SteeringAt;
-  proposal: Proposal;
-}) {
+function ProposalItem({ at, proposal }: { at: SteeringAt; proposal: Proposal }) {
   const t = useTranslations("steering.proposals");
   const locale = useLocale();
   const { support, pr, checks } = proposal;

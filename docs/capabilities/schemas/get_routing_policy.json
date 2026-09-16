@@ -3,7 +3,11 @@
   "domain": "router",
   "description": "Read the effective market-router policy for the current scope (mode, verified-success threshold, min samples, window, tier-escalation) plus its provenance (workspace / org / default).",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "cli"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -28,7 +32,11 @@
     "properties": {
       "mode": {
         "type": "string",
-        "enum": ["off", "shadow", "enforce"]
+        "enum": [
+          "off",
+          "shadow",
+          "enforce"
+        ]
       },
       "successThreshold": {
         "type": "number"
@@ -46,7 +54,11 @@
       },
       "source": {
         "type": "string",
-        "enum": ["workspace", "org", "default"]
+        "enum": [
+          "workspace",
+          "org",
+          "default"
+        ]
       }
     },
     "required": [

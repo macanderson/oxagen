@@ -3,7 +3,10 @@
   "domain": "cost",
   "description": "List the price book this organization is priced against: every provider list price effective at an instant and the organization's negotiated rows, in integer micros per million units with the window each is effective over.",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "low",
   "agent": null,
   "chain": {
@@ -89,7 +92,12 @@
             },
             "unit": {
               "type": "string",
-              "enum": ["token", "request", "image", "second"]
+              "enum": [
+                "token",
+                "request",
+                "image",
+                "second"
+              ]
             },
             "currency": {
               "type": "string"
@@ -112,7 +120,11 @@
             },
             "source": {
               "type": "string",
-              "enum": ["list", "negotiated", "override"]
+              "enum": [
+                "list",
+                "negotiated",
+                "override"
+              ]
             }
           },
           "required": [
@@ -134,7 +146,10 @@
         }
       }
     },
-    "required": ["at", "entries"],
+    "required": [
+      "at",
+      "entries"
+    ],
     "additionalProperties": false
   }
 }

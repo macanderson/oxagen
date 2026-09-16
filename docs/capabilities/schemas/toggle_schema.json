@@ -3,7 +3,11 @@
   "domain": "schema",
   "description": "Enable/disable a schema. Activation auto-publishes the current draft and auto-pins the resulting version — no separate publish/pin step.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "cli"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -28,7 +32,10 @@
         "type": "boolean"
       }
     },
-    "required": ["schemaName", "enabled"],
+    "required": [
+      "schemaName",
+      "enabled"
+    ],
     "additionalProperties": false
   },
   "output": {

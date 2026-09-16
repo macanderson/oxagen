@@ -3,7 +3,11 @@
   "domain": "environment",
   "description": "Fetch a single workspace environment by its public id.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -25,7 +29,9 @@
         "minLength": 1
       }
     },
-    "required": ["environmentId"],
+    "required": [
+      "environmentId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -72,7 +78,9 @@
         "additionalProperties": false
       }
     },
-    "required": ["environment"],
+    "required": [
+      "environment"
+    ],
     "additionalProperties": false
   }
 }

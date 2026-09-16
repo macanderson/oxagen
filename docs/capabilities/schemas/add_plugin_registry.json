@@ -3,7 +3,11 @@
   "domain": "plugin",
   "description": "Add an MCP registry source for the workspace (any registry implementing the MCP Registry OpenAPI).",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": true,
@@ -30,7 +34,10 @@
         "format": "uri"
       }
     },
-    "required": ["name", "baseUrl"],
+    "required": [
+      "name",
+      "baseUrl"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -44,7 +51,10 @@
         "type": "boolean"
       }
     },
-    "required": ["registryId", "isDefault"],
+    "required": [
+      "registryId",
+      "isDefault"
+    ],
     "additionalProperties": false
   }
 }

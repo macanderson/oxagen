@@ -3,7 +3,11 @@
   "domain": "mandate",
   "description": "Ask for a mandate on behalf of an agent: the same shape as grant_mandate, recorded as a draft for the role accountable for the consequence to grant or decline.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -42,7 +46,11 @@
             },
             "period": {
               "type": "string",
-              "enum": ["daily", "weekly", "monthly"]
+              "enum": [
+                "daily",
+                "weekly",
+                "monthly"
+              ]
             },
             "currencyOrUnit": {
               "type": "string",
@@ -50,7 +58,10 @@
               "maxLength": 32
             }
           },
-          "required": ["period", "currencyOrUnit"],
+          "required": [
+            "period",
+            "currencyOrUnit"
+          ],
           "additionalProperties": false
         }
       },
@@ -207,7 +218,11 @@
             },
             "period": {
               "type": "string",
-              "enum": ["daily", "weekly", "monthly"]
+              "enum": [
+                "daily",
+                "weekly",
+                "monthly"
+              ]
             },
             "currencyOrUnit": {
               "type": "string",
@@ -215,7 +230,10 @@
               "maxLength": 32
             }
           },
-          "required": ["period", "currencyOrUnit"],
+          "required": [
+            "period",
+            "currencyOrUnit"
+          ],
           "additionalProperties": false
         }
       },
@@ -292,7 +310,12 @@
       },
       "status": {
         "type": "string",
-        "enum": ["draft", "active", "expired", "revoked"]
+        "enum": [
+          "draft",
+          "active",
+          "expired",
+          "revoked"
+        ]
       },
       "revokedBy": {
         "anyOf": [
@@ -343,7 +366,11 @@
             },
             "period": {
               "type": "string",
-              "enum": ["daily", "weekly", "monthly"]
+              "enum": [
+                "daily",
+                "weekly",
+                "monthly"
+              ]
             },
             "periodKey": {
               "type": "string"

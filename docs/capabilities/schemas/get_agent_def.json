@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "Fetch an agent definition with its active (or latest) version config, parsed and validated via parseAgentDefinitionConfig",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -25,7 +29,9 @@
         "description": "Agent public id (agt_…), UUID, or slug"
       }
     },
-    "required": ["agentId"],
+    "required": [
+      "agentId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -89,11 +95,18 @@
       },
       "status": {
         "type": "string",
-        "enum": ["draft", "active", "archived"]
+        "enum": [
+          "draft",
+          "active",
+          "archived"
+        ]
       },
       "deploymentStatus": {
         "type": "string",
-        "enum": ["inactive", "active"]
+        "enum": [
+          "inactive",
+          "active"
+        ]
       },
       "version": {
         "anyOf": [
@@ -124,7 +137,10 @@
               },
               "mode": {
                 "type": "string",
-                "enum": ["read", "extend"],
+                "enum": [
+                  "read",
+                  "extend"
+                ],
                 "default": "read"
               },
               "retrieval": {
@@ -132,7 +148,12 @@
                 "properties": {
                   "strategy": {
                     "type": "string",
-                    "enum": ["semantic", "lexical", "hybrid", "explicit"]
+                    "enum": [
+                      "semantic",
+                      "lexical",
+                      "hybrid",
+                      "explicit"
+                    ]
                   },
                   "scopeToTypes": {
                     "type": "array",
@@ -141,7 +162,9 @@
                     }
                   }
                 },
-                "required": ["strategy"],
+                "required": [
+                  "strategy"
+                ],
                 "additionalProperties": false
               },
               "budget": {
@@ -165,11 +188,18 @@
                     "minimum": 0
                   }
                 },
-                "required": ["maxHops", "maxNodes"],
+                "required": [
+                  "maxHops",
+                  "maxNodes"
+                ],
                 "additionalProperties": false
               }
             },
-            "required": ["ontologyId", "retrieval", "budget"],
+            "required": [
+              "ontologyId",
+              "retrieval",
+              "budget"
+            ],
             "additionalProperties": false
           },
           "agentTools": {
@@ -179,7 +209,10 @@
               "properties": {
                 "type": {
                   "type": "string",
-                  "enum": ["function", "mcp_server"]
+                  "enum": [
+                    "function",
+                    "mcp_server"
+                  ]
                 },
                 "ref": {
                   "type": "string"
@@ -189,7 +222,10 @@
                   "additionalProperties": {}
                 }
               },
-              "required": ["type", "ref"],
+              "required": [
+                "type",
+                "ref"
+              ],
               "additionalProperties": false
             }
           },
@@ -197,7 +233,10 @@
             "type": "string"
           }
         },
-        "required": ["graph", "agentTools"],
+        "required": [
+          "graph",
+          "agentTools"
+        ],
         "additionalProperties": false
       }
     },

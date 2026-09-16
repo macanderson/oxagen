@@ -3,7 +3,11 @@
   "domain": "router",
   "description": "Dry-run the market router for a prompt: derive its task class, read observed outcomes, and return the full decision (chosen model + tier, rationale, source, and the ranked candidate audit trail) under the effective policy plus any overrides. Changes nothing.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "cli"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -36,7 +40,11 @@
       },
       "mode": {
         "type": "string",
-        "enum": ["off", "shadow", "enforce"]
+        "enum": [
+          "off",
+          "shadow",
+          "enforce"
+        ]
       },
       "successThreshold": {
         "type": "number",
@@ -55,7 +63,9 @@
         "type": "boolean"
       }
     },
-    "required": ["prompt"],
+    "required": [
+      "prompt"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -73,7 +83,10 @@
       },
       "source": {
         "type": "string",
-        "enum": ["market", "deterministic-fallback"]
+        "enum": [
+          "market",
+          "deterministic-fallback"
+        ]
       },
       "taskClass": {
         "type": "string"
@@ -119,7 +132,11 @@
         "properties": {
           "mode": {
             "type": "string",
-            "enum": ["off", "shadow", "enforce"]
+            "enum": [
+              "off",
+              "shadow",
+              "enforce"
+            ]
           },
           "successThreshold": {
             "type": "number",

@@ -3,7 +3,9 @@
   "domain": "graph",
   "description": "Read a customer-context node's full label set.",
   "mode": "sync",
-  "surfaces": ["agent"],
+  "surfaces": [
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -26,7 +28,9 @@
         "description": "publicId of the target node"
       }
     },
-    "required": ["nodeId"],
+    "required": [
+      "nodeId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -43,7 +47,10 @@
         }
       }
     },
-    "required": ["nodeId", "labels"],
+    "required": [
+      "nodeId",
+      "labels"
+    ],
     "additionalProperties": false
   }
 }

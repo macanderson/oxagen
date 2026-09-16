@@ -18,7 +18,13 @@ import { type SteeringAt, steeringLink } from "./view";
 const chip =
   "inline-flex min-h-9 items-center rounded-md border border-border px-3 text-sm text-muted-foreground hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground";
 
-function KindFilter({ at, kind }: { at: SteeringAt; kind: RecordKind | null }) {
+function KindFilter({
+  at,
+  kind,
+}: {
+  at: SteeringAt;
+  kind: RecordKind | null;
+}) {
   const t = useTranslations("steering.records");
   const record = useTranslations("ui.record");
   return (

@@ -3,7 +3,10 @@
   "domain": "run",
   "description": "Read the redacted body of one frame of a run by its sequence: the content type and bytes when the workspace retained bodies, the digest and no bytes under digest_only.",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "high",
   "agent": null,
   "chain": {
@@ -23,7 +26,10 @@
         "type": "string"
       }
     },
-    "required": ["runId", "seq"],
+    "required": [
+      "runId",
+      "seq"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -69,12 +75,21 @@
               "type": "string"
             }
           },
-          "required": ["path", "reason", "originalDigest"],
+          "required": [
+            "path",
+            "reason",
+            "originalDigest"
+          ],
           "additionalProperties": false
         }
       }
     },
-    "required": ["contentType", "bytes", "digest", "redactions"],
+    "required": [
+      "contentType",
+      "bytes",
+      "digest",
+      "redactions"
+    ],
     "additionalProperties": false
   }
 }

@@ -3,7 +3,11 @@
   "domain": "asset",
   "description": "Ingest a binary asset from a source URL into object storage and return its stored URL and key.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -26,7 +30,12 @@
       },
       "kind": {
         "type": "string",
-        "enum": ["avatar", "image", "document", "video"]
+        "enum": [
+          "avatar",
+          "image",
+          "document",
+          "video"
+        ]
       },
       "filename": {
         "type": "string",
@@ -35,14 +44,19 @@
       },
       "source": {
         "type": "string",
-        "enum": ["user_upload"]
+        "enum": [
+          "user_upload"
+        ]
       },
       "conversationId": {
         "type": "string",
         "minLength": 1
       }
     },
-    "required": ["sourceUrl", "kind"],
+    "required": [
+      "sourceUrl",
+      "kind"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -76,7 +90,13 @@
         ]
       }
     },
-    "required": ["url", "key", "contentType", "bytes", "publicId"],
+    "required": [
+      "url",
+      "key",
+      "contentType",
+      "bytes",
+      "publicId"
+    ],
     "additionalProperties": false
   }
 }

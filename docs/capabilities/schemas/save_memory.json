@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "Capture a free-text memory: infer its kind + weight (unless pinned), embed it, and write it to the workspace AgentMemory graph. Backs the CLI /remember command.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -31,7 +35,11 @@
       },
       "memoryClass": {
         "type": "string",
-        "enum": ["OBSERVATION", "RULE", "FACT"]
+        "enum": [
+          "OBSERVATION",
+          "RULE",
+          "FACT"
+        ]
       },
       "memoryKind": {
         "type": "string",
@@ -46,7 +54,13 @@
       },
       "source": {
         "type": "string",
-        "enum": ["user", "feature", "fix", "exception-watcher", "bug-report"],
+        "enum": [
+          "user",
+          "feature",
+          "fix",
+          "exception-watcher",
+          "bug-report"
+        ],
         "default": "user"
       },
       "relatedNodeIds": {
@@ -56,7 +70,9 @@
         }
       }
     },
-    "required": ["text"],
+    "required": [
+      "text"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -77,7 +93,11 @@
           },
           "memoryClass": {
             "type": "string",
-            "enum": ["OBSERVATION", "RULE", "FACT"]
+            "enum": [
+              "OBSERVATION",
+              "RULE",
+              "FACT"
+            ]
           },
           "memoryKind": {
             "type": "string",
@@ -111,7 +131,12 @@
           },
           "status": {
             "type": "string",
-            "enum": ["ACTIVE", "SUPERSEDED", "RETRACTED", "ARCHIVED"]
+            "enum": [
+              "ACTIVE",
+              "SUPERSEDED",
+              "RETRACTED",
+              "ARCHIVED"
+            ]
           },
           "subjectHint": {
             "type": "string"
@@ -146,7 +171,11 @@
           },
           "createdByKind": {
             "type": "string",
-            "enum": ["AGENT", "USER", "SYSTEM"]
+            "enum": [
+              "AGENT",
+              "USER",
+              "SYSTEM"
+            ]
           },
           "createdById": {
             "anyOf": [
@@ -162,7 +191,11 @@
             "anyOf": [
               {
                 "type": "string",
-                "enum": ["AGENT", "USER", "SYSTEM"]
+                "enum": [
+                  "AGENT",
+                  "USER",
+                  "SYSTEM"
+                ]
               },
               {
                 "type": "null"
@@ -225,7 +258,11 @@
         "properties": {
           "memoryClass": {
             "type": "string",
-            "enum": ["OBSERVATION", "RULE", "FACT"]
+            "enum": [
+              "OBSERVATION",
+              "RULE",
+              "FACT"
+            ]
           },
           "memoryKind": {
             "type": "string",
@@ -238,12 +275,19 @@
             "description": "true when class/kind were inferred by the model rather than supplied or defaulted"
           }
         },
-        "required": ["memoryClass", "memoryKind", "classified"],
+        "required": [
+          "memoryClass",
+          "memoryKind",
+          "classified"
+        ],
         "additionalProperties": false,
         "description": "The class + kind actually used, and whether the model inferred them"
       }
     },
-    "required": ["memory", "inferred"],
+    "required": [
+      "memory",
+      "inferred"
+    ],
     "additionalProperties": false
   }
 }

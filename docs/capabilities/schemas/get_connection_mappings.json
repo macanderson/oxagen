@@ -3,7 +3,11 @@
   "domain": "connection",
   "description": "Get the current entity type mappings for a data source connection.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -26,7 +30,9 @@
         "description": "Public ID or internal UUID of the connection"
       }
     },
-    "required": ["connectionId"],
+    "required": [
+      "connectionId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -76,7 +82,9 @@
         }
       }
     },
-    "required": ["mappings"],
+    "required": [
+      "mappings"
+    ],
     "additionalProperties": false
   }
 }

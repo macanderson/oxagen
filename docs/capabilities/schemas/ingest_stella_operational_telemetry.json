@@ -3,7 +3,9 @@
   "domain": "telemetry",
   "description": "Ingest an authenticated, content-free batch of Stella operational execution rollups.",
   "mode": "sync",
-  "surfaces": ["api"],
+  "surfaces": [
+    "api"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": false,
@@ -132,7 +134,10 @@
         }
       }
     },
-    "required": ["schema", "events"],
+    "required": [
+      "schema",
+      "events"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -151,7 +156,10 @@
         }
       }
     },
-    "required": ["accepted", "event_ids"],
+    "required": [
+      "accepted",
+      "event_ids"
+    ],
     "additionalProperties": false
   }
 }

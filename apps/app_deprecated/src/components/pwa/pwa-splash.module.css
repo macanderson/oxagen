@@ -27,7 +27,7 @@
   justify-content: center;
 
   /* Dark background matches the PWA manifest background_color. */
-  background-color: #10100f;
+  background-color: #10100F;
 
   /* Fade transition on dismiss — disabled under reduced-motion. */
   opacity: 1;
@@ -36,7 +36,7 @@
 
 @media (prefers-color-scheme: light) {
   .splash {
-    background-color: #f2eee5;
+    background-color: #F2EEE5;
   }
 }
 

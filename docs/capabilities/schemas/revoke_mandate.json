@@ -3,7 +3,11 @@
   "domain": "mandate",
   "description": "Revoke a mandate with a reason. Releases every reservation held by a call that has not dispatched; an already ended mandate is refused.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -29,7 +33,10 @@
         "maxLength": 2000
       }
     },
-    "required": ["mandateId", "reason"],
+    "required": [
+      "mandateId",
+      "reason"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -94,7 +101,11 @@
             },
             "period": {
               "type": "string",
-              "enum": ["daily", "weekly", "monthly"]
+              "enum": [
+                "daily",
+                "weekly",
+                "monthly"
+              ]
             },
             "currencyOrUnit": {
               "type": "string",
@@ -102,7 +113,10 @@
               "maxLength": 32
             }
           },
-          "required": ["period", "currencyOrUnit"],
+          "required": [
+            "period",
+            "currencyOrUnit"
+          ],
           "additionalProperties": false
         }
       },
@@ -179,7 +193,12 @@
       },
       "status": {
         "type": "string",
-        "enum": ["draft", "active", "expired", "revoked"]
+        "enum": [
+          "draft",
+          "active",
+          "expired",
+          "revoked"
+        ]
       },
       "revokedBy": {
         "anyOf": [
@@ -230,7 +249,11 @@
             },
             "period": {
               "type": "string",
-              "enum": ["daily", "weekly", "monthly"]
+              "enum": [
+                "daily",
+                "weekly",
+                "monthly"
+              ]
             },
             "periodKey": {
               "type": "string"

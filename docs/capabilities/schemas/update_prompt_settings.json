@@ -3,7 +3,11 @@
   "domain": "workspace",
   "description": "Update the workspace prompt configuration (partial). `additionalInstructions` and `autoImprovePrompts` are available on all plans; `overrides` (full prompt replacement) is enterprise-only.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -104,7 +108,11 @@
         "type": "boolean"
       }
     },
-    "required": ["additionalInstructions", "overrides", "autoImprovePrompts"],
+    "required": [
+      "additionalInstructions",
+      "overrides",
+      "autoImprovePrompts"
+    ],
     "additionalProperties": false
   }
 }

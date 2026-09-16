@@ -3,7 +3,11 @@
   "domain": "billing",
   "description": "Read the current subscription, plan, and period bounds for the active tenant",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -42,7 +46,10 @@
               },
               "billingInterval": {
                 "type": "string",
-                "enum": ["month", "year"]
+                "enum": [
+                  "month",
+                  "year"
+                ]
               },
               "currentPeriodStart": {
                 "type": "string"
@@ -119,7 +126,11 @@
         ]
       }
     },
-    "required": ["subscription", "creditBalanceCents", "periodUsage"],
+    "required": [
+      "subscription",
+      "creditBalanceCents",
+      "periodUsage"
+    ],
     "additionalProperties": false
   }
 }

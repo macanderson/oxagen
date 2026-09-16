@@ -3,7 +3,11 @@
   "domain": "notification",
   "description": "Mark a notification as read and/or archived for the calling user.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": null,
   "chain": {
@@ -27,7 +31,9 @@
         "type": "boolean"
       }
     },
-    "required": ["id"],
+    "required": [
+      "id"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -38,7 +44,9 @@
         "type": "boolean"
       }
     },
-    "required": ["ok"],
+    "required": [
+      "ok"
+    ],
     "additionalProperties": false
   }
 }

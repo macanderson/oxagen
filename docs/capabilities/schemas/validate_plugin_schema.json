@@ -3,7 +3,11 @@
   "domain": "plugin",
   "description": "Validate a connector plugin config object against its schema before install or configure. Returns field-level errors for form display.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -33,7 +37,10 @@
         "description": "Config values keyed by field key. Nested sections use dot-path or nested objects."
       }
     },
-    "required": ["pluginId", "config"],
+    "required": [
+      "pluginId",
+      "config"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -74,13 +81,20 @@
               "description": "Machine-readable validation rule that failed"
             }
           },
-          "required": ["field", "message", "code"],
+          "required": [
+            "field",
+            "message",
+            "code"
+          ],
           "additionalProperties": false
         },
         "description": "Field-level validation errors. Empty when valid is true."
       }
     },
-    "required": ["valid", "errors"],
+    "required": [
+      "valid",
+      "errors"
+    ],
     "additionalProperties": false
   }
 }

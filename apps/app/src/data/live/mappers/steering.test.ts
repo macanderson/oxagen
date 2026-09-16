@@ -3,7 +3,11 @@
 // nulls, a proposal before its pull request carries none, and the Context PR
 // carries its checks, what merge will do and, once merged, the promotion.
 import { describe, expect, it } from "vitest";
-import { ContextPr, ProposalPage, RecordPage } from "@/data/contracts/steering";
+import {
+  ContextPr,
+  ProposalPage,
+  RecordPage,
+} from "@/data/contracts/steering";
 import {
   contextPrOutput,
   LINEAGE,

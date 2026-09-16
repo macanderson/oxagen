@@ -3,7 +3,11 @@
   "domain": "org",
   "description": "Decline a pending org invitation. Frees the reserved seat.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -25,7 +29,9 @@
         "minLength": 1
       }
     },
-    "required": ["invitationPublicId"],
+    "required": [
+      "invitationPublicId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -39,7 +45,10 @@
         "const": "declined"
       }
     },
-    "required": ["invitationPublicId", "status"],
+    "required": [
+      "invitationPublicId",
+      "status"
+    ],
     "additionalProperties": false
   }
 }

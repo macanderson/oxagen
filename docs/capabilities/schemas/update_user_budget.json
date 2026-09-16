@@ -3,7 +3,11 @@
   "domain": "user",
   "description": "Update the calling user's saved per-turn budget (partial update — only provided fields change). Turn the per-turn dollar ceiling on/off, set the limit in USD, choose the enforcement mode (grace = allow overage within a grace window, then stop; prompt = pause and ask to continue; enforce = hard stop the instant the limit is crossed), and set the grace-window cushion.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -36,7 +40,11 @@
       },
       "mode": {
         "type": "string",
-        "enum": ["grace", "prompt", "enforce"]
+        "enum": [
+          "grace",
+          "prompt",
+          "enforce"
+        ]
       },
       "graceOveragePct": {
         "type": "number",
@@ -65,13 +73,22 @@
       },
       "mode": {
         "type": "string",
-        "enum": ["grace", "prompt", "enforce"]
+        "enum": [
+          "grace",
+          "prompt",
+          "enforce"
+        ]
       },
       "graceOveragePct": {
         "type": "number"
       }
     },
-    "required": ["enabled", "limitUsd", "mode", "graceOveragePct"],
+    "required": [
+      "enabled",
+      "limitUsd",
+      "mode",
+      "graceOveragePct"
+    ],
     "additionalProperties": false
   }
 }

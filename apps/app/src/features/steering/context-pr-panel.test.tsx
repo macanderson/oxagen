@@ -36,8 +36,7 @@ function renderPanel(read: Read<ContextPr>) {
 const renderState = (status: ProposalStatus) =>
   renderPanel(readOk(contextPr(status)));
 
-const merge = () =>
-  screen.queryByRole("button", { name: "Merge pull request" });
+const merge = () => screen.queryByRole("button", { name: "Merge pull request" });
 
 afterEach(async () => {
   try {
@@ -55,14 +54,17 @@ describe("the state machine", () => {
     ["checks_passed", "checks passed"],
     ["checks_failed", "checks failed"],
     ["merged", "merged"],
-  ])("marks %s as the current step", (status, label) => {
-    renderState(status);
-    const machine = screen.getByRole("list", { name: "Context PR state" });
-    const current = within(machine)
-      .getAllByRole("listitem")
-      .filter((step) => step.getAttribute("aria-current") === "step");
-    expect(current.map((step) => step.textContent)).toEqual([label]);
-  });
+  ])(
+    "marks %s as the current step",
+    (status, label) => {
+      renderState(status);
+      const machine = screen.getByRole("list", { name: "Context PR state" });
+      const current = within(machine)
+        .getAllByRole("listitem")
+        .filter((step) => step.getAttribute("aria-current") === "step");
+      expect(current.map((step) => step.textContent)).toEqual([label]);
+    },
+  );
 
   it("marks no step for a dismissed proposal and says what dismissal did", () => {
     const panel = renderState("rejected");
@@ -86,16 +88,12 @@ describe("before the pull request opens", () => {
     expect(panel.querySelector('[data-fact="path"] dd')).toHaveTextContent(
       ".oxagen/rules/ctx.release.no-reread-changelog.toml",
     );
-    expect(
-      panel.querySelector('[data-fact="governance"] dd'),
-    ).toHaveTextContent(
+    expect(panel.querySelector('[data-fact="governance"] dd')).toHaveTextContent(
       "read from .oxagen/rules/governance.toml when the pull request opens",
     );
     expect(panel.querySelector("[data-check]")).toBeNull();
     expect(merge()).toBeDisabled();
-    expect(panel).toHaveTextContent(
-      "Merge is blocked until every check passes.",
-    );
+    expect(panel).toHaveTextContent("Merge is blocked until every check passes.");
     expect(
       screen.getByRole("button", { name: "Open a Context PR" }),
     ).toBeInTheDocument();

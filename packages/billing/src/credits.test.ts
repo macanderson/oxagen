@@ -137,8 +137,11 @@ vi.mock("./credits", async (importOriginal) => {
   return importOriginal<typeof import("./credits")>();
 });
 
-const { CREDIT_REASONS, RETIRED_CREDIT_REASONS, HISTORICAL_CREDIT_REASONS } =
-  await import("./constants");
+const {
+  CREDIT_REASONS,
+  RETIRED_CREDIT_REASONS,
+  HISTORICAL_CREDIT_REASONS,
+} = await import("./constants");
 
 const { createCreditLot, grantCredits, effectiveBalance } = await import(
   "./credits"

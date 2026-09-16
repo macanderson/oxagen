@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "List an agent's environment bindings, with each binding's resolved template name.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -25,7 +29,9 @@
         "minLength": 1
       }
     },
-    "required": ["agentId"],
+    "required": [
+      "agentId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -68,7 +74,9 @@
         }
       }
     },
-    "required": ["bindings"],
+    "required": [
+      "bindings"
+    ],
     "additionalProperties": false
   }
 }

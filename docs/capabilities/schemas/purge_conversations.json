@@ -3,7 +3,11 @@
   "domain": "conversation",
   "description": "Permanently delete every archived conversation the caller owns in this workspace (soft-delete: sets deleted_at; rows retained for audit)",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "destructive",
   "agent": {
     "requiresApproval": true,
@@ -31,7 +35,9 @@
         "minimum": 0
       }
     },
-    "required": ["deleted"],
+    "required": [
+      "deleted"
+    ],
     "additionalProperties": false
   }
 }

@@ -3,7 +3,9 @@
   "domain": "agent",
   "description": "Resolve the active workspace's installed MCP servers with connection details and per-workspace credentials for first-party client use",
   "mode": "sync",
-  "surfaces": ["api"],
+  "surfaces": [
+    "api"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": false,
@@ -39,18 +41,29 @@
             },
             "transportType": {
               "type": "string",
-              "enum": ["streamable-http", "stdio"]
+              "enum": [
+                "streamable-http",
+                "stdio"
+              ]
             },
             "endpointUrl": {
               "type": "string"
             },
             "authStrategy": {
               "type": "string",
-              "enum": ["none", "bearer", "header"]
+              "enum": [
+                "none",
+                "bearer",
+                "header"
+              ]
             },
             "authKind": {
               "type": "string",
-              "enum": ["oauth", "secret", "none"]
+              "enum": [
+                "oauth",
+                "secret",
+                "none"
+              ]
             },
             "token": {
               "anyOf": [
@@ -94,7 +107,9 @@
         }
       }
     },
-    "required": ["servers"],
+    "required": [
+      "servers"
+    ],
     "additionalProperties": false
   }
 }

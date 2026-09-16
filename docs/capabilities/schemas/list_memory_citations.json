@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "List memory citations for an execution, optionally filtered by compliance (violations) or influence (what shaped the output).",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -26,17 +30,29 @@
       },
       "compliance": {
         "type": "string",
-        "enum": ["COMPLIED", "DISCRETION", "VIOLATION", "NA"]
+        "enum": [
+          "COMPLIED",
+          "DISCRETION",
+          "VIOLATION",
+          "NA"
+        ]
       },
       "influenceIn": {
         "type": "array",
         "items": {
           "type": "string",
-          "enum": ["DECISIVE", "CONTRIBUTING", "CONSIDERED", "IGNORED"]
+          "enum": [
+            "DECISIVE",
+            "CONTRIBUTING",
+            "CONSIDERED",
+            "IGNORED"
+          ]
         }
       }
     },
-    "required": ["executionId"],
+    "required": [
+      "executionId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -59,11 +75,21 @@
             },
             "influence": {
               "type": "string",
-              "enum": ["DECISIVE", "CONTRIBUTING", "CONSIDERED", "IGNORED"]
+              "enum": [
+                "DECISIVE",
+                "CONTRIBUTING",
+                "CONSIDERED",
+                "IGNORED"
+              ]
             },
             "compliance": {
               "type": "string",
-              "enum": ["COMPLIED", "DISCRETION", "VIOLATION", "NA"]
+              "enum": [
+                "COMPLIED",
+                "DISCRETION",
+                "VIOLATION",
+                "NA"
+              ]
             },
             "enforcementAtCite": {
               "anyOf": [
@@ -121,7 +147,9 @@
         }
       }
     },
-    "required": ["citations"],
+    "required": [
+      "citations"
+    ],
     "additionalProperties": false
   }
 }

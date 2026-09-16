@@ -3,7 +3,11 @@
   "domain": "billing",
   "description": "Convert a projected number of agent runs into governed actions and a price, using the published run-class conversion (spec §3.4) and volume bands (§4.1). Shows the actions-per-run ratio it used, and the tier allowance it applied. Pure arithmetic — no organisation data is read.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -28,7 +32,12 @@
       },
       "runClass": {
         "type": "string",
-        "enum": ["qa_lookup", "standard_task", "multi_step", "long_running"],
+        "enum": [
+          "qa_lookup",
+          "standard_task",
+          "multi_step",
+          "long_running"
+        ],
         "default": "standard_task"
       },
       "actionsPerRun": {
@@ -38,10 +47,17 @@
       },
       "tier": {
         "type": "string",
-        "enum": ["free", "build", "scale", "enterprise"]
+        "enum": [
+          "free",
+          "build",
+          "scale",
+          "enterprise"
+        ]
       }
     },
-    "required": ["runsPerYear"],
+    "required": [
+      "runsPerYear"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -61,15 +77,28 @@
           },
           "actionsPerRunSource": {
             "type": "string",
-            "enum": ["run_class", "caller_supplied"]
+            "enum": [
+              "run_class",
+              "caller_supplied"
+            ]
           },
           "runClass": {
             "type": "string",
-            "enum": ["qa_lookup", "standard_task", "multi_step", "long_running"]
+            "enum": [
+              "qa_lookup",
+              "standard_task",
+              "multi_step",
+              "long_running"
+            ]
           },
           "tier": {
             "type": "string",
-            "enum": ["free", "build", "scale", "enterprise"]
+            "enum": [
+              "free",
+              "build",
+              "scale",
+              "enterprise"
+            ]
           }
         },
         "required": [
@@ -111,7 +140,10 @@
             "minimum": 0
           }
         },
-        "required": ["id", "usdPer1000"],
+        "required": [
+          "id",
+          "usdPer1000"
+        ],
         "additionalProperties": false
       },
       "overageUsd": {

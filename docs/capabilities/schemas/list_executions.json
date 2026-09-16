@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "List recent top-level agent runs (executions) for the workspace, newest first, with keyset pagination — each row's status, origin, duration, token/cost figures.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -31,7 +35,13 @@
       },
       "status": {
         "type": "string",
-        "enum": ["planning", "running", "completed", "failed", "cancelled"]
+        "enum": [
+          "planning",
+          "running",
+          "completed",
+          "failed",
+          "cancelled"
+        ]
       }
     },
     "additionalProperties": false
@@ -166,7 +176,10 @@
         ]
       }
     },
-    "required": ["executions", "nextCursor"],
+    "required": [
+      "executions",
+      "nextCursor"
+    ],
     "additionalProperties": false
   }
 }

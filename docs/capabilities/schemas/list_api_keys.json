@@ -3,7 +3,10 @@
   "domain": "api_key",
   "description": "List the API keys in scope with their metadata: public id, name, prefix, creation, last use, expiry and revocation times. Never returns a key's secret or its hash.",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "high",
   "agent": null,
   "chain": {
@@ -86,7 +89,9 @@
         }
       }
     },
-    "required": ["items"],
+    "required": [
+      "items"
+    ],
     "additionalProperties": false
   }
 }

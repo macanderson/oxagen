@@ -3,7 +3,12 @@
   "domain": "integration",
   "description": "Browse installed plugin instances with status, config summary, and sync metrics.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "cli", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -22,7 +27,12 @@
     "properties": {
       "status": {
         "type": "string",
-        "enum": ["active", "paused", "failed", "pending_setup"]
+        "enum": [
+          "active",
+          "paused",
+          "failed",
+          "pending_setup"
+        ]
       },
       "pluginId": {
         "type": "string"
@@ -61,7 +71,12 @@
             },
             "status": {
               "type": "string",
-              "enum": ["active", "paused", "failed", "pending_setup"]
+              "enum": [
+                "active",
+                "paused",
+                "failed",
+                "pending_setup"
+              ]
             },
             "version": {
               "type": "string"
@@ -114,7 +129,11 @@
         "type": "boolean"
       }
     },
-    "required": ["integrations", "total", "hasMore"],
+    "required": [
+      "integrations",
+      "total",
+      "hasMore"
+    ],
     "additionalProperties": false
   }
 }

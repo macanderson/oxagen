@@ -34,22 +34,10 @@ describe("parseSteeringView", () => {
     ["a kind off Records", { tab: "proposals", kind: "rule" }, { kind: null }],
     ["a negative offset", { offset: "-50" }, { offset: 0 }],
     ["a padded offset", { offset: "050" }, { offset: 0 }],
-    [
-      "an offset past the pages a list holds",
-      { offset: "10000000" },
-      { offset: 0 },
-    ],
+    ["an offset past the pages a list holds", { offset: "10000000" }, { offset: 0 }],
     ["a proposal off Context PRs", { proposal: "prp_1" }, { proposal: null }],
-    [
-      "a malformed proposal",
-      { tab: "prs", proposal: "prp_1/../x" },
-      { proposal: null },
-    ],
-    [
-      "another kind of id",
-      { tab: "prs", proposal: "ctr_1" },
-      { proposal: null },
-    ],
+    ["a malformed proposal", { tab: "prs", proposal: "prp_1/../x" }, { proposal: null }],
+    ["another kind of id", { tab: "prs", proposal: "ctr_1" }, { proposal: null }],
   ])("falls back for %s (negative)", (_case, params, expected) => {
     expect(parseSteeringView(params)).toMatchObject(expected);
   });

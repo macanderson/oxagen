@@ -3,7 +3,11 @@
   "domain": "plugin",
   "description": "List version history for a connector plugin including changelog entries and breaking-change flags. Used by org admins to review update impact before upgrading.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -35,7 +39,9 @@
         "default": false
       }
     },
-    "required": ["pluginId"],
+    "required": [
+      "pluginId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -97,7 +103,12 @@
               "type": "string"
             }
           },
-          "required": ["version", "releasedAt", "isBreaking", "schemaVersion"],
+          "required": [
+            "version",
+            "releasedAt",
+            "isBreaking",
+            "schemaVersion"
+          ],
           "additionalProperties": false
         }
       }

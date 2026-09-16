@@ -3,7 +3,12 @@
   "domain": "integration",
   "description": "Update plugin instance configuration: credentials, filters, and sync cadence.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "cli", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -33,10 +38,16 @@
       },
       "syncCadence": {
         "type": "string",
-        "enum": ["manual", "polling", "webhook"]
+        "enum": [
+          "manual",
+          "polling",
+          "webhook"
+        ]
       }
     },
-    "required": ["integrationId"],
+    "required": [
+      "integrationId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -51,13 +62,22 @@
       },
       "syncCadence": {
         "type": "string",
-        "enum": ["manual", "polling", "webhook"]
+        "enum": [
+          "manual",
+          "polling",
+          "webhook"
+        ]
       },
       "updatedAt": {
         "type": "string"
       }
     },
-    "required": ["integrationId", "displayName", "syncCadence", "updatedAt"],
+    "required": [
+      "integrationId",
+      "displayName",
+      "syncCadence",
+      "updatedAt"
+    ],
     "additionalProperties": false
   }
 }

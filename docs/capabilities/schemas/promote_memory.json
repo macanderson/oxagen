@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "Promote a memory to RULE or FACT, recording an auditable promotion event. FACT requires human confirmation and forces enforcement 100.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": true,
@@ -27,7 +31,10 @@
       },
       "toClass": {
         "type": "string",
-        "enum": ["RULE", "FACT"],
+        "enum": [
+          "RULE",
+          "FACT"
+        ],
         "description": "Target class; OBSERVATION cannot be a promotion target"
       },
       "enforcementScore": {
@@ -47,7 +54,10 @@
         }
       }
     },
-    "required": ["memoryId", "toClass"],
+    "required": [
+      "memoryId",
+      "toClass"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -65,7 +75,11 @@
       },
       "memoryClass": {
         "type": "string",
-        "enum": ["OBSERVATION", "RULE", "FACT"]
+        "enum": [
+          "OBSERVATION",
+          "RULE",
+          "FACT"
+        ]
       },
       "memoryKind": {
         "type": "string",
@@ -99,7 +113,12 @@
       },
       "status": {
         "type": "string",
-        "enum": ["ACTIVE", "SUPERSEDED", "RETRACTED", "ARCHIVED"]
+        "enum": [
+          "ACTIVE",
+          "SUPERSEDED",
+          "RETRACTED",
+          "ARCHIVED"
+        ]
       },
       "subjectHint": {
         "type": "string"
@@ -134,7 +153,11 @@
       },
       "createdByKind": {
         "type": "string",
-        "enum": ["AGENT", "USER", "SYSTEM"]
+        "enum": [
+          "AGENT",
+          "USER",
+          "SYSTEM"
+        ]
       },
       "createdById": {
         "anyOf": [
@@ -150,7 +173,11 @@
         "anyOf": [
           {
             "type": "string",
-            "enum": ["AGENT", "USER", "SYSTEM"]
+            "enum": [
+              "AGENT",
+              "USER",
+              "SYSTEM"
+            ]
           },
           {
             "type": "null"

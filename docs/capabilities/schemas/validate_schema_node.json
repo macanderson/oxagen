@@ -3,7 +3,12 @@
   "domain": "schema",
   "description": "Validate a node's properties against the workspace schema. Returns conformance score and field-level errors.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent", "cli"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -32,7 +37,10 @@
         "type": "string"
       }
     },
-    "required": ["label", "properties"],
+    "required": [
+      "label",
+      "properties"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -73,7 +81,11 @@
               ]
             }
           },
-          "required": ["field", "message", "code"],
+          "required": [
+            "field",
+            "message",
+            "code"
+          ],
           "additionalProperties": false
         }
       },
@@ -85,7 +97,11 @@
       },
       "outcome": {
         "type": "string",
-        "enum": ["accepted", "rejected", "written_below_floor"]
+        "enum": [
+          "accepted",
+          "rejected",
+          "written_below_floor"
+        ]
       }
     },
     "required": [

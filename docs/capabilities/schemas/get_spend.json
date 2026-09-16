@@ -3,7 +3,10 @@
   "domain": "spend",
   "description": "Read this workspace's spend over a day range, rolled up by operator, agent, model, tool or task from the cost rollup, with every figure in micros and the basis that says who observed it, plus the period total with proven and accepted spend kept apart.",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "medium",
   "agent": null,
   "chain": {
@@ -26,15 +29,27 @@
             "type": "string"
           }
         },
-        "required": ["from", "to"],
+        "required": [
+          "from",
+          "to"
+        ],
         "additionalProperties": false
       },
       "groupBy": {
         "type": "string",
-        "enum": ["operator", "agent", "model", "tool", "task"]
+        "enum": [
+          "operator",
+          "agent",
+          "model",
+          "tool",
+          "task"
+        ]
       }
     },
-    "required": ["period", "groupBy"],
+    "required": [
+      "period",
+      "groupBy"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -51,12 +66,21 @@
             "type": "string"
           }
         },
-        "required": ["from", "to"],
+        "required": [
+          "from",
+          "to"
+        ],
         "additionalProperties": false
       },
       "groupBy": {
         "type": "string",
-        "enum": ["operator", "agent", "model", "tool", "task"]
+        "enum": [
+          "operator",
+          "agent",
+          "model",
+          "tool",
+          "task"
+        ]
       },
       "total": {
         "type": "object",
@@ -82,7 +106,11 @@
                     ]
                   }
                 },
-                "required": ["micros", "currency", "basis"],
+                "required": [
+                  "micros",
+                  "currency",
+                  "basis"
+                ],
                 "additionalProperties": false
               },
               {
@@ -110,7 +138,10 @@
                     "type": "string"
                   }
                 },
-                "required": ["micros", "currency"],
+                "required": [
+                  "micros",
+                  "currency"
+                ],
                 "additionalProperties": false
               },
               {
@@ -130,7 +161,10 @@
                     "type": "string"
                   }
                 },
-                "required": ["micros", "currency"],
+                "required": [
+                  "micros",
+                  "currency"
+                ],
                 "additionalProperties": false
               },
               {
@@ -187,7 +221,11 @@
                       ]
                     }
                   },
-                  "required": ["micros", "currency", "basis"],
+                  "required": [
+                    "micros",
+                    "currency",
+                    "basis"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -215,7 +253,10 @@
                       "type": "string"
                     }
                   },
-                  "required": ["micros", "currency"],
+                  "required": [
+                    "micros",
+                    "currency"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -235,7 +276,10 @@
                       "type": "string"
                     }
                   },
-                  "required": ["micros", "currency"],
+                  "required": [
+                    "micros",
+                    "currency"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -322,7 +366,12 @@
         }
       }
     },
-    "required": ["period", "groupBy", "total", "rows"],
+    "required": [
+      "period",
+      "groupBy",
+      "total",
+      "rows"
+    ],
     "additionalProperties": false
   }
 }

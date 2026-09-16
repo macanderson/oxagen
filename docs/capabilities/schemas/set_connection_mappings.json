@@ -3,7 +3,11 @@
   "domain": "connection",
   "description": "Save entity type mappings for a data source connection. Activates the connection and starts ingestion once mappings are confirmed.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": true,
@@ -47,7 +51,10 @@
               "default": {}
             }
           },
-          "required": ["sourceRecordType", "oxagenEntityType"],
+          "required": [
+            "sourceRecordType",
+            "oxagenEntityType"
+          ],
           "additionalProperties": false
         },
         "description": "Confirmed entity type mappings to save"
@@ -79,7 +86,10 @@
         "type": "string"
       }
     },
-    "required": ["connectionId", "mappings"],
+    "required": [
+      "connectionId",
+      "mappings"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -96,7 +106,11 @@
         "type": "string"
       }
     },
-    "required": ["mappingsCreated", "mappingsUpdated", "connectionStatus"],
+    "required": [
+      "mappingsCreated",
+      "mappingsUpdated",
+      "connectionStatus"
+    ],
     "additionalProperties": false
   }
 }

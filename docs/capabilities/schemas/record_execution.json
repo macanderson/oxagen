@@ -3,7 +3,10 @@
   "domain": "agent",
   "description": "Persist a complete agent execution record including steps and tool calls for observability, billing, and audit",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "low",
   "agent": null,
   "chain": {
@@ -41,7 +44,13 @@
       },
       "status": {
         "type": "string",
-        "enum": ["planning", "running", "completed", "failed", "cancelled"]
+        "enum": [
+          "planning",
+          "running",
+          "completed",
+          "failed",
+          "cancelled"
+        ]
       },
       "inputPayload": {},
       "outputPayload": {},
@@ -126,7 +135,12 @@
                   "responsePayload": {},
                   "status": {
                     "type": "string",
-                    "enum": ["pending", "running", "completed", "failed"]
+                    "enum": [
+                      "pending",
+                      "running",
+                      "completed",
+                      "failed"
+                    ]
                   },
                   "latencyMs": {
                     "type": "integer",
@@ -151,7 +165,12 @@
               }
             }
           },
-          "required": ["stepNumber", "stepType", "status", "inputPayload"],
+          "required": [
+            "stepNumber",
+            "stepType",
+            "status",
+            "inputPayload"
+          ],
           "additionalProperties": false
         }
       }
@@ -182,7 +201,11 @@
         "format": "date-time"
       }
     },
-    "required": ["executionId", "status", "createdAt"],
+    "required": [
+      "executionId",
+      "status",
+      "createdAt"
+    ],
     "additionalProperties": false
   }
 }

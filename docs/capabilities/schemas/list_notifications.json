@@ -3,7 +3,11 @@
   "domain": "notification",
   "description": "List in-app notifications for the calling user. Supports filtering to unread-only and pagination.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": null,
   "chain": {
@@ -46,7 +50,13 @@
             },
             "kind": {
               "type": "string",
-              "enum": ["system", "approval", "run", "member", "security"]
+              "enum": [
+                "system",
+                "approval",
+                "run",
+                "member",
+                "security"
+              ]
             },
             "title": {
               "type": "string"
@@ -100,7 +110,10 @@
         "minimum": 0
       }
     },
-    "required": ["notifications", "unreadCount"],
+    "required": [
+      "notifications",
+      "unreadCount"
+    ],
     "additionalProperties": false
   }
 }

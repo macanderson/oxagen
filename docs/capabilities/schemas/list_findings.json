@@ -3,7 +3,10 @@
   "domain": "spend",
   "description": "List this workspace's costed findings ranked by the money at stake (open by default; applied or dismissed most recent first), each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend over the findings' window and that saving annualised.",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "medium",
   "agent": null,
   "chain": {
@@ -18,7 +21,11 @@
     "properties": {
       "status": {
         "type": "string",
-        "enum": ["open", "applied", "dismissed"],
+        "enum": [
+          "open",
+          "applied",
+          "dismissed"
+        ],
         "default": "open"
       }
     },
@@ -30,7 +37,11 @@
     "properties": {
       "status": {
         "type": "string",
-        "enum": ["open", "applied", "dismissed"]
+        "enum": [
+          "open",
+          "applied",
+          "dismissed"
+        ]
       },
       "window": {
         "anyOf": [
@@ -44,7 +55,10 @@
                 "type": "string"
               }
             },
-            "required": ["from", "to"],
+            "required": [
+              "from",
+              "to"
+            ],
             "additionalProperties": false
           },
           {
@@ -73,7 +87,11 @@
                 ]
               }
             },
-            "required": ["micros", "currency", "basis"],
+            "required": [
+              "micros",
+              "currency",
+              "basis"
+            ],
             "additionalProperties": false
           },
           {
@@ -102,7 +120,11 @@
                 ]
               }
             },
-            "required": ["micros", "currency", "basis"],
+            "required": [
+              "micros",
+              "currency",
+              "basis"
+            ],
             "additionalProperties": false
           },
           {
@@ -143,7 +165,11 @@
                 ]
               }
             },
-            "required": ["micros", "currency", "basis"],
+            "required": [
+              "micros",
+              "currency",
+              "basis"
+            ],
             "additionalProperties": false
           },
           {
@@ -171,7 +197,12 @@
             "minimum": 0
           }
         },
-        "required": ["findings", "high", "medium", "operators"],
+        "required": [
+          "findings",
+          "high",
+          "medium",
+          "operators"
+        ],
         "additionalProperties": false
       },
       "findings": {
@@ -193,7 +224,12 @@
             },
             "level": {
               "type": "string",
-              "enum": ["tool", "agent", "operator", "workspace"]
+              "enum": [
+                "tool",
+                "agent",
+                "operator",
+                "workspace"
+              ]
             },
             "subject": {
               "type": "string"
@@ -217,12 +253,19 @@
                   ]
                 }
               },
-              "required": ["micros", "currency", "basis"],
+              "required": [
+                "micros",
+                "currency",
+                "basis"
+              ],
               "additionalProperties": false
             },
             "confidence": {
               "type": "string",
-              "enum": ["high", "medium"]
+              "enum": [
+                "high",
+                "medium"
+              ]
             },
             "window": {
               "type": "object",
@@ -234,7 +277,10 @@
                   "type": "string"
                 }
               },
-              "required": ["from", "to"],
+              "required": [
+                "from",
+                "to"
+              ],
               "additionalProperties": false
             },
             "why": {
@@ -253,7 +299,11 @@
             },
             "status": {
               "type": "string",
-              "enum": ["open", "applied", "dismissed"]
+              "enum": [
+                "open",
+                "applied",
+                "dismissed"
+              ]
             },
             "detectedAt": {
               "type": "string"

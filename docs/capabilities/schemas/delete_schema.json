@@ -3,7 +3,9 @@
   "domain": "schema",
   "description": "Drop an entire named schema from the draft — its labels, relationship types, and properties.",
   "mode": "sync",
-  "surfaces": ["agent"],
+  "surfaces": [
+    "agent"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -25,7 +27,9 @@
         "minLength": 1
       }
     },
-    "required": ["schemaName"],
+    "required": [
+      "schemaName"
+    ],
     "additionalProperties": false
   },
   "output": {

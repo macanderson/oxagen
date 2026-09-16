@@ -3,7 +3,11 @@
   "domain": "connection",
   "description": "Pause or resume syncing for a data source connection. Pausing stops ingestion while keeping the connection and its data intact; resuming returns it to connected.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -30,7 +34,10 @@
         "description": "true = pause syncing; false = resume syncing"
       }
     },
-    "required": ["connectionId", "paused"],
+    "required": [
+      "connectionId",
+      "paused"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -42,11 +49,17 @@
       },
       "status": {
         "type": "string",
-        "enum": ["connected", "paused"],
+        "enum": [
+          "connected",
+          "paused"
+        ],
         "description": "Resulting connection status"
       }
     },
-    "required": ["connectionId", "status"],
+    "required": [
+      "connectionId",
+      "status"
+    ],
     "additionalProperties": false
   }
 }

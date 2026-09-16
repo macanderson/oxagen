@@ -3,7 +3,9 @@
   "domain": "run",
   "description": "Read one run's proof record: every witness that reported on it with each attempt's target and head results, fingerprints and attestation, the run's verdict, the cost of each witness run, and the workspace's disclosure grain.",
   "mode": "sync",
-  "surfaces": ["api"],
+  "surfaces": [
+    "api"
+  ],
   "sensitivity": "high",
   "agent": null,
   "chain": {
@@ -20,7 +22,9 @@
         "type": "string"
       }
     },
-    "required": ["runId"],
+    "required": [
+      "runId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -116,11 +120,21 @@
                   },
                   "targetResult": {
                     "type": "string",
-                    "enum": ["pass", "fail", "excluded", "inconclusive"]
+                    "enum": [
+                      "pass",
+                      "fail",
+                      "excluded",
+                      "inconclusive"
+                    ]
                   },
                   "prResult": {
                     "type": "string",
-                    "enum": ["pass", "fail", "excluded", "inconclusive"]
+                    "enum": [
+                      "pass",
+                      "fail",
+                      "excluded",
+                      "inconclusive"
+                    ]
                   },
                   "verdict": {
                     "type": "string",
@@ -156,7 +170,10 @@
                   },
                   "tamperExclusion": {
                     "type": "string",
-                    "enum": ["held", "broken"]
+                    "enum": [
+                      "held",
+                      "broken"
+                    ]
                   },
                   "tamper": {
                     "anyOf": [
@@ -170,7 +187,10 @@
                             "type": "string"
                           }
                         },
-                        "required": ["fingerprintAuthored", "fingerprintAtRun"],
+                        "required": [
+                          "fingerprintAuthored",
+                          "fingerprintAtRun"
+                        ],
                         "additionalProperties": false
                       },
                       {
@@ -180,7 +200,12 @@
                   },
                   "disclosureGrain": {
                     "type": "string",
-                    "enum": ["L0", "L1", "L2", "L3"]
+                    "enum": [
+                      "L0",
+                      "L1",
+                      "L2",
+                      "L3"
+                    ]
                   },
                   "witnessRunId": {
                     "anyOf": [
@@ -202,7 +227,10 @@
                         "type": "string"
                       }
                     },
-                    "required": ["keyId", "signature"],
+                    "required": [
+                      "keyId",
+                      "signature"
+                    ],
                     "additionalProperties": false
                   }
                 },
@@ -269,7 +297,11 @@
                       ]
                     }
                   },
-                  "required": ["micros", "currency", "basis"],
+                  "required": [
+                    "micros",
+                    "currency",
+                    "basis"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -278,13 +310,21 @@
               ]
             }
           },
-          "required": ["runId", "cost"],
+          "required": [
+            "runId",
+            "cost"
+          ],
           "additionalProperties": false
         }
       },
       "disclosureGrain": {
         "type": "string",
-        "enum": ["L0", "L1", "L2", "L3"]
+        "enum": [
+          "L0",
+          "L1",
+          "L2",
+          "L3"
+        ]
       }
     },
     "required": [

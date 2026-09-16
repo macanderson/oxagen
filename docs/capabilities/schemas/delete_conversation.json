@@ -3,7 +3,11 @@
   "domain": "conversation",
   "description": "Permanently delete conversations from the user's view (soft-delete: sets deleted_at; row retained for audit, never restorable)",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "destructive",
   "agent": {
     "requiresApproval": true,
@@ -28,7 +32,9 @@
         }
       }
     },
-    "required": ["conversationIds"],
+    "required": [
+      "conversationIds"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -40,7 +46,9 @@
         "minimum": 0
       }
     },
-    "required": ["deleted"],
+    "required": [
+      "deleted"
+    ],
     "additionalProperties": false
   }
 }

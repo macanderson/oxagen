@@ -29,7 +29,11 @@
         "maximum": 100000000
       }
     },
-    "required": ["orgId", "approvedForInvoiceBilling", "invoiceGauMax"],
+    "required": [
+      "orgId",
+      "approvedForInvoiceBilling",
+      "invoiceGauMax"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -49,7 +53,11 @@
         "maximum": 100000000
       }
     },
-    "required": ["orgId", "approvedForInvoiceBilling", "invoiceGauMax"],
+    "required": [
+      "orgId",
+      "approvedForInvoiceBilling",
+      "invoiceGauMax"
+    ],
     "additionalProperties": false
   }
 }

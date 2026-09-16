@@ -3,7 +3,9 @@
   "domain": "run",
   "description": "Queue a fast-tier model to read a sealed run's transcript and write its generated name and summary; refused on a live run and on a digest_only recording.",
   "mode": "async",
-  "surfaces": ["api"],
+  "surfaces": [
+    "api"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -24,7 +26,9 @@
         "type": "string"
       }
     },
-    "required": ["runId"],
+    "required": [
+      "runId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -38,7 +42,10 @@
         "const": "queued"
       }
     },
-    "required": ["runId", "status"],
+    "required": [
+      "runId",
+      "status"
+    ],
     "additionalProperties": false
   }
 }

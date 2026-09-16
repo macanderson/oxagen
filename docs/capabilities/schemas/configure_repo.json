@@ -3,7 +3,12 @@
   "domain": "repo",
   "description": "Set repo-specific filters, sync cadence, and field mappings. Specializes connection.configure for code repository connectors.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "cli", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -68,7 +73,11 @@
       },
       "syncCadence": {
         "type": "string",
-        "enum": ["manual", "polling", "webhook"]
+        "enum": [
+          "manual",
+          "polling",
+          "webhook"
+        ]
       },
       "pollingIntervalSeconds": {
         "type": "integer",
@@ -81,7 +90,9 @@
         }
       }
     },
-    "required": ["repoId"],
+    "required": [
+      "repoId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -118,7 +129,10 @@
                 }
               }
             },
-            "required": ["include", "exclude"],
+            "required": [
+              "include",
+              "exclude"
+            ],
             "additionalProperties": false
           },
           {
@@ -144,7 +158,10 @@
                 }
               }
             },
-            "required": ["include", "exclude"],
+            "required": [
+              "include",
+              "exclude"
+            ],
             "additionalProperties": false
           },
           {
@@ -154,7 +171,11 @@
       },
       "syncCadence": {
         "type": "string",
-        "enum": ["manual", "polling", "webhook"]
+        "enum": [
+          "manual",
+          "polling",
+          "webhook"
+        ]
       },
       "pollingIntervalSeconds": {
         "anyOf": [

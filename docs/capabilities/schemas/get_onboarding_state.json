@@ -3,7 +3,10 @@
   "domain": "onboarding",
   "description": "Where the signed-in person is in the onboarding gate: the current step, the gate's workspace, the first frame once one arrived, and the provisional window until a main repository is bound.",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "low",
   "agent": null,
   "chain": {
@@ -24,7 +27,12 @@
     "properties": {
       "step": {
         "type": "string",
-        "enum": ["organization", "wrap", "run", "unlocked"]
+        "enum": [
+          "organization",
+          "wrap",
+          "run",
+          "unlocked"
+        ]
       },
       "workspace": {
         "anyOf": [
@@ -39,7 +47,10 @@
                 "minLength": 1
               }
             },
-            "required": ["id", "slug"],
+            "required": [
+              "id",
+              "slug"
+            ],
             "additionalProperties": false
           },
           {
@@ -102,7 +113,11 @@
                         "minLength": 1
                       }
                     },
-                    "required": ["provider", "owner", "name"],
+                    "required": [
+                      "provider",
+                      "owner",
+                      "name"
+                    ],
                     "additionalProperties": false
                   },
                   {
@@ -111,7 +126,11 @@
                 ]
               }
             },
-            "required": ["until", "mainRepoBoundAt", "detectedRepository"],
+            "required": [
+              "until",
+              "mainRepoBoundAt",
+              "detectedRepository"
+            ],
             "additionalProperties": false
           },
           {

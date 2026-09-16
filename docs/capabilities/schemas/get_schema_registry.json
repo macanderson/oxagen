@@ -3,7 +3,11 @@
   "domain": "schema",
   "description": "Resolve a workspace's registry: pinned version, draft version, enforcement mode, per-schema enabled state, label/relationship/property tree.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "cli"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -55,7 +59,11 @@
       },
       "enforcementMode": {
         "type": "string",
-        "enum": ["strict", "lenient", "off"]
+        "enum": [
+          "strict",
+          "lenient",
+          "off"
+        ]
       },
       "conformanceFloor": {
         "type": "number",
@@ -75,7 +83,11 @@
             },
             "source": {
               "type": "string",
-              "enum": ["user", "connector", "recommended"]
+              "enum": [
+                "user",
+                "connector",
+                "recommended"
+              ]
             },
             "connectorId": {
               "type": "string"
@@ -180,7 +192,10 @@
                           "type": "string"
                         }
                       },
-                      "required": ["key", "dataType"],
+                      "required": [
+                        "key",
+                        "dataType"
+                      ],
                       "additionalProperties": false
                     }
                   }
@@ -230,7 +245,11 @@
                     "anyOf": [
                       {
                         "type": "string",
-                        "enum": ["one_to_one", "one_to_many", "many_to_many"]
+                        "enum": [
+                          "one_to_one",
+                          "one_to_many",
+                          "many_to_many"
+                        ]
                       },
                       {
                         "type": "null"
@@ -307,7 +326,10 @@
                           "type": "string"
                         }
                       },
-                      "required": ["key", "dataType"],
+                      "required": [
+                        "key",
+                        "dataType"
+                      ],
                       "additionalProperties": false
                     }
                   }

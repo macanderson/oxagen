@@ -3,7 +3,11 @@
   "domain": "schema",
   "description": "Dispatch an async reconciliation job to re-label existing graph nodes and relationships against the pinned schema version.",
   "mode": "async",
-  "surfaces": ["api", "mcp", "cli"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
   "sensitivity": "destructive",
   "agent": {
     "requiresApproval": true,
@@ -29,7 +33,9 @@
         "default": false
       }
     },
-    "required": ["versionId"],
+    "required": [
+      "versionId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -41,7 +47,9 @@
         "description": "aex_… agent_executions public_id"
       }
     },
-    "required": ["executionId"],
+    "required": [
+      "executionId"
+    ],
     "additionalProperties": false
   }
 }

@@ -3,7 +3,11 @@
   "domain": "environment",
   "description": "Create a workspace environment (e.g. production, development, preview) for scoping secrets and sandbox config.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -39,7 +43,10 @@
         ]
       }
     },
-    "required": ["name", "slug"],
+    "required": [
+      "name",
+      "slug"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -86,7 +93,9 @@
         "additionalProperties": false
       }
     },
-    "required": ["environment"],
+    "required": [
+      "environment"
+    ],
     "additionalProperties": false
   }
 }

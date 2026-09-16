@@ -45,9 +45,7 @@ describe("OxagenWordmark — THE Oxagen logo", () => {
 
   it("keeps the kit's own viewBox rather than re-fitting the word", () => {
     const { getByRole } = render(<OxagenWordmark />);
-    expect(getByRole("img").getAttribute("viewBox")).toBe(
-      OXAGEN.wordmark.viewBox,
-    );
+    expect(getByRole("img").getAttribute("viewBox")).toBe(OXAGEN.wordmark.viewBox);
   });
 
   it("draws exactly two paths: the letters, and the one gold glyph", () => {
@@ -122,18 +120,14 @@ describe("StellaWordmark — the mark is inside the word", () => {
 
   it("keeps the kit's viewBox", () => {
     const { getByRole } = render(<StellaWordmark />);
-    expect(getByRole("img").getAttribute("viewBox")).toBe(
-      STELLA.wordmark.viewBox,
-    );
+    expect(getByRole("img").getAttribute("viewBox")).toBe(STELLA.wordmark.viewBox);
   });
 });
 
 describe("StellaIcon — the asterisk IS the metal", () => {
   it("ships gold, unlike the Ox lettermark", () => {
     const { container } = render(<StellaIcon />);
-    expect(container.querySelector("path")?.getAttribute("fill")).toBe(
-      BRAND_GOLD,
-    );
+    expect(container.querySelector("path")?.getAttribute("fill")).toBe(BRAND_GOLD);
   });
 
   it("flattens for a mono tone", () => {

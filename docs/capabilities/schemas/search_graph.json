@@ -3,7 +3,12 @@
   "domain": "graph",
   "description": "Natural-language semantic (vector) search across customer-context entities in the shared workspace graph, ranked by embedding similarity. Product-owned runtime data is read through its typed memory, execution, trace, and asset capabilities.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent", "cli"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -39,7 +44,9 @@
         }
       }
     },
-    "required": ["query"],
+    "required": [
+      "query"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -82,7 +89,9 @@
         }
       }
     },
-    "required": ["results"],
+    "required": [
+      "results"
+    ],
     "additionalProperties": false
   }
 }

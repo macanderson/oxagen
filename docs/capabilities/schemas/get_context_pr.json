@@ -3,7 +3,10 @@
   "domain": "context",
   "description": "Get a proposal's Context PR: state, branch, checks with their outcomes, what merge will do, and the promotion event once merged",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -24,7 +27,9 @@
         "type": "string"
       }
     },
-    "required": ["proposalId"],
+    "required": [
+      "proposalId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -53,7 +58,11 @@
         "anyOf": [
           {
             "type": "string",
-            "enum": ["solo", "team", "regulated"]
+            "enum": [
+              "solo",
+              "team",
+              "regulated"
+            ]
           },
           {
             "type": "null"
@@ -135,13 +144,21 @@
               },
               "force": {
                 "type": "string",
-                "enum": ["must", "should", "may", "info"]
+                "enum": [
+                  "must",
+                  "should",
+                  "may",
+                  "info"
+                ]
               },
               "constraintEffect": {
                 "anyOf": [
                   {
                     "type": "string",
-                    "enum": ["require", "forbid"]
+                    "enum": [
+                      "require",
+                      "forbid"
+                    ]
                   },
                   {
                     "type": "null"
@@ -150,7 +167,10 @@
               },
               "sharingScope": {
                 "type": "string",
-                "enum": ["repository", "workspace"]
+                "enum": [
+                  "repository",
+                  "workspace"
+                ]
               },
               "statement": {
                 "type": "string"
@@ -200,7 +220,12 @@
             },
             "status": {
               "type": "string",
-              "enum": ["pending", "running", "passed", "failed"]
+              "enum": [
+                "pending",
+                "running",
+                "passed",
+                "failed"
+              ]
             },
             "summary": {
               "type": "string"
@@ -260,7 +285,10 @@
                 "type": "string"
               }
             },
-            "required": ["lineageId", "path"],
+            "required": [
+              "lineageId",
+              "path"
+            ],
             "additionalProperties": false
           },
           "bundleVersion": {
@@ -273,7 +301,10 @@
                 "type": "integer"
               }
             },
-            "required": ["current", "afterMerge"],
+            "required": [
+              "current",
+              "afterMerge"
+            ],
             "additionalProperties": false
           },
           "review": {
@@ -287,7 +318,11 @@
             ]
           }
         },
-        "required": ["publishes", "bundleVersion", "review"],
+        "required": [
+          "publishes",
+          "bundleVersion",
+          "review"
+        ],
         "additionalProperties": false
       },
       "merged": {

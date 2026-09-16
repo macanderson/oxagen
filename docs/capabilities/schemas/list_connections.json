@@ -3,7 +3,11 @@
   "domain": "connection",
   "description": "List all data source connections for a workspace.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -82,7 +86,11 @@
             },
             "healthStatus": {
               "type": "string",
-              "enum": ["healthy", "degraded", "errored"]
+              "enum": [
+                "healthy",
+                "degraded",
+                "errored"
+              ]
             },
             "lastPollAt": {
               "anyOf": [
@@ -127,7 +135,9 @@
         }
       }
     },
-    "required": ["connections"],
+    "required": [
+      "connections"
+    ],
     "additionalProperties": false
   }
 }

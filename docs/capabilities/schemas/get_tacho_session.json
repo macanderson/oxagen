@@ -3,7 +3,9 @@
   "domain": "tacho",
   "description": "Read one Tacho session's flight-recorder index: totals, subagent chains, model usage, files, commands, incidents, and checkpoints.",
   "mode": "sync",
-  "surfaces": ["api"],
+  "surfaces": [
+    "api"
+  ],
   "sensitivity": "medium",
   "agent": null,
   "chain": {
@@ -21,7 +23,9 @@
         "format": "uuid"
       }
     },
-    "required": ["sessionUuid"],
+    "required": [
+      "sessionUuid"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -90,11 +94,21 @@
           },
           "outcome": {
             "type": "string",
-            "enum": ["running", "completed", "aborted", "crashed", "unknown"]
+            "enum": [
+              "running",
+              "completed",
+              "aborted",
+              "crashed",
+              "unknown"
+            ]
           },
           "enforcementTier": {
             "type": "string",
-            "enum": ["gateway", "harness", "observe"]
+            "enum": [
+              "gateway",
+              "harness",
+              "observe"
+            ]
           },
           "startedAt": {
             "type": "string"
@@ -523,11 +537,21 @@
             },
             "outcome": {
               "type": "string",
-              "enum": ["running", "completed", "aborted", "crashed", "unknown"]
+              "enum": [
+                "running",
+                "completed",
+                "aborted",
+                "crashed",
+                "unknown"
+              ]
             },
             "enforcementTier": {
               "type": "string",
-              "enum": ["gateway", "harness", "observe"]
+              "enum": [
+                "gateway",
+                "harness",
+                "observe"
+              ]
             },
             "startedAt": {
               "type": "string"

@@ -22,21 +22,21 @@
      the ONLY place a hex appears.
      The light-mode paper ramp (--st-paper*) is deliberately omitted: this site
      is dark-only, and a paper ramp here would be tokens nothing can consume. */
-  --st-void: #0a0a09; /* below the canvas */
-  --st-bg: #10100f; /* the canvas */
+  --st-void: #0A0A09; /* below the canvas */
+  --st-bg: #10100F; /* the canvas */
   --st-panel: #181715; /* panels, cards, code blocks */
-  --st-hl: #201f1c; /* selected and hover rows */
+  --st-hl: #201F1C; /* selected and hover rows */
   --st-border: #292722; /* hairlines, dividers */
-  --st-rule: #34322d; /* section rules, boundaries */
-  --st-gold: #d6962c; /* the brand metal: actions, active, money, the mark */
-  --st-gold-bright: #f1c364; /* tiny live indicators only */
-  --st-gold-ink: #8b5e1a; /* gold as TEXT where the metal itself is illegible */
-  --st-paper-text: #f2eee5; /* primary text in dark */
+  --st-rule: #34322D; /* section rules, boundaries */
+  --st-gold: #D6962C; /* the brand metal: actions, active, money, the mark */
+  --st-gold-bright: #F1C364; /* tiny live indicators only */
+  --st-gold-ink: #8B5E1A; /* gold as TEXT where the metal itself is illegible */
+  --st-paper-text: #F2EEE5; /* primary text in dark */
   --st-text: #e8e8ec; /* cooler alternate ink */
   --st-silver-type: #bfc1cc; /* types, tertiary labels */
-  --st-silver: #9b958a; /* secondary emphasis */
-  --st-muted: #8c877c; /* secondary text */
-  --st-dim: #504c44; /* hints, captions, line numbers */
+  --st-silver: #9B958A; /* secondary emphasis */
+  --st-muted: #8C877C; /* secondary text */
+  --st-dim: #504C44; /* hints, captions, line numbers */
   --st-green: #74c991; /* pass, additive */
   --st-green-ink: #006933;
   --st-red: #e0687a; /* fail, destructive */
@@ -234,9 +234,8 @@ hr {
   margin: 0;
 }
 .mono {
-  font-family:
-    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
-    monospace;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
 }
 .wrap {
   width: min(1180px, calc(100% - 40px));
@@ -295,11 +294,7 @@ hr {
     #000 0%,
     transparent 78%
   );
-  mask-image: radial-gradient(
-    ellipse 80% 60% at 50% 38%,
-    #000 0%,
-    transparent 78%
-  );
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 38%, #000 0%, transparent 78%);
 }
 .tex::after {
   content: none;

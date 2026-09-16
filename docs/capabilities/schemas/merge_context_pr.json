@@ -3,7 +3,9 @@
   "domain": "context",
   "description": "Merge a proposal's Context PR on GitHub and publish its record: refused until every check passed and unless the caller is a reviewer the governance mode allows; writes the promotion event to the ledger, bumps the steering version and emits steering.published",
   "mode": "sync",
-  "surfaces": ["api"],
+  "surfaces": [
+    "api"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -24,7 +26,9 @@
         "type": "string"
       }
     },
-    "required": ["proposalId"],
+    "required": [
+      "proposalId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -54,7 +58,12 @@
             "type": "string"
           }
         },
-        "required": ["id", "lineageId", "version", "path"],
+        "required": [
+          "id",
+          "lineageId",
+          "version",
+          "path"
+        ],
         "additionalProperties": false
       },
       "mergedCommit": {
@@ -74,7 +83,11 @@
             "type": "string"
           }
         },
-        "required": ["id", "seq", "chainDigest"],
+        "required": [
+          "id",
+          "seq",
+          "chainDigest"
+        ],
         "additionalProperties": false
       },
       "bundleVersion": {
@@ -87,7 +100,10 @@
             "type": "integer"
           }
         },
-        "required": ["before", "after"],
+        "required": [
+          "before",
+          "after"
+        ],
         "additionalProperties": false
       }
     },

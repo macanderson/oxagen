@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "Demote a memory to RULE or OBSERVATION, recording an auditable demotion event. Leaving FACT clears human confirmation; demoting to OBSERVATION clears enforcement.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": true,
@@ -27,7 +31,10 @@
       },
       "toClass": {
         "type": "string",
-        "enum": ["RULE", "OBSERVATION"],
+        "enum": [
+          "RULE",
+          "OBSERVATION"
+        ],
         "description": "Target class; must be strictly below the memory's current class (FACT cannot be a demotion target)"
       },
       "enforcementScore": {
@@ -41,7 +48,10 @@
         "maxLength": 1000
       }
     },
-    "required": ["memoryId", "toClass"],
+    "required": [
+      "memoryId",
+      "toClass"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -59,7 +69,11 @@
       },
       "memoryClass": {
         "type": "string",
-        "enum": ["OBSERVATION", "RULE", "FACT"]
+        "enum": [
+          "OBSERVATION",
+          "RULE",
+          "FACT"
+        ]
       },
       "memoryKind": {
         "type": "string",
@@ -93,7 +107,12 @@
       },
       "status": {
         "type": "string",
-        "enum": ["ACTIVE", "SUPERSEDED", "RETRACTED", "ARCHIVED"]
+        "enum": [
+          "ACTIVE",
+          "SUPERSEDED",
+          "RETRACTED",
+          "ARCHIVED"
+        ]
       },
       "subjectHint": {
         "type": "string"
@@ -128,7 +147,11 @@
       },
       "createdByKind": {
         "type": "string",
-        "enum": ["AGENT", "USER", "SYSTEM"]
+        "enum": [
+          "AGENT",
+          "USER",
+          "SYSTEM"
+        ]
       },
       "createdById": {
         "anyOf": [
@@ -144,7 +167,11 @@
         "anyOf": [
           {
             "type": "string",
-            "enum": ["AGENT", "USER", "SYSTEM"]
+            "enum": [
+              "AGENT",
+              "USER",
+              "SYSTEM"
+            ]
           },
           {
             "type": "null"

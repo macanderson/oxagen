@@ -3,7 +3,10 @@
   "domain": "org",
   "description": "Read the organisation's data-plane binding for one store (postgres, neo4j, or clickhouse): shared or dedicated, its health status, endpoint host and database name, applied schema version, and the last verification/rotation timestamps. Never returns credentials or a connection string.",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -22,10 +25,16 @@
     "properties": {
       "kind": {
         "type": "string",
-        "enum": ["postgres", "neo4j", "clickhouse"]
+        "enum": [
+          "postgres",
+          "neo4j",
+          "clickhouse"
+        ]
       }
     },
-    "required": ["kind"],
+    "required": [
+      "kind"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -34,15 +43,26 @@
     "properties": {
       "kind": {
         "type": "string",
-        "enum": ["postgres", "neo4j", "clickhouse"]
+        "enum": [
+          "postgres",
+          "neo4j",
+          "clickhouse"
+        ]
       },
       "mode": {
         "type": "string",
-        "enum": ["shared", "dedicated"]
+        "enum": [
+          "shared",
+          "dedicated"
+        ]
       },
       "status": {
         "type": "string",
-        "enum": ["active", "degraded", "disabled"]
+        "enum": [
+          "active",
+          "degraded",
+          "disabled"
+        ]
       },
       "host": {
         "anyOf": [

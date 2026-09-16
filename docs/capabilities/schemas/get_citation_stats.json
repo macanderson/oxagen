@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "Workspace citation analytics: totals and influence/compliance breakdowns, daily citation series, most-cited and least-useful memories, most-cited graph nodes, and most-violated rules.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -61,7 +65,12 @@
             "description": "Distinct non-memory graph nodes cited"
           }
         },
-        "required": ["citations", "executions", "memoriesCited", "nodesCited"],
+        "required": [
+          "citations",
+          "executions",
+          "memoriesCited",
+          "nodesCited"
+        ],
         "additionalProperties": false
       },
       "byInfluence": {
@@ -96,7 +105,11 @@
               "minimum": 0
             }
           },
-          "required": ["date", "citations", "violations"],
+          "required": [
+            "date",
+            "citations",
+            "violations"
+          ],
           "additionalProperties": false
         },
         "description": "Per-day citation and violation counts across the window"
@@ -117,7 +130,11 @@
             },
             "memoryClass": {
               "type": "string",
-              "enum": ["OBSERVATION", "RULE", "FACT"]
+              "enum": [
+                "OBSERVATION",
+                "RULE",
+                "FACT"
+              ]
             },
             "memoryKind": {
               "type": "string",
@@ -183,7 +200,11 @@
             },
             "memoryClass": {
               "type": "string",
-              "enum": ["OBSERVATION", "RULE", "FACT"]
+              "enum": [
+                "OBSERVATION",
+                "RULE",
+                "FACT"
+              ]
             },
             "memoryKind": {
               "type": "string",
@@ -249,7 +270,11 @@
             },
             "memoryClass": {
               "type": "string",
-              "enum": ["OBSERVATION", "RULE", "FACT"]
+              "enum": [
+                "OBSERVATION",
+                "RULE",
+                "FACT"
+              ]
             },
             "memoryKind": {
               "type": "string",
@@ -331,7 +356,11 @@
                   "default": {}
                 }
               },
-              "required": ["id", "label", "displayName"],
+              "required": [
+                "id",
+                "label",
+                "displayName"
+              ],
               "additionalProperties": false
             },
             "citationCount": {

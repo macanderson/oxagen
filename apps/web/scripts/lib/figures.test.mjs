@@ -232,33 +232,13 @@ describe("Curve", () => {
       xLabel: "x",
       xMax: 3,
       series: [
-        {
-          label: "a",
-          end: "e",
-          points: [
-            [0, 1],
-            [2, 3],
-          ],
-        },
-        {
-          label: "b",
-          end: "e",
-          points: [
-            [0, 9],
-            [3, 7],
-          ],
-        },
+        { label: "a", end: "e", points: [[0, 1], [2, 3]] },
+        { label: "b", end: "e", points: [[0, 9], [3, 7]] },
       ],
     });
-    expect(html).toContain(
-      '<tr><th scope="row">0</th><td>1</td><td>9</td></tr>',
-    );
-    expect(html).toContain(
-      '<tr><th scope="row">2</th><td>3</td><td></td></tr>',
-    );
-    expect(html).toContain(
-      '<tr><th scope="row">3</th><td></td><td>7</td></tr>',
-    );
+    expect(html).toContain('<tr><th scope="row">0</th><td>1</td><td>9</td></tr>');
+    expect(html).toContain('<tr><th scope="row">2</th><td>3</td><td></td></tr>');
+    expect(html).toContain('<tr><th scope="row">3</th><td></td><td>7</td></tr>');
   });
 });
 
@@ -333,7 +313,7 @@ describe("Timeline", () => {
     expect(html).toContain("<td>Jan to Mar</td><td>No longer holds</td>");
     // The marker sits at 2.25 and Enterprise opens at 3, so it has not started.
     expect(html).toContain("<td>Apr on</td><td>Not yet</td>");
-    expect(html).toContain('<th scope="col">Status (As of)</th>');
+    expect(html).toContain("<th scope=\"col\">Status (As of)</th>");
   });
 
   it("reads each row's status off the marker, not off the ended flag", () => {
@@ -345,17 +325,11 @@ describe("Timeline", () => {
       end: 9,
       marker: { at: 2.5, label: "As of mid-March" },
       rows: [
-        {
-          label: "Growth",
-          when: "January to March",
-          from: 0,
-          to: 3,
-          ended: true,
-        },
+        { label: "Growth", when: "January to March", from: 0, to: 3, ended: true },
         { label: "Enterprise", when: "April onward", from: 3, to: 9 },
       ],
     });
-    expect(html).toContain('<th scope="col">Status (As of mid-March)</th>');
+    expect(html).toContain("<th scope=\"col\">Status (As of mid-March)</th>");
     expect(html).toContain("<td>January to March</td><td>Holds</td>");
     expect(html).toContain("<td>April onward</td><td>Not yet</td>");
   });
@@ -369,19 +343,11 @@ describe("Timeline", () => {
       marker: { at: 0, label: "Today" },
       rows: [
         { label: "Template", when: "Throughout", from: -36, to: 0 },
-        {
-          label: "Contract",
-          when: "Until 14 months ago",
-          from: -36,
-          to: -14,
-          ended: true,
-        },
+        { label: "Contract", when: "Until 14 months ago", from: -36, to: -14, ended: true },
       ],
     });
     expect(html).toContain("<td>Throughout</td><td>Holds</td>");
-    expect(html).toContain(
-      "<td>Until 14 months ago</td><td>No longer holds</td>",
-    );
+    expect(html).toContain("<td>Until 14 months ago</td><td>No longer holds</td>");
   });
 
   it("falls back to the ended flag with no marker and with no interval", () => {

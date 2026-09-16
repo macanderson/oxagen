@@ -3,7 +3,10 @@
   "domain": "spend",
   "description": "List this workspace's wasted spend over a day range by cause, each cause a pattern read off the cost rollup with the runs that prove it: the total wasted with its basis, its share of spend, and the largest cause.",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "medium",
   "agent": null,
   "chain": {
@@ -26,11 +29,16 @@
             "type": "string"
           }
         },
-        "required": ["from", "to"],
+        "required": [
+          "from",
+          "to"
+        ],
         "additionalProperties": false
       }
     },
-    "required": ["period"],
+    "required": [
+      "period"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -47,7 +55,10 @@
             "type": "string"
           }
         },
-        "required": ["from", "to"],
+        "required": [
+          "from",
+          "to"
+        ],
         "additionalProperties": false
       },
       "wasted": {
@@ -71,7 +82,11 @@
                 ]
               }
             },
-            "required": ["micros", "currency", "basis"],
+            "required": [
+              "micros",
+              "currency",
+              "basis"
+            ],
             "additionalProperties": false
           },
           {
@@ -99,7 +114,9 @@
         "anyOf": [
           {
             "type": "string",
-            "enum": ["cache_write_never_read"]
+            "enum": [
+              "cache_write_never_read"
+            ]
           },
           {
             "type": "null"
@@ -113,7 +130,9 @@
           "properties": {
             "cause": {
               "type": "string",
-              "enum": ["cache_write_never_read"]
+              "enum": [
+                "cache_write_never_read"
+              ]
             },
             "wasted": {
               "type": "object",
@@ -134,7 +153,11 @@
                   ]
                 }
               },
-              "required": ["micros", "currency", "basis"],
+              "required": [
+                "micros",
+                "currency",
+                "basis"
+              ],
               "additionalProperties": false
             },
             "runs": {
@@ -148,7 +171,12 @@
               }
             }
           },
-          "required": ["cause", "wasted", "runs", "runIds"],
+          "required": [
+            "cause",
+            "wasted",
+            "runs",
+            "runIds"
+          ],
           "additionalProperties": false
         }
       }

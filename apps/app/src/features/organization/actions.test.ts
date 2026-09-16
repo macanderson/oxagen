@@ -45,10 +45,8 @@ const TENANT = {
   surface: "app",
 };
 
-const refusal = (
-  code: "forbidden" | "not_found" | "conflict",
-  reason: string,
-) => new kernel.HandlerError({ code, reason, message: `${code}: ${reason}` });
+const refusal = (code: "forbidden" | "not_found" | "conflict", reason: string) =>
+  new kernel.HandlerError({ code, reason, message: `${code}: ${reason}` });
 
 beforeEach(() => {
   invoke.mockReset();

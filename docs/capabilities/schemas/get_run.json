@@ -3,7 +3,10 @@
   "domain": "run",
   "description": "Read one run's header and one page of its frames, each with its body reference, from an opaque cursor, optionally waiting for a new frame.",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "medium",
   "agent": null,
   "chain": {
@@ -36,7 +39,9 @@
         "default": 0
       }
     },
-    "required": ["runId"],
+    "required": [
+      "runId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -51,7 +56,10 @@
           },
           "source": {
             "type": "string",
-            "enum": ["ledger", "tacho"]
+            "enum": [
+              "ledger",
+              "tacho"
+            ]
           },
           "agentKey": {
             "anyOf": [
@@ -75,7 +83,11 @@
           },
           "status": {
             "type": "string",
-            "enum": ["live", "sealed", "halted"]
+            "enum": [
+              "live",
+              "sealed",
+              "halted"
+            ]
           },
           "turns": {
             "anyOf": [
@@ -117,7 +129,11 @@
                     ]
                   }
                 },
-                "required": ["micros", "currency", "basis"],
+                "required": [
+                  "micros",
+                  "currency",
+                  "basis"
+                ],
                 "additionalProperties": false
               },
               {
@@ -152,7 +168,12 @@
             "anyOf": [
               {
                 "type": "string",
-                "enum": ["inspect", "view", "fork", "retry"]
+                "enum": [
+                  "inspect",
+                  "view",
+                  "fork",
+                  "retry"
+                ]
               },
               {
                 "type": "null"
@@ -203,7 +224,11 @@
                     "type": "string"
                   }
                 },
-                "required": ["text", "generatedAt", "model"],
+                "required": [
+                  "text",
+                  "generatedAt",
+                  "model"
+                ],
                 "additionalProperties": false
               },
               {
@@ -300,16 +325,28 @@
                             "type": "string"
                           }
                         },
-                        "required": ["path", "reason", "originalDigest"],
+                        "required": [
+                          "path",
+                          "reason",
+                          "originalDigest"
+                        ],
                         "additionalProperties": false
                       }
                     },
                     "fidelity": {
                       "type": "string",
-                      "enum": ["full", "digest_only"]
+                      "enum": [
+                        "full",
+                        "digest_only"
+                      ]
                     }
                   },
-                  "required": ["digest", "bytesRef", "redactions", "fidelity"],
+                  "required": [
+                    "digest",
+                    "bytesRef",
+                    "redactions",
+                    "fidelity"
+                  ],
                   "additionalProperties": false
                 },
                 "cost": {
@@ -333,7 +370,11 @@
                           ]
                         }
                       },
-                      "required": ["micros", "currency", "basis"],
+                      "required": [
+                        "micros",
+                        "currency",
+                        "basis"
+                      ],
                       "additionalProperties": false
                     },
                     {
@@ -367,7 +408,10 @@
             ]
           }
         },
-        "required": ["frames", "cursor"],
+        "required": [
+          "frames",
+          "cursor"
+        ],
         "additionalProperties": false
       },
       "witnessFor": {
@@ -381,7 +425,11 @@
         ]
       }
     },
-    "required": ["run", "frames", "witnessFor"],
+    "required": [
+      "run",
+      "frames",
+      "witnessFor"
+    ],
     "additionalProperties": false
   }
 }

@@ -3,7 +3,11 @@
   "domain": "org",
   "description": "Invite a user to join the org by email. Enforces seat/license limits; fails with a typed error when no seat is available.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "high",
   "agent": {
     "requiresApproval": true,
@@ -29,7 +33,10 @@
         "minLength": 1
       }
     },
-    "required": ["email", "role"],
+    "required": [
+      "email",
+      "role"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -60,7 +67,13 @@
         ]
       }
     },
-    "required": ["invitationId", "email", "role", "status", "expiresAt"],
+    "required": [
+      "invitationId",
+      "email",
+      "role",
+      "status",
+      "expiresAt"
+    ],
     "additionalProperties": false
   }
 }

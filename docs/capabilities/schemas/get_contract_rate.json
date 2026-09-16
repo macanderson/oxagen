@@ -3,7 +3,11 @@
   "domain": "billing",
   "description": "The organisation's contracted governed-action terms: per-GAU rate in micro-dollars, block size, currency, included GAUs per month, effective dates, and whether they are the published tier's figures or a negotiated agreement's",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -28,7 +32,10 @@
     "properties": {
       "source": {
         "type": "string",
-        "enum": ["published_tier", "negotiated"]
+        "enum": [
+          "published_tier",
+          "negotiated"
+        ]
       },
       "agreementRef": {
         "anyOf": [
@@ -42,7 +49,12 @@
       },
       "tier": {
         "type": "string",
-        "enum": ["free", "build", "scale", "enterprise"]
+        "enum": [
+          "free",
+          "build",
+          "scale",
+          "enterprise"
+        ]
       },
       "currency": {
         "type": "string",

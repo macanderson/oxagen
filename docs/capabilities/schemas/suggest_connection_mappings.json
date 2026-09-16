@@ -3,7 +3,11 @@
   "domain": "connection",
   "description": "Use an LLM to suggest entity type mappings for a connection based on previewed record types. Part of the setup wizard flow.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -53,7 +57,11 @@
               }
             }
           },
-          "required": ["sourceRecordType", "displayName", "sampleFields"],
+          "required": [
+            "sourceRecordType",
+            "displayName",
+            "sampleFields"
+          ],
           "additionalProperties": false
         },
         "description": "Record type samples to analyze (from connection.preview output)"
@@ -65,7 +73,10 @@
         }
       }
     },
-    "required": ["connectionId", "recordTypes"],
+    "required": [
+      "connectionId",
+      "recordTypes"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -119,7 +130,10 @@
         "description": "Public IDs of the persisted setup_suggestions rows"
       }
     },
-    "required": ["suggestions", "suggestionIds"],
+    "required": [
+      "suggestions",
+      "suggestionIds"
+    ],
     "additionalProperties": false
   }
 }

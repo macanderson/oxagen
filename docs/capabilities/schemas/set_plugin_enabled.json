@@ -3,7 +3,11 @@
   "domain": "plugin",
   "description": "Enable or disable a plugin listing. scope='org' toggles the org listing's enabled flag; scope='workspace' upserts/disables an agent.mcp_servers row for this workspace from the org listing.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": true,
@@ -22,7 +26,10 @@
     "properties": {
       "scope": {
         "type": "string",
-        "enum": ["org", "workspace"]
+        "enum": [
+          "org",
+          "workspace"
+        ]
       },
       "orgListingId": {
         "type": "string"
@@ -31,7 +38,11 @@
         "type": "boolean"
       }
     },
-    "required": ["scope", "orgListingId", "enabled"],
+    "required": [
+      "scope",
+      "orgListingId",
+      "enabled"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -52,7 +63,10 @@
         ]
       }
     },
-    "required": ["ok", "workspaceServerId"],
+    "required": [
+      "ok",
+      "workspaceServerId"
+    ],
     "additionalProperties": false
   }
 }

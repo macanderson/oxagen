@@ -3,7 +3,10 @@
   "domain": "spend",
   "description": "Export this workspace's monthly spend statement as CSV: one line per operator, agent, model, tool and task with runs, calls, cost in micros and in cents rounded half to even once, the basis, and proven and accepted spend kept apart.",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "medium",
   "agent": null,
   "chain": {
@@ -21,11 +24,15 @@
       },
       "format": {
         "type": "string",
-        "enum": ["csv"],
+        "enum": [
+          "csv"
+        ],
         "default": "csv"
       }
     },
-    "required": ["month"],
+    "required": [
+      "month"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -49,7 +56,13 @@
         "minimum": 0
       }
     },
-    "required": ["month", "filename", "mediaType", "content", "lines"],
+    "required": [
+      "month",
+      "filename",
+      "mediaType",
+      "content",
+      "lines"
+    ],
     "additionalProperties": false
   }
 }

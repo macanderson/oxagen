@@ -3,7 +3,10 @@
   "domain": "run",
   "description": "List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, status, counts and metered cost each row recorded.",
   "mode": "sync",
-  "surfaces": ["api", "mcp"],
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
   "sensitivity": "medium",
   "agent": null,
   "chain": {
@@ -43,7 +46,10 @@
             },
             "source": {
               "type": "string",
-              "enum": ["ledger", "tacho"]
+              "enum": [
+                "ledger",
+                "tacho"
+              ]
             },
             "agentKey": {
               "anyOf": [
@@ -67,7 +73,11 @@
             },
             "status": {
               "type": "string",
-              "enum": ["live", "sealed", "halted"]
+              "enum": [
+                "live",
+                "sealed",
+                "halted"
+              ]
             },
             "turns": {
               "anyOf": [
@@ -109,7 +119,11 @@
                       ]
                     }
                   },
-                  "required": ["micros", "currency", "basis"],
+                  "required": [
+                    "micros",
+                    "currency",
+                    "basis"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -144,7 +158,12 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": ["inspect", "view", "fork", "retry"]
+                  "enum": [
+                    "inspect",
+                    "view",
+                    "fork",
+                    "retry"
+                  ]
                 },
                 {
                   "type": "null"
@@ -195,7 +214,11 @@
                       "type": "string"
                     }
                   },
-                  "required": ["text", "generatedAt", "model"],
+                  "required": [
+                    "text",
+                    "generatedAt",
+                    "model"
+                  ],
                   "additionalProperties": false
                 },
                 {
@@ -236,7 +259,10 @@
         ]
       }
     },
-    "required": ["runs", "nextCursor"],
+    "required": [
+      "runs",
+      "nextCursor"
+    ],
     "additionalProperties": false
   }
 }

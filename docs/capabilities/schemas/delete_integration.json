@@ -3,7 +3,12 @@
   "domain": "integration",
   "description": "Remove a plugin instance and optionally purge its graph data from Neo4j.",
   "mode": "async",
-  "surfaces": ["api", "mcp", "cli", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli",
+    "agent"
+  ],
   "sensitivity": "destructive",
   "agent": {
     "requiresApproval": true,
@@ -29,7 +34,9 @@
         "default": false
       }
     },
-    "required": ["integrationId"],
+    "required": [
+      "integrationId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -50,7 +57,12 @@
         "type": "boolean"
       }
     },
-    "required": ["jobId", "status", "integrationId", "purgeData"],
+    "required": [
+      "jobId",
+      "status",
+      "integrationId",
+      "purgeData"
+    ],
     "additionalProperties": false
   }
 }

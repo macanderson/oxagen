@@ -3,7 +3,11 @@
   "domain": "agent",
   "description": "Edit an AgentMemory: change its lesson, kind, source, confidence/enforcement scores, or status. Re-embeds when the lesson changes so semantic recall stays accurate. Class changes go through agent.memory.promote.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "medium",
   "agent": {
     "requiresApproval": false,
@@ -53,10 +57,17 @@
       },
       "status": {
         "type": "string",
-        "enum": ["ACTIVE", "SUPERSEDED", "RETRACTED", "ARCHIVED"]
+        "enum": [
+          "ACTIVE",
+          "SUPERSEDED",
+          "RETRACTED",
+          "ARCHIVED"
+        ]
       }
     },
-    "required": ["memoryId"],
+    "required": [
+      "memoryId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -74,7 +85,11 @@
       },
       "memoryClass": {
         "type": "string",
-        "enum": ["OBSERVATION", "RULE", "FACT"]
+        "enum": [
+          "OBSERVATION",
+          "RULE",
+          "FACT"
+        ]
       },
       "memoryKind": {
         "type": "string",
@@ -108,7 +123,12 @@
       },
       "status": {
         "type": "string",
-        "enum": ["ACTIVE", "SUPERSEDED", "RETRACTED", "ARCHIVED"]
+        "enum": [
+          "ACTIVE",
+          "SUPERSEDED",
+          "RETRACTED",
+          "ARCHIVED"
+        ]
       },
       "subjectHint": {
         "type": "string"
@@ -143,7 +163,11 @@
       },
       "createdByKind": {
         "type": "string",
-        "enum": ["AGENT", "USER", "SYSTEM"]
+        "enum": [
+          "AGENT",
+          "USER",
+          "SYSTEM"
+        ]
       },
       "createdById": {
         "anyOf": [
@@ -159,7 +183,11 @@
         "anyOf": [
           {
             "type": "string",
-            "enum": ["AGENT", "USER", "SYSTEM"]
+            "enum": [
+              "AGENT",
+              "USER",
+              "SYSTEM"
+            ]
           },
           {
             "type": "null"

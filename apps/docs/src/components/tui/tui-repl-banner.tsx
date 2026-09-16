@@ -50,7 +50,9 @@ export function TuiReplBanner({ className }: { className?: string }) {
         <tspan fill={tuiColors.violet} fontWeight={700}>
           Oxagen
         </tspan>
-        <tspan fill={tuiColors.dim}>{`  ·  CLI  ·  v${CLI_VERSION}`}</tspan>
+        <tspan
+          fill={tuiColors.dim}
+        >{`  ·  CLI  ·  v${CLI_VERSION}`}</tspan>
       </text>
 
       {/* Prompt bar */}

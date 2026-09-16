@@ -10,11 +10,11 @@
 import { Biscuit, PublicKey, Authorizer } from "@biscuit-auth/biscuit-wasm";
 
 interface VerifyInput {
-  tokenB64: string; // minted by the control plane's Mint
-  mintRootKey: PublicKey; // published, cached locally, rotatable
-  sessionId: string; // this session (bound at agent_start)
+  tokenB64: string;            // minted by the control plane's Mint
+  mintRootKey: PublicKey;      // published, cached locally, rotatable
+  sessionId: string;           // this session (bound at agent_start)
   action: { scope: string; resource: string }; // the exact action to run
-  useCount: number; // from the collector's local nonce set
+  useCount: number;            // from the collector's local nonce set
 }
 
 export function verifyCapability(input: VerifyInput): void {
@@ -25,9 +25,7 @@ export function verifyCapability(input: VerifyInput): void {
 
   const authorizer = new Authorizer();
   authorizer.addFact(`current_session("${input.sessionId}")`);
-  authorizer.addFact(
-    `requested("${input.action.scope}", "${input.action.resource}")`,
-  );
+  authorizer.addFact(`requested("${input.action.scope}", "${input.action.resource}")`);
   authorizer.addFact(`now(${Math.floor(Date.now() / 1000)})`);
   authorizer.addFact(`use_count(${input.useCount})`);
 

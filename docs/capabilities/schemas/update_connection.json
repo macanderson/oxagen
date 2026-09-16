@@ -3,7 +3,11 @@
   "domain": "connection",
   "description": "Update a data source connection: rename it (displayName) and/or adjust its delivery configuration (sync schedule, scope). Partial update — omit a field to keep it. Pausing/resuming is connection.pause.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -42,7 +46,9 @@
         ]
       }
     },
-    "required": ["connectionId"],
+    "required": [
+      "connectionId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -70,7 +76,12 @@
         ]
       }
     },
-    "required": ["connectionId", "displayName", "status", "deliveryConfig"],
+    "required": [
+      "connectionId",
+      "displayName",
+      "status",
+      "deliveryConfig"
+    ],
     "additionalProperties": false
   }
 }

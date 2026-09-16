@@ -3,7 +3,12 @@
   "domain": "graph",
   "description": "Retrieve a customer-context graph node by its publicId.",
   "mode": "sync",
-  "surfaces": ["api", "mcp", "agent", "cli"],
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
   "sensitivity": "low",
   "agent": {
     "requiresApproval": false,
@@ -11,9 +16,15 @@
     "category": "graph"
   },
   "chain": {
-    "produces": ["graph.node"],
-    "consumes": ["graph.nodeId"],
-    "chainHints": ["list_nodes"]
+    "produces": [
+      "graph.node"
+    ],
+    "consumes": [
+      "graph.nodeId"
+    ],
+    "chainHints": [
+      "list_nodes"
+    ]
   },
   "render": {
     "componentId": "graph-node-card",
@@ -35,7 +46,9 @@
         "description": "publicId of the KnowledgeNode to retrieve"
       }
     },
-    "required": ["nodeId"],
+    "required": [
+      "nodeId"
+    ],
     "additionalProperties": false
   },
   "output": {
@@ -108,7 +121,9 @@
         ]
       }
     },
-    "required": ["node"],
+    "required": [
+      "node"
+    ],
     "additionalProperties": false
   }
 }
