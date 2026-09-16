@@ -1459,7 +1459,11 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "Generate with `openssl rand -base64 32`.",
     secret: true,
     clientExposed: false,
-    services: ["app"],
+    // api and mcp as well as app: export_audit_events is a contract on all
+    // three surfaces (#3097), and the fallback cannot save mcp — BETTER_AUTH_SECRET
+    // is provisioned for api and app only, so an mcp export would walk the
+    // whole record and then throw on the signing key it never received.
+    services: ["api", "app", "mcp"],
     // Was ["production"], which contradicted the schema and the route. The
     // build-environment resolver enforces this field, so the contradiction
     // stopped the first app deploy that ever reached it — a registry claiming

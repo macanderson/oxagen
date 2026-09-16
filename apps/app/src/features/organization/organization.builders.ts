@@ -74,6 +74,7 @@ export function orgSource(reads: OrgReads): {
       members: answer(reads.members, "members"),
       apiKeys: answer(reads.apiKeys, "apiKeys"),
     },
+    audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },
   };

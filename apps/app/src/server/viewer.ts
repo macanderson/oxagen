@@ -33,7 +33,11 @@ import { routes, type SafePath, sanitizeNext } from "@/shared/safe-path";
 import { MFA_ENROLL_PATH } from "./mfa-gate";
 import { getSession } from "./session";
 import { type InvitationRecord, systemLookups } from "./tenancy-lookups";
-import { canonicalPath, resolveViewerWith } from "./viewer-resolution";
+import {
+  canonicalPath,
+  resolveViewerWith,
+  type ViewerResolution,
+} from "./viewer-resolution";
 import { MINT } from "./viewer-mint";
 
 export type { InvitationRecord } from "./tenancy-lookups";
@@ -188,24 +192,38 @@ async function requestUrl(): Promise<{
   }
 }
 
+/** The session's resolution of an organization and, when named, a workspace. */
+async function resolveSession(
+  orgSlug: string,
+  wsSlug?: string,
+): Promise<ViewerResolution> {
+  const session = await getSession();
+  // The MFA deadline is judged against the request's clock. Under partial
+  // prefetching a runtime prerender resolves cookies but not the clock, so
+  // `new Date()` straight after the session read is a blocking-prerender
+  // error; connection() defers it to the request.
+  await connection();
+  return resolveViewerWith(
+    { session, lookups: systemLookups, now: new Date() },
+    orgSlug,
+    wsSlug,
+  );
+}
+
+function mintResolved(
+  result: Extract<ViewerResolution, { kind: "ok" }>,
+): OrgCtx {
+  return result.ws === null
+    ? OrgCtx.mint(MINT, result.org)
+    : WsCtx.mint(MINT, { ...result.org, ...result.ws });
+}
+
 const requireCtx = cache(
   async (orgSlug: string, wsSlug?: string): Promise<OrgCtx> => {
-    const session = await getSession();
-    // The MFA deadline is judged against the request's clock. Under partial
-    // prefetching a runtime prerender resolves cookies but not the clock, so
-    // `new Date()` straight after the session read is a blocking-prerender
-    // error; connection() defers it to the request.
-    await connection();
-    const result = await resolveViewerWith(
-      { session, lookups: systemLookups, now: new Date() },
-      orgSlug,
-      wsSlug,
-    );
+    const result = await resolveSession(orgSlug, wsSlug);
     switch (result.kind) {
       case "ok":
-        return result.ws === null
-          ? OrgCtx.mint(MINT, result.org)
-          : WsCtx.mint(MINT, { ...result.org, ...result.ws });
+        return mintResolved(result);
       case "unauthenticated":
         return redirectTo(routes.login());
       case "not_found":
@@ -231,6 +249,23 @@ export function requireViewer(org: string): Promise<OrgCtx>;
 export function requireViewer(org: string, ws: string): Promise<WsCtx>;
 export function requireViewer(org: string, ws?: string): Promise<OrgCtx> {
   return requireCtx(org, ws);
+}
+
+/** What a route handler learns about its viewer: a minted ctx, or why there is none. */
+export type RouteViewer =
+  | { kind: "ok"; ctx: OrgCtx }
+  | Exclude<ViewerResolution, { kind: "ok" }>;
+
+/**
+ * The organization viewer for a route handler (ARCHITECTURE.md §3.1): the
+ * resolution requireViewer makes, answered as a value, never as a redirect or
+ * a not-found interrupt, so the handler writes its own response.
+ */
+export async function resolveViewer(org: string): Promise<RouteViewer> {
+  const result = await resolveSession(org);
+  return result.kind === "ok"
+    ? { kind: "ok", ctx: mintResolved(result) }
+    : result;
 }
 
 /** Signed in, no organization yet; a signed-out request goes to /login, and on to `next` once signed in. */

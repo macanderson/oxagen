@@ -24,6 +24,42 @@ describe("audit.log.query capability", () => {
     });
   });
 
+  it("is never a governed action: reading the record declares noBillingGate", () => {
+    expect(auditLogQuery.noBillingGate).toBe(true);
+  });
+
+  it("accepts the actor's public id as a filter", () => {
+    expect(
+      auditLogQuery.input.parse({ actorPublicId: "usr_7k2m9q4x8r1t5v3w6y0z2a" })
+        .actorPublicId,
+    ).toBe("usr_7k2m9q4x8r1t5v3w6y0z2a");
+  });
+
+  it("refuses an event missing the id, ip and user agent keys", () => {
+    expect(() =>
+      auditLogQuery.output.parse({
+        events: [
+          {
+            source: "security",
+            eventType: "auth.sign_in",
+            occurredAt: "2024-01-01T00:00:00.000Z",
+            actorUserId: null,
+            actorPublicId: null,
+            workspaceId: null,
+            workspaceSlug: null,
+            capability: null,
+            outcome: "success",
+            requestId: null,
+          },
+        ],
+        total: 1,
+        hasMore: false,
+        limit: 50,
+        offset: 0,
+      }),
+    ).toThrow();
+  });
+
   it("exposes api, mcp, agent and cli surfaces", () => {
     expect(auditLogQuery.surfaces).toEqual(
       expect.arrayContaining(["api", "mcp", "agent", "cli"]),
@@ -77,13 +113,18 @@ describe("audit.log.query capability", () => {
     const parsed = auditLogQuery.output.parse({
       events: [
         {
+          id: "0192d4a8-7c1e-7a00-8000-000000000e01",
           source: "security",
-          eventType: "capability.invoked",
+          eventType: "capability.invoke_allowed",
           occurredAt: "2024-01-03T18:42:10.000Z",
           actorUserId: "u_1",
+          actorPublicId: "usr_7k2m9q4x8r1t5v3w6y0z2a",
           workspaceId: "ws_1",
+          workspaceSlug: "core-platform",
           capability: "start_subscription_upgrade",
           outcome: "success",
+          ip: "203.0.113.7",
+          userAgent: "oxagen-cli/3.0",
           requestId: "req_1",
         },
       ],

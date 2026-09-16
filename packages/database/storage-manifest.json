@@ -626,6 +626,16 @@
       "writes": []
     },
     {
+      "domain": "audit",
+      "name": "export_audit_events",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "conversation",
       "name": "export_conversation",
       "reads": [],
@@ -3158,7 +3168,7 @@
       "writes": []
     }
   ],
-  "contentHash": "a391cb2846afabd26762959706a139a2fafdbd31a9aec5c2b05a8f41f4930038",
+  "contentHash": "e0b40ef4b5bf570456ce0ffbb408db2305d9f62720ed6f5877f045ce9a7dff20",
   "domains": [
     {
       "name": "agent",
