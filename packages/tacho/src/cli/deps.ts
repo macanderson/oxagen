@@ -98,6 +98,14 @@ export interface RuntimeCommands {
   hookCommand: string;
   /** argv that runs `tachod` in the foreground. */
   daemonCommand: string[];
+  /**
+   * argv that runs the MCP stdio shim, for a connected app whose config file
+   * spawns a process rather than dialling a URL (ADR-069). Computed here
+   * beside the other two so all three reference the same binary layout: a
+   * connected app's entry must not outlive the executable it names any more
+   * than a hook may.
+   */
+  mcpStdioCommand: string[];
   /** Where the executables live, for `status`. */
   binDir: string;
   /**
@@ -203,6 +211,7 @@ export function runtimeCommands(
     return {
       hookCommand: `${shellQuote(nativeTacho, platform)} hook`,
       daemonCommand: [nativeTacho, "daemon"],
+      mcpStdioCommand: [nativeTacho, "mcp-stdio"],
       binDir,
       ...flagged,
     };
@@ -210,9 +219,21 @@ export function runtimeCommands(
   return {
     hookCommand: `${shellQuote(nodePath, platform)} ${shellQuote(P.join(binDir, "tacho-hook.mjs"), platform)}`,
     daemonCommand: [nodePath, P.join(binDir, "tachod.mjs")],
+    mcpStdioCommand: [nodePath, P.join(binDir, "tacho.mjs"), "mcp-stdio"],
     binDir,
     ...flagged,
   };
+}
+
+/**
+ * What `detect` knows about an installed connected app. There is no version:
+ * a GUI bundle does not answer `--version`, and reading its Info.plist for a
+ * number nothing uses would be a fact collected because it was available.
+ */
+export interface AppFacts {
+  installed: boolean;
+  /** The bundle or install directory, when one was found. */
+  path?: string;
 }
 
 export interface ClaudeFacts {
@@ -251,9 +272,22 @@ export interface CliDeps {
    */
   readStellaHooks: (format?: StellaHooksFormat) => StellaHooksFile;
   writeStellaHooks: (file: StellaHooksFile) => void;
+  /**
+   * Claude Desktop's MCP client config, undefined when the file is absent.
+   * The writer is pure; these two are the only file I/O for the connected
+   * tier, matching how the hook writers are fed.
+   */
+  readClaudeDesktopConfig: () => unknown;
+  writeClaudeDesktopConfig: (document: unknown) => void;
   claude: () => ClaudeFacts;
   codex: () => HarnessFacts;
   stella: () => HarnessFacts;
+  /**
+   * Whether Claude Desktop is installed. A connected app is a GUI bundle, not
+   * a binary on PATH, so it is detected by the app on disk rather than by
+   * `command -v` and a `--version` probe.
+   */
+  claudeDesktop: () => AppFacts;
   runtime: RuntimeCommands;
   /** GET a daemon route on the loopback port with the local bearer. */
   daemonGet: (path: string) => Promise<unknown | undefined>;
@@ -377,6 +411,34 @@ export function harnessFacts(
   return { path, ...(match?.[1] !== undefined ? { version: match[1] } : {}) };
 }
 
+/**
+ * Where Claude Desktop installs itself, checked on disk. Verified 2026-09-16:
+ * macOS puts an app bundle in `/Applications` (or `~/Applications` for a
+ * per-user install); Windows installs per-user under `%LOCALAPPDATA%`. Linux
+ * has no official build, so the answer there is "not installed" and the
+ * enrollment refuses the harness rather than writing a file nothing reads.
+ */
+export function claudeDesktopFacts(
+  platform: NodeJS.Platform = process.platform,
+  home: string = homedir(),
+  env: Record<string, string | undefined> = process.env,
+  exists: (candidate: string) => boolean = existsSync,
+): AppFacts {
+  const candidates: string[] =
+    platform === "darwin"
+      ? ["/Applications/Claude.app", `${home}/Applications/Claude.app`]
+      : platform === "win32"
+        ? [
+            `${env["LOCALAPPDATA"] ?? `${home}\\AppData\\Local`}\\AnthropicClaude`,
+            `${env["LOCALAPPDATA"] ?? `${home}\\AppData\\Local`}\\Programs\\Claude`,
+          ]
+        : [];
+  for (const candidate of candidates) {
+    if (exists(candidate)) return { installed: true, path: candidate };
+  }
+  return { installed: false };
+}
+
 export function claudeFacts(
   exec: Exec,
   platform: NodeJS.Platform = process.platform,
@@ -461,9 +523,25 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     readStellaHooks: (format) => readStellaHooksFile(paths, format),
     writeStellaHooks: (file) =>
       writeSensitiveFileAtomic(file.path, file.text ?? "", 0o644),
+    readClaudeDesktopConfig: () =>
+      paths.claudeDesktopConfig === undefined
+        ? undefined
+        : readJsonFileIfExists(paths.claudeDesktopConfig),
+    writeClaudeDesktopConfig: (document) => {
+      if (paths.claudeDesktopConfig === undefined)
+        throw new Error(
+          "Claude Desktop has no config path on this platform; Anthropic ships no build for it",
+        );
+      writeSensitiveFileAtomic(
+        paths.claudeDesktopConfig,
+        `${JSON.stringify(document, null, 2)}\n`,
+        0o644,
+      );
+    },
     claude: () => claudeFacts(exec, platform, env, home),
     codex: () => harnessFacts(exec, "codex", platform, env, home),
     stella: () => harnessFacts(exec, "stella", platform, env, home),
+    claudeDesktop: () => claudeDesktopFacts(platform, home, env),
     runtime: runtimeCommands(undefined, env, undefined, platform),
     daemonGet,
     findFreePort: () =>

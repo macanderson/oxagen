@@ -31,6 +31,7 @@ import {
 } from "../host/test-support";
 import { Wal } from "../host/wal";
 import { minimalSession } from "../test-helpers";
+import { TACHO_TIER_SUMMARY } from "../wire";
 import type { EnrollmentResponse } from "../wire";
 import { CODEX_HOOK_EVENTS, codexHookPresence } from "../host/codex-writer";
 import {
@@ -214,9 +215,26 @@ function deps(overrides: Partial<CliDeps> = {}): CliDeps & {
     claude: () => ({ path: "/usr/local/bin/claude", version: "2.1.263" }),
     codex: () => ({ path: "/usr/local/bin/codex", version: "0.104.0" }),
     stella: () => ({ path: "/usr/local/bin/stella", version: "0.9.423" }),
+    claudeDesktop: () => ({
+      installed: true,
+      path: "/Applications/Claude.app",
+    }),
+    readClaudeDesktopConfig: () =>
+      paths.claudeDesktopConfig === undefined
+        ? undefined
+        : readJsonFileIfExists(paths.claudeDesktopConfig),
+    writeClaudeDesktopConfig: (document) => {
+      if (paths.claudeDesktopConfig === undefined) return;
+      writeSensitiveFileAtomic(
+        paths.claudeDesktopConfig,
+        JSON.stringify(document, null, 2),
+        0o644,
+      );
+    },
     runtime: {
       hookCommand: "node /opt/tacho/tacho-hook.mjs",
       daemonCommand: ["node", "/opt/tacho/tachod.mjs"],
+      mcpStdioCommand: ["node", "/opt/tacho/tacho.mjs", "mcp-stdio"],
       binDir: "/opt/tacho",
     },
     daemonGet: async (path) => {
@@ -1365,9 +1383,18 @@ describe("export and verify", () => {
       ["claude-code", true, false],
       ["codex", true, false],
       ["stella", true, false],
+      // The connected tier (ADR-069): a GUI app, detected on disk rather
+      // than on PATH, and reported with its tier so no surface has to guess.
+      ["claude-desktop", true, false],
+    ]);
+    expect(fresh.harnesses.map((h) => h.tier)).toEqual([
+      "harness",
+      "harness",
+      "harness",
+      "gateway",
     ]);
     expect(d.lines.join("\n")).toContain(
-      "Claude Code  2.1.263 at /usr/local/bin/claude",
+      "Claude Code      2.1.263 at /usr/local/bin/claude",
     );
     const signer = bundleSigner();
     writeHostFile(
@@ -1396,6 +1423,13 @@ describe("export and verify", () => {
           path: "/usr/local/bin/stella",
           version: "0.9.423",
           enrolled: false,
+        },
+        {
+          harness: "claude-desktop",
+          label: "Claude Desktop",
+          installed: true,
+          enrolled: false,
+          tier: "gateway",
         },
       ],
     });
@@ -1686,6 +1720,8 @@ describe("stella", () => {
       path: "/usr/local/bin/stella",
       version: "0.9.423",
       enrolled: true,
+      tier: "harness",
+      tierSummary: TACHO_TIER_SUMMARY.harness,
     });
 
     await unenroll({ token: "tok" }, d);

@@ -16,7 +16,12 @@ import type { ClaudeCodeContext } from "../claude-code/context";
 import { type RecorderState, SessionRecorder } from "../claude-code/recorder";
 import type { TachoEvent, TachoRuntime } from "../envelope";
 import { toProtocolTimestamp } from "../timestamp";
-import { TACHO_HARNESS_LABELS, type TachoHarness } from "../wire";
+import {
+  isWrappedHarness,
+  TACHO_HARNESS_LABELS,
+  type TachoHarness,
+  type WrappedHarness,
+} from "../wire";
 
 /**
  * The recorder context for a session's harness. The daemon's context is
@@ -27,7 +32,14 @@ import { TACHO_HARNESS_LABELS, type TachoHarness } from "../wire";
  * harness that had to borrow `custom` could not be told apart from a custom
  * agent.
  */
-const RUNTIME_FOR_HARNESS: Record<TachoHarness, TachoRuntime> = {
+/**
+ * Only *wrapped* harnesses appear here. A connected one (ADR-069) never opens
+ * a session: it has no hook, so nothing marks a session's start or end, and
+ * its gateway calls are sealed on the daemon's own chain instead. Giving it a
+ * runtime would invite a caller to open a chain for a session that does not
+ * exist.
+ */
+const RUNTIME_FOR_HARNESS: Record<WrappedHarness, TachoRuntime> = {
   "claude-code": "claude-code",
   codex: "codex",
   stella: "stella",
@@ -50,6 +62,11 @@ export function contextForHarness(
     };
   }
   if (harness === undefined || harness === "claude-code") return context;
+  // A connected harness has no session to label: its gateway calls are sealed
+  // on the daemon's chain, never on one of these. Reaching here with one means
+  // a caller opened a session for it, which is a bug, so the context is left
+  // as the daemon's rather than inventing a runtime for it.
+  if (!isWrappedHarness(harness)) return context;
   return {
     ...context,
     agent: { ...context.agent, harness, runtime: RUNTIME_FOR_HARNESS[harness] },
@@ -210,7 +227,10 @@ export class SessionRegistry {
         label: record.customAgent,
       };
     }
-    const harness = record.harness ?? "claude-code";
+    const named = record.harness ?? "claude-code";
+    const harness: WrappedHarness = isWrappedHarness(named)
+      ? named
+      : "claude-code";
     const runtime = RUNTIME_FOR_HARNESS[harness];
     return {
       key: `${runtime}:${harness}`,

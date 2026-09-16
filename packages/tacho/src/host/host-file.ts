@@ -77,6 +77,21 @@ export const hostFileSchema = z
     daemon_command: z.array(z.string()).min(1),
     /** Env values the settings merge displaced, restored by `unenroll`. */
     displaced_env: z.record(z.string(), z.string()).default({}),
+    /**
+     * argv for the MCP stdio shim, written into a connected app's config
+     * (ADR-069). Optional: a host enrolled before the connected tier existed
+     * has none, and it is only needed when a connected harness is enrolled.
+     */
+    mcp_stdio_command: z.array(z.string()).min(1).optional(),
+    /**
+     * MCP servers the merge displaced from our key in a connected app's
+     * config, per harness, restored by `unenroll`. The `mcpServers` map is
+     * keyed by name, so unlike a hook a colliding entry cannot simply sit
+     * beside ours; this is the `displaced_env` of the connected tier.
+     */
+    displaced_mcp_servers: z
+      .record(z.string(), z.record(z.string(), z.unknown()))
+      .default({}),
     enrolled_at: z.string(),
     expires_at: z.string(),
     revoked_at: z.string().nullable().default(null),

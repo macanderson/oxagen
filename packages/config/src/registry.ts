@@ -920,6 +920,20 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "https://api.oxagen.sh/v1/tacho",
   },
+  TACHO_LOCAL_TOKEN: {
+    group: "Inngest",
+    description:
+      "The per-install bearer the Tacho collector's loopback listener requires. Written into " +
+      "each wrapped harness's settings and into a connected app's MCP config by `tacho enroll`, " +
+      "and read back by the hook and the `tacho mcp-stdio` shim. Never set by hand and never " +
+      "a deployment value: it is minted per machine at enrollment and lives in host.json.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "",
+  },
   TACHO_MCP_ENDPOINT: {
     group: "Inngest",
     description:

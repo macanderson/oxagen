@@ -3,6 +3,7 @@
  * event, bundle version and age, last ingest, spool depth, unobserved
  * sessions since boot (spec section 5.1).
  */
+import { claudeDesktopPresence } from "../host/claude-desktop-writer";
 import { codexHookPresence } from "../host/codex-writer";
 import { readHostFile } from "../host/host-file";
 import { tachoHookPresence } from "../host/settings-writer";
@@ -57,6 +58,13 @@ export interface StatusReport {
   codexHooks?: ReturnType<typeof codexHookPresence>;
   /** Present when the host enrolled Stella. */
   stellaHooks?: ReturnType<typeof stellaHookPresence>;
+  /**
+   * Present when the host connected Claude Desktop. Not called `hooks`,
+   * because there are none: a connected app carries an MCP server entry, and
+   * `otherServers` is the count of servers in that app Oxagen does not see
+   * (ADR-069 §3).
+   */
+  claudeDesktop?: ReturnType<typeof claudeDesktopPresence>;
   wal?: { sessions: number; unshipped: number; oldest_unshipped_at?: string };
 }
 
@@ -85,6 +93,12 @@ export async function status(
     : undefined;
   const stellaHooks = host.harnesses.includes("stella")
     ? stellaHookPresence(deps.readStellaHooks(), host.host_enrollment_id)
+    : undefined;
+  const claudeDesktop = host.harnesses.includes("claude-desktop")
+    ? claudeDesktopPresence(
+        deps.readClaudeDesktopConfig(),
+        host.host_enrollment_id,
+      )
     : undefined;
   const walStats = new Wal(deps.paths.wal).stats();
   const report: StatusReport = {
@@ -125,6 +139,7 @@ export async function status(
     hooks,
     ...(codexHooks !== undefined ? { codexHooks } : {}),
     ...(stellaHooks !== undefined ? { stellaHooks } : {}),
+    ...(claudeDesktop !== undefined ? { claudeDesktop } : {}),
     wal: {
       sessions: walStats.sessions,
       unshipped: walStats.unshipped,
@@ -174,6 +189,19 @@ export async function status(
   );
   if (hooks.missing.length > 0)
     deps.out(`            missing: ${hooks.missing.join(", ")}`);
+  if (claudeDesktop !== undefined) {
+    deps.out(
+      `Claude Desktop ${claudeDesktop.present ? "connected" : "NOT CONNECTED"}: serves the workspace toolbelt through the local gateway; records the Oxagen tools it calls, not what else the app does`,
+    );
+    if (claudeDesktop.foreignEnrollment)
+      deps.out(
+        "            an entry from an earlier enrollment is still there; reconnect the app",
+      );
+    if (claudeDesktop.otherServers > 0)
+      deps.out(
+        `            ${claudeDesktop.otherServers} other MCP server(s): ${claudeDesktop.otherServerNames.join(", ")} — Oxagen does not see what they serve`,
+      );
+  }
   if (codexHooks !== undefined) {
     deps.out(
       `Codex       ${codexHooks.complete ? "complete" : "INCOMPLETE"}: ${codexHooks.present.length} present, ${codexHooks.missing.length} missing`,

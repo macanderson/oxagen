@@ -6,7 +6,11 @@
  */
 import { readHostFile } from "../host/host-file";
 import { isInternalSession } from "../collector/registry";
-import type { TachoHarness } from "../wire";
+import {
+  isWrappedHarness,
+  type TachoHarness,
+  type WrappedHarness,
+} from "../wire";
 import type { CliDeps } from "./deps";
 
 export interface VerifyOptions {
@@ -18,7 +22,7 @@ export interface VerifyOptions {
 
 const DEFAULT_PROMPT = "Reply with exactly the word OK and nothing else.";
 
-const BINARY: Record<TachoHarness, string> = {
+const BINARY: Record<WrappedHarness, string> = {
   "claude-code": "claude",
   codex: "codex",
   stella: "stella",
@@ -29,7 +33,7 @@ const BINARY: Record<TachoHarness, string> = {
  * is sealed by the daemon's sweep (every 30 s) once the `stella` process has
  * exited, so it needs longer than a harness that ends its own session.
  */
-const DEFAULT_TIMEOUT_MS: Record<TachoHarness, number> = {
+const DEFAULT_TIMEOUT_MS: Record<WrappedHarness, number> = {
   "claude-code": 15_000,
   codex: 15_000,
   stella: 45_000,
@@ -106,7 +110,18 @@ export async function verify(
       detail: `tachod is not answering on 127.0.0.1:${host.port}`,
     };
   }
-  const harness = options.harness ?? "claude-code";
+  const requested = options.harness ?? "claude-code";
+  if (!isWrappedHarness(requested)) {
+    // `verify` drives one headless turn and waits for a sealed chain. A
+    // connected harness (ADR-069) is a GUI app with no headless mode and no
+    // hook to fire, so there is nothing to drive and nothing to wait for.
+    // Saying so beats reporting a failure the operator cannot act on.
+    return {
+      ok: false,
+      detail: `${requested} is a connected app, not a wrapped harness: it has no hook to verify. Check it in the Oxagen app, which reads its MCP config and the gateway's own record.`,
+    };
+  }
+  const harness: WrappedHarness = requested;
   const facts = factsFor(harness, deps);
   const name = BINARY[harness];
   if (facts.path === undefined)

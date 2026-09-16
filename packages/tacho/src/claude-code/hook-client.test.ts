@@ -582,7 +582,7 @@ describe("runTachoHook for Stella and custom agents", () => {
         exitCode: 0,
       });
       expect(refused.stderr).toBe(
-        `tacho-hook: invalid --agent name "${reserved}"; "${reserved}" is a built-in harness or runtime name (reserved: claude-code, codex, stella, claude-agent-sdk, custom, proxy)\n`,
+        `tacho-hook: invalid --agent name "${reserved}"; "${reserved}" is a built-in harness or runtime name (reserved: claude-code, codex, stella, claude-desktop, claude-agent-sdk, custom, proxy)\n`,
       );
     }
   });

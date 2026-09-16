@@ -146,6 +146,7 @@ export function testHostFile(
     hook_command: "node /opt/tacho/tacho-hook.mjs",
     daemon_command: ["node", "/opt/tacho/tachod.mjs"],
     displaced_env: {},
+    displaced_mcp_servers: {},
     enrolled_at: "2026-09-10T00:00:00.000Z",
     expires_at: "2027-03-09T00:00:00.000Z",
     revoked_at: null,
