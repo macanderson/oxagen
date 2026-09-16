@@ -455,11 +455,16 @@ Two asserted counts had drifted. `222 semantic tokens` → corrected to **260**,
 which is now exactly the `@kind`-annotated set, so the number and the stylesheet
 cannot drift apart again. `85 redefined under .dark` still verifies exactly.
 
-**Left alone deliberately: "only the 325 utility classes the library itself already
-uses exist."** Counting distinct class selectors in the built CSS gives 521–701
-depending on how variant prefixes (`hover:`, `dark:`, `group-*`) and escaped
-arbitrary values are folded, and none of those reproduces 325 — so the original
-method is unknown and any replacement number would be a guess. The load-bearing
-claim (the utility set is CLOSED — invent a class and it silently does nothing)
-is true regardless, and the explicit class list beneath it is correct. Recompute
-it properly or drop the numeral; do not swap in one of the numbers above.
+**The utility-class count was stale too, and has been revised to `~597`** (by a
+parallel session, mid-run). 325 was certainly wrong. Counting the built CSS gives
+701 raw class selectors, or **586** distinct base utilities once variant prefixes
+(`hover:`, `dark:`, `group-*`) are folded and harness classes (`ds-*`) dropped —
+so `~597` is the right order of magnitude, and its tilde carries real uncertainty
+rather than decoration. Nobody has reproduced an exact figure, because "utility
+class" has no single definition here: it turns on whether you count variants,
+arbitrary-value escapes and `group/name` scopes separately.
+
+If you touch this number again, recompute it and record which method you used, or
+drop the numeral entirely. The load-bearing claim does not need it: the utility
+set is CLOSED — invent a class and it silently does nothing — and the explicit
+class list beneath it is verified correct.
