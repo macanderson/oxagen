@@ -1,0 +1,424 @@
+// @vitest-environment jsdom
+// The three Tools writes as a person makes them: the import dialog, the tool
+// dialog's reclassification form, and the switch dialog — which states the
+// blast radius before the confirming button, never after. A completed write
+// reloads the view it leads to; a refusal is named where the person acted and
+// navigates nowhere. Every refusal code the three handlers throw has its own
+// sentence. Each state gets an axe check.
+import {
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import type { ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
+import { IntlProvider } from "@/test/intl";
+
+const { router, importTools, setToolClassification, flipKillSwitch } =
+  vi.hoisted(() => ({
+    router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+    importTools: vi.fn(),
+    setToolClassification: vi.fn(),
+    flipKillSwitch: vi.fn(),
+  }));
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
+vi.mock("./actions", () => ({
+  importTools,
+  setToolClassification,
+  flipKillSwitch,
+}));
+
+const { ImportControls } = await import("./import-controls");
+const { ToolDialog, splitTags, versionLabel } = await import("./tool-dialog");
+const { FlipControls } = await import("./switch-controls");
+const { useActionFailure } = await import("./action-failure");
+const { toolVersionPage, killSwitchBoard } = await import("./tools.builders");
+
+/** The element or a failure naming what was missing: the tests assert, they never cast. */
+function element(node: Element | null | undefined, what: string): HTMLElement {
+  if (!(node instanceof HTMLElement)) throw new Error(`no ${what}`);
+  return node;
+}
+const formOf = (node: HTMLElement) => element(node.closest("form"), "form");
+
+const at = { org: "acme", ws: "core-platform" };
+const TOOLS = "/acme/core-platform/tools";
+const SWITCHES = "/acme/core-platform/tools?tab=switches";
+const GENERATION = { org: 12, workspace: 4 };
+
+/** The nth record of a fixture page, or a failure naming which one was missing. */
+function nth<T>(items: readonly T[], index: number, what: string): T {
+  const item = items[index];
+  if (item === undefined) throw new Error(`no ${what}`);
+  return item;
+}
+const financial = () => nth(toolVersionPage().items, 0, "financial version");
+const plain = () => nth(toolVersionPage().items, 1, "unclassified version");
+const classSwitch = () => nth(killSwitchBoard().switches, 0, "class switch");
+const clearedSwitch = () =>
+  nth(killSwitchBoard().switches, 1, "cleared switch");
+
+const intl = ({ children }: { children: ReactNode }) => (
+  <IntlProvider>{children}</IntlProvider>
+);
+
+function withIntl(element: ReactNode) {
+  return render(<IntlProvider>{element}</IntlProvider>);
+}
+
+function fill(label: string | RegExp, value: string) {
+  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+}
+
+beforeEach(() => {
+  for (const fn of [
+    router.replace,
+    router.refresh,
+    importTools,
+    setToolClassification,
+    flipKillSwitch,
+  ]) {
+    fn.mockReset();
+  }
+});
+
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
+
+describe("splitTags", () => {
+  it("splits on commas and whitespace, drops blanks and keeps each tag once", () => {
+    expect(splitTags(" moves_money, destroys_data  moves_money ")).toEqual([
+      "moves_money",
+      "destroys_data",
+    ]);
+    expect(splitTags("   ")).toEqual([]);
+  });
+});
+
+describe("versionLabel", () => {
+  it("is the one spelling of a version's identity", () => {
+    expect(versionLabel(financial())).toBe("stripe__create_payment@4");
+  });
+});
+
+describe("ImportControls", () => {
+  it("imports the server the person named and reloads the registry", async () => {
+    importTools.mockResolvedValue({
+      ok: true,
+      value: { importDigest: "d1", published: 2, unchanged: 1 },
+    });
+    withIntl(<ImportControls at={at} />);
+    fireEvent.click(screen.getByTestId("tools-import-open"));
+    fill("Server", "mcs_01k5s1");
+    fill("Tools", "get_page create_page");
+    fireEvent.submit(formOf(screen.getByText("Import")));
+    await waitFor(() => {
+      expect(importTools).toHaveBeenCalledWith("acme", "core-platform", {
+        serverId: "mcs_01k5s1",
+        tools: ["get_page", "create_page"],
+      });
+    });
+    expect(router.replace).toHaveBeenCalledWith(TOOLS);
+    expect(await screen.findByTestId("tools-import-done")).toHaveTextContent(
+      "2 new versions · 1 already registered.",
+    );
+  });
+
+  it("names a refusal where the person acted and navigates nowhere", async () => {
+    importTools.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    withIntl(<ImportControls at={at} />);
+    fireEvent.click(screen.getByTestId("tools-import-open"));
+    fill("Server", "mcs_01k5s1");
+    fireEvent.submit(formOf(screen.getByText("Import")));
+    expect(await screen.findByTestId("tools-import-failure")).toHaveTextContent(
+      "This needs an organization Owner or Admin.",
+    );
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("names a write that threw before it answered", async () => {
+    importTools.mockRejectedValue(new Error("network"));
+    withIntl(<ImportControls at={at} />);
+    fireEvent.click(screen.getByTestId("tools-import-open"));
+    fill("Server", "mcs_01k5s1");
+    fireEvent.submit(formOf(screen.getByText("Import")));
+    expect(await screen.findByTestId("tools-import-failure")).toHaveTextContent(
+      "action_failed",
+    );
+  });
+});
+
+describe("ToolDialog", () => {
+  it("opens on the row and prints what the version's record carries", async () => {
+    withIntl(
+      <ToolDialog at={at} version={financial()} canClassify>
+        <span>Create payment</span>
+      </ToolDialog>,
+    );
+    fireEvent.click(screen.getByText("Create payment"));
+    const dialog = within(await screen.findByTestId("tool-dialog"));
+    expect(dialog.getByText("mcp.stripe.create_payment")).toBeInTheDocument();
+    expect(dialog.getByText("MCP server")).toBeInTheDocument();
+    expect(
+      dialog.getByText("a1b2c3d4e5f60718293a4b5c6d7e8f90"),
+    ).toBeInTheDocument();
+    expect(dialog.getByText("amount $.amount")).toBeInTheDocument();
+  });
+
+  it("says a version is not classified yet rather than showing a blank", async () => {
+    withIntl(
+      <ToolDialog at={at} version={plain()} canClassify={false}>
+        <span>Get file contents</span>
+      </ToolDialog>,
+    );
+    fireEvent.click(screen.getByText("Get file contents"));
+    const dialog = within(await screen.findByTestId("tool-dialog"));
+    expect(dialog.getByText("Not classified yet")).toBeInTheDocument();
+    expect(
+      dialog.getByText(
+        "Reclassifying a tool version needs an organization Owner or Admin.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("reclassifies the version, carrying its measures through unchanged", async () => {
+    setToolClassification.mockResolvedValue({
+      ok: true,
+      value: { classifiedAt: "2026-09-16T09:00:00.000Z" },
+    });
+    withIntl(
+      <ToolDialog at={at} version={financial()} canClassify>
+        <span>Create payment</span>
+      </ToolDialog>,
+    );
+    fireEvent.click(screen.getByText("Create payment"));
+    await screen.findByTestId("tool-dialog");
+    fireEvent.change(screen.getByLabelText("Risk grade"), {
+      target: { value: "high" },
+    });
+    fill("Consequence tags", "moves_money, changes_access");
+    fill("Reason", "Narrowed after the audit.");
+    fireEvent.submit(formOf(screen.getByText("Reclassify this version")));
+    await waitFor(() => {
+      expect(setToolClassification).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        {
+          toolVersionId: "tlv_01k5a1",
+          riskGrade: "high",
+          sideEffect: "irreversible",
+          egress: "third_party",
+          consequenceTags: ["moves_money", "changes_access"],
+          dataClasses: ["payment"],
+          measures: financial().classification?.measures,
+          reason: "Narrowed after the audit.",
+        },
+      );
+    });
+    expect(router.replace).toHaveBeenCalledWith(TOOLS);
+  });
+
+  it("names a refusal on the form", async () => {
+    setToolClassification.mockResolvedValue({
+      ok: false,
+      reason: "not_found",
+      code: "tool_version_not_found",
+    });
+    withIntl(
+      <ToolDialog at={at} version={financial()} canClassify>
+        <span>Create payment</span>
+      </ToolDialog>,
+    );
+    fireEvent.click(screen.getByText("Create payment"));
+    await screen.findByTestId("tool-dialog");
+    fill("Reason", "x");
+    fireEvent.submit(formOf(screen.getByText("Reclassify this version")));
+    expect(
+      await screen.findByTestId("tool-classify-failure"),
+    ).toHaveTextContent("No tool version has that id in this workspace.");
+  });
+});
+
+describe("FlipControls", () => {
+  it("states the blast radius before the confirming button, and flips the level the person picked", async () => {
+    flipKillSwitch.mockResolvedValue({
+      ok: true,
+      value: {
+        switchId: "emd_new",
+        on: true,
+        changed: true,
+        denyGeneration: { org: 13, workspace: 4 },
+        grantsRevoked: 0,
+      },
+    });
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        tone="flip"
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    const radius = within(dialog).getByTestId("tools-flip-blast-radius");
+    expect(radius).toHaveTextContent("Blast radius");
+    expect(radius).toHaveTextContent(
+      "Every tool version carrying this consequence tag",
+    );
+    // The blast radius is above the confirming button in the document.
+    expect(
+      radius.compareDocumentPosition(within(dialog).getByText("Deny now")),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(within(dialog).getByText(/deny generation 12 → 13/)).toBeVisible();
+
+    fill("Target", "moves_money");
+    fill(/^Reason/, "Suspected compromise.");
+    fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
+    await waitFor(() => {
+      expect(flipKillSwitch).toHaveBeenCalledWith("acme", "core-platform", {
+        kind: "class",
+        target: "moves_money",
+        on: true,
+        reason: "Suspected compromise.",
+      });
+    });
+    expect(router.replace).toHaveBeenCalledWith(SWITCHES);
+  });
+
+  it("changes the blast radius with the level, and names what a connection switch also revokes", async () => {
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        tone="flip"
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    await screen.findByTestId("tools-flip-dialog");
+    fireEvent.change(screen.getByLabelText("Level"), {
+      target: { value: "connection" },
+    });
+    expect(screen.getByTestId("tools-flip-blast-radius")).toHaveTextContent(
+      "live grants are revoked with the flip",
+    );
+    expect(
+      screen.getByText(
+        "A connection switch also revokes every credential grant that drew on it.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("clears a switch that is on, and says what that restores", async () => {
+    flipKillSwitch.mockResolvedValue({
+      ok: true,
+      value: {
+        switchId: "emd_01k5c1",
+        on: false,
+        changed: true,
+        denyGeneration: { org: 13, workspace: 4 },
+        grantsRevoked: 0,
+      },
+    });
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={classSwitch()}
+        tone="clear"
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-emd_01k5c1"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    expect(
+      within(dialog).getByTestId("tools-flip-blast-radius"),
+    ).toHaveTextContent("What this restores");
+    fill(/^Reason/, "Rotation confirmed.");
+    fireEvent.submit(formOf(within(dialog).getByText("Allow again")));
+    await waitFor(() => {
+      expect(flipKillSwitch).toHaveBeenCalledWith("acme", "core-platform", {
+        kind: "class",
+        target: "moves_money",
+        on: false,
+        reason: "Rotation confirmed.",
+      });
+    });
+  });
+
+  it("flips a switch that is off back on, on the workspace's own generation", async () => {
+    flipKillSwitch.mockResolvedValue({
+      ok: false,
+      reason: "unavailable",
+      code: "store_down",
+    });
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={clearedSwitch()}
+        tone="flip"
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-emd_01k5c2"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    expect(within(dialog).getByText(/deny generation 4 → 5/)).toBeVisible();
+    fill(/^Reason/, "Halt the workspace.");
+    fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
+    expect(await screen.findByTestId("tools-flip-failure")).toHaveTextContent(
+      "store_down",
+    );
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+});
+
+describe("useActionFailure", () => {
+  it.each([
+    [
+      { ok: false, reason: "denied", code: "no_principal" },
+      "This session carries no person to record the action against.",
+    ],
+    [
+      { ok: false, reason: "not_found", code: "server_not_found" },
+      "No registered tool server has that id in this workspace.",
+    ],
+    [
+      { ok: false, reason: "conflict", code: "kill_switch_on" },
+      "A kill switch names this target",
+    ],
+    [
+      { ok: false, reason: "conflict", code: "something_else" },
+      "Refused: something_else.",
+    ],
+    [
+      { ok: false, reason: "invalid", code: "invalid_input" },
+      "Check the values above",
+    ],
+    [
+      { ok: false, reason: "pending_approval", accessRequestId: "acr_1" },
+      "acr_1",
+    ],
+    [
+      { ok: false, reason: "exhausted", code: "gau_exhausted" },
+      "gau_exhausted",
+    ],
+  ] as const)("names %j", (failure, expected) => {
+    const hook = renderHook(() => useActionFailure(), { wrapper: intl });
+    expect(hook.result.current(failure)).toContain(expected);
+    hook.unmount();
+  });
+});

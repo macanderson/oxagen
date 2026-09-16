@@ -1,0 +1,408 @@
+// @vitest-environment jsdom
+// The Tools page body in each of its states on a fake DataSource: the loaded
+// registry, the grants log, the switch board, each tab's empty state and every
+// refusal a read can answer. A registry row prints what the record carries and
+// nothing it does not — an unclassified version says so, a call count the
+// store did not answer stays "not recorded" — and axe checks the state each
+// test ends in (INV-26).
+import { cleanup, render, screen, within } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { readError, readOk } from "@/data/read";
+import { expectNoAxe } from "@/test/expect-no-axe";
+import { IntlProvider } from "@/test/intl";
+
+vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
+vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+}));
+
+const { WsCtx } = await import("@/server/viewer");
+const { unsafeMint } = await import("@/server/viewer.testing");
+const { Tools, ToolsLoading } = await import("./tools");
+const { credentialGrantPage, killSwitchBoard, toolsSource, toolVersionPage } =
+  await import("./tools.builders");
+
+function viewer(orgRole: "owner" | "member") {
+  return unsafeMint(WsCtx, {
+    userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    orgId: "7a000000-0000-4000-8000-0000000000a1",
+    orgSlug: "acme",
+    orgName: "Acme Robotics",
+    orgRole,
+    workspaceId: "7b000000-0000-4000-8000-000000000001",
+    wsSlug: "core-platform",
+    wsName: "Core platform",
+  });
+}
+
+const owner = viewer("owner");
+const member = viewer("member");
+
+function withIntl(element: ReactNode) {
+  return render(<IntlProvider>{element}</IntlProvider>);
+}
+
+/** The element or a failure naming what was missing: the tests assert, they never cast. */
+function element(node: Element | null | undefined, what: string): HTMLElement {
+  if (!(node instanceof HTMLElement)) throw new Error(`no ${what}`);
+  return node;
+}
+const rowOf = (node: HTMLElement) => element(node.closest("tr"), "row");
+const cardOf = (selector: string) =>
+  element(document.querySelector(selector), selector);
+
+type Query = Readonly<Record<string, string | string[] | undefined>>;
+
+async function renderTools(
+  reads: Parameters<typeof toolsSource>[0],
+  query: Query = {},
+  ctx = owner,
+) {
+  const { source, calls } = toolsSource(reads);
+  const view = withIntl(await Tools({ ctx, source, searchParams: query }));
+  return { ...view, calls };
+}
+
+/** The reads a tab that is not open never makes are still handed the switch board. */
+const board = () => readOk(killSwitchBoard());
+
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
+
+describe("Tools › tabs", () => {
+  it("marks the registry as the default tab and counts the switches that are denying", async () => {
+    await renderTools({
+      versions: readOk(toolVersionPage()),
+      killSwitches: board(),
+    });
+    const tabs = screen.getByRole("navigation", { name: "Tools sections" });
+    expect(
+      within(tabs).getByRole("link", { name: /Registry/ }),
+    ).toHaveAttribute("aria-current", "page");
+    expect(within(tabs).getByText("1 on")).toBeInTheDocument();
+  });
+
+  it("shows no count when nothing is denying", async () => {
+    await renderTools({
+      versions: readOk(toolVersionPage()),
+      killSwitches: readOk(
+        killSwitchBoard({
+          switches: killSwitchBoard().switches.map((s) => ({
+            ...s,
+            on: false,
+            target: { kind: s.target.kind, id: s.target.ref },
+            flippedBy: s.flippedByRef,
+            clearedBy: s.clearedByRef,
+          })),
+        }),
+      ),
+      grants: readOk(credentialGrantPage()),
+    });
+    expect(screen.queryByText(/\d+ on/)).not.toBeInTheDocument();
+  });
+
+  it("shows no count when the switch read did not answer", async () => {
+    await renderTools({
+      versions: readOk(toolVersionPage()),
+      killSwitches: readError("tool_registry_unavailable", 503),
+    });
+    expect(screen.queryByText(/\d+ on/)).not.toBeInTheDocument();
+  });
+});
+
+describe("Tools › registry", () => {
+  it("prints each version with its classification, gate, origin, digest and calls", async () => {
+    await renderTools({
+      versions: readOk(toolVersionPage()),
+      killSwitches: board(),
+    });
+    const table = screen.getByRole("table", { name: "Tool versions" });
+    const rows = within(table).getAllByRole("row");
+    // header + two versions
+    expect(rows).toHaveLength(3);
+
+    const money = within(rowOf(within(table).getByText("Create payment")));
+    expect(money.getByText("stripe__create_payment@4")).toBeInTheDocument();
+    expect(money.getByText("moves_money")).toBeInTheDocument();
+    expect(money.getByText("Critical")).toBeInTheDocument();
+    expect(money.getByText("irreversible")).toBeInTheDocument();
+    expect(money.getByText("Killed · its class")).toBeInTheDocument();
+    expect(money.getByText("third party")).toBeInTheDocument();
+    expect(money.getByText("Moves money")).toBeInTheDocument();
+    expect(money.getByText("Imported")).toBeInTheDocument();
+    expect(money.getByText("a1b2c3d4e5f6")).toBeInTheDocument();
+    expect(money.getByText("1,204")).toBeInTheDocument();
+  });
+
+  it("says what an unclassified version does not carry rather than inventing it", async () => {
+    await renderTools({
+      versions: readOk(toolVersionPage()),
+      killSwitches: board(),
+    });
+    const plain = rowOf(screen.getByText("Get file contents"));
+    expect(within(plain).getByText("Unclassified")).toBeInTheDocument();
+    expect(within(plain).getAllByText("not recorded")).toHaveLength(2);
+    expect(within(plain).queryByText("0")).not.toBeInTheDocument();
+  });
+
+  it("offers a chip per consequence tag with its count, and asks the kernel for the one picked", async () => {
+    const { calls } = await renderTools(
+      { versions: readOk(toolVersionPage()), killSwitches: board() },
+      { category: "moves_money" },
+    );
+    expect(calls.versions[0]?.[1]).toEqual({
+      category: "moves_money",
+      cursor: null,
+    });
+    const chips = screen.getByRole("navigation", {
+      name: "Filter by consequence tag",
+    });
+    expect(
+      within(chips).getByRole("link", { name: /moves_money/ }),
+    ).toHaveAttribute("aria-current", "page");
+    expect(within(chips).getByRole("link", { name: /^All/ })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/tools",
+    );
+  });
+
+  it("swaps the label and the API name on the names toggle", async () => {
+    await renderTools(
+      { versions: readOk(toolVersionPage()), killSwitches: board() },
+      { names: "api" },
+    );
+    const toggle = screen.getByRole("navigation", { name: "Tool names" });
+    expect(
+      within(toggle).getByRole("link", { name: "API names" }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
+  it("links a later page when the read carried a cursor", async () => {
+    await renderTools({
+      versions: readOk(toolVersionPage({ nextCursor: "c2" })),
+      killSwitches: board(),
+    });
+    expect(screen.getByTestId("tools-next-page")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/tools?cursor=c2",
+    );
+  });
+
+  it("says the registry is empty, with the import action, when nothing is registered", async () => {
+    await renderTools({
+      versions: readOk(toolVersionPage({ items: [], nextCursor: null })),
+      killSwitches: board(),
+    });
+    expect(screen.getByText("No tool version is registered")).toBeVisible();
+    expect(screen.getByTestId("tools-import-open")).toBeVisible();
+  });
+
+  it("says the chip matched nothing rather than that the registry is empty", async () => {
+    await renderTools(
+      {
+        versions: readOk(toolVersionPage({ items: [], nextCursor: null })),
+        killSwitches: board(),
+      },
+      { category: "moves_money" },
+    );
+    expect(
+      screen.getByText("No tool version on this page carries that tag."),
+    ).toBeVisible();
+  });
+
+  it("offers no write action to a member", async () => {
+    await renderTools(
+      { versions: readOk(toolVersionPage()), killSwitches: board() },
+      {},
+      member,
+    );
+    expect(screen.queryByTestId("tools-import-open")).not.toBeInTheDocument();
+  });
+});
+
+describe("Tools › connections", () => {
+  it("prints each grant with the connection, the scope, its TTL and its state", async () => {
+    await renderTools(
+      { grants: readOk(credentialGrantPage()), killSwitches: board() },
+      { tab: "connections" },
+    );
+    const table = screen.getByRole("table", { name: "Credential grants" });
+    const github = rowOf(within(table).getByText("mcgr_01k5g1"));
+    expect(within(github).getByText("github")).toBeInTheDocument();
+    expect(within(github).getByText("arun_01k5r7")).toBeInTheDocument();
+    expect(within(github).getByText("mcrd_01k5c9")).toBeInTheDocument();
+    expect(within(github).getByText("token exchange")).toBeInTheDocument();
+    expect(within(github).getByText("5m")).toBeInTheDocument();
+    expect(within(github).getByText("Expired")).toBeInTheDocument();
+
+    const stripe = rowOf(within(table).getByText("mcgr_01k5g2"));
+    expect(within(stripe).getByText("Outside a run")).toBeInTheDocument();
+    expect(within(stripe).getByText("Revoked")).toBeInTheDocument();
+  });
+
+  it("says nothing has been put to use when the log is empty", async () => {
+    await renderTools(
+      {
+        grants: readOk(credentialGrantPage({ items: [], nextCursor: null })),
+        killSwitches: board(),
+      },
+      { tab: "connections" },
+    );
+    expect(screen.getByText("No credential has been put to use")).toBeVisible();
+  });
+
+  it("links a later page of the log", async () => {
+    await renderTools(
+      {
+        grants: readOk(credentialGrantPage({ nextCursor: "g2" })),
+        killSwitches: board(),
+      },
+      { tab: "connections" },
+    );
+    expect(screen.getByTestId("tools-next-page")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/tools?tab=connections&cursor=g2",
+    );
+  });
+});
+
+describe("Tools › kill switches", () => {
+  it("draws every level, the deny generation, and each recorded switch with its blast radius", async () => {
+    await renderTools({ killSwitches: board() }, { tab: "switches" });
+    for (const level of [
+      "Consequence class",
+      "Organization",
+      "Tool server",
+      "Tool version",
+      "Connection",
+      "Agent",
+      "Operator",
+    ]) {
+      expect(screen.getAllByText(level).length).toBeGreaterThan(0);
+    }
+    expect(
+      screen.getByText(
+        "Deny generation: 12 organization-wide, 4 in this workspace.",
+      ),
+    ).toBeVisible();
+
+    const card = within(cardOf('[data-switch="emd_01k5c1"]'));
+    expect(card.getByText("denying")).toBeInTheDocument();
+    expect(card.getByText("moves_money")).toBeInTheDocument();
+    expect(
+      card.getByText(
+        "Every tool version carrying this consequence tag, across the organization — including one imported tomorrow.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      card.getByText("Suspected compromise of the Stripe restricted key."),
+    ).toBeInTheDocument();
+  });
+
+  it("prints no uuid for a switch the record names by an internal id", async () => {
+    await renderTools({ killSwitches: board() }, { tab: "switches" });
+    const workspace = cardOf('[data-switch="emd_01k5c2"]');
+    expect(
+      within(workspace).getByText("named by an internal id"),
+    ).toBeInTheDocument();
+    expect(workspace.textContent).not.toContain(
+      "7b000000-0000-4000-8000-000000000001",
+    );
+    expect(within(workspace).getByText("allowing")).toBeInTheDocument();
+  });
+
+  it("says nothing has ever been flipped when the board is empty", async () => {
+    await renderTools(
+      { killSwitches: readOk(killSwitchBoard({ switches: [] })) },
+      { tab: "switches" },
+    );
+    expect(
+      screen.getByText(
+        "No kill switch has ever been flipped in this workspace. Flip one to record the first.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("offers the flip action to an owner and to nobody else", async () => {
+    await renderTools({ killSwitches: board() }, { tab: "switches" });
+    expect(screen.getByTestId("tools-flip-open")).toBeVisible();
+    cleanup();
+    await renderTools({ killSwitches: board() }, { tab: "switches" }, member);
+    expect(screen.queryByTestId("tools-flip-open")).not.toBeInTheDocument();
+  });
+});
+
+describe("Tools › not loaded", () => {
+  it("names the role held, the permission needed and who decides when the read is denied", async () => {
+    await renderTools({
+      versions: {
+        ok: false,
+        reason: "denied",
+        permission: "tools.read",
+      },
+      killSwitches: board(),
+    });
+    const panel = screen.getByTestId("tools-denied");
+    expect(
+      within(panel).getByText("You cannot see the tool registry"),
+    ).toBeVisible();
+    expect(within(panel).getByText("Signed in as: Owner")).toBeVisible();
+    expect(within(panel).getByText("tools.read")).toBeVisible();
+    expect(
+      within(panel).getByText(
+        "Decided by: the workspace’s decision rules — deny wins over every allow.",
+      ),
+    ).toBeVisible();
+    expect(
+      within(panel).getByRole("link", { name: "Back to Fleet" }),
+    ).toHaveAttribute("href", "/acme/core-platform");
+  });
+
+  it("names the access request while one is waiting", async () => {
+    await renderTools(
+      {
+        grants: {
+          ok: false,
+          reason: "pending_approval",
+          accessRequestId: "acr_01k5",
+        },
+        killSwitches: board(),
+      },
+      { tab: "connections" },
+    );
+    expect(
+      within(screen.getByTestId("tools-pending")).getByText(/acr_01k5/),
+    ).toBeVisible();
+  });
+
+  it("says nothing was changed, names the code, and offers the tab again on an error", async () => {
+    await renderTools(
+      { killSwitches: readError("tool_registry_unavailable", 503) },
+      { tab: "switches" },
+    );
+    const panel = screen.getByTestId("tools-error");
+    expect(within(panel).getByText("Tools could not be loaded")).toBeVisible();
+    expect(
+      within(panel).getByText("tool_registry_unavailable · 503"),
+    ).toBeVisible();
+    expect(
+      within(panel).getByRole("link", { name: "Try again" }),
+    ).toHaveAttribute("href", "/acme/core-platform/tools?tab=switches");
+  });
+});
+
+describe("ToolsLoading", () => {
+  it("is a busy skeleton with an accessible name", () => {
+    withIntl(<ToolsLoading />);
+    const skeleton = screen.getByLabelText("Loading tools");
+    expect(skeleton).toHaveAttribute("aria-busy", "true");
+    expect(skeleton.dataset.state).toBe("loading");
+  });
+});
