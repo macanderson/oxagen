@@ -251,6 +251,7 @@ export function agentsSource(reads: AgentReads) {
       findingEvidence: refuse,
     },
     org: { members: refuse },
+    skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },
   };
   return { source, calls };

@@ -46,6 +46,7 @@ const ROLE_CHECKED_CONTRACTS = [
   "propose_record",
   "dismiss_proposal",
   "open_context_pr",
+  "list_skills",
   "get_run_proof",
   "set_disclosure_grain",
 ] as const;
