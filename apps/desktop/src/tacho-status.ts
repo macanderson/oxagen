@@ -10,11 +10,26 @@ export interface TachoHookPresence {
   missing: string[];
 }
 
+/**
+ * What `tacho status` reports about a connected app's MCP config (ADR-069).
+ * Not called `hooks`, because there are none.
+ */
+export interface TachoMcpPresence {
+  present: boolean;
+  /** An entry from an earlier enrollment is still in the file. */
+  foreignEnrollment: boolean;
+  /** MCP servers in that app Oxagen does not see. */
+  otherServers: number;
+  otherServerNames: string[];
+}
+
 export interface TachoStatus {
   enrolled: boolean;
   hooks?: TachoHookPresence;
   codexHooks?: TachoHookPresence;
   stellaHooks?: TachoHookPresence;
+  /** Present once the host connects Claude Desktop. */
+  claudeDesktop?: TachoMcpPresence;
   service?: { kind: string; installed: boolean; running: boolean };
   wal?: { sessions: number; unshipped: number };
 }

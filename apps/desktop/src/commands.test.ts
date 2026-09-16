@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   ago,
+  HARNESS_TIER,
+  isConnected,
+  isWrapped,
+  TIER_LABEL,
+  TIER_OMITS,
+  TIER_RECORDS,
   defaultRegistration,
   deregisterArgs,
   describeCliInstall,
@@ -268,10 +274,55 @@ describe("wizard and de-register", () => {
     );
   });
 
-  it("lists every harness the app knows how to wrap, labeled", () => {
-    expect(HARNESSES).toEqual(["claude-code", "codex", "stella"]);
+  it("lists every AI app the machine can put under Oxagen, labeled", () => {
+    expect(HARNESSES).toEqual([
+      "claude-code",
+      "codex",
+      "stella",
+      "claude-desktop",
+    ]);
     for (const h of HARNESSES) expect(HARNESS_LABEL[h]).toBeTruthy();
     expect(HARNESS_LABEL.stella).toBe("Stella");
+  });
+
+  it("gives every app a tier, and the two predicates agree with it", () => {
+    // Mirrors TACHO_HARNESS_TIERS in packages/tacho/src/wire.ts. The desktop
+    // app shares no runtime code with the CLIs it drives, so the list is
+    // written twice and this is where the two meet: an app added here without
+    // a tier fails, rather than defaulting to wrapped.
+    for (const h of HARNESSES) {
+      expect(HARNESS_TIER[h]).toMatch(/^(harness|gateway)$/);
+      expect(isWrapped(h)).toBe(HARNESS_TIER[h] === "harness");
+      expect(isConnected(h)).toBe(HARNESS_TIER[h] === "gateway");
+      expect(isWrapped(h)).not.toBe(isConnected(h));
+    }
+    expect(HARNESS_TIER["claude-code"]).toBe("harness");
+    expect(HARNESS_TIER["claude-desktop"]).toBe("gateway");
+  });
+
+  it("says what each tier records and what it does not, for both tiers", () => {
+    for (const tier of ["harness", "gateway"] as const) {
+      expect(TIER_LABEL[tier]).toBeTruthy();
+      expect(TIER_RECORDS[tier]).toBeTruthy();
+      // ADR-069 §2: the omission line is as mandatory as the records line.
+      // A surface that shows only what a tier captures reads as coverage it
+      // does not have.
+      expect(TIER_OMITS[tier]).toBeTruthy();
+    }
+    expect(TIER_LABEL.harness).toBe("Wrapped");
+    expect(TIER_LABEL.gateway).toBe("Connected");
+    // The wrapped caveat is the client-attestation one; the connected caveat
+    // is the narrowness one. Neither is worded as a ranking.
+    expect(TIER_OMITS.harness).toContain("does not run this agent");
+    expect(TIER_OMITS.gateway).toContain("Not your prompts");
+    for (const text of [
+      ...Object.values(TIER_RECORDS),
+      ...Object.values(TIER_OMITS),
+    ]) {
+      expect(text.toLowerCase()).not.toContain("full");
+      expect(text.toLowerCase()).not.toContain("partial");
+      expect(text.toLowerCase()).not.toContain("limited");
+    }
   });
 });
 

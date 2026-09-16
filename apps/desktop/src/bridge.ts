@@ -80,7 +80,25 @@ export interface DaemonStatus {
   sessions?: unknown[];
   unobserved_sessions?: string[];
   agents?: DaemonAgentSummary[];
+  /**
+   * One row per MCP client that has called through the local gateway
+   * (ADR-069). A separate list from `agents` on purpose: those are the
+   * wrapped ones, and a surface that merged the two would have to invent a
+   * tier for each row after the fact.
+   */
+  connected?: DaemonConnectedApp[];
   [key: string]: unknown;
+}
+
+/** A connected app the gateway has served, as `/status` reports it. */
+export interface DaemonConnectedApp {
+  /** The name the app gave in the MCP `initialize` handshake. */
+  client: string;
+  enforcement_tier: "gateway";
+  calls: number;
+  /** Calls the control plane refused. A refusal is a decision, so it counts. */
+  refused: number;
+  last_seen_at: string;
 }
 
 export interface DesktopState {

@@ -72,6 +72,9 @@ const INSTALL_HINT: Record<Harness, string> = {
   codex: "npm i -g @openai/codex",
   stella:
     "curl -fsSL https://raw.githubusercontent.com/macanderson/stella/main/install.sh | sh",
+  // A connected app is downloaded, not installed from a terminal. Sending a
+  // non-developer to a command line is the thing this release exists to stop.
+  "claude-desktop": "https://claude.ai/download",
 };
 
 interface LogLine {
@@ -1173,13 +1176,16 @@ export function App() {
 
       <section className="panel" aria-labelledby="agents">
         <p className="eyebrow" id="agents">
-          Wrapped agents
+          AI apps on this machine
         </p>
         <p className="sub">
-          Every agent Oxagen records on this machine, and any script or in-house
-          agent reporting through <code>tacho hook</code>. De-registering
-          removes Oxagen's hooks from that agent's settings. The last one also
-          stops the collector and deletes the host credentials.
+          Every app Oxagen covers here, and what each one records. A{" "}
+          <strong>wrapped</strong> agent runs an Oxagen hook, so every action it
+          takes is recorded and can be refused — but Oxagen does not run it, so
+          the record is what the agent reported. A <strong>connected</strong>{" "}
+          app has no hook: Oxagen serves it a toolbelt and refuses the calls its
+          mandate does not allow, and sees nothing else the app does. Neither
+          covers what the other covers.
         </p>
         <div className="agents">
           {agentRows.map((row) => {
@@ -1199,9 +1205,54 @@ export function App() {
                 >
                   {HEALTH_LABEL[row.health]}
                 </span>
+                <span
+                  className={`pill tier-${row.tier}`}
+                  title={`${row.records} ${row.omits}`}
+                >
+                  {row.tierLabel}
+                </span>
                 <span className="meta">{meta}</span>
+                {/*
+                  Both lines, always. ADR-069 §2: a row that shows only what a
+                  tier records reads as coverage it does not have, and the two
+                  tiers do not rank against each other.
+                */}
+                <span className="records">
+                  <span className="records-yes">Records: {row.records}</span>
+                  <span className="records-no">{row.omits}</span>
+                </span>
                 {row.kind === "custom" ? (
                   <span className="pill">reports through tacho hook</span>
+                ) : row.kind === "connected" && row.wrapped ? (
+                  confirming === confirmKey ? (
+                    <>
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={() => deregister(row.key as Harness)}
+                        disabled={busy !== null}
+                      >
+                        Confirm disconnect
+                      </button>
+                      <button
+                        type="button"
+                        className="quiet"
+                        onClick={() => setConfirming(null)}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => setConfirming(confirmKey)}
+                      disabled={busy !== null}
+                      title="Remove Oxagen's entry from this app's settings"
+                    >
+                      Disconnect…
+                    </button>
+                  )
                 ) : row.wrapped ? (
                   confirming === confirmKey ? (
                     <>
