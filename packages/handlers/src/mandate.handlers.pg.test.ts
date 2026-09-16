@@ -498,6 +498,25 @@ describe.skipIf(!process.env.DATABASE_URL)(
           },
         }),
       ).rejects.toSatisfy(conflict("measure_not_declared"));
+      // The unit is the third field of the same declaration and the gate reads
+      // the call by it, so a limit denominated differently is enforced in the
+      // tool's unit while every screen shows the operator's. `amount` is
+      // declared in USD; a limit calling it EUR, or "cents", would be approved
+      // as one thing and enforced as another.
+      for (const unit of ["EUR", "cents", "usd", "GB"]) {
+        await expect(
+          grant(billingUserId, {
+            ...body(),
+            limits: {
+              amount: {
+                perCall: "1000000",
+                period: "daily",
+                currencyOrUnit: unit,
+              },
+            },
+          }),
+        ).rejects.toSatisfy(conflict("measure_unit_mismatch"));
+      }
       expect(await countMandates()).toBe(before);
       expect(doubles.events).toEqual([]);
     });
@@ -747,6 +766,25 @@ describe.skipIf(!process.env.DATABASE_URL)(
           ),
         ),
       ).rejects.toSatisfy(conflict("measure_not_declared"));
+      // Widening a limit is the other path that writes one, and it goes
+      // through the same assertion.
+      await expect(
+        inScope(() =>
+          mandateLimitsUpdateHandler(
+            {
+              mandateId: m.id,
+              limits: {
+                amount: {
+                  perCall: "1000000",
+                  period: "daily",
+                  currencyOrUnit: "EUR",
+                },
+              },
+            },
+            ctx(billingUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(conflict("measure_unit_mismatch"));
       await expect(
         inScope(() =>
           mandateLimitsUpdateHandler(

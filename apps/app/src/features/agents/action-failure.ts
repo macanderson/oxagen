@@ -44,6 +44,8 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("noToolMatches");
           case "measure_not_declared":
             return t("measureNotDeclared");
+          case "measure_unit_mismatch":
+            return t("measureUnitMismatch");
           default:
             return t("refused", { code: failure.code });
         }

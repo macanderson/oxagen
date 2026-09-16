@@ -10,7 +10,11 @@ import type { ApprovalItem } from "@/data/contracts/approvals";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import { mandateList, mandateRow } from "@/test/mandate-views";
+import {
+  mandateAuthority,
+  mandateList,
+  mandateRow,
+} from "@/test/mandate-views";
 import {
   approvalItem,
   fleetSource,
@@ -418,5 +422,49 @@ describe("Fleet approvals › the mandate bar", () => {
     expect(
       within(approvalsSection()).queryByTestId("mandate-unread"),
     ).toBeNull();
+  });
+
+  // A mandate limited per call only has no denominator, so every `MandateBar`
+  // draws nothing — and the card used to print a caveat about the period it
+  // was not counting, over that emptiness, while suppressing the fallback that
+  // would at least have named the mandate.
+  it("names a per-call-only mandate instead of drawing an empty card", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([parked]),
+      mandates: mandateList([
+        mandateRow({
+          authority: [
+            mandateAuthority({
+              perPeriod: null,
+              remaining: null,
+              settledRatio: null,
+              reservedRatio: null,
+            }),
+          ],
+        }),
+      ]),
+    });
+    const card = within(approvalsSection()).getByTestId("approval");
+    expect(within(card).queryByTestId("mandate-bar")).toBeNull();
+    expect(within(card).queryByTestId("mandate-period-basis")).toBeNull();
+    const line = within(card).getByTestId("mandate-per-call-only");
+    expect(line.textContent).toContain("mnd_4f2a9c");
+    expect(line.textContent).toContain("limits per call only");
+    expect(line.textContent).toContain("$250.00");
+    expect(line.textContent).toContain("amount");
+  });
+
+  it("keeps the period caveat when a measure does have a period limit", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([parked]),
+      mandates: mandateList([mandateRow()]),
+    });
+    const card = within(approvalsSection()).getByTestId("approval");
+    expect(
+      within(card).getByTestId("mandate-period-basis"),
+    ).toBeInTheDocument();
+    expect(within(card).queryByTestId("mandate-per-call-only")).toBeNull();
   });
 });

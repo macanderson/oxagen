@@ -23,6 +23,7 @@ import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { linkText, mono, panel } from "@/ui/control-styles";
 import { MandateBar } from "@/ui/mandate-bar";
+import { NamedMeasure } from "@/ui/measure";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { Clock } from "./clock";
@@ -43,6 +44,13 @@ function ApprovalCard({
   now: number;
 } & Place) {
   const t = useTranslations("fleet.approvals");
+  /**
+   * The measures a bar can draw: one needs a per-period limit for its
+   * denominator, and `MandateBar` answers null without one. A mandate limited
+   * per call only therefore drew nothing at all, under a caveat about the
+   * period it was not counting.
+   */
+  const metered = mandate?.authority.filter((a) => a.perPeriod !== null) ?? [];
   const recorded = (value: string | null) =>
     value === null ? (
       <dd className="text-muted-foreground">{t("notRecorded")}</dd>
@@ -61,9 +69,9 @@ function ApprovalCard({
         <dt className="text-muted-foreground">{t("requester")}</dt>
         {recorded(item.requester)}
       </dl>
-      {mandate !== null ? (
+      {mandate !== null && metered.length > 0 ? (
         <>
-          {mandate.authority.map((authority) => (
+          {metered.map((authority) => (
             <MandateBar key={authority.measure} authority={authority} />
           ))}
           <p
@@ -73,6 +81,25 @@ function ApprovalCard({
             {t("mandatePeriodBasis")}
           </p>
         </>
+      ) : mandate !== null ? (
+        // Every measure is limited per call and none per period, so there is
+        // no denominator and `MandateBar` draws nothing. The card used to
+        // print the period caveat over that emptiness — a note about figures
+        // it was not showing. It names the mandate and its per-call limits
+        // instead, and says nothing about a period it is not counting.
+        <p data-testid="mandate-per-call-only" className="text-xs">
+          {t("mandatePerCallOnly", { mandate: mandate.id })}
+          {mandate.authority.map((authority) =>
+            authority.perCall === null ? null : (
+              <span key={authority.measure} className="ml-1">
+                <NamedMeasure
+                  measure={authority.measure}
+                  value={authority.perCall}
+                />
+              </span>
+            ),
+          )}
+        </p>
       ) : item.mandateId === null ? null : (
         <p data-testid="mandate-unread" className="text-xs">
           {t("mandateUnread", { mandate: item.mandateId })}

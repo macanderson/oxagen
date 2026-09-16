@@ -153,6 +153,24 @@ export async function assertToolsDeclareMeasures(
             message: `${tool.slug}@${tool.version} declares no measure "${name}" for the limit the mandate names`,
           });
         }
+        // The unit is the third field of the same declaration, and the gate
+        // reads the call by the declaration: `readMeasure` takes a count as
+        // the tool reported it, in the tool's unit, and compares it against
+        // this limit's figure. A limit denominated in anything else is
+        // therefore enforced in the tool's unit while every screen shows the
+        // operator's — a tool declaring `storage` in GB accepts a limit read
+        // by a person as "50 bytes" and admits a call of 50 GB. Both halves
+        // are self-consistent and they differ by a billion, which is why this
+        // is checked here, where the declaration is in hand, and not at a
+        // caller: every path that writes a measure limit comes through here.
+        const asked = args.limits[name]?.currencyOrUnit;
+        if (asked !== undefined && asked !== d.unit) {
+          throw new HandlerError({
+            code: "conflict",
+            reason: "measure_unit_mismatch",
+            message: `${tool.slug}@${tool.version} declares measure "${name}" in ${d.unit}; the mandate denominates its limit in ${asked}`,
+          });
+        }
       }
       for (const name of targetMeasures) {
         if (declaredMeasures[name] === undefined) {

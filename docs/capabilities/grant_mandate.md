@@ -47,6 +47,7 @@ Owner, Admin, Compliance; the rest → Owner, Admin). Checked in the handler
 | `conflict` | `agent_has_no_principal` | The agent has no delegated principal to bind to. |
 | `conflict` | `no_tool_matches` | A tool pattern matches no declared, enabled tool carrying a consequence tag. |
 | `conflict` | `measure_not_declared` | A matched tool's active version declares no measure for a limit or target the mandate names: denied by construction (§6.9 rule 1). |
+| `conflict` | `measure_unit_mismatch` | A matched tool declares that measure in a different unit from the one the limit is denominated in. The gate reads a call in the unit the tool declares, so a limit in any other unit is enforced as a figure nobody entered — a `storage` measure declared in GB, limited at "50 bytes", would admit a call of 50 GB. |
 | `conflict` | `not_a_draft` | `requestId` names a mandate that is not a draft. |
 
 ## SPEC references

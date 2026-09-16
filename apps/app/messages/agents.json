@@ -303,7 +303,8 @@
         "pendingApproval": "The change is waiting for approval, request {accessRequestId}.",
         "unavailable": "The change could not be made: {code}. Nothing was changed.",
         "noToolMatches": "No declared tool with a consequence tag matches those patterns in this workspace, so the mandate would cover nothing.",
-        "measureNotDeclared": "A tool version those patterns match declares no such measure, so the limit could not be read from a call. A financial tool whose schema does not expose an amount cannot be given a mandate."
+        "measureNotDeclared": "A tool version those patterns match declares no such measure, so the limit could not be read from a call. A financial tool whose schema does not expose an amount cannot be given a mandate.",
+        "measureUnitMismatch": "A covered tool declares that measure in a different unit. The gate reads a call in the unit the tool declares, so a limit denominated in anything else would be enforced as a figure nobody entered. Name the unit the tool declares."
       }
     },
     "source": {
@@ -399,7 +400,7 @@
         "confirm": "Request the mandate",
         "pending": "Requesting",
         "unit": "Unit",
-        "unitHint": "What the measure counts, in the name the tool version declares — rows, recipients, messages. Not a currency code: a limit in money is scaled by the tool’s declaration, which nothing here can read, so it is asked for over the API or MCP instead.",
+        "unitHint": "What the measure counts, in the name the tool version declares — rows, recipients, GB. It must be the declared unit: the gate reads a call in that unit, so a limit denominated in another is enforced as a figure nobody entered, and the request is refused. Not a currency code: a limit in money is scaled by the tool’s declaration, which nothing here can read, so it is asked for over the API or MCP instead.",
         "perCallHint": "Whole units of the measure. The figure is recorded exactly as typed and is never scaled, so the limit this request carries is the figure entered.",
         "consequenceTags": "Consequences",
         "consequenceTagsHint": "Name every consequence the covered tools declare. A mandate covers a tool only when it names all of them — name one of a tool’s two and the mandate is granted as asked and the call is still denied. The six above are the starter set; a workspace defines its own, and those go in the field beneath.",

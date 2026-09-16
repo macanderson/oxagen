@@ -353,6 +353,7 @@ type Messages = {
         unavailable: string;
         noToolMatches: string;
         measureNotDeclared: string;
+        measureUnitMismatch: string;
       };
     };
     source: {
@@ -915,6 +916,7 @@ type Messages = {
       openRun: string;
       mandateUnread: string;
       mandatePeriodBasis: string;
+      mandatePerCallOnly: string;
     };
     runs: {
       title: string;
