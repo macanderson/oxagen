@@ -50,10 +50,6 @@ interface PageProps {
   searchParams: Promise<{ reauth?: string }>;
 }
 
-// Sentinel workspaceId for org-only reads (API keys are org-scoped) — mirrors
-// developer/mcp/page.tsx's ORG_ONLY_WS.
-const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
-
 /** Shiki is an optional enhancement — fall back to plain text on failure. */
 async function highlight(code: string, lang: string): Promise<string> {
   try {
@@ -154,10 +150,17 @@ export default async function AgentToolsMcpPage({
   );
 
   // (c) Read the org's first active API key to inject into external-client snippets.
+  //
+  // `auth.api_keys` is policy class `standard`, so its RLS predicate compares
+  // workspace_id to the workspace GUC. This read used to run under the org-only
+  // workspace sentinel and so matched only keys carrying the nil workspace,
+  // which is no key the CLI or the API ever mints. This page is inside a
+  // workspace and has the real id in hand, so it scopes to `ws.id` and keeps
+  // the eq(orgId) fence as well.
   let firstKey: string | null = null;
   try {
     const keys = await runInTenantScope(
-      { orgId: org.id, workspaceId: ORG_ONLY_WS },
+      { orgId: org.id, workspaceId: ws.id },
       () =>
         withTenantDb((tx) =>
           tx

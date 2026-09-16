@@ -9,8 +9,7 @@
 // and org-wide MFA enforcement is read from the policy the MFA tab writes.
 
 import { and, count, desc, eq, gte, isNull, or } from "drizzle-orm";
-import { withTenantDb, schema } from "@oxagen/database";
-import { runInTenantScope } from "@oxagen/tenancy";
+import { withSystemDb, schema } from "@oxagen/database";
 import { logger } from "@oxagen/handlers/logger";
 import { resolveOrg } from "@/lib/resolve-org";
 import { getEnterpriseAccess } from "@/lib/enterprise";
@@ -34,8 +33,6 @@ import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { Stat, StatGroup } from "@/components/ui/stat";
 
-// Org-only route — sentinel workspaceId (no workspace context).
-const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface Posture {
@@ -54,69 +51,83 @@ const EMPTY_POSTURE: Posture = {
   lastEventAt: null,
 };
 
+// WHY withSystemDb AND NOT withTenantDb: every figure below is an
+// organization-wide count, and the two tables it counts are scoped by
+// workspace in Postgres — `security.security_events` is policy class
+// `workspace_nullable` and `auth.api_keys` is `standard`
+// (packages/database/src/tenant-policy.manifest.ts). Read under the org-only
+// workspace sentinel, RLS admitted only the rows carrying no workspace, and it
+// hides rather than refuses, so the catch below could not fire and the page
+// published the short answer as a live one. Three figures were wrong in a way
+// a reader could act on: `deniedInvocations7d` counts capability.invoke_denied,
+// which the kernel emits with the request's real workspace
+// (packages/oxagen/src/kernel.ts), so it read 0 while the kernel was denying
+// and the tile rendered as a success; `activeApiKeys` counted only keys
+// carrying the nil sentinel; and `totalAuditEvents` drives the SOC 2 CC7.2
+// control state and its auditor-facing rationale below. Tenant isolation is
+// enforced here explicitly instead — eq(orgId) on every query — which is the
+// shape packages/handlers/src/audit.log.query.ts uses over the same table.
 async function loadPosture(orgId: string): Promise<Posture> {
   const since = new Date(Date.now() - SEVEN_DAYS_MS);
   const now = new Date();
   try {
-    return await runInTenantScope({ orgId, workspaceId: ORG_ONLY_WS }, () =>
-      withTenantDb(async (tx) => {
-        const [failures] = await tx
-          .select({ c: count() })
-          .from(schema.securityEvents)
-          .where(
-            and(
-              eq(schema.securityEvents.orgId, orgId),
-              eq(schema.securityEvents.eventType, "auth.sign_in_failed"),
-              gte(schema.securityEvents.occurredAt, since),
+    return await withSystemDb(async (tx) => {
+      const [failures] = await tx
+        .select({ c: count() })
+        .from(schema.securityEvents)
+        .where(
+          and(
+            eq(schema.securityEvents.orgId, orgId),
+            eq(schema.securityEvents.eventType, "auth.sign_in_failed"),
+            gte(schema.securityEvents.occurredAt, since),
+          ),
+        );
+
+      const [denied] = await tx
+        .select({ c: count() })
+        .from(schema.securityEvents)
+        .where(
+          and(
+            eq(schema.securityEvents.orgId, orgId),
+            eq(schema.securityEvents.eventType, "capability.invoke_denied"),
+            gte(schema.securityEvents.occurredAt, since),
+          ),
+        );
+
+      const [total] = await tx
+        .select({ c: count() })
+        .from(schema.securityEvents)
+        .where(eq(schema.securityEvents.orgId, orgId));
+
+      const [latest] = await tx
+        .select({ occurredAt: schema.securityEvents.occurredAt })
+        .from(schema.securityEvents)
+        .where(eq(schema.securityEvents.orgId, orgId))
+        .orderBy(desc(schema.securityEvents.occurredAt))
+        .limit(1);
+
+      const [keys] = await tx
+        .select({ c: count() })
+        .from(schema.apiKeys)
+        .where(
+          and(
+            eq(schema.apiKeys.orgId, orgId),
+            isNull(schema.apiKeys.deletedAt),
+            or(
+              isNull(schema.apiKeys.expiresAt),
+              gte(schema.apiKeys.expiresAt, now),
             ),
-          );
+          ),
+        );
 
-        const [denied] = await tx
-          .select({ c: count() })
-          .from(schema.securityEvents)
-          .where(
-            and(
-              eq(schema.securityEvents.orgId, orgId),
-              eq(schema.securityEvents.eventType, "capability.invoke_denied"),
-              gte(schema.securityEvents.occurredAt, since),
-            ),
-          );
-
-        const [total] = await tx
-          .select({ c: count() })
-          .from(schema.securityEvents)
-          .where(eq(schema.securityEvents.orgId, orgId));
-
-        const [latest] = await tx
-          .select({ occurredAt: schema.securityEvents.occurredAt })
-          .from(schema.securityEvents)
-          .where(eq(schema.securityEvents.orgId, orgId))
-          .orderBy(desc(schema.securityEvents.occurredAt))
-          .limit(1);
-
-        const [keys] = await tx
-          .select({ c: count() })
-          .from(schema.apiKeys)
-          .where(
-            and(
-              eq(schema.apiKeys.orgId, orgId),
-              isNull(schema.apiKeys.deletedAt),
-              or(
-                isNull(schema.apiKeys.expiresAt),
-                gte(schema.apiKeys.expiresAt, now),
-              ),
-            ),
-          );
-
-        return {
-          authFailures7d: failures?.c ?? 0,
-          deniedInvocations7d: denied?.c ?? 0,
-          activeApiKeys: keys?.c ?? 0,
-          totalAuditEvents: total?.c ?? 0,
-          lastEventAt: latest?.occurredAt ?? null,
-        };
-      }),
-    );
+      return {
+        authFailures7d: failures?.c ?? 0,
+        deniedInvocations7d: denied?.c ?? 0,
+        activeApiKeys: keys?.c ?? 0,
+        totalAuditEvents: total?.c ?? 0,
+        lastEventAt: latest?.occurredAt ?? null,
+      };
+    });
   } catch (err) {
     // Degrade to zeroes so a DB blip does not 500 the whole security section.
     // This is the one place the page can show a figure that is not live, so it

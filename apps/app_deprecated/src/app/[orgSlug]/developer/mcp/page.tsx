@@ -8,17 +8,13 @@
 
 import { desc, eq } from "drizzle-orm";
 import { ExternalLink, KeySquare } from "lucide-react";
-import { withTenantDb, schema } from "@oxagen/database";
-import { runInTenantScope } from "@oxagen/tenancy";
+import { withSystemDb, schema } from "@oxagen/database";
 import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
 import { getSession } from "@/lib/session";
 import { Panel } from "@/components/ui/panel";
 import { McpInstallTabs } from "./mcp-install-tabs";
 import type { McpTabEntry } from "./mcp-install-tabs";
 import { MCP_URL, buildSnippets } from "./mcp-install-snippets";
-
-// Sentinel workspaceId for org-only routes.
-const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 /**
  * Shiki is an optional enhancement — fall back to plain text on failure.
@@ -59,22 +55,25 @@ export default async function DeveloperMcpPage({
   }
 
   // Read the first active API key for this org.
+  //
+  // WHY withSystemDb AND NOT withTenantDb: `auth.api_keys` is policy class
+  // `standard`, so under the org-only workspace sentinel this page's read
+  // matched only keys carrying the nil workspace and showed the
+  // `$OXAGEN_API_KEY` placeholder to an org that has real keys. The eq(orgId)
+  // fence below is the isolation; see the tokens panel
+  // (developer/tokens/tokens-body.tsx) for the full reasoning.
   let firstKey: string | null = null;
   try {
-    const keys = await runInTenantScope(
-      { orgId: org.id, workspaceId: ORG_ONLY_WS },
-      () =>
-        withTenantDb((tx) =>
-          tx
-            .select({
-              keyPrefix: schema.apiKeys.keyPrefix,
-              expiresAt: schema.apiKeys.expiresAt,
-            })
-            .from(schema.apiKeys)
-            .where(eq(schema.apiKeys.orgId, org.id))
-            .orderBy(desc(schema.apiKeys.createdAt))
-            .limit(10),
-        ),
+    const keys = await withSystemDb((tx) =>
+      tx
+        .select({
+          keyPrefix: schema.apiKeys.keyPrefix,
+          expiresAt: schema.apiKeys.expiresAt,
+        })
+        .from(schema.apiKeys)
+        .where(eq(schema.apiKeys.orgId, org.id))
+        .orderBy(desc(schema.apiKeys.createdAt))
+        .limit(10),
     );
     const active = keys.filter((k) => !k.expiresAt || k.expiresAt > new Date());
     if (active[0]) {
