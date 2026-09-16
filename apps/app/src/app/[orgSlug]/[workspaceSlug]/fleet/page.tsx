@@ -28,9 +28,9 @@ import { type FleetHost, listFleetAction } from "./actions";
 // declares one, which is what `dynamic = "force-dynamic"` here did. Removing it
 // does not risk a stale prerender: nothing on this page opts into `use cache`,
 // and every read below is uncached runtime IO — the session cookie, the org and
-// workspace lookups, `listFleetAction` — so under Cache Components the whole
-// fleet itself is server-rendered on every request, which is what
-// force-dynamic was asking for. The Suspense boundary that build-time
+// workspace lookups, `listFleetAction` — so under Cache Components the fleet
+// itself is server-rendered on every request, which is what force-dynamic was
+// asking for. The Suspense boundary that build-time
 // enforcement requires around that IO is the parent segment's
 // `[workspaceSlug]/loading.tsx`, which wraps this page as the layout's
 // children; the build reports the route as ◐ (partial prerender), meaning the
