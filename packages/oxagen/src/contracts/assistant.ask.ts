@@ -98,8 +98,14 @@ export const assistantAsk = registerCapability({
       runId: z.string().regex(/^arun_[0-9a-z]+$/),
       /** The assistant's reply, whole. */
       reply: z.string(),
-      /** A governed write awaiting a person; null when nothing parked. */
-      parkedCard: assistantParkedCardSchema.nullable(),
+      /**
+       * Every governed write this turn parked, in the order they parked;
+       * empty when nothing did. A turn can park more than one — each is a real
+       * approval row with its own five-minute expiry — so surfacing one and
+       * dropping the rest would leave a person answering for a write they were
+       * never shown, while the others expire unseen.
+       */
+      parkedCards: z.array(assistantParkedCardSchema),
     })
     .strict(),
 });

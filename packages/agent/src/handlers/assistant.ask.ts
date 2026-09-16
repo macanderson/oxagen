@@ -54,7 +54,7 @@ export async function assistantAskHandler(
       assistantMessageId: result.assistantMessageId,
       runId: result.runId,
       reply: result.reply,
-      parkedCard: result.parkedCard,
+      parkedCards: result.parkedCards,
     };
   } catch (err) {
     if (err instanceof ConversationNotFoundError) {

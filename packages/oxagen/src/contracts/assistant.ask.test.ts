@@ -50,14 +50,14 @@ describe("ask_assistant contract", () => {
     ).toBe(false);
   });
 
-  it("answers with the run the turn was recorded as and a nullable parked card", () => {
+  it("answers with the run the turn was recorded as and every parked card", () => {
     const output = {
       conversationId: CONVERSATION,
       userMessageId: "0192d4a8-7c1e-7a00-8000-0000000000d1",
       assistantMessageId: "0192d4a8-7c1e-7a00-8000-0000000000d2",
       runId: "arun_0123456789abcdef012345",
       reply: "Three runs are live.",
-      parkedCard: null,
+      parkedCards: [],
     };
     expect(assistantAsk.output.parse(output)).toEqual(output);
     expect(

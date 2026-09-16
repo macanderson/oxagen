@@ -36,7 +36,7 @@ All three adapters reach the turn through `kernel.invoke("ask_assistant")`, so t
 | `assistantMessageId` | uuid | the persisted reply |
 | `runId` | string | `arun_…`, the run the turn was recorded as; `get_run` opens it |
 | `reply` | string | the assistant's reply, whole |
-| `parkedCard` | object or null | `{ approvalId, capability, expiresAt }` for a governed write the turn opened that waits on a person; null when nothing parked |
+| `parkedCards` | array | one `{ approvalId, capability, expiresAt }` per governed write the turn opened that waits on a person, in park order; empty when nothing parked. A turn can park more than one, and each has its own five-minute expiry, so all of them are returned |
 
 ## Recording
 
@@ -46,7 +46,7 @@ The run is admitted on the `chat` (SSE) or `api-chat` (API, MCP) surface, and `l
 
 ## Tools
 
-The engine is declared every governed tool plus the two meta-tools. Each completion shows the provider the pinned belt, the meta-tools and what the model loaded by name, under `assertToolListFitsProvider` (#2611). A tool call runs through the materialised tool's own `execute`, where IAM, entitlement, tool RBAC, consent and approval apply; a governed write that needs a person parks and comes back as `parkedCard`.
+The engine is declared every governed tool plus the two meta-tools. Each completion shows the provider the pinned belt, the meta-tools and what the model loaded by name, under `assertToolListFitsProvider` (#2611). A tool call runs through the materialised tool's own `execute`, where IAM, entitlement, tool RBAC, consent and approval apply; a governed write that needs a person parks and comes back in `parkedCards`.
 
 ## Errors
 

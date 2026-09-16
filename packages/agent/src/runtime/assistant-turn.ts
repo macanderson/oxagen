@@ -56,6 +56,10 @@ import {
   type AssistantParkedCard,
 } from "@oxagen/oxagen/contracts/assistant.ask";
 import { budgetPolicyRead } from "@oxagen/oxagen/contracts/budget.policy.read";
+import {
+  chatMessageExecution,
+  type ChatMessageExecutionInput,
+} from "@oxagen/oxagen/contracts/chat.message.execution";
 import { workspaceBudgetPolicyRead } from "@oxagen/oxagen/contracts/workspace.budget_policy.read";
 import { INTERACTIVE_AGENT_CAPABILITIES } from "@oxagen/oxagen/interactive-agent";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -64,7 +68,12 @@ import pino from "pino";
 import { buildChatSystemPrompt } from "../system-prompt";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { recallWorkspaceMemoryMessage } from "./assistant-recall";
-import { openAssistantRun, type AssistantRunSurface } from "./assistant-run";
+import {
+  openAssistantRun,
+  type AssistantRunReceipt,
+  type AssistantRunRecorder,
+  type AssistantRunSurface,
+} from "./assistant-run";
 import {
   DEFAULT_GOVERNED_TURN_MAX_STEPS,
   runGovernedTurn,
@@ -153,7 +162,8 @@ export interface AssistantTurnResult {
   /** `arun_…` */
   runId: string;
   reply: string;
-  parkedCard: AssistantParkedCard | null;
+  /** Every write this turn parked, in park order; empty when none did. */
+  parkedCards: AssistantParkedCard[];
 }
 
 /** The credit gate said no. Surfaces answer 402 with the code and the message. */
@@ -293,6 +303,7 @@ async function runPreparedTurn(
 ): Promise<AssistantTurnResult> {
   const { request, userId, funding, hooks } = p;
   const { ctx } = request;
+  const turnStartedAt = new Date();
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
   const inScope = <T>(fn: () => Promise<T>): Promise<T> =>
     runInTenantScope(scope, fn);
@@ -473,15 +484,162 @@ async function runPreparedTurn(
     ),
   );
 
+  // The execution's id reaches readers through the assistant message's
+  // `metadata.executionId`, which the handler writes under
+  // `updateMessageMetadata` — the same place the old route left it.
+  await recordTurnExecution({
+    run,
+    capCtx,
+    assistantMessageId,
+    instruction: request.content,
+    conversationId,
+    reply,
+    usage,
+    startedAt: turnStartedAt,
+  });
+
   return {
     conversationId,
     userMessageId,
     assistantMessageId,
     runId: run.runPublicId,
     reply,
-    parkedCard: parked[0] ?? null,
+    parkedCards: parked,
   };
 }
+
+/**
+ * The turn's agent-execution record (SOC 2 CC6/CC7) and the Neo4j tool-usage
+ * lineage projection that rides with it.
+ *
+ * The evidence ledger is the authority on what the turn did — every reverse
+ * request has a receipt there, and the seal attests to them. `agent_executions`
+ * is a different question answered for a different reader: `list_executions`
+ * and `get_execution_trace` are in `INTERACTIVE_AGENT_CAPABILITIES`, so the
+ * assistant itself uses them to answer "what did my agents do", and
+ * `projectToolUsageBestEffort` (the handler's own tail) is the only writer of
+ * the lineage projection. A turn that skips this leaves both answering
+ * "nothing happened", which is worse than answering nothing at all.
+ *
+ * Best effort by construction, and deliberately so: the reply is already
+ * persisted and, on the SSE route, already sent. A failure here is a gap in
+ * the audit trail, which is a defect — so it is logged loudly with the ids
+ * needed to find it, never swallowed, and never allowed to fail the turn the
+ * person already has an answer to.
+ */
+async function recordTurnExecution(args: {
+  run: AssistantRunRecorder;
+  capCtx: CapabilityContext;
+  assistantMessageId: string;
+  instruction: string;
+  conversationId: string;
+  reply: string;
+  usage: { inputTokens: number; outputTokens: number };
+  startedAt: Date;
+}): Promise<void> {
+  const { run, capCtx, assistantMessageId } = args;
+  const completedAt = new Date();
+  try {
+    await invoke(
+      chatMessageExecution.name,
+      {
+        messageId: assistantMessageId,
+        agentId: run.agentId,
+        agentVersionId: run.agentVersionId,
+        originType: "chat" as const,
+        originId: assistantMessageId,
+        status: "completed" as const,
+        inputPayload: {
+          content: args.instruction,
+          conversationId: args.conversationId,
+        },
+        // The ledger holds the turn's text; this record holds the shape of it.
+        outputPayload: { text: args.reply.length > 0 ? "[streamed]" : null },
+        startedAt: args.startedAt,
+        completedAt,
+        latencyMs: Math.max(
+          0,
+          completedAt.getTime() - args.startedAt.getTime(),
+        ),
+        inputTokens: args.usage.inputTokens,
+        outputTokens: args.usage.outputTokens,
+        updateMessageMetadata: true,
+        steps: stepsFromReceipts(run.receipts),
+      },
+      { ...capCtx, messageId: assistantMessageId },
+      { surface: "api" },
+    );
+  } catch (err) {
+    logger.error(
+      {
+        err,
+        messageId: assistantMessageId,
+        runId: run.runPublicId,
+        orgId: capCtx.orgId,
+        workspaceId: capCtx.workspaceId,
+      },
+      "assistant turn: agent-execution record failed; the SOC 2 audit trail and the lineage projection have a gap for this turn",
+    );
+  }
+}
+
+/**
+ * The ledger's receipts as execution steps. One step per model completion,
+ * numbered from 1 in engine-frame order; the tool calls the engine asked for
+ * after a completion hang off that completion's step, which is the shape
+ * `get_execution_trace` renders. Tool calls that arrive before any completion
+ * (there are none today, but the engine decides the order, not this code) get
+ * a step of their own rather than being dropped.
+ */
+function stepsFromReceipts(
+  receipts: readonly AssistantRunReceipt[],
+): ChatMessageExecutionStep[] {
+  const steps: ChatMessageExecutionStep[] = [];
+  const openStep = (inputPayload: unknown): ChatMessageExecutionStep => {
+    const step: ChatMessageExecutionStep = {
+      stepNumber: steps.length + 1,
+      stepType: "llm_turn",
+      status: "completed",
+      inputPayload,
+      toolCalls: [],
+    };
+    steps.push(step);
+    return step;
+  };
+  for (const receipt of receipts) {
+    if (receipt.kind === "model") {
+      const step = openStep({
+        provider: receipt.provider,
+        model: receipt.model,
+        role: receipt.role,
+        engineSeq: receipt.seq,
+      });
+      step.status = receipt.outcome === "completed" ? "completed" : "failed";
+      if (receipt.usage) {
+        step.inputTokens = receipt.usage.input_tokens;
+        step.outputTokens = receipt.usage.output_tokens;
+      }
+      continue;
+    }
+    const step =
+      steps[steps.length - 1] ?? openStep({ engineSeq: receipt.seq });
+    step.toolCalls?.push({
+      toolName: receipt.toolName,
+      toolType: "capability",
+      requestPayload: receipt.input,
+      ...(receipt.outcome === "completed"
+        ? { responsePayload: receipt.output }
+        : { responsePayload: { error: receipt.error ?? receipt.outcome } }),
+      status: receipt.outcome === "completed" ? "completed" : "failed",
+      latencyMs: Math.max(0, Math.round(receipt.durationMs)),
+    });
+  }
+  return steps;
+}
+
+type ChatMessageExecutionStep = NonNullable<
+  ChatMessageExecutionInput["steps"]
+>[number];
 
 type Tx = Parameters<Parameters<typeof withTenantDb>[0]>[0];
 type Scope = { orgId: string; workspaceId: string };

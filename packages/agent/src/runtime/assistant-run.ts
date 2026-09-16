@@ -123,11 +123,33 @@ export interface OpenAssistantRunArgs extends AssistantRunScope {
   now?: () => Date;
 }
 
+/**
+ * One reverse request as the recorder saw it, kept in arrival order so the
+ * turn can build its `agent_executions` step rows from the same receipts the
+ * seal attests to. The ledger holds digests; this holds the payloads the
+ * execution record needs, and nothing leaves the process.
+ */
+export type AssistantRunReceipt =
+  | ({ kind: "model" } & TurnLedgerModelCall)
+  | ({ kind: "tool" } & TurnLedgerToolCall);
+
 /** A recorded assistant run: the ledger hook the turn writes through, plus its ids. */
 export interface AssistantRunRecorder extends TurnLedger {
   readonly runId: string;
   /** `arun_…`: what the flyout links and `get_run` opens. */
   readonly runPublicId: string;
+  /**
+   * The agent and version the run is attributed to — the same pair the spec's
+   * `actor_binding` pins. `get_message_execution` needs them to write the
+   * turn's `agent_executions` row against the agent that actually ran it.
+   */
+  readonly agentId: string;
+  readonly agentVersionId: string;
+  /**
+   * Every model and tool receipt this recorder wrote, in the order the engine
+   * asked. Read once, after the turn, to build the execution's steps.
+   */
+  readonly receipts: readonly AssistantRunReceipt[];
 }
 
 /** What admission resolved about who acts and under which retention policy. */
@@ -420,7 +442,10 @@ export async function openAssistantRun(
         engine: ASSISTANT_ENGINE,
       }),
     );
-    const recorder = new Recorder(store, inScope, now, run, attempt.attemptId);
+    const recorder = new Recorder(store, inScope, now, run, attempt.attemptId, {
+      agentId: identity.agentId,
+      agentVersionId: identity.agentVersionId,
+    });
     await recorder.append({
       eventType: "admission.run_admitted",
       payload: {
@@ -459,9 +484,22 @@ type PendingEvent = Pick<AttemptEventInput, "eventType" | "payload">;
 class Recorder implements AssistantRunRecorder {
   readonly runId: string;
   readonly runPublicId: string;
+  readonly agentId: string;
+  readonly agentVersionId: string;
+  /** Append-only, in engine-frame order; the turn reads it once, after. */
+  readonly receipts: AssistantRunReceipt[] = [];
   /** The seq the next event takes: one past the last durable event. */
   private nextSeq = 1;
   private chain: Promise<void> = Promise.resolve();
+  /**
+   * Latched by `seal`. The seal reads the chain once and then takes a seq, so
+   * an append that arrived during that await would chain onto the older value
+   * and could take a seq at or past the terminal event's, which the store
+   * refuses. No caller reaches it today — `runGovernedTurn` awaits every
+   * receipt before the outcome that seals — and this makes that falsifiable
+   * rather than a comment nobody can check.
+   */
+  private sealed = false;
 
   constructor(
     private readonly store: RunStore,
@@ -469,12 +507,23 @@ class Recorder implements AssistantRunRecorder {
     private readonly now: () => Date,
     run: { runId: string; publicId: string },
     private readonly attemptId: string,
+    actor: { agentId: string; agentVersionId: string },
   ) {
     this.runId = run.runId;
     this.runPublicId = run.publicId;
+    this.agentId = actor.agentId;
+    this.agentVersionId = actor.agentVersionId;
   }
 
   append(event: PendingEvent): Promise<void> {
+    if (this.sealed) {
+      return Promise.reject(
+        new AssistantRunNotRecordedError(
+          "ledger_refused",
+          `attempt already sealed; ${event.eventType} arrived after the terminal event`,
+        ),
+      );
+    }
     const write = this.chain.then(async () => {
       const attemptSeq = this.nextSeq;
       try {
@@ -507,6 +556,7 @@ class Recorder implements AssistantRunRecorder {
   }
 
   modelCall(record: TurnLedgerModelCall): Promise<void> {
+    this.receipts.push({ kind: "model", ...record });
     return this.append({
       eventType: "model.engine_call_completed",
       payload: {
@@ -528,6 +578,7 @@ class Recorder implements AssistantRunRecorder {
   }
 
   toolCall(record: TurnLedgerToolCall): Promise<void> {
+    this.receipts.push({ kind: "tool", ...record });
     return this.append({
       eventType: "tool.engine_call_completed",
       payload: {
@@ -545,6 +596,10 @@ class Recorder implements AssistantRunRecorder {
   }
 
   async seal(outcome: TurnLedgerOutcome): Promise<void> {
+    // Latch before the await, not after: an append queued while `this.chain`
+    // settles would otherwise chain onto the value read here and race the
+    // terminal event for a seq.
+    this.sealed = true;
     await this.chain;
     const attemptSeq = this.nextSeq;
     const terminalStatus =

@@ -115,34 +115,30 @@
       "reply": {
         "type": "string"
       },
-      "parkedCard": {
-        "anyOf": [
-          {
-            "type": "object",
-            "properties": {
-              "approvalId": {
-                "type": "string",
-                "minLength": 1
-              },
-              "capability": {
-                "type": "string",
-                "minLength": 1
-              },
-              "expiresAt": {
-                "type": "string"
-              }
+      "parkedCards": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "approvalId": {
+              "type": "string",
+              "minLength": 1
             },
-            "required": [
-              "approvalId",
-              "capability",
-              "expiresAt"
-            ],
-            "additionalProperties": false
+            "capability": {
+              "type": "string",
+              "minLength": 1
+            },
+            "expiresAt": {
+              "type": "string"
+            }
           },
-          {
-            "type": "null"
-          }
-        ]
+          "required": [
+            "approvalId",
+            "capability",
+            "expiresAt"
+          ],
+          "additionalProperties": false
+        }
       }
     },
     "required": [
@@ -151,7 +147,7 @@
       "assistantMessageId",
       "runId",
       "reply",
-      "parkedCard"
+      "parkedCards"
     ],
     "additionalProperties": false
   }

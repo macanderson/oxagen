@@ -83,7 +83,7 @@ const OUTPUT = {
   assistantMessageId: "77777777-7777-4777-8777-777777777777",
   runId: "arun_0123456789abcdef012345",
   reply: "hello world",
-  parkedCard: null,
+  parkedCards: [],
 };
 
 async function post(
@@ -308,7 +308,7 @@ describe("POST chat/stream — the turn on the wire", () => {
         limitUsd: 1,
         mode: "grace",
       });
-      return { ...OUTPUT, parkedCard: parked };
+      return { ...OUTPUT, parkedCards: [parked] };
     });
     const { events, done } = await readSse(await post({ content: "hi" }));
     expect(events[0]).toMatchObject({
@@ -323,7 +323,7 @@ describe("POST chat/stream — the turn on the wire", () => {
       limitUsd: 1,
       mode: "grace",
     });
-    expect((done as { parkedCard: unknown }).parkedCard).toEqual(parked);
+    expect((done as { parkedCards: unknown }).parkedCards).toEqual([parked]);
   });
 
   it.each([

@@ -108,6 +108,9 @@ const CTX = {
   messageId: null,
 };
 const CONVERSATION = "0192d4a8-7c1e-7a00-8000-0000000000c1";
+const AGENT_ID = "0192d4a8-7c1e-7a00-8000-0000000000a1";
+const AGENT_VERSION_ID = "0192d4a8-7c1e-7a00-8000-0000000000a2";
+const EXECUTION_ID = "0192d4a8-7c1e-7a00-8000-0000000000e1";
 
 interface World {
   conversationExists: boolean;
@@ -269,12 +272,20 @@ beforeEach(() => {
     text: { model: null, tier: "balanced" },
   });
   mocks.createTurnBudgetGuard.mockReturnValue(undefined);
-  mocks.invoke.mockResolvedValue({
-    enabled: false,
-    limitUsd: null,
-    mode: "grace",
-    graceOveragePct: 0.25,
-  });
+  mocks.invoke.mockImplementation(async (name: string) =>
+    name === "get_message_execution"
+      ? {
+          executionId: EXECUTION_ID,
+          status: "completed",
+          createdAt: new Date(),
+        }
+      : {
+          enabled: false,
+          limitUsd: null,
+          mode: "grace",
+          graceOveragePct: 0.25,
+        },
+  );
   mocks.recall.mockResolvedValue({ role: "user", content: "[memory]" });
   mocks.materializeTools.mockImplementation(async () => {
     mocks.log.push("materialize");
@@ -287,11 +298,19 @@ beforeEach(() => {
   });
   mocks.openAssistantRun.mockImplementation(async () => {
     mocks.log.push("open-run");
+    const receipts: unknown[] = [];
     return {
       runId: "run-uuid",
       runPublicId: "arun_0123456789abcdef012345",
-      modelCall: async () => undefined,
-      toolCall: async () => undefined,
+      agentId: AGENT_ID,
+      agentVersionId: AGENT_VERSION_ID,
+      receipts,
+      modelCall: async (r: unknown) => {
+        receipts.push({ kind: "model", ...(r as object) });
+      },
+      toolCall: async (r: unknown) => {
+        receipts.push({ kind: "tool", ...(r as object) });
+      },
       seal: async () => undefined,
     };
   });
@@ -407,7 +426,7 @@ describe("the prepared turn", () => {
       assistantMessageId: "msg-assistant",
       runId: "arun_0123456789abcdef012345",
       reply: "hi",
-      parkedCard: null,
+      parkedCards: [],
     });
     expect(usages).toEqual([
       {
@@ -538,11 +557,13 @@ describe("the prepared turn", () => {
     const result = await runTurn(request, {
       onApprovalRequired: (e) => events.push(e),
     });
-    expect(result.parkedCard).toEqual({
-      approvalId: "apr_1",
-      capability: "set_budget",
-      expiresAt: "2026-09-14T10:05:00.000Z",
-    });
+    expect(result.parkedCards).toEqual([
+      {
+        approvalId: "apr_1",
+        capability: "set_budget",
+        expiresAt: "2026-09-14T10:05:00.000Z",
+      },
+    ]);
     expect(events).toHaveLength(2);
   });
 
@@ -596,5 +617,181 @@ describe("the prepared turn", () => {
     mocks.openAssistantRun.mockRejectedValueOnce(new Error("ledger refused"));
     await expect(runTurn(request)).rejects.toThrow("ledger refused");
     expect(mocks.runGovernedTurn).not.toHaveBeenCalled();
+  });
+
+  // The agent-execution record (SOC 2 CC6/CC7) and, through its handler, the
+  // Neo4j tool-usage lineage projection. `list_executions` and
+  // `get_execution_trace` are in the assistant's own belt, so a turn that skips
+  // this makes the assistant answer "nothing happened" about itself.
+  describe("agent-execution record", () => {
+    /** The receipts a two-completion, one-tool turn leaves on the recorder. */
+    function turnWithReceipts() {
+      mocks.runGovernedTurn.mockImplementationOnce(
+        async (args: {
+          ledger: {
+            modelCall: (r: unknown) => Promise<void>;
+            toolCall: (r: unknown) => Promise<void>;
+          };
+        }) => {
+          await args.ledger.modelCall({
+            seq: 1,
+            requestId: "mc-1",
+            role: "worker",
+            provider: "anthropic",
+            model: "claude",
+            outcome: "completed",
+            usage: { input_tokens: 7, output_tokens: 3 },
+          });
+          await args.ledger.toolCall({
+            seq: 2,
+            requestId: "tc-1",
+            toolName: "recall_memory",
+            outcome: "completed",
+            input: { query: "runs" },
+            output: { hits: 2 },
+            durationMs: 12.6,
+          });
+          await args.ledger.modelCall({
+            seq: 3,
+            requestId: "mc-2",
+            role: "worker",
+            provider: "anthropic",
+            model: "claude",
+            outcome: "completed",
+            usage: { input_tokens: 11, output_tokens: 4 },
+          });
+          return fakeTurn({});
+        },
+      );
+    }
+
+    function executionCall() {
+      return mocks.invoke.mock.calls.find(
+        (c: unknown[]) => c[0] === "get_message_execution",
+      );
+    }
+
+    it("records the turn against the run's agent and the assistant message", async () => {
+      await runTurn(request);
+      const call = executionCall();
+      expect(call, "no get_message_execution invoke").toBeDefined();
+      expect(call![1]).toMatchObject({
+        messageId: "msg-assistant",
+        originId: "msg-assistant",
+        originType: "chat",
+        agentId: AGENT_ID,
+        agentVersionId: AGENT_VERSION_ID,
+        status: "completed",
+        updateMessageMetadata: true,
+        inputTokens: 10,
+        outputTokens: 5,
+      });
+    });
+
+    it("builds the steps from the ledger's receipts, tools under the completion that asked", async () => {
+      turnWithReceipts();
+      await runTurn(request);
+      const input = executionCall()![1] as {
+        steps: Array<{
+          stepNumber: number;
+          inputTokens?: number;
+          toolCalls?: Array<Record<string, unknown>>;
+        }>;
+      };
+      expect(input.steps).toHaveLength(2);
+      expect(input.steps[0]).toMatchObject({
+        stepNumber: 1,
+        stepType: "llm_turn",
+        status: "completed",
+        inputTokens: 7,
+        outputTokens: 3,
+      });
+      expect(input.steps[0]!.toolCalls).toEqual([
+        {
+          toolName: "recall_memory",
+          toolType: "capability",
+          requestPayload: { query: "runs" },
+          responsePayload: { hits: 2 },
+          status: "completed",
+          latencyMs: 13,
+        },
+      ]);
+      expect(input.steps[1]).toMatchObject({ stepNumber: 2, inputTokens: 11 });
+      expect(input.steps[1]!.toolCalls).toEqual([]);
+    });
+
+    it("records a failed tool call as a failed step entry rather than dropping it (negative)", async () => {
+      mocks.runGovernedTurn.mockImplementationOnce(
+        async (args: {
+          ledger: {
+            modelCall: (r: unknown) => Promise<void>;
+            toolCall: (r: unknown) => Promise<void>;
+          };
+        }) => {
+          await args.ledger.modelCall({
+            seq: 1,
+            requestId: "mc-1",
+            role: "worker",
+            provider: "anthropic",
+            model: "claude",
+            outcome: "completed",
+          });
+          await args.ledger.toolCall({
+            seq: 2,
+            requestId: "tc-1",
+            toolName: "set_budget",
+            outcome: "denied",
+            input: { usd: 5 },
+            error: "not permitted",
+            durationMs: 1,
+          });
+          return fakeTurn({});
+        },
+      );
+      await runTurn(request);
+      const input = executionCall()![1] as {
+        steps: Array<{ toolCalls?: Array<Record<string, unknown>> }>;
+      };
+      expect(input.steps[0]!.toolCalls).toEqual([
+        {
+          toolName: "set_budget",
+          toolType: "capability",
+          requestPayload: { usd: 5 },
+          responsePayload: { error: "not permitted" },
+          status: "failed",
+          latencyMs: 1,
+        },
+      ]);
+    });
+
+    // The reply is already persisted and, on the SSE route, already sent. A
+    // missing audit record is a defect, so it is logged — but it must not take
+    // the answer away from the person who already has it.
+    it("still answers when the execution record cannot be written (negative)", async () => {
+      mocks.invoke.mockImplementation(async (name: string) => {
+        if (name === "get_message_execution")
+          throw new Error("agent_executions write failed");
+        return {
+          enabled: false,
+          limitUsd: null,
+          mode: "grace",
+          graceOveragePct: 0.25,
+        };
+      });
+      const result = await runTurn(request);
+      expect(result.reply).toBe("hi");
+      expect(result.assistantMessageId).toBe("msg-assistant");
+    });
+
+    it("does not record an execution for a turn that never produced a reply (negative)", async () => {
+      const failure = Object.assign(new Error("engine down"), {
+        code: "engine_unavailable",
+      });
+      mocks.runGovernedTurn.mockImplementationOnce(async () =>
+        fakeTurn({ fail: failure }),
+      );
+      await expect(runTurn(request)).rejects.toBe(failure);
+      expect(executionCall()).toBeUndefined();
+    });
   });
 });

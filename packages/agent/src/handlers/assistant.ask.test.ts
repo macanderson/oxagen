@@ -56,7 +56,7 @@ const RESULT = {
   assistantMessageId: "0192d4a8-7c1e-7a00-8000-0000000000d2",
   runId: "arun_0123456789abcdef012345",
   reply: "three runs are live",
-  parkedCard: null,
+  parkedCards: [],
 };
 
 beforeEach(() => {

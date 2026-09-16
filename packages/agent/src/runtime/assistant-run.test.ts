@@ -650,6 +650,86 @@ describe("openAssistantRun", () => {
     expect(ledger.attempts).toHaveLength(0);
   });
 
+  // The execution record the turn writes afterwards needs the agent the run was
+  // attributed to and the payloads the ledger only kept digests of.
+  it("carries the run's agent and every receipt for the turn's execution record", async () => {
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      surface: "chat",
+      instruction: "hi",
+      maxSteps: 4,
+      store: ledger.store,
+    });
+    expect(recorder.agentId).toBe(AGENT.id);
+    expect(recorder.agentVersionId).toBe(AGENT.versionId);
+    expect(recorder.receipts).toEqual([]);
+
+    await recorder.modelCall({
+      seq: 1,
+      requestId: "prov-1-0",
+      role: "worker",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+      outcome: "completed",
+    });
+    await recorder.toolCall({
+      seq: 2,
+      requestId: "tool-2-0",
+      toolName: "recall_memory",
+      outcome: "completed",
+      input: { query: "runs" },
+      output: { hits: 2 },
+      durationMs: 12,
+    });
+    expect(recorder.receipts.map((r) => [r.kind, r.seq])).toEqual([
+      ["model", 1],
+      ["tool", 2],
+    ]);
+    // The payloads survive, which is the whole reason for keeping them: the
+    // ledger event carries `input_digest`, not the input.
+    expect(recorder.receipts[1]).toMatchObject({
+      kind: "tool",
+      toolName: "recall_memory",
+      input: { query: "runs" },
+      output: { hits: 2 },
+    });
+  });
+
+  // seal() reads the chain once and then takes a seq. An append that arrived
+  // during that await would chain onto the older value and could take a seq at
+  // or past the terminal event's, which the store refuses. No caller reaches it
+  // today; the latch makes that falsifiable instead of a comment.
+  it("refuses an append after the attempt is sealed (negative)", async () => {
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      surface: "chat",
+      instruction: "hi",
+      maxSteps: 4,
+      store: ledger.store,
+    });
+    await recorder.seal({ status: "completed", text: "done" });
+    await expect(
+      recorder.modelCall({
+        seq: 9,
+        requestId: "late",
+        role: "worker",
+        provider: "oxagen",
+        model: "m",
+        outcome: "completed",
+      }),
+    ).rejects.toSatisfy(
+      (e) =>
+        e instanceof AssistantRunNotRecordedError &&
+        e.reason === "ledger_refused",
+    );
+  });
+
   it("carries an identity refusal through unchanged", async () => {
     setupRun({ operatorPrincipalId: null });
     await expect(
