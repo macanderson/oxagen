@@ -121,9 +121,7 @@ export function FixDialog({
         <form
           onSubmit={(event: SyntheticEvent<HTMLFormElement>) => {
             event.preventDefault();
-            void decide("record", () =>
-              recordFindingFixAction(at, findingId),
-            );
+            void decide("record", () => recordFindingFixAction(at, findingId));
           }}
           className="flex flex-col gap-3"
         >

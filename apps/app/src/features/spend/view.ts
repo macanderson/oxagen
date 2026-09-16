@@ -59,8 +59,7 @@ export function parseSpendView(
     return {
       tab,
       drill: null,
-      finding:
-        finding !== undefined && isFindingId(finding) ? finding : null,
+      finding: finding !== undefined && isFindingId(finding) ? finding : null,
     };
   }
   return { tab, drill: null, finding: null };

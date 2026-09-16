@@ -55,13 +55,16 @@ describe("parseSpendView", () => {
     ["an id of another kind", { finding: "arun_01k5rtgh" }],
     ["an empty id", { finding: "" }],
     ["an id carrying a path", { finding: "fnd_01/../x" }],
-  ])("ignores %s, opening the findings tab with none (negative)", (_case, params) => {
-    expect(parseSpendView({ tab: "findings", ...params })).toEqual({
-      tab: "findings",
-      drill: null,
-      finding: null,
-    });
-  });
+  ])(
+    "ignores %s, opening the findings tab with none (negative)",
+    (_case, params) => {
+      expect(parseSpendView({ tab: "findings", ...params })).toEqual({
+        tab: "findings",
+        drill: null,
+        finding: null,
+      });
+    },
+  );
 
   it("does not carry a finding onto another tab (negative)", () => {
     expect(parseSpendView({ tab: "waste", finding: "fnd_01k5rtgh" })).toEqual({
