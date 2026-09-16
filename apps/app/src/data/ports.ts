@@ -3,7 +3,7 @@
 // production caller (INV-17). The rev1 ports land with the seams and pages
 // that bind them: the Fleet ports in WL-34, the Run and Organization ports in
 // WL-35 to WL-37, the Billing port in WL-38, the Spend port in #2962; each gap
-// lane adds its page's port (#2956: agents).
+// lane adds its page's port (#2956: agents; #2961: steering).
 import type { OrgCtx, PretenantCtx, WsCtx } from "@/server/viewer";
 import type {
   AgentDetail,
@@ -36,6 +36,12 @@ import type {
   SpendReport,
   SpendWaste,
 } from "./contracts/spend";
+import type {
+  ContextPr,
+  ProposalPage,
+  RecordKind,
+  RecordPage,
+} from "./contracts/steering";
 import type { Read } from "./read";
 
 export interface DataSource {
@@ -136,4 +142,19 @@ export interface DataSource {
   };
   /** list_members {scope:"org"}; caller: features/organization/people.tsx. */
   org: { members(ctx: OrgCtx): Promise<Read<MemberList>> };
+  /**
+   * The Steering page's three noBillingGate reads on the workspace; caller:
+   * features/steering/steering.tsx.
+   */
+  steering: {
+    /** list_records, status active: one page of the records in force, of one kind or all */
+    records(
+      ctx: WsCtx,
+      q: { kind: RecordKind | null; offset: number },
+    ): Promise<Read<RecordPage>>;
+    /** list_proposals: one page, newest first */
+    proposals(ctx: WsCtx, q: { offset: number }): Promise<Read<ProposalPage>>;
+    /** get_context_pr: one proposal's state machine, checks and what merge will do */
+    contextPr(ctx: WsCtx, proposalId: string): Promise<Read<ContextPr>>;
+  };
 }

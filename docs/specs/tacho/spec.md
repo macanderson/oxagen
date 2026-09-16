@@ -239,6 +239,7 @@ The design's fourteen kinds stand. This spec adds, additively, the kinds a harne
 | `policy_decision` | every standing-grant evaluation, including harness-originated denies | a deny is evidence even when no elevation was attempted |
 | `subagent_start`, `subagent_stop` | Claude Code spawns / finishes a subagent | subagents are child sessions with their own chain, linked by `body.parent_session_id` and the spawning `tool_use_id` |
 | `oxagen:compaction`, `oxagen:config_change`, `oxagen:unobserved_session`, `oxagen:hooks_removed` | harness lifecycle and tamper signals | vendor-namespaced per CGP U3 |
+| `proof.observed` | a witness runner (Stella's local ladder, or the Oxagen witness runner) reports a verdict on the worker's run | Mission Control spec §8.5; the body is `proofObservedBodySchema` in `@oxagen/run-evidence`, carried opaquely by this package and validated by the control plane's ingest contract (ADR-064) |
 
 `body` shapes for the harness kinds are fixed in the package's zod schema and its published JSON Schema; the representative bodies in the design (`llm_call`, `tool_call`, `network`, `approval_*`, `token_*`) are unchanged.
 

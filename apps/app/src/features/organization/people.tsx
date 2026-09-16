@@ -1,17 +1,23 @@
 // Organization › People (ARCHITECTURE.md §1.2): the organization's members and
 // its pending invitations from list_members {scope:"org"}, under the tabs that
 // link People and API keys. A refused or failed read replaces both sections;
-// the tabs stay. Role changes, removal and invitations sent from here land
-// with the People writes.
+// the tabs stay. Each member's row carries the two writes on a membership —
+// change role and remove (WL-42) — which an Owner or an Admin makes and every
+// other role sees refused. Invitations are sent from here with the People
+// writes the #2964 lane adds.
 import { useFormatter, useTranslations } from "next-intl";
 import type { MemberList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { OrgCtx, OrgRole } from "@/server/viewer";
-import { routes } from "@/shared/safe-path";
+import { routes, type SafePath } from "@/shared/safe-path";
 import { mono } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
 import { RouteTabs } from "@/ui/route-tabs";
+import { MemberRowActions } from "./member-row-actions";
+
+/** The org roles the two membership handlers admit (INV-29). */
+const MEMBERSHIP_WRITERS: readonly OrgRole[] = ["owner", "admin"];
 
 export async function People({
   ctx,
@@ -59,7 +65,12 @@ function PeopleView({
       />
       {read.ok ? (
         <>
-          <Members members={read.value.members} />
+          <Members
+            members={read.value.members}
+            org={orgSlug}
+            writes={MEMBERSHIP_WRITERS.includes(orgRole)}
+            here={routes.people(orgSlug)}
+          />
           <Invitations invitations={read.value.invitations} />
         </>
       ) : read.reason === "denied" ? (
@@ -103,7 +114,19 @@ function DateCell({ iso }: { iso: string }) {
   );
 }
 
-function Members({ members }: { members: MemberList["members"] }) {
+function Members({
+  members,
+  org,
+  writes,
+  here,
+}: {
+  members: MemberList["members"];
+  org: string;
+  /** Whether this viewer's org role may change a role and remove a member. */
+  writes: boolean;
+  /** This page, reloaded after a membership changed. */
+  here: SafePath;
+}) {
   const t = useTranslations("organization");
   return (
     <section aria-labelledby="people-members" className="flex flex-col gap-3">
@@ -124,6 +147,9 @@ function Members({ members }: { members: MemberList["members"] }) {
               </th>
               <th scope="col" className={headCell}>
                 {t("people.joined")}
+              </th>
+              <th scope="col" className={headCell}>
+                {t("people.actions")}
               </th>
             </tr>
           </thead>
@@ -147,6 +173,14 @@ function Members({ members }: { members: MemberList["members"] }) {
                 <td className={cell}>{t(`roles.${member.role}`)}</td>
                 <td className={cell}>
                   <DateCell iso={member.joinedAt} />
+                </td>
+                <td className={cell}>
+                  <MemberRowActions
+                    org={org}
+                    member={member}
+                    allowed={writes}
+                    after={here}
+                  />
                 </td>
               </tr>
             ))}
