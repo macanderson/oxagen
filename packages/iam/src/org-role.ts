@@ -289,14 +289,14 @@ export async function assertOrgRole(
   if (orgMatch !== null) return orgMatch;
 
   if (required.workspace && ctx.workspaceId) {
-    const accepted = required.workspace;
+    const acceptedOnWorkspace = required.workspace;
     const wsRoles = await resolveActorWorkspaceRoles(
       ctx.orgId,
       ctx.workspaceId,
       ctx.userId,
     );
     const wsMatch = mostPrivileged(
-      wsRoles.filter((name) => accepted.includes(name)),
+      wsRoles.filter((name) => acceptedOnWorkspace.includes(name)),
     );
     if (wsMatch !== null) return wsMatch;
   }
