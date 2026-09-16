@@ -41,6 +41,7 @@ export type PageKey =
   | "fleet"
   | "run"
   | "agents"
+  | "onboarding"
   | "organization"
   | "billing"
   | "spend"
@@ -72,6 +73,13 @@ export const PAGE_FAILURES = {
   agents: {
     error: { code: "iam_principals_unavailable", status: 503 },
     permission: "agent.read",
+  },
+  // The gate is a row on the organization and the first frame is the ingest's:
+  // a read that cannot answer says so rather than holding the page that
+  // carries it (#2967).
+  onboarding: {
+    error: { code: "onboarding_state_unavailable", status: 503 },
+    permission: "agent.register",
   },
   organization: { error: CONTROL_PLANE_DOWN, permission: "org.admin" },
   billing: {

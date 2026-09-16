@@ -9,6 +9,8 @@ import type { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import type { agentGet } from "@oxagen/oxagen/contracts/agent.get";
 import type { agentList } from "@oxagen/oxagen/contracts/agent.list";
 import type { auditLogQuery } from "@oxagen/oxagen/contracts/audit.log.query";
+import type { onboardingFirstFrameGet } from "@oxagen/oxagen/contracts/onboarding.first_frame.get";
+import type { onboardingStateGet } from "@oxagen/oxagen/contracts/onboarding.state.get";
 import type { tachoIncidentList } from "@oxagen/oxagen/contracts/tacho.incident.list";
 import type { mandateList } from "@oxagen/oxagen/contracts/mandate.list";
 import type { runList } from "@oxagen/oxagen/contracts/run.list";
@@ -17,6 +19,7 @@ import type { toAgentDetail, toAgentPage, toIncidentPage } from "./agents";
 import type { toApprovalItems } from "./approvals";
 import type { toMandateList } from "./mandates";
 import type { toAuditPage } from "./audit";
+import type { toFirstFrame, toOnboardingGate } from "./onboarding";
 import type { toApiKeys } from "./org";
 import type { toRunPage } from "./runs";
 
@@ -59,6 +62,14 @@ declare const incidentView: IncidentView;
 declare const mandateView: MandateView;
 declare const apiKeyView: ApiKeyView;
 
+type GateOut = ContractOutput<typeof onboardingStateGet>;
+type GateView = ReturnType<typeof toOnboardingGate>;
+type FrameOut = ContractOutput<typeof onboardingFirstFrameGet>;
+type FrameView = ReturnType<typeof toFirstFrame>;
+
+declare const gateView: GateView;
+declare const frameView: FrameView;
+
 // The positives: both mappers keep a field nullable only where the contract does.
 const _runsHold: NullableOnlyWhenSourceIs<RunView, RunOut> = runView;
 const _approvalsHold: NullableOnlyWhenSourceIs<ApprovalView, ApprovalOut> =
@@ -81,6 +92,8 @@ const _incidentsHold: NullableOnlyWhenSourceIs<IncidentView, IncidentOut> =
   incidentView;
 const _mandatesHold: NullableOnlyWhenSourceIs<MandateView, MandateOut> =
   mandateView;
+const _gateHolds: NullableOnlyWhenSourceIs<GateView, GateOut> = gateView;
+const _frameHolds: NullableOnlyWhenSourceIs<FrameView, FrameOut> = frameView;
 const _apiKeysHold: NullableOnlyWhenSourceIs<ApiKeyView, ApiKeyOut> =
   apiKeyView;
 

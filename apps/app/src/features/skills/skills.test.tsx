@@ -93,6 +93,7 @@ const source: DataSource = {
     findings: vi.fn(),
     findingEvidence: vi.fn(),
   },
+  onboarding: { state: vi.fn(), firstFrame: vi.fn() },
   org: { members: vi.fn(), apiKeys: vi.fn() },
   skills: { inventory: read },
   mandates: { list: vi.fn() },

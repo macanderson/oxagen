@@ -27,11 +27,7 @@ import {
   resolveActingUserId,
   resolveActorOrgRole,
 } from "@oxagen/iam/org-role";
-import {
-  auditConditions,
-  ORG_ONLY_WS,
-  readAuditEvents,
-} from "./audit.shared";
+import { auditConditions, ORG_ONLY_WS, readAuditEvents } from "./audit.shared";
 import { logger } from "./logger";
 
 /** The org roles that read the whole organization's record. */
@@ -45,9 +41,7 @@ export const auditLogQueryHandler: CapabilityHandler<
   const { orgId } = ctx;
   const actingUserId = await resolveActingUserId(ctx);
   const ownWorkspace =
-    ctx.workspaceId && ctx.workspaceId !== ORG_ONLY_WS
-      ? ctx.workspaceId
-      : null;
+    ctx.workspaceId && ctx.workspaceId !== ORG_ONLY_WS ? ctx.workspaceId : null;
   const requested = input.workspaceId ?? null;
 
   let workspaceFilter: string | null;

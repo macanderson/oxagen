@@ -6,7 +6,7 @@
 // PullRequestUrl.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { ComponentProps } from "react";
+import { type ComponentProps, useMemo } from "react";
 import type { HostedInvoiceUrl } from "@/shared/invoice-url";
 import type { PullRequestUrl } from "@/shared/pull-request-url";
 import type { SafePath } from "@/shared/safe-path";
@@ -15,17 +15,31 @@ export function useNavigate(): {
   push(path: SafePath): void;
   /** Replaces the entry and re-renders the server components, for a navigation after the session or a membership changed. */
   replace(path: SafePath): void;
+  /**
+   * Re-renders the server components at the URL already showing, for a re-read
+   * that is not a navigation. A poll uses this rather than `replace`, which
+   * would push a history entry and fetch the same route twice.
+   */
+  refresh(): void;
 } {
   const router = useRouter();
-  return {
-    push(path) {
-      router.push(path);
-    },
-    replace(path) {
-      router.replace(path);
-      router.refresh();
-    },
-  };
+  // Memoised on the router: an effect that navigates has to list this object,
+  // and a fresh literal every render makes that effect fire every render.
+  return useMemo(
+    () => ({
+      push(path: SafePath) {
+        router.push(path);
+      },
+      replace(path: SafePath) {
+        router.replace(path);
+        router.refresh();
+      },
+      refresh() {
+        router.refresh();
+      },
+    }),
+    [router],
+  );
 }
 
 export function SafeLink({

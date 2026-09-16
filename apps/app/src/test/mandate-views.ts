@@ -112,6 +112,7 @@ export function toolsSource(read: Read<MandateList>) {
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },
+    onboarding: { state: refuse, firstFrame: refuse },
   };
   return { source, calls };
 }

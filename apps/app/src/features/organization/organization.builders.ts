@@ -70,6 +70,7 @@ export function orgSource(reads: OrgReads): {
       findings: refuse,
       findingEvidence: refuse,
     },
+    onboarding: { state: refuse, firstFrame: refuse },
     org: {
       members: answer(reads.members, "members"),
       apiKeys: answer(reads.apiKeys, "apiKeys"),

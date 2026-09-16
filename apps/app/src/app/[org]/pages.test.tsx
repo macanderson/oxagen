@@ -34,6 +34,7 @@ const {
   Steering,
   Spend,
   FleetSpendTiles,
+  OnboardingGate,
   Tools,
   Skills,
   SkillsLoading,
@@ -63,6 +64,10 @@ const {
     FleetSpendTiles: vi.fn((_props: Record<string, unknown>) => (
       <p data-testid="fleet-spend" />
     )),
+    // The gate's own states are its component test; here it only has to render.
+    OnboardingGate: vi.fn((_props: Record<string, unknown>) => (
+      <p data-testid="onboarding-gate" />
+    )),
     Skills: vi.fn((_props: Record<string, unknown>) => (
       <p data-testid="skills-body" />
     )),
@@ -80,6 +85,7 @@ vi.mock("@/features/agents", () => ({ Agents, Agent, AgentSource }));
 vi.mock("@/features/steering", () => ({ Steering }));
 vi.mock("@/features/tools", () => ({ Tools }));
 vi.mock("@/features/spend", () => ({ Spend, FleetSpendTiles }));
+vi.mock("@/features/onboarding", () => ({ OnboardingGate }));
 vi.mock("@/features/skills", () => ({ Skills, SkillsLoading }));
 vi.mock("@/data/source", () => ({ dataSource: () => source }));
 vi.mock("next-intl/server", () => ({
