@@ -165,8 +165,7 @@
           "bind": "Bind {repository} as the main repo",
           "binding": "Binding…",
           "skip": "Skipping leaves {workspace} provisional until {until}. Runs record and spend counts, and steering, context records and agent definitions stay off until a main repo is bound."
-        },
-        "back": "Back"
+        }
       },
       "failure": {
         "orgRoleRequired": "This account may not register agents here. An organization owner or admin can.",

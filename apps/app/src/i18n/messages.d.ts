@@ -937,7 +937,6 @@ type Messages = {
           binding: string;
           skip: string;
         };
-        back: string;
       };
       failure: {
         orgRoleRequired: string;
