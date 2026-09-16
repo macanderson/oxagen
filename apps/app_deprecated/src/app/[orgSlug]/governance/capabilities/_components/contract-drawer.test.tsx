@@ -99,17 +99,19 @@ const USAGE = {
 
 const AUDIT_EVENTS = [
   {
+    id: "evt-1",
     source: "security" as const,
     eventType: "capability.invoked",
     occurredAt: "2026-07-01T12:00:00.000Z",
     actorUserId: "u1",
+    actorPublicId: "usr_1",
     workspaceId: null,
+    workspaceSlug: null,
     capability: "query_audit_log",
     outcome: "allow" as const,
+    ip: null,
+    userAgent: null,
     requestId: null,
-    playbookRunId: null,
-    sequence: null,
-    eventData: null,
   },
 ];
 
