@@ -82,7 +82,7 @@
  * Usage:
  *   pnpm db:provision-enterprise --email mac@oxagen.sh
  *   pnpm db:provision-enterprise --email mac@oxagen.sh --apply
- *   pnpm db:provision-enterprise --org acme --floor-usd 5000000 --apply
+ *   pnpm db:provision-enterprise --org acme --floor-usd 500000 --apply
  *   pnpm db:provision-enterprise --org acme --actions-annual 25000000 --apply
  *
  * Env:
@@ -111,18 +111,23 @@ import { formatError } from "./lib/format-error";
 /**
  * The default balance floor, in whole USD.
  *
- * One billion dollars is not a guess at anyone's spend — it is chosen to be so
- * far outside the range of one tenant's plausible burn that the balance check
- * stops being a variable in operating the platform, while staying an exact
- * integer in every layer that touches it. In credit cents that is 1e11, which
- * is exactly representable as a JS `number` (well under 2^53, which the balance
- * crosses `Number()` for in log lines and the billing UI) and eleven orders of
- * magnitude below the `bigint` column's ceiling, so no sum of lots can overflow.
+ * $100,000 is comfortably above any plausible burn for one tenant — it is
+ * roughly two hundred years of the $500/month enterprise plan's included credit
+ * — while staying a number a human reading the billing page can make sense of.
+ * A balance in the billions reads as a bug in the meter rather than a decision
+ * someone made, and the first thing anyone does with a figure they cannot
+ * believe is stop trusting the page it is on.
  *
- * A bigger number would buy nothing and start costing precision; a smaller one
- * would eventually need a human. This is the smallest number that needs neither.
+ * It does not need to be enormous, because the floor is a floor rather than a
+ * one-time gift: {@link topUpCents} grants only the shortfall, so re-running
+ * this command tops the balance back up. Running out is a scheduling problem,
+ * not a sizing one, and `--floor-usd` raises it for a tenant that needs more.
+ *
+ * In credit cents that is 1e7 — exact as a JS `number` (the balance crosses
+ * `Number()` in log lines and the billing UI) and far below the `bigint`
+ * column's ceiling, so no sum of lots can overflow.
  */
-export const DEFAULT_FLOOR_USD = 1_000_000_000;
+export const DEFAULT_FLOOR_USD = 100_000;
 
 /** Credit cents per USD. One credit is one cent (`packages/billing/src/pricing.ts`). */
 const CENTS_PER_USD = 100n;

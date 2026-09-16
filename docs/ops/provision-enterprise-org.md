@@ -20,7 +20,7 @@ refusals, and the kernel's budget gate adds a fourth:
 | Refusal | Cause | What the script does |
 | --- | --- | --- |
 | `BillingSuspendedError` | `dunning_state = 'suspended'` | resets to `active`, clears `delinquent_since` / `grace_ends_at` / `suspended_at` |
-| `InsufficientCreditsError` | effective balance `<= 0` after auto-reload | tops up to `--floor-usd` with a **non-expiring** lot |
+| `InsufficientCreditsError` | effective balance `<= 0` after auto-reload | tops up to `--floor-usd` (default $100,000) with a **non-expiring** lot |
 | `AssistantSpendCapError` | month's platform-paid assistant spend reached `assistant_spend_cap_cents` (default **$20**, ADR-053 §3) | sets it to `NULL`, which the cap check reads as "no cap" |
 | `BudgetExceededError` | an enabled `billing.spend_budgets` ceiling | disables the org's ceilings (rows kept, so the config is recoverable) |
 
@@ -44,7 +44,7 @@ pnpm db:provision-enterprise --org acme --actions-annual 25000000 --apply
 | --- | --- | --- |
 | `--email` | — | every org the user belongs to |
 | `--org` | — | one org by slug, uuid or `org_…` public id |
-| `--floor-usd` | `1000000000` ($1B) | the balance floor to hold |
+| `--floor-usd` | `100000` ($100,000) | the balance floor to hold |
 | `--actions-annual` | `1500000` | the recorded governed-action commitment |
 | `--apply` | off | write; without it the run is read-only |
 
@@ -127,4 +127,4 @@ SELECT o.slug, o.plan_type, o.status, o.negotiated_actions_annual,
 
 Expect `plan_type = enterprise`, `assistant_spend_cap_cents` NULL,
 `dunning_state = active`, and `effective_balance_cents` at the floor
-(`100000000000` for the default $1B).
+(`10000000` for the default $100,000).

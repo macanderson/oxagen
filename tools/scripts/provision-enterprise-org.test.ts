@@ -49,10 +49,18 @@ describe("topUpCents", () => {
     expect(topUpCents(0n, -1n)).toBe(0n);
   });
 
-  it("stays exact at the default floor, well past Number's integer range", () => {
+  it("is exact at the default floor", () => {
     const floor = usdToCents(DEFAULT_FLOOR_USD);
-    expect(floor).toBe(100_000_000_000n);
-    expect(topUpCents(1n, floor)).toBe(99_999_999_999n);
+    expect(floor).toBe(10_000_000n);
+    expect(topUpCents(1n, floor)).toBe(9_999_999n);
+  });
+
+  it("stays exact well past Number's integer range, for a floor set by flag", () => {
+    // --floor-usd takes whatever an operator passes, and the arithmetic is
+    // bigint throughout, so a figure beyond 2^53 cents is still exact.
+    const huge = usdToCents(1_000_000_000);
+    expect(huge).toBe(100_000_000_000n);
+    expect(topUpCents(1n, huge)).toBe(99_999_999_999n);
   });
 });
 
@@ -67,6 +75,10 @@ describe("parseFloorUsd", () => {
 
   it("tolerates surrounding whitespace from shell quoting", () => {
     expect(parseFloorUsd(" 5000000 ")).toBe(5_000_000);
+  });
+
+  it("defaults to a figure a human reading the billing page can believe", () => {
+    expect(DEFAULT_FLOOR_USD).toBe(100_000);
   });
 
   it.each(["0", "-1", "abc", "1.5", "", "   ", "Infinity", "NaN", "1e9"])(
@@ -106,6 +118,7 @@ describe("parseActionsAnnual", () => {
 describe("usdToCents", () => {
   it("converts whole dollars to credit cents", () => {
     expect(usdToCents(1)).toBe(100n);
+    expect(usdToCents(DEFAULT_FLOOR_USD)).toBe(10_000_000n);
     expect(usdToCents(1_000_000_000)).toBe(100_000_000_000n);
   });
 });
@@ -115,6 +128,7 @@ describe("formatCents", () => {
     expect(formatCents(0n)).toBe("$0.00");
     expect(formatCents(5n)).toBe("$0.05");
     expect(formatCents(12_345_678n)).toBe("$123,456.78");
+    expect(formatCents(usdToCents(DEFAULT_FLOOR_USD))).toBe("$100,000.00");
     expect(formatCents(100_000_000_000n)).toBe("$1,000,000,000.00");
   });
 
