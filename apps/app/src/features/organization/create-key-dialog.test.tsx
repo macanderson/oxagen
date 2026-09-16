@@ -191,9 +191,10 @@ describe("create", () => {
     expect(document.body).not.toHaveTextContent(SECRET);
   });
 
-  it("shows the secret even when the person closed the dialog while the write was in flight (negative)", async () => {
-    // The secret exists nowhere else and cannot be asked for again; a rotation
-    // has already revoked the key it replaces.
+  it("refuses to be dismissed while the write is in flight, so the island cannot unmount before the secret lands (negative)", async () => {
+    // Dismissing and then navigating — the workspace picker, the People tab,
+    // the sidebar — unmounts this island, and the secret comes back once. The
+    // dialog is modal over a scrim, so holding it holds that navigation too.
     let answer: (result: unknown) => void = () => undefined;
     createApiKey.mockReturnValue(
       new Promise((resolve) => {
@@ -207,13 +208,18 @@ describe("create", () => {
       within(dialog).getByRole("button", { name: "Create it" }),
     );
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
-    expect(screen.queryByTestId("create-api-key")).toBeNull();
+    expect(screen.getByTestId("create-api-key")).toBeInTheDocument();
 
     answer({ ok: true, value: minted });
     const panel = await screen.findByTestId("api-key-secret");
     expect(within(panel).getByTestId("api-key-secret-value")).toHaveTextContent(
       SECRET,
     );
+    // Dismissable again once nothing is in flight.
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("api-key-secret")).toBeNull();
+    });
   });
 
   it("reloads the page when the person closes the secret, and shows it no more", async () => {
