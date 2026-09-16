@@ -379,6 +379,20 @@ export type CapabilityHandler<C extends CapabilityDeclaration> = (
  */
 export type PlanTier = "free" | "build" | "scale" | "enterprise";
 
+/**
+ * The workspace id an organization-level invoke carries (#3029).
+ *
+ * `invoke` enters a tenant scope for every scoped capability, and
+ * `runInTenantScope` asserts both ids are uuids, so a surface that has an org
+ * but no workspace cannot pass `""`: the call is refused with a
+ * `TenantScopeError` before any handler runs. Organization-scoped tables carry
+ * `org_only` RLS policies and ignore the workspace GUC, so a uuid-shaped
+ * constant that names no real workspace satisfies the scope without widening
+ * anything. Every surface builder uses this one constant: `apps/app`'s kernel
+ * seam and `apps/api`'s `capabilityContext` when a route needs no workspace.
+ */
+export const ORG_ONLY_WORKSPACE_ID = "00000000-0000-0000-0000-000000000000";
+
 export interface CapabilityContext {
   orgId: string;
   workspaceId: string;

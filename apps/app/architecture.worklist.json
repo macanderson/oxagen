@@ -50,7 +50,7 @@
     },
     {
       "page": "Organization › People /{org} (pages.people)",
-      "ships": "Members and pending invitations; change role; remove member; denied state for a Member viewer. The settings slice renders nothing. The #2964 lane adds the two kept sections of the mockup's pOrganization that rev1 does not ship: Roles (the role and permission catalogue) at a re-added /{org}/roles route (+1 page.tsx and REV1_ROUTES entry) and Workspaces (list, edit, archive, create) as a section of this page (no route); invitations stay a section, not a tab; model funding and routes, the data plane and SSO/SCIM are cut. create_workspace has no rev1 surface: between WL-39 and that lane a second workspace is made through the API, MCP or CLI, not in the app — create_org makes the first one.",
+      "ships": "Members and pending invitations; change role; remove member; denied state for a Member viewer. The settings slice renders nothing. The #2964 lane has added the two kept sections of the mockup's pOrganization: Roles (the role and permission catalogue) at the re-added /{org}/roles route (+1 page.tsx; its REV1_ROUTES entry lands with e2e/routes.ts in WL-47) and Workspaces (list, create, edit, archive) as a section of this page (no route); invitations stay a section and stay a read, because no resend or revoke contract exists; model funding and routes, the data plane and SSO/SCIM are cut. create_workspace now has an in-app surface: the Workspaces section closes the rev1 hole that made a second workspace an API, MCP or CLI job.",
       "backing": "list_members {scope:'org'} including invitations (WL-19, mutates:false, noBillingGate), change_member_role, remove_org_member with HandlerError codes and noBillingGate (WL-22)",
       "notRecordedOnly": []
     },

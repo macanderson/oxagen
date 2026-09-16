@@ -18,6 +18,7 @@
       "spend": "Spend",
       "organization": "Organization",
       "billing": "Billing",
+      "roles": "Roles",
       "apiKeys": "API keys"
     },
     "switcher": {

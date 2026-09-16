@@ -16,12 +16,13 @@
 
 Org `Owner` or `Admin`, checked in the handler (`assertOrgRole`, INV-29) for the signed-in user or, on an API-key (MCP) call, the key's creator (`resolveActingUserId`). `noBillingGate` (a settings write, ADR-052 exclusion 2). Sensitivity **high**.
 
+No tier gates this write (ADR-067, superseding ADR-063 decision 3). `list_iam_roles.enforcement` reports whether the kernel's IAM check runs the resolver for the org, and the Roles page prints that either way. The delegation ceiling reads no tier, so a granter is held to what they hold on every plan.
+
 The handler refuses, in this order:
 
 | code        | reason                               | when                                                                                                                                                                |
 | ----------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `forbidden` | `no_principal` / `org_role_required` | no signed-in user and no API key with a live creator, or an acting user (the signed-in user, or the key's creator) outside Owner and Admin                          |
-| `forbidden` | `enterprise_tier_required`           | the org's tier is not one the kernel runs the IAM resolver for (`list_iam_roles.enforcement.enforced` is false); the role would never be read                       |
 | `forbidden` | `delegation_ceiling_exceeded`        | a capability the permissions name resolves to less than `allow` for the granter (the message names them); the system org Owner passes by resolver rule 7.5          |
 | `conflict`  | `role_exists`                        | the name is already used in the same scope kind (`roles_org_scope_name_uq`), or by another custom role of the org in either scope kind (`roles_org_custom_name_uq`) |
 
