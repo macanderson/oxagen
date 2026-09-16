@@ -3,7 +3,8 @@
 // production caller (INV-17). The rev1 ports land with the seams and pages
 // that bind them: the Fleet ports in WL-34, the Run and Organization ports in
 // WL-35 to WL-37, the Billing port in WL-38, the Spend port in #2962; each gap
-// lane adds its page's port (#2956: agents; #2961: steering; #3097: audit).
+// lane adds its page's port (#2956: agents; #2961: steering; #3097: audit;
+// #3098: skills).
 import type { OrgCtx, PretenantCtx, WsCtx } from "@/server/viewer";
 import type {
   AgentDetail,
@@ -32,6 +33,7 @@ import type {
   ShellContext,
   WorkspaceChoice,
 } from "./contracts/shell";
+import type { SkillInventory } from "./contracts/skills";
 import type {
   DayRange,
   FleetSpend,
@@ -155,6 +157,17 @@ export interface DataSource {
       ctx: OrgCtx,
       q: AuditFilters & { format: AuditExportFormat },
     ): Promise<Read<AuditExport>>;
+  };
+  /**
+   * list_skills, one page by name over its default window (noBillingGate;
+   * workspace members, checked in its handler); caller:
+   * features/skills/skills.tsx.
+   */
+  skills: {
+    inventory(
+      ctx: WsCtx,
+      q: { cursor: string | null },
+    ): Promise<Read<SkillInventory>>;
   };
   /**
    * The Steering page's three noBillingGate reads on the workspace; caller:

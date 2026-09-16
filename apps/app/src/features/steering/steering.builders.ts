@@ -194,6 +194,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     },
     org: { members: refuse },
     audit: { events: refuse, exportEvents: refuse },
+    skills: { inventory: refuse },
     steering: {
       records: (...args) => {
         calls.records.push(args);

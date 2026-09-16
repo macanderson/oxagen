@@ -45,6 +45,7 @@ export type PageKey =
   | "billing"
   | "spend"
   | "audit"
+  | "skills"
   | "steering"
   | "shell";
 
@@ -87,6 +88,11 @@ export const PAGE_FAILURES = {
   audit: {
     error: { code: "audit_store_unavailable", status: 503 },
     permission: "org.admin",
+  },
+  // The session inventory is a control-plane table read (tacho.sessions).
+  skills: {
+    error: { code: "session_store_unavailable", status: 503 },
+    permission: "skills.read",
   },
   // The published records and the proposals are one record index; a member
   // without the workspace's steering read is denied on it.

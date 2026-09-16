@@ -97,6 +97,7 @@ const source: DataSource = {
   },
   org: { members },
   audit: { events, exportEvents },
+  skills: { inventory: refuse },
   steering: { records: refuse, proposals: refuse, contextPr: refuse },
 };
 

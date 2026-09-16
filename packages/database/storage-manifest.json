@@ -1928,6 +1928,16 @@
       "writes": []
     },
     {
+      "domain": "skill",
+      "name": "list_skills",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "tacho",
       "name": "list_tacho_hosts",
       "reads": [],
@@ -3158,7 +3168,7 @@
       "writes": []
     }
   ],
-  "contentHash": "d8c0aa665610345b88e72a0022201d915fa8d7a37d555bbb41cb8ed5b1cf9bf9",
+  "contentHash": "e0b40ef4b5bf570456ce0ffbb408db2305d9f62720ed6f5877f045ce9a7dff20",
   "domains": [
     {
       "name": "agent",

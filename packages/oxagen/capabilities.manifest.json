@@ -4576,6 +4576,23 @@
       }
     },
     {
+      "name": "list_skills",
+      "file": "skill.list.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_spend_drill",
       "file": "spend.drill.ts",
       "domain": "spend",

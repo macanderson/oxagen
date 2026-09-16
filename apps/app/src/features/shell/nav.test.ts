@@ -66,6 +66,7 @@ describe("isNavItemCurrent", () => {
     ["/acme/core-platform/runs/run_01/chain", "fleet"],
     ["/acme/core-platform/agents/acme.core.triage", "agents"],
     ["/acme/core-platform/tools/switches", "tools"],
+    ["/acme/core-platform/skills", "skills"],
     ["/acme/core-platform/steering", "steering"],
     ["/acme/core-platform/spend/budgets", "spend"],
   ] as const)("%s → %s", (path, key) => {
@@ -116,13 +117,14 @@ describe("hrefs", () => {
 });
 
 describe("sidebarSections", () => {
-  it("has the mockup's eight links in order, and no Run or Ontology entry", () => {
+  it("has the mockup's nine links in order, Skills between Tools and Steering and Audit after Billing, and no Run or Ontology entry", () => {
     const sections = sidebarSections("acme", "core-platform");
     expect(sections.map((s) => s.key)).toEqual(["workspace", "organization"]);
     expect(sections.flatMap((s) => s.items)).toEqual([
       { key: "fleet", href: "/acme/core-platform" },
       { key: "agents", href: "/acme/core-platform/agents" },
       { key: "tools", href: "/acme/core-platform/tools" },
+      { key: "skills", href: "/acme/core-platform/skills" },
       { key: "steering", href: "/acme/core-platform/steering" },
       { key: "spend", href: "/acme/core-platform/spend" },
       { key: "organization", href: "/acme" },
@@ -152,6 +154,7 @@ describe("the phone's thumb bar and More sheet", () => {
     expect(THUMB_SLOTS).toEqual(["fleet", "agents", "tools", "spend"]);
     expect(MORE_SHEET).toEqual([
       "steering",
+      "skills",
       "organization",
       "billing",
       "audit",
@@ -168,6 +171,7 @@ describe("the phone's thumb bar and More sheet", () => {
       "/acme/billing",
       "/acme/audit",
       "/acme/core-platform/steering",
+      "/acme/core-platform/skills",
     ])
       expect(isMoreCurrent(path)).toBe(true);
   });

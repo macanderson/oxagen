@@ -53,6 +53,7 @@ const source: DataSource = {
   },
   org: { members: refuse },
   audit: { events: refuse, exportEvents },
+  skills: { inventory: refuse },
   steering: { records: refuse, proposals: refuse, contextPr: refuse },
 };
 const deps: AuditExportDeps = { resolveViewer, dataSource: () => source };

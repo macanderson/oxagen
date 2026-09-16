@@ -8,7 +8,8 @@
 // feature (WL-34) and renders the cost rollup's two tiles under its title
 // (#2962); the three Agents routes hand theirs, with the agent, the tab and the
 // cursor the URL names, to the Agents feature (#2956); Spend hands its viewer,
-// the data source and the query to its body (#2962); Steering hands its viewer,
+// the data source and the query to its body (#2962); Skills hands its viewer,
+// the data source and the cursor to its body (#3098); Steering hands its viewer,
 // the data source and the query to the Steering feature (#2961); Billing hands
 // its viewer, the data source, the checkout outcome and the invoices cursor to
 // the Billing feature (WL-38); People renders its sections from org.members.
@@ -33,6 +34,8 @@ const {
   Steering,
   Spend,
   FleetSpendTiles,
+  Skills,
+  SkillsLoading,
   members,
   source,
 } = vi.hoisted(() => {
@@ -54,6 +57,10 @@ const {
     FleetSpendTiles: vi.fn((_props: Record<string, unknown>) => (
       <p data-testid="fleet-spend" />
     )),
+    Skills: vi.fn((_props: Record<string, unknown>) => (
+      <p data-testid="skills-body" />
+    )),
+    SkillsLoading: vi.fn(() => null),
     members,
     source: { org: { members } },
   };
@@ -65,6 +72,7 @@ vi.mock("@/features/fleet", () => ({ Fleet }));
 vi.mock("@/features/agents", () => ({ Agents, Agent, AgentSource }));
 vi.mock("@/features/steering", () => ({ Steering }));
 vi.mock("@/features/spend", () => ({ Spend, FleetSpendTiles }));
+vi.mock("@/features/skills", () => ({ Skills, SkillsLoading }));
 vi.mock("@/data/source", () => ({ dataSource: () => source }));
 vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
@@ -105,6 +113,7 @@ const GAP_LANE: [string, Load][] = [
   ["tools", () => import("./[ws]/tools/page")],
 ];
 
+const SKILLS: Load = () => import("./[ws]/skills/page");
 const STEERING: Load = () => import("./[ws]/steering/page");
 
 const FLEET: Load = () => import("./[ws]/page");
@@ -233,6 +242,39 @@ describe("the Spend page", () => {
       "waste",
     );
     expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+});
+
+describe("the Skills page", () => {
+  it("resolves the workspace viewer, names the page once under the workspace eyebrow and hands its body the viewer, the data source and the cursor", async () => {
+    const viewer = { wsSlug: "core-platform", wsName: "Core platform" };
+    requireViewer.mockResolvedValue(viewer);
+    const page = await expectPageTitle(
+      await SKILLS(),
+      routeProps(SEGMENTS, { cursor: "c2" }),
+      title("skills"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...WS);
+    expect(page).toHaveTextContent("Workspace · Core platform");
+    expect(page).toHaveTextContent(
+      "Oxagen does not run a skill — the harness does.",
+    );
+    expect(Skills.mock.calls[0]?.[0]).toEqual({
+      ctx: viewer,
+      source,
+      cursor: "c2",
+    });
+    expect(screen.getByTestId("skills-body")).toBeInTheDocument();
+    expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+
+  it("hands its body the first page when the URL names no cursor", async () => {
+    await expectPageTitle(
+      await SKILLS(),
+      routeProps(SEGMENTS),
+      title("skills"),
+    );
+    expect(Skills.mock.calls.at(-1)?.[0]).toMatchObject({ cursor: null });
   });
 });
 
@@ -376,6 +418,7 @@ describe("a person requireViewer refuses", () => {
   it.each([
     ...GAP_LANE.map(([key, load]) => [key, load] as const),
     ["billing", BILLING] as const,
+    ["skills", SKILLS] as const,
     ["steering", STEERING] as const,
     ["fleet", FLEET] as const,
     ["agents", AGENTS] as const,

@@ -12,6 +12,7 @@ describe("buildCommands", () => {
       "/acme/core-platform",
       "/acme/core-platform/agents",
       "/acme/core-platform/tools",
+      "/acme/core-platform/skills",
       "/acme/core-platform/steering",
       "/acme/core-platform/spend",
       "/acme",
@@ -21,6 +22,14 @@ describe("buildCommands", () => {
     ]);
     expect(commands.every((c) => c.id.startsWith("go:"))).toBe(true);
     expect(commands.map((c) => c.label)).toContain("nav:apiKeys");
+  });
+
+  it("offers go:skills to the workspace's Skills page under the Skills label", () => {
+    expect(commands.find((c) => c.id === "go:skills")).toEqual({
+      id: "go:skills",
+      label: "nav:skills",
+      href: "/acme/core-platform/skills",
+    });
   });
 
   it("offers no workspace routes without a workspace (negative)", () => {

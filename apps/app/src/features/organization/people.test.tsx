@@ -76,6 +76,7 @@ async function renderPeople(
     },
     org: { members },
     audit: { events: vi.fn(), exportEvents: vi.fn() },
+    skills: { inventory: vi.fn() },
     steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
   };
   const view = render(

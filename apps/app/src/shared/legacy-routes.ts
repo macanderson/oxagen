@@ -32,6 +32,7 @@ type WorkspaceTarget =
   | "/{org}/{ws}"
   | "/{org}/{ws}/agents"
   | "/{org}/{ws}/tools"
+  | "/{org}/{ws}/skills"
   | "/{org}/{ws}/steering"
   | "/{org}/{ws}/spend";
 
@@ -99,6 +100,9 @@ export const LEGACY_ROUTES: readonly LegacyRoute[] = [
   { from: "/{org}/{ws}/workbench/tools", to: "/{org}/{ws}/tools" },
   { from: "/{org}/{ws}/workbench/tools/capabilities", to: "/{org}/{ws}/tools" },
   { from: "/{org}/{ws}/workbench/tools/mcp", to: "/{org}/{ws}/tools" },
+  // The retired skill pages (ADR-043) land on the session skill inventory (#3098).
+  { from: "/{org}/{ws}/workbench/tools/skills/**", to: "/{org}/{ws}/skills" },
+  { from: "/{org}/{ws}/settings/skills", to: "/{org}/{ws}/skills" },
   { from: "/{org}/{ws}/marketplace", to: "/{org}/{ws}/tools" },
   { from: "/{org}/{ws}/marketplace/agent-tools", to: "/{org}/{ws}/tools" },
   { from: "/{org}/{ws}/marketplace/integrations", to: "/{org}/{ws}/tools" },

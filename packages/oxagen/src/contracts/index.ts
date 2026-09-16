@@ -76,6 +76,7 @@ import { evidenceDisclosureGrainSet } from "./evidence.disclosure_grain.set";
 import { spendGet } from "./spend.get";
 import { spendDrill } from "./spend.drill";
 import { spendWasteList } from "./spend.waste";
+import { skillList } from "./skill.list";
 import { spendStatementExport } from "./spend.statement.export";
 import { costPriceEntryList } from "./cost.price_entry.list";
 import { findingList } from "./finding.list";
@@ -592,6 +593,7 @@ export {
   spendGet,
   spendDrill,
   spendWasteList,
+  skillList,
   spendStatementExport,
   costPriceEntryList,
   findingList,
@@ -899,6 +901,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   spendGet,
   spendDrill,
   spendWasteList,
+  skillList,
   spendStatementExport,
   costPriceEntryList,
   findingList,
