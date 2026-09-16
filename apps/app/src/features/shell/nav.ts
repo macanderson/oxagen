@@ -1,6 +1,6 @@
-// The shell's navigation model (ARCHITECTURE.md §1.2): the sidebar's seven
-// links in the mockup's order (Workspace: Fleet, Agent IAM, Tools, Steering,
-// Spend; Organization: Organization, Billing), the phone's thumb bar and More
+// The shell's navigation model (ARCHITECTURE.md §1.2): the sidebar's eight
+// links in the mockup's order (Workspace: Fleet, Agent IAM, Tools, Skills,
+// Steering, Spend; Organization: Organization, Billing), the phone's thumb bar and More
 // sheet over the same keys, which item is current, and the breadcrumbs. Pure
 // functions of the URL, so the sidebar, top bar, command menu and <MobileNav>
 // agree on one model. Run has no entry: it opens from the Fleet runs table.
@@ -11,6 +11,7 @@ export type WorkspaceNavKey =
   | "fleet"
   | "agents"
   | "tools"
+  | "skills"
   | "steering"
   | "spend";
 export type OrgNavKey = "organization" | "billing";
@@ -22,6 +23,7 @@ export const WORKSPACE_NAV: readonly WorkspaceNavKey[] = [
   "fleet",
   "agents",
   "tools",
+  "skills",
   "steering",
   "spend",
 ];
@@ -58,6 +60,7 @@ export const THUMB_SLOTS: readonly ThumbSlot[] = [
 /** The rest of the sidebar, one tap away in the phone's More sheet. */
 export const MORE_SHEET: readonly NavKey[] = [
   "steering",
+  "skills",
   "organization",
   "billing",
 ];
@@ -84,6 +87,7 @@ function isOrgSegment(segment: string): segment is keyof typeof ORG_SEGMENTS {
 const WORKSPACE_SEGMENT: Record<Exclude<WorkspaceNavKey, "fleet">, string> = {
   agents: "agents",
   tools: "tools",
+  skills: "skills",
   steering: "steering",
   spend: "spend",
 };

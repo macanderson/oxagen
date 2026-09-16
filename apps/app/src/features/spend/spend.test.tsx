@@ -103,6 +103,7 @@ const source: DataSource = {
   },
   spend: { byGroup, fleet: vi.fn(), drill, waste, budgets },
   org: { members: vi.fn(), roles: vi.fn(), workspaces: vi.fn() },
+  skills: { inventory: vi.fn() },
   steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
 };
 

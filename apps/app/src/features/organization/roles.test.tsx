@@ -74,6 +74,7 @@ async function renderRoles(
       budgets: vi.fn(),
     },
     org: { members: vi.fn(), roles, workspaces: vi.fn() },
+    skills: { inventory: vi.fn() },
     steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
   };
   const view = render(
@@ -159,7 +160,9 @@ describe("ok", () => {
 
   it("prints the catalogue a role is written in, with what each permission covers", async () => {
     await renderRoles(readOk(catalog));
-    const section = screen.getByRole("region", { name: "Permission catalogue" });
+    const section = screen.getByRole("region", {
+      name: "Permission catalogue",
+    });
     expect(section).toHaveTextContent("Runs");
     expect(section).toHaveTextContent("Money");
     const entry = section.querySelector('[data-permission="run.read"]');

@@ -59,6 +59,7 @@ const source: DataSource = {
     budgets: refuse,
   },
   org: { members: refuse, roles: refuse, workspaces: refuse },
+  skills: { inventory: refuse },
   steering: { records: refuse, proposals: refuse, contextPr: refuse },
 };
 

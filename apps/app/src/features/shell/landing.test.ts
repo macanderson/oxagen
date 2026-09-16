@@ -55,6 +55,7 @@ const source = {
     budgets: vi.fn(),
   },
   org: { members: vi.fn(), roles: vi.fn(), workspaces: vi.fn() },
+  skills: { inventory: vi.fn() },
   steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
 };
 

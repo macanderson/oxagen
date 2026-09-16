@@ -103,6 +103,7 @@ export function fleetSource(reads: FleetReads) {
       budgets: refuse,
     },
     org: { members: refuse, roles: refuse, workspaces: refuse },
+    skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },
   };
   return { source, calls };

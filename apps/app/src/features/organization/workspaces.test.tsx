@@ -71,6 +71,7 @@ async function renderWorkspaces(
       budgets: vi.fn(),
     },
     org: { members: vi.fn(), roles: vi.fn(), workspaces },
+    skills: { inventory: vi.fn() },
     steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
   };
   const view = render(
@@ -101,7 +102,10 @@ describe("ok", () => {
     const [core, research] = within(section).getAllByRole("row").slice(1);
     if (core === undefined || research === undefined)
       throw new Error("expected two workspace rows");
-    expect(core).toHaveAttribute("data-workspace", "wrk_0a1b2c3d4e5f6g7h8j9k0m");
+    expect(core).toHaveAttribute(
+      "data-workspace",
+      "wrk_0a1b2c3d4e5f6g7h8j9k0m",
+    );
     expect(core).toHaveTextContent("Core platform");
     expect(core).toHaveTextContent("core-platform");
     expect(core).toHaveTextContent("Owner");
@@ -146,9 +150,7 @@ describe("a viewer who cannot write", () => {
       screen.getByText("An owner or an admin makes these changes."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button")).toBeNull();
-    expect(
-      within(screen.getByRole("table")).queryByText("Actions"),
-    ).toBeNull();
+    expect(within(screen.getByRole("table")).queryByText("Actions")).toBeNull();
   });
 });
 
