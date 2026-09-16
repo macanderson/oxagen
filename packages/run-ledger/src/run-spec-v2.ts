@@ -368,6 +368,11 @@ const EXTERNAL_TOOL_PREFIXES = ["mcp", "file-mcp"] as const;
  * capability the platform defines or a tool someone contributed, which carry
  * different trust. `isExternalToolIdentity` is that test, exported so a reader
  * does not re-derive it from the prefix.
+ *
+ * If you are here because some name was rejected: add its form here, or give
+ * it one of its own. Do not relax `capabilityNameSchema` to let it through —
+ * that is the move this separation exists to prevent, and it is the one that
+ * looks like a one-character fix.
  */
 const externalToolNameSchema = z
   .string()
