@@ -10,8 +10,8 @@
 // cursor the URL names, to the Agents feature (#2956); Spend hands its viewer,
 // the data source and the query to its body (#2962); Billing hands its viewer,
 // the data source, the checkout outcome and the invoices cursor to the Billing
-// feature (WL-38); People renders its sections from org.members. Run and API
-// keys gain their bodies in WL-35 and WL-37.
+// feature (WL-38); People renders its sections from org.members and API keys
+// its table from org.apiKeys. Run gains its body in WL-35.
 import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { translator } from "@/test/intl";
@@ -31,9 +31,11 @@ const {
   Spend,
   FleetSpendTiles,
   members,
+  apiKeys,
   source,
 } = vi.hoisted(() => {
   const members = vi.fn();
+  const apiKeys = vi.fn();
   return {
     requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
     Billing: vi.fn((_props: Record<string, unknown>) => null),
@@ -48,7 +50,8 @@ const {
       <p data-testid="fleet-spend" />
     )),
     members,
-    source: { org: { members } },
+    apiKeys,
+    source: { org: { members, apiKeys } },
   };
 });
 vi.mock("@/server/viewer", () => ({ requireViewer }));
@@ -93,8 +96,8 @@ const SPEND: Load = () => import("./[ws]/spend/page");
 
 const REV1: [string, string[], Load][] = [
   ["run", WS, () => import("./[ws]/runs/[run]/page")],
-  ["apiKeys", ORG, () => import("./api-keys/page")],
 ];
+const API_KEYS: Load = () => import("./api-keys/page");
 
 const BILLING: Load = () => import("./billing/page");
 
@@ -304,6 +307,36 @@ describe("Organization › People", () => {
   });
 });
 
+describe("Organization › API keys", () => {
+  it("resolves the organization viewer, names the page once and renders the keys org.apiKeys read for that viewer", async () => {
+    const ctx = { orgSlug: "acme", orgRole: "owner" };
+    requireViewer.mockResolvedValue(ctx);
+    apiKeys.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          id: "aky_7k2m9q4x8r1t5v3w6y0z2a",
+          name: "CI runner",
+          prefix: "ox_liveliveli",
+          createdAt: "2026-09-13T10:00:00.000Z",
+          lastUsedAt: null,
+          expiresAt: null,
+          revokedAt: null,
+        },
+      ],
+    });
+    await expectPageTitle(
+      await API_KEYS(),
+      routeProps(SEGMENTS),
+      title("apiKeys"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...ORG);
+    expect(apiKeys).toHaveBeenCalledWith(ctx);
+    expect(screen.getByRole("main")).toHaveTextContent("ox_liveliveli");
+    expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+});
+
 describe("a person requireViewer refuses", () => {
   it.each([
     ...GAP_LANE.map(([key, load]) => [key, load] as const),
@@ -315,6 +348,7 @@ describe("a person requireViewer refuses", () => {
     ["spend", SPEND] as const,
     ...REV1.map(([key, , load]) => [key, load] as const),
     ["people", () => import("./page")] as const,
+    ["apiKeys", API_KEYS] as const,
   ])("pages.%s renders nothing (negative)", async (_key, load) => {
     requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
     await expect(

@@ -3,7 +3,7 @@
 // link People and API keys. A refused or failed read replaces both sections;
 // the tabs stay. Role changes, removal and invitations sent from here land
 // with the People writes.
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import type { MemberList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
@@ -12,6 +12,7 @@ import { routes } from "@/shared/safe-path";
 import { mono } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
 import { RouteTabs } from "@/ui/route-tabs";
+import { DateCell, emptyLine } from "./parts";
 
 export async function People({
   ctx,
@@ -28,7 +29,6 @@ const sectionTitle = "text-base font-semibold text-foreground";
 const table = "w-full text-left text-sm";
 const headCell = "px-3 py-2 text-xs font-medium text-muted-foreground";
 const cell = "px-3 py-2.5 align-top";
-const emptyLine = "text-sm text-muted-foreground";
 
 function PeopleView({
   orgSlug,
@@ -91,15 +91,6 @@ function PeopleView({
         </OutcomePanel>
       )}
     </div>
-  );
-}
-
-function DateCell({ iso }: { iso: string }) {
-  const format = useFormatter();
-  return (
-    <time dateTime={iso}>
-      {format.dateTime(new Date(iso), { dateStyle: "medium" })}
-    </time>
   );
 }
 
