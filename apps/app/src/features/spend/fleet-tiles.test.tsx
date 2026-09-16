@@ -59,6 +59,7 @@ const source: DataSource = {
     budgets: refuse,
   },
   org: { members: refuse },
+  mandates: { list: refuse },
   steering: { records: refuse, proposals: refuse, contextPr: refuse },
 };
 

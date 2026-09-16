@@ -66,6 +66,25 @@ export function mulMicros(value: Money, quantity: number): Money {
   };
 }
 
+/** Six digits of the fraction, finer than any meter draws. */
+const RATIO_SCALE = 1_000_000n;
+
+/**
+ * `part` as a fraction of `whole`, clamped to 0…1, for a meter's width and
+ * the percentage beside it. Both are integer strings — micros for money,
+ * whole units for a count — and the division happens on BigInt, so a figure
+ * too large for a double still yields the right fraction. A `whole` of zero
+ * has no fraction and answers 0.
+ */
+export function ratioOfIntegers(part: string, whole: string): number {
+  const total = toBigInt(whole);
+  if (total <= 0n) return 0;
+  const drawn = toBigInt(part);
+  if (drawn <= 0n) return 0;
+  if (drawn >= total) return 1;
+  return Number((drawn * RATIO_SCALE) / total) / Number(RATIO_SCALE);
+}
+
 /**
  * A decimal amount a person typed ("500", "0.25", "12.000001") as integer
  * micros, or null for anything else: a sign, a grouping separator, more than

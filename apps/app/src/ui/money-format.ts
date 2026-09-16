@@ -67,6 +67,16 @@ export function formatClock(seconds: number, locale: string): string {
   return `${minutes}:${rest}`;
 }
 
+/**
+ * A 0…1 ratio as a CSS length ("42.3%") for a meter's width. A style value is
+ * not prose, so it is built without a locale: a decimal comma or a narrow
+ * no-break space would not be a length any browser reads.
+ */
+export function ratioWidth(ratio: number): string {
+  const clamped = Math.min(1, Math.max(0, ratio));
+  return `${Math.round(clamped * 1000) / 10}%`;
+}
+
 /** A 0..1 ratio (a productive ratio, a cache hit rate) as a percentage with at most one decimal. */
 export function formatRatio(ratio: number, locale: string): string {
   return new Intl.NumberFormat(locale, {

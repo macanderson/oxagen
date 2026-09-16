@@ -1,11 +1,18 @@
 // The approvals panel: one card per pending approval, soonest expiry first as
 // list_approvals orders them. The decisions (approve, deny) arrive with the
 // approval dialog; this panel reads.
+//
+// A card whose call drew on a mandate carries the mandate bar (#2957): what
+// the period has settled, what calls in flight reserve, and what is left, from
+// the same ledger the Tools ledger reads. A card names no bar when the call
+// drew on no mandate, or when the viewer may not read the ledger.
 import { useLocale, useTranslations } from "next-intl";
 import type { ApprovalItem } from "@/data/contracts/approvals";
+import type { MandateRow } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { linkText, mono, panel } from "@/ui/control-styles";
+import { MandateBar } from "@/ui/mandate-bar";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { Clock } from "./clock";
@@ -15,10 +22,16 @@ type Place = { org: string; ws: string };
 
 function ApprovalCard({
   item,
+  mandate,
   now,
   org,
   ws,
-}: { item: ApprovalItem; now: number } & Place) {
+}: {
+  item: ApprovalItem;
+  /** The mandate the call drew on, when the viewer could read it. */
+  mandate: MandateRow | null;
+  now: number;
+} & Place) {
   const t = useTranslations("fleet.approvals");
   const recorded = (value: string | null) =>
     value === null ? (
@@ -38,6 +51,11 @@ function ApprovalCard({
         <dt className="text-muted-foreground">{t("requester")}</dt>
         {recorded(item.requester)}
       </dl>
+      {mandate === null
+        ? null
+        : mandate.authority.map((authority) => (
+            <MandateBar key={authority.measure} authority={authority} />
+          ))}
       <p className="text-xs">
         {t.rich("timesOut", {
           clock: () => (
@@ -63,10 +81,16 @@ function ApprovalCard({
 
 export function ApprovalsPanel({
   approvals,
+  mandates,
   now,
   org,
   ws,
-}: { approvals: Read<ApprovalItem[]>; now: number } & Place) {
+}: {
+  approvals: Read<ApprovalItem[]>;
+  /** The mandates the cards name, by public id; empty when none was read. */
+  mandates: ReadonlyMap<string, MandateRow>;
+  now: number;
+} & Place) {
   const t = useTranslations("fleet.approvals");
   const locale = useLocale();
   return (
@@ -96,6 +120,11 @@ export function ApprovalsPanel({
             <ApprovalCard
               key={item.id}
               item={item}
+              mandate={
+                item.mandateId === null
+                  ? null
+                  : (mandates.get(item.mandateId) ?? null)
+              }
               now={now}
               org={org}
               ws={ws}

@@ -45,6 +45,7 @@ export type PageKey =
   | "billing"
   | "spend"
   | "steering"
+  | "mandates"
   | "shell";
 
 type PageFailure = {
@@ -86,6 +87,13 @@ export const PAGE_FAILURES = {
   steering: {
     error: { code: "record_index_unavailable", status: 503 },
     permission: "steering.read",
+  },
+  // The mandate ledger is read on three pages — Tools, Agents and the Fleet
+  // approval card — and names its own failure wherever it is read: a member
+  // without a finance role is denied on it, and the ledger is what is down.
+  mandates: {
+    error: { code: "mandate_ledger_unavailable", status: 503 },
+    permission: "org.billing",
   },
   // The shell's one read fails with the control plane and needs organization
   // membership alone.

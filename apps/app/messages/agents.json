@@ -62,7 +62,8 @@
         "toolbelt": "Toolbelt",
         "enrollment": "Enrollment",
         "incidents": "Tamper incidents",
-        "definition": "Definition in git"
+        "definition": "Definition in git",
+        "mandates": "Mandates"
       },
       "identity": {
         "title": "Identity",
@@ -300,7 +301,9 @@
         "refused": "The change was refused: {code}. Nothing was changed.",
         "invalid": "The request was refused as invalid. Nothing was changed.",
         "pendingApproval": "The change is waiting for approval, request {accessRequestId}.",
-        "unavailable": "The change could not be made: {code}. Nothing was changed."
+        "unavailable": "The change could not be made: {code}. Nothing was changed.",
+        "noToolMatches": "No declared tool with a consequence tag matches those patterns in this workspace, so the mandate would cover nothing.",
+        "measureNotDeclared": "A tool version those patterns match declares no such measure, so the limit could not be read from a call. A financial tool whose schema does not expose an amount cannot be given a mandate."
       }
     },
     "source": {
@@ -346,6 +349,57 @@
           "message": "The message is at most 200 characters.",
           "source": "The file is empty or larger than 64 KB."
         }
+      }
+    },
+    "mandates": {
+      "title": "Mandates held",
+      "noneTitle": "No mandate",
+      "lead": "A mandate is bounded, expiring authority for one consequence. Nothing in a role, a grant or a toolbelt substitutes for one.",
+      "none": "This agent holds no mandate, so it cannot carry a consequence.",
+      "noneDetail": "A call that carries a consequence tag is denied before dispatch — before any credential is minted and before anything reaches a tool server — whether or not the tool is on this agent's belt.",
+      "authority": "Remaining authority is what the ledger says: every draw reserves, then settles against a receipt or releases. The tools a mandate covers appear on the belt gated by mandate and approval, never as plainly allowed.",
+      "columns": {
+        "mandate": "Mandate",
+        "effect": "Consequence",
+        "perCall": "Per call",
+        "perPeriod": "Per period",
+        "remaining": "Remaining",
+        "validTo": "Expires",
+        "status": "Status"
+      },
+      "status": {
+        "draft": "requested",
+        "active": "active",
+        "expired": "expired",
+        "revoked": "revoked"
+      },
+      "request": {
+        "open": "Request a mandate",
+        "title": "Request a mandate",
+        "body": "The request is recorded as a draft for the role accountable for this consequence to grant or decline. A draft grants nothing.",
+        "consequenceTag": "Consequence",
+        "measure": "Measure",
+        "measureHint": "The name the tool version declares the amount under, which is how it is read from a call.",
+        "currency": "Currency",
+        "perCall": "Per call",
+        "perPeriod": "Per period",
+        "perPeriodHint": "Name a per-call limit, a per-period limit, or both.",
+        "period": "Period",
+        "periods": {
+          "daily": "daily",
+          "weekly": "weekly",
+          "monthly": "monthly"
+        },
+        "callsPerDay": "Calls per day",
+        "tools": "Tools",
+        "toolsHint": "Patterns over slug@version, separated by commas. Everything else is denied.",
+        "purpose": "Purpose",
+        "purposeHint": "Written for the office that reads the ledger.",
+        "validFrom": "Valid from",
+        "validTo": "Valid to",
+        "validToHint": "A mandate expires. There is no unbounded option.",
+        "confirm": "Request the mandate",
+        "pending": "Requesting"
       }
     }
   }

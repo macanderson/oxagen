@@ -75,6 +75,7 @@ async function renderPeople(
       budgets: vi.fn(),
     },
     org: { members },
+    mandates: { list: vi.fn() },
     steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
   };
   const view = render(

@@ -30,7 +30,6 @@ type Messages = {
     billing: string;
   };
   unrecorded: {
-    tools: string;
     run: {
       frames_wrapped: string;
     };
@@ -109,6 +108,7 @@ type Messages = {
         enrollment: string;
         incidents: string;
         definition: string;
+        mandates: string;
       };
       identity: {
         title: string;
@@ -347,6 +347,8 @@ type Messages = {
         invalid: string;
         pendingApproval: string;
         unavailable: string;
+        noToolMatches: string;
+        measureNotDeclared: string;
       };
     };
     source: {
@@ -392,6 +394,57 @@ type Messages = {
           message: string;
           source: string;
         };
+      };
+    };
+    mandates: {
+      title: string;
+      noneTitle: string;
+      lead: string;
+      none: string;
+      noneDetail: string;
+      authority: string;
+      columns: {
+        mandate: string;
+        effect: string;
+        perCall: string;
+        perPeriod: string;
+        remaining: string;
+        validTo: string;
+        status: string;
+      };
+      status: {
+        draft: string;
+        active: string;
+        expired: string;
+        revoked: string;
+      };
+      request: {
+        open: string;
+        title: string;
+        body: string;
+        consequenceTag: string;
+        measure: string;
+        measureHint: string;
+        currency: string;
+        perCall: string;
+        perPeriod: string;
+        perPeriodHint: string;
+        period: string;
+        periods: {
+          daily: string;
+          weekly: string;
+          monthly: string;
+        };
+        callsPerDay: string;
+        tools: string;
+        toolsHint: string;
+        purpose: string;
+        purposeHint: string;
+        validFrom: string;
+        validTo: string;
+        validToHint: string;
+        confirm: string;
+        pending: string;
       };
     };
   };
@@ -1288,6 +1341,35 @@ type Messages = {
       };
     };
   };
+  tools: {
+    mandates: {
+      title: string;
+      lead: string;
+      empty: string;
+      emptyDetail: string;
+      noLimit: string;
+      notGranted: string;
+      columns: {
+        mandate: string;
+        agent: string;
+        grantedBy: string;
+        purpose: string;
+        perCall: string;
+        perPeriod: string;
+        settled: string;
+        reserved: string;
+        remaining: string;
+        validTo: string;
+        status: string;
+      };
+      status: {
+        draft: string;
+        active: string;
+        expired: string;
+        revoked: string;
+      };
+    };
+  };
   ui: {
     brand: {
       name: string;
@@ -1327,6 +1409,23 @@ type Messages = {
       denied: string;
       pendingApproval: string;
       error: string;
+    };
+    measure: {
+      count: string;
+    };
+    mandateBar: {
+      title: string;
+      of: string;
+      period: {
+        daily: string;
+        weekly: string;
+        monthly: string;
+      };
+      settled: string;
+      reserved: string;
+      remaining: string;
+      label: string;
+      labelReserved: string;
     };
   };
 };

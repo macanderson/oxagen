@@ -39,15 +39,11 @@ describe("NotRecorded", () => {
     expect(state).not.toHaveTextContent(/milestone/i);
   });
 
-  it("carries the backend gap as data only, and only where the row names one", () => {
+  it("carries the backend gap as data only, and names no milestone", () => {
     renderWithIntl(<NotRecorded section="run.frames_wrapped" />);
-    expect(screen.getByTestId("not-recorded")).toHaveAttribute(
-      "data-gap",
-      "G6",
-    );
-    cleanup();
-    renderWithIntl(<NotRecorded section="tools" />);
-    expect(screen.getByTestId("not-recorded")).not.toHaveAttribute("data-gap");
+    const state = screen.getByTestId("not-recorded");
+    expect(state).toHaveAttribute("data-gap", "G6");
+    expect(state).not.toHaveTextContent(/G6/);
   });
 
   it("has prose in the catalog for every row and no row without prose", () => {

@@ -38,6 +38,23 @@
       "denied": "You cannot see {section} in this workspace. Your roles do not include {permission}; an organization owner can grant it.",
       "pendingApproval": "Access to {section} is waiting for approval, request {accessRequestId}.",
       "error": "{section} could not be loaded: the control plane answered {code}. Nothing was changed, and runs kept recording."
+    },
+    "measure": {
+      "count": "{count} {unit}"
+    },
+    "mandateBar": {
+      "title": "Remaining authority · {period} · {periodKey}",
+      "of": "of <limit></limit>",
+      "period": {
+        "daily": "daily",
+        "weekly": "weekly",
+        "monthly": "monthly"
+      },
+      "settled": "settled",
+      "reserved": "reserved by calls in flight",
+      "remaining": "remaining",
+      "label": "{settled} settled, {remaining} remaining of {limit}",
+      "labelReserved": "{settled} settled, {reserved} reserved by calls in flight, {remaining} remaining of {limit}"
     }
   }
 }

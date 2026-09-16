@@ -27,7 +27,6 @@
     "billing": "Billing"
   },
   "unrecorded": {
-    "tools": "The tool registry, connections, kill switches, and auto-approval rules are not recorded here yet.",
     "run": {
       "frames_wrapped": "Frames of a wrapped run are not recorded yet."
     }

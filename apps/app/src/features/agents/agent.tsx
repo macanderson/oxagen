@@ -2,10 +2,10 @@
 // identity card with its status and the writes on it, then one section chosen
 // by `?tab=`. Five sections have a store behind them: Identity (get_agent),
 // Toolbelt (get_agent_toolbelt), Enrollment (get_agent's hosts), Tamper
-// incidents (list_incidents) and Definition in git (get_agent's cached
-// commit). The mockup's Mandates, Budgets and Runs tabs have no contract that
-// reads them per agent, so they are not drawn (§3.6). Only the chosen section
-// makes its own read.
+// incidents (list_incidents), Definition in git (get_agent's cached commit)
+// and Mandates (list_mandates narrowed to this agent, #2957). The mockup's
+// Budgets and Runs tabs have no contract that reads them per agent, so they
+// are not drawn (§3.6). Only the chosen section makes its own read.
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
@@ -22,6 +22,7 @@ import { DefinitionSection } from "./definition";
 import { EnrollmentSection } from "./enrollment";
 import { IdentitySection } from "./identity";
 import { IncidentsSection } from "./incidents";
+import { MandatesSection } from "./mandates";
 import { AgentStatusBadge } from "./parts";
 import { ToolbeltSection } from "./toolbelt";
 
@@ -31,6 +32,7 @@ const TABS = [
   "enrollment",
   "incidents",
   "definition",
+  "mandates",
 ] as const;
 type Tab = (typeof TABS)[number];
 
@@ -162,6 +164,17 @@ export async function Agent({
           read={await source.agents.incidents(ctx, identity.id, { cursor })}
           cursor={cursor}
           {...place}
+        />
+      );
+      break;
+    case "mandates":
+      body = (
+        <MandatesSection
+          read={await source.mandates.list(ctx, { agentId: identity.id })}
+          org={place.org}
+          ws={place.ws}
+          agentId={identity.id}
+          agentSlug={identity.slug}
         />
       );
       break;

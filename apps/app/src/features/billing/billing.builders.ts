@@ -205,6 +205,7 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
       budgets: refuse,
     },
     org: { members: refuse },
+    mandates: { list: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },
   };
   return { source, calls };

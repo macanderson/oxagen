@@ -148,7 +148,7 @@ describe("Agent header and tabs", () => {
   });
 
   it("opens Identity for an unknown tab (negative)", async () => {
-    const calls = await renderAgent({ get: readOk(agentDetail()) }, "mandates");
+    const calls = await renderAgent({ get: readOk(agentDetail()) }, "budgets");
     expect(current()).toEqual(["Identity"]);
     expect(calls.toolbelt).toEqual([]);
     expect(calls.incidents).toEqual([]);

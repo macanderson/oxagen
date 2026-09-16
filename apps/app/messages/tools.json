@@ -1,0 +1,31 @@
+{
+  "tools": {
+    "mandates": {
+      "title": "Mandates ledger",
+      "lead": "Every mandate this workspace has granted, with what it has settled, what calls in flight hold, and what is left. A mandate is the only thing that lets an agent carry a consequence, and every draw on it reserves, then settles or releases.",
+      "empty": "No mandate has been granted in this workspace.",
+      "emptyDetail": "A call that carries a consequence tag with no mandate is denied before dispatch, whether or not the tool is on the agent's belt.",
+      "noLimit": "no limit",
+      "notGranted": "not granted",
+      "columns": {
+        "mandate": "Mandate",
+        "agent": "Agent",
+        "grantedBy": "Granted by",
+        "purpose": "Purpose",
+        "perCall": "Per call",
+        "perPeriod": "Per period",
+        "settled": "Settled",
+        "reserved": "Reserved",
+        "remaining": "Remaining",
+        "validTo": "Valid to",
+        "status": "Status"
+      },
+      "status": {
+        "draft": "requested",
+        "active": "active",
+        "expired": "expired",
+        "revoked": "revoked"
+      }
+    }
+  }
+}
