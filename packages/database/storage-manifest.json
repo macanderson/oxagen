@@ -1461,7 +1461,8 @@
       "name": "list_tacho_hosts",
       "reads": [],
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "writes": []
     },
@@ -2520,7 +2521,7 @@
       "writes": []
     }
   ],
-  "contentHash": "e4021b98ed843b21b1c6ded7a1d16b98fe0d795905dfaac237f05b312e368564",
+  "contentHash": "c2c80c64e919240de8d94da857ecbded80af20a55aabfd6bc83a168b87440bea",
   "domains": [
     {
       "name": "agent",

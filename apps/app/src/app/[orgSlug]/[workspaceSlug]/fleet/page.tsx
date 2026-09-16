@@ -23,8 +23,6 @@ import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspaceOrRedirect } from "@/lib/resolve-org";
 import { type FleetHost, listFleetAction } from "./actions";
 
-export const dynamic = "force-dynamic";
-
 /** What each tier records, and what it does not. Both lines, always. */
 const TIER_COPY = {
   harness: {
