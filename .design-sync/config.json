@@ -19,5 +19,37 @@
     }
   },
   "guidelinesGlob": ["THEME.md"],
-  "readmeHeader": ".design-sync/conventions.md"
+  "readmeHeader": ".design-sync/conventions.md",
+  "tokenKinds": ".design-sync/token-kinds.json",
+  "overrides": {
+    "Dialog": {
+      "cardMode": "single",
+      "primaryStory": "Open"
+    },
+    "Select": {
+      "cardMode": "single",
+      "primaryStory": "Open"
+    },
+    "Menu": {
+      "cardMode": "single",
+      "primaryStory": "Open"
+    },
+    "Popover": {
+      "cardMode": "single",
+      "primaryStory": "Open"
+    },
+    "Tooltip": {
+      "cardMode": "single",
+      "primaryStory": "Open"
+    },
+    "ToastProvider": {
+      "cardMode": "single",
+      "primaryStory": "Open"
+    },
+    "Sheet": {
+      "cardMode": "single",
+      "primaryStory": "Right Open"
+    }
+  },
+  "extraFonts": ["../../.design-sync/fonts-dejavu.css"]
 }

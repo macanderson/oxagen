@@ -7,7 +7,7 @@ the logo is the only difference.
 ### The rule that will bite you
 
 **`styles.css` is a COMPILED, CLOSED stylesheet — there is no Tailwind runtime here.**
-Only the 325 utility classes the library itself already uses exist. A class you
+Only the ~597 utility classes the library itself already uses exist. A class you
 invent (`bg-sidebar-bg`, `p-12`, `gap-8`) silently does nothing — no error, just
 unstyled output.
 
@@ -19,8 +19,11 @@ So: **use library components for UI, and CSS variables for your own layout glue.
               padding: 24, display: "flex", gap: 16 }}>
 ```
 
-222 semantic tokens are declared at root scope in `_ds_bundle.css` and **always**
-resolve (85 of them are redefined under `.dark`). Families (each `--x` plus often
+260 semantic tokens are declared at root scope in `_ds_bundle.css` and **always**
+resolve (85 of them are redefined under `.dark`). Each one carries a
+`/* @kind color|spacing|radius|shadow|font|other */` marker right after its
+declaration — if a custom property has no marker it is Tailwind engine plumbing
+(`--tw-*`, utility-scoped), not a token to design with. Families (each `--x` plus often
 `--x-foreground`):
 
 - Surfaces: `--background` `--foreground` `--card` `--popover` `--muted` `--surface` `--border` `--ring` `--radius` `--ui-radius`
