@@ -137,7 +137,7 @@ describe("the shell on /{org}/{ws}", () => {
 });
 
 describe("sidebar", () => {
-  it("renders exactly the mockup's seven links with Agent IAM naming and the current page", () => {
+  it("renders exactly the mockup's eight links with Agent IAM naming and the current page", () => {
     renderShell(shellData());
     const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
     const main = within(sidebar).getByRole("navigation", { name: "Main" });
@@ -150,10 +150,11 @@ describe("sidebar", () => {
       ["Spend", "/acme/core-platform/spend"],
       ["Organization", "/acme"],
       ["Billing", "/acme/billing"],
+      ["Audit", "/acme/audit"],
     ]);
     for (const link of links)
       expect(link.getAttribute("href")).not.toMatch(
-        /^\/acme\/(core-platform\/ontology|audit)(\/|$)/,
+        /^\/acme\/core-platform\/ontology(\/|$)/,
       );
     expect(
       within(main).getByRole("link", { name: "Agent IAM" }),

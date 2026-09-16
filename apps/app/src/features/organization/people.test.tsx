@@ -67,6 +67,7 @@ async function renderPeople(
       budgets: vi.fn(),
     },
     org: { members },
+    audit: { events: vi.fn(), exportEvents: vi.fn() },
   };
   const view = render(
     <IntlProvider>{await People({ ctx, source })}</IntlProvider>,

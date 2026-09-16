@@ -118,6 +118,16 @@ export const routes = {
       cursor: q !== undefined && "cursor" in q ? q.cursor : undefined,
       checkout: q !== undefined && "checkout" in q ? q.checkout : undefined,
     }),
+  /** Audit's events; a filter or a page is a query value, not a route (§1.2). */
+  audit: (
+    org: string,
+    q: Readonly<Record<string, string | undefined>> = {},
+  ): SafePath => withQuery(pathOf(org, "audit"), q),
+  /** The signed export of Audit's events over the same query values. */
+  auditExport: (
+    org: string,
+    q: Readonly<Record<string, string | undefined>>,
+  ): SafePath => withQuery(pathOf(org, "audit", "export"), q),
   /** A run opened from a list (a run id is a public id, never a raw row id). */
   run: (org: string, ws: string, run: string): SafePath =>
     pathOf(org, ws, "runs", run),

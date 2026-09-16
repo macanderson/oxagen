@@ -46,6 +46,8 @@ const ROLE_CHECKED_CONTRACTS = [
   "propose_record",
   "dismiss_proposal",
   "open_context_pr",
+  "query_audit_log",
+  "export_audit_events",
 ] as const;
 
 const AGENT_ROLE_CHECKED_CONTRACTS = [
@@ -379,6 +381,8 @@ describe("INV-29: every role gate acts as the resolved user", () => {
         "handlers/src/context.pr.open.ts",
         "handlers/src/context.records.append.ts",
         "handlers/src/tacho.command.dispatch.ts",
+        "handlers/src/audit.events.export.ts",
+        "handlers/src/audit.log.query.ts",
         "handlers/src/workspace.archive.ts",
         "iam/src/mandate-role.ts",
       ]),

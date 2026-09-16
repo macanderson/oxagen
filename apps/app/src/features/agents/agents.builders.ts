@@ -249,6 +249,7 @@ export function agentsSource(reads: AgentReads) {
       budgets: refuse,
     },
     org: { members: refuse },
+    audit: { events: refuse, exportEvents: refuse },
   };
   return { source, calls };
 }

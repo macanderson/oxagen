@@ -220,12 +220,12 @@ describe("thumb bar", () => {
       within(sheet)
         .getAllByRole("link")
         .map((l) => l.textContent),
-    ).toEqual(["Organization", "Billing"]);
+    ).toEqual(["Organization", "Billing", "Audit"]);
   });
 });
 
 describe("More sheet", () => {
-  it("rises as a bottom sheet carrying Steering, Organization and Billing, and no audit entry", async () => {
+  it("rises as a bottom sheet carrying Steering, Organization, Billing and Audit", async () => {
     const user = userEvent.setup();
     renderPhone(shellData());
     const more = screen.getByRole("button", { name: "More" });
@@ -238,8 +238,8 @@ describe("More sheet", () => {
       ["Steering", "/acme/core-platform/steering"],
       ["Organization", "/acme"],
       ["Billing", "/acme/billing"],
+      ["Audit", "/acme/audit"],
     ]);
-    expect(within(sheet).queryByText(/audit/i)).toBeNull();
     for (const link of links) expect(style(link).minHeight).toBe("44px");
 
     // The bottom sheet: a drag handle, the safe-area inset, a full-width footer button, a scrim.

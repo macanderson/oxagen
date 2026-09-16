@@ -3,6 +3,7 @@
 import type { DataSource } from "@/data/ports";
 import { agents } from "./agents";
 import { approvals } from "./approvals";
+import { audit } from "./audit";
 import { billing } from "./billing";
 import { org } from "./org";
 import { pretenant } from "./pretenant";
@@ -19,4 +20,5 @@ export const liveSource: DataSource = {
   billing,
   org,
   spend,
+  audit,
 };

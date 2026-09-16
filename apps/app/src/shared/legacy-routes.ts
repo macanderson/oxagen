@@ -13,10 +13,19 @@
 // (`packages/oxagen/src/contracts/org.create.ts`), so no row shadows a
 // workspace's Fleet page, and `account` is in RESERVED_ORG_SLUGS.
 //
-// Where Appendix F sends a route to Ontology or Audit, neither of which ships
-// (decision log 2026-09-14), the row targets Fleet or Organization › People.
+// Where Appendix F sends a route to Ontology, which does not ship (decision
+// log 2026-09-14), the row targets Fleet. Audit ships again (decision log
+// 2026-09-15), so the deprecated app's audit route lands on the Audit page and
+// the rest of the security pages still land on Organization › People. There is
+// no row under `/{org}/audit`: the page is a §1.2 route and its export handler
+// is a route beneath it, so a catch-all row there would swallow the download.
 
-type OrganizationTarget = "/" | "/{org}" | "/{org}/api-keys" | "/{org}/billing";
+type OrganizationTarget =
+  | "/"
+  | "/{org}"
+  | "/{org}/api-keys"
+  | "/{org}/audit"
+  | "/{org}/billing";
 
 type WorkspaceTarget =
   | OrganizationTarget
@@ -40,10 +49,10 @@ export const LEGACY_ROUTES: readonly LegacyRoute[] = [
   { from: "/account/privacy", to: "/" },
   { from: "/account/security", to: "/" },
 
-  // Organization scope. Audit does not ship: its rows go to People.
-  { from: "/{org}/audit/**", to: "/{org}" },
+  // Organization scope. The deprecated audit viewer is the Audit page now; the
+  // rest of the security pages have no rev1 page of their own.
   { from: "/{org}/security", to: "/{org}" },
-  { from: "/{org}/security/audit", to: "/{org}" },
+  { from: "/{org}/security/audit", to: "/{org}/audit" },
   { from: "/{org}/security/compliance", to: "/{org}" },
   { from: "/{org}/security/mfa", to: "/{org}" },
   { from: "/{org}/security/trust", to: "/{org}" },

@@ -1,9 +1,10 @@
-// Test support for the sign-in, organization-creation, Fleet, Agents, Billing and Organization components: the real catalogs,
+// Test support for the sign-in, organization-creation, Fleet, Agents, Audit, Billing and Organization components: the real catalogs,
 // a client provider, and a server `getTranslations` stand-in that formats ICU
 // arguments the simple way (the components under test use no plurals).
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactNode } from "react";
 import agents from "../../messages/agents.json";
+import audit from "../../messages/audit.json";
 import auth from "../../messages/auth.json";
 import billing from "../../messages/billing.json";
 import en from "../../messages/en.json";
@@ -15,6 +16,7 @@ import ui from "../../messages/ui.json";
 export const messages = {
   ...en,
   ...agents,
+  ...audit,
   ...auth,
   ...billing,
   ...fleet,

@@ -221,6 +221,7 @@ import { graphStatsRoute } from "./routes/v1/graph.stats";
 import { ontologyQueryRoute } from "./routes/v1/ontology.query";
 import { ontologyNeighborsRoute } from "./routes/v1/ontology.neighbors";
 import { auditLogQueryRoute } from "./routes/v1/audit.log.query";
+import { auditEventsExportRoute } from "./routes/v1/audit.events.export";
 import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
 import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
 import { telemetryStellaEnrollRoute } from "./routes/v1/telemetry.stella.enroll";
@@ -778,6 +779,7 @@ orgScoped.route("/graph/stats", graphStatsRoute);
 orgScoped.route("/ontology/query", ontologyQueryRoute);
 orgScoped.route("/ontology/neighbors", ontologyNeighborsRoute);
 orgScoped.route("/audit/log/query", auditLogQueryRoute);
+orgScoped.route("/audit/events/export", auditEventsExportRoute);
 // Creating a workspace needs an org and cannot need a workspace: the caller is
 // asking for their first one. Mounted only under the workspace-scoped group, the
 // REST surface could not take a new account past org creation — every attempt

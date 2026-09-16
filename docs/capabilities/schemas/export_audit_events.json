@@ -1,0 +1,97 @@
+{
+  "name": "export_audit_events",
+  "domain": "audit",
+  "description": "Export the org's security audit events over the query_audit_log filters as CSV or NDJSON, signed with HMAC-SHA256 so the file can be verified after download. Up to 50,000 events; a wider match is refused.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "format": {
+        "type": "string",
+        "enum": [
+          "csv",
+          "ndjson"
+        ],
+        "default": "csv"
+      },
+      "eventType": {
+        "type": "string"
+      },
+      "actorUserId": {
+        "type": "string"
+      },
+      "actorPublicId": {
+        "type": "string"
+      },
+      "capability": {
+        "type": "string"
+      },
+      "outcome": {
+        "type": "string",
+        "enum": [
+          "allow",
+          "deny",
+          "error",
+          "success"
+        ]
+      },
+      "workspaceId": {
+        "type": "string"
+      },
+      "from": {
+        "type": "string"
+      },
+      "to": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "format": {
+        "type": "string",
+        "enum": [
+          "csv",
+          "ndjson"
+        ]
+      },
+      "body": {
+        "type": "string"
+      },
+      "signature": {
+        "type": "string"
+      },
+      "algorithm": {
+        "const": "HMAC-SHA256"
+      },
+      "rowCount": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "format",
+      "body",
+      "signature",
+      "algorithm",
+      "rowCount"
+    ],
+    "additionalProperties": false
+  }
+}

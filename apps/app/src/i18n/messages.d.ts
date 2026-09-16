@@ -28,6 +28,7 @@ type Messages = {
     people: string;
     apiKeys: string;
     billing: string;
+    audit: string;
   };
   unrecorded: {
     tools: string;
@@ -394,6 +395,86 @@ type Messages = {
           source: string;
         };
       };
+    };
+  };
+  audit: {
+    eyebrow: string;
+    description: string;
+    loading: string;
+    events: {
+      title: string;
+      when: string;
+      event: string;
+      actor: string;
+      what: string;
+      result: string;
+      more: string;
+      workspace: string;
+      ip: string;
+      request: string;
+      userAgent: string;
+      notRecorded: string;
+    };
+    outcomes: {
+      allow: string;
+      deny: string;
+      error: string;
+      success: string;
+    };
+    filters: {
+      label: string;
+      eventType: string;
+      anyEventType: string;
+      outcome: string;
+      anyOutcome: string;
+      actor: string;
+      anyActor: string;
+      capability: string;
+      from: string;
+      to: string;
+      apply: string;
+      clear: string;
+    };
+    export: {
+      csv: string;
+      ndjson: string;
+    };
+    pager: {
+      label: string;
+      newer: string;
+      older: string;
+      end: string;
+    };
+    empty: {
+      title: string;
+      body: string;
+      action: string;
+    };
+    filteredEmpty: {
+      title: string;
+      body: string;
+    };
+    error: {
+      title: string;
+      body: string;
+      code: string;
+      retry: string;
+    };
+    denied: {
+      title: string;
+      body: string;
+    };
+    pending: {
+      title: string;
+      body: string;
+    };
+    roles: {
+      owner: string;
+      admin: string;
+      member: string;
+      billing: string;
+      compliance: string;
+      viewer: string;
     };
   };
   auth: {
@@ -866,6 +947,7 @@ type Messages = {
       spend: string;
       organization: string;
       billing: string;
+      audit: string;
       apiKeys: string;
     };
     switcher: {
