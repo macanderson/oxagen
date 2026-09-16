@@ -28,18 +28,25 @@ const workspaceNotFound = () =>
 //      accepts org Owner or Admin only, because `assertOrgRole` reads the
 //      workspace role on `ctx.workspaceId` and a workspace role must not
 //      reach another workspace of the org.
-//   2. The target is resolved by public id in the org (`not_found`), the
+//   2. `consequenceRoles` decides who may grant a mandate over money and the
+//      other consequences (ADR-059 decision 1), so writing it also needs the
+//      org Owner.
+//   3. The target is resolved by public id in the org (`not_found`), the
 //      slug rename is captured and the unique index's 23505 reads as
 //      `conflict` / `slug_taken`.
 export const workspaceSettingsWriteHandler: CapabilityHandler<
   typeof workspaceSettingsWrite
 > = async (input, ctx) => {
+  const actingUserId = await resolveActingUserId(ctx);
   await assertOrgRole(
-    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { ...ctx, userId: actingUserId },
     input.workspaceId === undefined
       ? { org: ["Owner", "Admin"], workspace: ["Owner", "Admin"] }
       : { org: ["Owner", "Admin"] },
   );
+  if (input.consequenceRoles !== undefined) {
+    await assertOrgRole({ ...ctx, userId: actingUserId }, { org: ["Owner"] });
+  }
 
   const row = await withTenantDb(async (tx) => {
     const target = await tx.query.workspaces.findFirst({
@@ -58,6 +65,7 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
         slug: true,
         avatarUrl: true,
         description: true,
+        consequenceRoles: true,
       },
     });
     if (!target) return null;
@@ -71,6 +79,9 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
     // description is now a real column too: null clears, a string sets.
     if (input.description !== undefined)
       updates.description = input.description;
+    // The consequence-role overrides replace as a whole (ADR-059 decision 1).
+    if (input.consequenceRoles !== undefined)
+      updates.consequenceRoles = input.consequenceRoles;
 
     if (Object.keys(updates).length === 0) {
       return existing;
@@ -109,7 +120,13 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
 
     return tx.query.workspaces.findFirst({
       where: eq(schema.workspaces.id, workspaceId),
-      columns: { name: true, slug: true, avatarUrl: true, description: true },
+      columns: {
+        name: true,
+        slug: true,
+        avatarUrl: true,
+        description: true,
+        consequenceRoles: true,
+      },
     });
   });
 

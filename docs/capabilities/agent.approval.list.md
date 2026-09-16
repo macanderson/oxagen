@@ -42,7 +42,8 @@ Each item:
 | `createdAt`      | RFC 3339         | `approval_requests.created_at`.                                                             |
 | `expiresAt`      | RFC 3339         | `approval_requests.expires_at`.                                                             |
 | `chain.agentKey` | `string \| null` | The agent that raised the call. Not recorded today.                                         |
-| `chain.rule`     | `string \| null` | The grant, mandate or standing rule that parked the call (MC spec §7.5). Not recorded today. |
+| `mandateId`      | `string \| null` | `tools.mandates.public_id` (`mnd_…`) of the mandate the parked call drew on (ADR-059). Null on a chat gate row. |
+| `chain.rule`     | `string \| null` | The rule that parked the call: the first of `rule_ids` (`mandate:<id>:human_above:<measure>` or `…:always_human_for:<tag>`). Null on a chat gate row. |
 
 Only public ids leave the handler.
 

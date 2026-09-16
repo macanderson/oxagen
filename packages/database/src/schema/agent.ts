@@ -166,10 +166,25 @@ export const approvalRequests = agentSchema.table(
     ...orgScopeMixin(),
     executionStepId: uuid("execution_step_id"),
     toolCallId: uuid("tool_call_id"),
-    messageId: uuid("message_id").notNull(),
+    // The chat turn that parked the call; null on a row the mandate gate
+    // writes, where the call arrived through the kernel with no message.
+    messageId: uuid("message_id"),
     capabilityName: text("capability_name").notNull(),
     inputPreview: jsonb("input_preview").notNull(),
     riskLevel: text("risk_level").notNull(),
+    // The four-hop chain (MC spec App. A.6, ADR-059 decision 4): the mandate
+    // the parked call drew on, the rule ids that required a person, and the
+    // sha256 of the call's canonical input so an approved call can be retried
+    // once. Null / empty on rows the chat approval gate writes.
+    mandateId: uuid("mandate_id"),
+    ruleIds: text("rule_ids").array().notNull().default(sql`'{}'::text[]`),
+    inputDigest: text("input_digest"),
+    // Set when the approved call was retried and proceeded on this approval;
+    // an approval is single-use.
+    tokenUsedAt: timestamp("token_used_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     // resolution null until resolved.
     resolution: text("resolution"),
     resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "date" }),
@@ -188,6 +203,10 @@ export const approvalRequests = agentSchema.table(
     ),
     orgIdx: index("approval_requests_org_idx").on(t.orgId, t.workspaceId),
     messageIdx: index("approval_requests_message_idx").on(t.messageId),
+    // The retry lookup: an approved, unused row for this call's digest.
+    mandateDigestIdx: index("approval_requests_mandate_digest_idx")
+      .on(t.workspaceId, t.mandateId, t.inputDigest)
+      .where(sql`mandate_id IS NOT NULL`),
     resolutionCheck: check(
       "approval_requests_resolution_check",
       sql`${t.resolution} IN ('approved', 'denied', 'expired') OR ${t.resolution} IS NULL`,
@@ -1146,6 +1165,17 @@ export const toolVersions = agentSchema.table(
     // SHA-256 hex over the canonical (sorted-key) manifest JSON — immutability
     // contract (see skill_versions.checksum).
     checksum: text("checksum").notNull(),
+    // Safety classification (MC spec §6.9 part 1, ADR-059 decision 6): the
+    // consequences invoking this version can cause, the measures it exposes
+    // as paths into its input ({ path, type, unit, scale? } per measure name),
+    // and the path into its output that carries the external effect id a
+    // settlement records. Describes the tool; decides nothing by itself.
+    consequenceTags: text("consequence_tags")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    measures: jsonb("measures").notNull().default(sql`'{}'::jsonb`),
+    effectIdPath: text("effect_id_path"),
   },
   (t) => ({
     toolIdx: index("tool_versions_tool_idx").on(t.toolId),

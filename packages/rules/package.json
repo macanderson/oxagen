@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@oxagen/database": "workspace:*",
+    "@oxagen/mcp-config": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "drizzle-orm": "0.45.2",
     "pino": "9.14.0",
@@ -23,6 +24,7 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
+    "@oxagen/tenancy": "workspace:*",
     "@types/node": "25.9.1",
     "@vitest/coverage-v8": "2.1.9",
     "eslint": "9.39.4",

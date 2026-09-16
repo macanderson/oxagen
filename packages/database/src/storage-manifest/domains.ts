@@ -47,6 +47,8 @@ export const PG_DOMAINS: readonly string[] = [
   "ratelimit",
   "schema_registry",
   "security",
+  // Mandates and their ledger (ADR-059).
+  "tools",
   "workspace",
 ];
 

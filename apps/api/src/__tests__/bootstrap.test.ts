@@ -33,9 +33,14 @@ const mocks = vi.hoisted(() => ({
   loggerInfo: vi.fn(),
 }));
 
-vi.mock("@oxagen/config/env", () => ({
-  loadEnv: mocks.loadEnv,
-}));
+// Partial: only loadEnv is stubbed. The rest of the module stays real, because
+// anything bootstrap imports that reaches @oxagen/config (its registry builds a
+// key set from baseEnvSchema at import) would otherwise load a module with no
+// baseEnvSchema and fail the whole file before a test runs.
+vi.mock("@oxagen/config/env", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/config/env")>();
+  return { ...real, loadEnv: mocks.loadEnv };
+});
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();

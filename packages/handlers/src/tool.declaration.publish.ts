@@ -1,6 +1,15 @@
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import {
+  getCapability,
+  HandlerError,
+  type CapabilityHandler,
+} from "@oxagen/oxagen";
 import { toolDeclarationPublish } from "@oxagen/oxagen/contracts/tool.declaration.publish";
 import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
+import {
+  assertConsequenceRole,
+  loadConsequenceRoles,
+} from "@oxagen/iam/mandate-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { canonicalJson, sha256Hex } from "./registry-digest";
@@ -14,6 +23,21 @@ import { canonicalJson, sha256Hex } from "./registry-digest";
  * (published: false). Mirrors skill.workspace.install's shape: existence
  * check, transactional insert, and a unique-violation catch for the
  * concurrent-publish race.
+ *
+ * Roles (INV-29): org Owner or Admin, or workspace Owner or Admin (the
+ * contract's defaultRoles). The version's `consequence_tags`, `measures` and
+ * `effect_id_path` are what the mandate gate reads (ADR-059 decision 6), so a
+ * publish that changes them against the active version also needs an org
+ * role the workspace names for every tag before and after the change
+ * (assertConsequenceRole): only the office accountable for a consequence
+ * adds, removes or re-measures it.
+ *
+ * The gate runs inside `invoke()` and finds the tool by `slug` equal to the
+ * capability name, so a classification binds only a declaration whose slug
+ * names a registered capability. Any other declaration (an external MCP
+ * tool, a Stella built-in) is called without `invoke()`, and a
+ * classification on it is refused as `conflict` / `consequence_not_gated`
+ * rather than recorded as governing calls no mandate sees.
  */
 export const toolDeclarationPublishHandler: CapabilityHandler<
   typeof toolDeclarationPublish
@@ -24,14 +48,34 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
     );
   }
 
+  const actingUserId = await resolveActingUserId(ctx);
+  await assertOrgRole(
+    { ...ctx, userId: actingUserId },
+    { org: ["Owner", "Admin"], workspace: ["Owner", "Admin"] },
+  );
+
   const slug = input.name.trim().toLowerCase();
+  const classified =
+    input.consequence_tags.length > 0 ||
+    Object.keys(input.measures).length > 0 ||
+    input.effect_id_path !== undefined;
+  if (classified && getCapability(slug) === undefined) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "consequence_not_gated",
+      message: `"${slug}" names no capability invoke() dispatches, so the mandate gate never sees its calls; publish it without consequence_tags, measures or effect_id_path`,
+    });
+  }
   // The checksum covers every declared fact, not just the manifest body, so a
   // changed risk grade or schema republishes even when the manifest didn't.
   const checksum = sha256Hex(
     canonicalJson({
+      consequence_tags: input.consequence_tags,
       description: input.description,
+      effect_id_path: input.effect_id_path ?? null,
       input_schema: input.input_schema,
       manifest: input.manifest,
+      measures: input.measures,
       name: slug,
       policy_group: input.policy_group ?? null,
       read_only: input.read_only,
@@ -42,6 +86,40 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
 
   const orgId = ctx.orgId;
   const workspaceId = ctx.workspaceId;
+
+  interface Classification {
+    consequenceTags: readonly string[];
+    measures: unknown;
+    effectIdPath: string | null;
+  }
+  const classificationKey = (c: Classification) =>
+    canonicalJson({
+      consequence_tags: [...new Set(c.consequenceTags)].sort(),
+      effect_id_path: c.effectIdPath,
+      measures: c.measures,
+    });
+  const declared: Classification = {
+    consequenceTags: input.consequence_tags,
+    measures: input.measures,
+    effectIdPath: input.effect_id_path ?? null,
+  };
+  // `active` is the version the gate reads today; null for a fresh tool.
+  const assertClassificationRole = async (active: Classification | null) => {
+    const before = active ?? {
+      consequenceTags: [],
+      measures: {},
+      effectIdPath: null,
+    };
+    if (classificationKey(before) === classificationKey(declared)) return;
+    const tags = [
+      ...new Set([...before.consequenceTags, ...declared.consequenceTags]),
+    ];
+    if (tags.length === 0) return;
+    const overrides = await withTenantDb((tx) =>
+      loadConsequenceRoles(tx, workspaceId),
+    );
+    await assertConsequenceRole(ctx, tags, overrides);
+  };
 
   const findExisting = async () => {
     const rows = await withTenantDb((tx) =>
@@ -73,11 +151,14 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
     riskGrade: input.risk_grade,
     policyGroup: input.policy_group ?? null,
     manifest: input.manifest,
+    consequenceTags: input.consequence_tags,
+    measures: input.measures,
+    effectIdPath: input.effect_id_path ?? null,
     checksum,
     isLatest: true,
     publishedAt: sql`now()`,
-    createdById: ctx.userId ?? undefined,
-    updatedById: ctx.userId ?? undefined,
+    createdById: actingUserId ?? undefined,
+    updatedById: actingUserId ?? undefined,
   };
 
   // Version-publish path against an existing identity row: idempotent when the
@@ -93,6 +174,9 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
           id: schema.toolVersions.id,
           versionNumber: schema.toolVersions.versionNumber,
           checksum: schema.toolVersions.checksum,
+          consequenceTags: schema.toolVersions.consequenceTags,
+          measures: schema.toolVersions.measures,
+          effectIdPath: schema.toolVersions.effectIdPath,
         })
         .from(schema.toolVersions)
         .where(
@@ -117,6 +201,8 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
         published: false,
       };
     }
+
+    await assertClassificationRole(latest ?? null);
 
     const nextVersion = (latest?.versionNumber ?? 0) + 1;
     await withTenantDb(async (tx) => {
@@ -147,9 +233,9 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
           description: input.description,
           source: input.source,
           activeVersionId: versionRow.id,
-          activatedByUserId: ctx.userId ?? undefined,
+          activatedByUserId: actingUserId ?? undefined,
           activatedAt: sql`now()`,
-          updatedById: ctx.userId ?? undefined,
+          updatedById: actingUserId ?? undefined,
           updatedAt: sql`now()`,
         })
         .where(eq(schema.tools.id, existing.id));
@@ -177,6 +263,7 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
   // existence check and this insert run in separate sessions, so two
   // concurrent publishes can both pass the check; tools_workspace_slug_idx
   // makes the second insert throw 23505 and we fall back to the version path.
+  await assertClassificationRole(null);
   try {
     const result = await withTenantDb(async (tx) => {
       const [toolRow] = await tx
@@ -189,8 +276,8 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
           description: input.description,
           source: input.source,
           enabled: true,
-          createdById: ctx.userId ?? undefined,
-          updatedById: ctx.userId ?? undefined,
+          createdById: actingUserId ?? undefined,
+          updatedById: actingUserId ?? undefined,
         })
         .returning({
           id: schema.tools.id,
@@ -215,7 +302,7 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
         .update(schema.tools)
         .set({
           activeVersionId: versionRow.id,
-          activatedByUserId: ctx.userId ?? undefined,
+          activatedByUserId: actingUserId ?? undefined,
           activatedAt: sql`now()`,
           updatedAt: sql`now()`,
         })

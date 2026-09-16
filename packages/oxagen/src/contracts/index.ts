@@ -25,6 +25,12 @@ import { agentDefinitionCommit } from "./agent.definition.commit";
 import { agentToolbeltGet } from "./agent.toolbelt.get";
 import { tachoIncidentList } from "./tacho.incident.list";
 import { agentApprovalResolve } from "./agent.approval.resolve";
+import { mandateGrant } from "./mandate.grant";
+import { mandateRequest } from "./mandate.request";
+import { mandateList } from "./mandate.list";
+import { mandateGet } from "./mandate.get";
+import { mandateRevoke } from "./mandate.revoke";
+import { mandateLimitsUpdate } from "./mandate.limits.update";
 import { agentDefinitionCreate } from "./agent.definition.create";
 import { agentDefinitionDelete } from "./agent.definition.delete";
 import { agentDefinitionSuggest } from "./agent.definition.suggest";
@@ -501,6 +507,12 @@ export {
   agentToolbeltGet,
   tachoIncidentList,
   agentApprovalResolve,
+  mandateGrant,
+  mandateRequest,
+  mandateList,
+  mandateGet,
+  mandateRevoke,
+  mandateLimitsUpdate,
   agentDefinitionCreate,
   agentDefinitionDelete,
   agentDefinitionSuggest,
@@ -802,6 +814,12 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentToolbeltGet,
   tachoIncidentList,
   agentApprovalResolve,
+  mandateGrant,
+  mandateRequest,
+  mandateList,
+  mandateGet,
+  mandateRevoke,
+  mandateLimitsUpdate,
   agentDefinitionCreate,
   agentDefinitionDelete,
   agentDefinitionSuggest,

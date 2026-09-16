@@ -16,6 +16,9 @@ const parked: Item = {
   requester: "usr_marcusbell",
   createdAt: "2026-09-15T08:57:30.000Z",
   expiresAt: "2026-09-15T09:07:30.000Z",
+  // Parked by the approval rule, not by a mandate: `list_approvals` carries
+  // the mandate that parked the call, and null is the common case.
+  mandateId: null,
   chain: { agentKey: "acme.core.release-bot", rule: "rule_release" },
 };
 
