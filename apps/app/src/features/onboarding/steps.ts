@@ -6,11 +6,11 @@ import type { OnboardingStep } from "@/data/contracts/onboarding";
 import { routes, type SafePath } from "@/shared/safe-path";
 
 /** The three steps of the gate's rail. Sign-up and email verification belong to the session and are not recorded. */
-export const GATE_STEPS = ["organization", "wrap", "run"] as const;
+const GATE_STEPS = ["organization", "wrap", "run"] as const;
 export type GateStep = (typeof GATE_STEPS)[number];
 
 /** The register flow's own three steps, which are the `[step]` segment. */
-export const REGISTER_STEPS = ["name", "wrap", "run"] as const;
+const REGISTER_STEPS = ["name", "wrap", "run"] as const;
 export type RegisterStep = (typeof REGISTER_STEPS)[number];
 
 export type StepState = "done" | "current" | "todo";

@@ -5,4 +5,4 @@
 export { OnboardingGate } from "./gate";
 export { NewOrganizationScreen } from "./new-organization";
 export { RegisterAgent } from "./register";
-export { parseRegisterStep, type RegisterStep } from "./steps";
+export { parseRegisterStep } from "./steps";

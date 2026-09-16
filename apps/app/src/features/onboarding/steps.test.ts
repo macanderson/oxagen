@@ -2,20 +2,16 @@
 // which step is current, which are behind it, and which carry a target the
 // operator can open.
 import { describe, expect, it } from "vitest";
-import {
-  GATE_STEPS,
-  gateRail,
-  parseRegisterStep,
-  REGISTER_STEPS,
-  registerRail,
-  stepNumber,
-} from "./steps";
+import { gateRail, parseRegisterStep, registerRail, stepNumber } from "./steps";
 
 const place = { org: "acme", ws: "core-platform" };
 
+/** The flow's steps, written out here so the test names them rather than reading them back off the module under test. */
+const registerSteps = ["name", "wrap", "run"] as const;
+
 describe("parseRegisterStep", () => {
   it("reads each step of the flow", () => {
-    expect(REGISTER_STEPS.map(parseRegisterStep)).toEqual([
+    expect(registerSteps.map(parseRegisterStep)).toEqual([
       "name",
       "wrap",
       "run",
@@ -31,7 +27,7 @@ describe("parseRegisterStep", () => {
 
 describe("stepNumber", () => {
   it("counts from one, for the step line", () => {
-    expect(REGISTER_STEPS.map(stepNumber)).toEqual([1, 2, 3]);
+    expect(registerSteps.map(stepNumber)).toEqual([1, 2, 3]);
   });
 });
 
@@ -50,11 +46,7 @@ describe("gateRail", () => {
 
   it("opens the run step once the gate reached it", () => {
     const rail = gateRail("run", place);
-    expect(rail.map((item) => item.state)).toEqual([
-      "done",
-      "done",
-      "current",
-    ]);
+    expect(rail.map((item) => item.state)).toEqual(["done", "done", "current"]);
     expect(rail[2]?.to).toBe("/acme/core-platform/register/run");
   });
 
@@ -73,7 +65,11 @@ describe("gateRail", () => {
       state: "current",
       to: null,
     });
-    expect(GATE_STEPS).toEqual(["organization", "wrap", "run"]);
+    expect(rail.map((item) => item.step)).toEqual([
+      "organization",
+      "wrap",
+      "run",
+    ]);
   });
 });
 
