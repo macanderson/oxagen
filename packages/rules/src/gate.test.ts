@@ -167,3 +167,114 @@ describe("createDecisionRulesGate", () => {
     ).resolves.toBeUndefined();
   });
 });
+
+// ── The mandate check (ADR-059 decision 4) ───────────────────────────────────
+//
+// The gate runs it after the rules, for an agent principal with a workspace,
+// and hands the kernel whatever settlement it returns. Every other principal
+// shape skips it; a rules deny still wins before it runs.
+
+describe("createDecisionRulesGate — the mandate check", () => {
+  const settlement = {
+    settle: async () => undefined,
+    release: async () => undefined,
+  };
+  const agent = {
+    id: "prn_agent",
+    kind: "agent" as const,
+    orgId: "org1",
+    workspaceId: "ws1",
+  };
+  const human = { ...agent, id: "prn_human", kind: "human" as const };
+
+  test("runs for an agent principal with the capability, input, tenant and principal id, and returns its settlement", async () => {
+    const checkMandate = vi.fn(async () => settlement);
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => null,
+      checkMandate,
+    });
+    await expect(
+      gate({
+        capability: "stripe__create_payment",
+        input: { amount: "12.50" },
+        ctx: { ...CTX, userId: "u1", requestId: "req_1" },
+        principal: agent,
+      }),
+    ).resolves.toBe(settlement);
+    expect(checkMandate).toHaveBeenCalledWith({
+      capability: "stripe__create_payment",
+      input: { amount: "12.50" },
+      orgId: "org1",
+      workspaceId: "ws1",
+      agentPrincipalId: "prn_agent",
+      userId: "u1",
+      requestId: "req_1",
+    });
+  });
+
+  test.each([
+    ["a human principal", { principal: human }],
+    [
+      "a service principal",
+      { principal: { ...agent, kind: "service" as const } },
+    ],
+    ["no principal", { principal: null }],
+    ["an absent principal", {}],
+    [
+      "an agent with no workspace",
+      { principal: agent, ctx: { ...CTX, workspaceId: null } },
+    ],
+  ])("skips the check for %s", async (_label, extra) => {
+    const checkMandate = vi.fn(async () => settlement);
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => null,
+      checkMandate,
+    });
+    await expect(
+      gate({
+        capability: "stripe__create_payment",
+        input: {},
+        ctx: CTX,
+        ...extra,
+      }),
+    ).resolves.toBeUndefined();
+    expect(checkMandate).not.toHaveBeenCalled();
+  });
+
+  test("a rules deny wins before the mandate check runs", async () => {
+    const checkMandate = vi.fn(async () => settlement);
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => RULES,
+      checkMandate,
+    });
+    await expect(
+      gate({
+        capability: "issue_refund",
+        input: { amount_usd: 900 },
+        ctx: CTX,
+        principal: agent,
+      }),
+    ).rejects.toThrow(DecisionRuleDeniedError);
+    expect(checkMandate).not.toHaveBeenCalled();
+  });
+
+  test("a mandate refusal is enforced, never failed open", async () => {
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => null,
+      checkMandate: async () => {
+        throw new Error("no_mandate");
+      },
+      onError: vi.fn(),
+    });
+    await expect(
+      gate({ capability: "x", input: {}, ctx: CTX, principal: agent }),
+    ).rejects.toThrow("no_mandate");
+  });
+
+  test("without a configured check every agent call proceeds on the rules alone", async () => {
+    const gate = createDecisionRulesGate({ loadRuleSet: async () => null });
+    await expect(
+      gate({ capability: "x", input: {}, ctx: CTX, principal: agent }),
+    ).resolves.toBeUndefined();
+  });
+});

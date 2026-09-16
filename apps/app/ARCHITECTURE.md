@@ -166,7 +166,7 @@ Metering and roles are separate gates. The billing gate above runs for every org
 | `src/app/**` | A route resolves its viewer, picks a feature and does nothing else. `route.ts` is a one-line delegation. | `@/features/<page>` (barrel only), `@/server/viewer`, `@/data/source`, `@/ui/*`, `@/shared/*` |
 | `src/features/<page>/**` | Owns a page's sections, client islands and server actions. Never touches a store or `invoke`. | own folder, `@/ui/*`, `@/data/{read,contracts,ports,unrecorded}`, `@/server/viewer`, `@/server/session`, `@/server/kernel` (`kernelWrite`, only from a `"use server"` module), `@/server/sse` (stream handler only), `@/shared/*`; another page only through `@/features/<x>` |
 | `src/ui/**` | Presentational: props in, markup out. | `@/ui/*`, `@/data/read` (types), `@/data/contracts/*` (types), `@/data/unrecorded`, `@/shared/*` |
-| `src/data/read.ts`, `src/data/contracts/**`, `src/data/unrecorded.ts` | Pure vocabulary: `Read<T>`, `PageKey`, `PAGE_FAILURES`, zod view models, `Money` + `mulMicros`, the unrecorded table. | `zod`, each other |
+| `src/data/read.ts`, `src/data/contracts/**`, `src/data/unrecorded.ts` | Pure vocabulary: `Read<T>`, `PageKey`, `PAGE_FAILURES`, zod view models, `Money`, `Cost` and `moneyFromMicros` (`mulMicros` lands with its first caller in WL-44), the unrecorded table. | `zod`, each other |
 | `src/data/ports.ts` | The typed list of reads a page may make. Every method has a production caller. | `@/data/{read,contracts}`, `@/server/viewer` (ctx types) |
 | `src/data/source.ts` | The one composition point: returns the live `DataSource`. | `./live` |
 | `src/data/live/**` | One file per port. Each method is `kernelRead` plus a mapper typed from contract output. | `@/data/{read,contracts,ports}`, `@/server/kernel`, `@oxagen/oxagen/contracts/*` (declarations only) |
@@ -319,7 +319,7 @@ export type Read<T> =
   | { ok: false; reason: "denied"; permission: string }
   | { ok: false; reason: "pending_approval"; accessRequestId: string }
   | { ok: false; reason: "error"; code: string; status: number };   // no `exhausted`: no app read can produce it (§3.2)
-export type PageKey = "fleet" | "run" | "organization" | "billing" | "shell";
+export type PageKey = "fleet" | "run" | "agents" | "organization" | "billing" | "audit" | "shell";
 export const PAGE_FAILURES: Record<PageKey, { error: { code: string; status: number }; permission: string }>;
 
 // src/data/ports.ts — rev1, complete
@@ -330,8 +330,14 @@ export interface DataSource {
   runs:      { list(ctx: WsCtx, q: { cursor: string | null }): Promise<Read<RunPage>>;                 // list_runs
                get(ctx: WsCtx, runId: string, frames: { after: string | null }): Promise<Read<RunDetail>> }; // get_run
   approvals: { pending(ctx: WsCtx, q: { runId: string | null }): Promise<Read<ApprovalItem[]>> };      // list_approvals
+  agents:    { list(ctx: WsCtx, q: { cursor: string | null }): Promise<Read<AgentPage>>;               // list_agents (#2956)
+               get(ctx: WsCtx, agent: string): Promise<Read<AgentDetail>>;                             // get_agent
+               toolbelt(ctx: WsCtx, agent: string): Promise<Read<Toolbelt>>;                           // get_agent_toolbelt
+               incidents(ctx: WsCtx, agent: string, q: { cursor: string | null }): Promise<Read<IncidentPage>> }; // list_incidents {agentId}
   org:       { members(ctx: OrgCtx): Promise<Read<MemberList>>;                                       // list_members {scope:"org"}
                apiKeys(ctx: OrgCtx): Promise<Read<ApiKey[]>> };                                       // list_api_keys
+  audit:     { events(ctx: OrgCtx, q: AuditQuery): Promise<Read<AuditPage>>;                          // query_audit_log (#3097)
+               exportEvents(ctx: OrgCtx, q: AuditFilters & { format: "csv" | "ndjson" }): Promise<Read<AuditExport>> }; // export_audit_events
   billing:   { plan(ctx: OrgCtx): Promise<Read<PlanCard>>;                                            // get_subscription
                bucket(ctx: OrgCtx): Promise<Read<GauBucket>>;                                         // get_gau_bucket: mode, meter, invoice thresholds, auto top-up state
                contractRate(ctx: OrgCtx): Promise<Read<ContractRate>>;                                // get_contract_rate

@@ -128,12 +128,16 @@ export function Sidebar({ ctx, user, planTier }: SidebarProps) {
         )}
       >
         {/*
-          * Oxagen's logo is the WORDMARK, so the expanded sidebar shows the
-          * word alone — the icon is not placed beside it, which would rebuild
-          * the lockup the brand system does not use. Collapsed, the slot is
-          * square and too narrow for a word, so the Ox lettermark stands in.
-          */}
-        <Link href={homeHref} aria-label="Oxagen home" className="flex items-center">
+         * Oxagen's logo is the WORDMARK, so the expanded sidebar shows the
+         * word alone — the icon is not placed beside it, which would rebuild
+         * the lockup the brand system does not use. Collapsed, the slot is
+         * square and too narrow for a word, so the Ox lettermark stands in.
+         */}
+        <Link
+          href={homeHref}
+          aria-label="Oxagen home"
+          className="flex items-center"
+        >
           {collapsed ? <BrandMark /> : <OxagenWordmark className="h-6" />}
         </Link>
       </div>

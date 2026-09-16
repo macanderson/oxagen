@@ -191,6 +191,33 @@ function stepsForVscode(_wsSlug: string | undefined): InstallStep[] {
   ];
 }
 
+/**
+ * The wrap for a hook-based harness when the caller holds an enrollment token
+ * (#2967): the scripted path spec §14.1 names. The token is single use and
+ * expires, so the step says so.
+ */
+function stepsForEnrollment(
+  client: "claude-code" | "codex",
+  token: string,
+): InstallStep[] {
+  return [
+    {
+      label: "Install the Oxagen CLI",
+      command: "npm install -g @oxagen/cli",
+    },
+    {
+      label:
+        "Enrol this machine with the one-time token: device key, host credential, collector service and the harness hooks (the token is single use and expires unused)",
+      command: `oxagen agent enroll --token ${token} --harness ${client}`,
+    },
+    {
+      label:
+        "Start a session — its first frame is what registers the agent on Fleet",
+      command: client === "claude-code" ? "claude" : "codex",
+    },
+  ];
+}
+
 const STEP_BUILDERS: Record<
   InstallClient,
   (ws: string | undefined) => InstallStep[]
@@ -207,8 +234,11 @@ const STEP_BUILDERS: Record<
 export const systemInstallInstructionsHandler: CapabilityHandler<
   typeof systemInstallInstructions
 > = async (input, _ctx) => {
-  const builder = STEP_BUILDERS[input.client];
-  const steps = builder(input.workspaceSlug);
+  const steps =
+    input.enrollmentToken !== undefined &&
+    (input.client === "claude-code" || input.client === "codex")
+      ? stepsForEnrollment(input.client, input.enrollmentToken)
+      : STEP_BUILDERS[input.client](input.workspaceSlug);
 
   return {
     client: input.client,

@@ -3,6 +3,10 @@ import { defineTool } from "./_define";
 import { toolDeclarationList } from "../tool.declaration.list";
 import { toolDeclarationPublish } from "../tool.declaration.publish";
 import { agentToolList } from "../agent.tool.list";
+import {
+  consequenceTagSchema,
+  measureDeclarationsSchema,
+} from "../../mandates/schemas";
 
 const publishInput = toolDeclarationPublish.input.shape;
 const listedTool = toolDeclarationList.output.shape.tools.element.shape;
@@ -148,6 +152,14 @@ export const importTools = defineTool({
             risk_grade: publishInput.risk_grade,
             policy_group: publishInput.policy_group,
             manifest: publishInput.manifest,
+            // Safety classification (§6.9 part 1, ADR-059 decision 6), carried
+            // by reference from `publish_tool_declaration`. It is what the
+            // mandate gate reads off the active version at decision time, so
+            // an imported declaration that cannot state it would leave every
+            // mandate over this tool unable to measure or settle a call.
+            consequence_tags: publishInput.consequence_tags,
+            measures: publishInput.measures,
+            effect_id_path: publishInput.effect_id_path,
           })
           .strict(),
       )
@@ -194,6 +206,16 @@ export const importTools = defineTool({
            * `observed_approved` are `approve_tool_schema`'s to write.
            */
           schemaOrigin: z.enum(["declared", "imported"]),
+
+          /**
+           * The safety classification frozen onto this version, echoed back so
+           * an import of forty tools says what each one is now classified as
+           * — an origin `imported` row takes it from the wire manifest, and
+           * the caller has no other way to read what was stored.
+           */
+          consequenceTags: z.array(consequenceTagSchema),
+          measures: measureDeclarationsSchema,
+          effectIdPath: z.string().nullable(),
 
           /**
            * Carried from `list_agent_tools`: the domain each tool belongs to,

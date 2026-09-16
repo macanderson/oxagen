@@ -6,7 +6,8 @@ const orphans = JSON.parse(readFileSync(process.argv[3], "utf8"));
 const OUT = process.argv[4];
 
 const esc = (s) => (s || "").replace(/\|/g, "\\|");
-const grade = (t) => (t.resolved.length === 0 ? "NEW" : t.unresolved.length ? "MERGE" : "INHERIT");
+const grade = (t) =>
+  t.resolved.length === 0 ? "NEW" : t.unresolved.length ? "MERGE" : "INHERIT";
 
 const groups = [...new Set(tools.map((t) => t.group))];
 
@@ -31,14 +32,18 @@ for (const g of groups) {
   md += `\n## ${g} (${rows.length})\n\n`;
   md += `| Tool | Grade | Inherits schema from | Risk | Effect |\n|---|---|---|---|---|\n`;
   for (const t of rows) {
-    const from = t.resolved.length ? t.resolved.map((r) => `\`${r}\``).join(", ") : "none";
+    const from = t.resolved.length
+      ? t.resolved.map((r) => `\`${r}\``).join(", ")
+      : "none";
     md += `| \`${t.name}\` | ${grade(t)} | ${from} | ${t.inherit?.riskLevel ?? "none"} | ${t.inherit?.defaultEffect ?? "none"} |\n`;
   }
 }
 
 md += `\n---\n\n## Deletion candidates: contracts no target tool absorbs (${orphans.length})\n\n`;
 md += `| Contract | File | Domain |\n|---|---|---|\n`;
-for (const o of orphans.sort((a, b) => (a.domain || "").localeCompare(b.domain || ""))) {
+for (const o of orphans.sort((a, b) =>
+  (a.domain || "").localeCompare(b.domain || ""),
+)) {
   md += `| \`${o.name}\` | \`${o.file}\` | ${esc(o.domain)} |\n`;
 }
 

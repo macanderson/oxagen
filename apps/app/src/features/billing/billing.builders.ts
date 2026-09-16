@@ -171,6 +171,14 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
   const source: DataSource = {
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: { context: refuse },
+    runs: { list: refuse },
+    approvals: { pending: refuse },
+    agents: {
+      list: refuse,
+      get: refuse,
+      toolbelt: refuse,
+      incidents: refuse,
+    },
     billing: {
       plan: (...args) => {
         calls.plan.push(args);
@@ -197,6 +205,7 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
       budgets: refuse,
     },
     org: { members: refuse },
+    audit: { events: refuse, exportEvents: refuse },
   };
   return { source, calls };
 }

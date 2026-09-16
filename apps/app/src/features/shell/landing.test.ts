@@ -39,6 +39,14 @@ const source = {
     contractRate: vi.fn(),
     invoices: vi.fn(),
   },
+  runs: { list: vi.fn() },
+  approvals: { pending: vi.fn() },
+  agents: {
+    list: vi.fn(),
+    get: vi.fn(),
+    toolbelt: vi.fn(),
+    incidents: vi.fn(),
+  },
   spend: {
     byGroup: vi.fn(),
     fleet: vi.fn(),
@@ -47,6 +55,7 @@ const source = {
     budgets: vi.fn(),
   },
   org: { members: vi.fn() },
+  audit: { events: vi.fn(), exportEvents: vi.fn() },
 };
 
 const acme = { slug: "acme", name: "Acme Robotics" };

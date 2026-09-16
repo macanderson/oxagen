@@ -34,20 +34,16 @@
         "default": "all"
       },
       "eventType": {
-        "type": "string",
-        "description": "Exact event-type match (e.g. 'billing.plan_changed')"
+        "type": "string"
       },
       "actorUserId": {
-        "type": "string",
-        "description": "Filter by the acting user's id"
+        "type": "string"
       },
       "actorPublicId": {
-        "type": "string",
-        "description": "Filter by the acting user's public id (usr_…)"
+        "type": "string"
       },
       "capability": {
-        "type": "string",
-        "description": "Filter by capability name"
+        "type": "string"
       },
       "outcome": {
         "type": "string",
@@ -56,20 +52,16 @@
           "deny",
           "error",
           "success"
-        ],
-        "description": "Filter by authz outcome"
+        ]
       },
       "workspaceId": {
-        "type": "string",
-        "description": "Restrict to one workspace (default: all in org)"
+        "type": "string"
       },
       "from": {
-        "type": "string",
-        "description": "Inclusive ISO-8601 lower bound on occurredAt"
+        "type": "string"
       },
       "to": {
-        "type": "string",
-        "description": "Exclusive ISO-8601 upper bound on occurredAt"
+        "type": "string"
       },
       "limit": {
         "type": "integer",
@@ -121,8 +113,7 @@
                 {
                   "type": "null"
                 }
-              ],
-              "description": "User who triggered the event, when known"
+              ]
             },
             "actorPublicId": {
               "anyOf": [
@@ -132,8 +123,7 @@
                 {
                   "type": "null"
                 }
-              ],
-              "description": "The acting user's public id (usr_…), when the user exists"
+              ]
             },
             "workspaceId": {
               "anyOf": [
@@ -153,8 +143,7 @@
                 {
                   "type": "null"
                 }
-              ],
-              "description": "The workspace's slug, when the event names a workspace"
+              ]
             },
             "capability": {
               "anyOf": [
@@ -164,8 +153,7 @@
                 {
                   "type": "null"
                 }
-              ],
-              "description": "Capability name for capability.* security events"
+              ]
             },
             "outcome": {
               "anyOf": [
@@ -175,8 +163,7 @@
                 {
                   "type": "null"
                 }
-              ],
-              "description": "Authz outcome for security events (allow/deny/error/success)"
+              ]
             },
             "ip": {
               "anyOf": [
@@ -186,8 +173,7 @@
                 {
                   "type": "null"
                 }
-              ],
-              "description": "Client IP address, when recorded"
+              ]
             },
             "userAgent": {
               "anyOf": [
@@ -197,8 +183,7 @@
                 {
                   "type": "null"
                 }
-              ],
-              "description": "Client user agent, when recorded"
+              ]
             },
             "requestId": {
               "anyOf": [

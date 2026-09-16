@@ -53,6 +53,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
+const provisional = vi.hoisted(() => ({
+  assertWorkspaceNotProvisional: vi.fn(),
+}));
+vi.mock("./lib/onboarding", () => ({
+  assertWorkspaceNotProvisional: provisional.assertWorkspaceNotProvisional,
+}));
+
+import { HandlerError, isHandlerError } from "@oxagen/oxagen";
 import { contextRecordPublishHandler } from "./context.record.publish";
 
 const CTX: CapabilityContext = {
@@ -85,6 +93,8 @@ beforeEach(() => {
   mocks.insertReturning.length = 0;
   mocks.insertedValues.length = 0;
   mocks.updateSets.length = 0;
+  provisional.assertWorkspaceNotProvisional.mockReset();
+  provisional.assertWorkspaceNotProvisional.mockResolvedValue(undefined);
 });
 
 describe("context.record.publish handler", () => {
@@ -159,6 +169,24 @@ describe("context.record.publish handler", () => {
       parentVersionId: "v1-uuid",
       checksum: BODY_CHECKSUM,
     });
+  });
+
+  it("refuses a provisional workspace before touching the registry (#2967)", async () => {
+    provisional.assertWorkspaceNotProvisional.mockRejectedValueOnce(
+      new HandlerError({ code: "conflict", reason: "provisional" }),
+    );
+    await expect(contextRecordPublishHandler(INPUT, CTX)).rejects.toSatisfy(
+      (e: unknown) =>
+        isHandlerError(e) &&
+        e.code === "conflict" &&
+        e.reason === "provisional",
+    );
+    expect(provisional.assertWorkspaceNotProvisional).toHaveBeenCalledWith({
+      orgId: CTX.orgId,
+      workspaceId: CTX.workspaceId,
+    });
+    expect(mocks.insertedValues).toEqual([]);
+    expect(mocks.updateSets).toEqual([]);
   });
 
   it("requires a workspace scope", async () => {
