@@ -70,7 +70,7 @@ async function renderWorkspaces(
       waste: vi.fn(),
       budgets: vi.fn(),
     },
-    org: { members: vi.fn(), roles: vi.fn(), workspaces },
+    org: { members: vi.fn(), roles: vi.fn(), workspaces, apiKeys: vi.fn() },
     skills: { inventory: vi.fn() },
     steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
   };

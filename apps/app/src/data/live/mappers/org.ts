@@ -2,15 +2,18 @@
 // §3.4): list_members {scope:"org"} to People, narrowed to the org branch of
 // its scope union (the adapter answers the workspace branch as unmappable);
 // list_iam_roles to the role and permission catalogue, folded to the
-// vocabulary the editor speaks; list_workspaces to the Workspaces section,
-// carrying the public id so no database uuid reaches the page (INV-11). Each
-// is typed from the contract's `_output`, so a nullable contract field cannot
-// land in a required view field.
+// vocabulary the editor speaks; list_workspaces to the Workspaces section; and
+// list_api_keys to the keys the organization holds. Each carries the public id
+// so no database uuid reaches the page (INV-11), and each is typed from the
+// contract's `_output`, so a nullable contract field cannot land in a required
+// view field.
+import type { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import type { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
-import type { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import type { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
+import type { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import type { z } from "zod";
 import type {
+  ApiKeyList,
   MemberList,
   RoleCatalog,
   WorkspaceList,
@@ -84,4 +87,23 @@ export function toWorkspaceList(
       archivedAt: workspace.archivedAt,
     })),
   };
+}
+
+/**
+ * The key's public id is the only id the view carries (INV-11). Every field is
+ * named here, so a field the contract gains later — a secret among them —
+ * reaches the page only when this mapper is changed to copy it.
+ */
+export function toApiKeys(
+  out: ContractOutput<typeof apiKeyList>,
+): z.input<typeof ApiKeyList> {
+  return out.items.map((key) => ({
+    id: key.publicId,
+    name: key.name,
+    prefix: key.prefix,
+    createdAt: key.createdAt,
+    lastUsedAt: key.lastUsedAt,
+    expiresAt: key.expiresAt,
+    revokedAt: key.revokedAt,
+  }));
 }

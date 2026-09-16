@@ -1,6 +1,9 @@
-// The organization port: one kernel read of list_members at org scope for the
-// Organization page, mapped into the People view model, with a refusal passed
+// The organization port: one kernel read each of list_members at org scope for
+// the Organization page, list_iam_roles for the roles and the permission
+// catalogue, list_workspaces for the Workspaces section and list_api_keys for
+// the API keys page, each mapped into its view model, with a refusal passed
 // through and an unmappable answer reported once.
+import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
@@ -252,6 +255,71 @@ describe("org.workspaces", () => {
     expect(await org.workspaces(ctx)).toEqual(
       readError("record_unmappable", 502),
     );
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+});
+
+const storedKey = {
+  publicId: "aky_7k2m9q4x8r1t5v3w6y0z2a",
+  name: "CI runner",
+  prefix: "ox_liveliveli",
+  createdAt: "2026-09-13T10:00:00.000Z",
+  lastUsedAt: null,
+  expiresAt: null,
+  revokedAt: null,
+};
+
+describe("org.apiKeys", () => {
+  it("reads list_api_keys for the organization page and returns the API keys view model", async () => {
+    kernelRead.mockResolvedValue(readOk({ items: [storedKey] }));
+    expect(await org.apiKeys(ctx)).toEqual(
+      readOk([
+        {
+          id: "aky_7k2m9q4x8r1t5v3w6y0z2a",
+          name: "CI runner",
+          prefix: "ox_liveliveli",
+          createdAt: "2026-09-13T10:00:00.000Z",
+          lastUsedAt: null,
+          expiresAt: null,
+          revokedAt: null,
+        },
+      ]),
+    );
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: apiKeyList,
+      input: {},
+      page: "organization",
+    });
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("returns an empty list for an organization holding no keys", async () => {
+    kernelRead.mockResolvedValue(readOk({ items: [] }));
+    expect(await org.apiKeys(ctx)).toEqual(readOk([]));
+  });
+
+  it("passes a denied read through (negative)", async () => {
+    const denied = { ok: false, reason: "denied", permission: "org.admin" };
+    kernelRead.mockResolvedValue(denied);
+    expect(await org.apiKeys(ctx)).toEqual(denied);
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("passes a failed read through (negative)", async () => {
+    const down = readError("control_plane_unavailable", 503);
+    kernelRead.mockResolvedValue(down);
+    expect(await org.apiKeys(ctx)).toEqual(down);
+  });
+
+  it("answers record_unmappable and reports once for a key the view model refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        items: [
+          { ...storedKey, publicId: "7a000000-0000-4000-8000-0000000000a1" },
+        ],
+      }),
+    );
+    expect(await org.apiKeys(ctx)).toEqual(readError("record_unmappable", 502));
     expect(captureError).toHaveBeenCalledOnce();
   });
 });

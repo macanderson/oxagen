@@ -90,7 +90,12 @@ const source: DataSource = {
     waste: vi.fn(),
     budgets: vi.fn(),
   },
-  org: { members: vi.fn(), roles: vi.fn(), workspaces: vi.fn() },
+  org: {
+    members: vi.fn(),
+    roles: vi.fn(),
+    workspaces: vi.fn(),
+    apiKeys: vi.fn(),
+  },
   skills: { inventory: read },
   steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
 };

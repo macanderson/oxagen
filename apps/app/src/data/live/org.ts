@@ -1,19 +1,32 @@
 // The organization port on the kernel (ARCHITECTURE.md §3.3): the members and
 // pending invitations of the viewer's organization (list_members
-// {scope:"org"}), its roles with the permission catalogue (list_iam_roles) and
-// its workspaces including the archived ones (list_workspaces), each a
-// noBillingGate read made with the organization viewer's context.
+// {scope:"org"}), its roles with the permission catalogue (list_iam_roles), its
+// workspaces including the archived ones (list_workspaces) and the keys it
+// holds (list_api_keys), each a noBillingGate read made with the organization
+// viewer's context, and each refused by its handler for a viewer below the role
+// it names.
 import "server-only";
+import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
-import { MemberList, RoleCatalog, WorkspaceList } from "@/data/contracts/org";
+import {
+  ApiKeyList,
+  MemberList,
+  RoleCatalog,
+  WorkspaceList,
+} from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
-import { toMemberList, toRoleCatalog, toWorkspaceList } from "./mappers/org";
+import {
+  toApiKeys,
+  toMemberList,
+  toRoleCatalog,
+  toWorkspaceList,
+} from "./mappers/org";
 
 /** The mapped value parsed at the boundary; a record the view refuses is `record_unmappable`, reported once. */
 function view<S extends z.ZodType>(
@@ -51,12 +64,7 @@ export const org: DataSource["org"] = {
       });
       return readError("record_unmappable", 502);
     }
-    return view(
-      ctx.orgId,
-      MemberList,
-      toMemberList(read.value),
-      "org.members",
-    );
+    return view(ctx.orgId, MemberList, toMemberList(read.value), "org.members");
   },
 
   async roles(ctx) {
@@ -82,5 +90,15 @@ export const org: DataSource["org"] = {
       toWorkspaceList(read.value),
       "org.workspaces",
     );
+  },
+
+  async apiKeys(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: apiKeyList,
+      input: {},
+      page: "organization",
+    });
+    if (!read.ok) return read;
+    return view(ctx.orgId, ApiKeyList, toApiKeys(read.value), "org.apiKeys");
   },
 };

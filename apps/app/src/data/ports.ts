@@ -18,7 +18,12 @@ import type {
   InvoicePage,
   PlanCard,
 } from "./contracts/billing";
-import type { MemberList, RoleCatalog, WorkspaceList } from "./contracts/org";
+import type {
+  ApiKey,
+  MemberList,
+  RoleCatalog,
+  WorkspaceList,
+} from "./contracts/org";
 import type { RunPage } from "./contracts/runs";
 import type {
   OrgChoice,
@@ -135,17 +140,19 @@ export interface DataSource {
     budgets(ctx: WsCtx): Promise<Read<SpendBudgets>>;
   };
   /**
-   * The Organization pages' three reads, each noBillingGate and org-scoped
-   * (#2964): list_members {scope:"org"} for People, caller
-   * features/organization/people.tsx; list_iam_roles for the roles and the
-   * permission catalogue, caller features/organization/roles.tsx; and
-   * list_workspaces including archived rows for the Workspaces section,
-   * caller features/organization/workspaces.tsx.
+   * The Organization pages' four reads, each noBillingGate and org-scoped
+   * (#2964, WL-37); callers: features/organization/people.tsx, roles.tsx,
+   * workspaces.tsx and api-keys.tsx.
    */
   org: {
+    /** list_members {scope:"org"} */
     members(ctx: OrgCtx): Promise<Read<MemberList>>;
+    /** list_iam_roles, the roles and the permission catalogue */
     roles(ctx: OrgCtx): Promise<Read<RoleCatalog>>;
+    /** list_workspaces, archived rows included */
     workspaces(ctx: OrgCtx): Promise<Read<WorkspaceList>>;
+    /** list_api_keys, every key in scope, newest first, revoked ones included */
+    apiKeys(ctx: OrgCtx): Promise<Read<ApiKey[]>>;
   };
   /**
    * list_skills, one page by name over its default window (noBillingGate;
