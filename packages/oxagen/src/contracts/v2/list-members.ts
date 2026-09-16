@@ -30,6 +30,12 @@ export const listMembers = defineTool({
   scoped: live.scoped,
 
   absorbs: ["list_workspace_members"],
+  carriedInPlace: [
+    {
+      name: "list_workspace_members",
+      why: "the contract was rewritten in place in ../workspace.member.list.ts under its Appendix E name; the v1 name no longer registers anywhere. This descriptor takes `input: live.input` from that same contract, so there is no v1 shape to diff against.",
+    },
+  ],
   drops: [
     {
       field: "workspace_id",
