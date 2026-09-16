@@ -152,6 +152,7 @@ type Messages = {
         never: string;
         noExpiry: string;
         active: string;
+        expired: string;
         revoked: string;
       };
       toolbelt: {
@@ -234,6 +235,7 @@ type Messages = {
         bundleVersion: string;
         never: string;
         revoked: string;
+        expired: string;
         empty: {
           title: string;
           body: string;

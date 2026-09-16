@@ -200,7 +200,7 @@ describe("Identity", () => {
       "oxa_ag_7frelease-bot run key",
       "Sep 1, 2026, 10:00 AM",
       "never",
-      "Mar 1, 2027, 10:00 AM",
+      "Mar 1, 2099, 10:00 AM",
       "active",
     ]);
     expect(calls.toolbelt).toEqual([]);
@@ -229,6 +229,28 @@ describe("Identity", () => {
     );
   });
 
+  it("marks a credential whose expiry has passed as expired, never active (negative)", async () => {
+    // resolveApiKey refuses an expired key; a row reading "active" over it
+    // would be the page disagreeing with the date in the cell beside it.
+    const [credential] = agentDetail().credentials;
+    await renderAgent({
+      get: readOk(
+        agentDetail({
+          credentials: credential
+            ? [{ ...credential, expiresAt: "2020-01-01T10:00:00.000Z" }]
+            : [],
+        }),
+      ),
+    });
+    const row = screen.getByTestId("credential-row");
+    expect(row.querySelector("[data-state]")).toHaveAttribute(
+      "data-state",
+      "expired",
+    );
+    expect(row).toHaveTextContent("expired");
+    expect(row).not.toHaveTextContent("active");
+  });
+
   it("marks a revoked credential with when it was revoked", async () => {
     const [credential] = agentDetail().credentials;
     await renderAgent({
@@ -243,6 +265,31 @@ describe("Identity", () => {
     expect(region("Run credentials")).toHaveTextContent(
       "revoked Sep 10, 2026, 10:00 AM",
     );
+  });
+
+  it("names revocation on a credential that is both revoked and expired, as the resolver does (negative)", async () => {
+    const [credential] = agentDetail().credentials;
+    await renderAgent({
+      get: readOk(
+        agentDetail({
+          credentials: credential
+            ? [
+                {
+                  ...credential,
+                  expiresAt: "2020-01-01T10:00:00.000Z",
+                  revokedAt: "2026-09-10T10:00:00.000Z",
+                },
+              ]
+            : [],
+        }),
+      ),
+    });
+    const row = screen.getByTestId("credential-row");
+    expect(row.querySelector("[data-state]")).toHaveAttribute(
+      "data-state",
+      "revoked",
+    );
+    expect(row).not.toHaveTextContent("expired");
   });
 });
 
@@ -426,6 +473,59 @@ describe("Enrollment", () => {
       "Sep 14, 2026, 10:00 AM",
     ]);
     expect(calls.toolbelt).toEqual([]);
+  });
+
+  it("says an enrollment past its expiry has expired, over the status column alone (negative)", async () => {
+    // tacho-host.ts refuses a host whose enrollment has expired, and the table
+    // prints no expiry column, so the stored status is all a person would see.
+    const [host] = agentDetail().hosts;
+    await renderAgent(
+      {
+        get: readOk(
+          agentDetail({
+            hosts: host
+              ? [{ ...host, expiresAt: "2020-01-01T10:00:00.000Z" }]
+              : [],
+          }),
+        ),
+      },
+      "enrollment",
+    );
+    const row = screen.getByTestId("host-row");
+    expect(row.querySelector("[data-state]")).toHaveAttribute(
+      "data-state",
+      "expired",
+    );
+    expect(row).toHaveTextContent("expired Jan 1, 2020, 10:00 AM");
+  });
+
+  it("names revocation on an enrollment that is both revoked and expired (negative)", async () => {
+    const [host] = agentDetail().hosts;
+    await renderAgent(
+      {
+        get: readOk(
+          agentDetail({
+            hosts: host
+              ? [
+                  {
+                    ...host,
+                    expiresAt: "2020-01-01T10:00:00.000Z",
+                    revokedAt: "2026-09-14T11:00:00.000Z",
+                  },
+                ]
+              : [],
+          }),
+        ),
+      },
+      "enrollment",
+    );
+    const row = screen.getByTestId("host-row");
+    expect(row.querySelector("[data-state]")).toHaveAttribute(
+      "data-state",
+      "revoked",
+    );
+    expect(row).toHaveTextContent("revoked Sep 14, 2026, 11:00 AM");
+    expect(row).not.toHaveTextContent("expired");
   });
 
   it("tells a person how to enroll a host when none is", async () => {

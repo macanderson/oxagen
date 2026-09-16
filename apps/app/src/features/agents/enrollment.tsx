@@ -2,8 +2,15 @@
 // device key fingerprint, the collector and hook state the daemon reported and
 // the policy bundle it last fetched. A report the daemon has not sent reads
 // "not recorded".
+//
+// The status cell prints the status column and then what ended the enrollment.
+// `packages/handlers/src/lib/tacho-host.ts:110-115` refuses a revoked host and
+// then an expired one, and every enrollment carries an expiry, so a cell that
+// read only the revocation would print a stored status over a host whose every
+// request is refused.
 import { useLocale, useTranslations } from "next-intl";
 import type { AgentDetail } from "@/data/contracts/agents";
+import { credentialState } from "@/shared/credential-state";
 import { mono } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
 import { cell, Table } from "@/ui/table";
@@ -16,9 +23,10 @@ function hooksKey(ok: boolean | null) {
   return ok ? "ok" : "missing";
 }
 
-function HostRow({ host }: { host: Host }) {
+function HostRow({ host, now }: { host: Host; now: number }) {
   const t = useTranslations("agents.detail.enrollment");
   const locale = useLocale();
+  const state = credentialState(host, now);
   return (
     <tr data-testid="host-row">
       <td className={cell}>
@@ -27,13 +35,18 @@ function HostRow({ host }: { host: Host }) {
           {host.platform}
         </span>
       </td>
-      <td className={cell}>
+      <td className={cell} data-state={state}>
         <span className={mono}>{host.status}</span>
-        {host.revokedAt === null ? null : (
+        {state === "revoked" && host.revokedAt !== null ? (
           <span className="block text-xs text-muted-foreground">
             {t("revoked")} <Instant at={host.revokedAt} />
           </span>
-        )}
+        ) : null}
+        {state === "expired" ? (
+          <span className="block text-xs text-muted-foreground">
+            {t("expired")} <Instant at={host.expiresAt} />
+          </span>
+        ) : null}
       </td>
       <td className={cell}>
         <span className={mono}>{host.mode}</span>
@@ -71,7 +84,14 @@ function HostRow({ host }: { host: Host }) {
   );
 }
 
-export function EnrollmentSection({ hosts }: { hosts: AgentDetail["hosts"] }) {
+export function EnrollmentSection({
+  hosts,
+  now,
+}: {
+  hosts: AgentDetail["hosts"];
+  /** The instant the agent was read; an enrollment's expiry is judged against it. */
+  now: number;
+}) {
   const t = useTranslations("agents.detail.enrollment");
   return (
     <Panel id="agent-hosts" title={t("title")} lead={t("lead")}>
@@ -98,7 +118,7 @@ export function EnrollmentSection({ hosts }: { hosts: AgentDetail["hosts"] }) {
           ]}
         >
           {hosts.map((host) => (
-            <HostRow key={host.hostEnrollmentId} host={host} />
+            <HostRow key={host.hostEnrollmentId} host={host} now={now} />
           ))}
         </Table>
       )}

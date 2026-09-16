@@ -19,6 +19,10 @@ import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { OrgCtx, OrgRole } from "@/server/viewer";
 import { WsCtx } from "@/server/viewer";
+import {
+  credentialState,
+  type CredentialState,
+} from "@/shared/credential-state";
 import { routes, type SafePath } from "@/shared/safe-path";
 import { mono } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
@@ -216,23 +220,8 @@ function WorkspacePicker({
   );
 }
 
-/** A key's state, from what is recorded and the clock the page was rendered at. */
-type KeyState = "live" | "expired" | "revoked";
-
-/**
- * Revocation is recorded, expiry is judged. `resolveApiKey` refuses an expired
- * key (`packages/auth/src/resolvers/api-key.ts:144-145`), so a page that reads
- * only `revokedAt` prints a key as live that no request can present.
- */
-export function keyState(key: ApiKey, now: number): KeyState {
-  if (key.revokedAt !== null) return "revoked";
-  if (key.expiresAt !== null && Date.parse(key.expiresAt) <= now)
-    return "expired";
-  return "live";
-}
-
 /** The key's state as a dot and a word. */
-function KeyStatus({ state }: { state: KeyState }) {
+function KeyStatus({ state }: { state: CredentialState }) {
   const t = useTranslations("organization.apiKeys.status");
   return (
     <span
@@ -289,7 +278,7 @@ function Keys({
           ]}
         >
           {keys.map((key) => {
-            const state = keyState(key, now);
+            const state = credentialState(key, now);
             return (
               <tr key={key.id} data-api-key={key.id}>
                 <td className={`${cell} font-medium text-foreground`}>
