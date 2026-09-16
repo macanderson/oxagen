@@ -39,3 +39,19 @@ Neo4j's native vector index (`cosine`, 1536 dims to match
   spec §8.2 mutation contract).
 - Tradeoff: Neo4j vector index is younger than pgvector. Acceptable for
   v1; reassess at 100M+ vectors.
+
+## Amendment 2026-09-15: Neo4j stays
+
+Maintainer decision, 2026-09-15. Neo4j stays in the architecture. This
+ADR's decision stands, there is no retirement ADR, and there is no
+removal work. Every Neo4j dependency, schema runner, vector index, data
+plane and `NEO4J_*` variable stays in place.
+
+Earlier wording that the Mission Control target retires Neo4j with the
+ontology engine, and that Neo4j stays only "through rev1" until a
+retirement ADR written after the witness lane, is superseded by this
+amendment.
+
+The Ontology page is cut from `apps/app` (`apps/app/ARCHITECTURE.md` §9,
+the scale-back decision of 2026-09-14). That cut removes the page, not
+the store: graph reads stay on the API and MCP surfaces.

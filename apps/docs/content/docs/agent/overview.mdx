@@ -3,27 +3,11 @@ title: Agent overview
 description: "How the Oxagen in-app agent works: a governed turn loop over the fleet record and knowledge graph, not a coding runtime."
 ---
 
-Oxagen governs the agents your organization builds and runs; it does not run
-a coding agent of its own. The sandbox layer, subagent fan-out, background
-tasks, plan mode, skills authoring, and content-generation tools have been
-excised (ADR-043, `docs/adr/ADR-043-runtime-excision.md` in the repository).
-What remains is one conversational surface: a governed turn
-(`runGovernedTurn`) whose job is to interrogate the **fleet record** and
-the **knowledge graph**: what did my agents do, what context did they have,
-what did it cost, what is pending approval.
+Oxagen governs the agents your organization builds and runs. It does not run a coding agent of its own. The sandbox layer, subagent fan-out, background tasks, plan mode, skills authoring, and content-generation tools are gone (ADR-043, `docs/adr/ADR-043-runtime-excision.md` in the repository). What remains is one conversational surface, a governed turn (`runGovernedTurn`). Its job is to answer questions about the **fleet record** and the **knowledge graph**: what your agents did, what context they had, what it cost, and what is waiting for a person.
 
-It has no sandbox, no file system, no browser, and no subagents. Every tool
-call it makes is a capability contract invoked through the same
-`kernel.invoke()` boundary as the REST API and the MCP gateway: IAM-checked,
-metered, and audit-logged identically regardless of which surface triggered
-it.
+It has no sandbox, no file system, no browser, and no subagents. Every tool call it makes is a request for a capability contract, called through the same `kernel.invoke()` boundary as the REST API and the MCP gateway. Each call is IAM-checked, metered, and audit-logged the same way whichever surface triggered it.
 
-The turn loop itself runs on Stella's headless engine, `stella-serve`
-(ADR-053). The engine owns the step cap, loop detection, compaction, and
-cancellation, but it holds no model key and runs no tool. Every completion and
-every tool call it wants comes back to Oxagen as a request, and Oxagen answers
-it under governance. There is no in-process fallback: if the engine is
-unreachable, the turn fails before anything streams.
+The turn loop runs on Stella's headless engine, `stella-serve` (ADR-053). The engine owns the step cap, loop detection, compaction, and cancellation, but it holds no model key and runs no tool. Every completion and every tool call it wants comes back to Oxagen as a request, and Oxagen answers it under the same rules as any other governed action. There is no in-process fallback. If the engine is unreachable, the turn fails before anything streams.
 
 ## Architecture
 
@@ -60,63 +44,46 @@ sequenceDiagram
   T-->>R: Final text and usage
 `} />
 
-The engine sees tool results; it never sees a credential. A denied approval
-fails the tool call before `invoke()` runs, and the handler always runs inside
-the kernel's tenant scope.
+The engine sees tool results. It never sees a credential. A denied approval fails the tool call before `invoke()` runs, and the handler always runs inside the kernel's tenant scope.
 
-## What the agent can do
+## What the agent can request
 
-The agent tool surface is derived from the contract registry. Any capability
-declared with `surfaces: ['agent']` is available as a tool in a chat session,
-filtered by:
+The contract registry defines the agent's tools. Any capability declared with `surfaces: ['agent']` is a tool the agent can request in a conversation, filtered by:
 
-1. Whether the capability is enabled in the workspace tool policy.
-2. Whether the current principal (user or delegated agent) has the required
-   grant.
+1. The tool policy for the turn.
+2. Whether the current principal (you, or an agent acting for you) holds the grant.
 
-The agent selects tools autonomously based on the user's request. It cannot
-call a capability it does not have access to: the IAM check happens before
-the handler runs, not inside it.
+The agent picks tools from that list to answer your request. A rule answers each call before the handler runs: allowed, denied, or routed to you as an approval card. The IAM check happens before the handler, never inside it.
 
 ## Delegated context
 
-When a user is in chat, the agent operates in delegated context. The agent
-borrows the user's effective grants for the session. The audit record
-captures both: the human principal and the agent acting on their behalf.
+When you chat, the agent acts in delegated context, with your effective grants for that conversation and never more. The audit record names both: you, and the agent acting for you.
 
-This is the "chain of custody" model: an auditor reviewing an audit log can
-always trace any agent action back to the human who authorized it, or to the
-service identity configured for an automated trigger.
+This is the chain of custody. An auditor reading the audit log can follow any agent action back to the person who started it, or to the identity configured for an automated trigger.
 
 ## Tool categories
 
 | Category | Examples |
 |---|---|
 | Fleet & registry | Look up agent definitions, roles, deployments, and environment bindings |
-| Run history | List and inspect past agent runs, traces, and citations |
+| Run history | List and inspect past agent runs, run trees, and citations |
 | Memory | Recall and write memories from the workspace knowledge graph |
-| Knowledge | Query the ontology, search the graph, browse nodes and relationships |
-| Approvals | Resolve a pending tool-call or MCP-consent approval |
+| Knowledge | Query the ontology, search the graph, and browse nodes and relationships |
+| Approvals | Answer a pending tool-call or MCP-consent approval |
 | Billing & budgets | Read spend, usage, and budget policy |
 | MCP gateway | List registered external MCP servers and their tools |
-| Repository status | CI status, PR diffs, PR metadata for connected repos (read-only) |
+| Repository status | CI status, PR diffs, and PR metadata for connected repositories (read-only) |
 
-See [Tools and capabilities](/docs/agent/tools-and-capabilities) for the full
-list.
+See [Tools and capabilities](/docs/agent/tools-and-capabilities) for the full list.
 
 ## What a turn records
 
 Every agent turn produces:
 
-- Streamed SSE events: `text` (the response), `tool-call-start` and
-  `tool-call-end` (tool calls), `approval-required` (an approval card), and
-  `usage`.
-- One `agent.agent_tool_calls` row in Postgres per tool invocation (durable
-  record).
-- One ClickHouse `tool_invocations` row per tool invocation (analytics).
-- A `capability.invoke_allowed` or `capability.invoke_denied` security event
-  per IAM decision.
-- A credit delta event at turn end (credits charged for the turn).
+- Streamed SSE events: `text` (the response), `tool-call-start` and `tool-call-end` (tool calls), `approval-required` (an approval card), and `usage`.
+- One `agent.agent_tool_calls` row in Postgres per tool call (the durable record).
+- One ClickHouse `tool_invocations` row per tool call (analytics).
+- A `capability.invoke_allowed` or `capability.invoke_denied` security event per IAM decision.
+- A credit delta event at turn end (the credits charged for the turn).
 
-Token usage, tool call latency, and error rates are available in
-**Workspace → Activity**.
+Read token usage and spend on the organization **Dashboard**.

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <meta charset="utf-8">
-<title>Oxagen · The Verified-Outcome Market Router</title>
+<title>Oxagen · Verified-outcome market router</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0B0B0C">
 <meta name="description" content="The verified-outcome market router: every subtask routed to the cheapest model that clears a verified-success threshold, learned from Oxagen's own metered history, with a roadmap to billing-native accuracy SLAs.">
@@ -247,11 +247,11 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
       <svg class="title-logo" viewBox="7.775 4.325 36.343 37.216" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Oxagen logo"><defs><linearGradient gradientTransform="matrix(27.9194 19.5129 -21.9367 24.8347 12.2858 18.2731)" gradientUnits="userSpaceOnUse" id="lgA" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#F1C364"/><stop offset="0.5" stop-color="#D6962C"/><stop offset="1" stop-color="#8B5E1A"/></linearGradient><linearGradient gradientTransform="matrix(12.59 0 0 12.59 9.77471 32.9406)" gradientUnits="userSpaceOnUse" id="lgB" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#F1C364"/><stop offset="0.5" stop-color="#D6962C"/><stop offset="1" stop-color="#8B5E1A"/></linearGradient></defs><g stroke="#F1EDEA" stroke-width="1" fill="none"><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z"/></g><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="url(#lgA)"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="url(#lgB)" opacity="0.55"/></svg>
     </div>
     <div class="eyebrow rv" data-d="2">Feature deep dive · The verified-outcome market router</div>
-    <h1 class="rv" data-d="3">Route every subtask like an order.<br><span class="gradtext">Accuracy with an SLA and a price tag.</span></h1>
-    <p class="lede rv" data-d="4">Every subtask class gets a live cost/accuracy curve computed from Oxagen's own metered history: <strong>verified successes per model per task class, at current prices</strong>. The router sends each subtask to the cheapest venue that clears the verified-success threshold, escalates only when the verifier rejects, and points at the endgame: <strong>billing-native accuracy SLAs</strong>.</p>
+    <h1 class="rv" data-d="3">Route every subtask<br><span class="gradtext">like an order.</span></h1>
+    <p class="lede rv" data-d="4">Every subtask class gets a live cost/accuracy curve computed from Oxagen's own metered history: <strong>verified successes per model per task class, at current prices</strong>. The router sends each subtask to the cheapest venue that clears the verified-success threshold, climbs a tier only when the verifier rejects, and points at the endgame: <strong>billing-native accuracy SLAs</strong>.</p>
     <div class="title-meta rv" data-d="5">
       <span class="pill">Shipped: shadow-mode v1</span>
-      <span class="pill">Learned from our own exhaust</span>
+      <span class="pill">Learned from Oxagen's metered history</span>
       <span class="pill">Roadmap: 4 phases</span>
       <span class="pill">Endgame: refundable SLAs</span>
     </div>
@@ -276,10 +276,10 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
 </section>
 
 <!-- 3 · TODAY: THE ROUTING MACHINERY -->
-<section class="slide" aria-label="What we have today: routing machinery">
+<section class="slide" aria-label="What Oxagen has today: routing machinery">
   <div class="inner">
-    <div class="eyebrow rv" data-d="1"><span class="idx">02</span> What we have today · 1 of 2</div>
-    <h2 class="rv" data-d="1">Solid routing plumbing, <span class="gradtext">zero learning</span>.</h2>
+    <div class="eyebrow rv" data-d="1"><span class="idx">02</span> What Oxagen has today · 1 of 2</div>
+    <h2 class="rv" data-d="1">Solid routing plumbing, <span class="gradtext">no learning</span>.</h2>
     <p class="lede rv" data-d="2">Oxagen already routes every turn through a deterministic pipeline, and it is good plumbing: tiers, overrides, and a hard budget guard. What it lacks is feedback.</p>
     <div class="pipe rv" data-d="3">
       <div class="node">Task signals</div>
@@ -289,23 +289,23 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
       <div class="node">Model slug</div>
     </div>
     <div class="grid3 rv" data-d="4">
-      <div class="card"><span class="k">Tier router</span><p><strong>Rules-based classifier.</strong> High-stakes domains (auth, billing, security, migrations) force the precise tier; breadth and vocabulary decide the rest.</p></div>
+      <div class="card"><span class="k">Tier router</span><p><strong>Rules-based classifier.</strong> High-stakes domains (auth, billing, security, migrations) force the precise tier. Breadth and vocabulary decide the rest.</p></div>
       <div class="card"><span class="k">Per-role pins</span><p><strong>Human overrides.</strong> <code>/worker-model</code>, <code>/judge-model</code>, <code>/triage-model</code> persist a pin per function. A pin always wins.</p></div>
       <div class="card"><span class="k">Budget guard</span><p><strong>Per-turn USD cap.</strong> Grace, prompt, or enforce modes, priced from the rate card, checked after every step.</p></div>
     </div>
-    <p class="footnote rv" data-d="5">The judge is always a different model than the worker. That independence is a design invariant we keep.</p>
+    <p class="footnote rv" data-d="5">The judge is always a different model than the worker. That independence is a design invariant.</p>
   </div>
 </section>
 
 <!-- 4 · TODAY: THE DATA EXHAUST -->
-<section class="slide" aria-label="What we have today: the data exhaust">
+<section class="slide" aria-label="What Oxagen has today: the data exhaust">
   <div class="inner">
-    <div class="eyebrow rv" data-d="1"><span class="idx">03</span> What we have today · 2 of 2</div>
-    <h2 class="rv" data-d="1">We already produce everything a learned router needs. <span class="gradtext">In three unjoined stores.</span></h2>
+    <div class="eyebrow rv" data-d="1"><span class="idx">03</span> What Oxagen has today · 2 of 2</div>
+    <h2 class="rv" data-d="1">Oxagen already produces everything a learned router needs. <span class="gradtext">In three unjoined stores.</span></h2>
     <div class="grid3 rv" data-d="2">
       <div class="card"><span class="k">Cost</span><p><strong>Billing-grade, total coverage.</strong> Every LLM call lands in ClickHouse with model, provider cost, capability, and latency. 365-day retention. Every call, no exceptions.</p></div>
       <div class="card"><span class="k">Correctness</span><p><strong>Judged and tested.</strong> The eval suite records model-attributed scores. Every agent turn produces a judge verdict. Executed tests produce the strongest signal of all.</p></div>
-      <div class="card"><span class="k">Completion</span><p><strong>Run outcomes.</strong> Every execution records success or failure, latency, and tokens, per agent and per step.</p></div>
+      <div class="card"><span class="k">Completion</span><p><strong>Run outcomes.</strong> Every run records success or failure, latency, and tokens, per agent and per step.</p></div>
     </div>
     <div class="verdict rv" data-d="3">
       <div class="big">Three stores. Never joined.</div>
@@ -331,7 +331,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
     <div class="grid4 rv" data-d="3">
       <div class="card"><h3><span class="g">Record</span>router_outcomes</h3><p>The missing joined record: task class × model × verified × cost × latency. Tenant-scoped, append-only ClickHouse.</p></div>
       <div class="card"><h3><span class="g">Decide</span>Market router core</h3><p>A pure function: cheapest model whose verified rate clears the policy bar with enough samples. Full candidate table returned as an audit trail.</p></div>
-      <div class="card"><h3><span class="g">Escalate</span>On rejection only</h3><p>When the judge rejects, the revision round climbs one tier instead of retrying the same model and hoping.</p></div>
+      <div class="card"><h3><span class="g">Climb a tier</span>On rejection only</h3><p>When the judge rejects, the revision round climbs one tier instead of retrying the same model and hoping.</p></div>
       <div class="card"><h3><span class="g">Govern</span>4 capabilities</h3><p>Get/set policy, list the Pareto stats, preview any routing decision. Contract-first on API, MCP, and CLI.</p></div>
     </div>
     <p class="footnote rv" data-d="4">Sparse data falls back to the deterministic classifier. Manual pins always win. Default mode changes nothing.</p>
@@ -342,22 +342,22 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
 <section class="slide" aria-label="The market metaphor">
   <div class="inner">
     <div class="eyebrow rv" data-d="1"><span class="idx">05</span> The mental model</div>
-    <h2 class="rv" data-d="1">Each subtask is an order. Models are venues. <span class="gradtext">We route for best execution.</span></h2>
-    <p class="lede rv" data-d="2">Equities solved this decades ago: an order goes to the venue with the best execution quality at the best price, and the routing decision itself is auditable. We apply the same discipline to model selection.</p>
+    <h2 class="rv" data-d="1">Each subtask is an order. Models are venues. <span class="gradtext">Oxagen routes for the best fill.</span></h2>
+    <p class="lede rv" data-d="2">Equities solved this decades ago: an order goes to the venue with the best fill quality at the best price, and the routing decision itself is auditable. Oxagen applies the same discipline to model selection.</p>
     <div class="grid3 rv" data-d="3">
-      <div class="card"><h3><span class="g">The book</span>Venue quality</h3><p>Per task class, every model's verified success rate and observed cost per task, computed from our own metered history, not a benchmark blog post.</p></div>
-      <div class="card"><h3><span class="g">The bar</span>Execution quality</h3><p>Policy sets the bar: verified success at or above the threshold, with enough samples to trust it. Below the bar, a venue is simply not eligible.</p></div>
-      <div class="card"><h3><span class="g">The fill</span>Best execution</h3><p>Cheapest eligible venue wins. Ties break on accuracy, then latency. Every decision ships with the candidates it rejected and why.</p></div>
+      <div class="card"><h3><span class="g">The book</span>Venue quality</h3><p>Per task class, every model's verified success rate and observed cost per task, computed from Oxagen's own metered history, not a benchmark blog post.</p></div>
+      <div class="card"><h3><span class="g">The bar</span>Fill quality</h3><p>Policy sets the bar: verified success at or above the threshold, with enough samples to trust it. Below the bar, a venue is simply not eligible.</p></div>
+      <div class="card"><h3><span class="g">The fill</span>Best fill</h3><p>Cheapest eligible venue wins. Ties break on accuracy, then latency. Every decision ships with the candidates it rejected and why.</p></div>
     </div>
-    <p class="footnote rv" data-d="4">Prices and models drift; the curve re-fits from live history, so the routing drifts with the market instead of behind it.</p>
+    <p class="footnote rv" data-d="4">Prices and models drift. The curve re-fits from live history, so the routing drifts with the market instead of behind it.</p>
   </div>
 </section>
 
 <!-- 7 · SHADOW FIRST -->
 <section class="slide" aria-label="Safety: shadow mode first">
   <div class="inner">
-    <div class="eyebrow rv" data-d="1"><span class="idx">06</span> How we turn it on</div>
-    <h2 class="rv" data-d="1">Shadow first. <span class="gradtext">Zero-risk learning loop.</span></h2>
+    <div class="eyebrow rv" data-d="1"><span class="idx">06</span> How you turn it on</div>
+    <h2 class="rv" data-d="1">Shadow first. <span class="gradtext">Learn with behavior unchanged.</span></h2>
     <p class="lede rv" data-d="2">Three policy modes per organization or workspace, governed like every other capability: contract-first, role-gated, audited.</p>
     <div class="grid3 rv" data-d="3">
       <div class="stat"><div class="num">off</div><div class="lbl">Default · behavior unchanged</div></div>
@@ -377,9 +377,9 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
     <div class="eyebrow rv" data-d="1"><span class="idx">07</span> Roadmap · Phases 1 and 2</div>
     <h2 class="rv" data-d="1">First trust the data. <span class="gradtext">Then let the economics go live.</span></h2>
     <div class="grid4 rv" data-d="2">
-      <div class="card"><h3><span class="g">Phase 1</span>Confidence, not counts</h3><p>Wilson lower bounds replace raw rates; tenant curves blend with platform-global curves so small tenants get real statistics.</p></div>
+      <div class="card"><h3><span class="g">Phase 1</span>Confidence, not counts</h3><p>Wilson lower bounds replace raw rates. Tenant curves blend with platform-global curves so small tenants get real statistics.</p></div>
       <div class="card"><h3><span class="g">Phase 1</span>Prove it in the app</h3><p>Pareto dashboard per task class, a policy editor, and a shadow-versus-enforce diff: what the market router would have done, and what it would have saved.</p></div>
-      <div class="card"><h3><span class="g">Phase 2</span>Live price sync</h3><p>Gateway prices sync on a schedule; a price cut or a new model changes routing within one cycle, no human involved.</p></div>
+      <div class="card"><h3><span class="g">Phase 2</span>Live price sync</h3><p>Gateway prices sync on a schedule. A price cut or a new model changes routing within one cycle, no human involved.</p></div>
       <div class="card"><h3><span class="g">Phase 2</span>Budget-aware objective</h3><p>From threshold-then-cheapest to maximizing verified success under the per-turn budget, with latency as a third axis for interactive surfaces.</p></div>
     </div>
     <p class="footnote rv" data-d="3">Phase 1 exit: enforce mode on internally with measured cost reduction at flat-or-better verified success.</p>
@@ -395,7 +395,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
     <div class="grid3 rv" data-d="3">
       <div class="card"><h3><span class="g">Signatures</span>Beyond regexes</h3><p>Clustered prompt embeddings plus structural features become the routing key. The old vocabulary survives only as human-readable labels.</p></div>
       <div class="card"><h3><span class="g">Bandits</span>Explore on purpose</h3><p>A policy-capped exploration share (Thompson sampling) gives under-sampled venues verified traffic. Exploration spend is metered and itemized, a line item, never a leak.</p></div>
-      <div class="card"><h3><span class="g">Paper trading</span>Models earn traffic</h3><p>New venues run scheduled evals built from real metered traces before they ever see production. Promotion to routable is automatic when the confidence gate clears.</p></div>
+      <div class="card"><h3><span class="g">Paper trading</span>Models earn traffic</h3><p>New venues are scored on scheduled replays of real metered runs before they ever see production. Promotion to routable is automatic when the confidence gate clears.</p></div>
     </div>
     <p class="footnote rv" data-d="4">Per-role curves follow: the judge only needs to be accurate at judging, which cheaper venues often are.</p>
   </div>
@@ -420,16 +420,16 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
 </section>
 
 <!-- 11 · WHY IT MATTERS -->
-<section class="slide" aria-label="Why we think this is important">
+<section class="slide" aria-label="Why this matters">
   <div class="inner">
     <div class="eyebrow rv" data-d="1"><span class="idx">10</span> Why this matters</div>
-    <h2 class="rv" data-d="1">It takes the whole loop. <span class="gradtext">Only we own the whole loop.</span></h2>
-    <p class="lede rv" data-d="2">Pricing and guaranteeing accuracy requires three things at once: the meter that knows cost, the verifier that knows truth, and the billing rail that can pay it back. Everyone else owns at most one.</p>
+    <h2 class="rv" data-d="1">It takes the whole loop. <span class="gradtext">Oxagen owns the whole loop.</span></h2>
+    <p class="lede rv" data-d="2">Pricing and backing accuracy requires three things at once: the meter that knows cost, the verifier that knows truth, and the billing rail that can pay it back. Everyone else owns at most one.</p>
     <div class="matrix rv" data-d="3">
       <div class="mx-row mx-head">
         <div class="mx-c lbl">Requirement</div>
-        <div class="mx-c">Observability &amp; gateways</div>
-        <div class="mx-c">Eval platforms</div>
+        <div class="mx-c">Recording tools and gateways</div>
+        <div class="mx-c">Scoring tools</div>
         <div class="mx-c ox">Oxagen</div>
       </div>
       <div class="mx-row">
@@ -451,7 +451,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
         <div class="mx-c cell ox"><span class="yes">✓</span></div>
       </div>
       <div class="mx-row">
-        <div class="mx-c lbl">Bill it, guarantee it, refund it</div>
+        <div class="mx-c lbl">Bill it, back it, refund it</div>
         <div class="mx-c cell"><span class="no">✕</span></div>
         <div class="mx-c cell"><span class="no">✕</span></div>
         <div class="mx-c cell ox"><span class="yes">✓</span></div>
@@ -465,7 +465,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
 <section class="slide" aria-label="Close">
   <div class="inner">
     <div class="eyebrow rv" data-d="1"><span class="idx">11</span> The ask</div>
-    <h2 class="rv" data-d="1">Accuracy stops being a vibe. <span class="gradtext">It becomes a product.</span></h2>
+    <h2 class="rv" data-d="1">Accuracy stops being a vibe.<br><span class="gradtext">Can you explain your AI bill? Neither can your provider.</span></h2>
     <div class="grid3 rv" data-d="2">
       <div class="stat hero"><div class="num">≥95%</div><div class="lbl">Verified success · the SLA</div></div>
       <div class="stat"><div class="num">≤$0.50</div><div class="lbl">Per task · the price tag</div></div>
@@ -473,7 +473,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
     </div>
     <div class="verdict rv" data-d="3">
       <div class="big">Flip a workspace to shadow mode today.</div>
-      <div class="small">The curves start accumulating on your own traffic immediately, at zero behavior risk. When your data says the cheap venue clears the bar, enforce is one policy change, and everything it decides is auditable. <strong>The Stripe for agents, routing like a market.</strong></div>
+      <div class="small">The curves start accumulating on your own traffic immediately, with behavior unchanged. When your data says the cheap venue clears the bar, enforce is one policy change, and everything it decides is on the record.</div>
     </div>
     <p class="footnote rv" data-d="4">app.oxagen.sh · api.oxagen.sh · mcp.oxagen.sh · docs.oxagen.sh</p>
   </div>
@@ -627,9 +627,9 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
 '</style></head><body>',
 '<div class="hd"><span class="badge">Presenter · private</span><span class="pos" id="pos">–</span><span class="timer" id="timer">00:00</span></div>',
 '<div class="lbl">Now saying</div><div class="title" id="ptitle">Connecting…</div>',
-'<div class="say" id="say">Open this from the deck (press S) — it will sync automatically.</div>',
+'<div class="say" id="say">Open this from the deck (press S). It syncs automatically.</div>',
 '<div class="demo" id="demo"></div>',
-'<div class="next"><span class="lbl">Up next → </span><b id="pnext">—</b></div>',
+'<div class="next"><span class="lbl">Up next → </span><b id="pnext">·</b></div>',
 '<div class="ctrls"><button class="btn" id="preconn">⟳ Sync</button><button class="btn" id="pprev">← Prev</button><button class="btn" id="treset">Timer</button><button class="btn p" id="pnextb">Next →</button></div>',
 '<div class="tnote">Share only the DECK window/tab on your call · this window stays off-screen</div>',
 '<script>(function(){',
@@ -645,7 +645,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
 'document.getElementById("pos").textContent="Slide "+(i+1)+" / "+S.length;',
 'document.getElementById("ptitle").textContent=e.title;',
 'document.getElementById("say").textContent=e.say;',
-'var nx=S[i+1];document.getElementById("pnext").textContent=nx?nx.title:"— end —";',
+'var nx=S[i+1];document.getElementById("pnext").textContent=nx?nx.title:"End of deck";',
 'var d=document.getElementById("demo");d.innerHTML="";',
 'if(e.demo){e.demo.forEach(function(step){var el=document.createElement("div");el.className="step";el.innerHTML=fmtStep(step);d.appendChild(el);});}',
 '}',

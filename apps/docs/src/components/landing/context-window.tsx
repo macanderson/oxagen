@@ -165,17 +165,17 @@ export function ContextWindow() {
         {governed ? (
           <>
             <span className="font-medium text-foreground">Free, not full.</span>{" "}
-            Oxagen retrieves only the authorized, relevant slice from your typed
-            knowledge graph — RBAC-scoped, so the window stays open and the
-            model stays sharp.
+            Oxagen retrieves only the slice of your typed knowledge graph the
+            task needs and the agent&apos;s mandate lets it read, so the window
+            stays open and the model stays sharp.
           </>
         ) : (
           <>
             <span className="font-medium text-foreground">
               Full, and failing.
             </span>{" "}
-            Dump every document into the prompt and the window saturates —
-            latency climbs, cost climbs, and recall collapses in the noise.
+            Dump every document into the prompt and the window saturates.
+            Latency climbs, cost climbs, and recall drops in the noise.
           </>
         )}
       </p>

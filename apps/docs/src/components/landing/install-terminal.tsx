@@ -33,7 +33,7 @@ const STEPS: TerminalStep[] = [
       { kind: "out", text: "install: ~/.local/bin/oxagen" },
       {
         kind: "ok",
-        text: "✓ oxagen is on your PATH — run `oxagen` to get started",
+        text: "✓ oxagen is on your PATH. Run `oxagen` to start.",
       },
     ],
   },
@@ -44,5 +44,5 @@ const STEPS: TerminalStep[] = [
 ];
 
 export function InstallTerminal() {
-  return <TypewriterTerminal steps={STEPS} title="oxagen — cli install" />;
+  return <TypewriterTerminal steps={STEPS} title="oxagen · cli install" />;
 }
