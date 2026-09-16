@@ -48,8 +48,13 @@ async function open(name: string, testId: string) {
 }
 
 describe("CreateWorkspace", () => {
-  it("sends the name and the slug, then reloads the organization page", async () => {
-    createWorkspace.mockResolvedValue({ ok: true, value: { slug: "research" } });
+  // WL-62: the write answers with the new workspace's slug and the navigation
+  // is its only reader — creating a workspace lands the operator in it.
+  it("sends the name and the slug, then navigates to the new workspace's Fleet", async () => {
+    createWorkspace.mockResolvedValue({
+      ok: true,
+      value: { slug: "research" },
+    });
     render(
       <IntlProvider>
         <CreateWorkspace org="acme" />
@@ -65,7 +70,7 @@ describe("CreateWorkspace", () => {
       name: "Research",
       slug: "research",
     });
-    expect(router.replace).toHaveBeenCalledWith("/acme");
+    expect(router.replace).toHaveBeenCalledWith("/acme/research");
   });
 
   it("names a slug already taken and creates nothing (negative)", async () => {
@@ -81,7 +86,10 @@ describe("CreateWorkspace", () => {
     );
     const dialog = await open("Create a workspace", "create-workspace");
     await userEvent.type(within(dialog).getByLabelText("Name"), "Research");
-    await userEvent.type(within(dialog).getByLabelText("Slug"), "core-platform");
+    await userEvent.type(
+      within(dialog).getByLabelText("Slug"),
+      "core-platform",
+    );
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Create" }),
     );

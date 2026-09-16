@@ -69,8 +69,11 @@ export function CreateWorkspace({ org }: { org: string }) {
       }}
       testId="create-workspace"
       submit={(form) => createWorkspace(org, draftOf(form))}
-      onDone={() => {
-        navigate.replace(routes.people(org));
+      onDone={(created) => {
+        // WL-62: the workspace that was just made is where the operator wants to
+        // be, so the write's slug is what the navigation uses — the org page
+        // would leave `createWorkspace`'s answer with no reader.
+        navigate.replace(routes.fleet(org, created.slug));
       }}
     >
       <Fields idPrefix="create-workspace" />

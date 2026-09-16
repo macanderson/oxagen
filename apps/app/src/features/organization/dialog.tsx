@@ -29,8 +29,11 @@ export function WriteDialog<O>({
   testId: string;
   /** Reads the dialog's fields and performs the write. */
   submit: (form: FormData) => Promise<ActionResult<O>>;
-  /** Runs after the write answered ok, with the dialog already closed. */
-  onDone: () => void;
+  /**
+   * Runs after the write answered ok, with the dialog already closed, and is
+   * handed what the write returned — a create navigates to the record it made.
+   */
+  onDone: (value: O) => void;
   /** The dialog's fields; a confirmation has a sentence instead. */
   children?: ReactNode;
 }) {
@@ -54,7 +57,7 @@ export function WriteDialog<O>({
       const result = await submit(form);
       if (result.ok) {
         setOpen(false);
-        onDone();
+        onDone(result.value);
       } else {
         setFailure(failureText(result));
       }
@@ -82,7 +85,10 @@ export function WriteDialog<O>({
         title={copy.title}
         testId={testId}
       >
-        <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-3">
+        <form
+          onSubmit={(e) => void onSubmit(e)}
+          className="flex flex-col gap-3"
+        >
           {children}
           {failure === null ? null : (
             <FormAlert testId={`${testId}-failure`}>{failure}</FormAlert>

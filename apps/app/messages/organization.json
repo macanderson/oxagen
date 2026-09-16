@@ -131,6 +131,7 @@
       },
       "status": {
         "live": "live",
+        "expired": "expired",
         "revoked": "revoked"
       },
       "never": "Never",

@@ -8,7 +8,10 @@
   `packages/oxagen/src/types.ts`, `packages/oxagen/src/kernel.ts` (the
   `withScope` wrapper), `packages/tenancy/src/scope.ts` (`assertUuid`),
   `apps/api/src/lib/context.ts`, `apps/app/src/server/kernel.ts`,
-  `apps/app/ARCHITECTURE.md` §3.2 step 4
+  `apps/app/ARCHITECTURE.md` §3.2 step 4,
+  `packages/database/src/tenant-policy.manifest.ts`,
+  `packages/handlers/src/workspace.settings.write.ts`,
+  `packages/handlers/src/workspace-bootstrap.ts`
 
 ## Context
 
@@ -24,9 +27,45 @@ raised `TenantScopeError` before its handler ran, and the API's error
 middleware had no mapping for that error, so the caller got a 500. The route
 test mocked `invoke`, which is why the mount read as working.
 
-The org-only shape is sound for the tables involved: `workspace.workspaces`,
-`iam.roles` and `iam.role_grants` carry `org_only` RLS policies and ignore
-the workspace GUC.
+The sentinel is only sound for tables whose RLS policy ignores the workspace
+GUC, and that is a property of the TABLE, not of the capability. Postgres
+evaluates `tenant_isolation` per relation against
+`app.current_workspace_id`, which `withTenantDb` sets from the scope — so
+under an org-only scope that GUC holds the nil sentinel, which names no row.
+`packages/database/src/tenant-policy.manifest.ts` is where each table's class
+is recorded:
+
+- `org_only` (`workspace.workspaces`, `iam.roles`, `iam.role_grants`) keys on
+  `app.current_org_id` alone and genuinely ignores the workspace GUC. The
+  reads and writes an org-only surface was built for stay inside this set.
+- `standard` (org + workspace, both `NOT NULL`) and `workspace_only`
+  (workspace only) compare the row's `workspace_id` against the workspace
+  GUC in both `USING` and `WITH CHECK`. A row carrying a real workspace id
+  written under the sentinel fails that check and Postgres raises `42501`.
+
+Two capabilities reachable from an org-only scope leave the `org_only` set,
+and neither was caught before the sentinel shipped, because `42501` is not
+`23505` and so escapes the `isUniqueViolation` catch each handler has — it
+surfaces as a 500:
+
+- `update_workspace_settings` inserts into `workspace.workspace_slug_history`
+  (`standard`) on every slug change. A name-only edit works, which is why
+  this read as sound; the re-slug does not.
+- `create_workspace` bootstraps `workspace.workspace_users`
+  (`workspace_only`), `agent.agents` and `environments.environments`
+  (`standard`), on the caller's transaction (issue #3029).
+
+**The rule, and its exception class.** A capability reached from an org-only
+scope may write `org_only` tables directly. A write that touches a
+workspace-GUC-scoped table MUST first re-enter the target workspace's scope
+— `runInTenantScope({ ...getPrincipalAttribution(), orgId, workspaceId })`
+around the `withTenantDb` that performs it, the way `archive_workspace`
+already does for `agent.agents`. Where the target workspace does not exist
+until the transaction is under way, as in the create bootstrap, the same
+move is made inside that one transaction with
+`setTransactionWorkspaceScope`, so the workspace and everything that makes it
+usable still commit together. The sentinel is not a licence to write
+workspace-scoped rows without a workspace.
 
 Three options were on the table in #3029: share the app's sentinel, add a
 kernel-side rule that a scoped capability may declare it needs no workspace,
@@ -57,6 +96,15 @@ creates one over REST.
    lives in the app's builder and nowhere else is replaced by the shared
    constant and its two callers.
 
+5. **A write reached from an org-only scope that touches a workspace-GUC-scoped
+   table re-enters the target workspace's scope**, as set out in Context. The
+   two known cases are fixed accordingly: `workspace.settings.write` wraps its
+   update and slug-history capture in `runInTenantScope` on the resolved
+   target, and `workspace-bootstrap` moves the transaction's workspace scope
+   onto the new row with `setTransactionWorkspaceScope` before writing anything
+   workspace-scoped. `packages/database/integration/org-only-scope-writes.test.ts`
+   holds both halves against a real Postgres with RLS enforced.
+
 ## Consequences
 
 - The org-only mount reaches its handler, and the route test asserts the
@@ -65,3 +113,13 @@ creates one over REST.
   one place to change.
 - The sentinel is still a value that names no workspace. It is legible in a
   scope assertion and in RLS, and nothing resolves it to a row.
+- Because it names no workspace, it is refused by every `standard` and
+  `workspace_only` policy rather than silently matching one. That is the
+  behaviour we want — a scope that names no workspace must not be able to
+  write a workspace's rows — and it is why the exception class above is a
+  rule about re-entering scope and never about relaxing a policy.
+- The policy classes this ADR reasons about live in
+  `packages/database/src/tenant-policy.manifest.ts`, and
+  `integration/manifest-coverage.test.ts` fails CI when a table's class drifts
+  from the live schema. A future table that an org-only surface reaches is
+  therefore visible, and the rule above says what to do about it.

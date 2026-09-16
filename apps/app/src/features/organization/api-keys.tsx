@@ -90,10 +90,31 @@ function ApiKeysView({
   );
 }
 
-/** The key's state as a dot and a word, off `revokedAt` alone, so no clock decides it. */
-function KeyStatus({ revokedAt }: { revokedAt: string | null }) {
+/**
+ * The key's state as a dot and a word, off the two instants the record carries.
+ * Revocation is a decision and outranks the clock; past that, an `expiresAt`
+ * already behind us is what the platform itself reads — both `tacho-host.ts`
+ * and `telemetry.stella.ingest.ts` admit a key only on
+ * `expiresAt IS NULL OR expiresAt > now()` — so a key past its expiry is dead
+ * and calling it "live" beside an Expires column printing a past date states
+ * something stronger than the record (mockups/pages/organization-api-keys.md,
+ * ARCHITECTURE.md §3.4). This component renders on the server, so the clock is
+ * the server's and there is no hydration split to keep out of it.
+ */
+function KeyStatus({
+  revokedAt,
+  expiresAt,
+}: {
+  revokedAt: string | null;
+  expiresAt: string | null;
+}) {
   const t = useTranslations("organization.apiKeys.status");
-  const status = revokedAt === null ? "live" : "revoked";
+  const status =
+    revokedAt !== null
+      ? "revoked"
+      : expiresAt !== null && Date.parse(expiresAt) <= Date.now()
+        ? "expired"
+        : "live";
   return (
     <span
       data-status={status}
@@ -151,7 +172,10 @@ function Keys({ keys }: { keys: readonly ApiKey[] }) {
                 )}
               </td>
               <td className={cell}>
-                <KeyStatus revokedAt={key.revokedAt} />
+                <KeyStatus
+                  revokedAt={key.revokedAt}
+                  expiresAt={key.expiresAt}
+                />
               </td>
             </tr>
           ))}

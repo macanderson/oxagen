@@ -958,6 +958,7 @@ type Messages = {
       };
       status: {
         live: string;
+        expired: string;
         revoked: string;
       };
       never: string;
