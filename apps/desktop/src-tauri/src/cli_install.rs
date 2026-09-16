@@ -193,12 +193,6 @@ pub fn auto_link_cli_enabled_with(
         .unwrap_or_else(|| auto_link_cli_default(developer_harness_present))
 }
 
-/// Pure: whether automatic linking is enabled. Kept for callers that have
-/// already resolved the machine question; prefer `auto_link_cli_enabled_with`.
-pub fn auto_link_cli_enabled(config: &Map<String, Value>) -> bool {
-    auto_link_cli_enabled_with(config, true)
-}
-
 /// The coding agents whose presence makes this a developer's machine. Matches
 /// the harnesses Tacho wraps with a hook (`WRAPPED_HARNESSES` in
 /// `packages/tacho/src/wire.ts`); a connected app is deliberately not on this
@@ -1594,7 +1588,7 @@ mod tests {
 
     #[test]
     fn auto_link_defaults_to_enabled_when_unset() {
-        assert!(auto_link_cli_enabled(&Map::new()));
+        assert!(auto_link_cli_enabled_with(&Map::new(), true));
     }
 
     /// ADR-069: a machine with no coding agent on it belongs to someone who
@@ -1647,10 +1641,10 @@ mod tests {
         let updated = set_auto_link_cli(config, false);
         assert_eq!(updated.get("autoLinkCli"), Some(&Value::Bool(false)));
         assert_eq!(updated.get("someOtherPref"), Some(&Value::Bool(true)));
-        assert!(!auto_link_cli_enabled(&updated));
+        assert!(!auto_link_cli_enabled_with(&updated, true));
 
         let restored = set_auto_link_cli(updated, true);
-        assert!(auto_link_cli_enabled(&restored));
+        assert!(auto_link_cli_enabled_with(&restored, true));
         assert_eq!(restored.get("someOtherPref"), Some(&Value::Bool(true)));
     }
 
