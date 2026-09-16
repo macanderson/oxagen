@@ -115,7 +115,12 @@ export function fleetSource(reads: FleetReads) {
       findingEvidence: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
-    org: { members: refuse, apiKeys: refuse },
+    org: {
+      members: refuse,
+      roles: refuse,
+      workspaces: refuse,
+      apiKeys: refuse,
+    },
     mandates: {
       list: (...args) => {
         calls.mandates.push(args);

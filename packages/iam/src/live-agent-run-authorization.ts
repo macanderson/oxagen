@@ -55,6 +55,7 @@ import {
   type LiveAuthorityState,
 } from "./authorization-snapshot";
 import { logger } from "./logger";
+import { implicitScopeDigests } from "./resource-scope";
 
 // ---------------------------------------------------------------------------
 // Deny reasons
@@ -143,20 +144,24 @@ export async function readActiveEmergencyDenies(
  * and the point of the typed shape is that the live check stays an index lookup
  * on the hot path.
  *
- * NOTE: a `resource_scope` row can only match when the caller supplies
- * `resourceScopeDigest`. The kernel path (check-iam.ts) does not compute one
- * today, so only `capability` rows fire on a live invocation — a
- * `resource_scope` emergency deny is currently inert outside this function's
- * own tests.
+ * A `resource_scope` row matches the digest of the operation's declared
+ * target (`resourceScopeDigest`, which check-iam.ts derives from the
+ * contract's audit target, #1261) or any of the scopes the operation carries
+ * implicitly (`scopeDigests`: organisation, workspace, agent, operator —
+ * resource-scope.ts). Both sides digest with `resourceScopeDigestOf`.
  */
 export function matchEmergencyDeny(
   denies: readonly ActiveEmergencyDeny[],
   args: {
     capability: string;
     resourceScopeDigest: string | null;
+    /** Digests of the scopes the operation is inside, beyond its target. */
+    scopeDigests?: readonly string[];
     principalIds: readonly string[];
   },
 ): ActiveEmergencyDeny | null {
+  const digests = new Set(args.scopeDigests ?? []);
+  if (args.resourceScopeDigest !== null) digests.add(args.resourceScopeDigest);
   for (const deny of denies) {
     if (
       deny.principalId !== null &&
@@ -169,8 +174,8 @@ export function matchEmergencyDeny(
       continue;
     }
     if (
-      args.resourceScopeDigest !== null &&
-      deny.resourceScopeDigest === args.resourceScopeDigest
+      deny.resourceScopeDigest !== null &&
+      digests.has(deny.resourceScopeDigest)
     ) {
       return deny;
     }
@@ -487,6 +492,12 @@ export interface EvaluateAgentRunAuthorizationArgs {
   inputDigest: string;
   /** Digest of the resource this operation targets, when one applies. */
   resourceScopeDigest?: string | null;
+  /**
+   * The initiating human's user id, so an operator kill switch (a
+   * `resource_scope` deny over `{ kind: "operator", id: <user id> }`) reaches
+   * every run they initiated.
+   */
+  operatorUserId?: string | null;
   clientIp?: string | null;
   now?: Date;
   /** Seam for tests; defaults to the real repeatable-read read. */
@@ -646,6 +657,12 @@ export async function evaluateAgentRunAuthorization(
   const emergency = matchEmergencyDeny(live.emergencyDenies, {
     capability: args.capability,
     resourceScopeDigest,
+    scopeDigests: implicitScopeDigests({
+      orgId: agentRun.agentPrincipal.orgId,
+      workspaceId,
+      agentId: agentRun.agentId,
+      operatorUserId: args.operatorUserId ?? null,
+    }),
     principalIds,
   });
   if (emergency !== null) {

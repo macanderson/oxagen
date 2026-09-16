@@ -27,7 +27,6 @@ export interface RolePickerProps {
   onChange: (roleName: string) => void;
   disabled?: boolean;
   /** True when the org tier allows custom (non-system) agent roles. */
-  customRolesAvailable: boolean;
   /** Non-null when role data failed to load — renders a degraded state. */
   rolesError: string | null;
   /** The role currently persisted on the agent (badge on its card). */
@@ -91,7 +90,6 @@ export function RolePicker({
   value,
   onChange,
   disabled,
-  customRolesAvailable,
   rolesError,
   assignedRoleName,
 }: RolePickerProps) {
@@ -153,15 +151,7 @@ export function RolePicker({
         ) : null}
       </div>
 
-      {!customRolesAvailable ? (
-        <p
-          className="text-xs text-muted-foreground"
-          data-testid="agent-role-custom-tier-hint"
-        >
-          Custom agent roles are an Enterprise capability — this org&rsquo;s
-          tier assigns the system roles only.
-        </p>
-      ) : custom.length === 0 && !rolesError ? (
+      {custom.length === 0 && !rolesError ? (
         <p
           className="text-xs text-muted-foreground"
           data-testid="agent-role-custom-empty"

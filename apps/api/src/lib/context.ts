@@ -1,6 +1,9 @@
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
-import type { CapabilityContext } from "@oxagen/oxagen";
+import {
+  type CapabilityContext,
+  ORG_ONLY_WORKSPACE_ID,
+} from "@oxagen/oxagen";
 import { requireEnv } from "@oxagen/config/env";
 import type { AppEnv } from "../app";
 
@@ -97,7 +100,11 @@ export function capabilityContext(
   }
   return {
     orgId: orgId ?? "",
-    workspaceId: workspaceId ?? "",
+    // A route mounted org-only reaches a scoped capability, and the kernel
+    // enters a tenant scope that asserts a uuid, so an empty workspace id is
+    // refused before the handler runs. The org-only sentinel is what such a
+    // call carries, the same constant the app's kernel seam uses (#3029).
+    workspaceId: workspaceId ?? (orgId ? ORG_ONLY_WORKSPACE_ID : ""),
     userId: c.get("userId") ?? null,
     apiKeyId: c.get("apiKeyId") ?? null,
     // Must be a valid UUID: it flows into non-nullable ClickHouse UUID columns

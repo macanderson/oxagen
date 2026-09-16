@@ -27,6 +27,7 @@ import {
   capabilityMutates,
   getCapability,
   invoke,
+  ORG_ONLY_WORKSPACE_ID,
 } from "@oxagen/oxagen";
 import type { orgMemberInviteAccept } from "@oxagen/oxagen/contracts/org.member_invite.accept";
 import type { orgMemberInviteDecline } from "@oxagen/oxagen/contracts/org.member_invite.decline";
@@ -107,13 +108,6 @@ type Failure =
   | { kind: "unclassified" };
 
 type Outcome<O> = { ok: true; value: O } | { ok: false; failure: Failure };
-
-/**
- * The workspace id an organization-level invoke carries. Organization-scoped
- * tables ignore the workspace GUC; the kernel's tenant scope asserts a uuid
- * shape, which this constant satisfies without naming a real workspace.
- */
-const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 const EXHAUSTED_CODES: readonly string[] = [
   "gau_exhausted",
@@ -197,7 +191,8 @@ function capabilityContext(ctx: Viewer): CapabilityContext {
   return {
     ...base,
     orgId: ctx.orgId,
-    workspaceId: WsCtx.is(ctx) ? ctx.workspaceId : ORG_ONLY_WS,
+    // An OrgCtx names no workspace: the shared org-only sentinel (#3029).
+    workspaceId: WsCtx.is(ctx) ? ctx.workspaceId : ORG_ONLY_WORKSPACE_ID,
   };
 }
 

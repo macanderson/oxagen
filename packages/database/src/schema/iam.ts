@@ -438,6 +438,17 @@ export const emergencyDenies = iamSchema.table(
     // the scope.
     principalId: uuid("principal_id"),
     reason: text("reason").notNull(),
+    // Kill switches (MC spec §6.11, #2958): a deny written by set_kill_switch
+    // names what it stops — target_kind is one of tool_version, tool_server,
+    // connection, agent, operator, workspace, org, class — and target_id the
+    // public id (or the consequence tag for a class). A row with no target is
+    // an operator deny written by another path. flipped_by_user_id is who
+    // flipped it on and reason why; the clearing user lands on
+    // updated_by_user_id and why on cleared_reason.
+    targetKind: text("target_kind"),
+    targetId: text("target_id"),
+    flippedByUserId: uuid("flipped_by_user_id"),
+    clearedReason: text("cleared_reason"),
     active: boolean("active").notNull().default(true),
     activatedAt: timestamp("activated_at", {
       withTimezone: true,
@@ -475,6 +486,36 @@ export const emergencyDenies = iamSchema.table(
       "emergency_denies_digest_check",
       sql`${t.resourceScopeDigest} IS NULL OR ${t.resourceScopeDigest} ~ '^sha256:[0-9a-f]{64}$'`,
     ),
+    targetKindCheck: check(
+      "emergency_denies_target_kind_check",
+      sql`${t.targetKind} IS NULL OR ${t.targetKind} IN ('tool_version', 'tool_server', 'connection', 'agent', 'operator', 'workspace', 'org', 'class')`,
+    ),
+    targetCheck: check(
+      "emergency_denies_target_check",
+      sql`(${t.targetKind} IS NULL) = (${t.targetId} IS NULL)`,
+    ),
+    // A kill switch flipped off says why.
+    clearedReasonCheck: check(
+      "emergency_denies_cleared_reason_check",
+      sql`${t.targetKind} IS NULL OR ${t.active} = true OR ${t.clearedReason} IS NOT NULL`,
+    ),
+    // The listing reads an org's switches newest first.
+    switchIdx: index("emergency_denies_switch_idx")
+      .on(t.orgId, t.activatedAt)
+      .where(sql`target_kind IS NOT NULL`),
+    // One active switch per target: an org-wide switch has workspace_id NULL,
+    // a workspace switch its workspace, so the pair covers both (the shape of
+    // pra_principal_role_org_*). flipKillSwitchOn inserts ON CONFLICT DO
+    // NOTHING against the one its scope names, so two concurrent on-flips
+    // write one row.
+    activeTargetOrgUniq: uniqueIndex("emergency_denies_active_target_org_uidx")
+      .on(t.orgId, t.targetKind, t.targetId)
+      .where(sql`active = true AND workspace_id IS NULL`),
+    activeTargetWorkspaceUniq: uniqueIndex(
+      "emergency_denies_active_target_ws_uidx",
+    )
+      .on(t.orgId, t.workspaceId, t.targetKind, t.targetId)
+      .where(sql`active = true AND workspace_id IS NOT NULL`),
   }),
 );
 

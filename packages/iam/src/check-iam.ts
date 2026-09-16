@@ -27,6 +27,7 @@ import {
   type TraceStep,
 } from "@oxagen/oxagen/iam";
 import { digestJcs } from "@oxagen/run-evidence";
+import { resourceScopeDigestOf } from "./resource-scope";
 import { fetchAuthz } from "./fetch-authz";
 import {
   evaluateAgentRunAuthorization,
@@ -384,6 +385,11 @@ async function checkAgentRunIAM(
     defaultEffect,
     requestId: ctx.requestId,
     inputDigest: inputDigestOf(rawInputJson),
+    // The object this call acts on, from the contract's declared audit
+    // target, digested the way set_kill_switch digests a target — so a
+    // resource-scope emergency deny naming it refuses the call (#1261).
+    resourceScopeDigest: target ? resourceScopeDigestOf(target) : null,
+    operatorUserId: ctx.userId ?? null,
     clientIp: ctx.clientIp ?? null,
   });
 

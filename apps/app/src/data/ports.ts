@@ -29,7 +29,12 @@ import type {
 } from "./contracts/billing";
 import type { MandateList } from "./contracts/mandates";
 import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
-import type { ApiKey, MemberList } from "./contracts/org";
+import type {
+  ApiKey,
+  MemberList,
+  RoleCatalog,
+  WorkspaceList,
+} from "./contracts/org";
 import type { RunPage } from "./contracts/runs";
 import type {
   OrgChoice,
@@ -188,14 +193,18 @@ export interface DataSource {
     ): Promise<Read<FirstFrame>>;
   };
   /**
-   * The Organization page's two tabs, each an Owner-or-Admin read checked in
-   * its handler; callers: features/organization/people.tsx,
-   * features/organization/api-keys.tsx and features/audit/audit.tsx (actor
-   * names, off `members`).
+   * The Organization pages' four reads, each noBillingGate and org-scoped
+   * (#2964, WL-37), each an Owner-or-Admin read checked in its handler;
+   * callers: features/organization/people.tsx, roles.tsx, workspaces.tsx,
+   * api-keys.tsx and features/audit/audit.tsx (actor names, off `members`).
    */
   org: {
     /** list_members {scope:"org"} */
     members(ctx: OrgCtx): Promise<Read<MemberList>>;
+    /** list_iam_roles, the roles and the permission catalogue */
+    roles(ctx: OrgCtx): Promise<Read<RoleCatalog>>;
+    /** list_workspaces, archived rows included */
+    workspaces(ctx: OrgCtx): Promise<Read<WorkspaceList>>;
     /** list_api_keys, every key in scope, newest first, revoked ones included */
     apiKeys(ctx: OrgCtx): Promise<Read<ApiKey[]>>;
   };

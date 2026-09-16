@@ -34,6 +34,8 @@ const {
   Steering,
   Spend,
   FleetSpendTiles,
+  Roles,
+  Workspaces,
   OnboardingGate,
   Tools,
   Skills,
@@ -64,6 +66,8 @@ const {
     FleetSpendTiles: vi.fn((_props: Record<string, unknown>) => (
       <p data-testid="fleet-spend" />
     )),
+    Roles: vi.fn((_props: Record<string, unknown>) => null),
+    Workspaces: vi.fn((_props: Record<string, unknown>) => null),
     // The gate's own states are its component test; here it only has to render.
     OnboardingGate: vi.fn((_props: Record<string, unknown>) => (
       <p data-testid="onboarding-gate" />
@@ -85,6 +89,13 @@ vi.mock("@/features/agents", () => ({ Agents, Agent, AgentSource }));
 vi.mock("@/features/steering", () => ({ Steering }));
 vi.mock("@/features/tools", () => ({ Tools }));
 vi.mock("@/features/spend", () => ({ Spend, FleetSpendTiles }));
+// People stays real, so the organization page still renders a roster; the two
+// sections the #2964 lane adds are stubbed to show what each route hands them.
+vi.mock("@/features/organization", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/organization")>()),
+  Roles,
+  Workspaces,
+}));
 vi.mock("@/features/onboarding", () => ({ OnboardingGate }));
 vi.mock("@/features/skills", () => ({ Skills, SkillsLoading }));
 vi.mock("@/data/source", () => ({ dataSource: () => source }));
@@ -425,6 +436,38 @@ describe("Organization › People", () => {
     expect(screen.getByRole("main")).toHaveTextContent("Marcus Bell");
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
+
+  it("renders the Workspaces section of the same page from the same viewer and data source (#2964)", async () => {
+    const ctx = { orgSlug: "acme", orgRole: "owner" };
+    requireViewer.mockResolvedValue(ctx);
+    members.mockResolvedValue({
+      ok: true,
+      value: { members: [], invitations: [] },
+    });
+    await expectPageTitle(
+      await import("./page"),
+      routeProps(SEGMENTS),
+      title("people"),
+    );
+    expect(Workspaces).toHaveBeenCalledOnce();
+    expect(Workspaces.mock.calls[0]?.[0]).toEqual({ ctx, source });
+  });
+});
+
+describe("Organization › Roles", () => {
+  it("resolves the organization viewer, names the page once and hands the viewer and the data source to Roles", async () => {
+    const ctx = { orgSlug: "acme", orgRole: "owner" };
+    requireViewer.mockResolvedValue(ctx);
+    await expectPageTitle(
+      await import("./roles/page"),
+      routeProps(SEGMENTS),
+      title("roles"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...ORG);
+    expect(Roles).toHaveBeenCalledOnce();
+    expect(Roles.mock.calls[0]?.[0]).toEqual({ ctx, source });
+    expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
 });
 
 describe("Organization › API keys", () => {
@@ -470,6 +513,7 @@ describe("a person requireViewer refuses", () => {
     ["spend", SPEND] as const,
     ...REV1.map(([key, , load]) => [key, load] as const),
     ["people", () => import("./page")] as const,
+    ["roles", () => import("./roles/page")] as const,
     ["apiKeys", API_KEYS] as const,
   ])("pages.%s renders nothing (negative)", async (_key, load) => {
     requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));

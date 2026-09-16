@@ -120,7 +120,12 @@ export function onboardingSource(reads: Reads): {
       events: refuse("audit.events"),
       exportEvents: refuse("audit.exportEvents"),
     },
-    org: { members: refuse("org.members"), apiKeys: refuse("org.apiKeys") },
+    org: {
+      members: refuse("org.members"),
+      roles: refuse("org.roles"),
+      workspaces: refuse("org.workspaces"),
+      apiKeys: refuse("org.apiKeys"),
+    },
     skills: { inventory: refuse("skills.inventory") },
     steering: {
       records: refuse("steering.records"),

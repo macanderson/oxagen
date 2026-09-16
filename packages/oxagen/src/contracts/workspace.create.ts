@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { workspaceSlug } from "../workspace-slug";
 
 /**
  * create_workspace — a workspace in the caller's org.
@@ -30,11 +31,11 @@ export const workspaceCreate = registerCapability({
   },
   input: z.object({
     name: z.string().min(1).max(120),
-    slug: z
-      .string()
-      .min(2)
-      .max(40)
-      .regex(/^[a-z0-9-]+$/, "lowercase letters, digits, and hyphens only"),
+    // The shared shape (packages/oxagen/src/workspace-slug.ts): reserved
+    // org-route segments are refused, and the spelling is the one
+    // `update_workspace_settings` also takes, so a workspace this creates can
+    // always be edited afterwards (#3110).
+    slug: workspaceSlug,
   }),
   output: z.object({
     publicId: z.string(),

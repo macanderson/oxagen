@@ -194,6 +194,13 @@ import { listMembers } from "./workspace.member.list";
 import { workspaceInviteSend } from "./workspace.invite.send";
 import { toolDeclarationPublish } from "./tool.declaration.publish";
 import { toolDeclarationList } from "./tool.declaration.list";
+import { toolClassificationSchema } from "./tool.classification";
+import { toolVersionList } from "./tool.version.list";
+import { toolClassificationSet } from "./tool.classification.set";
+import { toolImport } from "./tool.import";
+import { credentialGrantList } from "./credential.grant.list";
+import { killSwitchSet } from "./kill_switch.set";
+import { killSwitchList } from "./kill_switch.list";
 import { contextRecordPublish } from "./context.record.publish";
 import { contextRecordList } from "./context.record.list";
 import { contextRecordPromote } from "./context.record.promote";
@@ -678,6 +685,13 @@ export {
   workspaceInviteSend,
   toolDeclarationPublish,
   toolDeclarationList,
+  toolVersionList,
+  toolClassificationSet,
+  toolImport,
+  credentialGrantList,
+  killSwitchSet,
+  killSwitchList,
+  toolClassificationSchema,
   contextRecordPublish,
   contextRecordList,
   contextRecordPromote,
@@ -986,6 +1000,12 @@ export const contracts: readonly CapabilityDeclaration[] = [
   workspaceInviteSend,
   toolDeclarationPublish,
   toolDeclarationList,
+  toolVersionList,
+  toolClassificationSet,
+  toolImport,
+  credentialGrantList,
+  killSwitchSet,
+  killSwitchList,
   contextRecordPublish,
   contextRecordList,
   contextRecordPromote,

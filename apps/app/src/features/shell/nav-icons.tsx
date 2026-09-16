@@ -25,4 +25,5 @@ export const NAV_ICONS: Record<NavKey, LucideIcon> = {
   billing: Receipt,
   audit: ShieldCheck,
   apiKeys: KeyRound,
+  roles: ShieldCheck,
 };

@@ -123,6 +123,8 @@ describe("routes", () => {
     expect(routes.resetPassword()).toBe("/reset-password");
     expect(routes.invite("invi_1")).toBe("/invite/invi_1");
     expect(routes.cliAuthorize({})).toBe("/cli/authorize");
+    expect(routes.people("acme")).toBe("/acme");
+    expect(routes.roles("acme")).toBe("/acme/roles");
     expect(routes.billing("acme")).toBe("/acme/billing");
     expect(routes.billing("acme", { cursor: "c 2&x" })).toBe(
       "/acme/billing?cursor=c+2%26x",
