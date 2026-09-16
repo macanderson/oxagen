@@ -5,7 +5,20 @@
 //
 // A limit names either an ISO 4217 currency or a unit of a count
 // (`mandates/schemas.ts`), told apart by `isCurrencyCode` rather than by the
-// shape of the name, so a three-letter unit such as GAU stays a count. Every
+// shape of the name, so a three-letter unit such as GAU stays a count. **This
+// is the one place in the system that guesses whether a measure is money**, and
+// it is a stand-in, not a rule: the gate does not guess — `readMeasure`
+// (packages/rules/src/mandates/measures.ts) switches on `declaration.type`,
+// which is the fact — and `assertToolsDeclareMeasures` now holds that same
+// declaration while it validates the write. A tool may legitimately declare
+// `{ type: "count", unit: "USD" }`, and the handler accepts a limit matching
+// that unit while this branch reads its whole-unit count as micros: 50 counted
+// units rendered as $0.00. The fix is to carry the declared `type` from the
+// write, where it is known, onto the limit and through `mandateAuthoritySchema`
+// — not a further test on the unit string, because no test on a unit string can
+// answer a question about a type. It needs the stored limit shape to change
+// (#3024's jsonb) and so is not this PR's; ARCHITECTURE.md §9 carries the
+// analysis and the reader list. Every
 // figure of one measure is carried in that measure's form, counts as the
 // integer string the ledger recorded. The ratios the meter draws are computed
 // here, on integers, so the component does no arithmetic (INV-09).
