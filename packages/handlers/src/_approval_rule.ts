@@ -14,6 +14,7 @@ import {
   loadConsequenceRoles,
 } from "@oxagen/iam/mandate-role";
 import { HandlerError, type CheckedContext } from "@oxagen/oxagen";
+import { unionConsequenceTags } from "@oxagen/oxagen/contracts/tool.classification";
 import {
   measureDeclarationsSchema,
   type MeasureDeclarations,
@@ -195,7 +196,19 @@ interface DeclaredTool {
   measures: MeasureDeclarations;
 }
 
-/** Every enabled declared tool of the workspace, with its active version. */
+/**
+ * Every enabled declared tool of the workspace, with its active version.
+ *
+ * `consequenceTags` is the EFFECTIVE union of the declared column and the
+ * classified jsonb, through the one function every reader of this fact uses.
+ * Reading only the column here was a real bypass, and a quiet one: a tool with
+ * no declared consequences that `set_tool_classification` had marked
+ * `moves_money` presented no tags to `assertRulesSavable`, so an Admin cleared
+ * the handler's `{ org: ["Owner","Admin"] }` gate, never reached the
+ * consequence gate that reserves money to Owner and Billing, and authored a
+ * rule that `loadDeclaredTool` would then enforce against the very tag the
+ * authoring gate never saw. The floor and the gate have to read one fact.
+ */
 async function declaredTools(
   tx: Tx,
   workspaceId: string,
@@ -205,6 +218,7 @@ async function declaredTools(
       slug: schema.tools.slug,
       version: schema.toolVersions.versionNumber,
       consequenceTags: schema.toolVersions.consequenceTags,
+      classification: schema.toolVersions.classification,
       measures: schema.toolVersions.measures,
     })
     .from(schema.tools)
@@ -224,7 +238,7 @@ async function declaredTools(
     return {
       slug: r.slug,
       version: r.version,
-      consequenceTags: r.consequenceTags,
+      consequenceTags: unionConsequenceTags(r),
       measures: parsed.success ? parsed.data : {},
     };
   });

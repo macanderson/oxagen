@@ -391,6 +391,56 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
     });
 
+    it("reads the CLASSIFIED consequences at authoring time, so a classified tag cannot be authored around", async () => {
+      // The bypass this closes, and it is the case that was passing and
+      // should not have been. A tool with NO declared consequence tags that
+      // `set_tool_classification` has marked `moves_money` used to present an
+      // empty tag set to `assertRulesSavable`: an Admin cleared the handler's
+      // own `{ org: ["Owner","Admin"] }` gate, never reached the consequence
+      // gate that reserves money to Owner and Billing, and authored a rule
+      // that `loadDeclaredTool` would then enforce against the very tag the
+      // authoring gate never saw. The floor and the gate now read one fact.
+      const adminId = randomUUID();
+      doubles.roles.set(adminId, "Admin");
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.toolVersions)
+          .set({
+            consequenceTags: [],
+            classification: {
+              sideEffect: "write",
+              egress: "third_party",
+              consequenceTags: ["moves_money"],
+              measures: {},
+              dataClasses: [],
+            },
+            classifiedRiskGrade: "high",
+            classifiedAt: new Date("2026-09-16T08:00:00.000Z"),
+          })
+          .where(eq(schema.toolVersions.id, paymentVersionId)),
+      );
+      try {
+        await expect(set(adminId, [RULE])).rejects.toSatisfy(
+          forbidden("org_role_required"),
+        );
+        // An Owner is accountable for money and may still author it, so the
+        // gate refuses the unaccountable caller rather than the tool.
+        await expect(set(ownerUserId, [RULE])).resolves.toBeDefined();
+      } finally {
+        await withSystemDb((tx) =>
+          tx
+            .update(schema.toolVersions)
+            .set({
+              consequenceTags: ["moves_money"],
+              classification: null,
+              classifiedRiskGrade: null,
+              classifiedAt: null,
+            })
+            .where(eq(schema.toolVersions.id, paymentVersionId)),
+        );
+      }
+    });
+
     it("refuses two rules under one id and leaves the stored document as it was", async () => {
       await set(ownerUserId, [RULE]);
       const before = await settingsOf();

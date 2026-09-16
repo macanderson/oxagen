@@ -100,6 +100,52 @@ describe("inputDigest", () => {
     );
   });
 
+  it("no user input can produce the encoder's output", () => {
+    // The property, stated as a property. The markers alone were not enough:
+    // a tag moved the collision out of the value space and into the key
+    // space, and `record_execution` takes `inputPayload: z.unknown()`, so the
+    // key space is caller-controlled.
+    //
+    // Escaping makes the map injective: a marker is exactly one `$` followed
+    // by a name, and a user key of n leading `$` (n >= 1) becomes n + 1, so a
+    // user key can only ever arrive with two or more.
+    const realDate = { startedAt: new Date("2026-09-16T10:00:00.000Z") };
+    const forged = { startedAt: { $date: "2026-09-16T10:00:00.000Z" } };
+    expect(inputDigest(realDate)).not.toBe(inputDigest(forged));
+
+    // Both directions the escape has to keep apart, including the one a naive
+    // non-idempotent escape gets wrong: a user object that ALREADY contains
+    // `$$date` must stay distinct from the escaped form of `{$date: …}`.
+    const one = { v: { $date: "x" } };
+    const two = { v: { $$date: "x" } };
+    const three = { v: { $$$date: "x" } };
+    const digests = [one, two, three].map(inputDigest);
+    expect(new Set(digests).size).toBe(3);
+
+    // The same for every other marker, so this is a rule rather than a
+    // special case for dates.
+    expect(inputDigest({ n: 1n })).not.toBe(
+      inputDigest({ n: { $bigint: "1" } }),
+    );
+    expect(inputDigest({ s: new Set([1]) })).not.toBe(
+      inputDigest({ s: { $set: [1] } }),
+    );
+    expect(inputDigest({ m: new Map([["a", 1]]) })).not.toBe(
+      inputDigest({ m: { $map: [["a", 1]] } }),
+    );
+    expect(inputDigest({ r: /a/g })).not.toBe(
+      inputDigest({ r: { $regexp: ["a", "g"] } }),
+    );
+    expect(inputDigest({ u: new URL("https://a.test/") })).not.toBe(
+      inputDigest({ u: { $url: "https://a.test/" } }),
+    );
+
+    // Escaping only touches keys that could be mistaken for a marker; an
+    // ordinary key with a `$` inside it is left alone.
+    expect(inputDigest({ a$b: 1 })).toBe(inputDigest({ a$b: 1 }));
+    expect(inputDigest({ a$b: 1 })).not.toBe(inputDigest({ a$$b: 1 }));
+  });
+
   it("still digests an object with a null prototype", () => {
     const bare = Object.create(null) as Record<string, unknown>;
     bare.a = 1;

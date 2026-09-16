@@ -29,29 +29,16 @@ export function registryCapabilityId(row: {
 /**
  * The consequence tags a version carries, from BOTH halves, deduped.
  *
- * `agent.tool_versions.consequence_tags` (text[]) is the declared half — what
- * `publish_tool_declaration` and `import_tools` write from the descriptor and
- * what the mandate gate reads. `classification->'consequenceTags'` is the
- * classified half, what `set_tool_classification` writes. Both draw on one
- * vocabulary (`consequenceTagSchema`), so a tool tagged in either is in a
- * class kill switch's reach. Reading only the jsonb left every declared-tag
- * tool running while `list_kill_switches` reported the switch on.
+ * Re-exported, not implemented here. The one implementation lives in
+ * `@oxagen/oxagen/contracts/tool.classification`, beside the vocabulary it
+ * draws on, because `@oxagen/rules` also has to read it for the auto-approval
+ * floor and the rule-authoring gate, and `@oxagen/agent` depends on
+ * `@oxagen/rules` — so this module cannot be where both of them get it.
+ *
+ * The path stays so every caller #2958 wired keeps working unchanged.
  */
-export function unionConsequenceTags(row: {
-  consequenceTags: readonly string[] | null;
-  classification: unknown;
-}): string[] {
-  const tags = new Set<string>();
-  for (const t of row.consequenceTags ?? []) {
-    if (typeof t === "string" && t.length > 0) tags.add(t);
-  }
-  const classified = (
-    row.classification as { consequenceTags?: unknown } | null
-  )?.consequenceTags;
-  if (Array.isArray(classified)) {
-    for (const t of classified) {
-      if (typeof t === "string" && t.length > 0) tags.add(t);
-    }
-  }
-  return [...tags];
-}
+export {
+  unionConsequenceTags,
+  effectiveSideEffect,
+  type ClassificationHalves,
+} from "@oxagen/oxagen/contracts/tool.classification";

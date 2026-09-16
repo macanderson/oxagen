@@ -15,6 +15,10 @@ import {
   measureDeclarationsSchema,
   type MeasureDeclarations,
 } from "@oxagen/oxagen/mandates/schemas";
+import {
+  effectiveSideEffect,
+  unionConsequenceTags,
+} from "@oxagen/oxagen/contracts/tool.classification";
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import type { AutoApprovalRule } from "@oxagen/oxagen/approval-rules/schemas";
 import {
@@ -35,77 +39,6 @@ export interface DeclaredTool {
   consequenceTags: string[];
   measures: MeasureDeclarations;
   effectIdPath: string | null;
-}
-
-/** Side-effect classes from least to most severe (toolSideEffectClassSchema). */
-const SIDE_EFFECT_SEVERITY = ["read", "write", "irreversible"];
-
-/**
- * The more severe of two side-effect classes, with an unknown or absent value
- * contributing nothing.
- *
- * `max`, never "the classified one": see the union note on
- * `effectiveConsequenceTags`. There is no declared side-effect COLUMN today —
- * the class exists only inside `classification` — so this currently reduces to
- * the classified value. It is written as a max anyway so that the day a
- * declared column lands, a reclassification still cannot lower what the
- * manifest declared.
- */
-function moreSevereSideEffect(
-  a: string | null,
-  b: string | null,
-): string | null {
-  const rank = (v: string | null) =>
-    v === null ? -1 : SIDE_EFFECT_SEVERITY.indexOf(v);
-  return rank(a) >= rank(b) ? a : b;
-}
-
-/**
- * The tags the floor reads: the declared column UNIONED with the classified
- * ones, deduplicated and sorted.
- *
- * A union, deliberately, and the asymmetry is the whole argument. The two
- * halves are written by different capabilities behind different gates:
- * `publish_tool_declaration` writes the column behind `assertConsequenceRole`,
- * and `set_tool_classification` writes the jsonb behind Owner/Admin. Letting
- * the jsonb REPLACE the column would let an Owner lower an approval floor
- * without passing the consequence-role gate, which is a real bypass.
- *
- * A union cannot do that, because it is monotonic for a floor — it only ever
- * adds reasons a call needs a person, never removes one:
- *
- *   declared {}, classified {destroys_data} → {destroys_data} → floor fires.
- *     An Owner RAISED the floor. That is the fix.
- *   declared {destroys_data}, classified {} → {destroys_data} → floor fires.
- *     An Owner CANNOT lower it. The bypass does not exist.
- *
- * So the objection to reading the jsonb is an objection to replacement, not to
- * union, and it does not apply here. Recorded next to the code because the
- * next person to read this will have the same objection.
- */
-function effectiveConsequenceTags(
-  declared: readonly string[],
-  classified: readonly string[],
-): string[] {
-  return [...new Set([...declared, ...classified])].sort();
-}
-
-/** The classification an administrator set, read defensively off the jsonb. */
-function readClassification(raw: unknown): {
-  sideEffect: string | null;
-  consequenceTags: string[];
-} {
-  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
-    return { sideEffect: null, consequenceTags: [] };
-  }
-  const c = raw as Record<string, unknown>;
-  const tags = Array.isArray(c.consequenceTags)
-    ? c.consequenceTags.filter((t): t is string => typeof t === "string")
-    : [];
-  return {
-    sideEffect: typeof c.sideEffect === "string" ? c.sideEffect : null,
-    consequenceTags: tags,
-  };
 }
 
 /** The workspace's enabled declared tool for this capability, or null. */
@@ -140,7 +73,6 @@ export async function loadDeclaredTool(
     )
     .limit(1);
   if (!row) return null;
-  const classified = readClassification(row.classification);
   return {
     slug: row.slug,
     version: row.version,
@@ -156,11 +88,12 @@ export async function loadDeclaredTool(
     // raises the floor, and the call can skip a person. A floor that fails
     // open is worse than no floor, because the record says a rule judged it.
     riskGrade: row.classifiedRiskGrade ?? row.riskGrade,
-    sideEffect: moreSevereSideEffect(null, classified.sideEffect),
-    consequenceTags: effectiveConsequenceTags(
-      row.consequenceTags,
-      classified.consequenceTags,
-    ),
+    // Both halves, through the one function every reader of this fact uses
+    // (@oxagen/oxagen/contracts/tool.classification). The floor and the
+    // rule-authoring gate read the same union, so a rule cannot be authored
+    // under a gate that cannot see a tag the floor will later enforce.
+    sideEffect: effectiveSideEffect(row),
+    consequenceTags: unionConsequenceTags(row),
     measures: measureDeclarationsSchema.parse(row.measures),
     effectIdPath: row.effectIdPath,
   };
@@ -180,6 +113,9 @@ export class UndigestibleInputError extends Error {
     this.name = "UndigestibleInputError";
   }
 }
+
+/** A key that already starts with `$`, and so has to be escaped past the markers. */
+const MARKER_LIKE = /^\$/;
 
 /** A value with no prototype, or exactly Object's — everything else is typed. */
 function isPlainObject(v: object): boolean {
@@ -261,10 +197,27 @@ function canonicalize(v: unknown): unknown {
       `an instance of ${v.constructor?.name ?? "an anonymous class"}`,
     );
   }
+  // Escape any user key that could be mistaken for one of the markers above.
+  // `$date` → `$$date`, `$$date` → `$$$date`, everything else untouched.
+  //
+  // The property this establishes, and the reason the markers alone were not
+  // enough: NO USER INPUT CAN PRODUCE THE ENCODER'S OUTPUT. A marker is
+  // exactly one `$` followed by a name; escaping maps a user key of n leading
+  // `$` (n >= 1) to n + 1, so a user key can only ever arrive with two or
+  // more and never collides with a marker's one. The map is total and
+  // injective, so two different inputs still cannot share a digest.
+  //
+  // Reachable rather than theoretical: `record_execution` takes
+  // `inputPayload: z.unknown()`, so the key space is caller-controlled and a
+  // plain `{ $date: "…" }` would otherwise be byte-identical to a real Date's
+  // encoding and inherit its standing approval.
   return Object.fromEntries(
     Object.keys(v)
       .sort()
-      .map((k) => [k, canonicalize((v as Record<string, unknown>)[k])]),
+      .map((k) => [
+        MARKER_LIKE.test(k) ? `$${k}` : k,
+        canonicalize((v as Record<string, unknown>)[k]),
+      ]),
   );
 }
 

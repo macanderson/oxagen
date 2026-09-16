@@ -273,10 +273,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
           }),
         ),
       );
+      // toEqual, not toMatchObject, on purpose: this asserts the whole shape
+      // every consumer of `subject.tool` sees, so a loader that gains a field
+      // has to come through here and say what the new field means.
+      // `sideEffect` is null rather than absent because the version carries no
+      // classification and the field is always present on the subject —
+      // "the record says nothing" rather than "this key may not exist", so no
+      // reader has to handle undefined.
       expect(subject.tool).toEqual({
         slug: "stripe__create_payment",
         version: 3,
         riskGrade: "high",
+        sideEffect: null,
         consequenceTags: ["moves_money"],
       });
       expect(subject.measures).toEqual({ amount: "12500000" });

@@ -4,6 +4,7 @@ import {
   type CapabilityHandler,
 } from "@oxagen/oxagen";
 import { toolDeclarationPublish } from "@oxagen/oxagen/contracts/tool.declaration.publish";
+import { unionConsequenceTags } from "@oxagen/oxagen/contracts/tool.classification";
 import { withTenantDb } from "@oxagen/database";
 import {
   assertConsequenceRole,
@@ -75,6 +76,9 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
     consequenceTags: input.consequence_tags,
     measures: input.measures,
     effectIdPath: input.effect_id_path ?? null,
+    // The incoming declaration carries no classification of its own; the
+    // active version's is what the gate below unions in.
+    classification: null,
   };
   // `active` is the version the gate reads today; null for a fresh tool.
   const assertClassificationRole = async (
@@ -84,10 +88,21 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
       consequenceTags: [],
       measures: {},
       effectIdPath: null,
+      classification: null,
     };
     if (classificationKey(before) === classificationKey(declared)) return;
+    // The EFFECTIVE tags, through the one function every reader of this fact
+    // uses: what the version declares, what it is classified with, and what
+    // this declaration would leave it declaring. Reading only the declared
+    // columns let a tool with no declared tag that an administrator had
+    // classified `moves_money` fall through the `length === 0` return, so its
+    // declaration — including the measures a rule's ceilings are read from —
+    // could be rewritten by someone not accountable for money.
     const tags = [
-      ...new Set([...before.consequenceTags, ...declared.consequenceTags]),
+      ...new Set([
+        ...unionConsequenceTags(before),
+        ...declared.consequenceTags,
+      ]),
     ];
     if (tags.length === 0) return;
     const overrides = await withTenantDb((tx) =>
