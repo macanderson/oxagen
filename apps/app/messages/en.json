@@ -13,6 +13,7 @@
     "invitation": "Join {org} on Oxagen",
     "invitationNotFound": "This invitation link does not work",
     "newOrganization": "Name your organization",
+    "register": "Register an agent",
     "cliAuthorize": "Authorize the Oxagen CLI",
     "fleet": "Fleet",
     "run": "Run",

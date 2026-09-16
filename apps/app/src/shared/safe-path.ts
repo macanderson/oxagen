@@ -109,6 +109,18 @@ export const routes = {
   /** The agent's definition file in the source editor. */
   agentSource: (org: string, ws: string, agent: string): SafePath =>
     pathOf(org, ws, "agents", agent, "source"),
+  /**
+   * One step of Register an agent (#2967, ADR-065 decision 1). `agent` carries
+   * the identity `register_agent` minted from the name step to the wrap and
+   * run steps, so a reload lands back on the same registration.
+   */
+  register: (
+    org: string,
+    ws: string,
+    step: string,
+    q?: { agent: string },
+  ): SafePath =>
+    withQuery(pathOf(org, ws, "register", step), { agent: q?.agent }),
   /** Billing; `cursor` opens a later page of its invoices, `checkout` is where a Stripe Checkout returns. */
   billing: (
     org: string,

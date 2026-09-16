@@ -30,6 +30,7 @@ const {
   AgentSource,
   Spend,
   FleetSpendTiles,
+  OnboardingGate,
   members,
   source,
 } = vi.hoisted(() => {
@@ -47,6 +48,10 @@ const {
     FleetSpendTiles: vi.fn((_props: Record<string, unknown>) => (
       <p data-testid="fleet-spend" />
     )),
+    // The gate's own states are its component test; here it only has to render.
+    OnboardingGate: vi.fn((_props: Record<string, unknown>) => (
+      <p data-testid="onboarding-gate" />
+    )),
     members,
     source: { org: { members } },
   };
@@ -56,6 +61,7 @@ vi.mock("@/features/billing", () => ({ Billing }));
 vi.mock("@/features/fleet", () => ({ Fleet }));
 vi.mock("@/features/agents", () => ({ Agents, Agent, AgentSource }));
 vi.mock("@/features/spend", () => ({ Spend, FleetSpendTiles }));
+vi.mock("@/features/onboarding", () => ({ OnboardingGate }));
 vi.mock("@/data/source", () => ({ dataSource: () => source }));
 vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
