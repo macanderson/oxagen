@@ -931,3 +931,116 @@ describe("how a read names its table", () => {
     expect(residualTableForms.join(" ")).toMatch(/module resolution/);
   });
 });
+
+describe("a handler that delegates its queries", () => {
+  const register = `registerHandler(
+    "add_plugin_registry",
+    async () => (await import("./plugin.registry.add")).h,
+  );
+`;
+  /** Opens the transaction, hands `tx` to a helper. Touches no table itself. */
+  const entry = `import { withTenantDb } from "@oxagen/database";
+import { addRegistry } from "./registry-default";
+export const h = async (input, ctx) =>
+  withTenantDb((tx) => addRegistry(tx, { orgId: ctx.orgId }));
+`;
+  const helper = `import { schema } from "@oxagen/database";
+export const addRegistry = (tx, args) =>
+  tx.insert(schema.apiKeys).values({ orgId: args.orgId, workspaceId: args.ws });
+`;
+  const action = `import { invoke } from "@oxagen/oxagen";
+const ORG_ONLY_WS = "${SENTINEL}";
+export const add = (orgId: string) =>
+  invoke("add_plugin_registry", {}, { orgId, workspaceId: ORG_ONLY_WS });
+`;
+
+  it("follows the tables into the helper the transaction was handed to", () => {
+    // The helper has no withTenantDb of its own BECAUSE the caller opened one.
+    // Discarding it for that was backwards, and left the call site out of the
+    // inventory entirely.
+    const root = makeTree({
+      "packages/handlers/src/register.ts": register,
+      "packages/handlers/src/plugin.registry.add.ts": entry,
+      "packages/handlers/src/registry-default.ts": helper,
+      "apps/app/src/actions.ts": action,
+    });
+    const { findings } = findSentinelNarrowedReads(root);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.tables.map((t: { table: string }) => t.table)).toEqual([
+      "auth.api_keys",
+    ]);
+  });
+
+  it("leaves the helper alone when the handler opens no transaction", () => {
+    const root = makeTree({
+      "packages/handlers/src/register.ts": register,
+      "packages/handlers/src/plugin.registry.add.ts": entry.replace(
+        /withTenantDb/g,
+        "withSystemDb",
+      ),
+      "packages/handlers/src/registry-default.ts": helper,
+      "apps/app/src/actions.ts": action,
+    });
+    expect(findSentinelNarrowedReads(root).findings).toEqual([]);
+  });
+});
+
+describe("ADR-068's transaction re-entry", () => {
+  const tablesOf = (src: string) => {
+    const sf = parse(src);
+    return [...tableResolver(sf).tablesIn(sf)];
+  };
+
+  it("skips a write after setTransactionWorkspaceScope, which is at a real workspace", () => {
+    // workspace-bootstrap: the workspace does not exist until the transaction
+    // is under way, so ADR-068 §5 allows re-pointing the GUC onto the new row
+    // before writing anything workspace-scoped.
+    expect(
+      tablesOf(
+        `await setTransactionWorkspaceScope(tx, ws.id);\nawait tx.insert(schema.workspaceUsers).values({ workspaceId: ws.id });`,
+      ),
+    ).toEqual([]);
+  });
+
+  it("still judges a statement BEFORE the re-entry", () => {
+    expect(
+      tablesOf(
+        `await tx.select().from(schema.apiKeys);\nawait setTransactionWorkspaceScope(tx, ws.id);\nawait tx.insert(schema.workspaceUsers).values({});`,
+      ),
+    ).toEqual(["apiKeys"]);
+  });
+});
+
+describe("invokeOrgCapability through a local wrapper", () => {
+  const register = `registerHandler(
+    "list_capability_registry",
+    async () => (await import("./capability.registry.list")).h,
+  );
+`;
+  const handler = `import { schema, withTenantDb } from "@oxagen/database";
+export const h = async () => withTenantDb((tx) => tx.select().from(schema.apiKeys));
+`;
+
+  it("scans the file's capability names when the wrapper forwards its parameter", () => {
+    // governance/page.tsx: safeInvoke(orgId, userId, name, input) forwards
+    // `name`, so the capability strings are at the WRAPPER's call sites. The
+    // direct invoke() path already had this branch; this one never got it.
+    const root = makeTree({
+      "packages/handlers/src/register.ts": register,
+      "packages/handlers/src/capability.registry.list.ts": handler,
+      "apps/app/src/page.tsx": `import { invokeOrgCapability } from "./_lib/invoke-org";
+async function safeInvoke<T>(orgId: string, userId: string, name: string, input: unknown) {
+  return invokeOrgCapability<T>(orgId, userId, name, input);
+}
+export default async function Page() {
+  return safeInvoke(tenant.id, userId, "list_capability_registry", { limit: 10 });
+}
+`,
+    });
+    const { findings } = findSentinelNarrowedReads(root);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      capability: "list_capability_registry",
+    });
+  });
+});

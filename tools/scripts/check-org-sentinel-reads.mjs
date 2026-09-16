@@ -451,10 +451,29 @@ export function tableResolver(sourceFile) {
       if (ts.isIdentifier(node)) return bindings.get(node.text) ?? null;
       return null;
     },
-    /** Every table name this subtree could be referring to. */
+    /**
+     * Every table name this subtree could be referring to.
+     *
+     * Statements after a `setTransactionWorkspaceScope(tx, id)` call are
+     * skipped. That is ADR-068 §5's sanctioned move: the one place allowed to
+     * re-point an open transaction's workspace GUC, used by
+     * workspace-bootstrap because the workspace being written does not exist
+     * until the transaction is under way. After that call the transaction is
+     * at a REAL workspace, so the sentinel no longer narrows anything — and
+     * modelling it by name is the same treatment the other named seams get.
+     * Positions are compared rather than exempting the whole unit, so a
+     * statement BEFORE the re-entry is still judged.
+     */
     tablesIn(root) {
       const out = new Set();
+      let reentry = Number.POSITIVE_INFINITY;
       for (const n of nodesOf(root)) {
+        if (calleeText(n) === "setTransactionWorkspaceScope") {
+          reentry = Math.min(reentry, n.getStart());
+        }
+      }
+      for (const n of nodesOf(root)) {
+        if (n.getStart() > reentry) continue;
         const direct = this.tableOf(n);
         if (direct !== null) out.add(direct);
         // tx.query.<table>
@@ -894,29 +913,56 @@ function handlerFindings(
 ) {
   const entryRef = handlerModules.get(capability);
   if (entryRef === undefined) return [];
-  const out = [];
-  for (const { src, file } of handlerSources(entryRef, root)) {
-    const sourceFile = parse(src, file);
-    const regions = tenantDbRegions(sourceFile);
-    if (regions.length === 0) continue;
-    const resolver = tableResolver(sourceFile);
+  const sources = handlerSources(entryRef, root);
+  const entry = sources[0];
+  const entrySf = parse(entry.src, entry.file);
+  const entryRegions = tenantDbRegions(entrySf);
+  // No transaction anywhere in the handler: nothing here runs under the
+  // sentinel's tenant scope.
+  if (entryRegions.length === 0) return [];
+
+  // The units to judge, each with the resolver of the file it came from.
+  //
+  // A handler often opens withTenantDb and hands `tx` to a helper —
+  // plugin.registry.add.ts opens the transaction and calls addRegistry, which
+  // is where schema.mcpRegistries is touched. Skipping a helper for having no
+  // transaction OF ITS OWN is backwards: it has none BECAUSE the caller opened
+  // one, and its queries run inside it. So once the entry has a tenant region,
+  // each direct import is judged whole. That over-approximates a helper whose
+  // tables are only used outside a transaction, which is the safe direction —
+  // a false positive rather than a call site missing from the inventory.
+  const units = entryRegions.map((region) => ({
+    root: region,
+    resolver: tableResolver(entrySf),
+  }));
+  for (const helper of sources.slice(1)) {
+    const sf = parse(helper.src, helper.file);
+    units.push({ root: sf, resolver: tableResolver(sf) });
+  }
+
+  const byTable = new Map();
+  for (const unit of units) {
     const bad = offenders(
-      tablesNamed(regions, resolver),
+      tablesNamed([unit.root], unit.resolver),
       tableNames,
       policyClasses,
-      regions,
-      resolver,
+      [unit.root],
+      unit.resolver,
     );
-    if (bad.length > 0) {
-      out.push({
-        ...shape,
-        capability,
-        handler: `${entryRef.base}/${entryRef.module.replace(/^\.\//, "")}.ts`,
-        tables: bad,
-      });
-    }
+    for (const t of bad) if (!byTable.has(t.table)) byTable.set(t.table, t);
   }
-  return out;
+  if (byTable.size === 0) return [];
+
+  return [
+    {
+      ...shape,
+      capability,
+      handler: `${entryRef.base}/${entryRef.module.replace(/^\.\//, "")}.ts`,
+      tables: [...byTable.values()].sort((a, b) =>
+        a.table.localeCompare(b.table),
+      ),
+    },
+  ];
 }
 
 export function passCrossSurface(
@@ -966,6 +1012,13 @@ export function passCrossSurface(
       const nameArg = call.arguments[2];
       if (nameArg !== undefined && ts.isStringLiteral(nameArg)) {
         invoked.add(nameArg.text);
+      } else {
+        // Called through a local wrapper — governance/page.tsx has a
+        // safeInvoke(orgId, userId, name, input) that forwards its `name`
+        // parameter, so the capability strings are at the WRAPPER's call
+        // sites. Same situation as an indirect invoke(), and it gets the same
+        // answer: scan every capability this file names.
+        indirect = true;
       }
     }
 

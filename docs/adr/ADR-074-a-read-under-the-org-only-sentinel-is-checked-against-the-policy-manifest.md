@@ -328,17 +328,18 @@ and the answer should be written rather than assumed.
 
 ### This check is best-effort, and it does not converge
 
-Eight failures were found in it during one review cycle. **Every one reported
+Ten failures were found in it during one review cycle. **Every one reported
 clean rather than erroring**, which is the property that makes a green
 mandatory check worse than no check: it turns "nobody has verified this" into
-"CI says it is fine". They fall on four axes, and the axes are the point.
+"CI says it is fine". They fall on four axes, and the axes are the point —
+above all the split between *reading something wrong* and *never looking*.
 
 | # | axis | what it could not do |
 |---|---|---|
 | 1-4 | which call sites carry a sentinel context | read a helper, `kernelRead`, `capabilityContext`, an inline object |
 | 5, 8 | whether a predicate constrains the statement it belongs to | it compared totals across a file; it accepted an `isNull` inside an `or`, which is an alternative rather than a constraint |
 | 6 | which table a read touches | it matched the literal identifier `schema` |
-| 7 | **which handlers exist at all** | it read one registry; `@oxagen/agent` registers 45 more and none had ever been examined |
+| 7, 9, 10 | **whether it looked at all** — coverage, not precision | it read one registry, so `@oxagen/agent`'s 45 handlers were never examined; it discarded a handler's helper for having no transaction of its own; it did not scan for capability names when `invokeOrgCapability` was reached through a wrapper |
 
 Each was closed. Closing axis 1 took the call-site analysis from regexes to a
 TypeScript parse. Closing axis 3 — resolving `import { schema as db }` and
@@ -350,9 +351,18 @@ condition on an input supplied in another file: path sensitivity, then
 interprocedural constant propagation. A fourth axis, opened by closing the
 third.
 
-**Number seven is a different kind and is worth separating.** The first six and
-the eighth are the check looking at something and reading it wrong. The seventh
-was the check never looking: `readHandlerModules` parsed
+**Three of these are a different kind, and the distinction is the stopping
+rule.** Most were the check looking at something and reading it wrong, which
+costs a false negative in CI. Three were the check **never looking**, which is
+worse for the job this check has left: an incomplete inventory sends #3132's
+conversion out short, and the runtime refusal then starts raising on paths
+nobody reviewed. A coverage gap gets fixed; a precision gap gets written into
+the residual list below.
+
+The three coverage gaps:
+
+1. **A second registry.** `readHandlerModules` parsed
+   `packages/handlers/src/register.ts` alone: `readHandlerModules` parsed
 `packages/handlers/src/register.ts` alone, so every capability registered by
 `@oxagen/agent` — its registry, approval, MCP, memory, role and trace handlers,
 45 of them — resolved to no module, and `handlerFindings` returned an empty
@@ -361,6 +371,27 @@ nothing."** That is a coverage hole, it was cheap to close by parsing the second
 registry, and an unresolvable handler module is now an error rather than an
 empty result, because that is the one condition under which this check's silence
 means nothing.
+
+2. **A handler's queries in its helper.** A handler often opens `withTenantDb`
+   and hands `tx` to a direct import — `plugin.registry.add.ts` opens the
+   transaction and `registry-default.ts` is where `schema.mcpRegistries` is
+   touched. The helper was discarded for having no transaction of its own,
+   which is backwards: it has none *because the caller opened one*. Once the
+   entry has a tenant region, each direct import is judged whole.
+
+3. **`invokeOrgCapability` through a wrapper.** `governance/page.tsx` has a
+   `safeInvoke(orgId, userId, name, input)` that forwards its `name` parameter,
+   so the capability strings are at the wrapper's call sites and every
+   org-sentinel invocation on that page was unexamined. The direct `invoke()`
+   path already scanned the file's capability names when its argument did not
+   resolve; this one now takes the same branch.
+
+Closing (2) produced one false positive, and closing it was the same kind of
+work as the other named seams: `workspace-bootstrap` calls
+`setTransactionWorkspaceScope` before writing `workspace.workspace_users`,
+which is ADR-068 §5's sanctioned re-entry onto the workspace being created, so
+the transaction is at a real workspace by then. Statements after that call are
+skipped, by position, so a statement before it is still judged.
 
 **That is the answer to whether this converges: it does not.** The residual is
 structural, not a backlog:
@@ -482,9 +513,9 @@ directly — so it needs the check anyway.
   anything outside Postgres, since Neo4j and ClickHouse scoping is a separate
   seam. It is a net with a known mesh, not a proof.
 
-- **Eight failures were found after the check was first written. All eight were
+- **Ten failures were found after the check was first written. All ten were
   closed; the count of KNOWN blind spots shrank each round and the rate of
-  discovery did not.** Eight rounds in, there is no evidence the set is finite,
+  discovery did not.** Ten rounds in, there is no evidence the set is finite,
   and the section above says plainly that it is not. An earlier draft of this
   ADR claimed the incompleteness was "written down and shrinking"; the writing
   is accurate, the shrinking is not a claim this can support, and the sentence
