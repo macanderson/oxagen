@@ -7,12 +7,13 @@ import { schema } from "@oxagen/database";
 import type { AttemptEventReadRecord, RunSummary } from "@oxagen/run-ledger";
 import type { TachoFrameRow } from "@oxagen/telemetry";
 import { NO_BODY } from "@oxagen/run-ledger";
+import type { RunItem } from "@oxagen/oxagen/contracts/run.list";
 import {
   type LedgerEventRollup,
   type LedgerRunRow,
   type LedgerSeal,
   type PageQuery,
-  type ReadRunCosts,
+  type ReadRunRollups,
   type RunCost,
   type RunQueries,
   type RunScope,
@@ -98,6 +99,10 @@ export type LedgerFixture = LedgerRunRow & {
   seal?: LedgerSeal | null;
   /** The run's `cost.run_totals` row; absent when the rollup has not covered it. */
   cost?: RunCost | null;
+  /** The verdict on that row; absent when no witness reported on the run. */
+  verdict?: RunItem["verdict"];
+  /** The worker run this run witnessed; absent for any other run. */
+  witnessFor?: string;
 };
 
 /** A graded seal for a ledger fixture; `over` narrows the grade or the gaps. */
@@ -125,6 +130,10 @@ export type TachoFixture = TachoSessionRow & {
   child?: boolean;
   /** The run's `cost.run_totals` row; absent when the rollup has not covered it. */
   cost?: RunCost | null;
+  /** The verdict on that row; absent when no witness reported on the run. */
+  verdict?: RunItem["verdict"];
+  /** The worker run this run witnessed; absent for any other run. */
+  witnessFor?: string;
 };
 
 export function ledgerRun(
@@ -213,28 +222,36 @@ function pageOf<T extends Ordered>(rows: T[], q: PageQuery): T[] {
 
 export type MemoryStores = {
   queries: RunQueries;
-  readRunCosts: ReadRunCosts;
-  /** Every `readRunCosts` call, so a test can assert what a page read. */
-  costCalls: (readonly string[])[];
+  readRunRollups: ReadRunRollups;
+  readWitnessFor: (scope: RunScope, runId: string) => Promise<string | null>;
+  /** Every `readRunRollups` call, so a test can assert what a page read. */
+  rollupCalls: (readonly string[])[];
 };
+
+/** A page leaves a witness run out when the query asks it to. */
+const listed =
+  (q: PageQuery) =>
+  (r: { witnessFor?: string }): boolean =>
+    !(q.withoutWitnessRuns && r.witnessFor);
 
 export function memoryStores(
   ledger: readonly LedgerFixture[],
   tacho: readonly TachoFixture[],
 ): MemoryStores {
-  const costCalls: (readonly string[])[] = [];
+  const rollupCalls: (readonly string[])[] = [];
   const inScope = (scope: RunScope) => ({
     ledger: ledger.filter((r) => sameScope(r.scope, scope)),
     tacho: tacho.filter((r) => sameScope(r.scope, scope)),
   });
   return {
-    costCalls,
+    rollupCalls,
     queries: {
       ledgerPage: (scope, q) =>
         Promise.resolve(
           pageOf(
             inScope(scope)
               .ledger.filter((r) => r.specVersion === 2)
+              .filter(listed(q))
               .map((r) => ({
                 at: (r.run.startedAt ?? r.run.createdAt).getTime(),
                 id: r.run.publicId,
@@ -272,6 +289,7 @@ export function memoryStores(
           pageOf(
             inScope(scope)
               .tacho.filter((r) => !r.child)
+              .filter(listed(q))
               .map((r) => ({
                 at: r.session.startedAt.getTime(),
                 id: r.session.publicId,
@@ -294,22 +312,34 @@ export function memoryStores(
         );
       },
     },
-    readRunCosts: (scope, runIds) => {
-      costCalls.push(runIds);
+    readRunRollups: (scope, runIds) => {
+      rollupCalls.push(runIds);
       const rows = [
-        ...inScope(scope).ledger.map((r) => [r.run.publicId, r.cost] as const),
-        ...inScope(scope).tacho.map(
-          (r) => [r.session.publicId, r.cost] as const,
-        ),
+        ...inScope(scope).ledger.map((r) => [r.run.publicId, r] as const),
+        ...inScope(scope).tacho.map((r) => [r.session.publicId, r] as const),
       ];
       return Promise.resolve(
         new Map(
-          rows.flatMap(([id, cost]) =>
-            runIds.includes(id) && cost ? [[id, cost] as const] : [],
+          rows.flatMap(([id, r]) =>
+            runIds.includes(id) && (r.cost || r.verdict)
+              ? [
+                  [
+                    id,
+                    { cost: r.cost ?? null, verdict: r.verdict ?? null },
+                  ] as const,
+                ]
+              : [],
           ),
         ),
       );
     },
+    readWitnessFor: (scope, runId) =>
+      Promise.resolve(
+        [
+          ...inScope(scope).ledger.map((r) => [r.run.publicId, r] as const),
+          ...inScope(scope).tacho.map((r) => [r.session.publicId, r] as const),
+        ].find(([id]) => id === runId)?.[1].witnessFor ?? null,
+      ),
   };
 }
 

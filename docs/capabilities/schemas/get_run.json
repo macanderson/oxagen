@@ -180,6 +180,25 @@
               }
             ]
           },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "flipped",
+                  "failing",
+                  "unmoved",
+                  "unsatisfied",
+                  "tampered",
+                  "unverified",
+                  "waived"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "name": {
             "anyOf": [
               {
@@ -232,6 +251,7 @@
           "startedAt",
           "sealedAt",
           "replayGrade",
+          "verdict",
           "name",
           "summary"
         ],
@@ -393,11 +413,22 @@
           "cursor"
         ],
         "additionalProperties": false
+      },
+      "witnessFor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
       }
     },
     "required": [
       "run",
-      "frames"
+      "frames",
+      "witnessFor"
     ],
     "additionalProperties": false
   }

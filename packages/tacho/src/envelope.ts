@@ -635,6 +635,11 @@ export const KIND_BODIES = {
     ...pick(...policyKeys),
     ...pick(...integrityKeys),
   }),
+  // A witness verdict on the worker's run (Mission Control spec §8.5,
+  // ADR-064). The chain carries the body as it was produced; its schema is
+  // `proofObservedBodySchema` in @oxagen/run-evidence, which the control
+  // plane's ingest contract applies, so this leaf package holds no copy.
+  "proof.observed": z.object({}).catchall(json),
 } as const;
 
 export type TachoKind = keyof typeof KIND_BODIES;
