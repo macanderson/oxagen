@@ -25,6 +25,7 @@ import {
 
 const {
   requireViewer,
+  Audit,
   Billing,
   Fleet,
   Agents,
@@ -44,6 +45,7 @@ const {
   const apiKeys = vi.fn();
   return {
     requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
+    Audit: vi.fn((_props: Record<string, unknown>) => null),
     Billing: vi.fn((_props: Record<string, unknown>) => null),
     Fleet: vi.fn((_props: Record<string, unknown>) => null),
     Agents: vi.fn((_props: Record<string, unknown>) => null),
@@ -71,6 +73,7 @@ const {
   };
 });
 vi.mock("@/server/viewer", () => ({ requireViewer }));
+vi.mock("@/features/audit", () => ({ Audit, AuditSkeleton: () => null }));
 vi.mock("@/features/billing", () => ({ Billing }));
 vi.mock("@/features/fleet", () => ({ Fleet }));
 vi.mock("@/features/agents", () => ({ Agents, Agent, AgentSource }));
@@ -131,6 +134,7 @@ const REV1: [string, string[], Load][] = [
 const API_KEYS: Load = () => import("./api-keys/page");
 
 const BILLING: Load = () => import("./billing/page");
+const AUDIT: Load = () => import("./audit/page");
 
 describe("the Tools page", () => {
   it("resolves the workspace viewer, names the page once, hands the viewer and the data source to Tools, and says what the page still owes", async () => {
@@ -145,6 +149,27 @@ describe("the Tools page", () => {
       "data-section",
       "tools",
     );
+  });
+});
+
+describe("the Audit page", () => {
+  it("resolves the organization viewer, names the page once and hands the viewer, the data source and the filters the URL carries to Audit", async () => {
+    const ctx = { orgSlug: "acme" };
+    requireViewer.mockResolvedValue(ctx);
+    await expectPageTitle(
+      await AUDIT(),
+      routeProps(SEGMENTS, { outcome: "deny", offset: "50" }),
+      title("audit"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...ORG);
+    expect(Audit).toHaveBeenCalledOnce();
+    expect(Audit.mock.calls[0]?.[0]).toEqual({
+      ctx,
+      source,
+      searchParams: { outcome: "deny", offset: "50" },
+    });
+    // Audit has a page, so it has no UNRECORDED row (§3.6).
+    expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
 });
 

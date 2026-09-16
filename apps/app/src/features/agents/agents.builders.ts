@@ -232,6 +232,7 @@ export function agentsSource(reads: AgentReads) {
     shell: { context: refuse },
     billing: {
       plan: refuse,
+      usageCredits: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,
@@ -251,8 +252,11 @@ export function agentsSource(reads: AgentReads) {
       drill: refuse,
       waste: refuse,
       budgets: refuse,
+      findings: refuse,
+      findingEvidence: refuse,
     },
     org: { members: refuse, apiKeys: refuse },
+    audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },
   };

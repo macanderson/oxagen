@@ -3,7 +3,8 @@
 // production caller (INV-17). The rev1 ports land with the seams and pages
 // that bind them: the Fleet ports in WL-34, the Run and Organization ports in
 // WL-35 to WL-37, the Billing port in WL-38, the Spend port in #2962; each gap
-// lane adds its page's port (#2956: agents; #2961: steering; #3098: skills).
+// lane adds its page's port (#2956: agents; #2961: steering; #3097: audit;
+// #3098: skills).
 import type { OrgCtx, PretenantCtx, WsCtx } from "@/server/viewer";
 import type {
   AgentDetail,
@@ -13,10 +14,18 @@ import type {
 } from "./contracts/agents";
 import type { ApprovalItem } from "./contracts/approvals";
 import type {
+  AuditExport,
+  AuditExportFormat,
+  AuditFilters,
+  AuditPage,
+  AuditQuery,
+} from "./contracts/audit";
+import type {
   ContractRate,
   GauBucket,
   InvoicePage,
   PlanCard,
+  UsageCredits,
 } from "./contracts/billing";
 import type { MandateList } from "./contracts/mandates";
 import type { ApiKey, MemberList } from "./contracts/org";
@@ -33,6 +42,8 @@ import type {
   SpendBudgets,
   SpendDrill,
   SpendDrillKind,
+  SpendFindingEvidence,
+  SpendFindings,
   SpendGroupKind,
   SpendReport,
   SpendWaste,
@@ -63,12 +74,18 @@ export interface DataSource {
   /** list_orgs + list_workspaces; caller: features/shell/source.ts. */
   shell: { context(ctx: OrgCtx): Promise<Read<ShellContext>> };
   /**
-   * The Billing page's four noBillingGate reads, each Owner, Admin or Billing
+   * The Billing page's five noBillingGate reads, each Owner, Admin or Billing
    * (checked in its handler); caller: features/billing/billing.tsx.
    */
   billing: {
     /** get_subscription */
     plan(ctx: OrgCtx): Promise<Read<PlanCard>>;
+    /**
+     * get_subscription again, for the second meter's balance (§3.9). The two
+     * reads are separate because a `Read<T>` carries one view model, and the
+     * plan card is deliberately blind to the credit balance (INV-25).
+     */
+    usageCredits(ctx: OrgCtx): Promise<Read<UsageCredits>>;
     /** get_gau_bucket: mode, meter, invoice thresholds, auto top-up state */
     bucket(ctx: OrgCtx): Promise<Read<GauBucket>>;
     /** get_contract_rate */
@@ -144,17 +161,39 @@ export interface DataSource {
     waste(ctx: WsCtx, period: DayRange): Promise<Read<SpendWaste>>;
     /** get_spend_budget */
     budgets(ctx: WsCtx): Promise<Read<SpendBudgets>>;
+    /** list_findings over the open findings (#2963): the Findings section's cards and the totals above them */
+    findings(ctx: WsCtx): Promise<Read<SpendFindings>>;
+    /** get_finding_evidence: the runs, calls and prices one finding cites */
+    findingEvidence(
+      ctx: WsCtx,
+      findingId: string,
+    ): Promise<Read<SpendFindingEvidence>>;
   };
   /**
    * The Organization page's two tabs, each an Owner-or-Admin read checked in
-   * its handler; callers: features/organization/people.tsx and
-   * features/organization/api-keys.tsx.
+   * its handler; callers: features/organization/people.tsx,
+   * features/organization/api-keys.tsx and features/audit/audit.tsx (actor
+   * names, off `members`).
    */
   org: {
     /** list_members {scope:"org"} */
     members(ctx: OrgCtx): Promise<Read<MemberList>>;
     /** list_api_keys, every key in scope, newest first, revoked ones included */
     apiKeys(ctx: OrgCtx): Promise<Read<ApiKey[]>>;
+  };
+  /**
+   * The organization's audit record (#3097), both noBillingGate reads for an
+   * org Owner or Admin (checked in the handlers); callers:
+   * features/audit/audit.tsx and features/audit/export.ts.
+   */
+  audit: {
+    /** query_audit_log, one page at `offset` */
+    events(ctx: OrgCtx, q: AuditQuery): Promise<Read<AuditPage>>;
+    /** export_audit_events: the signed file over the same filters */
+    exportEvents(
+      ctx: OrgCtx,
+      q: AuditFilters & { format: AuditExportFormat },
+    ): Promise<Read<AuditExport>>;
   };
   /**
    * list_skills, one page by name over its default window (noBillingGate;

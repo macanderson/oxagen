@@ -80,6 +80,7 @@ export function toolsSource(read: Read<MandateList>) {
     shell: { context: refuse },
     billing: {
       plan: refuse,
+      usageCredits: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,
@@ -104,8 +105,11 @@ export function toolsSource(read: Read<MandateList>) {
       drill: refuse,
       waste: refuse,
       budgets: refuse,
+      findings: refuse,
+      findingEvidence: refuse,
     },
     org: { members: refuse, apiKeys: refuse },
+    audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },
   };

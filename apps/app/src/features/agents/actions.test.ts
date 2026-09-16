@@ -285,6 +285,7 @@ describe("requestMandate", () => {
     agentId: "agt_invoicebot",
     consequenceTag: "moves_money",
     measure: "amount",
+    kind: "amount" as const,
     currency: "usd",
     perCall: "250.00",
     perPeriod: "2,000.00",
@@ -385,6 +386,66 @@ describe("requestMandate", () => {
       code: "invalid_input",
       field,
     });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("stores a count limit in whole units, not scaled as money", async () => {
+    // The sibling of the `calls` defect: a measure a tool declares as a count
+    // (`rows`) whose limit went through the money scaling would be filed as
+    // 50,000,000 — a millionfold more authority than the 50 that was asked
+    // for — and the gate compares it against whole-unit counts.
+    invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
+    await requestMandate("acme", "core-platform", {
+      ...good,
+      measure: "rows",
+      kind: "count",
+      currency: "rows",
+      perCall: "50",
+      perPeriod: "1000",
+      callsPerDay: "",
+    });
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+      limits: {
+        rows: {
+          perCall: "50",
+          perPeriod: "1000",
+          period: "monthly",
+          currencyOrUnit: "rows",
+        },
+      },
+    });
+  });
+
+  it.each([
+    // A count is whole units: a decimal has no meaning in them.
+    [
+      {
+        kind: "count" as const,
+        currency: "rows",
+        perCall: "",
+        perPeriod: "12.5",
+      },
+      "perPeriod",
+    ],
+    [
+      {
+        kind: "count" as const,
+        currency: "rows",
+        perCall: "1.5",
+        perPeriod: "",
+      },
+      "perCall",
+    ],
+    // A count denominated in a currency code could not be told from an amount
+    // on the read, and an amount must name a real one.
+    [{ kind: "count" as const, currency: "USD" }, "currency"],
+    [{ kind: "count" as const, currency: "  " }, "currency"],
+    [{ kind: "amount" as const, currency: "GAU" }, "currency"],
+    [{ kind: "amount" as const, currency: "rows" }, "currency"],
+  ])("refuses %j before the kernel runs (negative)", async (patch, field) => {
+    expect(
+      await requestMandate("acme", "core-platform", { ...good, ...patch }),
+    ).toEqual({ ok: false, reason: "invalid", code: "invalid_input", field });
     expect(invoke).not.toHaveBeenCalled();
   });
 

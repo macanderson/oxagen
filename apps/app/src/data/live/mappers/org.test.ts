@@ -187,7 +187,9 @@ describe("toApiKeys", () => {
 
   it("a key whose public id is a raw database id is refused by the view model (negative)", () => {
     const out = keys({
-      items: [{ ...storedKey, publicId: "7a000000-0000-4000-8000-0000000000a1" }],
+      items: [
+        { ...storedKey, publicId: "7a000000-0000-4000-8000-0000000000a1" },
+      ],
     });
     expect(ApiKeyList.safeParse(toApiKeys(out)).success).toBe(false);
   });

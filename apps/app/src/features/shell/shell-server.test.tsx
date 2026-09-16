@@ -58,6 +58,7 @@ describe("ShellChrome", () => {
       shell: { context: vi.fn() },
       billing: {
         plan: vi.fn(),
+        usageCredits: vi.fn(),
         bucket: vi.fn(),
         contractRate: vi.fn(),
         invoices: vi.fn(),
@@ -76,9 +77,12 @@ describe("ShellChrome", () => {
         drill: vi.fn(),
         waste: vi.fn(),
         budgets: vi.fn(),
+        findings: vi.fn(),
+        findingEvidence: vi.fn(),
       },
       org: { members: vi.fn(), apiKeys: vi.fn() },
       mandates: { list: vi.fn() },
+      audit: { events: vi.fn(), exportEvents: vi.fn() },
       skills: { inventory: vi.fn() },
       steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
     };

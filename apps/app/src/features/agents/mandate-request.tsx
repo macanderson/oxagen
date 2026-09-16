@@ -10,6 +10,11 @@
 // rather than guessed; a tool version that exposes no such measure cannot be
 // given a mandate and the handler refuses the draft. The measure cannot be
 // `calls`, which the field below writes and the gate reads as one per call.
+//
+// The operator also states what the measure counts. No contract answers a tool
+// version's `measures`, so the form cannot read the declaration, and scaling a
+// limit by guessing would file a count of 50 as 50,000,000 — a millionfold
+// more authority than was asked for.
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import { buttonSecondary, inputBase } from "@/ui/control-styles";
@@ -23,6 +28,9 @@ import { type MandateDraft, requestMandate } from "./actions";
 const TESTID = "request-mandate";
 
 const PERIODS = ["daily", "weekly", "monthly"] as const;
+
+/** What the named measure counts, which decides how its limits are scaled. */
+const KINDS = ["amount", "count"] as const;
 
 /** The starter set of consequence tags (MC spec §6.9 part 1). */
 const CONSEQUENCE_TAGS = [
@@ -66,6 +74,11 @@ function period(form: FormData): MandateDraft["period"] {
   return PERIODS.find((p) => p === raw) ?? "monthly";
 }
 
+function kind(form: FormData): MandateDraft["kind"] {
+  const raw = text(form, "kind");
+  return KINDS.find((k) => k === raw) ?? "amount";
+}
+
 export function RequestMandate({
   org,
   ws,
@@ -95,6 +108,7 @@ export function RequestMandate({
         agentId,
         consequenceTag: text(form, "consequenceTag"),
         measure: text(form, "measure"),
+        kind: kind(form),
         currency: text(form, "currency"),
         perCall: text(form, "perCall"),
         perPeriod: text(form, "perPeriod"),
@@ -165,13 +179,27 @@ export function RequestMandate({
               className={inputBase}
             />
           </Field>
-          <Field name="currency" label={t("currency")}>
+          <Field name="kind" label={t("kind")} hint={t("kindHint")}>
+            <select
+              id={id("kind")}
+              name="kind"
+              defaultValue="amount"
+              className={inputBase}
+            >
+              {KINDS.map((value) => (
+                <option key={value} value={value}>
+                  {t(`kinds.${value}`)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field name="currency" label={t("currency")} hint={t("currencyHint")}>
             <input
               id={id("currency")}
               name="currency"
               defaultValue="USD"
               required
-              maxLength={3}
+              maxLength={32}
               className={inputBase}
             />
           </Field>

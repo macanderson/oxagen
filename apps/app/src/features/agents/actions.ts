@@ -11,7 +11,7 @@ import { agentDefinitionCommit } from "@oxagen/oxagen/contracts/agent.definition
 import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
 import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
 import { mandateRequest } from "@oxagen/oxagen/contracts/mandate.request";
-import { microsFromDecimal } from "@/data/contracts/money";
+import { isCurrencyCode, microsFromDecimal } from "@/data/contracts/money";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
@@ -107,11 +107,19 @@ export type MandateDraft = {
   agentId: string;
   /** The consequence the mandate answers for (`moves_money`). */
   consequenceTag: string;
-  /** The measure the tool version declares the amount under (`amount`). */
+  /** The measure the tool version declares the limit under (`amount`, `rows`). */
   measure: string;
-  /** ISO 4217, the currency the limits are named in. */
+  /**
+   * What that measure counts, as the operator states it. No contract answers a
+   * tool version's `measures` today, so the form cannot read the declaration
+   * and must be told: an amount is scaled to micros against a currency, a
+   * count is whole units of a named unit. Guessing would put a count of 50
+   * into the ledger as 50,000,000.
+   */
+  kind: "amount" | "count";
+  /** ISO 4217 for an amount; the unit's own name for a count. */
   currency: string;
-  /** Decimal amounts as typed; at least one of the two is required. */
+  /** The limits as typed: a decimal for an amount, a whole number for a count. */
   perCall: string;
   perPeriod: string;
   period: "daily" | "weekly" | "monthly";
@@ -125,9 +133,10 @@ export type MandateDraft = {
   validTo: string;
 };
 
-const CURRENCY = /^[A-Za-z]{3}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const WHOLE = /^\d{1,9}$/;
+/** A count limit: whole units, up to what the measure-value regex admits. */
+const WHOLE_UNITS = /^(0|[1-9][0-9]{0,29})$/;
 
 /**
  * The one built-in measure (`CALLS_MEASURE`, packages/oxagen/src/mandates/
@@ -147,30 +156,50 @@ function refuse(field: keyof MandateDraft): ActionResult<never> {
 /**
  * Asks for a mandate on this agent's behalf. The handler records a draft for
  * the role accountable for the consequence to grant or decline; a draft grants
- * nothing, because the gate reads active mandates only. Amounts are converted
- * to micros here (INV-09) and a figure that is not a plain decimal is refused
- * before the kernel is called.
+ * nothing, because the gate reads active mandates only.
+ *
+ * A limit is stored in the units the ledger records, and which those are
+ * depends on what the measure counts: micros for an amount (INV-09), whole
+ * units for a count. The operator states which, because no contract answers a
+ * tool version's `measures` and the form would otherwise be choosing a scaling
+ * for a value whose type it does not know — a count of 50 filed as 50,000,000
+ * is a millionfold more authority than was asked for. A figure that is not of
+ * the stated kind is refused before the kernel is called.
  */
 export async function requestMandate(
   org: string,
   ws: string,
   draft: MandateDraft,
 ): Promise<ActionResult<{ mandateId: string; status: string }>> {
-  const currency = draft.currency.trim().toUpperCase();
-  if (!CURRENCY.test(currency)) return refuse("currency");
+  const amount = draft.kind === "amount";
+  const unit = amount
+    ? draft.currency.trim().toUpperCase()
+    : draft.currency.trim();
+  // An amount is denominated in a currency, a count in a unit of its own; a
+  // unit that is a currency code would make the two indistinguishable on the
+  // read (`isCurrencyCode`), so each field admits only its own kind of name.
+  if (amount ? !isCurrencyCode(unit) : unit === "" || isCurrencyCode(unit))
+    return refuse("currency");
   const measure = draft.measure.trim();
   if (measure === "" || measure === RESERVED_MEASURE) return refuse("measure");
   const consequenceTag = draft.consequenceTag.trim();
   if (consequenceTag === "") return refuse("consequenceTag");
 
+  /** A typed limit in the units the ledger records: micros, or whole units. */
+  const limitValue = (typed: string): string | null =>
+    amount
+      ? microsFromDecimal(typed)
+      : WHOLE_UNITS.test(typed)
+        ? typed.replace(/^0+(?=\d)/, "")
+        : null;
+
   const perCall = draft.perCall.trim();
   const perPeriod = draft.perPeriod.trim();
   if (perCall === "" && perPeriod === "") return refuse("perPeriod");
-  const perCallMicros = perCall === "" ? null : microsFromDecimal(perCall);
-  if (perCall !== "" && perCallMicros === null) return refuse("perCall");
-  const perPeriodMicros =
-    perPeriod === "" ? null : microsFromDecimal(perPeriod);
-  if (perPeriod !== "" && perPeriodMicros === null) return refuse("perPeriod");
+  const perCallValue = perCall === "" ? null : limitValue(perCall);
+  if (perCall !== "" && perCallValue === null) return refuse("perCall");
+  const perPeriodValue = perPeriod === "" ? null : limitValue(perPeriod);
+  if (perPeriod !== "" && perPeriodValue === null) return refuse("perPeriod");
 
   const callsPerDay = draft.callsPerDay.trim();
   if (callsPerDay !== "" && !WHOLE.test(callsPerDay))
@@ -201,10 +230,10 @@ export async function requestMandate(
     consequenceTags: [consequenceTag],
     limits: {
       [measure]: {
-        ...(perCallMicros === null ? {} : { perCall: perCallMicros }),
-        ...(perPeriodMicros === null ? {} : { perPeriod: perPeriodMicros }),
+        ...(perCallValue === null ? {} : { perCall: perCallValue }),
+        ...(perPeriodValue === null ? {} : { perPeriod: perPeriodValue }),
         period: draft.period,
-        currencyOrUnit: currency,
+        currencyOrUnit: unit,
       },
       ...(callsPerDay === ""
         ? {}

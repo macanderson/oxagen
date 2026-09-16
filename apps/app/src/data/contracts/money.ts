@@ -66,6 +66,25 @@ export function mulMicros(value: Money, quantity: number): Money {
   };
 }
 
+/** The precision `ratioOfMicros` divides at: a ratio carries six decimal places. */
+const RATIO_SCALE = 1_000_000;
+
+/**
+ * `part ÷ whole` as a ratio, or null when the two carry different currencies
+ * or `whole` is zero. The division is BigInt on the micros, scaled first, so a
+ * figure past what a float holds exactly still divides where it should. The
+ * answer is a ratio and never money: the caller prints it through
+ * `formatRatio` (INV-09). A ratio above one or below zero is answered as
+ * measured; nothing here clamps a figure the contract carried.
+ */
+export function ratioOfMicros(part: Money, whole: Money): number | null {
+  if (part.currency !== whole.currency) return null;
+  const divisor = toBigInt(whole.micros);
+  if (divisor === BigInt(0)) return null;
+  const scaled = (toBigInt(part.micros) * BigInt(RATIO_SCALE)) / divisor;
+  return Number(scaled) / RATIO_SCALE;
+}
+
 /**
  * The ISO 4217 codes this runtime knows, which is what "a currency code"
  * means. A mandate limit names either one of these or a unit of a count
@@ -83,15 +102,14 @@ export function isCurrencyCode(code: string): boolean {
   return CURRENCY_CODES.has(code);
 }
 
-/** Six digits of the fraction, finer than any meter draws. */
-const RATIO_SCALE = 1_000_000n;
-
 /**
- * `part` as a fraction of `whole`, clamped to 0…1, for a meter's width and
- * the percentage beside it. Both are integer strings — micros for money,
- * whole units for a count — and the division happens on BigInt, so a figure
- * too large for a double still yields the right fraction. A `whole` of zero
- * has no fraction and answers 0.
+ * `part` as a fraction of `whole`, for a meter's width. The pair beside
+ * `ratioOfMicros`, which answers what a figure measures and never clamps: this
+ * one answers how much of a bar to fill, so it takes the bare integer strings
+ * a mandate limit carries — micros for money, whole units for a count, with no
+ * currency to compare — and clamps to 0…1, because a bar wider than its track
+ * is not a reading. The division is BigInt, so a figure past what a double
+ * holds exactly still divides where it should.
  */
 export function ratioOfIntegers(part: string, whole: string): number {
   const total = toBigInt(whole);
@@ -99,7 +117,8 @@ export function ratioOfIntegers(part: string, whole: string): number {
   const drawn = toBigInt(part);
   if (drawn <= 0n) return 0;
   if (drawn >= total) return 1;
-  return Number((drawn * RATIO_SCALE) / total) / Number(RATIO_SCALE);
+  const scale = BigInt(RATIO_SCALE);
+  return Number((drawn * scale) / total) / RATIO_SCALE;
 }
 
 /**

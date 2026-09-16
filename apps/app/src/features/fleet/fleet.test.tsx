@@ -339,6 +339,27 @@ describe("Fleet approvals › the mandate bar", () => {
     await expectNoAxe(container);
   });
 
+  it("says what the bar's figures are counted over, since a parked call can outlive a period", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([parked]),
+      mandates: mandateList([mandateRow()]),
+    });
+    expect(
+      within(approvalsSection()).getByTestId("mandate-period-basis"),
+    ).toHaveTextContent("A reservation this call made in an earlier period");
+  });
+
+  it("says nothing about a period on a card with no bar (negative)", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([approvalItem()]),
+    });
+    expect(
+      within(approvalsSection()).queryByTestId("mandate-period-basis"),
+    ).toBeNull();
+  });
+
   it("reads no mandate at all when no parked call names one (negative)", async () => {
     const { calls } = await renderFleet({
       runs: NO_RUNS,

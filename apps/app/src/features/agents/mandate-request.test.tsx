@@ -82,6 +82,7 @@ describe("RequestMandate", () => {
     );
     expect(dialog()).toHaveTextContent("There is no unbounded option.");
     expect(dialog()).toHaveTextContent("It cannot be “calls”");
+    expect(dialog()).toHaveTextContent("this cannot be guessed");
     await expectNoAxe(document.body);
   });
 
@@ -97,6 +98,7 @@ describe("RequestMandate", () => {
       agentId: "agt_invoicebot",
       consequenceTag: "moves_money",
       measure: "amount",
+      kind: "amount",
       currency: "USD",
       perCall: "",
       perPeriod: "2000.00",
@@ -112,6 +114,16 @@ describe("RequestMandate", () => {
         tab: "mandates",
       }),
     );
+  });
+
+  it("asks what the measure counts, since the form cannot read the declaration", async () => {
+    draw();
+    await open();
+    const kind = within(dialog()).getByLabelText("What it counts");
+    expect(
+      [...kind.querySelectorAll("option")].map((o) => o.getAttribute("value")),
+    ).toEqual(["amount", "count"]);
+    expect(kind).toHaveValue("amount");
   });
 
   it("names a refusal in the dialog and navigates nowhere (negative)", async () => {

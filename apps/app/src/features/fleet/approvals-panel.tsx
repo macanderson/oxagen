@@ -9,6 +9,13 @@
 // the ledger, or the mandate fell outside the one page `list_mandates` answers
 // — names the mandate instead of drawing nothing, because a bar that silently
 // disappears reads as an agent acting under no authority at all.
+//
+// The bar reads the mandate's current period, which is what `list_mandates`
+// answers, and a parked call can outlive one: an approval holds for up to 24
+// hours, so a call parked before midnight holds a daily reservation recorded
+// under the period that has since rolled. Neither the reservation nor its
+// period key is on `list_approvals`, so the card says what the figures are
+// counted over rather than implying they isolate this call.
 import { useLocale, useTranslations } from "next-intl";
 import type { ApprovalItem } from "@/data/contracts/approvals";
 import type { MandateRow } from "@/data/contracts/mandates";
@@ -55,9 +62,17 @@ function ApprovalCard({
         {recorded(item.requester)}
       </dl>
       {mandate !== null ? (
-        mandate.authority.map((authority) => (
-          <MandateBar key={authority.measure} authority={authority} />
-        ))
+        <>
+          {mandate.authority.map((authority) => (
+            <MandateBar key={authority.measure} authority={authority} />
+          ))}
+          <p
+            data-testid="mandate-period-basis"
+            className="text-xs text-muted-foreground"
+          >
+            {t("mandatePeriodBasis")}
+          </p>
+        </>
       ) : item.mandateId === null ? null : (
         <p data-testid="mandate-unread" className="text-xs">
           {t("mandateUnread", { mandate: item.mandateId })}

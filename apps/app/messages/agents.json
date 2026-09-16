@@ -380,7 +380,7 @@
         "consequenceTag": "Consequence",
         "measure": "Measure",
         "measureHint": "The name the tool version declares the amount under, which is how it is read from a call. It cannot be “calls”: every call draws one of those, and the field below sets that limit.",
-        "currency": "Currency",
+        "currency": "Currency or unit",
         "perCall": "Per call",
         "perPeriod": "Per period",
         "perPeriodHint": "Name a per-call limit, a per-period limit, or both.",
@@ -399,7 +399,14 @@
         "validTo": "Valid to",
         "validToHint": "A mandate expires. There is no unbounded option.",
         "confirm": "Request the mandate",
-        "pending": "Requesting"
+        "pending": "Requesting",
+        "kind": "What it counts",
+        "kindHint": "An amount is money, and its limits are read as a decimal. A count is whole units of whatever the tool measures. The tool version's declaration says which; the ledger stores each differently, so this cannot be guessed.",
+        "kinds": {
+          "amount": "an amount of money",
+          "count": "a count of units"
+        },
+        "currencyHint": "An ISO 4217 code for an amount (USD). For a count, the unit's own name (rows, recipients) — not a currency code."
       },
       "truncated": "The newest {shown} mandates this agent holds. It holds at least that many, and older ones are not listed here."
     }

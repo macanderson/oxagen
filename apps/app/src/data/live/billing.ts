@@ -1,5 +1,5 @@
 // The billing port on the kernel (ARCHITECTURE.md §3.3, §3.9): the Billing
-// page's four reads, each a noBillingGate kernelRead mapped into its view
+// page's five reads, each a noBillingGate kernelRead mapped into its view
 // model and parsed at the boundary.
 import "server-only";
 import { billingContractRateGet } from "@oxagen/oxagen/contracts/billing.contract_rate.get";
@@ -13,6 +13,7 @@ import {
   GauBucket,
   InvoicePage,
   PlanCard,
+  UsageCredits,
 } from "@/data/contracts/billing";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
@@ -22,6 +23,7 @@ import {
   toGauBucket,
   toInvoicePage,
   toPlanCard,
+  toUsageCredits,
 } from "./mappers/billing";
 
 /** The view model parsed from a mapped record, or record_unmappable reported once. */
@@ -51,6 +53,25 @@ export const billing: DataSource["billing"] = {
     });
     return read.ok
       ? parsed(PlanCard, toPlanCard(read.value), ctx.orgId, "plan")
+      : read;
+  },
+  // The plan card and the credit balance are two mappings of one record, so
+  // this repeats the read the plan made. The kernel seam serves a repeated
+  // read once per request (§3.2), which is where the dedup is allowed to live:
+  // INV-06 requires this method to make its own kernelRead call.
+  async usageCredits(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: billingSubscriptionRead,
+      input: {},
+      page: "billing",
+    });
+    return read.ok
+      ? parsed(
+          UsageCredits,
+          toUsageCredits(read.value),
+          ctx.orgId,
+          "usageCredits",
+        )
       : read;
   },
   async bucket(ctx) {
