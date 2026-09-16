@@ -12,7 +12,7 @@ import { auditMixin, idMixin } from "./_mixins";
 
 /**
  * The MC spec §7.7 events a notification row may report, restricted to the
- * names that have a producer (migration 20260915206000_notification_events).
+ * names that have a producer (migration 20260915205500_notification_events).
  * The drizzle CHECK below is built from this list. `list_notifications`
  * publishes the same list as `NOTIFICATION_EVENTS`, and
  * notification-events.test.ts holds the contract's list, this list and the
