@@ -2,8 +2,15 @@
 // takes the viewer's ctx and returns a `Read<T>`, and every method has a
 // production caller (INV-17). The rev1 ports land with the seams and pages
 // that bind them: the Fleet, Run and Organization ports in WL-34 to WL-37, the
-// Billing port in WL-38, the Spend port in #2962.
+// Billing port in WL-38, the Spend port in #2962, the Audit port in #3097.
 import type { OrgCtx, PretenantCtx, WsCtx } from "@/server/viewer";
+import type {
+  AuditExport,
+  AuditExportFormat,
+  AuditFilters,
+  AuditPage,
+  AuditQuery,
+} from "./contracts/audit";
 import type {
   ContractRate,
   GauBucket,
@@ -88,6 +95,20 @@ export interface DataSource {
     /** get_spend_budget */
     budgets(ctx: WsCtx): Promise<Read<SpendBudgets>>;
   };
-  /** list_members {scope:"org"}; caller: features/organization/people.tsx. */
+  /** list_members {scope:"org"}; callers: features/organization/people.tsx and features/audit/audit.tsx (actor names). */
   org: { members(ctx: OrgCtx): Promise<Read<MemberList>> };
+  /**
+   * The organization's audit record (#3097), both noBillingGate reads for an
+   * org Owner or Admin (checked in the handlers); callers:
+   * features/audit/audit.tsx and features/audit/export.ts.
+   */
+  audit: {
+    /** query_audit_log, one page at `offset` */
+    events(ctx: OrgCtx, q: AuditQuery): Promise<Read<AuditPage>>;
+    /** export_audit_events: the signed file over the same filters */
+    exportEvents(
+      ctx: OrgCtx,
+      q: AuditFilters & { format: AuditExportFormat },
+    ): Promise<Read<AuditExport>>;
+  };
 }

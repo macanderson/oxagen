@@ -22,7 +22,8 @@
     "spend": "Spend",
     "people": "Organization",
     "apiKeys": "API keys",
-    "billing": "Billing"
+    "billing": "Billing",
+    "audit": "Audit"
   },
   "unrecorded": {
     "agents": "Agent identities, roles, toolbelts, and mandates are not recorded here yet.",

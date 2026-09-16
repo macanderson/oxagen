@@ -3,6 +3,7 @@
 // arguments the simple way (the components under test use no plurals).
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactNode } from "react";
+import audit from "../../messages/audit.json";
 import auth from "../../messages/auth.json";
 import billing from "../../messages/billing.json";
 import en from "../../messages/en.json";
@@ -12,6 +13,7 @@ import ui from "../../messages/ui.json";
 
 export const messages = {
   ...en,
+  ...audit,
   ...auth,
   ...billing,
   ...onboarding,

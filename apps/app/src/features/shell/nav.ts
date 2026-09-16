@@ -13,7 +13,7 @@ export type WorkspaceNavKey =
   | "tools"
   | "steering"
   | "spend";
-export type OrgNavKey = "organization" | "billing";
+export type OrgNavKey = "organization" | "billing" | "audit";
 export type NavKey = WorkspaceNavKey | OrgNavKey | "apiKeys";
 
 export const WORKSPACE_NAV: readonly WorkspaceNavKey[] = [
@@ -23,7 +23,11 @@ export const WORKSPACE_NAV: readonly WorkspaceNavKey[] = [
   "steering",
   "spend",
 ];
-export const ORG_NAV: readonly OrgNavKey[] = ["organization", "billing"];
+export const ORG_NAV: readonly OrgNavKey[] = [
+  "organization",
+  "billing",
+  "audit",
+];
 
 type ThumbSlot = Extract<
   WorkspaceNavKey,
@@ -43,6 +47,7 @@ export const MORE_SHEET: readonly NavKey[] = [
   "steering",
   "organization",
   "billing",
+  "audit",
 ];
 
 /**
@@ -51,6 +56,7 @@ export const MORE_SHEET: readonly NavKey[] = [
  */
 const ORG_SEGMENTS = {
   billing: "billing",
+  audit: "audit",
   "api-keys": "apiKeys",
 } as const satisfies Record<string, NavKey>;
 
@@ -76,6 +82,8 @@ export function orgHref(org: string, key: NavKey): SafePath {
       return pathOf(org);
     case "billing":
       return pathOf(org, "billing");
+    case "audit":
+      return pathOf(org, "audit");
     case "apiKeys":
       return pathOf(org, "api-keys");
     default:
