@@ -84,6 +84,7 @@ const source: DataSource = {
   },
   billing: {
     plan: refuse,
+    usageCredits: refuse,
     bucket: refuse,
     contractRate: refuse,
     invoices: refuse,
@@ -94,6 +95,8 @@ const source: DataSource = {
     drill: refuse,
     waste: refuse,
     budgets: refuse,
+    findings: refuse,
+    findingEvidence: refuse,
   },
   org: { members, apiKeys: refuse },
   audit: { events, exportEvents },
