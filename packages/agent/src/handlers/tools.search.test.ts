@@ -67,6 +67,25 @@ const CTX = {
 
 type Captured = Array<{ table: unknown; where: string; params: unknown[] }>;
 
+/** What the two run stores answer; a test overrides either before it calls. */
+const DEFAULT_LEDGER_ROWS = [
+  {
+    publicId: "arun_a",
+    status: "completed",
+    goal: "review PR 12",
+    at: new Date("2026-09-14T10:00:00.000Z"),
+  },
+];
+const DEFAULT_TACHO_ROWS = [
+  {
+    publicId: "tse_b",
+    outcome: "sealed",
+    startedAt: new Date("2026-09-14T09:00:00.000Z"),
+  },
+];
+let ledgerRows: unknown[] = DEFAULT_LEDGER_ROWS;
+let tachoRows: unknown[] = DEFAULT_TACHO_ROWS;
+
 function tx(captured: Captured) {
   return {
     select: () => ({
@@ -79,19 +98,9 @@ function tx(captured: Captured) {
           },
           orderBy: () => chain,
           limit: () => {
-            if (table === schema.agentRuns)
-              return Promise.resolve([
-                {
-                  publicId: "arun_a",
-                  status: "completed",
-                  goal: "review PR 12",
-                  at: new Date(),
-                },
-              ]);
+            if (table === schema.agentRuns) return Promise.resolve(ledgerRows);
             if (table === schema.tachoSessions)
-              return Promise.resolve([
-                { publicId: "tse_b", outcome: "sealed", startedAt: new Date() },
-              ]);
+              return Promise.resolve(tachoRows);
             if (table === schema.agents)
               return Promise.resolve([
                 {
@@ -121,6 +130,8 @@ function tx(captured: Captured) {
 let captured: Captured;
 beforeEach(() => {
   captured = [];
+  ledgerRows = DEFAULT_LEDGER_ROWS;
+  tachoRows = DEFAULT_TACHO_ROWS;
   mocks.pluginForContract.mockReset().mockReturnValue(undefined);
   mocks.listEntitled.mockReset().mockResolvedValue(new Set<string>());
   mocks.withTenantDb.mockImplementation((fn: (t: unknown) => unknown) =>
@@ -216,6 +227,60 @@ describe("search_tools", () => {
     expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
     expect(captured).toHaveLength(0);
   });
+  it("keeps a Tacho session newer than a full page of ledger runs", async () => {
+    // Both stores answer their own newest rows. Taking the ledger's first and
+    // slicing dropped every Tacho session whenever a full page of ledger runs
+    // matched, however much newer the session was.
+    ledgerRows = Array.from({ length: 8 }, (_, i) => ({
+      publicId: `arun_${i}`,
+      status: "completed",
+      goal: `old run ${i}`,
+      at: new Date("2026-09-14T08:00:00.000Z"),
+    }));
+    tachoRows = [
+      {
+        publicId: "tse_new",
+        outcome: "sealed",
+        startedAt: new Date("2026-09-14T12:00:00.000Z"),
+      },
+    ];
+    const out = await toolsSearchHandler({ query: "", kinds: ["run"] }, CTX);
+    expect(out.rows[0]).toEqual({
+      kind: "run",
+      id: "tse_new",
+      label: "tse_new",
+      contextLine: "sealed",
+    });
+  });
+
+  it("hides every witness run from an API-key caller, in both run stores", async () => {
+    // ADR-064: a worker holds the API key, and a run a verdict names as its
+    // witness run is what checked that worker's own work. list_runs excludes
+    // it; search_tools must exclude it by the same predicate, or it is a
+    // second way in to the same rows.
+    await toolsSearchHandler(
+      { query: "", kinds: ["run"] },
+      { ...CTX, apiKeyId: "key-1" },
+    );
+    const reads = captured.filter(
+      (c) => c.table === schema.agentRuns || c.table === schema.tachoSessions,
+    );
+    expect(reads).toHaveLength(2);
+    for (const read of reads) {
+      expect(read.where).toMatch(/not exists \(select 1 from/);
+      expect(read.where).toMatch(/"witness_run_id"/);
+    }
+  });
+
+  it("hides no witness run from a session caller (negative)", async () => {
+    await toolsSearchHandler({ query: "", kinds: ["run"] }, CTX);
+    const reads = captured.filter(
+      (c) => c.table === schema.agentRuns || c.table === schema.tachoSessions,
+    );
+    expect(reads).toHaveLength(2);
+    for (const read of reads) expect(read.where).not.toMatch(/witness_run_id/);
+  });
+
   it("lists no tool claimed by a plugin the org has not installed (negative)", async () => {
     mocks.pluginForContract.mockImplementation((name: string) =>
       name === "set_budget" ? { id: "oxagen/budgets" } : undefined,

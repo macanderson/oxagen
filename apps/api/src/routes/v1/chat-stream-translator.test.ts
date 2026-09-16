@@ -135,14 +135,18 @@ describe("createApiStreamTranslator — SSE wire parity", () => {
     });
   });
 
-  it("surfaces a defensive error part as a typed error event", () => {
+  it("emits no error event for an error part: the route owns that event", () => {
+    // A turn that produces an error part always goes on to reject with the
+    // same failure, and the route emits the terminal `error` event from that
+    // rejection with the failure's code. Emitting here too gave the client
+    // two error events for one failure, the first of them untyped.
     const events: ApiStreamEvent[] = [];
     const t = createApiStreamTranslator({
       toolNameMap: {},
       emit: (e) => events.push(e),
     });
     t.onPart({ type: "error", error: "rate limited" });
-    expect(events).toContainEqual({ type: "error", message: "rate limited" });
+    expect(events.filter((e) => e.type === "error")).toEqual([]);
   });
 
   it("writes the on-the-wire SSE snapshot artifact", () => {

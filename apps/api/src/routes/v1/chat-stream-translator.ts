@@ -187,9 +187,13 @@ export function createApiStreamTranslator(args: {
       // No usage here: the route emits ONE aggregated usage from the turn's
       // own totals after the turn ends.
     } else if (pType === "error") {
-      // A provider or stream failure arrives as an `error` PART: surface it as
-      // a typed `error` SSE event. The turn's own result rejects with the same
-      // failure, so the route persists no partial reply.
+      // No error event here, for the same reason `finish` emits no usage: the
+      // route owns the one terminal `error` SSE event and emits it from the
+      // turn's rejection, where the failure still carries its code. A turn
+      // that produces an error part always goes on to reject with that same
+      // failure, so emitting here too sent the client two error events for
+      // one failure — an untyped one now and the coded one moments later.
+      // Logged here because this is where the part is seen.
       const errVal = (raw as { error?: unknown }).error;
       const message =
         errVal instanceof Error
@@ -198,7 +202,6 @@ export function createApiStreamTranslator(args: {
             ? errVal
             : "Stream error";
       console.error("[chat.stream] LLM stream error part:", message);
-      emit({ type: "error", message });
     }
   };
 

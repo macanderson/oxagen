@@ -253,6 +253,9 @@ const GOVERNED_TOOLS = {
   set_budget: { description: "Set", inputSchema: {}, execute: async () => 2 },
 };
 
+/** Every outcome the run recorder was sealed with, per test. */
+let sealCalls: unknown[] = [];
+
 beforeEach(() => {
   vi.clearAllMocks();
   setup();
@@ -296,6 +299,7 @@ beforeEach(() => {
       governance: {},
     };
   });
+  sealCalls = [];
   mocks.openAssistantRun.mockImplementation(async () => {
     mocks.log.push("open-run");
     const receipts: unknown[] = [];
@@ -311,7 +315,9 @@ beforeEach(() => {
       toolCall: async (r: unknown) => {
         receipts.push({ kind: "tool", ...(r as object) });
       },
-      seal: async () => undefined,
+      seal: async (outcome: unknown) => {
+        sealCalls.push(outcome);
+      },
     };
   });
   mocks.runGovernedTurn.mockImplementation(async () => {
@@ -630,6 +636,29 @@ describe("the prepared turn", () => {
     mocks.openAssistantRun.mockRejectedValueOnce(new Error("ledger refused"));
     await expect(runTurn(request)).rejects.toThrow("ledger refused");
     expect(mocks.runGovernedTurn).not.toHaveBeenCalled();
+  });
+
+  it("seals the admitted run as failed when the turn's preflight refuses", async () => {
+    // openAssistantRun has already created the run and its attempt, and
+    // runGovernedTurn installs no sealing path until after its preflight (the
+    // engine readiness probe, the provider tool-count cap, the contract
+    // conversion). A refusal in that window used to leave the run open for
+    // ever, and an engine outage refuses every turn — so the record would
+    // fill with unsealed runs exactly when it matters most.
+    mocks.runGovernedTurn.mockRejectedValueOnce(
+      new Error("engine is unavailable"),
+    );
+    await expect(runTurn(request)).rejects.toThrow("engine is unavailable");
+    expect(sealCalls).toEqual([
+      { status: "failed", error: "engine is unavailable" },
+    ]);
+  });
+
+  it("seals once, not twice, when the turn itself runs (negative)", async () => {
+    // runGovernedTurn seals on its own detached chain after it returns, so the
+    // preflight guard must not add a second seal for a turn that got going.
+    await runTurn(request);
+    expect(sealCalls).toEqual([]);
   });
 
   // The agent-execution record (SOC 2 CC6/CC7) and, through its handler, the

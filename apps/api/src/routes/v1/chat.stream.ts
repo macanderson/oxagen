@@ -166,6 +166,11 @@ chatStreamRoute.post("/", async (c) => {
       (err: unknown) => {
         // A turn that ended before its reply: the engine unreachable, the
         // ledger refusing the run, an unknown conversation, a cancelled turn.
+        // This is the ONE owner of the terminal `error` event. The translator
+        // deliberately emits none for an `error` part, because a turn that
+        // produces one always rejects with the same failure and the client
+        // would otherwise see it twice; only here does the failure still
+        // carry its code.
         emit({
           type: "error",
           message: err instanceof Error ? err.message : "Stream error",
