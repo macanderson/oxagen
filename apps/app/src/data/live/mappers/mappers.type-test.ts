@@ -5,8 +5,12 @@
 // source in a required field, and NullableOnlyWhenSourceIs refuses a required
 // source in a nullable field. Every mapper's output is checked against it.
 import type { agentApprovalList } from "@oxagen/oxagen/contracts/agent.approval.list";
+import type { agentGet } from "@oxagen/oxagen/contracts/agent.get";
+import type { agentList } from "@oxagen/oxagen/contracts/agent.list";
+import type { tachoIncidentList } from "@oxagen/oxagen/contracts/tacho.incident.list";
 import type { runList } from "@oxagen/oxagen/contracts/run.list";
 import type { ContractOutput } from "@/server/kernel";
+import type { toAgentDetail, toAgentPage, toIncidentPage } from "./agents";
 import type { toApprovalItems } from "./approvals";
 import type { toRunPage } from "./runs";
 
@@ -26,14 +30,42 @@ type RunView = ReturnType<typeof toRunPage>["runs"][number];
 type ApprovalOut = ContractOutput<typeof agentApprovalList>["items"][number];
 type ApprovalView = ReturnType<typeof toApprovalItems>[number];
 
+type AgentRowOut = ContractOutput<typeof agentList>["items"][number];
+type AgentRowView = ReturnType<typeof toAgentPage>["agents"][number];
+type AgentOut = ContractOutput<typeof agentGet>;
+type AgentView = ReturnType<typeof toAgentDetail>;
+type IncidentOut = ContractOutput<typeof tachoIncidentList>["items"][number];
+type IncidentView = ReturnType<typeof toIncidentPage>["incidents"][number];
+
 declare const runOut: RunOut;
 declare const runView: RunView;
 declare const approvalView: ApprovalView;
+declare const agentRowView: AgentRowView;
+declare const identityView: AgentView["identity"];
+declare const credentialView: AgentView["credentials"][number];
+declare const hostView: AgentView["hosts"][number];
+declare const incidentView: IncidentView;
 
 // The positives: both mappers keep a field nullable only where the contract does.
 const _runsHold: NullableOnlyWhenSourceIs<RunView, RunOut> = runView;
 const _approvalsHold: NullableOnlyWhenSourceIs<ApprovalView, ApprovalOut> =
   approvalView;
+const _agentRowsHold: NullableOnlyWhenSourceIs<AgentRowView, AgentRowOut> =
+  agentRowView;
+const _identityHolds: NullableOnlyWhenSourceIs<
+  AgentView["identity"],
+  AgentOut["identity"]
+> = identityView;
+const _credentialsHold: NullableOnlyWhenSourceIs<
+  AgentView["credentials"][number],
+  AgentOut["credentials"][number]
+> = credentialView;
+const _hostsHold: NullableOnlyWhenSourceIs<
+  AgentView["hosts"][number],
+  AgentOut["hosts"][number]
+> = hostView;
+const _incidentsHold: NullableOnlyWhenSourceIs<IncidentView, IncidentOut> =
+  incidentView;
 
 // @ts-expect-error -- turns may be null on the contract, and frames is required on the view
 const _nullableIntoRequired: Pick<RunView, "frames"> = { frames: runOut.turns };

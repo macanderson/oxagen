@@ -42,9 +42,6 @@ const run = {
   taskRef: null,
   startedAt: "2026-09-15T08:55:00.000Z",
   sealedAt: null,
-  replayGrade: null,
-  name: null,
-  summary: null,
 };
 
 beforeEach(() => {

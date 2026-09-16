@@ -5,14 +5,14 @@ import { useFormatter, useLocale, useTranslations } from "next-intl";
 import type { RunPage } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
+import { AgentCard } from "@/ui/agent-card";
 import { linkText, mono, panel } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { StatusBadge } from "@/ui/status-badge";
 import { cell, numericCell, Table } from "@/ui/table";
-import { AgentIdentity } from "./agent-identity";
-import { ReadFailure } from "./read-failure";
+import { ReadFailure } from "@/ui/read-failure";
 
 type Place = { org: string; ws: string };
 
@@ -73,7 +73,11 @@ function RunsPageView({
               )}
             </td>
             <td className={cell}>
-              <AgentIdentity agentKey={run.agentKey} source={run.source} />
+              <AgentCard
+                agentKey={run.agentKey}
+                notRecorded={t("notRecorded")}
+                sub={t(`source.${run.source}`)}
+              />
             </td>
             <td className={cell}>
               {run.operatorId === null ? (

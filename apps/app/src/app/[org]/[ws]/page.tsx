@@ -12,8 +12,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("fleet") };
 }
 
-// The title, the cost rollup's two tiles (#2962) and the Fleet feature's stat
-// strip, approvals and runs (WL-34; ARCHITECTURE.md §1.2 Fleet row).
+// The Fleet page (WL-34) with the cost rollup's two tiles (#2962) under its
+// title.
 export default async function FleetPage({
   params,
   searchParams,
@@ -22,15 +22,18 @@ export default async function FleetPage({
   const ctx = await requireViewer(org, ws);
   const { cursor } = await searchParams;
   const t = await getTranslations("pages");
-  const source = dataSource();
   return (
     <main
       id="main"
       className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
     >
       <PageHeader title={t("fleet")} />
-      <FleetSpendTiles ctx={ctx} source={source} />
-      <Fleet ctx={ctx} source={source} cursor={firstParam(cursor) ?? null} />
+      <FleetSpendTiles ctx={ctx} source={dataSource()} />
+      <Fleet
+        ctx={ctx}
+        source={dataSource()}
+        cursor={firstParam(cursor) ?? null}
+      />
     </main>
   );
 }

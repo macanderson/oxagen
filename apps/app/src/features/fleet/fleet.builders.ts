@@ -3,9 +3,11 @@
 // with what a test hands it. Importable from tests only (`testOnlyTarget` in
 // src/test/arch/layers.ts).
 import type { ApprovalItem } from "@/data/contracts/approvals";
-import type { RunPage, RunRow } from "@/data/contracts/runs";
+import type { RunPage } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
+
+type RunRow = RunPage["runs"][number];
 
 /** The instant every Fleet test renders at. */
 export const NOW = Date.parse("2026-09-15T09:00:00.000Z");
@@ -80,6 +82,12 @@ export function fleetSource(reads: FleetReads) {
         calls.approvals.push(args);
         return Promise.resolve(reads.approvals);
       },
+    },
+    agents: {
+      list: refuse,
+      get: refuse,
+      toolbelt: refuse,
+      incidents: refuse,
     },
     billing: {
       plan: refuse,

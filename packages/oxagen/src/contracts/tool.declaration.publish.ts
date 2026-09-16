@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import {
+  consequenceTagSchema,
+  measureDeclarationsSchema,
+} from "../mandates/schemas";
 
 export const toolDeclarationPublish = registerCapability({
   name: "publish_tool_declaration",
@@ -48,6 +52,31 @@ export const toolDeclarationPublish = registerCapability({
       manifest: z
         .record(z.unknown())
         .describe("The full declared manifest body, verbatim"),
+      // Safety classification (MC spec §6.9 part 1, ADR-059 decision 6):
+      // describes the tool and decides nothing by itself. The mandate gate
+      // reads it from the active version.
+      consequence_tags: z
+        .array(consequenceTagSchema)
+        .max(16)
+        .optional()
+        .default([])
+        .describe(
+          "The consequences invoking this tool can cause: moves_money, destroys_data, alters_production, communicates_externally, changes_access, changes_entitlement, or a tag the workspace defines",
+        ),
+      measures: measureDeclarationsSchema
+        .optional()
+        .default({})
+        .describe(
+          "measure name → { path, type: amount | count | text, unit, scale? }: how a mandate's limits and targets are read from the call's input",
+        ),
+      effect_id_path: z
+        .string()
+        .min(1)
+        .max(256)
+        .optional()
+        .describe(
+          "Dot path into the tool's output carrying the external effect id (a payment, migration, message or deployment id) a mandate settlement records",
+        ),
     })
     .strict(),
   output: z

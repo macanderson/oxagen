@@ -9,7 +9,7 @@ import { Cost } from "./money";
 export const RunStatus = z.enum(["live", "sealed", "halted"]);
 export type RunStatus = z.infer<typeof RunStatus>;
 
-export const RunRow = z.object({
+const RunRow = z.object({
   id: PublicId,
   /** Which store recorded the run: the evidence ledger or a wrapped agent's session. */
   source: z.enum(["ledger", "tacho"]),
@@ -22,7 +22,6 @@ export const RunRow = z.object({
   taskRef: z.string().nullable(),
   startedAt: z.iso.datetime({ offset: true }),
 });
-export type RunRow = z.infer<typeof RunRow>;
 
 export const RunPage = z.object({
   runs: z.array(RunRow),

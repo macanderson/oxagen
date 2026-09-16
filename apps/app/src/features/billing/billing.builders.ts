@@ -173,6 +173,12 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
     shell: { context: refuse },
     runs: { list: refuse },
     approvals: { pending: refuse },
+    agents: {
+      list: refuse,
+      get: refuse,
+      toolbelt: refuse,
+      incidents: refuse,
+    },
     billing: {
       plan: (...args) => {
         calls.plan.push(args);

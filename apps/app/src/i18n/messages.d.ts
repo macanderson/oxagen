@@ -20,6 +20,8 @@ type Messages = {
     fleet: string;
     run: string;
     agents: string;
+    agent: string;
+    agentSource: string;
     tools: string;
     steering: string;
     spend: string;
@@ -28,7 +30,6 @@ type Messages = {
     billing: string;
   };
   unrecorded: {
-    agents: string;
     tools: string;
     steering: string;
     run: {
@@ -44,6 +45,356 @@ type Messages = {
     title: string;
     body: string;
     retry: string;
+  };
+  agents: {
+    notRecorded: string;
+    harness: {
+      stella: string;
+      "claude-code": string;
+      "claude-agent-sdk": string;
+      custom: string;
+    };
+    status: {
+      unenrolled: string;
+      enrolled: string;
+      suspended: string;
+      retired: string;
+    };
+    list: {
+      tiles: {
+        label: string;
+        identities: {
+          title: string;
+          basis: string;
+        };
+        enrolled: {
+          title: string;
+          basis: string;
+        };
+        tamper: {
+          title: string;
+          basis: string;
+        };
+      };
+      title: string;
+      tableLabel: string;
+      columns: {
+        identity: string;
+        harness: string;
+        operator: string;
+        status: string;
+        runs: string;
+        spend: string;
+        incidents: string;
+        actions: string;
+      };
+      basisNotRecorded: string;
+      edit: string;
+      pager: string;
+      first: string;
+      next: string;
+      empty: {
+        title: string;
+        body: string;
+        register: string;
+        command: string;
+      };
+    };
+    detail: {
+      header: string;
+      seeBelt: string;
+      tabs: {
+        label: string;
+        identity: string;
+        toolbelt: string;
+        enrollment: string;
+        incidents: string;
+        definition: string;
+      };
+      identity: {
+        title: string;
+        lead: string;
+        agentKey: string;
+        principal: string;
+        harness: string;
+        operator: string;
+        status: string;
+        registered: string;
+        firstFrame: string;
+        noFrame: string;
+      };
+      roles: {
+        title: string;
+        lead: string;
+        empty: string;
+        columns: {
+          role: string;
+          scope: string;
+          assigned: string;
+          expires: string;
+        };
+        scope: {
+          org: string;
+          workspace: string;
+        };
+        standing: string;
+      };
+      credentials: {
+        title: string;
+        lead: string;
+        empty: string;
+        columns: {
+          key: string;
+          issued: string;
+          lastUsed: string;
+          expires: string;
+          state: string;
+        };
+        never: string;
+        noExpiry: string;
+        active: string;
+        revoked: string;
+      };
+      toolbelt: {
+        title: string;
+        computation: {
+          title: string;
+          computedAt: string;
+          ceiling: string;
+          ceilingValue: {
+            caller: string;
+            sentinel: string;
+          };
+          roleGrants: string;
+          denyGeneration: string;
+          denyGenerationValue: string;
+          killSwitches: string;
+        };
+        presentation: {
+          title: string;
+          mode: {
+            full: string;
+            searchable: string;
+          };
+          sent: {
+            definitions: string;
+            meta_tools: string;
+          };
+          limit: string;
+        };
+        tools: {
+          title: string;
+          empty: string;
+          columns: {
+            tool: string;
+            category: string;
+            risk: string;
+            decision: string;
+            rule: string;
+            access: string;
+          };
+          risk: {
+            low: string;
+            medium: string;
+            high: string;
+          };
+          decision: {
+            allow: string;
+            require_approval: string;
+          };
+          readOnly: string;
+          writes: string;
+        };
+        cannotSee: {
+          title: string;
+          empty: string;
+          columns: {
+            tool: string;
+            rule: string;
+          };
+        };
+      };
+      enrollment: {
+        title: string;
+        lead: string;
+        columns: {
+          host: string;
+          status: string;
+          mode: string;
+          collector: string;
+          hooks: string;
+          bundle: string;
+          deviceKey: string;
+          lastSeen: string;
+        };
+        hooks: {
+          ok: string;
+          missing: string;
+          unreported: string;
+        };
+        bundleVersion: string;
+        never: string;
+        revoked: string;
+        empty: {
+          title: string;
+          body: string;
+          command: string;
+        };
+      };
+      incidents: {
+        title: string;
+        empty: string;
+        columns: {
+          kind: string;
+          severity: string;
+          detected: string;
+          session: string;
+          state: string;
+        };
+        severity: {
+          notice: string;
+          warning: string;
+          tamper: string;
+        };
+        detectedBy: {
+          collector: string;
+          control_plane: string;
+          human: string;
+        };
+        open: string;
+        resolved: string;
+        pager: string;
+        first: string;
+        next: string;
+      };
+      definition: {
+        openEditor: string;
+        none: {
+          title: string;
+          body: string;
+        };
+        unparsed: string;
+        fields: {
+          title: string;
+          schema: string;
+          slug: string;
+          name: string;
+          description: string;
+          modelTier: string;
+          budget: string;
+          tools: string;
+          denyTools: string;
+          sideEffects: string;
+          harness: string;
+          instructions: string;
+          unset: string;
+        };
+        source: {
+          title: string;
+          lead: string;
+          path: string;
+          branch: string;
+          commit: string;
+          digest: string;
+          pullRequest: string;
+          committed: string;
+        };
+      };
+    };
+    actions: {
+      rotate: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+        done: string;
+        expires: string;
+      };
+      suspend: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+      };
+      resume: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+      };
+      retire: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+      };
+      failure: {
+        orgRoleRequired: string;
+        noPrincipal: string;
+        delegationCeiling: string;
+        agentNotFound: string;
+        agentRetired: string;
+        agentPrincipalMissing: string;
+        noRepository: string;
+        repositoryAmbiguous: string;
+        branchIsDefault: string;
+        definitionSchema: string;
+        definitionSlug: string;
+        refused: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
+    };
+    source: {
+      facts: string;
+      loading: string;
+      branchAt: string;
+      uncommitted: string;
+      truth: string;
+      lead: string;
+      back: string;
+      discard: string;
+      save: string;
+      modified: string;
+      unchanged: string;
+      stat: string;
+      parse: {
+        error: string;
+        reason: {
+          unterminated_string: string;
+          unterminated_array: string;
+          array_separator: string;
+          inline_table_key: string;
+          inline_table_separator: string;
+          missing_value: string;
+          unreadable_value: string;
+          expected_key_value: string;
+          text_after_value: string;
+        };
+      };
+      commit: {
+        title: string;
+        diff: string;
+        branch: string;
+        branchHint: string;
+        message: string;
+        messageHint: string;
+        submit: string;
+        pending: string;
+        done: string;
+        pullRequest: string;
+        invalid: {
+          branch: string;
+          message: string;
+          source: string;
+        };
+      };
+    };
   };
   auth: {
     shell: {
@@ -280,6 +631,11 @@ type Messages = {
       blocks: string;
       perTopup: string;
       readOnly: string;
+      save: string;
+      saving: string;
+      saved: string;
+      invalidBlocks: string;
+      failed: string;
       savedCard: string;
       savedCardUnlabelled: string;
       noCard: string;
@@ -416,11 +772,6 @@ type Messages = {
         enroll: string;
         command: string;
       };
-    };
-    failure: {
-      denied: string;
-      pendingApproval: string;
-      error: string;
     };
   };
   onboarding: {
@@ -751,6 +1102,11 @@ type Messages = {
       live: string;
       sealed: string;
       halted: string;
+    };
+    readFailure: {
+      denied: string;
+      pendingApproval: string;
+      error: string;
     };
   };
 };

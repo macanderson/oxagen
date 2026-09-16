@@ -14,7 +14,7 @@ export function ReadFailure({
   /** The section's translated title. */
   section: string;
 }) {
-  const t = useTranslations("fleet.failure");
+  const t = useTranslations("ui.readFailure");
   let text: string;
   switch (read.reason) {
     case "denied":

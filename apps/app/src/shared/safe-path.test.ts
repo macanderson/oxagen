@@ -150,6 +150,24 @@ describe("routes", () => {
     expect(routes.run("acme", "core-platform", "arun_7k2")).toBe(
       "/acme/core-platform/runs/arun_7k2",
     );
+    expect(routes.agents("acme", "core-platform")).toBe(
+      "/acme/core-platform/agents",
+    );
+    expect(routes.agents("acme", "core-platform", { cursor: "c/2" })).toBe(
+      "/acme/core-platform/agents?cursor=c%2F2",
+    );
+    expect(routes.agent("acme", "core-platform", "release-bot")).toBe(
+      "/acme/core-platform/agents/release-bot",
+    );
+    expect(
+      routes.agent("acme", "core-platform", "release-bot", {
+        tab: "incidents",
+        cursor: "c2",
+      }),
+    ).toBe("/acme/core-platform/agents/release-bot?tab=incidents&cursor=c2");
+    expect(routes.agentSource("acme", "core-platform", "../evil")).toBe(
+      "/acme/core-platform/agents/..%2Fevil/source",
+    );
     expect(routes.run("acme", "core-platform", "../../evil")).toBe(
       "/acme/core-platform/runs/..%2F..%2Fevil",
     );

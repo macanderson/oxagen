@@ -70,6 +70,18 @@ describe("formatCount", () => {
   });
 });
 
+describe("formatClock", () => {
+  it("reads whole seconds as m:ss", () => {
+    expect(formatClock(0, "en-US")).toBe("0:00");
+    expect(formatClock(65.9, "en-US")).toBe("1:05");
+    expect(formatClock(600, "en-US")).toBe("10:00");
+  });
+
+  it("reads a negative duration as 0:00 (negative)", () => {
+    expect(formatClock(-30, "en-US")).toBe("0:00");
+  });
+});
+
 describe("formatRatio", () => {
   it("prints a 0..1 ratio as a percentage with at most one decimal", () => {
     expect(formatRatio(0.4567, "en-US")).toBe("45.7%");

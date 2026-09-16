@@ -9,7 +9,7 @@ import { linkText, mono, panel } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { Clock } from "./clock";
-import { ReadFailure } from "./read-failure";
+import { ReadFailure } from "@/ui/read-failure";
 
 type Place = { org: string; ws: string };
 
