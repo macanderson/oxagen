@@ -49,6 +49,7 @@ const source = {
     budgets: vi.fn(),
   },
   org: { members: vi.fn() },
+  steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
 };
 const listed = readOk({
   orgs: [{ slug: "acme", name: "Acme Robotics" }],
