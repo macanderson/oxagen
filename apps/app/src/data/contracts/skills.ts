@@ -6,7 +6,7 @@
 import { z } from "zod";
 
 const Count = z.number().int().nonnegative();
-const Instant = z.string().datetime();
+const Instant = z.iso.datetime();
 
 export const SkillInventory = z.object({
   window: z.object({ from: Instant, to: Instant }),

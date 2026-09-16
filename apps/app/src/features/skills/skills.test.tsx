@@ -154,7 +154,7 @@ describe("Skills › loaded", () => {
     expect(notes).toHaveTextContent("2 of 5 sessions");
     expect(notes).toHaveTextContent("Last seen Sep 12, 2026");
     expect(
-      within(notes as HTMLElement)
+      within(notes ?? document.body)
         .getByRole("list", { name: "Harnesses" })
         .querySelectorAll("[data-harness]"),
     ).toHaveLength(2);
@@ -164,7 +164,7 @@ describe("Skills › loaded", () => {
   it("prints no version, digest, cost or decision the record does not carry (negative)", async () => {
     read.mockResolvedValue(readOk(inventory()));
     await renderSkills();
-    const body = document.body.textContent ?? "";
+    const body = document.body.textContent;
     expect(body).not.toMatch(/\$|@\d|sha256|digest|allowed|denied|tokens?\b/i);
   });
 
