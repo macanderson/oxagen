@@ -34,7 +34,10 @@ vi.mock("@oxagen/tenancy", () => ({
 }));
 
 import {
+  ASSISTANT_CONTEXT_PROVIDERS,
   ASSISTANT_ENGINE,
+  ASSISTANT_MAX_CONTEXT_FRAMES,
+  ASSISTANT_MAX_CONTEXT_TOKENS,
   ASSISTANT_PRINCIPAL_NAME,
   ASSISTANT_RETENTION_POLICY,
   AssistantRunNotRecordedError,
@@ -404,6 +407,7 @@ describe("openAssistantRun", () => {
       surface: "chat",
       instruction: "  explain run arun_1  ",
       maxSteps: 12,
+      toolAllowlist: ["recall_memory", "search_tools"],
       store: ledger.store,
       now: () => new Date("2026-09-14T10:00:01.000Z"),
     });
@@ -452,6 +456,47 @@ describe("openAssistantRun", () => {
     });
   });
 
+  // ADR-070: the seal attests to the spec's digest, so the spec has to be what
+  // the turn ran under. It pinned sandbox_required: true, an empty provider
+  // allowlist, max_frames 0, max_tokens 0 and an empty tool allowlist while
+  // running unsandboxed, framing a recalled memory, and calling the governed
+  // catalogue — a run whose own evidence contradicted it.
+  it("pins the policies the turn actually runs under", async () => {
+    setupRun();
+    const ledger = fakeStore();
+    await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      surface: "chat",
+      instruction: "hi",
+      maxSteps: 12,
+      toolAllowlist: ["set_budget", "recall_memory", "set_budget"],
+      store: ledger.store,
+    });
+    const spec = ledger.runs[0]!.spec as {
+      workspace_policy: { sandbox_required: boolean };
+      context_policy: {
+        provider_allowlist: string[];
+        max_frames: number;
+        max_tokens: number;
+      };
+      tool_policy: { allowlist: string[]; risk_ceiling: string };
+    };
+    // The turn runs in this process through kernel.invoke(); there is no
+    // sandbox, so the spec does not claim one.
+    expect(spec.workspace_policy.sandbox_required).toBe(false);
+    expect(spec.context_policy).toMatchObject({
+      provider_allowlist: [...ASSISTANT_CONTEXT_PROVIDERS],
+      max_frames: ASSISTANT_MAX_CONTEXT_FRAMES,
+      max_tokens: ASSISTANT_MAX_CONTEXT_TOKENS,
+    });
+    expect(spec.context_policy.max_frames).toBeGreaterThan(0);
+    // Deduplicated and ordered, so two turns holding the same set digest the
+    // same regardless of the order materializeTools returned them in.
+    expect(spec.tool_policy.allowlist).toEqual(["recall_memory", "set_budget"]);
+    expect(spec.tool_policy.risk_ceiling).toBe("high");
+  });
+
   it("records receipts with a dense attempt seq and the engine seq, and seals with verdict waived", async () => {
     setupRun();
     const ledger = fakeStore();
@@ -461,6 +506,7 @@ describe("openAssistantRun", () => {
       surface: "api-chat",
       instruction: "hi",
       maxSteps: 4,
+      toolAllowlist: ["recall_memory", "search_tools"],
       store: ledger.store,
     });
     await recorder.modelCall({
@@ -557,6 +603,7 @@ describe("openAssistantRun", () => {
       surface: "chat",
       instruction: "a",
       maxSteps: 1,
+      toolAllowlist: ["recall_memory", "search_tools"],
       store: ledger.store,
     });
     await aborted.seal({ status: "aborted", reason: "budget" });
@@ -566,6 +613,7 @@ describe("openAssistantRun", () => {
       surface: "chat",
       instruction: "b",
       maxSteps: 1,
+      toolAllowlist: ["recall_memory", "search_tools"],
       store: failedLedger.store,
     });
     await failed.seal({ status: "failed", error: "engine unavailable" });
@@ -591,6 +639,7 @@ describe("openAssistantRun", () => {
       surface: "chat",
       instruction: "a",
       maxSteps: 1,
+      toolAllowlist: ["recall_memory", "search_tools"],
       store: ledger.store,
     });
     await expect(
@@ -640,6 +689,7 @@ describe("openAssistantRun", () => {
         surface: "chat",
         instruction: "a",
         maxSteps: 1,
+        toolAllowlist: ["recall_memory", "search_tools"],
         store: ledger.store,
       }),
     ).rejects.toSatisfy(
@@ -661,6 +711,7 @@ describe("openAssistantRun", () => {
       surface: "chat",
       instruction: "hi",
       maxSteps: 4,
+      toolAllowlist: ["recall_memory", "search_tools"],
       store: ledger.store,
     });
     expect(recorder.agentId).toBe(AGENT.id);
@@ -711,6 +762,7 @@ describe("openAssistantRun", () => {
       surface: "chat",
       instruction: "hi",
       maxSteps: 4,
+      toolAllowlist: ["recall_memory", "search_tools"],
       store: ledger.store,
     });
     await recorder.seal({ status: "completed", text: "done" });
@@ -739,6 +791,7 @@ describe("openAssistantRun", () => {
         surface: "chat",
         instruction: "a",
         maxSteps: 1,
+        toolAllowlist: ["recall_memory", "search_tools"],
         store: fakeStore().store,
       }),
     ).rejects.toMatchObject({ reason: "operator_principal_missing" });

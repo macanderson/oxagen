@@ -467,6 +467,10 @@ describe("the prepared turn", () => {
       surface: "chat",
       instruction: "explain this run",
       maxSteps: 12,
+      // The spec's tool policy is what the turn actually holds — the
+      // materialised capabilities and the belt's two meta-tools. An empty
+      // allowlist would read "no tools" on a run whose job is calling them.
+      toolAllowlist: ["recall_memory", "set_budget", SEARCH_TOOLS, LOAD_TOOLS],
     });
 
     // The engine is declared the whole belt plus the meta-tools; the model is

@@ -429,6 +429,16 @@ async function runPreparedTurn(
     surface: request.surface,
     instruction: request.content,
     maxSteps: DEFAULT_GOVERNED_TURN_MAX_STEPS,
+    // The spec's tool policy is the set this turn holds: the capabilities
+    // materializeTools resolved, plus the belt's two meta-tools, which are
+    // tool calls of the turn like any other and carry their own receipts.
+    toolAllowlist: [
+      ...new Set([
+        ...Object.values(materialised.nameMap),
+        SEARCH_TOOLS,
+        LOAD_TOOLS,
+      ]),
+    ],
   });
   hooks.onRun?.({ runId: run.runPublicId });
 

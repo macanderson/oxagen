@@ -30,6 +30,7 @@ import {
   compareRunRowIdentity,
   assertRunRowMatchesSpec,
   TRUSTED_RUN_SPEC_SECTIONS,
+  TOOL_ALLOWLIST_MAX,
   type RunSpecV2,
   type RunRowIdentity,
   type CallerRunInfluence,
@@ -789,6 +790,58 @@ describe("parseRunSpecV2 workspace policy", () => {
     );
     expect(spec.workspace_policy.environment_id).toBeUndefined();
     expect(spec.workspace_policy.sandbox_required).toBe(true);
+  });
+
+  // ADR-070. A general run touches no repository and may need no sandbox —
+  // the in-app agent's turn is answered in-process through kernel.invoke().
+  // Pinning `true` there does not sandbox the run, it makes the seal attest to
+  // a sandbox that never existed.
+  it("lets a general run say it was not sandboxed", () => {
+    const spec = parseRunSpecV2(
+      mutate(generalRaw(), "workspace_policy.sandbox_required", false),
+    );
+    expect(spec.workspace_policy.sandbox_required).toBe(false);
+  });
+
+  it("still refuses a non-boolean sandbox_required on a general run (negative)", () => {
+    for (const value of ["true", 1, null]) {
+      expect(() =>
+        parseRunSpecV2(
+          mutate(generalRaw(), "workspace_policy.sandbox_required", value),
+        ),
+      ).toThrow(RunSpecValidationError);
+    }
+  });
+});
+
+// The catalogue a general run may call is the whole registered set — ~271
+// capabilities when the bound was raised from 256. A bound below the catalogue
+// leaves an empty allowlist as the only expressible policy, which says the
+// opposite of what such a run does.
+describe("parseRunSpecV2 tool policy bound", () => {
+  it("accepts an allowlist the size of the capability catalogue", () => {
+    const names = Array.from({ length: 300 }, (_, i) => `do_thing_${i}`);
+    const spec = parseRunSpecV2(
+      mutate(generalRaw(), "tool_policy.allowlist", names),
+    );
+    expect(spec.tool_policy.allowlist).toHaveLength(300);
+  });
+
+  it("still refuses an unbounded allowlist and a duplicate entry (negative)", () => {
+    expect(() =>
+      parseRunSpecV2(
+        mutate(
+          generalRaw(),
+          "tool_policy.allowlist",
+          Array.from({ length: TOOL_ALLOWLIST_MAX + 1 }, (_, i) => `do_t_${i}`),
+        ),
+      ),
+    ).toThrow(RunSpecValidationError);
+    expect(() =>
+      parseRunSpecV2(
+        mutate(generalRaw(), "tool_policy.allowlist", ["do_thing", "do_thing"]),
+      ),
+    ).toThrow(RunSpecValidationError);
   });
 });
 

@@ -85,6 +85,26 @@ export const ASSISTANT_ENGINE: ResolvedEngineIdentity = {
 /** A run's goal is the turn's instruction, bounded to the spec's ceiling. */
 const GOAL_MAX_CHARS = 8192;
 
+/**
+ * The context the turn frames, as the spec names it. `engram` is the
+ * workspace memory `recallWorkspaceMemoryMessage` reads; `page` is the
+ * page-context message the app's turn carries. Both are assembled in this
+ * process, which is why they are named here rather than resolved from a
+ * provider registry the turn does not consult.
+ */
+export const ASSISTANT_CONTEXT_PROVIDERS = ["engram", "page"] as const;
+
+/** One recalled-memory message and one page-context message, at most. */
+export const ASSISTANT_MAX_CONTEXT_FRAMES = ASSISTANT_CONTEXT_PROVIDERS.length;
+
+/**
+ * The ceiling those frames are built under. Both are bounded at assembly —
+ * the recall by its own row and query limits, the page context by the
+ * contract's page-context schema — so this is the spec's statement of the
+ * budget, not a second gate.
+ */
+export const ASSISTANT_MAX_CONTEXT_TOKENS = 8192;
+
 export type AssistantRunNotRecordedReason =
   | "assistant_agent_missing"
   | "operator_principal_missing"
@@ -118,6 +138,13 @@ export interface OpenAssistantRunArgs extends AssistantRunScope {
   instruction: string;
   /** The step cap the turn runs under; pinned on the spec. */
   maxSteps: number;
+  /**
+   * The capability names the turn materialised, as its tool policy. The spec
+   * says what the run may call, so it has to be the set the turn actually
+   * holds; an empty allowlist would read "no tools" on a run whose whole job
+   * is calling them.
+   */
+  toolAllowlist: readonly string[];
   /** Test seams. Production leaves both unset. */
   store?: RunStore;
   now?: () => Date;
@@ -415,15 +442,26 @@ export async function openAssistantRun(
         },
         resolved_at: snapshot.resolvedAt,
       },
-      workspace_policy: { sandbox_required: true },
+      // What this turn actually ran under (ADR-070). The spec is what the
+      // seal attests to, so every value here is the one the turn holds, not a
+      // placeholder: an unsandboxed run that pins `sandbox_required: true`,
+      // frames one memory and one page-context message under `max_frames: 0`,
+      // and calls the governed catalogue under an empty allowlist, is a run
+      // whose own evidence contradicts it.
+      workspace_policy: { sandbox_required: false },
       context_policy: {
-        provider_allowlist: [],
-        max_frames: 0,
-        max_tokens: 0,
+        provider_allowlist: [...ASSISTANT_CONTEXT_PROVIDERS],
+        max_frames: ASSISTANT_MAX_CONTEXT_FRAMES,
+        max_tokens: ASSISTANT_MAX_CONTEXT_TOKENS,
         retention_policy_id: identity.retention.publicId,
         retention_policy_digest: identity.retention.digest,
       },
-      tool_policy: { allowlist: [], risk_ceiling: "high" },
+      tool_policy: {
+        allowlist: [...new Set(args.toolAllowlist)].sort(),
+        // Nothing in the turn filters by risk; a write that needs a person
+        // parks rather than being refused for its risk level.
+        risk_ceiling: "high",
+      },
     });
 
     const run = await inScope(() =>
