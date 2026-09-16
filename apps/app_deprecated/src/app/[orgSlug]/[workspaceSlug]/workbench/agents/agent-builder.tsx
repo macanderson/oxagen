@@ -159,7 +159,6 @@ export interface AgentBuilderProps {
    * currently-assigned role name (null for a pre-RBAC agent).
    */
   roleOptions: AgentRoleOption[];
-  customRolesAvailable: boolean;
   rolesError: string | null;
   initialRoleName: string | null;
 }
@@ -215,7 +214,6 @@ export function AgentBuilder({
   installAction,
   installBulkAction,
   roleOptions,
-  customRolesAvailable,
   rolesError,
   initialRoleName,
 }: AgentBuilderProps) {
@@ -1174,7 +1172,6 @@ export function AgentBuilder({
                   setRoleSuggestionReason(null);
                 }}
                 disabled={disabled}
-                customRolesAvailable={customRolesAvailable}
                 rolesError={rolesError}
                 assignedRoleName={assignedRoleName}
               />

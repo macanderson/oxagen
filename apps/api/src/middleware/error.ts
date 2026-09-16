@@ -44,6 +44,13 @@ function isBillingError(err: unknown): err is BillingError {
   return (BILLING_ERROR_CODES as readonly string[]).includes(code as string);
 }
 
+// A TenantScopeError from @oxagen/tenancy, duck-typed on its code the way the
+// kernel does, so this middleware takes no dependency on that package.
+function isTenantScopeError(err: unknown): err is Error {
+  if (!(err instanceof Error)) return false;
+  return (err as Error & { code?: unknown }).code === "no_tenant_scope";
+}
+
 // A handler's typed refusal (HandlerError, @oxagen/oxagen) reaches this
 // middleware unchanged: the kernel rethrows what a handler throws. Each code is
 // a client-side outcome with its own status; the `reason` sub-code travels in
@@ -224,6 +231,26 @@ export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
       "assistant turn failure",
     );
     return c.json({ error: { code, message: err.message }, requestId }, status);
+  }
+  // A tenant scope the kernel refused to enter (#3029). The two cases share
+  // one code, so the message distinguishes them: a malformed id is a bad
+  // request from the surface that built the context, and a missing scope is
+  // the same to the caller. Either way it is a 4xx, never a 500.
+  if (isTenantScopeError(err)) {
+    logger.warn(
+      { requestId, message: err.message },
+      "tenant scope refused",
+    );
+    return c.json(
+      {
+        error: {
+          code: "invalid_tenant_scope",
+          message: err.message,
+        },
+        requestId,
+      },
+      400,
+    );
   }
 
   logger.error({ requestId, err }, "unhandled error");

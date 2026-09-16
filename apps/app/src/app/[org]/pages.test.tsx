@@ -8,11 +8,12 @@
 // feature (WL-34) and renders the cost rollup's two tiles under its title
 // (#2962); the three Agents routes hand theirs, with the agent, the tab and the
 // cursor the URL names, to the Agents feature (#2956); Spend hands its viewer,
-// the data source and the query to its body (#2962); Steering hands its viewer,
+// the data source and the query to its body (#2962); Skills hands its viewer,
+// the data source and the cursor to its body (#3098); Steering hands its viewer,
 // the data source and the query to the Steering feature (#2961); Billing hands
 // its viewer, the data source, the checkout outcome and the invoices cursor to
-// the Billing feature (WL-38); People renders its sections from org.members.
-// Run and API keys gain their bodies in WL-35 and WL-37.
+// the Billing feature (WL-38); People renders its sections from org.members and
+// API keys its table from org.apiKeys. Run gains its body in WL-35.
 import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { translator } from "@/test/intl";
@@ -24,6 +25,7 @@ import {
 
 const {
   requireViewer,
+  Audit,
   Billing,
   Fleet,
   Agents,
@@ -32,12 +34,20 @@ const {
   Steering,
   Spend,
   FleetSpendTiles,
+  Roles,
+  Workspaces,
+  OnboardingGate,
+  Skills,
+  SkillsLoading,
   members,
+  apiKeys,
   source,
 } = vi.hoisted(() => {
   const members = vi.fn();
+  const apiKeys = vi.fn();
   return {
     requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
+    Audit: vi.fn((_props: Record<string, unknown>) => null),
     Billing: vi.fn((_props: Record<string, unknown>) => null),
     Fleet: vi.fn((_props: Record<string, unknown>) => null),
     Agents: vi.fn((_props: Record<string, unknown>) => null),
@@ -52,16 +62,37 @@ const {
     FleetSpendTiles: vi.fn((_props: Record<string, unknown>) => (
       <p data-testid="fleet-spend" />
     )),
+    Roles: vi.fn((_props: Record<string, unknown>) => null),
+    Workspaces: vi.fn((_props: Record<string, unknown>) => null),
+    // The gate's own states are its component test; here it only has to render.
+    OnboardingGate: vi.fn((_props: Record<string, unknown>) => (
+      <p data-testid="onboarding-gate" />
+    )),
+    Skills: vi.fn((_props: Record<string, unknown>) => (
+      <p data-testid="skills-body" />
+    )),
+    SkillsLoading: vi.fn(() => null),
     members,
-    source: { org: { members } },
+    apiKeys,
+    source: { org: { members, apiKeys } },
   };
 });
 vi.mock("@/server/viewer", () => ({ requireViewer }));
+vi.mock("@/features/audit", () => ({ Audit, AuditSkeleton: () => null }));
 vi.mock("@/features/billing", () => ({ Billing }));
 vi.mock("@/features/fleet", () => ({ Fleet }));
 vi.mock("@/features/agents", () => ({ Agents, Agent, AgentSource }));
 vi.mock("@/features/steering", () => ({ Steering }));
 vi.mock("@/features/spend", () => ({ Spend, FleetSpendTiles }));
+// People stays real, so the organization page still renders a roster; the two
+// sections the #2964 lane adds are stubbed to show what each route hands them.
+vi.mock("@/features/organization", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/organization")>()),
+  Roles,
+  Workspaces,
+}));
+vi.mock("@/features/onboarding", () => ({ OnboardingGate }));
+vi.mock("@/features/skills", () => ({ Skills, SkillsLoading }));
 vi.mock("@/data/source", () => ({ dataSource: () => source }));
 vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
@@ -102,6 +133,7 @@ const GAP_LANE: [string, Load][] = [
   ["tools", () => import("./[ws]/tools/page")],
 ];
 
+const SKILLS: Load = () => import("./[ws]/skills/page");
 const STEERING: Load = () => import("./[ws]/steering/page");
 
 const FLEET: Load = () => import("./[ws]/page");
@@ -112,10 +144,11 @@ const SPEND: Load = () => import("./[ws]/spend/page");
 
 const REV1: [string, string[], Load][] = [
   ["run", WS, () => import("./[ws]/runs/[run]/page")],
-  ["apiKeys", ORG, () => import("./api-keys/page")],
 ];
+const API_KEYS: Load = () => import("./api-keys/page");
 
 const BILLING: Load = () => import("./billing/page");
+const AUDIT: Load = () => import("./audit/page");
 
 describe("gap-lane pages", () => {
   it.each(GAP_LANE)(
@@ -130,6 +163,27 @@ describe("gap-lane pages", () => {
       );
     },
   );
+});
+
+describe("the Audit page", () => {
+  it("resolves the organization viewer, names the page once and hands the viewer, the data source and the filters the URL carries to Audit", async () => {
+    const ctx = { orgSlug: "acme" };
+    requireViewer.mockResolvedValue(ctx);
+    await expectPageTitle(
+      await AUDIT(),
+      routeProps(SEGMENTS, { outcome: "deny", offset: "50" }),
+      title("audit"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...ORG);
+    expect(Audit).toHaveBeenCalledOnce();
+    expect(Audit.mock.calls[0]?.[0]).toEqual({
+      ctx,
+      source,
+      searchParams: { outcome: "deny", offset: "50" },
+    });
+    // Audit has a page, so it has no UNRECORDED row (§3.6).
+    expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
 });
 
 describe("the Billing page", () => {
@@ -208,6 +262,39 @@ describe("the Spend page", () => {
       "waste",
     );
     expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+});
+
+describe("the Skills page", () => {
+  it("resolves the workspace viewer, names the page once under the workspace eyebrow and hands its body the viewer, the data source and the cursor", async () => {
+    const viewer = { wsSlug: "core-platform", wsName: "Core platform" };
+    requireViewer.mockResolvedValue(viewer);
+    const page = await expectPageTitle(
+      await SKILLS(),
+      routeProps(SEGMENTS, { cursor: "c2" }),
+      title("skills"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...WS);
+    expect(page).toHaveTextContent("Workspace · Core platform");
+    expect(page).toHaveTextContent(
+      "Oxagen does not run a skill — the harness does.",
+    );
+    expect(Skills.mock.calls[0]?.[0]).toEqual({
+      ctx: viewer,
+      source,
+      cursor: "c2",
+    });
+    expect(screen.getByTestId("skills-body")).toBeInTheDocument();
+    expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+
+  it("hands its body the first page when the URL names no cursor", async () => {
+    await expectPageTitle(
+      await SKILLS(),
+      routeProps(SEGMENTS),
+      title("skills"),
+    );
+    expect(Skills.mock.calls.at(-1)?.[0]).toMatchObject({ cursor: null });
   });
 });
 
@@ -345,12 +432,75 @@ describe("Organization › People", () => {
     expect(screen.getByRole("main")).toHaveTextContent("Marcus Bell");
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
+
+  it("renders the Workspaces section of the same page from the same viewer and data source (#2964)", async () => {
+    const ctx = { orgSlug: "acme", orgRole: "owner" };
+    requireViewer.mockResolvedValue(ctx);
+    members.mockResolvedValue({
+      ok: true,
+      value: { members: [], invitations: [] },
+    });
+    await expectPageTitle(
+      await import("./page"),
+      routeProps(SEGMENTS),
+      title("people"),
+    );
+    expect(Workspaces).toHaveBeenCalledOnce();
+    expect(Workspaces.mock.calls[0]?.[0]).toEqual({ ctx, source });
+  });
+});
+
+describe("Organization › Roles", () => {
+  it("resolves the organization viewer, names the page once and hands the viewer and the data source to Roles", async () => {
+    const ctx = { orgSlug: "acme", orgRole: "owner" };
+    requireViewer.mockResolvedValue(ctx);
+    await expectPageTitle(
+      await import("./roles/page"),
+      routeProps(SEGMENTS),
+      title("roles"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...ORG);
+    expect(Roles).toHaveBeenCalledOnce();
+    expect(Roles.mock.calls[0]?.[0]).toEqual({ ctx, source });
+    expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+});
+
+describe("Organization › API keys", () => {
+  it("resolves the organization viewer, names the page once and renders the keys org.apiKeys read for that viewer", async () => {
+    const ctx = { orgSlug: "acme", orgRole: "owner" };
+    requireViewer.mockResolvedValue(ctx);
+    apiKeys.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          id: "aky_7k2m9q4x8r1t5v3w6y0z2a",
+          name: "CI runner",
+          prefix: "ox_liveliveli",
+          createdAt: "2026-09-13T10:00:00.000Z",
+          lastUsedAt: null,
+          expiresAt: null,
+          revokedAt: null,
+        },
+      ],
+    });
+    await expectPageTitle(
+      await API_KEYS(),
+      routeProps(SEGMENTS),
+      title("apiKeys"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...ORG);
+    expect(apiKeys).toHaveBeenCalledWith(ctx);
+    expect(screen.getByRole("main")).toHaveTextContent("ox_liveliveli");
+    expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
 });
 
 describe("a person requireViewer refuses", () => {
   it.each([
     ...GAP_LANE.map(([key, load]) => [key, load] as const),
     ["billing", BILLING] as const,
+    ["skills", SKILLS] as const,
     ["steering", STEERING] as const,
     ["fleet", FLEET] as const,
     ["agents", AGENTS] as const,
@@ -359,6 +509,8 @@ describe("a person requireViewer refuses", () => {
     ["spend", SPEND] as const,
     ...REV1.map(([key, , load]) => [key, load] as const),
     ["people", () => import("./page")] as const,
+    ["roles", () => import("./roles/page")] as const,
+    ["apiKeys", API_KEYS] as const,
   ])("pages.%s renders nothing (negative)", async (_key, load) => {
     requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
     await expect(

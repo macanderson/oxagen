@@ -1,14 +1,60 @@
 // The organization port on the kernel (ARCHITECTURE.md §3.3): the members and
-// pending invitations of the viewer's organization, list_members {scope:"org"},
-// a noBillingGate read.
+// pending invitations of the viewer's organization (list_members
+// {scope:"org"}), its roles with the permission catalogue (list_iam_roles), its
+// workspaces including the archived ones (list_workspaces) and the keys it
+// holds (list_api_keys), each a noBillingGate read made with the organization
+// viewer's context, and each refused by its handler for a viewer below the role
+// it names.
 import "server-only";
+import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
+import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
+import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import { captureError } from "@oxagen/telemetry";
-import { MemberList } from "@/data/contracts/org";
+import type { z } from "zod";
+import {
+  ApiKeyList,
+  MemberList,
+  RoleCatalog,
+  WorkspaceList,
+} from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
-import { readError, readOk } from "@/data/read";
+import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
-import { toMemberList } from "./mappers/org";
+import {
+  toApiKeys,
+  toMemberList,
+  toRoleCatalog,
+  toWorkspaceList,
+} from "./mappers/org";
+
+/** The mapped value parsed at the boundary; a record the view refuses is `record_unmappable`, reported once. */
+function view<S extends z.ZodType>(
+  orgId: string,
+  schema: S,
+  mapped: z.input<S>,
+  read: string,
+): Read<z.output<S>> {
+  const parsed = schema.safeParse(mapped);
+  if (parsed.success) return readOk(parsed.data);
+  captureError({
+    error: parsed.error,
+    source: "app",
+    orgId,
+    context: `${read} record_unmappable`,
+  });
+  return readError("record_unmappable", 502);
+}
+
+/** The largest page `list_iam_roles` allows, so the walk below is the shortest one. */
+const ROLE_PAGE = 200;
+/**
+ * A stop on the walk. 40 pages is 8,000 roles — orders of magnitude past any
+ * real permission model — so reaching it means the contract stopped clearing
+ * `hasMore`, and looping for ever on a server render is worse than showing the
+ * catalogue up to here.
+ */
+const ROLE_PAGE_CEILING = 40;
 
 export const org: DataSource["org"] = {
   async members(ctx) {
@@ -18,17 +64,83 @@ export const org: DataSource["org"] = {
       page: "organization",
     });
     if (!read.ok) return read;
-    const view =
-      read.value.scope === "org"
-        ? MemberList.safeParse(toMemberList(read.value))
-        : null;
-    if (view?.success) return readOk(view.data);
-    captureError({
-      error: view?.error ?? new Error("list_members answered workspace scope"),
-      source: "app",
-      orgId: ctx.orgId,
-      context: "org.members record_unmappable",
+    // The contract answers a scope union; only the org branch is a roster.
+    if (read.value.scope !== "org") {
+      captureError({
+        error: new Error("list_members answered workspace scope"),
+        source: "app",
+        orgId: ctx.orgId,
+        context: "org.members record_unmappable",
+      });
+      return readError("record_unmappable", 502);
+    }
+    return view(ctx.orgId, MemberList, toMemberList(read.value), "org.members");
+  },
+
+  async roles(ctx) {
+    // `list_iam_roles` pages, and the read used to send neither bound — so it
+    // took the contract's 100 default and the mapper dropped `total` and
+    // `hasMore` with it. The Roles section has no paging control and is not
+    // meant to have one: it is the organization's whole catalogue, and a role
+    // past the first page is a role nobody can see, edit or delete. So the
+    // read asks for the largest page the contract allows and walks the rest,
+    // and the section is handed every role there is.
+    const first = await kernelRead(ctx, {
+      contract: iamRoleList,
+      input: { includeGrants: true, limit: ROLE_PAGE, offset: 0 },
+      page: "organization",
     });
-    return readError("record_unmappable", 502);
+    if (!first.ok) return first;
+    const roles = [...first.value.roles];
+    let hasMore = first.value.hasMore;
+    // `catalog` and `enforcement` are properties of the organization, not of
+    // the page, so the first page's are the whole read's.
+    for (let page = 1; hasMore && page < ROLE_PAGE_CEILING; page += 1) {
+      // Serial by necessity: a page's offset is the previous page's, and
+      // `total` is known only from a page, so there is nothing to fan out.
+      const next = await kernelRead(ctx, {
+        contract: iamRoleList,
+        input: {
+          includeGrants: true,
+          limit: ROLE_PAGE,
+          offset: page * ROLE_PAGE,
+        },
+        page: "organization",
+      });
+      if (!next.ok) return next;
+      roles.push(...next.value.roles);
+      hasMore = next.value.hasMore;
+    }
+    return view(
+      ctx.orgId,
+      RoleCatalog,
+      toRoleCatalog({ ...first.value, roles }),
+      "org.roles",
+    );
+  },
+
+  async workspaces(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: workspaceList,
+      input: { orgSlug: ctx.orgSlug, includeArchived: true },
+      page: "organization",
+    });
+    if (!read.ok) return read;
+    return view(
+      ctx.orgId,
+      WorkspaceList,
+      toWorkspaceList(read.value),
+      "org.workspaces",
+    );
+  },
+
+  async apiKeys(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: apiKeyList,
+      input: {},
+      page: "organization",
+    });
+    if (!read.ok) return read;
+    return view(ctx.orgId, ApiKeyList, toApiKeys(read.value), "org.apiKeys");
   },
 };

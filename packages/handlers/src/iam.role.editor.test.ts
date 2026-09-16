@@ -66,7 +66,6 @@ import { createRoleHandler } from "./iam.role.create";
 import { createDeleteRoleHandler } from "./iam.role.delete";
 import { createSetRoleGrantsHandler } from "./iam.role.grants.set";
 import type { RoleGrantRecord, RoleRecord, RoleStore } from "./lib/iam-roles";
-import type { RoleEnforcement } from "./lib/org-tier";
 
 const ORG = "00000000-0000-0000-0000-00000000000a";
 const WS = "00000000-0000-0000-0000-00000000000b";
@@ -187,12 +186,10 @@ function fakeStore() {
   return { store, roles, grants, holders, granter, seed };
 }
 
-let enforcement: RoleEnforcement;
 let fake: ReturnType<typeof fakeStore>;
 
 const deps = () => ({
   withStore: <T>(fn: (store: RoleStore) => Promise<T>) => fn(fake.store),
-  enforcement: async () => enforcement,
 });
 
 const refusal = async (p: Promise<unknown>) => {
@@ -217,7 +214,6 @@ beforeEach(() => {
   tenant.roleName = "Owner";
   tenant.keyCreator = USER;
   emitted.length = 0;
-  enforcement = { tier: "enterprise", enforced: true };
   fake = fakeStore();
   for (const c of capabilitiesOf(["run.read", "run.control", "repo.read"]))
     fake.granter.allowed.add(c);
@@ -264,16 +260,6 @@ describe("create_role", () => {
     await expect(
       refusal(handler()(createInput(), { ...ctx, userId: null })),
     ).resolves.toEqual({ code: "forbidden", reason: "no_principal" });
-  });
-
-  it("refuses an org whose tier the kernel does not enforce roles for (negative)", async () => {
-    enforcement = { tier: "free", enforced: false };
-    await expect(refusal(handler()(createInput(), ctx))).resolves.toEqual({
-      code: "forbidden",
-      reason: "enterprise_tier_required",
-    });
-    expect(fake.roles.size).toBe(0);
-    expect(emitted).toEqual([]);
   });
 
   it("refuses a grant above the granter's ceiling, naming the capabilities, and writes nothing (negative)", async () => {
@@ -427,15 +413,10 @@ describe("set_role_grants", () => {
     ]);
   });
 
-  it("refuses an org Member and an unenforced tier (negative)", async () => {
+  it("refuses an org Member (negative)", async () => {
     tenant.roleName = "Member";
     await expect(refusal(handler()(input(["run.read"]), ctx))).resolves.toEqual(
       { code: "forbidden", reason: "org_role_required" },
-    );
-    tenant.roleName = "Admin";
-    enforcement = { tier: "scale", enforced: false };
-    await expect(refusal(handler()(input(["run.read"]), ctx))).resolves.toEqual(
-      { code: "forbidden", reason: "enterprise_tier_required" },
     );
   });
 });

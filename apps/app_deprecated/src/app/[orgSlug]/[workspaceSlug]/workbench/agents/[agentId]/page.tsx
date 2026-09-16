@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import { notFound } from "next/navigation";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { PageHeader } from "@/components/ui/page-header";
@@ -41,7 +42,9 @@ interface PageProps {
  * read-only: the builder still renders for inspection but every mutation is
  * disabled. A non-manager also gets a read-only view.
  */
-export default async function EditAgentPage({ params }: PageProps) {
+export default async function EditAgentPage({
+  params,
+}: PageProps): Promise<JSX.Element> {
   const { orgSlug, workspaceSlug, agentId } = await params;
 
   const { ctx, org, ws, canManage } = await resolveWorkbenchScope(
@@ -64,13 +67,11 @@ export default async function EditAgentPage({ params }: PageProps) {
   // Role picker data (Agent RBAC Phase 5a). Fail-soft, same posture as the
   // create page: system-role fallback + a visible error when the load fails.
   let roleOptions: AgentRoleOption[];
-  let customRolesAvailable = false;
   let rolesError: string | null = null;
   let initialRoleName: string | null = null;
   try {
     const roleData = await listAgentRoleOptions(ctx);
     roleOptions = roleData.options;
-    customRolesAvailable = roleData.customRolesAvailable;
   } catch (err) {
     roleOptions = fallbackSystemRoleOptions();
     rolesError = err instanceof Error ? err.message : "Unknown error";
@@ -161,7 +162,6 @@ export default async function EditAgentPage({ params }: PageProps) {
         installAction={installPlugin}
         installBulkAction={installBulkPlugin}
         roleOptions={roleOptions}
-        customRolesAvailable={customRolesAvailable}
         rolesError={rolesError}
         initialRoleName={initialRoleName}
       />

@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { billingCreditsPurchase } from "./billing.credits.purchase";
+import {
+  billingCreditsPurchase,
+  CREDIT_TOPUP_PRESETS_USD,
+  MIN_CREDIT_TOPUP_USD,
+} from "./billing.credits.purchase";
 import { getCapability } from "../registry";
 
 describe("billing.credits.purchase capability", () => {
@@ -102,5 +106,31 @@ describe("billing.credits.purchase capability", () => {
     expect(billingCreditsPurchase.defaultEffect).toBe("deny");
     expect(billingCreditsPurchase.defaultRoles?.org?.Owner).toBe("allow");
     expect(billingCreditsPurchase.defaultRoles?.org?.Billing).toBe("allow");
+  });
+
+  // INV-27 (ARCHITECTURE.md §1.5, §3.9 the second meter). The billing-gates
+  // test asserts the same flag from the registry over the whole rev1 list;
+  // this one states it on the contract a reader of this file is looking at.
+  it("declares noBillingGate, so an org out of governed action units may still top up", () => {
+    expect(billingCreditsPurchase.noBillingGate).toBe(true);
+  });
+
+  it("offers presets at or above the minimum the input accepts", () => {
+    expect(CREDIT_TOPUP_PRESETS_USD.length).toBeGreaterThan(0);
+    for (const preset of CREDIT_TOPUP_PRESETS_USD) {
+      expect(Number.isInteger(preset)).toBe(true);
+      expect(preset).toBeGreaterThanOrEqual(MIN_CREDIT_TOPUP_USD);
+      expect(() =>
+        billingCreditsPurchase.input.parse({ amountUsd: preset }),
+      ).not.toThrow();
+    }
+  });
+
+  it("rejects an amount a dollar under the minimum (negative)", () => {
+    expect(() =>
+      billingCreditsPurchase.input.parse({
+        amountUsd: MIN_CREDIT_TOPUP_USD - 1,
+      }),
+    ).toThrow();
   });
 });

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { dataSource } from "@/data/source";
-import { People } from "@/features/organization";
+import { People, Workspaces } from "@/features/organization";
 import { requireViewer } from "@/server/viewer";
 import { PageHeader } from "@/ui/page-header";
 
@@ -16,13 +16,15 @@ export default async function OrganizationPage({
   const { org } = await params;
   const ctx = await requireViewer(org);
   const t = await getTranslations("pages");
+  const source = dataSource();
   return (
     <main
       id="main"
       className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-10"
     >
       <PageHeader title={t("people")} />
-      <People ctx={ctx} source={dataSource()} />
+      <People ctx={ctx} source={source} />
+      <Workspaces ctx={ctx} source={source} />
     </main>
   );
 }

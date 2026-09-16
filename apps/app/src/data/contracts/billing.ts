@@ -1,9 +1,11 @@
 // The Billing page's view models (ARCHITECTURE.md §1.4, §3.9), from
-// get_subscription, get_gau_bucket, get_contract_rate and list_invoices. Every
-// figure except the contracted rate, the block price and an invoice's amounts
-// is a GAU count or a date: only ContractRate and InvoicePage carry a Money
-// (INV-25, src/test/arch/billing-units.test.ts). Token usage and stored
-// evidence volume have no view model (§1.4).
+// get_subscription, get_gau_bucket, get_contract_rate and list_invoices. On the
+// governed action meter every figure except the contracted rate, the block
+// price and an invoice's amounts is a GAU count or a date; the second meter,
+// in-app AI usage credits, carries its balance's face value. Only
+// ContractRate, InvoicePage and UsageCredits reach a Money (INV-25,
+// src/test/arch/billing-units.test.ts). Token usage and stored evidence volume
+// have no view model (§1.4).
 import { z } from "zod";
 import { PublicId } from "./common";
 import { Money } from "./money";
@@ -101,3 +103,16 @@ export const InvoicePage = z.object({
 });
 export type InvoicePage = z.infer<typeof InvoicePage>;
 export type InvoiceRow = InvoicePage["items"][number];
+
+/**
+ * The second meter (§3.9): the in-app AI usage credit balance that pays for
+ * the in-app agent's model calls. One credit is $0.01, so `balance` is
+ * `balanceCredits` at face value — the same figure in the two units the page
+ * prints it in. The balance goes negative when a turn settles past zero, and
+ * is printed as stored.
+ */
+export const UsageCredits = z.object({
+  balanceCredits: z.number().int(),
+  balance: Money,
+});
+export type UsageCredits = z.infer<typeof UsageCredits>;

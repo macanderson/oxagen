@@ -10,6 +10,9 @@ import { ORG_NAV, THUMB_SLOTS, WORKSPACE_NAV } from "./nav";
 
 const messages = shell.shell;
 
+/** The Organization pages nav labels but no sidebar item (nav.ts ORG_PAGE_NAV). */
+const ORG_PAGE_NAV = ["apiKeys", "roles"] as const;
+
 describe("messages/shell.json", () => {
   it("is registered and owns only the shell namespace", () => {
     // messages/ is the catalog list: request.ts merges every stem it holds.
@@ -25,17 +28,17 @@ describe("messages/shell.json", () => {
   });
 
   it("names every nav key", () => {
-    for (const key of [...WORKSPACE_NAV, ...ORG_NAV, "apiKeys"])
+    for (const key of [...WORKSPACE_NAV, ...ORG_NAV, ...ORG_PAGE_NAV])
       expect(messages.nav).toHaveProperty(key);
     expect(messages.nav.agents).toBe("Agent IAM");
     expect(Object.keys(messages.mobileNav.slots)).toEqual([...THUMB_SLOTS]);
   });
 
-  it("carries no Ontology or Audit label (negative)", () => {
+  it("carries no Ontology label, and no nav label for a page that does not ship (negative)", () => {
     expect(Object.keys(messages.nav).sort()).toEqual(
-      [...WORKSPACE_NAV, ...ORG_NAV, "apiKeys"].sort(),
+      [...WORKSPACE_NAV, ...ORG_NAV, ...ORG_PAGE_NAV].sort(),
     );
-    expect(JSON.stringify(shell)).not.toMatch(/ontology|audit/i);
+    expect(JSON.stringify(shell)).not.toMatch(/ontology/i);
   });
 
   it("carries no catalog for the chrome rev1 does not render", () => {

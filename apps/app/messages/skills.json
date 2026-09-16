@@ -1,0 +1,42 @@
+{
+  "skills": {
+    "eyebrow": "Workspace · {workspace}",
+    "lede": "Oxagen does not run a skill — the harness does. This page lists the skills each wrapped harness session reported when it started.",
+    "loading": "Loading skills",
+    "inventory": {
+      "title": "Skills sessions reported",
+      "window": "Sessions started {from} to {to}: {sessions, plural, one {# session} other {# sessions}}.",
+      "reported": "{reported, plural, one {# session reported its skills} other {# sessions reported their skills}}.",
+      "noneReported": "No session in this window reported its skills.",
+      "notReported": "{count, plural, one {# session reported no inventory} other {# sessions reported no inventory}}.",
+      "list": "Skills reported in this window",
+      "next": "Next page"
+    },
+    "row": {
+      "sessions": "{count} of {total, plural, one {# session} other {# sessions}}",
+      "lastSeen": "Last seen {date}",
+      "harnesses": "Harnesses"
+    },
+    "empty": {
+      "title": "No skill reported in this window",
+      "hint": "Enroll a machine with <code>oxagen tacho enroll</code>: every wrapped session reports the skills its harness had when it started."
+    },
+    "failure": {
+      "denied": {
+        "title": "You cannot see the skills of this workspace",
+        "body": "Your roles on this workspace do not include {permission}. An owner can grant it."
+      },
+      "pending": {
+        "title": "Access to this workspace’s skills is waiting for approval",
+        "body": "Access request {request}"
+      },
+      "error": {
+        "title": "Skills could not be loaded",
+        "body": "Nothing was changed. Runs keep recording while this page is down.",
+        "code": "{code} · {status}"
+      },
+      "retry": "Try again",
+      "back": "Back to Fleet"
+    }
+  }
+}

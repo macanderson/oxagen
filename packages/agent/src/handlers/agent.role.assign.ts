@@ -12,9 +12,14 @@
 //   3. Resolve the agent (workspace-scoped) and its delegated principal.
 //   4. Resolve the role by NAME (seeding is decoupled — spec §3.2).
 //   5. Assignability gate: system agent roles only among system roles.
-//   6. Tier gate (§3.4): custom roles are enterprise-only (canAccessACL —
-//      the same check that gates custom IAM ACL); system agent roles are
-//      assignable at every tier.
+//   6. No tier gate (ADR-069). Custom roles were enterprise-only here, via the
+//      same canAccessACL check ADR-063 put on create_role — but ADR-069
+//      removed that one and left this one, so on Free, Build and Scale the
+//      editor created and edited custom roles that nothing could then bind.
+//      An entitlement that stops at the last step is a wall the operator only
+//      meets after doing the work. What the tier decides is whether the kernel
+//      RESOLVES a grant, which list_iam_roles reports as `enforcement`; it
+//      never decided whether a role may exist or be held.
 //   7. Delegation ceiling (enterprise): the role's grants may not exceed the
 //      assigner's own effective grants — pure-resolver comparison.
 //   8. Upsert the principal_role_assignments row (resurrect a soft-deleted
@@ -26,7 +31,7 @@ import { withTenantDb, schema } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq, isNull } from "drizzle-orm";
 import pino from "pino";
-import { canAccessACL, resolveOrgTier, TierDeniedError } from "@oxagen/billing";
+import { canAccessACL, resolveOrgTier } from "@oxagen/billing";
 import { agentRoleAssign } from "@oxagen/oxagen/contracts/agent.role.assign";
 import type {
   AgentRoleAssignInput,
@@ -81,12 +86,6 @@ export async function agentRoleAssignHandler(
     // org roles (Owner is a resolver super-user via rule 7.5) never are.
     if (role.isSystemDefault && !AGENT_SYSTEM_ROLE_NAMES.has(role.name)) {
       throw new AgentRoleNotAssignableError(role.name);
-    }
-
-    // Tier gate (§3.4): system agent roles at every tier; custom roles are
-    // enterprise-only — the same canAccessACL check that gates custom IAM ACL.
-    if (!role.isSystemDefault && !canAccessACL(tier)) {
-      throw new TierDeniedError(tier, "enterprise", "custom agent roles");
     }
 
     // Delegation ceiling. Enterprise orgs run the full pure-resolver

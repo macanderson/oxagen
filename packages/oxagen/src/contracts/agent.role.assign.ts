@@ -13,9 +13,12 @@ import { registerCapability } from "../registry";
  *   roles (Owner, Admin, …) are never agent-assignable (the system org Owner
  *   role is a super-user via resolver rule 7.5; attaching it to an unattended
  *   automation would be privilege escalation by construction).
- * - Tier gate (§3.4): system agent roles are assignable at EVERY org tier;
- *   custom roles remain enterprise-only (same canAccessACL check as custom
- *   IAM ACL).
+ * - No tier gate (ADR-069): system agent roles AND custom roles are
+ *   assignable at every org tier. The tier decides whether the kernel
+ *   resolves a grant, which `list_iam_roles` reports as `enforcement`; it
+ *   does not decide whether a role may exist or be held. A role bound below
+ *   the enterprise tier governs nothing until the org moves to one, and the
+ *   Roles page says so.
  * - Delegation ceiling: the assigning user cannot attach a role whose grants
  *   exceed the assigner's own effective grants — rejected with the stable
  *   error code `agent_role_ceiling_exceeded`.
@@ -24,7 +27,7 @@ export const agentRoleAssign = registerCapability({
   name: "assign_agent_role",
   domain: "agent",
   description:
-    "Assign an IAM role to an agent's delegated principal. System agent roles (Agent Observer/Contributor/Operator) are assignable at every tier; custom roles are enterprise-only. Rejected when the role's grants exceed the assigning user's own effective grants (delegation ceiling). Audited with principal_kind='agent'.",
+    "Assign an IAM role to an agent's delegated principal. System agent roles (Agent Observer/Contributor/Operator) and custom roles are both assignable at every tier; whether the kernel resolves the grant is what the tier decides, and list_iam_roles reports it. Rejected when the role's grants exceed the assigning user's own effective grants (delegation ceiling). Audited with principal_kind='agent'.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["api", "mcp", "unit", "docs", "app"],

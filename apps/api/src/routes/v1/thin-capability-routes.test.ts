@@ -72,6 +72,12 @@ import { billingContractRateGet } from "@oxagen/oxagen/contracts/billing.contrac
 import { billingGauBucketGet } from "@oxagen/oxagen/contracts/billing.gau_bucket.get";
 import { billingGauBucketPurchase } from "@oxagen/oxagen/contracts/billing.gau_bucket.purchase";
 import { billingInvoiceList } from "@oxagen/oxagen/contracts/billing.invoice.list";
+import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
+import { toolClassificationSet } from "@oxagen/oxagen/contracts/tool.classification.set";
+import { toolImport } from "@oxagen/oxagen/contracts/tool.import";
+import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
+import { killSwitchSet } from "@oxagen/oxagen/contracts/kill_switch.set";
+import { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
 import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
 import { budgetPolicyRead } from "@oxagen/oxagen/contracts/budget.policy.read";
 import { budgetPolicyWrite } from "@oxagen/oxagen/contracts/budget.policy.write";
@@ -107,6 +113,8 @@ import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import { spendStatementExport } from "@oxagen/oxagen/contracts/spend.statement.export";
+import { auditEventsExport } from "@oxagen/oxagen/contracts/audit.events.export";
+import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/contracts/audit.log.query";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
 import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
@@ -164,6 +172,12 @@ import { billingContractRateGetRoute } from "./billing.contract_rate.get";
 import { billingGauBucketGetRoute } from "./billing.gau_bucket.get";
 import { billingGauBucketPurchaseRoute } from "./billing.gau_bucket.purchase";
 import { billingInvoiceListRoute } from "./billing.invoice.list";
+import { toolVersionListRoute } from "./tool.version.list";
+import { toolClassificationSetRoute } from "./tool.classification.set";
+import { toolImportRoute } from "./tool.import";
+import { credentialGrantListRoute } from "./credential.grant.list";
+import { killSwitchSetRoute } from "./kill_switch.set";
+import { killSwitchListRoute } from "./kill_switch.list";
 import { billingBudgetSetRoute } from "./billing.budget.set";
 import { budgetPolicyReadRoute } from "./budget.policy.read";
 import { budgetPolicyWriteRoute } from "./budget.policy.write";
@@ -186,6 +200,7 @@ import { runCostGetRoute } from "./run.cost";
 import { spendDrillRoute } from "./spend.drill";
 import { spendGetRoute } from "./spend.get";
 import { spendStatementExportRoute } from "./spend.statement.export";
+import { auditEventsExportRoute } from "./audit.events.export";
 import { spendWasteListRoute } from "./spend.waste";
 import { findingDismissRoute } from "./finding.dismiss";
 import { findingEvidenceGetRoute } from "./finding.evidence.get";
@@ -266,6 +281,12 @@ interface ThinRoute {
   body?: unknown;
   /** The input `invoke` should receive — defaults to the body when omitted. */
   expectedInput?: unknown;
+  /**
+   * The capability context `invoke` should receive — defaults to CTX. Set it
+   * where the route deliberately sends something else, as the audit export
+   * does with the organization-only workspace sentinel.
+   */
+  expectedCtx?: Record<string, unknown>;
   /** A body the contract must reject. Omitted for bodyless GET routes. */
   invalidBody?: unknown;
   /**
@@ -791,6 +812,75 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
+    file: "tool.version.list",
+    route: toolVersionListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolVersionList.name,
+    body: { limit: 10, category: "moves_money" },
+    invalidBody: { category: "Moves Money" },
+    status: 200,
+  },
+  {
+    file: "tool.classification.set",
+    route: toolClassificationSetRoute as unknown as Hono<never>,
+    method: "PUT",
+    capability: toolClassificationSet.name,
+    body: {
+      toolVersionId: "tlv_1",
+      riskGrade: "high",
+      classification: {
+        sideEffect: "write",
+        egress: "third_party",
+        consequenceTags: ["communicates_externally"],
+        measures: {},
+        dataClasses: [],
+      },
+      reason: "sends mail",
+    },
+    invalidBody: { toolVersionId: "tlv_1", riskGrade: "high", reason: "x" },
+    status: 200,
+  },
+  {
+    file: "tool.import",
+    route: toolImportRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolImport.name,
+    body: { serverId: "mcs_1", tools: ["search"] },
+    invalidBody: { serverId: "mcs_1", tools: [] },
+    status: 200,
+  },
+  {
+    file: "credential.grant.list",
+    route: credentialGrantListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: credentialGrantList.name,
+    body: { limit: 5 },
+    invalidBody: { limit: 0 },
+    status: 200,
+  },
+  {
+    file: "kill_switch.set",
+    route: killSwitchSetRoute as unknown as Hono<never>,
+    method: "PUT",
+    capability: killSwitchSet.name,
+    body: {
+      target: { kind: "class", id: "moves_money" },
+      on: true,
+      reason: "processor incident",
+    },
+    invalidBody: { target: { kind: "class", id: "moves_money" }, on: true },
+    status: 200,
+  },
+  {
+    file: "kill_switch.list",
+    route: killSwitchListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: killSwitchList.name,
+    body: { onlyOn: true, limit: 10 },
+    invalidBody: { limit: 0 },
+    status: 200,
+  },
+  {
     file: "billing.auto_topup.set",
     route: billingAutoTopupSetRoute as unknown as Hono<never>,
     method: "PUT",
@@ -1267,6 +1357,19 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
+    file: "audit.events.export",
+    route: auditEventsExportRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: auditEventsExport.name,
+    body: { outcome: "deny" },
+    expectedInput: { outcome: "deny", format: "csv" },
+    // An export answers for the whole organization, so the route sends the
+    // organization-only sentinel whichever router it was reached through.
+    expectedCtx: { ...CTX, workspaceId: ORG_ONLY_WORKSPACE_ID },
+    invalidBody: { format: "pdf" },
+    status: 200,
+  },
+  {
     file: "run.cost",
     route: runCostGetRoute as unknown as Hono<never>,
     method: "POST",
@@ -1575,7 +1678,7 @@ describe("thin capability routes", () => {
       expect(mocks.invoke).toHaveBeenCalledWith(
         entry.capability,
         entry.expectedInput ?? entry.body,
-        CTX,
+        entry.expectedCtx ?? CTX,
         { surface: "api" },
       );
     },

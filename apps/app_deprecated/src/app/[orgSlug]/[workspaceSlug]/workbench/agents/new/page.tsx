@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -32,7 +33,7 @@ export const metadata: Metadata = {
  * the shell if `params` is awaited first under Cache Components. See
  * lib/request-path.ts.
  */
-export default async function NewAgentPage() {
+export default async function NewAgentPage(): Promise<JSX.Element> {
   const { orgSlug, workspaceSlug } = await requestScopeSlugs();
   if (!orgSlug || !workspaceSlug) notFound();
   const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
@@ -50,12 +51,10 @@ export default async function NewAgentPage() {
   // back to the built-in system role definitions (grant counts unavailable
   // and flagged as such) so the builder never renders without an Access step.
   let roleOptions: AgentRoleOption[];
-  let customRolesAvailable = false;
   let rolesError: string | null = null;
   try {
     const roleData = await listAgentRoleOptions(ctx);
     roleOptions = roleData.options;
-    customRolesAvailable = roleData.customRolesAvailable;
   } catch (err) {
     roleOptions = fallbackSystemRoleOptions();
     rolesError = err instanceof Error ? err.message : "Unknown error";
@@ -86,7 +85,6 @@ export default async function NewAgentPage() {
         installAction={installPlugin}
         installBulkAction={installBulkPlugin}
         roleOptions={roleOptions}
-        customRolesAvailable={customRolesAvailable}
         rolesError={rolesError}
         initialRoleName={null}
       />

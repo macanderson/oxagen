@@ -223,6 +223,30 @@ describe("assertOrgRole", () => {
     ).resolves.toBe("Billing");
   });
 
+  // The gate reads every assignment, not the one ROLE_PRECEDENCE would name:
+  // Admin outranks Billing, so resolving a single role first discarded the
+  // Billing assignment and refused a billing member of purchase_credits.
+  it("accepts a principal holding Billing alongside the higher-ranked Admin", async () => {
+    stubRoleResolution("prn_1", ["Admin", "Billing"]);
+    await expect(
+      assertOrgRole(USER, { org: ["Owner", "Billing"] }),
+    ).resolves.toBe("Billing");
+  });
+
+  it("returns the most privileged role when several satisfy the gate", async () => {
+    stubRoleResolution("prn_1", ["Billing", "Owner"]);
+    await expect(
+      assertOrgRole(USER, { org: ["Owner", "Billing"] }),
+    ).resolves.toBe("Owner");
+  });
+
+  it("still refuses when none of several held roles is in the set (negative)", async () => {
+    stubRoleResolution("prn_1", ["Admin", "Member"]);
+    await expect(
+      assertOrgRole(USER, { org: ["Owner", "Billing"] }),
+    ).rejects.toSatisfy(forbidden("org_role_required"));
+  });
+
   it("never runs the workspace leg for an org-only requirement", async () => {
     stubRoleResolution("prn_1", "Viewer", "Owner");
     await expect(

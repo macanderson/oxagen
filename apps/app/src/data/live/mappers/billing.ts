@@ -15,7 +15,9 @@ import type {
   GauBucket,
   InvoicePage,
   PlanCard,
+  UsageCredits,
 } from "@/data/contracts/billing";
+import type { Money } from "@/data/contracts/money";
 import { moneyFromMicros, mulMicros } from "@/data/contracts/money";
 import type { ContractOutput } from "@/server/kernel";
 
@@ -34,6 +36,32 @@ export function toPlanCard(
             currentPeriodStart: subscription.currentPeriodStart,
             currentPeriodEnd: subscription.currentPeriodEnd,
           },
+  };
+}
+
+/**
+ * One credit at face value: $0.01, which is 10,000 micro-dollars
+ * (`CREDIT_VALUE_USD`, packages/billing/src/pricing.ts). Multiplying it by the
+ * balance is how the face value is derived, so no arithmetic on micros happens
+ * outside `money.ts` (INV-09).
+ */
+const CREDIT_FACE_VALUE: Money = { micros: "10000", currency: "USD" };
+
+/**
+ * The second meter (§3.9). The parameter is a Pick of the contract output
+ * holding the credit balance alone, so the token usage `get_subscription` also
+ * reports cannot reach the page through this mapper (§1.4, INV-25).
+ */
+export function toUsageCredits(
+  out: Pick<
+    ContractOutput<typeof billingSubscriptionRead>,
+    "creditBalanceCents"
+  >,
+): z.input<typeof UsageCredits> {
+  const balanceCredits = out.creditBalanceCents;
+  return {
+    balanceCredits,
+    balance: mulMicros(CREDIT_FACE_VALUE, balanceCredits),
   };
 }
 

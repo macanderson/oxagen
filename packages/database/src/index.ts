@@ -8,6 +8,7 @@ export * from "./types";
 export {
   withTenantDb,
   withSystemDb,
+  setTransactionWorkspaceScope,
   assertRlsConnectionSafe,
   assertRlsEnforcedInProduction,
   type Tx,

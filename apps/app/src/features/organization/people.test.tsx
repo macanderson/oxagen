@@ -2,8 +2,9 @@
 // Organization › People over org.members: the tabs, the members with the two
 // writes their row carries and pending invitations in the ok state, each
 // section's empty line, and the denied, pending-approval and error states that
-// replace both sections. Every state is checked with axe. No settings, roles or
-// workspaces section renders.
+// replace both sections. Every state is checked with axe. Roles is a tab of its
+// own and Workspaces is a sibling section of the same page, so neither renders
+// from here.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -11,6 +12,7 @@ import type { MemberList } from "@/data/contracts/org";
 import type { OrgRole } from "@/server/viewer";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { orgSource } from "./organization.builders";
 
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { href: string; children: ReactNode }) => (
@@ -49,38 +51,12 @@ async function renderPeople(
     orgName: "Acme Robotics",
     orgRole,
   });
-  const members = vi.fn<Members>().mockResolvedValue(read);
-  const source = {
-    pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-    shell: { context: vi.fn() },
-    billing: {
-      plan: vi.fn(),
-      bucket: vi.fn(),
-      contractRate: vi.fn(),
-      invoices: vi.fn(),
-    },
-    runs: { list: vi.fn() },
-    approvals: { pending: vi.fn() },
-    agents: {
-      list: vi.fn(),
-      get: vi.fn(),
-      toolbelt: vi.fn(),
-      incidents: vi.fn(),
-    },
-    spend: {
-      byGroup: vi.fn(),
-      fleet: vi.fn(),
-      drill: vi.fn(),
-      waste: vi.fn(),
-      budgets: vi.fn(),
-    },
-    org: { members },
-    steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
-  };
+  const { source, calls } = orgSource({ members: read });
   const view = render(
     <IntlProvider>{await People({ ctx, source })}</IntlProvider>,
   );
-  expect(members).toHaveBeenCalledWith(ctx);
+  expect(calls.members).toEqual([[ctx]]);
+  expect(calls.apiKeys).toEqual([]);
   await expectNoAxe(view.container);
   return view;
 }
@@ -125,13 +101,16 @@ function sectionTitles(): (string | null)[] {
 }
 
 describe("People tabs", () => {
-  it("link People and API keys by URL, People marked as the current page", async () => {
+  it("link People, Roles and API keys by URL, People marked as the current page", async () => {
     await renderPeople(readOk(roster));
     const tabs = screen.getByRole("navigation", { name: "Organization" });
     const people = within(tabs).getByRole("link", { name: "People" });
+    const roles = within(tabs).getByRole("link", { name: "Roles" });
     const keys = within(tabs).getByRole("link", { name: "API keys" });
     expect(people).toHaveAttribute("href", "/acme");
     expect(people).toHaveAttribute("aria-current", "page");
+    expect(roles).toHaveAttribute("href", "/acme/roles");
+    expect(roles).not.toHaveAttribute("aria-current");
     expect(keys).toHaveAttribute("href", "/acme/api-keys");
     expect(keys).not.toHaveAttribute("aria-current");
   });
@@ -172,11 +151,12 @@ describe("ok", () => {
     expect(audit).toHaveTextContent("Never");
   });
 
-  it("renders only the People and Pending invitations sections: no settings, roles or workspaces slice (negative)", async () => {
+  it("renders only the People and Pending invitations sections: no settings slice, and no workspaces table of its own (negative)", async () => {
     await renderPeople(readOk(roster));
     expect(sectionTitles()).toEqual(["People", "Pending invitations"]);
     expect(screen.queryByTestId("not-recorded")).toBeNull();
-    expect(screen.queryByText(/settings|workspaces|roles/i)).toBeNull();
+    expect(screen.queryByText(/settings/i)).toBeNull();
+    expect(screen.queryByRole("region", { name: "Workspaces" })).toBeNull();
   });
 });
 
