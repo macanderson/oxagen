@@ -6,12 +6,15 @@
 // one the test finds the module the handler loads from — `register.ts` for
 // packages/handlers, the `LOADERS` map in `index.ts` for packages/agent —
 // parses that module with the TypeScript compiler API and asserts the
-// exported handler contains a call expression to `assertOrgRole`: in its
+// exported handler contains a call expression to a role gate: in its
 // initializer, in the same-file factory its initializer calls, or in its body
-// when it is a function declaration. Every entry must also be a registered
-// contract, so a renamed capability fails here rather than silently dropping
-// out of the gate. The arrays grow with each lane that adds a role-checked
-// handler.
+// when it is a function declaration. A role gate is `assertOrgRole`, or
+// `assertConsequenceRole` (`@oxagen/iam/mandate-role`), which asks for the org
+// roles a workspace names for a consequence and calls `assertOrgRole` with the
+// resolved user itself (rule two scans that call). Every entry must also be a
+// registered contract, so a renamed capability fails here rather than silently
+// dropping out of the gate. The arrays grow with each lane that adds a
+// role-checked handler.
 //
 // The second rule covers every `assertOrgRole` call under packages/*/src: an
 // API key acts as its creator, bounded by the creator's current org role
@@ -32,6 +35,12 @@ const ROLE_CHECKED_CONTRACTS = [
   "suspend_agent",
   "retire_agent",
   "commit_agent_definition",
+  "grant_mandate",
+  "request_mandate",
+  "revoke_mandate",
+  "update_mandate_limits",
+  "publish_tool_declaration",
+  "update_workspace_settings",
   "set_spend_budget",
   "append_record",
   "propose_record",
@@ -148,19 +157,22 @@ const isCallTo = (node: ts.Node, name: string): node is ts.CallExpression =>
   ts.isIdentifier(node.expression) &&
   node.expression.text === name;
 
+/** The calls that gate a handler on an org role. */
+const ROLE_GATES = ["assertOrgRole", "assertConsequenceRole"] as const;
+
 /**
- * Whether the exported handler contains a call to `assertOrgRole`: in its
+ * Whether the exported handler contains a call to a role gate: in its
  * initializer (`export const h = async (…) => …`), in the body of the
  * same-file factory its initializer calls (`export const h = createH(deps)`),
  * or in its body when it is a function declaration.
  */
-function handlerCallsAssertOrgRole(
+function handlerCallsRoleGate(
   source: ts.SourceFile,
   exportName: string,
 ): boolean {
   let calls = false;
   const scan = (node: ts.Node) => {
-    if (isCallTo(node, "assertOrgRole")) calls = true;
+    if (ROLE_GATES.some((gate) => isCallTo(node, gate))) calls = true;
     ts.forEachChild(node, scan);
   };
   const functionNamed = (name: string) =>
@@ -299,18 +311,28 @@ describe("INV-29: role-restricted contracts are gated in their handler", () => {
   });
 
   it.each(ROLE_CHECKED_CONTRACTS)(
-    "%s's handler body calls assertOrgRole",
+    "%s's handler body calls a role gate",
     (name) => {
       const { module, exportName } = handlerBinding(register, name);
       const source = parse(join(SRC, `${module}.ts`));
-      expect(handlerCallsAssertOrgRole(source, exportName)).toBe(true);
+      expect(handlerCallsRoleGate(source, exportName)).toBe(true);
     },
   );
 
   it("the scan itself sees no gate in a handler that has none", () => {
     const { module, exportName } = handlerBinding(register, "list_incidents");
     const source = parse(join(SRC, `${module}.ts`));
-    expect(handlerCallsAssertOrgRole(source, exportName)).toBe(false);
+    expect(handlerCallsRoleGate(source, exportName)).toBe(false);
+  });
+
+  it("the scan sees assertConsequenceRole as a gate", () => {
+    const source = parseSource(
+      "probe.ts",
+      `export const handler = async (_input, ctx) => {
+         await assertConsequenceRole(ctx, ["moves_money"], {});
+       };`,
+    );
+    expect(handlerCallsRoleGate(source, "handler")).toBe(true);
   });
 });
 
@@ -331,14 +353,14 @@ describe("INV-29: role-restricted packages/agent contracts are gated in their ha
     (name) => {
       const source = handlerSource(name);
       expect(
-        handlerCallsAssertOrgRole(source, soleHandlerExport(source)),
+        handlerCallsRoleGate(source, soleHandlerExport(source)),
       ).toBe(true);
     },
   );
 
   it("the scan itself sees no gate in an agent handler that has none", () => {
     const source = handlerSource("list_agent_roles");
-    expect(handlerCallsAssertOrgRole(source, soleHandlerExport(source))).toBe(
+    expect(handlerCallsRoleGate(source, soleHandlerExport(source))).toBe(
       false,
     );
   });
@@ -360,6 +382,7 @@ describe("INV-29: every role gate acts as the resolved user", () => {
         "handlers/src/context.records.append.ts",
         "handlers/src/tacho.command.dispatch.ts",
         "handlers/src/workspace.archive.ts",
+        "iam/src/mandate-role.ts",
       ]),
     );
   });
@@ -475,7 +498,7 @@ describe("INV-29: every role gate acts as the resolved user", () => {
         "probe.ts",
         `export function createHandler(deps) {\n  return async (_input, ctx) => {\n    await assertOrgRole({ ...ctx, userId: null }, { org: ["Owner"] });\n  };\n}\nexport const handler = createHandler({});`,
       );
-      expect(handlerCallsAssertOrgRole(source, "handler")).toBe(true);
+      expect(handlerCallsRoleGate(source, "handler")).toBe(true);
     });
 
     it("reads an exported function declaration's body", () => {
@@ -483,7 +506,7 @@ describe("INV-29: every role gate acts as the resolved user", () => {
         "probe.ts",
         `export async function probeHandler(_input, ctx) {\n  await assertOrgRole({ ...ctx, userId: null }, { org: ["Owner"] });\n}`,
       );
-      expect(handlerCallsAssertOrgRole(source, "probeHandler")).toBe(true);
+      expect(handlerCallsRoleGate(source, "probeHandler")).toBe(true);
       expect(soleHandlerExport(source)).toBe("probeHandler");
     });
   });

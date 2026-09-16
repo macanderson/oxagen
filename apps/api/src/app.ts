@@ -160,6 +160,12 @@ import { listMembersRoute } from "./routes/v1/workspace.member.list";
 import { workspaceInviteSendRoute } from "./routes/v1/workspace.invite.send";
 import { conversationChatRoute } from "./routes/v1/conversation.chat";
 import { toolDeclarationPublishRoute } from "./routes/v1/tool.declaration.publish";
+import { mandateGrantRoute } from "./routes/v1/mandate.grant";
+import { mandateRequestRoute } from "./routes/v1/mandate.request";
+import { mandateListRoute } from "./routes/v1/mandate.list";
+import { mandateGetRoute } from "./routes/v1/mandate.get";
+import { mandateRevokeRoute } from "./routes/v1/mandate.revoke";
+import { mandateLimitsUpdateRoute } from "./routes/v1/mandate.limits.update";
 import { toolDeclarationListRoute } from "./routes/v1/tool.declaration.list";
 import { contextRecordPublishRoute } from "./routes/v1/context.record.publish";
 import { contextRecordListRoute } from "./routes/v1/context.record.list";
@@ -738,6 +744,14 @@ orgScoped.route("/workspace/member/list", listMembersRoute);
 orgScoped.route("/workspace/invite/send", workspaceInviteSendRoute);
 orgScoped.route("/conversation/chat", conversationChatRoute);
 orgScoped.route("/tool/declaration/publish", toolDeclarationPublishRoute);
+// Mandates: bounded, expiring authority for a consequence, with a ledger
+// (MC spec §6.9 part 3, ADR-059).
+orgScoped.route("/mandates/grant", mandateGrantRoute);
+orgScoped.route("/mandates/request", mandateRequestRoute);
+orgScoped.route("/mandates/list", mandateListRoute);
+orgScoped.route("/mandates/get", mandateGetRoute);
+orgScoped.route("/mandates/revoke", mandateRevokeRoute);
+orgScoped.route("/mandates/limits/update", mandateLimitsUpdateRoute);
 orgScoped.route("/tool/declaration/list", toolDeclarationListRoute);
 orgScoped.route("/context/record/publish", contextRecordPublishRoute);
 orgScoped.route("/context/record/list", contextRecordListRoute);

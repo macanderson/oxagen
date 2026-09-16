@@ -50,3 +50,8 @@ export const ratelimitSchema = pgSchema("ratelimit");
 // negotiated overrides (org_id nullable); `run_totals` and `daily_totals` are
 // derived indexes rebuilt from frames, never a source of record.
 export const costSchema = pgSchema("cost");
+// tools — the toolbelt's governance records the Mission Control spec puts in
+// App. A.5: mandates and their ledger (ADR-059). Its own schema so the ledger
+// can carry append-only grants the way `evidence` and `tacho` do, and so the
+// registry, connections and switches the Tools page lane adds land beside it.
+export const toolsSchema = pgSchema("tools");

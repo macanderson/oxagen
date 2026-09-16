@@ -284,6 +284,11 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "evidence.verdicts", policyClass: "standard" },
   { table: "evidence.disclosure_policies", policyClass: "standard" },
 
+  // ── tools.* — mandates and their append-only ledger (ADR-059,
+  //   20260915202300_mandates_and_ledger.sql). Both carry orgScopeMixin.
+  { table: "tools.mandates", policyClass: "standard" },
+  { table: "tools.mandate_ledger", policyClass: "standard" },
+
   // ── tacho.* — hosts, sessions, and control state for agents Oxagen does
   //   not run (docs/specs/tacho/data-model.md section 3). All eight carry
   //   org_id + workspace_id NOT NULL → standard tenant_isolation.

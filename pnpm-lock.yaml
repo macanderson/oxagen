@@ -863,6 +863,9 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@oxagen/rules':
+        specifier: workspace:*
+        version: link:../rules
       '@oxagen/stella-engine-client':
         specifier: workspace:*
         version: link:../stella-engine-client
@@ -1294,6 +1297,9 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@oxagen/rules':
+        specifier: workspace:*
+        version: link:../rules
       '@oxagen/run-evidence':
         specifier: workspace:*
         version: link:../run-evidence
@@ -1453,6 +1459,9 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@oxagen/rules':
+        specifier: workspace:*
+        version: link:../rules
       '@oxagen/run-ledger':
         specifier: workspace:*
         version: link:../run-ledger
@@ -1675,6 +1684,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
+      '@oxagen/mcp-config':
+        specifier: workspace:*
+        version: link:../mcp-config
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../oxagen
@@ -1691,6 +1703,9 @@ importers:
         specifier: 3.25.76
         version: 3.25.76
     devDependencies:
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
       '@types/node':
         specifier: 25.9.1
         version: 25.9.1

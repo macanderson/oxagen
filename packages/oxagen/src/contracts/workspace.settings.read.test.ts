@@ -15,9 +15,39 @@ describe("workspace.settings.read capability", () => {
       slug: "w",
       description: null,
       avatarUrl: null,
+      consequenceRoles: {},
     });
     expect(out.description).toBeNull();
     expect(out.avatarUrl).toBeNull();
+  });
+
+  it("carries the effective consequence-role map and refuses a role outside the org roles", () => {
+    const out = workspaceSettingsRead.output.parse({
+      name: "W",
+      slug: "w",
+      description: null,
+      avatarUrl: null,
+      consequenceRoles: { moves_money: ["Owner", "Billing"] },
+    });
+    expect(out.consequenceRoles.moves_money).toEqual(["Owner", "Billing"]);
+    expect(
+      workspaceSettingsRead.output.safeParse({
+        name: "W",
+        slug: "w",
+        description: null,
+        avatarUrl: null,
+        consequenceRoles: { moves_money: ["Viewer"] },
+      }).success,
+    ).toBe(false);
+    expect(
+      workspaceSettingsRead.output.safeParse({
+        name: "W",
+        slug: "w",
+        description: null,
+        avatarUrl: null,
+        consequenceRoles: { moves_money: [] },
+      }).success,
+    ).toBe(false);
   });
 
   it("parses an output with an avatar URL", () => {
@@ -26,6 +56,7 @@ describe("workspace.settings.read capability", () => {
       slug: "w",
       description: null,
       avatarUrl: "https://cdn.example.com/w.png",
+      consequenceRoles: {},
     });
     expect(out.avatarUrl).toBe("https://cdn.example.com/w.png");
   });

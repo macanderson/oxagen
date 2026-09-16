@@ -57,11 +57,63 @@
           "approved",
           "denied"
         ]
+      },
+      "mandate": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "mandateId": {
+                "type": "string"
+              },
+              "reserved": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "measure": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    },
+                    "unitOrCurrency": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "measure",
+                    "value",
+                    "unitOrCurrency"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "held",
+                  "released"
+                ]
+              }
+            },
+            "required": [
+              "mandateId",
+              "reserved",
+              "outcome"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
       }
     },
     "required": [
       "approvalId",
-      "resolution"
+      "resolution",
+      "mandate"
     ],
     "additionalProperties": false
   }

@@ -13,6 +13,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 import { workspaceSettingsReadHandler } from "./workspace.settings.read";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
+import { DEFAULT_CONSEQUENCE_ROLES } from "@oxagen/oxagen/mandates/schemas";
+
+const { other: _other, ...DEFAULT_CONSEQUENCE_ROLES_WITHOUT_OTHER } =
+  DEFAULT_CONSEQUENCE_ROLES;
 
 describe("workspace.settings.read handler", () => {
   beforeEach(() => mocks.findFirst.mockReset());
@@ -23,6 +27,7 @@ describe("workspace.settings.read handler", () => {
       slug: "research",
       avatarUrl: 'avatar:v1:{"emoji":"🔬","bg":"#2563eb","mode":"full"}',
       description: "R&D workspace",
+      consequenceRoles: { moves_money: ["Billing"], ships_code: ["Admin"] },
     });
     const out = await workspaceSettingsReadHandler({}, CTX);
     expect(out).toEqual({
@@ -30,7 +35,26 @@ describe("workspace.settings.read handler", () => {
       slug: "research",
       description: "R&D workspace",
       avatarUrl: 'avatar:v1:{"emoji":"🔬","bg":"#2563eb","mode":"full"}',
+      consequenceRoles: {
+        ...DEFAULT_CONSEQUENCE_ROLES_WITHOUT_OTHER,
+        moves_money: ["Billing"],
+        ships_code: ["Admin"],
+      },
     });
+  });
+
+  it("reads stored overrides that no longer parse as no overrides", async () => {
+    mocks.findFirst.mockResolvedValue({
+      name: "W",
+      slug: "w",
+      avatarUrl: null,
+      description: null,
+      consequenceRoles: { moves_money: "Billing" },
+    });
+    const out = await workspaceSettingsReadHandler({}, CTX);
+    expect(out.consequenceRoles).toEqual(
+      DEFAULT_CONSEQUENCE_ROLES_WITHOUT_OTHER,
+    );
   });
 
   it("returns null description and avatarUrl when unset", async () => {
