@@ -1382,6 +1382,16 @@
       "writes": []
     },
     {
+      "domain": "tool",
+      "name": "import_tools",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "telemetry",
       "name": "ingest_stella_operational_telemetry",
       "reads": [],
@@ -1584,6 +1594,16 @@
       "writes": []
     },
     {
+      "domain": "credential",
+      "name": "list_credential_grants",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "environment",
       "name": "list_environments",
       "reads": [],
@@ -1662,6 +1682,16 @@
     {
       "domain": "billing",
       "name": "list_invoices",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "kill_switch",
+      "name": "list_kill_switches",
       "reads": [],
       "surfaces": [
         "api",
@@ -1932,6 +1962,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tool",
+      "name": "list_tool_versions",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -2597,6 +2637,17 @@
       "writes": []
     },
     {
+      "domain": "kill_switch",
+      "name": "set_kill_switch",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "set_mcp_enabled",
       "reads": [],
@@ -2686,6 +2737,16 @@
         "agent",
         "api",
         "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tool",
+      "name": "set_tool_classification",
+      "reads": [],
+      "surfaces": [
+        "api",
         "mcp"
       ],
       "writes": []
@@ -3130,7 +3191,7 @@
       "writes": []
     }
   ],
-  "contentHash": "e96a31e510d6ea8d06f1526b8faecd13e2bc8d93f45605cc048a32fc3302a7cb",
+  "contentHash": "72cdf69cdbed1f78b66b8944352cc21ff4bfa6f797e7f5cc6c3eed1d2119d47f",
   "domains": [
     {
       "name": "agent",
@@ -3367,6 +3428,7 @@
       "tables": [
         "postgres:mcp.catalog_servers",
         "postgres:mcp.consents",
+        "postgres:mcp.credential_grants",
         "postgres:mcp.credentials",
         "postgres:mcp.mcp_servers",
         "postgres:mcp.registries",
@@ -3547,7 +3609,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 125
+      "tableCount": 126
     },
     {
       "domains": [
@@ -7980,6 +8042,42 @@
           "type": "text"
         },
         {
+          "name": "schema_origin",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "classification",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "classified_risk_grade",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "classified_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "classified_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "classification_reason",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "consequence_tags",
           "nullable": false,
           "primaryKey": false,
@@ -8102,6 +8200,12 @@
           "nullable": true,
           "primaryKey": false,
           "references": "postgres:agent.tool_versions",
+          "type": "uuid"
+        },
+        {
+          "name": "mcp_server_id",
+          "nullable": true,
+          "primaryKey": false,
           "type": "uuid"
         },
         {
@@ -12584,6 +12688,30 @@
           "type": "text"
         },
         {
+          "name": "target_kind",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "target_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "flipped_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "cleared_reason",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "active",
           "nullable": false,
           "primaryKey": false,
@@ -14286,6 +14414,94 @@
           "type": "citext"
         },
         {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "connection_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "connection_public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "mcp_server_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "run_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "scope",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "provider_token_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "issued_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "expires_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "revoked_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "mcp",
+      "id": "postgres:mcp.credential_grants",
+      "name": "credential_grants",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
           "name": "created_at",
           "nullable": false,
           "primaryKey": false,
@@ -14522,6 +14738,18 @@
           "nullable": false,
           "primaryKey": false,
           "type": "boolean"
+        },
+        {
+          "name": "last_import_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "last_import_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "mcp",

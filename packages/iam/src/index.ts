@@ -56,6 +56,17 @@ export type {
   PersistedDecisionOutcome,
 } from "./live-agent-run-authorization";
 
+export { resourceScopeDigestOf } from "./resource-scope";
+
+export {
+  flipKillSwitchOff,
+  flipKillSwitchOn,
+  matchKillSwitch,
+  readActiveKillSwitches,
+  readKillSwitches,
+} from "./kill-switch";
+export type { KillSwitchDeny, KillSwitchRow } from "./kill-switch";
+
 export { emitAudit } from "./emit-audit";
 export type { EmitAuditArgs } from "./emit-audit";
 
