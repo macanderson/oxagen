@@ -7,7 +7,7 @@
 import { useTranslations } from "next-intl";
 import type { Workspace } from "@/data/contracts/org";
 import { routes } from "@/shared/safe-path";
-import { inputBase } from "@/ui/control-styles";
+import { Field } from "@/ui/field";
 import { useNavigate } from "@/ui/navigation";
 import {
   archiveWorkspace,
@@ -17,36 +17,41 @@ import {
 } from "./actions";
 import { textValue, WriteDialog } from "./dialog";
 
-const fieldLabel = "text-sm font-medium text-foreground";
-const hint = "text-xs text-muted-foreground";
-
 function draftOf(form: FormData): WorkspaceDraft {
   return { name: textValue(form, "name"), slug: textValue(form, "slug") };
 }
 
-function Fields({ workspace }: { workspace?: Workspace }) {
+/**
+ * The name and slug a workspace write takes. Each field is a `Field`, so the
+ * slug's hint reaches assistive technology through `aria-describedby` rather
+ * than folding into the input's accessible name, and `idPrefix` keeps the two
+ * dialogs' ids apart when both are mounted.
+ */
+function Fields({
+  idPrefix,
+  workspace,
+}: {
+  idPrefix: string;
+  workspace?: Workspace;
+}) {
   const t = useTranslations("organization.actions.fields");
   return (
     <>
-      <label className="flex flex-col gap-1.5">
-        <span className={fieldLabel}>{t("name")}</span>
-        <input
-          name="name"
-          required
-          defaultValue={workspace?.name}
-          className={inputBase}
-        />
-      </label>
-      <label className="flex flex-col gap-1.5">
-        <span className={fieldLabel}>{t("slug")}</span>
-        <input
-          name="slug"
-          required
-          defaultValue={workspace?.slug}
-          className={inputBase}
-        />
-        <span className={hint}>{t("slugHint")}</span>
-      </label>
+      <Field
+        id={`${idPrefix}-name`}
+        name="name"
+        label={t("name")}
+        required
+        defaultValue={workspace?.name}
+      />
+      <Field
+        id={`${idPrefix}-slug`}
+        name="slug"
+        label={t("slug")}
+        hint={t("slugHint")}
+        required
+        defaultValue={workspace?.slug}
+      />
     </>
   );
 }
@@ -68,7 +73,7 @@ export function CreateWorkspace({ org }: { org: string }) {
         navigate.replace(routes.people(org));
       }}
     >
-      <Fields />
+      <Fields idPrefix="create-workspace" />
     </WriteDialog>
   );
 }
@@ -96,7 +101,10 @@ export function EditWorkspace({
         navigate.replace(routes.people(org));
       }}
     >
-      <Fields workspace={workspace} />
+      <Fields
+        idPrefix={`edit-workspace-${workspace.id}`}
+        workspace={workspace}
+      />
     </WriteDialog>
   );
 }

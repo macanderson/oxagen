@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 import type { Permission, Role } from "@/data/contracts/org";
 import { routes } from "@/shared/safe-path";
 import { inputBase } from "@/ui/control-styles";
+import { Field } from "@/ui/field";
 import { useNavigate } from "@/ui/navigation";
 import {
   createRole,
@@ -98,22 +99,32 @@ export function CreateRole({
         navigate.replace(routes.roles(org));
       }}
     >
-      <label className="flex flex-col gap-1.5">
-        <span className={fieldLabel}>{tField("name")}</span>
-        <input name="name" required className={inputBase} />
-        <span className={hint}>{tField("roleNameHint")}</span>
-      </label>
-      <label className="flex flex-col gap-1.5">
-        <span className={fieldLabel}>{tField("description")}</span>
-        <input name="description" className={inputBase} />
-      </label>
-      <label className="flex flex-col gap-1.5">
-        <span className={fieldLabel}>{tField("scope")}</span>
-        <select name="scope" defaultValue="org" className={inputBase}>
+      <Field
+        id="create-role-name"
+        name="name"
+        label={tField("name")}
+        hint={tField("roleNameHint")}
+        required
+      />
+      <Field
+        id="create-role-description"
+        name="description"
+        label={tField("description")}
+      />
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <label htmlFor="create-role-scope" className={fieldLabel}>
+          {tField("scope")}
+        </label>
+        <select
+          id="create-role-scope"
+          name="scope"
+          defaultValue="org"
+          className={inputBase}
+        >
           <option value="org">{tScope("org")}</option>
           <option value="workspace">{tScope("workspace")}</option>
         </select>
-      </label>
+      </div>
       <PermissionPicker catalog={catalog} held={[]} />
     </WriteDialog>
   );
