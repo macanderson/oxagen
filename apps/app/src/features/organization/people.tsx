@@ -8,10 +8,9 @@ import type { MemberList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { OrgCtx, OrgRole } from "@/server/viewer";
-import { routes } from "@/shared/safe-path";
 import { mono } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
-import { RouteTabs } from "@/ui/route-tabs";
+import { OrganizationTabs } from "./tabs";
 
 export async function People({
   ctx,
@@ -42,21 +41,7 @@ function PeopleView({
   const t = useTranslations("organization");
   return (
     <div className="flex flex-col gap-6">
-      <RouteTabs
-        label={t("tabs.label")}
-        tabs={[
-          {
-            to: routes.people(orgSlug),
-            label: t("tabs.people"),
-            current: true,
-          },
-          {
-            to: routes.apiKeys(orgSlug),
-            label: t("tabs.apiKeys"),
-            current: false,
-          },
-        ]}
-      />
+      <OrganizationTabs org={orgSlug} current="people" />
       {read.ok ? (
         <>
           <Members members={read.value.members} />

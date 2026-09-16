@@ -14,7 +14,8 @@ export type WorkspaceNavKey =
   | "steering"
   | "spend";
 export type OrgNavKey = "organization" | "billing";
-export type NavKey = WorkspaceNavKey | OrgNavKey | "apiKeys";
+/** Roles and API keys are pages under Organization, not sidebar items of their own. */
+export type NavKey = WorkspaceNavKey | OrgNavKey | "apiKeys" | "roles";
 
 export const WORKSPACE_NAV: readonly WorkspaceNavKey[] = [
   "fleet",
@@ -52,6 +53,7 @@ export const MORE_SHEET: readonly NavKey[] = [
 const ORG_SEGMENTS = {
   billing: "billing",
   "api-keys": "apiKeys",
+  roles: "roles",
 } as const satisfies Record<string, NavKey>;
 
 /** The nav key for a static organization segment, or null when the segment is a workspace slug. */
@@ -78,6 +80,8 @@ export function orgHref(org: string, key: NavKey): SafePath {
       return pathOf(org, "billing");
     case "apiKeys":
       return pathOf(org, "api-keys");
+    case "roles":
+      return pathOf(org, "roles");
     default:
       throw new Error(`${key} is a workspace page, not an organization page`);
   }
@@ -137,11 +141,13 @@ function currentNavKey(pathname: string): NavKey | null {
   );
 }
 
-/** Whether a sidebar item is the current page. API keys sit under Organization. */
+/** Whether a sidebar item is the current page. Roles and API keys sit under Organization. */
 export function isNavItemCurrent(key: NavKey, pathname: string): boolean {
   const current = currentNavKey(pathname);
   if (current === key) return true;
-  return key === "organization" && current === "apiKeys";
+  return (
+    key === "organization" && (current === "apiKeys" || current === "roles")
+  );
 }
 
 /** Whether the current page is one the More sheet holds, so the More slot is current. */
@@ -197,7 +203,7 @@ export function breadcrumbs(
   const out: Crumb[] = [{ kind: "name", text: names.org, href: pathOf(org) }];
   if (ws === null) {
     const key = currentNavKey(pathname);
-    if (key === "apiKeys") {
+    if (key === "apiKeys" || key === "roles") {
       out.push({ kind: "nav", key: "organization", href: pathOf(org) });
       out.push({ kind: "nav", key, href: null });
     } else if (key !== null) {

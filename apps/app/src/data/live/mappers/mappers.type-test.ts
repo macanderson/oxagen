@@ -7,11 +7,14 @@
 import type { agentApprovalList } from "@oxagen/oxagen/contracts/agent.approval.list";
 import type { agentGet } from "@oxagen/oxagen/contracts/agent.get";
 import type { agentList } from "@oxagen/oxagen/contracts/agent.list";
+import type { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 import type { tachoIncidentList } from "@oxagen/oxagen/contracts/tacho.incident.list";
 import type { runList } from "@oxagen/oxagen/contracts/run.list";
+import type { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import type { ContractOutput } from "@/server/kernel";
 import type { toAgentDetail, toAgentPage, toIncidentPage } from "./agents";
 import type { toApprovalItems } from "./approvals";
+import type { toRoleCatalog, toWorkspaceList } from "./org";
 import type { toRunPage } from "./runs";
 
 /** Each field of View that Out also has may be nullable only where Out's is. */
@@ -37,6 +40,11 @@ type AgentView = ReturnType<typeof toAgentDetail>;
 type IncidentOut = ContractOutput<typeof tachoIncidentList>["items"][number];
 type IncidentView = ReturnType<typeof toIncidentPage>["incidents"][number];
 
+type RoleOut = ContractOutput<typeof iamRoleList>["roles"][number];
+type RoleView = ReturnType<typeof toRoleCatalog>["roles"][number];
+type WorkspaceOut = ContractOutput<typeof workspaceList>["workspaces"][number];
+type WorkspaceView = ReturnType<typeof toWorkspaceList>["workspaces"][number];
+
 declare const runOut: RunOut;
 declare const runView: RunView;
 declare const approvalView: ApprovalView;
@@ -45,6 +53,8 @@ declare const identityView: AgentView["identity"];
 declare const credentialView: AgentView["credentials"][number];
 declare const hostView: AgentView["hosts"][number];
 declare const incidentView: IncidentView;
+declare const roleView: RoleView;
+declare const workspaceView: WorkspaceView;
 
 // The positives: both mappers keep a field nullable only where the contract does.
 const _runsHold: NullableOnlyWhenSourceIs<RunView, RunOut> = runView;
@@ -66,6 +76,11 @@ const _hostsHold: NullableOnlyWhenSourceIs<
 > = hostView;
 const _incidentsHold: NullableOnlyWhenSourceIs<IncidentView, IncidentOut> =
   incidentView;
+// A role's description and author are nullable on both sides; a workspace's
+// role and archival date are the two the store may not have recorded.
+const _rolesHold: NullableOnlyWhenSourceIs<RoleView, RoleOut> = roleView;
+const _workspacesHold: NullableOnlyWhenSourceIs<WorkspaceView, WorkspaceOut> =
+  workspaceView;
 
 // @ts-expect-error -- turns may be null on the contract, and frames is required on the view
 const _nullableIntoRequired: Pick<RunView, "frames"> = { frames: runOut.turns };

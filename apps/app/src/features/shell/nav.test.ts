@@ -14,7 +14,12 @@ import {
   workspaceHref,
 } from "./nav";
 
-const ALL_KEYS: readonly NavKey[] = [...WORKSPACE_NAV, ...ORG_NAV, "apiKeys"];
+const ALL_KEYS: readonly NavKey[] = [
+  ...WORKSPACE_NAV,
+  ...ORG_NAV,
+  "apiKeys",
+  "roles",
+];
 
 describe("parseShellPath", () => {
   it("reads organization, workspace and the rest", () => {
@@ -26,7 +31,7 @@ describe("parseShellPath", () => {
   });
 
   it("treats the static organization segments as organization pages, not workspaces", () => {
-    for (const segment of ["billing", "api-keys"])
+    for (const segment of ["billing", "api-keys", "roles"])
       expect(parseShellPath(`/acme/${segment}`)).toEqual({
         org: "acme",
         ws: null,
@@ -61,6 +66,7 @@ describe("isNavItemCurrent", () => {
     ["/acme", "organization"],
     ["/acme/billing", "billing"],
     ["/acme/api-keys", "apiKeys"],
+    ["/acme/roles", "roles"],
     ["/acme/core-platform", "fleet"],
     ["/acme/core-platform/runs/run_01/chain", "fleet"],
     ["/acme/core-platform/agents/acme.core.triage", "agents"],
@@ -72,7 +78,7 @@ describe("isNavItemCurrent", () => {
       ALL_KEYS.filter((k) => k !== "organization" && isNavItemCurrent(k, path)),
     ).toEqual(key === "organization" ? [] : [key]);
     expect(isNavItemCurrent("organization", path)).toBe(
-      key === "organization" || key === "apiKeys",
+      key === "organization" || key === "apiKeys" || key === "roles",
     );
   });
 
@@ -85,8 +91,9 @@ describe("isNavItemCurrent", () => {
       expect(ALL_KEYS.filter((k) => isNavItemCurrent(k, path))).toEqual([]);
   });
 
-  it("marks Organization current for its API keys page", () => {
+  it("marks Organization current for its API keys and Roles pages", () => {
     expect(isNavItemCurrent("organization", "/acme/api-keys")).toBe(true);
+    expect(isNavItemCurrent("organization", "/acme/roles")).toBe(true);
   });
 
   it("does not mark an item current on another page", () => {
@@ -106,6 +113,7 @@ describe("hrefs", () => {
     expect(workspaceHref("acme", "a b", "agents")).toBe("/acme/a%20b/agents");
     expect(orgHref("acme", "organization")).toBe("/acme");
     expect(orgHref("acme", "apiKeys")).toBe("/acme/api-keys");
+    expect(orgHref("acme", "roles")).toBe("/acme/roles");
   });
 
   it("refuses to build an organization href for a workspace page", () => {
@@ -157,6 +165,7 @@ describe("the phone's thumb bar and More sheet", () => {
     for (const path of [
       "/acme",
       "/acme/api-keys",
+      "/acme/roles",
       "/acme/billing",
       "/acme/core-platform/steering",
     ])
@@ -186,6 +195,11 @@ describe("breadcrumbs", () => {
       { kind: "name", text: "Acme Robotics", href: "/acme" },
       { kind: "nav", key: "organization", href: "/acme" },
       { kind: "nav", key: "apiKeys", href: null },
+    ]);
+    expect(breadcrumbs("/acme/roles", names)).toEqual([
+      { kind: "name", text: "Acme Robotics", href: "/acme" },
+      { kind: "nav", key: "organization", href: "/acme" },
+      { kind: "nav", key: "roles", href: null },
     ]);
     expect(breadcrumbs("/acme/billing", names).at(-1)).toEqual({
       kind: "nav",
