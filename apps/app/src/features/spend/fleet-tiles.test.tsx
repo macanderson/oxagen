@@ -60,6 +60,7 @@ const source: DataSource = {
   },
   onboarding: { state: refuse, firstFrame: refuse },
   org: { members: refuse },
+  skills: { inventory: refuse },
   steering: { records: refuse, proposals: refuse, contextPr: refuse },
 };
 

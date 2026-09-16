@@ -64,7 +64,7 @@ export function onboardingSource(reads: Reads): {
   const refuse = (port: string) => () => {
     throw new Error(`${port} is not part of this test`);
   };
-  const answer = <T,>(read: Read<T> | undefined, port: string): Read<T> => {
+  const answer = <T>(read: Read<T> | undefined, port: string): Read<T> => {
     if (read === undefined) throw new Error(`${port} has no answer`);
     return read;
   };
@@ -74,7 +74,9 @@ export function onboardingSource(reads: Reads): {
         calls.state.push(args);
         return Promise.resolve(answer(reads.state, "onboarding.state"));
       },
-      firstFrame: (...args: Parameters<DataSource["onboarding"]["firstFrame"]>) => {
+      firstFrame: (
+        ...args: Parameters<DataSource["onboarding"]["firstFrame"]>
+      ) => {
         calls.firstFrame.push(args);
         return Promise.resolve(
           answer(reads.firstFrame, "onboarding.firstFrame"),
@@ -111,6 +113,7 @@ export function onboardingSource(reads: Reads): {
       budgets: refuse("spend.budgets"),
     },
     org: { members: refuse("org.members") },
+    skills: { inventory: refuse("skills.inventory") },
     steering: {
       records: refuse("steering.records"),
       proposals: refuse("steering.proposals"),

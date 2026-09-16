@@ -21,6 +21,7 @@
     "agent": "Agent",
     "agentSource": "Agent definition",
     "tools": "Tools",
+    "skills": "Skills",
     "steering": "Steering",
     "spend": "Spend",
     "people": "Organization",
