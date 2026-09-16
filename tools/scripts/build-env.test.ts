@@ -56,6 +56,32 @@ describe("resolveBuildEnv", () => {
     });
   });
 
+  it("carries the Tacho signing material to the api service", () => {
+    // A variable no service claims is dropped from the env file, so both
+    // secrets sat in Parameter Store while the api process had neither and
+    // every enrollment answered 500.
+    const pem =
+      "-----BEGIN PRIVATE KEY-----\\nMC4CAQAwBQYDK2VwBCIEIA==\\n-----END PRIVATE KEY-----\\n";
+    const { resolved } = resolveBuildEnv({
+      service: "api",
+      env: "production",
+      parameters: [
+        param("TACHO_ENROLLMENT_SIGNING_SECRET", "hmac-secret"),
+        param("TACHO_BUNDLE_SIGNING_PRIVATE_KEY", pem),
+      ],
+      prefix: PREFIX,
+    });
+
+    const keys = resolved.map((entry) => entry.key);
+    expect(keys).toContain("TACHO_ENROLLMENT_SIGNING_SECRET");
+    expect(keys).toContain("TACHO_BUNDLE_SIGNING_PRIVATE_KEY");
+    // The PEM is stored with its newlines escaped and un-escaped at read
+    // time, so the backslashes must survive the file verbatim.
+    expect(renderEnvFile(resolved)).toContain(
+      `TACHO_BUNDLE_SIGNING_PRIVATE_KEY=${shellQuote(pem)}`,
+    );
+  });
+
   it("is satisfied once Parameter Store supplies the required set", () => {
     const parameters = requiredForApp().map((key) =>
       param(key, `value-${key}`),
