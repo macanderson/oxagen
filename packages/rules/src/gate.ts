@@ -66,7 +66,7 @@ type MandateCheck = (args: {
  * The auto-approval clause of the same rule set (ADR-070). The gate asks it
  * once, on a `require_approval` verdict, and the ask WRITES NOTHING: an
  * outcome with `ok` carries a `commit` the gate calls only once every later
- * check has cleared. That order is the point — a mandate's own approval rule
+ * check has cleared, in the caller's tenant scope. That order is the point — a mandate's own approval rule
  * runs after the rules and can still park the call, and a receipt saying
  * `policy:<rule id>` for a call a person was required to look at would invert
  * the one thing the `policy:` form is for.

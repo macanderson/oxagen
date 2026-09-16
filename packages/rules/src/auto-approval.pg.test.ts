@@ -390,7 +390,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // call, and a receipt saying no person looked would then be a lie.
       expect(await approvalsOf()).toEqual([]);
 
-      await decision?.commit?.();
+      // The commit runs in the caller's tenant scope, as it does in
+      // production: the kernel wraps the decision gate and the handler in one
+      // runInTenantScope (kernel.ts), and the gate calls `commit` from inside it.
+      await inScope(async () => {
+        await decision?.commit?.();
+      });
       const [row] = await approvalsOf();
       expect(row).toMatchObject({
         capabilityName: "stripe__create_payment",

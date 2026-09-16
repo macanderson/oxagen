@@ -47,7 +47,15 @@ export interface AutoApproveArgs {
 
 /** What the evaluator said, and what writing the answer down will take. */
 export type AutoApprovalDecision = AutoApprovalOutcome & {
-  /** Present only when `ok`; writes the approval row and emits the event. */
+  /**
+   * Present only when `ok`; writes the approval row and emits the event.
+   *
+   * Runs in the CALLER'S tenant scope — it reaches Postgres through
+   * `withTenantDb` and captures no scope of its own. The gate calls it from
+   * inside the one `runInTenantScope` the kernel wraps the decision gate and
+   * the handler in, so production is always in scope; a caller that defers it
+   * out of that context gets `TenantScopeError`.
+   */
   commit?: () => Promise<void>;
 };
 
