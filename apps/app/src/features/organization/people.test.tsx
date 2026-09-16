@@ -51,34 +51,6 @@ async function renderPeople(
     orgRole,
   });
   const { source, calls } = orgSource({ members: read });
-  const members = vi.fn<Members>().mockResolvedValue(read);
-  const source = {
-    pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-    shell: { context: vi.fn() },
-    billing: {
-      plan: vi.fn(),
-      bucket: vi.fn(),
-      contractRate: vi.fn(),
-      invoices: vi.fn(),
-    },
-    runs: { list: vi.fn() },
-    approvals: { pending: vi.fn() },
-    agents: {
-      list: vi.fn(),
-      get: vi.fn(),
-      toolbelt: vi.fn(),
-      incidents: vi.fn(),
-    },
-    spend: {
-      byGroup: vi.fn(),
-      fleet: vi.fn(),
-      drill: vi.fn(),
-      waste: vi.fn(),
-      budgets: vi.fn(),
-    },
-    org: { members },
-    steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
-  };
   const view = render(
     <IntlProvider>{await People({ ctx, source })}</IntlProvider>,
   );
