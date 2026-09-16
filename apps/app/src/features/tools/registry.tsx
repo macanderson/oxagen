@@ -78,7 +78,7 @@ function ToolName({
 }
 
 /** Every consequence tag the classified versions on this page carry, with its count. */
-export function categoryCounts(
+function categoryCounts(
   items: readonly ToolVersion[],
 ): readonly { tag: string; count: number }[] {
   const counts = new Map<string, number>();

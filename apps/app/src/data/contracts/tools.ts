@@ -25,25 +25,24 @@ export const ToolEgress = z.enum(["local", "org_tenant", "third_party"]);
 export type ToolEgress = z.infer<typeof ToolEgress>;
 
 /** snake_case, the starter set and every customer tag; the registry's "category". */
-export const ConsequenceTag = z.string().regex(/^[a-z][a-z0-9_]{1,63}$/);
+const ConsequenceTag = z.string().regex(/^[a-z][a-z0-9_]{1,63}$/);
 
 /** The tag that makes a tool version financial (spec §6.9; the mockup's `moves_funds`). */
 export const MONEY_TAG = "moves_money";
 
 /** Which active switch stops a version today, in the recorded decision order (INV-10). */
-export const ToolGate = z.object({
+const ToolGate = z.object({
   kind: z.enum(["open", "killed_version", "killed_server", "killed_class"]),
   /** The `emd_…` of the switch that stops it; null when the gate is open. */
   switchId: PublicId.nullable(),
 });
-export type ToolGate = z.infer<typeof ToolGate>;
 
 /**
  * A path into the call's input the mandate gate measures. Authored where the
  * tool is declared or imported, never on this page: reclassifying carries the
  * version's measures through unchanged.
  */
-export const ToolMeasure = z.object({
+const ToolMeasure = z.object({
   name: z.string().min(1),
   path: z.string().min(1),
   type: z.enum([
@@ -59,7 +58,6 @@ export const ToolMeasure = z.object({
   /** For `count`: what is counted. */
   unit: z.string().min(1).nullable(),
 });
-export type ToolMeasure = z.infer<typeof ToolMeasure>;
 
 export const ToolClassification = z.object({
   sideEffect: ToolSideEffect,
@@ -105,13 +103,12 @@ export const ToolVersionPage = z.object({
 export type ToolVersionPage = z.infer<typeof ToolVersionPage>;
 
 /** How far the broker narrowed the credential for one use (spec §6.8). */
-export const GrantDownscope = z.enum([
+const GrantDownscope = z.enum([
   "token_exchange",
   "session_policy",
   "restricted_key",
   "none",
 ]);
-export type GrantDownscope = z.infer<typeof GrantDownscope>;
 
 export const CredentialGrant = z.object({
   id: PublicId,
@@ -158,11 +155,10 @@ export type KillSwitchKind = z.infer<typeof KillSwitchKind>;
  * for a class switch — and, for the operator, workspace and org kinds, the
  * database uuid the contract carries, which the page never prints as a label.
  */
-export const KillSwitchTarget = z.object({
+const KillSwitchTarget = z.object({
   kind: KillSwitchKind,
   ref: z.string().min(1),
 });
-export type KillSwitchTarget = z.infer<typeof KillSwitchTarget>;
 
 export const KillSwitch = z.object({
   id: PublicId,
@@ -180,8 +176,7 @@ export const KillSwitch = z.object({
 export type KillSwitch = z.infer<typeof KillSwitch>;
 
 /** The one invalidation counter a flip bumps, org-wide and for this workspace. */
-export const DenyGeneration = z.object({ org: Count, workspace: Count });
-export type DenyGeneration = z.infer<typeof DenyGeneration>;
+const DenyGeneration = z.object({ org: Count, workspace: Count });
 
 export const KillSwitchBoard = z.object({
   denyGeneration: DenyGeneration,

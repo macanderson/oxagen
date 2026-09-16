@@ -15,7 +15,7 @@ export const TOOLS_TABS = ["registry", "connections", "switches"] as const;
 export type ToolsTab = (typeof TOOLS_TABS)[number];
 
 /** How a tool version is named in the tables: its human label, or its API name. */
-export const TOOL_NAME_STYLES = ["labels", "api"] as const;
+const TOOL_NAME_STYLES = ["labels", "api"] as const;
 export type ToolNameStyle = (typeof TOOL_NAME_STYLES)[number];
 
 export type ToolsView = {

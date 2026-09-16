@@ -34,7 +34,7 @@ const STATUS_TONE = {
 } as const satisfies Record<CredentialGrant["status"], Tone>;
 
 /** The grant's own window, in whole minutes, as the two instants it recorded. */
-export function ttlMinutes(issuedAt: string, expiresAt: string): number | null {
+function ttlMinutes(issuedAt: string, expiresAt: string): number | null {
   const from = Date.parse(issuedAt);
   const to = Date.parse(expiresAt);
   if (Number.isNaN(from) || Number.isNaN(to) || to < from) return null;
