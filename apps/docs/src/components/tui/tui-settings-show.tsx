@@ -33,7 +33,7 @@ export function TuiSettingsShow({ className }: { className?: string }) {
   return (
     <TuiFrame
       id="tui-settings"
-      title="~/acme-web — oxagen"
+      title="~/acme-web · oxagen"
       width={560}
       height={228}
       className={className}

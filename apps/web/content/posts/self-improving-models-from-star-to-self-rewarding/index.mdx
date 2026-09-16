@@ -21,6 +21,17 @@ The research behind that sentence is real, it is about four years deep, and it i
 
 Here is the lineage, method by method, with the signal that drives each one and the thing that ends it.
 
+<Flow
+  title="Every self-improvement method is this loop"
+  steps={[
+    { label: "Generate", detail: "The model produces candidate outputs" },
+    { label: "Decide", detail: "An answer key, a reward model, or a judge", emph: true },
+    { label: "Train", detail: "Fine-tune on the survivors" },
+  ]}
+  loop="run it again"
+  caption="The methods below differ almost entirely in what fills step 2. That choice sets what the loop can learn and where it quietly stops."
+/>
+
 ## The loop that started it: keep what checks out
 
 STaR, published in 2022, is the clean version of the idea.[^1] A model is prompted with a handful of worked examples and asked to produce a chain of reasoning for a question. If the final answer is right, the reasoning is kept. If it is wrong, the model is shown the correct answer and asked to produce a rationale that reaches it, a step the authors call rationalization. Fine-tune on everything that survived, then run the whole thing again.
@@ -69,6 +80,18 @@ Quiet-STaR, from 2024, asks what happens if the reasoning step is not a separate
 
 The reported gains are zero-shot and come without task-specific fine-tuning: GSM8K from 5.9% to 10.9%, and CommonsenseQA from 36.3% to 47.2%.
 
+<Dumbbell
+  title="Quiet-STaR, zero-shot"
+  unit="%"
+  fromLabel="Before"
+  toLabel="After Quiet-STaR"
+  rows={[
+    { label: "GSM8K", from: 5.9, to: 10.9 },
+    { label: "CommonsenseQA", from: 36.3, to: 47.2 },
+  ]}
+  caption="Source: Zelikman et al. (2024). No task-specific fine-tuning; the only training signal is whether a thought improved prediction of the text that follows."
+/>
+
 The verifier here is the corpus itself. That is elegant, because ordinary text is unlimited and needs no labeling, and it is also the limit. Predicting the next token better is a proxy for thinking better, not the same thing. A thought that makes the following sentence more predictable may be a good inference, or it may be a good guess about the author's habits.
 
 ## Where it stands: reinforcement learning on answers you can check
@@ -95,7 +118,7 @@ Read the Verifier column top to bottom. Every method that produced a durable cap
 
 ## Where this meets Oxagen
 
-Oxagen does not train models and does not run agents. It governs them, and the Verifier column is why that matters commercially. A typed contract binds an agent's identity, its knowledge scope, its permitted actions, its commercial terms, and its verified outcome into one auditable record, which means the outcome signal lives outside the model that produced it. That record is also what gets metered and rated. If you want to know whether a self-improving system is actually improving, you need an outcome log the system cannot write for itself.
+Oxagen does not train models and does not run agents. It is the control plane for the agents you run, and the Verifier column is why that matters commercially. An agent's mandate binds its identity, its knowledge scope, its permitted actions, and its commercial terms into one object, and the run's record keeps the checked outcome beside them, which means the outcome signal lives outside the model that produced it. The meter prices that same record. If you want to know whether a self-improving system is actually improving, you need an outcome log the system cannot write for itself.
 
 [^1]: Zelikman, E., Wu, Y., Mu, J., & Goodman, N. D. (2022). *STaR: Bootstrapping Reasoning With Reasoning*. arXiv. https://arxiv.org/abs/2203.14465
 [^2]: Yuan, Z., Yuan, H., Li, C., Dong, G., Lu, K., Tan, C., Zhou, C., & Zhou, J. (2023). *Scaling Relationship on Learning Mathematical Reasoning with Large Language Models*. arXiv. https://arxiv.org/abs/2308.01825

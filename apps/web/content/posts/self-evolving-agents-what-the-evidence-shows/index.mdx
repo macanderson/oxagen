@@ -36,11 +36,35 @@ Almost every system in this literature modifies one of four things, in rising or
 
 The blast radius rises down that list, and so does the measured gain. That is not a coincidence, and it is not free.
 
+<Ladder
+  title="Four things an agent can change about itself"
+  axis="Blast radius and measured gain rise"
+  steps={[
+    { label: "Prompt or context", detail: "Reflexion, Self-Refine" },
+    { label: "Memory", detail: "Generative Agents" },
+    { label: "Skills or tools", detail: "Voyager, Agent Workflow Memory" },
+    { label: "Code", detail: "STOP, ADAS, Darwin Gödel Machine" },
+  ]}
+  caption="Rung height is an ordering, not a measurement. Each rung names the systems in this post that change that layer."
+/>
+
 ## What judges the change is the whole system
 
 Every system above has an improvement loop, and every improvement loop needs a judge. Change the judge and the whole thing behaves differently.
 
 The strong systems all judge against something outside the model. Reflexion's coding results come from running unit tests. Voyager's skill library only admits a skill after self-verification and successful execution in the environment, with execution errors fed back into the next attempt. AlphaEvolve requires an automated evaluator that scores a candidate program, which is why it works on problems with a machine-checkable objective and not on problems without one.[^10] The Darwin Gödel Machine validates each self-edit on coding benchmarks. In all four cases, the loop is anchored by a verifier the model cannot talk its way past.
+
+<Flow
+  title="An improvement loop is only as honest as its judge"
+  steps={[
+    { label: "Propose", detail: "A reflection, a skill, a workflow, or a code edit" },
+    { label: "Verify", detail: "Tests, execution, or an evaluator outside the model", emph: true },
+    { label: "Keep", detail: "Only what passed enters memory, the library, or the archive" },
+    { label: "Next attempt", detail: "Starts from what was kept" },
+  ]}
+  loop="the agent improves at the rate step 2 is honest"
+  caption="Reflexion, Voyager, AlphaEvolve, and the Darwin Gödel Machine all anchor step 2 outside the model. Take that away and self-correction stalls or degrades."
+/>
 
 The weak version is a model grading itself with no external signal, and the evidence there is unkind. Huang and colleagues tested intrinsic self-correction on reasoning, where the model revises based solely on its own judgment, and found that models struggle to correct themselves without external feedback, with performance sometimes degrading after the revision.[^11] Self-Refine reports roughly 20 points of absolute improvement on average across seven tasks, but its feedback is task-specific and its tasks include ones with clear rubrics.[^3] The gap between those two results is mostly a gap in what does the judging.
 
@@ -88,7 +112,7 @@ Code-level self-modification is the last move, not the first. It is where the la
 
 ## Where this meets Oxagen
 
-Oxagen governs agents, it does not run them. The part of this that lands in our lap is the record: which version of an agent produced a given result, what knowledge it was scoped to, what it was permitted to do, and what the verified outcome was. That is the explain job, and it is the difference between an agent that got better and an agent you can prove got better. The meter job matters here too, because a self-evolution loop is the shape most likely to spend real money in the background, and cost per accepted improvement is the number that tells you whether to keep the loop running.
+Oxagen is the control plane for the agents you run. It does not run them. The part of this that lands on Oxagen is the record: which version of an agent produced a given result, what knowledge it was scoped to, what it asked for and which rule answered, and what checked the outcome. That record is the difference between an agent that got better and an agent you can show got better. The meter matters here too, because a self-evolution loop is the shape most likely to spend real money in the background, and cost per accepted improvement is the number that tells you whether to keep the loop running.
 
 [^1]: Gao, H., Geng, J., Hua, W., Hu, M., Juan, X., Liu, H., et al. (2025). *A Survey of Self-Evolving Agents: What, When, How, and Where to Evolve on the Path to Artificial Super Intelligence*. arXiv. https://arxiv.org/abs/2507.21046
 [^2]: Shinn, N., Cassano, F., Berman, E., Gopinath, A., Narasimhan, K., & Yao, S. (2023). *Reflexion: Language Agents with Verbal Reinforcement Learning*. NeurIPS 2023. https://arxiv.org/abs/2303.11366

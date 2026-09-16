@@ -48,4 +48,4 @@ Do not invent a component when one of these fits.
 
 ## Ads
 
-Fixed canvases, same tokens, same rules. One gold action. The mark bottom left at 18 to 22px. Copy from `references/examples.md` only. See `ads/` for the three approved layouts.
+Fixed canvases, same tokens, same rules. One gold action. The mark bottom left at 18 to 22px. Copy comes from the message registry at `messages/`, which generates the ad copy. `references/examples.md` shows the current directions. See `ads/` for the approved layouts.

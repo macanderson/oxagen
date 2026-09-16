@@ -6,8 +6,9 @@ import { InstallCliButton } from "@/components/install/install-cli-button";
 import { SwRegister } from "@/components/pwa/sw-register";
 
 export const metadata: Metadata = {
-  title: "Oxagen Docs",
-  description: "Documentation for the Oxagen agent platform.",
+  title: "Oxagen docs: the agent control plane",
+  description:
+    "Documentation for Oxagen, the platform that governs and operates the autonomous agents an enterprise runs: the agent control plane and agent fleet management.",
   // No explicit `manifest` string here — apps/docs/src/app/manifest.ts
   // (Next's native metadata-route convention) is auto-detected and linked at
   // /manifest.webmanifest.
@@ -29,25 +30,27 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Oxagen Docs",
+    title: "Oxagen docs",
   },
   openGraph: {
-    title: "Oxagen Docs",
-    description: "Documentation for the Oxagen agent platform.",
+    title: "Oxagen docs: the agent control plane",
+    description:
+      "Documentation for Oxagen, the platform that governs and operates the autonomous agents an enterprise runs: the agent control plane and agent fleet management.",
     images: [
       {
         url: "/social/og-image-dark-1200x630.png",
         width: 1200,
         height: 630,
-        alt: "Oxagen Docs",
+        alt: "Oxagen docs",
       },
     ],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Oxagen Docs",
-    description: "Documentation for the Oxagen agent platform.",
+    title: "Oxagen docs: the agent control plane",
+    description:
+      "Documentation for Oxagen, the platform that governs and operates the autonomous agents an enterprise runs: the agent control plane and agent fleet management.",
     images: ["/social/og-image-dark-1200x630.png"],
   },
 };

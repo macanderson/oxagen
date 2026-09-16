@@ -1,20 +1,20 @@
 ---
 title: Security overview
-description: How Oxagen protects your data and enforces your governance policies across every layer of the platform.
+description: How Oxagen decides every call at one boundary, keeps tenant data apart, holds credentials, and records every answer.
 ---
 
-Oxagen is designed for organizations where AI governance is not optional. Every architectural decision, from the single capability chokepoint to the database-enforced row-level security, is made with an enterprise security review in mind.
+Security sets the access clause of every agent's mandate, and this page shows how Oxagen enforces it. An agent holds an identity and a mandate, and nothing else. When a task needs a capability, the agent asks. A rule answers at the `invoke()` boundary (allowed, denied, or routed to a person), and the audit stores keep the answer. Connection credentials stay in Oxagen, encrypted, and the agent never sees them.
 
-## Defense in depth
+## Four layers
 
-Security at Oxagen is not a layer added on top of a product built for convenience. It is built into the architecture at four layers, each independently enforced:
+Four layers each enforce independently:
 
 | Layer | Control | Enforcement point |
 |---|---|---|
-| Network | API key authentication; TLS in transit everywhere | Edge / Vercel Functions |
-| IAM | Role-based access control; per-capability default effect | `invoke()` kernel boundary |
-| Data | Row-level security; tenant-scoped seams for Neo4j and ClickHouse | Postgres RLS; session guards |
-| Audit | Two independent append-only stores; chain-hash tamper evidence | Every `invoke()` allow/deny |
+| Network | Login or Oxagen API key authentication, TLS in transit everywhere | Caddy on the application host |
+| IAM | Role-based access control, per-capability default effect | `invoke()` kernel boundary |
+| Data | Row-level security, tenant-scoped seams for Neo4j and ClickHouse | Postgres RLS, scoped query guards |
+| Audit | Two independent append-only stores, chain-hash tamper evidence | Every `invoke()` allow and deny |
 
 <Mermaid chart={`
 flowchart TD
@@ -31,72 +31,76 @@ flowchart TD
   H --> OK["capability.invoke_allowed<br/>credits metered"]
 `} />
 
-*One request through all four layers. A deny stops at IAM with an audit record; an allow reaches data only through a tenant-scoped seam. See [Tenant isolation and RLS](/docs/security/tenant-isolation-rls) for the policy SQL behind each seam.*
+*One request through all four layers. A denied call stops at IAM with an audit record. An allowed call reaches data only through a tenant-scoped seam. See [Tenant isolation and RLS](/docs/security/tenant-isolation-rls) for the policy SQL behind each seam.*
 
-These layers are independent. A misconfigured application-layer predicate does not create a data leak because the database enforces isolation by itself. A compromised session does not escalate beyond the roles assigned to that principal because the IAM resolver runs inside the same `invoke()` boundary that cannot be bypassed.
+The layers are independent. A misconfigured application-layer predicate does not leak data, because the database enforces isolation by itself. A stolen login cannot act beyond the roles assigned to that principal, because the IAM resolver runs inside the same `invoke()` boundary, and nothing bypasses it.
 
 ## The single capability chokepoint
 
-Every user action, agent action, API call, and MCP tool invocation passes through one function: `invoke()`. This is not convention: it is structural. The capability handler is captured inside `defineContract()` and is unreachable except via `invoke()`. There is no alternate call path.
+Every action a person or agent takes, every API call, and every MCP tool call passes through one function: `invoke()`. This is structural, not a convention. `defineContract()` captures the capability handler, and nothing reaches the handler except `invoke()`. There is no alternate call path.
 
 At the `invoke()` boundary:
 
-1. The calling principal is identified (session, API key, or service token).
-2. The IAM resolver evaluates the principal's role grants, then the system org Owner role, then falls back to the capability contract's `defaultEffect`. The resolution chain is logged as a structured trace.
-3. If denied, a `capability.invoke_denied` security event is written to both audit stores and a structured 403 is returned.
-4. If allowed, the handler runs inside a tenant scope (`runInTenantScope`) that feeds the database seams.
-5. On completion, credits are metered, latency is recorded, and a `capability.invoke_allowed` event is written.
+1. Oxagen identifies the calling principal (a signed-in login, an Oxagen API key, or a service token).
+2. The IAM resolver evaluates the principal's role grants, then the system org Owner role, then falls back to the capability contract's `defaultEffect`. The resolver records each step of its decision.
+3. If the answer is deny, Oxagen writes a `capability.invoke_denied` security event to both audit stores and returns a structured 403.
+4. If the answer is allow, the handler runs inside a tenant scope (`runInTenantScope`) that feeds the database seams.
+5. On completion, Oxagen meters credits, records latency, and writes a `capability.invoke_allowed` event.
 
-This is the SOC 2 "completeness" argument: there is no action the system can take that does not produce an audit record.
+This is the SOC 2 completeness argument: no path through the boundary skips the audit write.
 
 ## Encryption at rest
 
-All persisted data is encrypted at rest:
+Oxagen encrypts every store at rest:
 
-- **Postgres (Neon/AlloyDB):** managed encryption at rest, AES-256.
-- **Neo4j:** encryption at rest enabled on the managed cluster.
-- **ClickHouse:** managed encryption at rest.
-- **Blob storage (Vercel Blob):** server-side encryption.
+- **Postgres (Aurora PostgreSQL):** Aurora storage encryption.
+- **Neo4j and ClickHouse:** encrypted EBS volumes on the application host.
+- **Blob storage:** server-side encryption.
 
-Plugin OAuth tokens and API key secrets are additionally encrypted at the application layer with AES-256-GCM before being written to Postgres, using a KMS-managed key.
+Oxagen also encrypts plugin OAuth tokens and API key secrets at the application layer (AES-256-GCM, with a KMS-managed key) before writing them to Postgres.
 
 ## Encryption in transit
 
-All connections use TLS 1.2 or higher. Internal service-to-service calls within the Vercel platform are encrypted. Database connections to Neon/AlloyDB and ClickHouse Cloud use TLS.
+Client connections use TLS 1.2 or higher, terminated by Caddy on the application host. The application reaches Neo4j and ClickHouse over the host's loopback interface, which the security group opens to nothing. Postgres runs on a separate Aurora cluster that admits connections from the application host only.
 
 ## Data residency
 
-Oxagen services are deployed to `us-central` / `iad1` (US-East). Postgres, ClickHouse, and blob storage all run in US regions. Customer data does not leave the United States in normal operation.
+Oxagen runs in AWS `us-east-1` (US East). The application host, Postgres, Neo4j, and ClickHouse all run there. Customer data does not leave the United States in normal operation.
 
 ## Roles and access control
 
-Five built-in roles govern what principals can do:
+Seven built-in roles govern what people can do. Four are org-scoped:
 
 - **Owner**: full control, including billing and org deletion.
 - **Admin**: all operations except destructive org-level actions.
-- **Billing**: billing and subscription management only; no access to operational surfaces.
-- **Member**: run agents, resolve approvals, edit memories.
+- **Compliance**: security and privacy policy management. Cannot reach operational surfaces or billing.
+- **Billing**: billing and subscription management only. Cannot reach operational surfaces.
+
+Three are workspace-scoped:
+
+- **Owner**: workspace settings, grants within the workspace, and full operational access.
+- **Member**: run agents, resolve approvals, and edit memories.
 - **Viewer**: read-only across the workspace.
 
-The resolver also defines direct workspace grants and org-enforced policies that rank above role grants, but that tier is not active today: its tables were removed in migration 0027, so every live decision comes from role grants, the system org Owner role, or the contract default. The resolution order is documented in [RBAC and roles](/docs/governance/rbac).
+Agents get three roles of their own. See [Agent roles](/docs/governance/agent-roles).
+
+The resolver also defines direct workspace grants and org-enforced policies that rank above role grants, but that tier is not active today. Migration 0027 removed its tables, so every live decision comes from role grants, the system org Owner role, or the contract default. [RBAC and roles](/docs/governance/rbac) documents the resolution order.
 
 ## Sub-processors
 
-Oxagen relies on the following third-party processors for data handling:
+Oxagen relies on these third-party processors for data handling:
 
 | Sub-processor | Purpose | Data involved |
 |---|---|---|
-| Vercel | Compute, edge functions, blob storage | All application data in transit and at rest |
-| Neon / AlloyDB | Postgres database | Transactional application state |
-| ClickHouse Cloud | Analytics and audit telemetry | Run and tool-call events, audit logs, token usage |
-| Neo4j AuraDB | Graph database | Ontology, agent memory, workflow lineage |
+| Amazon Web Services | Compute, Postgres (Aurora), the host that runs Neo4j and ClickHouse, and runtime configuration (Parameter Store) | All application data in transit and at rest |
+| Model gateway (OpenRouter or Vercel AI Gateway) | Model inference | Messages and system prompts sent to a model |
 | Stripe | Billing | Subscription and payment data |
 | Inngest | Background job orchestration | Job payloads referencing org and workspace IDs |
 
-Full sub-processor details including DPA availability are in [Data handling](/docs/security/data-handling).
+Full sub-processor details, including DPA availability, are in [Data handling](/docs/security/data-handling).
 
 ## Security incident response
 
-Oxagen maintains a break-glass log at **Organization → Security → Incidents**. Any privileged access outside normal operational boundaries is recorded there. Security alerts are routed through the notifications system and surfaced under **Account → Cases** for the affected user.
+There is no incident register in the app. **Organization → Security → Audit** holds the security event record, and MCP authentication alerts are set under **Governance → Policies**.
 
 For vulnerability disclosures, contact security@oxagen.ai.
