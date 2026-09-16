@@ -145,19 +145,12 @@ describe("ok", () => {
 
   it("offers the editor on a custom role and nothing on a built-in one (negative)", async () => {
     await renderRoles(readOk(catalog));
-    const rows = screen
-      .getByRole("region", { name: "Roles" })
-      .querySelectorAll("tbody tr");
-    const [custom, builtIn] = [...rows];
-    expect(
-      within(custom as HTMLElement).getByRole("button", { name: "Edit" }),
-    ).toBeInTheDocument();
-    expect(
-      within(custom as HTMLElement).getByRole("button", { name: "Delete" }),
-    ).toBeInTheDocument();
-    expect(
-      within(builtIn as HTMLElement).queryByRole("button"),
-    ).toBeNull();
+    const section = screen.getByRole("region", { name: "Roles" });
+    const [custom, builtIn] = within(section).getAllByRole("row").slice(1);
+    expect(custom).toHaveTextContent("Edit");
+    expect(custom).toHaveTextContent("Delete");
+    expect(builtIn).not.toHaveTextContent("Edit");
+    expect(builtIn).not.toHaveTextContent("Delete");
     expect(
       screen.getByRole("button", { name: "Create role" }),
     ).toBeInTheDocument();
