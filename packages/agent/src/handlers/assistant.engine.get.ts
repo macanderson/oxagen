@@ -21,7 +21,7 @@ export interface EngineProbeDeps {
   now: () => Date;
 }
 
-export function createAssistantEngineGetHandler(deps: EngineProbeDeps) {
+export function createAssistantEngineProbe(deps: EngineProbeDeps) {
   return async (
     _input: unknown,
     _ctx: CapabilityContext,
@@ -71,7 +71,7 @@ export function createAssistantEngineGetHandler(deps: EngineProbeDeps) {
   };
 }
 
-export const assistantEngineGetHandler = createAssistantEngineGetHandler({
+export const assistantEngineGetHandler = createAssistantEngineProbe({
   client: () => engineClientFromEnv(),
   now: () => new Date(),
 });

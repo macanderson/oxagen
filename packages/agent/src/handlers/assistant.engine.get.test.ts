@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StellaEngineClient } from "@oxagen/stella-engine-client";
 import { EngineUnavailableError } from "../runtime/engine/client";
 import {
-  createAssistantEngineGetHandler,
+  createAssistantEngineProbe,
   ENGINE_PROBE_ATTEMPTS,
   ENGINE_PROBE_TIMEOUT_MS,
 } from "./assistant.engine.get";
@@ -27,7 +27,7 @@ function clientWith(fetchImpl: typeof fetch): StellaEngineClient {
 }
 
 function handlerOver(fetchImpl: typeof fetch) {
-  return createAssistantEngineGetHandler({
+  return createAssistantEngineProbe({
     client: () => clientWith(fetchImpl),
     now: () => NOW,
   });
@@ -95,7 +95,7 @@ describe("get_assistant_engine", () => {
   });
 
   it("reports unconfigured, with no attempt, when the engine has no address", async () => {
-    const probe = createAssistantEngineGetHandler({
+    const probe = createAssistantEngineProbe({
       client: () => {
         throw new EngineUnavailableError("STELLA_SERVE_TOKEN is not set");
       },
