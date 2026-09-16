@@ -27,10 +27,85 @@ import { readMeasure } from "./mandates/measures";
 export interface DeclaredTool {
   slug: string;
   version: number;
+  /** The effective risk grade: the classified one when set, else the declared one. */
   riskGrade: string;
+  /** The effective side-effect class: the more severe of declared and classified. */
+  sideEffect: string | null;
+  /** The declared consequence tags unioned with the classified ones. */
   consequenceTags: string[];
   measures: MeasureDeclarations;
   effectIdPath: string | null;
+}
+
+/** Side-effect classes from least to most severe (toolSideEffectClassSchema). */
+const SIDE_EFFECT_SEVERITY = ["read", "write", "irreversible"];
+
+/**
+ * The more severe of two side-effect classes, with an unknown or absent value
+ * contributing nothing.
+ *
+ * `max`, never "the classified one": see the union note on
+ * `effectiveConsequenceTags`. There is no declared side-effect COLUMN today —
+ * the class exists only inside `classification` — so this currently reduces to
+ * the classified value. It is written as a max anyway so that the day a
+ * declared column lands, a reclassification still cannot lower what the
+ * manifest declared.
+ */
+function moreSevereSideEffect(
+  a: string | null,
+  b: string | null,
+): string | null {
+  const rank = (v: string | null) =>
+    v === null ? -1 : SIDE_EFFECT_SEVERITY.indexOf(v);
+  return rank(a) >= rank(b) ? a : b;
+}
+
+/**
+ * The tags the floor reads: the declared column UNIONED with the classified
+ * ones, deduplicated and sorted.
+ *
+ * A union, deliberately, and the asymmetry is the whole argument. The two
+ * halves are written by different capabilities behind different gates:
+ * `publish_tool_declaration` writes the column behind `assertConsequenceRole`,
+ * and `set_tool_classification` writes the jsonb behind Owner/Admin. Letting
+ * the jsonb REPLACE the column would let an Owner lower an approval floor
+ * without passing the consequence-role gate, which is a real bypass.
+ *
+ * A union cannot do that, because it is monotonic for a floor — it only ever
+ * adds reasons a call needs a person, never removes one:
+ *
+ *   declared {}, classified {destroys_data} → {destroys_data} → floor fires.
+ *     An Owner RAISED the floor. That is the fix.
+ *   declared {destroys_data}, classified {} → {destroys_data} → floor fires.
+ *     An Owner CANNOT lower it. The bypass does not exist.
+ *
+ * So the objection to reading the jsonb is an objection to replacement, not to
+ * union, and it does not apply here. Recorded next to the code because the
+ * next person to read this will have the same objection.
+ */
+function effectiveConsequenceTags(
+  declared: readonly string[],
+  classified: readonly string[],
+): string[] {
+  return [...new Set([...declared, ...classified])].sort();
+}
+
+/** The classification an administrator set, read defensively off the jsonb. */
+function readClassification(raw: unknown): {
+  sideEffect: string | null;
+  consequenceTags: string[];
+} {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    return { sideEffect: null, consequenceTags: [] };
+  }
+  const c = raw as Record<string, unknown>;
+  const tags = Array.isArray(c.consequenceTags)
+    ? c.consequenceTags.filter((t): t is string => typeof t === "string")
+    : [];
+  return {
+    sideEffect: typeof c.sideEffect === "string" ? c.sideEffect : null,
+    consequenceTags: tags,
+  };
 }
 
 /** The workspace's enabled declared tool for this capability, or null. */
@@ -45,6 +120,7 @@ export async function loadDeclaredTool(
       version: schema.toolVersions.versionNumber,
       riskGrade: schema.toolVersions.riskGrade,
       classifiedRiskGrade: schema.toolVersions.classifiedRiskGrade,
+      classification: schema.toolVersions.classification,
       consequenceTags: schema.toolVersions.consequenceTags,
       measures: schema.toolVersions.measures,
       effectIdPath: schema.toolVersions.effectIdPath,
@@ -64,6 +140,7 @@ export async function loadDeclaredTool(
     )
     .limit(1);
   if (!row) return null;
+  const classified = readClassification(row.classification);
   return {
     slug: row.slug,
     version: row.version,
@@ -79,26 +156,122 @@ export async function loadDeclaredTool(
     // raises the floor, and the call can skip a person. A floor that fails
     // open is worse than no floor, because the record says a rule judged it.
     riskGrade: row.classifiedRiskGrade ?? row.riskGrade,
-    consequenceTags: row.consequenceTags,
+    sideEffect: moreSevereSideEffect(null, classified.sideEffect),
+    consequenceTags: effectiveConsequenceTags(
+      row.consequenceTags,
+      classified.consequenceTags,
+    ),
     measures: measureDeclarationsSchema.parse(row.measures),
     effectIdPath: row.effectIdPath,
   };
 }
 
+/**
+ * Raised when the call carries a value this canonicaliser will not reduce to
+ * a digest. Every consumer treats a throw here as a refusal, so the call goes
+ * to a person rather than sharing a digest with a call it is not.
+ */
+export class UndigestibleInputError extends Error {
+  readonly code = "undigestible_input";
+  constructor(description: string) {
+    super(
+      `a call carrying ${description} cannot be digested: the standing-approval window is identity, so an unencodable value would silently share one person's approval with a call they never saw`,
+    );
+    this.name = "UndigestibleInputError";
+  }
+}
+
+/** A value with no prototype, or exactly Object's — everything else is typed. */
+function isPlainObject(v: object): boolean {
+  const proto: unknown = Object.getPrototypeOf(v);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * The call's input in a form two equal calls share and two different calls do
+ * not, with object keys sorted.
+ *
+ * Every typed value is encoded BY VALUE under a tag, never by its enumerable
+ * keys. Walking keys is what made this wrong: a `Date` has none, so every
+ * date collapsed to `{}` and two calls differing only in a timestamp — the
+ * `z.coerce.date()` fields on `record_execution`, for instance — shared a
+ * digest. The digest is the identity a standing approval is keyed on, so that
+ * handed one person's approval to a call they never saw.
+ *
+ * The tags (`$date`, `$bigint`, …) are why encoding by value is not enough on
+ * its own: an untagged ISO string would make `new Date(x)` collide with the
+ * string `x`, trading one collision for another.
+ *
+ * Anything not listed here THROWS rather than being reduced to `{}`, because
+ * silently canonicalising an unrecognised type is this same bug waiting for
+ * the next type. Throwing is the safe direction for the same reason refusing
+ * an over-precise amount is: `skipsThePerson` catches and declines to
+ * auto-approve, and `checkMandate` throws to refuse, so both paths leave the
+ * call with a person.
+ */
+function canonicalize(v: unknown): unknown {
+  if (v === null) return null;
+  switch (typeof v) {
+    case "string":
+    case "number":
+    case "boolean":
+    case "undefined":
+      return v;
+    case "bigint":
+      // JSON.stringify throws on a BigInt, so this was never a silent
+      // collision — it is encoded by value so the call works at all.
+      return { $bigint: v.toString() };
+    case "function":
+      throw new UndigestibleInputError("a function");
+    case "symbol":
+      throw new UndigestibleInputError("a symbol");
+  }
+  if (Array.isArray(v)) return v.map(canonicalize);
+  if (v instanceof Date) {
+    if (Number.isNaN(v.getTime())) {
+      throw new UndigestibleInputError("an invalid Date");
+    }
+    return { $date: v.toISOString() };
+  }
+  if (v instanceof Map) {
+    // Insertion order is not identity, so the entries are sorted by their
+    // canonical key.
+    return {
+      $map: [...v.entries()]
+        .map(([k, val]) => [canonicalize(k), canonicalize(val)])
+        .sort((a, b) => (JSON.stringify(a[0]) < JSON.stringify(b[0]) ? -1 : 1)),
+    };
+  }
+  if (v instanceof Set) {
+    return {
+      $set: [...v]
+        .map(canonicalize)
+        .sort((a, b) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1)),
+    };
+  }
+  if (v instanceof RegExp) return { $regexp: [v.source, v.flags] };
+  if (v instanceof URL) return { $url: v.href };
+  if (ArrayBuffer.isView(v) || v instanceof ArrayBuffer) {
+    // Binary does not belong in a capability input, and guessing an encoding
+    // for it would be inventing identity rather than reading it.
+    throw new UndigestibleInputError("binary data");
+  }
+  if (!isPlainObject(v)) {
+    throw new UndigestibleInputError(
+      `an instance of ${v.constructor?.name ?? "an anonymous class"}`,
+    );
+  }
+  return Object.fromEntries(
+    Object.keys(v)
+      .sort()
+      .map((k) => [k, canonicalize((v as Record<string, unknown>)[k])]),
+  );
+}
+
 /** sha256 over the call's input with keys sorted, the retry's identity. */
 export function inputDigest(input: unknown): string {
-  const sort = (v: unknown): unknown =>
-    Array.isArray(v)
-      ? v.map(sort)
-      : v !== null && typeof v === "object"
-        ? Object.fromEntries(
-            Object.keys(v as object)
-              .sort()
-              .map((k) => [k, sort((v as Record<string, unknown>)[k])]),
-          )
-        : v;
   return createHash("sha256")
-    .update(JSON.stringify(sort(input)) ?? "")
+    .update(JSON.stringify(canonicalize(input)) ?? "")
     .digest("hex");
 }
 
@@ -218,6 +391,7 @@ export async function buildAutoApprovalSubject(
             slug: tool.slug,
             version: tool.version,
             riskGrade: tool.riskGrade,
+            sideEffect: tool.sideEffect,
             consequenceTags: tool.consequenceTags,
           },
   };

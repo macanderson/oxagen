@@ -10,7 +10,7 @@
  * emitter is a double that records what was emitted.
  *
  * What is asserted:
- *   set     — an Admin writes the clause and it comes back stamped with the
+ *   set     — an Owner writes the clause and it comes back stamped with the
  *             author and the time; a Member is refused; a pattern that matches
  *             no declared tool → no_tool_matches; a condition over a measure
  *             the matched tool does not declare → measure_not_declared; a
@@ -100,12 +100,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const tag = Date.now().toString(36).slice(-6);
     const orgId = randomUUID();
     const workspaceId = randomUUID();
-    const adminUserId = randomUUID();
+    const ownerUserId = randomUUID();
     const complianceUserId = randomUUID();
     const memberUserId = randomUUID();
     const paymentToolId = randomUUID();
     const paymentVersionId = randomUUID();
-    let adminPublicId = "";
+    let ownerPublicId = "";
+    /** User rows individual tests insert; teardown removes them with the rest. */
+    const extraUserIds: string[] = [];
 
     const ctx = (userId: string | null): CapabilityContext => ({
       orgId,
@@ -186,19 +188,26 @@ describe.skipIf(!process.env.DATABASE_URL)(
     }
 
     beforeAll(async () => {
-      doubles.roles.set(adminUserId, "Admin");
+      // Owner, not Admin, and that is the point rather than a detail. The
+      // payment tool below carries `moves_money`, whose default accountable
+      // roles are Owner and Billing (DEFAULT_CONSEQUENCE_ROLES), and
+      // `assertRulesSavable` puts that gate on the save path — a rule cannot
+      // be saved that would widen an agent past its operator's own grants.
+      // An Admin may run the other handlers here, and one does below, but an
+      // Admin is not accountable for money and so cannot author this rule.
+      doubles.roles.set(ownerUserId, "Owner");
       doubles.roles.set(complianceUserId, "Compliance");
       doubles.roles.set(memberUserId, null);
       await withSystemDb(async (tx) => {
-        const [admin] = await tx
+        const [owner] = await tx
           .insert(schema.users)
           .values({
-            id: adminUserId,
-            email: `admin-${tag}@rules.test`,
+            id: ownerUserId,
+            email: `owner-${tag}@rules.test`,
             status: "active",
           })
           .returning({ publicId: schema.users.publicId });
-        adminPublicId = admin!.publicId;
+        ownerPublicId = owner!.publicId;
         await tx.insert(schema.workspaces).values({
           id: workspaceId,
           orgId,
@@ -277,7 +286,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await tx
           .delete(schema.workspaces)
           .where(eq(schema.workspaces.id, workspaceId));
-        await tx.delete(schema.users).where(eq(schema.users.id, adminUserId));
+        await tx.delete(schema.users).where(eq(schema.users.id, ownerUserId));
+        for (const id of extraUserIds) {
+          await tx.delete(schema.users).where(eq(schema.users.id, id));
+        }
       });
     });
 
@@ -288,12 +300,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     // ── set ──────────────────────────────────────────────────────────────────
 
-    it("writes the clause for an Admin, stamps it, and leaves the rest of the settings bag alone", async () => {
-      const out = await set(adminUserId, [RULE]);
+    it("writes the clause for a role accountable for the tool's consequences, stamps it, and leaves the rest of the settings bag alone", async () => {
+      const out = await set(ownerUserId, [RULE]);
       expect(out.items).toHaveLength(1);
       expect(out.items[0]).toMatchObject({
         id: RULE.id,
-        createdBy: adminPublicId,
+        createdBy: ownerPublicId,
         hits30d: 0,
         skipped30d: 0,
       });
@@ -328,16 +340,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it("refuses a tool pattern that matches no declared tool", async () => {
       await expect(
-        set(adminUserId, [{ ...RULE, tools: ["linear__*"] }]),
+        set(ownerUserId, [{ ...RULE, tools: ["linear__*"] }]),
       ).rejects.toSatisfy(conflict("no_tool_matches"));
     });
 
     it("refuses a condition over a measure the matched tool does not declare", async () => {
       await expect(
-        set(adminUserId, [{ ...RULE, maxMeasures: { rows: "10" } }]),
+        set(ownerUserId, [{ ...RULE, maxMeasures: { rows: "10" } }]),
       ).rejects.toSatisfy(conflict("measure_not_declared"));
       await expect(
-        set(adminUserId, [{ ...RULE, allowTargets: { region: ["eu-*"] } }]),
+        set(ownerUserId, [{ ...RULE, allowTargets: { region: ["eu-*"] } }]),
       ).rejects.toSatisfy(conflict("measure_not_declared"));
     });
 
@@ -346,17 +358,17 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // and an allow list over a number both read as unreadable on every call,
       // so the rule would save cleanly and never fire.
       await expect(
-        set(adminUserId, [
+        set(ownerUserId, [
           { ...RULE, maxMeasures: { counterparty: "10" }, allowTargets: {} },
         ]),
       ).rejects.toSatisfy(conflict("measure_wrong_type"));
       await expect(
-        set(adminUserId, [
+        set(ownerUserId, [
           { ...RULE, maxMeasures: {}, allowTargets: { amount: ["1*"] } },
         ]),
       ).rejects.toSatisfy(conflict("measure_wrong_type"));
       // The right way round still saves.
-      await expect(set(adminUserId, [RULE])).resolves.toBeDefined();
+      await expect(set(ownerUserId, [RULE])).resolves.toBeDefined();
     });
 
     it("refuses a caller who does not hold the role accountable for the tool's consequence", async () => {
@@ -365,22 +377,34 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await expect(set(complianceUserId, [RULE])).rejects.toSatisfy(
         forbidden("org_role_required"),
       );
+      // Nor may an Admin, and that is the one worth stating outright: Admin
+      // passes the handler's own `{ org: ["Owner", "Admin"] }` gate and is
+      // refused a step later by the consequence gate, because accountability
+      // for money is not seniority. Every other handler in this file takes an
+      // Admin; only authoring a rule over this tool does not.
+      // No user row: the consequence gate refuses before anything reads a
+      // public id, and the role is the double's.
+      const adminOnlyId = randomUUID();
+      doubles.roles.set(adminOnlyId, "Admin");
+      await expect(set(adminOnlyId, [RULE])).rejects.toSatisfy(
+        forbidden("org_role_required"),
+      );
     });
 
     it("refuses two rules under one id and leaves the stored document as it was", async () => {
-      await set(adminUserId, [RULE]);
+      await set(ownerUserId, [RULE]);
       const before = await settingsOf();
       // The contract refuses it at the edge; the handler's own parse of the
       // document it is about to store is the second guard, so a set that
       // reaches it still writes nothing.
       await expect(
-        set(adminUserId, [RULE, { ...RULE, name: "Same id, other name" }]),
+        set(ownerUserId, [RULE, { ...RULE, name: "Same id, other name" }]),
       ).rejects.toThrow();
       expect(await settingsOf()).toEqual(before);
     });
 
     it("refuses to store a document the gate could not load", async () => {
-      await set(adminUserId, [RULE]);
+      await set(ownerUserId, [RULE]);
       const before = await settingsOf();
       await expect(
         inScope(() =>
@@ -395,15 +419,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("clears the clause when the caller sends no rules", async () => {
-      await set(adminUserId, [RULE]);
-      expect((await set(adminUserId, [])).items).toEqual([]);
-      expect((await list(adminUserId)).items).toEqual([]);
+      await set(ownerUserId, [RULE]);
+      expect((await set(ownerUserId, [])).items).toEqual([]);
+      expect((await list(ownerUserId)).items).toEqual([]);
     });
 
     // ── list and the counters ────────────────────────────────────────────────
 
     it("counts the calls a rule released and the calls it held over the window", async () => {
-      await set(adminUserId, [RULE]);
+      await set(ownerUserId, [RULE]);
       await insertApproval({
         autoRuleId: RULE.id,
         resolvedByPolicy: `policy:${RULE.id}`,
@@ -420,7 +444,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // A row no rule was read against counts for nothing.
       await insertApproval({ autoRuleId: null });
 
-      const out = await list(adminUserId);
+      const out = await list(ownerUserId);
       expect(out.items[0]).toMatchObject({ hits30d: 1, skipped30d: 1 });
     });
 
@@ -434,11 +458,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
     // ── enabled ──────────────────────────────────────────────────────────────
 
     it("switches a rule off with no re-check and back on with one", async () => {
-      await set(adminUserId, [RULE]);
+      await set(ownerUserId, [RULE]);
       const off = await inScope(() =>
         approvalRuleEnabledSetHandler(
           { ruleId: RULE.id, enabled: false },
-          ctx(adminUserId),
+          ctx(ownerUserId),
         ),
       );
       expect(off.items[0]!.enabled).toBe(false);
@@ -459,7 +483,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         inScope(() =>
           approvalRuleEnabledSetHandler(
             { ruleId: RULE.id, enabled: true },
-            ctx(adminUserId),
+            ctx(ownerUserId),
           ),
         ),
       ).rejects.toSatisfy(conflict("measure_not_declared"));
@@ -482,7 +506,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const on = await inScope(() =>
         approvalRuleEnabledSetHandler(
           { ruleId: RULE.id, enabled: true },
-          ctx(adminUserId),
+          ctx(ownerUserId),
         ),
       );
       expect(on.items[0]!.enabled).toBe(true);
@@ -494,7 +518,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // rule releases calls without a person. Attributing the currently active
       // state to the previous author is the one thing an auditor must not read
       // off this record.
+      //
+      // The flipper is an Admin, who could not have AUTHORED this rule — the
+      // tool moves money and only Owner or Billing is accountable for that —
+      // so the attribution visibly moves to someone other than the author
+      // rather than passing by coincidence.
       const secondAdminId = randomUUID();
+      extraUserIds.push(secondAdminId);
       doubles.roles.set(secondAdminId, "Admin");
       const secondAdminPublicId = await withSystemDb(async (tx) => {
         const [u] = await tx
@@ -508,9 +538,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
         return u!.publicId;
       });
 
-      await set(adminUserId, [RULE]);
-      const authored = (await list(adminUserId)).items[0]!;
-      expect(authored.createdBy).toBe(adminPublicId);
+      await set(ownerUserId, [RULE]);
+      const authored = (await list(ownerUserId)).items[0]!;
+      expect(authored.createdBy).toBe(ownerPublicId);
 
       const after = await inScope(() =>
         approvalRuleEnabledSetHandler(
@@ -527,15 +557,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("re-stamps only the rule it toggles", async () => {
-      await set(adminUserId, [RULE, { ...RULE, id: "release-tooling" }]);
-      const before = await list(adminUserId);
+      await set(ownerUserId, [RULE, { ...RULE, id: "release-tooling" }]);
+      const before = await list(ownerUserId);
       const untouchedBefore = before.items.find(
         (r) => r.id === "release-tooling",
       )!;
       const after = await inScope(() =>
         approvalRuleEnabledSetHandler(
           { ruleId: RULE.id, enabled: false },
-          ctx(adminUserId),
+          ctx(ownerUserId),
         ),
       );
       const untouchedAfter = after.items.find(
@@ -550,16 +580,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // The lost update this guards: both calls read the same array, each
       // changes its own rule, and the second stores a copy that still has the
       // first rule on. The row lock serialises them, so both stick.
-      await set(adminUserId, [RULE, { ...RULE, id: "release-tooling" }]);
+      await set(ownerUserId, [RULE, { ...RULE, id: "release-tooling" }]);
       const toggle = (ruleId: string) =>
         inScope(() =>
           approvalRuleEnabledSetHandler(
             { ruleId, enabled: false },
-            ctx(adminUserId),
+            ctx(ownerUserId),
           ),
         );
       await Promise.all([toggle(RULE.id), toggle("release-tooling")]);
-      const after = await list(adminUserId);
+      const after = await list(ownerUserId);
       expect(after.items.map((r) => [r.id, r.enabled])).toEqual([
         [RULE.id, false],
         ["release-tooling", false],
@@ -567,12 +597,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("refuses to switch a rule that is not there", async () => {
-      await set(adminUserId, [RULE]);
+      await set(ownerUserId, [RULE]);
       await expect(
         inScope(() =>
           approvalRuleEnabledSetHandler(
             { ruleId: "not-a-rule", enabled: false },
-            ctx(adminUserId),
+            ctx(ownerUserId),
           ),
         ),
       ).rejects.toSatisfy(notFound);
@@ -581,9 +611,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
     // ── delete ───────────────────────────────────────────────────────────────
 
     it("removes one rule and keeps the rest", async () => {
-      await set(adminUserId, [RULE, { ...RULE, id: "release-tooling" }]);
+      await set(ownerUserId, [RULE, { ...RULE, id: "release-tooling" }]);
       const out = await inScope(() =>
-        approvalRuleDeleteHandler({ ruleId: RULE.id }, ctx(adminUserId)),
+        approvalRuleDeleteHandler({ ruleId: RULE.id }, ctx(ownerUserId)),
       );
       expect(out.items.map((r) => r.id)).toEqual(["release-tooling"]);
       expect(doubles.events.at(-1)).toEqual({
@@ -592,7 +622,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
       await expect(
         inScope(() =>
-          approvalRuleDeleteHandler({ ruleId: RULE.id }, ctx(adminUserId)),
+          approvalRuleDeleteHandler({ ruleId: RULE.id }, ctx(ownerUserId)),
         ),
       ).rejects.toSatisfy(notFound);
     });
@@ -607,7 +637,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const out = await inScope(() =>
         approvalAutoEligibilityGetHandler(
           { approvalId: row.publicId },
-          ctx(adminUserId),
+          ctx(ownerUserId),
         ),
       );
       expect(out).toEqual({
@@ -630,7 +660,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const out = await inScope(() =>
         approvalAutoEligibilityGetHandler(
           { approvalId: row.id },
-          ctx(adminUserId),
+          ctx(ownerUserId),
         ),
       );
       expect(out.resolvedBy).toBeNull();
@@ -645,15 +675,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("names a person as the approver when one answered", async () => {
       const row = await insertApproval({
         autoRuleId: null,
-        resolvedByUserId: adminUserId,
+        resolvedByUserId: ownerUserId,
       });
       const out = await inScope(() =>
         approvalAutoEligibilityGetHandler(
           { approvalId: row.publicId },
-          ctx(adminUserId),
+          ctx(ownerUserId),
         ),
       );
-      expect(out.resolvedBy).toBe(`user:${adminPublicId}`);
+      expect(out.resolvedBy).toBe(`user:${ownerPublicId}`);
       expect(out.eligibility).toBeNull();
     });
 
@@ -662,7 +692,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         inScope(() =>
           approvalAutoEligibilityGetHandler(
             { approvalId: randomUUID() },
-            ctx(adminUserId),
+            ctx(ownerUserId),
           ),
         ),
       ).rejects.toSatisfy(notFound);

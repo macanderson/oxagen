@@ -35,6 +35,7 @@ function subject(over: Partial<AutoApprovalSubject> = {}): AutoApprovalSubject {
       slug: "stripe__create_payment",
       version: 3,
       riskGrade: "medium",
+      sideEffect: null,
       consequenceTags: ["moves_money"],
       ...(over.tool ?? {}),
     },
@@ -145,6 +146,7 @@ describe("the floors no rule can lift", () => {
           slug: "stripe__create_payment",
           version: 3,
           riskGrade: "critical",
+          sideEffect: null,
           consequenceTags: ["moves_money"],
         },
       }),
@@ -161,11 +163,43 @@ describe("the floors no rule can lift", () => {
           slug: "db__drop_table",
           version: 1,
           riskGrade: "high",
+          sideEffect: null,
           consequenceTags: ["alters_production", "destroys_data"],
         },
       }),
     );
     expect(out?.reasons).toEqual([REASON.irreversibleConsequence]);
+  });
+
+  it("refuses an irreversible SIDE EFFECT, with or without a tag", () => {
+    // `set_tool_classification` names the side-effect class; the consequence
+    // tag is the other half of the same statement. Either one is the floor,
+    // and it is reported once rather than twice.
+    const judge = (sideEffect: string | null, consequenceTags: string[]) =>
+      evaluateAutoApproval(
+        [rule({ tools: ["db__drop_table@*"] })],
+        subject({
+          capability: "db__drop_table",
+          tool: {
+            slug: "db__drop_table",
+            version: 1,
+            riskGrade: "high",
+            sideEffect,
+            consequenceTags,
+          },
+        }),
+      );
+    expect(judge("irreversible", [])?.reasons).toEqual([
+      REASON.irreversibleConsequence,
+    ]);
+    expect(judge("irreversible", ["destroys_data"])?.reasons).toEqual([
+      REASON.irreversibleConsequence,
+    ]);
+    expect(judge(null, ["destroys_data"])?.reasons).toEqual([
+      REASON.irreversibleConsequence,
+    ]);
+    expect(judge("write", [])?.reasons).toEqual([]);
+    expect(judge(null, [])?.reasons).toEqual([]);
   });
 
   it("refuses whatever a rule with no conditions says, and reports every floor at once", () => {
@@ -177,6 +211,7 @@ describe("the floors no rule can lift", () => {
           slug: "stripe__create_payment",
           version: 3,
           riskGrade: "critical",
+          sideEffect: null,
           consequenceTags: ["destroys_data"],
         },
       }),
@@ -445,6 +480,7 @@ describe("the recorded reason list stays readable", () => {
           slug: "stripe__create_payment",
           version: 3,
           riskGrade: "critical",
+          sideEffect: null,
           consequenceTags: ["destroys_data"],
         },
       }),

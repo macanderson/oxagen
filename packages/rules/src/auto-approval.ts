@@ -47,7 +47,18 @@ export interface AutoApprovalSubject {
   tool: {
     slug: string;
     version: number;
+    /** The effective grade: the classified one when set, else the declared one. */
     riskGrade: string;
+    /**
+     * The effective side-effect class — the more severe of what the manifest
+     * declared and what an administrator classified. Null when the version
+     * carries no classification.
+     */
+    sideEffect: string | null;
+    /**
+     * The union of the declared consequence tags and the classified ones.
+     * A union, never a replacement: see `loadDeclaredTool`.
+     */
     consequenceTags: string[];
   } | null;
   /** measure name → the value read from the call, as an integer string. Absent when unreadable. */
@@ -119,6 +130,9 @@ export const HARD_FLOOR_REASONS: readonly string[] = [
 export const IRREVERSIBLE_CONSEQUENCE_TAGS: readonly string[] = [
   "destroys_data",
 ];
+
+/** The side-effect class that means the same thing as an irreversible tag. */
+export const IRREVERSIBLE_SIDE_EFFECT = "irreversible";
 
 /** True when a recorded result was stopped by a floor rather than by a rule's own condition. */
 export function isFloorReason(reason: string): boolean {
@@ -200,7 +214,12 @@ function floorReasons(subject: AutoApprovalSubject): string[] {
   if (subject.tool?.riskGrade === "critical") {
     reasons.push(REASON.criticalHazard);
   }
+  // Two ways the record says this call cannot be taken back, and either one
+  // is the same floor: the side-effect class the classification names, and a
+  // consequence tag the record marks irreversible. One reason, not two, so
+  // the approval card does not say the same thing twice.
   if (
+    subject.tool?.sideEffect === IRREVERSIBLE_SIDE_EFFECT ||
     subject.tool?.consequenceTags.some((t) =>
       IRREVERSIBLE_CONSEQUENCE_TAGS.includes(t),
     )

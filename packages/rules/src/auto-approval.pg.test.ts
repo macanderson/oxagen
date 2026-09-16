@@ -349,6 +349,73 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
     });
 
+    it("unions the classified consequence tags with the declared ones, so a classification can only ever raise the floor", async () => {
+      // The asymmetry that makes reading the jsonb safe. The column is written
+      // by publish_tool_declaration behind assertConsequenceRole; the jsonb by
+      // set_tool_classification behind Owner/Admin. Replacement would let an
+      // Owner clear a declared tag and lower an approval floor without passing
+      // the consequence-role gate. Union cannot: it only ever adds reasons a
+      // call needs a person.
+      const classify = (body: Record<string, unknown> | null) =>
+        withSystemDb((tx) =>
+          tx
+            .update(schema.toolVersions)
+            .set({
+              classification: body,
+              classifiedRiskGrade: body === null ? null : "medium",
+              classifiedAt:
+                body === null ? null : new Date("2026-09-16T08:00:00.000Z"),
+            })
+            .where(eq(schema.toolVersions.id, versionId)),
+        );
+      const tags = async () =>
+        (
+          await inScope(() =>
+            withTenantDb((tx) =>
+              buildAutoApprovalSubject(tx, {
+                capability: "stripe__create_payment",
+                input: CALL,
+                workspaceId,
+                now: NOW,
+              }),
+            ),
+          )
+        ).tool;
+
+      // The declared column carries moves_money throughout this file.
+      try {
+        // Classified adds a tag the manifest never declared: the floor gains
+        // it. This is the fix — an administrator RAISES the floor.
+        await classify({
+          sideEffect: "irreversible",
+          consequenceTags: ["destroys_data"],
+        });
+        const raised = await tags();
+        expect(raised?.consequenceTags).toEqual([
+          "destroys_data",
+          "moves_money",
+        ]);
+        expect(raised?.sideEffect).toBe("irreversible");
+
+        // Classified names NO tags: the declared one survives. An
+        // administrator cannot lower what the manifest declared, which is the
+        // bypass union rules out.
+        await classify({ sideEffect: "read", consequenceTags: [] });
+        const notLowered = await tags();
+        expect(notLowered?.consequenceTags).toEqual(["moves_money"]);
+
+        // A classification that is not the shape we expect contributes
+        // nothing rather than throwing away the declared tags.
+        await classify({ nonsense: true });
+        expect((await tags())?.consequenceTags).toEqual(["moves_money"]);
+      } finally {
+        await classify(null);
+      }
+      const restored = await tags();
+      expect(restored?.consequenceTags).toEqual(["moves_money"]);
+      expect(restored?.sideEffect).toBeNull();
+    });
+
     it("reads the classified risk grade over the declared one, so an administrator can raise the critical_hazard floor", async () => {
       // `set_tool_classification` writes classified_risk_grade and leaves
       // risk_grade — the manifest's own, checksummed — alone, and the tool
@@ -364,7 +431,17 @@ describe.skipIf(!process.env.DATABASE_URL)(
           tx
             .update(schema.toolVersions)
             .set({
-              classification: on ? { sideEffectClass: "external" } : null,
+              // The real stored shape (toolClassificationSchema), not an
+              // invented key: this row is what loadDeclaredTool reads.
+              classification: on
+                ? {
+                    sideEffect: "write",
+                    egress: "third_party",
+                    consequenceTags: [],
+                    measures: {},
+                    dataClasses: [],
+                  }
+                : null,
               classifiedRiskGrade: on ? "critical" : null,
               classifiedAt: on ? new Date("2026-09-16T08:00:00.000Z") : null,
             })
