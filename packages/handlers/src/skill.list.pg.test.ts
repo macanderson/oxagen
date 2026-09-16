@@ -81,8 +81,16 @@ describe.skipIf(!enabled)("list_skills against Postgres", () => {
   beforeAll(async () => {
     await withSystemDb(async (tx) => {
       await tx.insert(schema.users).values([
-        { id: ownerId, email: `skills-owner-${tag}@handlers.test`, status: "active" },
-        { id: billingId, email: `skills-billing-${tag}@handlers.test`, status: "active" },
+        {
+          id: ownerId,
+          email: `skills-owner-${tag}@handlers.test`,
+          status: "active",
+        },
+        {
+          id: billingId,
+          email: `skills-billing-${tag}@handlers.test`,
+          status: "active",
+        },
       ]);
       await tx.insert(schema.organizations).values({
         id: orgId,
@@ -93,8 +101,20 @@ describe.skipIf(!enabled)("list_skills against Postgres", () => {
         status: "active",
       });
       await tx.insert(schema.workspaces).values([
-        { id: workspaceId, orgId, name: "Core", slug: "core", namespace: "core" },
-        { id: otherWorkspaceId, orgId, name: "Edge", slug: "edge", namespace: "edge" },
+        {
+          id: workspaceId,
+          orgId,
+          name: "Core",
+          slug: "core",
+          namespace: "core",
+        },
+        {
+          id: otherWorkspaceId,
+          orgId,
+          name: "Edge",
+          slug: "edge",
+          namespace: "edge",
+        },
       ]);
       for (const [userId, roleName] of [
         [ownerId, "Owner"],

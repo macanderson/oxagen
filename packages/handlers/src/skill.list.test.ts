@@ -47,8 +47,7 @@ function handlerWith(over: Partial<SkillQueries> = {}) {
     ...over,
   };
   const handler = createSkillListHandler({ queries, now: () => NOW });
-  const list = (input: unknown) =>
-    handler(skillList.input.parse(input), ctx);
+  const list = (input: unknown) => handler(skillList.input.parse(input), ctx);
   return { queries, list };
 }
 
@@ -179,7 +178,10 @@ describe("the cursor", () => {
   });
 
   it("refuses an empty last name (negative)", () => {
-    const raw = encodeSkillCursor({ window: windowEndingAt(NOW, 1), after: "" });
+    const raw = encodeSkillCursor({
+      window: windowEndingAt(NOW, 1),
+      after: "",
+    });
     expect(decodeSkillCursor(raw)).toBeNull();
   });
 

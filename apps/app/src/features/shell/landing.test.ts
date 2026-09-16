@@ -54,7 +54,7 @@ const source = {
     waste: vi.fn(),
     budgets: vi.fn(),
   },
-  org: { members: vi.fn() },
+  org: { members: vi.fn(), apiKeys: vi.fn() },
   audit: { events: vi.fn(), exportEvents: vi.fn() },
   skills: { inventory: vi.fn() },
   steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
