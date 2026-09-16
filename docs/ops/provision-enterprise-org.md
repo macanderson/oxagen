@@ -82,32 +82,41 @@ recorded allowance.
 
 ## Running it against production
 
-Aurora is VPC-only, so this runs from a laptop over an SSM port-forward, exactly
-like the `billing.plans` half of `pnpm billing:stripe-sync` (see
-[stripe-sandbox-mode.md](stripe-sandbox-mode.md) for the full recipe).
+Aurora's security group admits 5432 **from the app node's security group and
+nothing else** (`stacks-new/oxagen/data-services.tf`). A hosted GitHub runner is
+outside the VPC, which is why `db-migrate.yml` stops rather than hangs for
+`target: production` (#2652) — so there is no CI path for this, and a laptop
+reaches the cluster only by tunnelling *through* the app node. That is the same
+constraint `infra/tools/run-db-migrations.sh` is built around; read its header
+for the long version.
 
 ```bash
-# 1. Authenticate to account 916294258235 (interactive).
+# 1. Authenticate to account 916294258235. This is interactive — a browser
+#    console login does NOT give the CLI credentials; `aws sts get-caller-identity`
+#    must print the account before going further.
 aws login
+aws sts get-caller-identity
 
-# 2. Port-forward Aurora to localhost:15432.
-aws ssm start-session \
-  --target <bastion-instance-id> \
+# 2. Find the app node and tunnel Aurora to localhost:15432 THROUGH it, so the
+#    connection originates from the security group Aurora admits.
+INSTANCE=$(aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=oxagen-app" "Name=instance-state-name,Values=running" \
+  --query 'Reservations[].Instances[].InstanceId' --output text)
+aws ssm start-session --target "$INSTANCE" \
   --document-name AWS-StartPortForwardingSessionToRemoteHost \
   --parameters '{"host":["oxagen-postgres.cluster-cm1o4comkr8r.us-east-1.rds.amazonaws.com"],"portNumber":["5432"],"localPortNumber":["15432"]}'
 
-# 3. In a second shell — note the explicit DATABASE_URL. `tsx --env-file` does
-#    NOT override a shell-set one, so set it deliberately and read the host the
-#    script prints back before answering the confirmation prompt.
+# 3. In a second shell. Set DATABASE_URL deliberately — `tsx --env-file` does
+#    NOT override a shell-set one — and read the host the script prints back
+#    before answering the confirmation prompt.
 cd ~/Projects/oxagen
-DATABASE_URL='postgres://<user>:<pass>@localhost:15432/oxagen' \
-  pnpm db:provision-enterprise --email mac@oxagen.sh          # dry run first
-DATABASE_URL='postgres://<user>:<pass>@localhost:15432/oxagen' \
-  pnpm db:provision-enterprise --email mac@oxagen.sh --apply  # then apply
+export DATABASE_URL='postgres://<user>:<pass>@localhost:15432/oxagen'
+pnpm db:provision-enterprise --email mac@oxagen.sh            # dry run first
+pnpm db:provision-enterprise --email mac@oxagen.sh --apply    # then apply
 ```
 
-The `--apply` run prompts for confirmation on any non-local host. The
-credentials for step 3 are in Parameter Store under `/oxagen/production/`.
+The `--apply` run prompts for confirmation on any non-local host. The credentials
+for step 3 are in Parameter Store under `/oxagen/production/`.
 
 ## Verifying afterwards
 
