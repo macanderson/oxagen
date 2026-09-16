@@ -111,6 +111,11 @@ export function onboardingSource(reads: Reads): {
       budgets: refuse("spend.budgets"),
     },
     org: { members: refuse("org.members") },
+    steering: {
+      records: refuse("steering.records"),
+      proposals: refuse("steering.proposals"),
+      contextPr: refuse("steering.contextPr"),
+    },
   };
   return { source, calls };
 }

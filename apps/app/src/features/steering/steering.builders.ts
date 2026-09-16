@@ -193,6 +193,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       budgets: refuse,
     },
     org: { members: refuse },
+    onboarding: { state: refuse, firstFrame: refuse },
     steering: {
       records: (...args) => {
         calls.records.push(args);
