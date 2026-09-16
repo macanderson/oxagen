@@ -36,7 +36,7 @@ const FOOTER = [
     heading: "Product",
     links: [
       { label: "Getting started", href: "/docs/getting-started" },
-      { label: "Agent platform", href: "/docs/agent/overview" },
+      { label: "In-app agent", href: "/docs/agent/overview" },
       { label: "Plugins", href: "/docs/plugins/overview" },
       { label: "Governance", href: "/docs/governance/overview" },
     ],
@@ -51,9 +51,9 @@ const FOOTER = [
     ],
   },
   {
-    heading: "Trust",
+    heading: "Security",
     links: [
-      { label: "Security", href: "/docs/security/overview" },
+      { label: "Overview", href: "/docs/security/overview" },
       {
         label: "Tenant isolation",
         href: "/docs/security/tenant-isolation-rls",
@@ -113,9 +113,10 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
             {/* The wordmark alone: never the mark beside the word. */}
             <OxagenWordmark className="h-5" />
             <p className="mt-4 max-w-xs text-sm text-muted-foreground">
-              The control plane for agent work. Every agent runs under a
-              mandate: its access, its budget, its tools, its rules, enforced on
-              every run.
+              The agent control plane and agent fleet management. Every agent
+              runs under a mandate: its access, its budget, its tools, and its
+              rules, set by the teams accountable for it and enforced on every
+              run.
             </p>
           </div>
           {FOOTER.map((col) => (
