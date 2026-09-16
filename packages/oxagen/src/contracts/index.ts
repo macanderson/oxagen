@@ -76,6 +76,7 @@ import { evidenceDisclosureGrainSet } from "./evidence.disclosure_grain.set";
 import { spendGet } from "./spend.get";
 import { spendDrill } from "./spend.drill";
 import { spendWasteList } from "./spend.waste";
+import { skillList } from "./skill.list";
 import { spendStatementExport } from "./spend.statement.export";
 import { costPriceEntryList } from "./cost.price_entry.list";
 import { findingList } from "./finding.list";
@@ -252,6 +253,7 @@ import { ontologyQuery } from "./ontology.query";
 import { ontologyNeighbors } from "./ontology.neighbors";
 import { apiKeyRotate } from "./api.key.rotate";
 import { auditLogQuery } from "./audit.log.query";
+import { auditEventsExport } from "./audit.events.export";
 import { connectionPause } from "./connection.pause";
 import { connectionUpdate } from "./connection.update";
 import { orgDataPlaneGet } from "./org.data_plane.get";
@@ -598,6 +600,7 @@ export {
   spendGet,
   spendDrill,
   spendWasteList,
+  skillList,
   spendStatementExport,
   costPriceEntryList,
   findingList,
@@ -741,6 +744,7 @@ export {
   ontologyNeighbors,
   apiKeyRotate,
   auditLogQuery,
+  auditEventsExport,
   connectionPause,
   connectionUpdate,
   orgDataPlaneGet,
@@ -911,6 +915,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   spendGet,
   spendDrill,
   spendWasteList,
+  skillList,
   spendStatementExport,
   costPriceEntryList,
   findingList,
@@ -1055,6 +1060,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   ontologyNeighbors,
   apiKeyRotate,
   auditLogQuery,
+  auditEventsExport,
   connectionPause,
   connectionUpdate,
   orgDataPlaneGet,

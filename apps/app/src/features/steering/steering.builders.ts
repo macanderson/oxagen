@@ -103,7 +103,14 @@ const CHECKS: Record<ProposalStatus, Check[]> = {
   pr_open: checks([]),
   checks_running: checks(["passed", "passed", "running"]),
   checks_passed: PASSED,
-  checks_failed: checks(["passed", "passed", "passed", "failed", "passed", "passed"]),
+  checks_failed: checks([
+    "passed",
+    "passed",
+    "passed",
+    "failed",
+    "passed",
+    "passed",
+  ]),
   merged: PASSED,
   rejected: PASSED,
 };
@@ -181,6 +188,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     },
     billing: {
       plan: refuse,
+      usageCredits: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,
@@ -191,8 +199,13 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       drill: refuse,
       waste: refuse,
       budgets: refuse,
+      findings: refuse,
+      findingEvidence: refuse,
     },
-    org: { members: refuse },
+    onboarding: { state: refuse, firstFrame: refuse },
+    org: { members: refuse, apiKeys: refuse },
+    audit: { events: refuse, exportEvents: refuse },
+    skills: { inventory: refuse },
     steering: {
       records: (...args) => {
         calls.records.push(args);

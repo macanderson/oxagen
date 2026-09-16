@@ -8,8 +8,7 @@ export default defineConfig({
     include: ["src/**/*.test.ts"],
     // Several files here drive the REAL ClickHouse through the real
     // `migrate()`: schema-conformance-idempotency.integration.test.ts
-    // (beforeAll), skill-execution-join.integration.test.ts, and
-    // migrate-ledger.integration.test.ts. `migrate()` USED to keep no
+    // (beforeAll) and migrate-ledger.integration.test.ts. `migrate()` USED to keep no
     // applied-migrations ledger — it replayed schema.sql and every file in
     // migrations/ on every call — and 0021 opens with
     // `DROP TABLE IF EXISTS schema_conformance_events` (that migration's own

@@ -626,6 +626,16 @@
       "writes": []
     },
     {
+      "domain": "audit",
+      "name": "export_audit_events",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "conversation",
       "name": "export_conversation",
       "reads": [],
@@ -1948,6 +1958,16 @@
       "writes": []
     },
     {
+      "domain": "skill",
+      "name": "list_skills",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "tacho",
       "name": "list_tacho_hosts",
       "reads": [],
@@ -3209,7 +3229,7 @@
       "writes": []
     }
   ],
-  "contentHash": "444b2dbec7fd6417867d108f7956b8061908750a8e52ca61679f6cdbfc63f5b0",
+  "contentHash": "ddc03b147911db4007aa92eec6c47206d85e7ebcdc9156d84cf6659701d90644",
   "domains": [
     {
       "name": "agent",

@@ -2,6 +2,8 @@
 // page's failure row, mapped into the view model, with a refusal passed
 // through and an unmappable record reported once.
 import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
+import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
+import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
@@ -149,6 +151,112 @@ describe("spend port", () => {
       }),
     );
     expect(await spend.byGroup(ctx, "operator", period)).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+});
+
+describe("the findings the Spend page leads with", () => {
+  const savingCost = {
+    micros: "984600000",
+    currency: "USD",
+    basis: "gateway_observed",
+  };
+  const listedFinding = {
+    id: "fnd_01k5rtgh",
+    kind: "unpaged_results",
+    level: "tool",
+    subject: "aws_billing__get_cost_and_usage",
+    saving: savingCost,
+    confidence: "high",
+    window: {
+      from: "2026-08-16T00:00:00.000Z",
+      to: "2026-09-15T00:00:00.000Z",
+    },
+    why: "Each run requests thirty days of line items unpaged.",
+    fix: "Request grouped totals; page line items only on drill-down.",
+    runs: 88,
+    calls: 3106,
+    status: "open",
+    detectedAt: "2026-09-15T02:00:00.000Z",
+    decidedAt: null,
+    appliedActionId: null,
+  };
+
+  it("findings reads list_findings over the open findings and drops the decision fields", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        status: "open",
+        window: listedFinding.window,
+        saving: savingCost,
+        spend: null,
+        share: null,
+        annualised: savingCost,
+        counts: { findings: 1, high: 1, medium: 0, operators: 2 },
+        findings: [listedFinding],
+      }),
+    );
+    const read = await spend.findings(ctx);
+    expect(read.ok && read.value.counts.operators).toBe(2);
+    expect(read.ok && read.value.findings[0]).toEqual({
+      id: "fnd_01k5rtgh",
+      kind: "unpaged_results",
+      level: "tool",
+      subject: "aws_billing__get_cost_and_usage",
+      saving: savingCost,
+      confidence: "high",
+      window: listedFinding.window,
+      why: listedFinding.why,
+      fix: listedFinding.fix,
+      runs: 88,
+      calls: 3106,
+    });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: findingList,
+      input: { status: "open" },
+      page: "spend",
+    });
+  });
+
+  it("findingEvidence reads get_finding_evidence for the finding asked for", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        finding: listedFinding,
+        evidence: {
+          calls: 3106,
+          coveredCalls: 2980,
+          measuredTokens: 41200,
+          counterfactualTokens: 1900,
+          measured: { micros: "1030400000", currency: "USD" },
+          counterfactual: { micros: "45800000", currency: "USD" },
+          runs: [],
+        },
+      }),
+    );
+    const read = await spend.findingEvidence(ctx, "fnd_01k5rtgh");
+    expect(read.ok && read.value.coveredCalls).toBe(2980);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: findingEvidenceGet,
+      input: { findingId: "fnd_01k5rtgh" },
+      page: "spend",
+    });
+  });
+
+  it("answers record_unmappable for a finding the view model refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        status: "open",
+        window: listedFinding.window,
+        saving: savingCost,
+        spend: null,
+        share: null,
+        annualised: null,
+        counts: { findings: 1, high: 1, medium: 0, operators: 1 },
+        findings: [{ ...listedFinding, id: "01k5rtgh" }],
+      }),
+    );
+    expect(await spend.findings(ctx)).toEqual(
       readError("record_unmappable", 502),
     );
     expect(captureError).toHaveBeenCalledOnce();

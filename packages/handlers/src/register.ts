@@ -940,6 +940,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .auditLogQueryHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "export_audit_events",
+    async () =>
+      (await import("./audit.events.export"))
+        .auditEventsExportHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "create_stella_enrollment",
     async () =>
       (await import("./telemetry.stella.enroll"))
@@ -1113,6 +1119,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "list_waste",
     async () =>
       (await import("./spend.waste")).spendWasteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_skills",
+    async () =>
+      (await import("./skill.list")).skillListHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "export_statement",

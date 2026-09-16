@@ -7,19 +7,29 @@ const labels = { nav: (key: string) => `nav:${key}` };
 describe("buildCommands", () => {
   const commands = buildCommands({ org: "acme", ws: "core-platform" }, labels);
 
-  it("offers the seven sidebar pages and API keys, and nothing else", () => {
+  it("offers the eight sidebar pages and API keys, and nothing else", () => {
     expect(commands.map((c) => c.href)).toEqual([
       "/acme/core-platform",
       "/acme/core-platform/agents",
       "/acme/core-platform/tools",
+      "/acme/core-platform/skills",
       "/acme/core-platform/steering",
       "/acme/core-platform/spend",
       "/acme",
       "/acme/api-keys",
       "/acme/billing",
+      "/acme/audit",
     ]);
     expect(commands.every((c) => c.id.startsWith("go:"))).toBe(true);
     expect(commands.map((c) => c.label)).toContain("nav:apiKeys");
+  });
+
+  it("offers go:skills to the workspace's Skills page under the Skills label", () => {
+    expect(commands.find((c) => c.id === "go:skills")).toEqual({
+      id: "go:skills",
+      label: "nav:skills",
+      href: "/acme/core-platform/skills",
+    });
   });
 
   it("offers no workspace routes without a workspace (negative)", () => {
@@ -28,12 +38,13 @@ describe("buildCommands", () => {
       "/acme",
       "/acme/api-keys",
       "/acme/billing",
+      "/acme/audit",
     ]);
   });
 
-  it("offers no Ontology graph question and no Audit export (negative)", () => {
+  it("offers a page to go to and nothing else: no Ontology graph question, no export (negative)", () => {
     for (const c of commands) {
-      expect(c.href).not.toMatch(/\/(ontology|audit)(\/|$)/);
+      expect(c.href).not.toMatch(/\/(ontology|export)(\/|$)/);
       expect(c.id).toMatch(/^go:/);
     }
   });

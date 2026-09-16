@@ -17,10 +17,18 @@ const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 const setBudgetAction = vi.fn();
 const exportStatementAction = vi.fn();
-vi.mock("./actions", () => ({ setBudgetAction, exportStatementAction }));
+const recordFindingFixAction = vi.fn();
+const dismissFindingAction = vi.fn();
+vi.mock("./actions", () => ({
+  setBudgetAction,
+  exportStatementAction,
+  recordFindingFixAction,
+  dismissFindingAction,
+}));
 
 const { BudgetDialog } = await import("./budget-dialog");
 const { ExportDialog } = await import("./export-dialog");
+const { FixDialog } = await import("./fix-dialog");
 
 const at = { org: "acme", ws: "core-platform" };
 
@@ -41,6 +49,8 @@ beforeEach(() => {
   router.refresh.mockReset();
   setBudgetAction.mockReset();
   exportStatementAction.mockReset();
+  recordFindingFixAction.mockReset();
+  dismissFindingAction.mockReset();
 });
 
 afterEach(async () => {
@@ -205,6 +215,116 @@ describe("Export report", () => {
     expect(
       await screen.findByText(
         "Your roles on this organization do not let you export this workspace’s spend.",
+      ),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("Fix a finding", () => {
+  async function openDialog() {
+    renderWithIntl(
+      <FixDialog
+        at={at}
+        findingId="fnd_01k5rtgh"
+        fix="Request grouped totals; page line items only on drill-down."
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Fix" }));
+    return screen.getByRole("dialog", { name: "Fix this finding" });
+  }
+
+  it("shows the fix the finding names and records the change, returning to the findings tab", async () => {
+    recordFindingFixAction.mockResolvedValue({ ok: true, value: null });
+    await openDialog();
+    expect(
+      screen.getByText(
+        "Request grouped totals; page line items only on drill-down.",
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Record the fix as applied" }),
+    );
+
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalledWith(
+        "/acme/core-platform/spend?tab=findings",
+      );
+    });
+    expect(recordFindingFixAction).toHaveBeenCalledWith(at, "fnd_01k5rtgh");
+    expect(dismissFindingAction).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("dismisses the finding without recording a fix", async () => {
+    dismissFindingAction.mockResolvedValue({ ok: true, value: null });
+    await openDialog();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Dismiss this finding" }),
+    );
+
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalledWith(
+        "/acme/core-platform/spend?tab=findings",
+      );
+    });
+    expect(dismissFindingAction).toHaveBeenCalledWith(at, "fnd_01k5rtgh");
+    expect(recordFindingFixAction).not.toHaveBeenCalled();
+  });
+
+  it("names a role refusal, a finding already decided and a decision waiting for approval, changing nothing (negative)", async () => {
+    recordFindingFixAction.mockResolvedValueOnce({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    await openDialog();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Record the fix as applied" }),
+    );
+    expect(
+      await screen.findByText(/Your organization role cannot decide a finding/),
+    ).toBeInTheDocument();
+    expect(router.replace).not.toHaveBeenCalled();
+
+    recordFindingFixAction.mockResolvedValueOnce({
+      ok: false,
+      reason: "conflict",
+      code: "finding_not_open",
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Record the fix as applied" }),
+    );
+    expect(
+      await screen.findByText(
+        "This finding was already decided. Nothing was changed.",
+      ),
+    ).toBeInTheDocument();
+
+    recordFindingFixAction.mockResolvedValueOnce({
+      ok: false,
+      reason: "pending_approval",
+      accessRequestId: "acr_01k5",
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Record the fix as applied" }),
+    );
+    expect(
+      await screen.findByText(
+        "The decision is waiting for approval, request acr_01k5.",
+      ),
+    ).toBeInTheDocument();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("names a write that threw before it answered (negative)", async () => {
+    dismissFindingAction.mockRejectedValue(new Error("offline"));
+    await openDialog();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Dismiss this finding" }),
+    );
+    expect(
+      await screen.findByText(
+        "The decision could not be recorded: action_failed. Nothing was changed.",
       ),
     ).toBeInTheDocument();
   });

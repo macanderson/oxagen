@@ -14,10 +14,12 @@
       "fleet": "Fleet",
       "agents": "Agent IAM",
       "tools": "Tools",
+      "skills": "Skills",
       "steering": "Steering",
       "spend": "Spend",
       "organization": "Organization",
       "billing": "Billing",
+      "audit": "Audit",
       "apiKeys": "API keys"
     },
     "switcher": {

@@ -1,5 +1,5 @@
 {
-  "generatedCount": 301,
+  "generatedCount": 303,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -680,6 +680,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "export_audit_events",
+      "domain": "audit",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -2134,6 +2145,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_skills",
+      "domain": "skill",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

@@ -1,0 +1,82 @@
+{
+  "audit": {
+    "eyebrow": "Organization",
+    "description": "What happened, who allowed it, and what the kernel recorded. The record is written on every governed action and nothing in the product can edit it.",
+    "loading": "Loading the audit record",
+    "events": {
+      "title": "Control-plane events",
+      "when": "When",
+      "event": "Event",
+      "actor": "Actor",
+      "what": "What",
+      "result": "Result",
+      "more": "Details",
+      "workspace": "Workspace",
+      "ip": "IP address",
+      "request": "Request",
+      "userAgent": "User agent",
+      "notRecorded": "not recorded"
+    },
+    "outcomes": {
+      "allow": "allowed",
+      "deny": "denied",
+      "error": "error",
+      "success": "succeeded"
+    },
+    "filters": {
+      "label": "Filter the audit record",
+      "eventType": "Event",
+      "anyEventType": "Any event",
+      "outcome": "Result",
+      "anyOutcome": "Any result",
+      "actor": "Actor",
+      "anyActor": "Anyone",
+      "capability": "Capability",
+      "from": "From",
+      "to": "To",
+      "apply": "Apply filters",
+      "clear": "Clear filters"
+    },
+    "export": {
+      "csv": "Export CSV",
+      "ndjson": "Export NDJSON"
+    },
+    "pager": {
+      "label": "Pages of the audit record",
+      "newer": "Newer",
+      "older": "Older",
+      "end": "End of the record"
+    },
+    "empty": {
+      "title": "No audit events yet",
+      "body": "Control-plane audit events are written by the kernel on every governed action. An empty record means nothing has been done in this organization yet, not that recording is off.",
+      "action": "Open Organization"
+    },
+    "filteredEmpty": {
+      "title": "No events match these filters",
+      "body": "The record holds events outside this filter. Clear the filters to read it from the newest event."
+    },
+    "error": {
+      "title": "Audit could not be loaded",
+      "body": "Nothing was changed. Runs kept recording while this page was down: events are written by the kernel, not by Mission Control.",
+      "code": "{status} {code}",
+      "retry": "Try again"
+    },
+    "denied": {
+      "title": "You cannot see the audit record",
+      "body": "Signed in as {role}. Needed: an organization owner or admin ({permission}). An owner can grant it, and the grant is itself recorded in the audit record."
+    },
+    "pending": {
+      "title": "Waiting for approval",
+      "body": "Access request {id} is waiting for an owner's decision."
+    },
+    "roles": {
+      "owner": "an owner",
+      "admin": "an admin",
+      "member": "a member",
+      "billing": "a billing member",
+      "compliance": "a compliance member",
+      "viewer": "a viewer"
+    }
+  }
+}

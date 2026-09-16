@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**288 capabilities across 42 domains.**
+**289 capabilities across 43 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -90,9 +90,10 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [auth.cli.authorize](auth.cli.authorize.md) — Mint the single-use PKCE authorization code that lets the Oxagen CLI obtain an API key for one org and workspace after the signed-in person consents
 
-## Audit (1)
+## Audit (2)
 
-- [audit.log.query](audit.log.query.md) — Query the org's security and automation audit events with structured filters, newest-first
+- [audit.events.export](audit.events.export.md) — Export the org's security audit events as CSV or NDJSON over the query_audit_log filters, signed with HMAC-SHA256; up to 50,000 events
+- [audit.log.query](audit.log.query.md) — Query the org's security audit events with structured filters, newest first
 
 ## Billing (15)
 
@@ -362,6 +363,10 @@ Capabilities granted to an agent as a set have a page of their own:
 - [schema.version.diff](schema.version.diff.md) — Structural diff of two schema versions: added/removed/changed schemas, labels, types, and properties
 - [schema.version.list](schema.version.list.md) — List all schema versions with status, label, and change summary
 - [schema.version.pin](schema.version.pin.md) — Pin the workspace to a specific published schema version
+
+## Skill (1)
+
+- [skill.list](skill.list.md) — List the skills this workspace's harness sessions reported when they started, over a window of session start times: each name with the sessions that reported it, their harnesses and when it was first and last seen, plus the window's session count and how many sessions reported no inventory
 
 ## Spend (4)
 
