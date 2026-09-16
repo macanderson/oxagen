@@ -71,6 +71,8 @@ import { onboardingFirstFrameGet } from "./onboarding.first_frame.get";
 import { repositoryMainBind } from "./repository.main.bind";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
+import { runProofGet } from "./run.proof.get";
+import { evidenceDisclosureGrainSet } from "./evidence.disclosure_grain.set";
 import { spendGet } from "./spend.get";
 import { spendDrill } from "./spend.drill";
 import { spendWasteList } from "./spend.waste";
@@ -599,6 +601,8 @@ export {
   shellNavCountsGet,
   userPreferencesSet,
   runCostGet,
+  runProofGet,
+  evidenceDisclosureGrainSet,
   spendGet,
   spendDrill,
   spendWasteList,
@@ -909,6 +913,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   shellNavCountsGet,
   userPreferencesSet,
   runCostGet,
+  runProofGet,
+  evidenceDisclosureGrainSet,
   spendGet,
   spendDrill,
   spendWasteList,

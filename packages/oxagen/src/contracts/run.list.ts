@@ -21,6 +21,7 @@
  */
 import { REPLAY_GRADES } from "@oxagen/tacho";
 import { z } from "zod";
+import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import { registerCapability } from "../registry";
 import { costSchema } from "./spend.shared";
 
@@ -107,6 +108,12 @@ export const runItemSchema = z
      * predates the recorder. Never computed on read.
      */
     replayGrade: replayGradeSchema.nullable(),
+    /**
+     * The run's witness verdict as the rollup recorded it (spec §8.5, §12.8;
+     * ADR-064); null when no witness reported on the run or the rollup has
+     * not rebuilt it. Only `flipped` marks a run proven.
+     */
+    verdict: z.enum(PROOF_VERDICTS).nullable(),
     /** The generated name; null until `summarize_run` wrote one. */
     name: z.string().nullable(),
     summary: runSummarySchema.nullable(),

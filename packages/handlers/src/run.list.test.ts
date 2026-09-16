@@ -211,7 +211,7 @@ describe("list_runs", () => {
     expect(cost["tse_other"]).toBeUndefined();
     expect(JSON.stringify(out)).not.toContain('"micros":"0"');
     // One rollup read for the page, over exactly the runs on it.
-    expect(stores.costCalls).toEqual([
+    expect(stores.rollupCalls).toEqual([
       [
         "arun_unrolled",
         "arun_rolled",
@@ -555,7 +555,7 @@ describe("list_runs", () => {
 
 describe("list_runs queries name the tenant", () => {
   const db = drizzle.mock({ schema });
-  const page = { cursor: null, limit: 50 };
+  const page = { cursor: null, limit: 50, withoutWitnessRuns: false };
   const RUN = "0192d4a8-7c1e-7a00-8000-0000000000a1";
   const cases = [
     ["ledgerPageQuery", ledgerPageQuery(db, SCOPE, page).toSQL()],
@@ -575,6 +575,22 @@ describe("list_runs queries name the tenant", () => {
     expect(query.sql).toMatch(/"workspace_id" = \$\d+/);
     expect(query.params).toContain(SCOPE.orgId);
     expect(query.params).toContain(SCOPE.workspaceId);
+  });
+
+  it("leaves witness runs out of both pages only when the page asks", () => {
+    const hidden = { ...page, withoutWitnessRuns: true };
+    for (const query of [
+      ledgerPageQuery(db, SCOPE, hidden).toSQL(),
+      tachoPageQuery(db, SCOPE, hidden).toSQL(),
+    ])
+      expect(query.sql).toMatch(
+        /not exists \(select 1 from "evidence"\."verdicts" where "evidence"\."verdicts"\."org_id" = .*"evidence"\."verdicts"\."witness_run_id" = /,
+      );
+    for (const query of [
+      ledgerPageQuery(db, SCOPE, page).toSQL(),
+      tachoPageQuery(db, SCOPE, page).toSQL(),
+    ])
+      expect(query.sql).not.toMatch(/"evidence"\."verdicts"/);
   });
 
   it("a different scope binds different tenant ids (negative)", () => {
@@ -663,11 +679,75 @@ describe("list_runs queries name the tenant", () => {
 
   it("applies the cursor at millisecond precision with byte-order ties, reading one row past the page", () => {
     const cursor = { at: "2026-09-11T10:00:00.000Z", id: "arun_a" };
-    const ledger = ledgerPageQuery(db, SCOPE, { cursor, limit: 10 }).toSQL();
+    const ledger = ledgerPageQuery(db, SCOPE, {
+      cursor,
+      limit: 10,
+      withoutWitnessRuns: false,
+    }).toSQL();
     expect(ledger.sql).toContain("date_trunc('milliseconds'");
     expect(ledger.sql).toContain('collate "C"');
     expect(ledger.params).toEqual(expect.arrayContaining(["arun_a", 11]));
-    const tacho = tachoPageQuery(db, SCOPE, { cursor, limit: 10 }).toSQL();
+    const tacho = tachoPageQuery(db, SCOPE, {
+      cursor,
+      limit: 10,
+      withoutWitnessRuns: false,
+    }).toSQL();
     expect(tacho.params).toEqual(expect.arrayContaining(["arun_a", 11]));
+  });
+});
+
+describe("list_runs verdict (ADR-064)", () => {
+  it("carries the verdict the rollup row recorded, and null for a run no witness reported on", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({ publicId: "tse_proven", verdict: "flipped" }),
+        tachoSession({
+          publicId: "tse_tampered",
+          session: { startedAt: at("2026-09-11T09:01:00.000Z") },
+          cost: rollupCostRow(),
+          verdict: "tampered",
+        }),
+        tachoSession({
+          publicId: "tse_unproven",
+          session: { startedAt: at("2026-09-11T09:02:00.000Z") },
+          cost: rollupCostRow(),
+        }),
+      ],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    expect(runList.output.parse(out)).toEqual(out);
+    const verdict = Object.fromEntries(out.runs.map((r) => [r.id, r.verdict]));
+    expect(verdict).toEqual({
+      tse_proven: "flipped",
+      tse_tampered: "tampered",
+      tse_unproven: null,
+    });
+    // A verdict with no priced frame is still a verdict, never a cost.
+    expect(out.runs.find((r) => r.id === "tse_proven")?.cost).toBeNull();
+  });
+});
+
+describe("list_runs witness runs (ADR-064)", () => {
+  const runs = [
+    tachoSession({ publicId: "tse_worker" }),
+    tachoSession({
+      publicId: "tse_witness",
+      session: { startedAt: at("2026-09-11T09:01:00.000Z") },
+      witnessFor: "tse_worker",
+    }),
+  ];
+
+  it("lists a witness run to a signed-in member", async () => {
+    const out = await handlerOver([], runs).list({ limit: 50 }, ctx());
+    expect(out.runs.map((r) => r.id)).toEqual(["tse_witness", "tse_worker"]);
+  });
+
+  it("leaves every witness run out for an API-key caller (negative)", async () => {
+    const out = await handlerOver([], runs).list(
+      { limit: 50 },
+      { ...ctx(), userId: null, apiKeyId: "aky_worker" },
+    );
+    expect(out.runs.map((r) => r.id)).toEqual(["tse_worker"]);
   });
 });

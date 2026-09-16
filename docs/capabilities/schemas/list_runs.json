@@ -170,6 +170,25 @@
                 }
               ]
             },
+            "verdict": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "flipped",
+                    "failing",
+                    "unmoved",
+                    "unsatisfied",
+                    "tampered",
+                    "unverified",
+                    "waived"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "name": {
               "anyOf": [
                 {
@@ -222,6 +241,7 @@
             "startedAt",
             "sealedAt",
             "replayGrade",
+            "verdict",
             "name",
             "summary"
           ],
