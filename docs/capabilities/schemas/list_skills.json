@@ -1,0 +1,134 @@
+{
+  "name": "list_skills",
+  "domain": "skill",
+  "description": "List the skills this workspace's harness sessions reported when they started, over a window of session start times: each name with the sessions that reported it, their harnesses and when it was first and last seen, plus the window's session count and how many sessions reported no inventory.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "windowDays": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 90,
+        "default": 30
+      },
+      "cursor": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 8192
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "window": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "additionalProperties": false
+      },
+      "sessions": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "reportedSessions": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 0
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "notReportedSessions": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "skills": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "sessions": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "harnesses": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "firstSeenAt": {
+              "type": "string"
+            },
+            "lastSeenAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "sessions",
+            "harnesses",
+            "firstSeenAt",
+            "lastSeenAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "nextCursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "window",
+      "sessions",
+      "reportedSessions",
+      "notReportedSessions",
+      "skills",
+      "nextCursor"
+    ],
+    "additionalProperties": false
+  }
+}

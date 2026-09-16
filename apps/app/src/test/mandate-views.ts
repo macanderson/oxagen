@@ -103,6 +103,7 @@ export function toolsSource(read: Read<MandateList>) {
       budgets: refuse,
     },
     org: { members: refuse },
+    skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },
   };
   return { source, calls };

@@ -27,7 +27,7 @@
       "targetUserId": {
         "type": "string",
         "minLength": 1,
-        "description": "The UUID of the user to remove from the org"
+        "description": "The user to remove: their public id (usr_…) or their user uuid"
       }
     },
     "required": [

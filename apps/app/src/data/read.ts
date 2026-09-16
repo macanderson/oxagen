@@ -44,6 +44,7 @@ export type PageKey =
   | "organization"
   | "billing"
   | "spend"
+  | "skills"
   | "steering"
   | "mandates"
   | "shell";
@@ -81,6 +82,11 @@ export const PAGE_FAILURES = {
   spend: {
     error: { code: "rollup_rebuild_in_progress", status: 504 },
     permission: "spend.read",
+  },
+  // The session inventory is a control-plane table read (tacho.sessions).
+  skills: {
+    error: { code: "session_store_unavailable", status: 503 },
+    permission: "skills.read",
   },
   // The published records and the proposals are one record index; a member
   // without the workspace's steering read is denied on it.

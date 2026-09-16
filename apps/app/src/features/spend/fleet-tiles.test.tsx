@@ -60,6 +60,7 @@ const source: DataSource = {
   },
   org: { members: refuse },
   mandates: { list: refuse },
+  skills: { inventory: refuse },
   steering: { records: refuse, proposals: refuse, contextPr: refuse },
 };
 

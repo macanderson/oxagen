@@ -34,7 +34,10 @@ function draw() {
 const dialog = () => screen.getByTestId("request-mandate");
 
 async function open() {
-  const user = userEvent.setup();
+  // `delay: null` keeps every interaction synchronous. The default wraps each
+  // one in a timer, and this dialog has eleven fields: under the whole
+  // package's coverage run the typing alone passed the 5 s case timeout.
+  const user = userEvent.setup({ delay: null });
   await user.click(screen.getByRole("button", { name: "Request a mandate" }));
   return user;
 }
