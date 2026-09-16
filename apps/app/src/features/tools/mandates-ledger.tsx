@@ -4,12 +4,23 @@
 // Each figure is the ledger's (INV-10); nothing here is a rollup of the rows
 // beneath it.
 //
+// A reader without an accountable org role is not denied this read: the
+// handler narrows it to the agents that reader created and answers a
+// successful list. So an empty answer does not establish that the workspace
+// has granted nothing, and the empty state says so unless the reader is one
+// whose answer covers every mandate (`readsEveryMandate`).
+//
 // The registry, connections, kill switches and auto-approval rules are the
 // other tabs of this page and have no backing yet, so they are not drawn
 // (§3.6) and the page has no tab bar until the #2958 lane gives it a second
 // tab.
 import { useFormatter, useTranslations } from "next-intl";
-import type { MandateList, MandateRow } from "@/data/contracts/mandates";
+import type { OrgRole } from "@/data/contracts/common";
+import {
+  type MandateList,
+  type MandateRow,
+  readsEveryMandate,
+} from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import { mono, panel } from "@/ui/control-styles";
 import { Measure } from "@/ui/measure";
@@ -121,9 +132,17 @@ const COLUMNS = [
   "status",
 ] as const;
 
-export function MandatesLedger({ read }: { read: Read<MandateList> }) {
+export function MandatesLedger({
+  read,
+  orgRole,
+}: {
+  read: Read<MandateList>;
+  orgRole: OrgRole;
+}) {
   const t = useTranslations("tools.mandates");
   const title = t("title");
+  /** An empty answer is proof of an empty ledger only for a reader who sees it all. */
+  const complete = readsEveryMandate(orgRole);
   return (
     <section aria-labelledby="tools-mandates" className={`${panel} p-4`}>
       <h2 id="tools-mandates" className="text-base font-semibold">
@@ -137,8 +156,12 @@ export function MandatesLedger({ read }: { read: Read<MandateList> }) {
           <ReadFailure read={read} section={title} />
         ) : read.value.mandates.length === 0 ? (
           <div className="flex flex-col gap-1 text-sm">
-            <p data-state="empty">{t("empty")}</p>
-            <p className="text-xs text-muted-foreground">{t("emptyDetail")}</p>
+            <p data-state="empty">
+              {complete ? t("empty") : t("emptyVisible")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {complete ? t("emptyDetail") : t("emptyVisibleDetail")}
+            </p>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
@@ -151,32 +174,32 @@ export function MandatesLedger({ read }: { read: Read<MandateList> }) {
               </p>
             )}
             <div className="overflow-x-auto">
-            <table className="w-full min-w-3xl text-left text-sm">
-              <thead className="text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  {COLUMNS.map((column) => (
-                    <th
-                      key={column}
-                      scope="col"
-                      className={`px-3 pb-2 font-medium ${
-                        column === "perCall" ||
-                        column === "perPeriod" ||
-                        column === "settled" ||
-                        column === "reserved" ||
-                        column === "remaining"
-                          ? "text-right"
-                          : ""
-                      }`}
-                    >
-                      {t(`columns.${column}`)}
-                    </th>
+              <table className="w-full min-w-3xl text-left text-sm">
+                <thead className="text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    {COLUMNS.map((column) => (
+                      <th
+                        key={column}
+                        scope="col"
+                        className={`px-3 pb-2 font-medium ${
+                          column === "perCall" ||
+                          column === "perPeriod" ||
+                          column === "settled" ||
+                          column === "reserved" ||
+                          column === "remaining"
+                            ? "text-right"
+                            : ""
+                        }`}
+                      >
+                        {t(`columns.${column}`)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {read.value.mandates.map((mandate) => (
+                    <Row key={mandate.id} mandate={mandate} />
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {read.value.mandates.map((mandate) => (
-                  <Row key={mandate.id} mandate={mandate} />
-                ))}
                 </tbody>
               </table>
             </div>

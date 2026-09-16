@@ -26,7 +26,9 @@
         "expired": "expired",
         "revoked": "revoked"
       },
-      "truncated": "The newest {shown} mandates. This workspace has granted at least that many, and older ones are not listed here."
+      "truncated": "The newest {shown} mandates. This workspace has granted at least that many, and older ones are not listed here.",
+      "emptyVisible": "No mandate is listed for you. That is not the same as the workspace having granted none: you see the mandates of the agents you created, and this list is empty either way.",
+      "emptyVisibleDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate this workspace has granted. This ledger is written for that office."
     }
   }
 }

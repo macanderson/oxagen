@@ -16,7 +16,9 @@ import { toMandateList } from "./mandates";
 const view = () => MandateList.parse(toMandateList(mandateListOutput(), 100));
 
 /** The one mandate of a one-mandate answer, and its first measure. */
-function only(mandates: MandateList["mandates"]): MandateList["mandates"][number] {
+function only(
+  mandates: MandateList["mandates"],
+): MandateList["mandates"][number] {
   expect(mandates).toHaveLength(1);
   const [mandate] = mandates;
   if (mandate === undefined) throw new Error("no mandate");
@@ -52,7 +54,10 @@ describe("toMandateList", () => {
       measure: "amount",
       period: "monthly",
       periodKey: "2026-09",
-      perCall: { kind: "money", money: { micros: "250000000", currency: "USD" } },
+      perCall: {
+        kind: "money",
+        money: { micros: "250000000", currency: "USD" },
+      },
       perPeriod: {
         kind: "money",
         money: { micros: "2000000000", currency: "USD" },
@@ -170,7 +175,10 @@ describe("toMandateList", () => {
           mandateListOutput([
             mandateOutput({
               authority: [
-                callsAuthorityOutput({ measure: "units", currencyOrUnit: unit }),
+                callsAuthorityOutput({
+                  measure: "units",
+                  currencyOrUnit: unit,
+                }),
               ],
             }),
           ]),
@@ -216,8 +224,32 @@ describe("toMandateList", () => {
   });
 
   it("answers an empty workspace with no mandates", () => {
+    const at = new Date("2026-09-16T12:00:00.000Z");
     expect(
-      MandateList.parse(toMandateList(mandateListOutput([]), 100)),
-    ).toEqual({ mandates: [], truncatedAt: null });
+      MandateList.parse(toMandateList(mandateListOutput([]), 100, at)),
+    ).toEqual({
+      mandates: [],
+      truncatedAt: null,
+      asOf: "2026-09-16T12:00:00.000Z",
+    });
+  });
+});
+
+describe("toMandateList asOf", () => {
+  // Whether a mandate is in effect is a question about an instant, and the
+  // page may not ask a clock during render, so the answer carries the instant
+  // it was read at.
+  it("stamps the instant the ledger answered", () => {
+    const at = new Date("2026-03-04T05:06:07.008Z");
+    expect(toMandateList(mandateListOutput([]), 100, at).asOf).toBe(
+      "2026-03-04T05:06:07.008Z",
+    );
+  });
+
+  it("defaults to now when no instant is given", () => {
+    const before = Date.now();
+    const asOf = Date.parse(toMandateList(mandateListOutput([]), 100).asOf);
+    expect(asOf).toBeGreaterThanOrEqual(before);
+    expect(asOf).toBeLessThanOrEqual(Date.now());
   });
 });

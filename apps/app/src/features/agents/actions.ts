@@ -11,7 +11,7 @@ import { agentDefinitionCommit } from "@oxagen/oxagen/contracts/agent.definition
 import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
 import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
 import { mandateRequest } from "@oxagen/oxagen/contracts/mandate.request";
-import { isCurrencyCode, microsFromDecimal } from "@/data/contracts/money";
+import { isCurrencyCode } from "@/data/contracts/money";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
@@ -107,19 +107,15 @@ export type MandateDraft = {
   agentId: string;
   /** The consequence the mandate answers for (`moves_money`). */
   consequenceTag: string;
-  /** The measure the tool version declares the limit under (`amount`, `rows`). */
+  /** The measure the tool version declares the limit under (`rows`, `recipients`). */
   measure: string;
   /**
-   * What that measure counts, as the operator states it. No contract answers a
-   * tool version's `measures` today, so the form cannot read the declaration
-   * and must be told: an amount is scaled to micros against a currency, a
-   * count is whole units of a named unit. Guessing would put a count of 50
-   * into the ledger as 50,000,000.
+   * What that measure counts, in its own name (`rows`, `recipients`). Never an
+   * ISO 4217 code: this form writes counts and only counts, for the reason
+   * `requestMandate` gives.
    */
-  kind: "amount" | "count";
-  /** ISO 4217 for an amount; the unit's own name for a count. */
-  currency: string;
-  /** The limits as typed: a decimal for an amount, a whole number for a count. */
+  unit: string;
+  /** The limits as typed, in whole units of `unit`. Nothing here is scaled. */
   perCall: string;
   perPeriod: string;
   period: "daily" | "weekly" | "monthly";
@@ -135,7 +131,7 @@ export type MandateDraft = {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const WHOLE = /^\d{1,9}$/;
-/** A count limit: whole units, up to what the measure-value regex admits. */
+/** A limit: whole units, up to what the measure-value regex admits. */
 const WHOLE_UNITS = /^(0|[1-9][0-9]{0,29})$/;
 
 /**
@@ -144,8 +140,8 @@ const WHOLE_UNITS = /^(0|[1-9][0-9]{0,29})$/;
  * way whatever a limit says. A money limit filed under that name would be
  * read as a ceiling of that many calls — $250 per call as 250,000,000 calls —
  * and the grant handler cannot catch it, because it exempts `calls` from the
- * measure a tool version must declare. The amount field refuses the name, and
- * the calls-per-day field is the only writer of that limit.
+ * measure a tool version must declare. The measure field refuses the name,
+ * and the calls-per-day field is the only writer of that limit.
  */
 const RESERVED_MEASURE = "calls";
 
@@ -158,40 +154,73 @@ function refuse(field: keyof MandateDraft): ActionResult<never> {
  * the role accountable for the consequence to grant or decline; a draft grants
  * nothing, because the gate reads active mandates only.
  *
- * A limit is stored in the units the ledger records, and which those are
- * depends on what the measure counts: micros for an amount (INV-09), whole
- * units for a count. The operator states which, because no contract answers a
- * tool version's `measures` and the form would otherwise be choosing a scaling
- * for a value whose type it does not know — a count of 50 filed as 50,000,000
- * is a millionfold more authority than was asked for. A figure that is not of
- * the stated kind is refused before the kernel is called.
+ * **This form never multiplies a limit.** A limit is stored in the units the
+ * ledger records, and which those are is a property of the tool version's
+ * declaration, not of the request: micros for an `amount`, whole units for a
+ * `count` (INV-09). The gate reads the call by that declaration — `readMeasure`
+ * in packages/rules/src/mandates/measures.ts converts an amount to micros and
+ * takes a count as whole units — and compares it against the stored limit as
+ * an integer.
+ *
+ * The declaration is not reachable from here, and nothing downstream catches a
+ * request that disagrees with it. `measureDeclarationsSchema` is an input of
+ * `publish_tool_declaration` and appears in no output; `list_tool_declarations`
+ * answers the version and checksum and no `measures`; `get_agent_toolbelt`
+ * carries none; and reading `agent.tool_versions` is banned (INV-05).
+ * `assertToolsDeclareMeasures` (packages/handlers/src/_mandate.ts) refuses a
+ * measure that is undeclared or `text` and never compares its `type` to
+ * anything the request states, so a grant does not check the scaling either.
+ *
+ * Being wrong in the two directions is not symmetric, which is what decides
+ * this:
+ *
+ *   scaled, declared a `count`   50 stored as 50000000, read as 50,000,000
+ *                                counts — a millionfold MORE authority than
+ *                                was typed, silently.
+ *   verbatim, declared an `amount`  50 stored as "50", read as 50 micros — a
+ *                                millionfold LESS. The call is denied and a
+ *                                person sees it.
+ *
+ * Only the first is a silent over-grant, and a mandate is bounded authority: a
+ * form that can store a wider bound than the operator entered is a worse
+ * failure than a form that cannot express every bound. So the figure typed is
+ * the figure stored, digit for digit. A money limit is correct only once the
+ * declaration confirms the measure is an `amount`, so it is not requestable
+ * here — it is requestable over the API and MCP, where the caller holds the
+ * declaration, and the app reads one back as money either way.
+ *
+ * The durable fix is `measures` on `list_tool_declarations`' output: with it
+ * the form resolves the declaration for the named measure across the tools its
+ * patterns match, defaults from it, refuses a mismatch, and can scale an
+ * amount because it knows it is one. That is `list_tool_declarations`' object
+ * and not this lane's (ARCHITECTURE.md §9).
  */
 export async function requestMandate(
   org: string,
   ws: string,
   draft: MandateDraft,
 ): Promise<ActionResult<{ mandateId: string; status: string }>> {
-  const amount = draft.kind === "amount";
-  const unit = amount
-    ? draft.currency.trim().toUpperCase()
-    : draft.currency.trim();
-  // An amount is denominated in a currency, a count in a unit of its own; a
-  // unit that is a currency code would make the two indistinguishable on the
-  // read (`isCurrencyCode`), so each field admits only its own kind of name.
-  if (amount ? !isCurrencyCode(unit) : unit === "" || isCurrencyCode(unit))
-    return refuse("currency");
+  const unit = draft.unit.trim();
+  // A limit denominated in an ISO 4217 code reads back as money
+  // (`isCurrencyCode`, src/data/contracts/money.ts) while the figure beside it
+  // is whole units — the one shape this form must not write, since it is the
+  // shape it cannot scale. Refusing the code keeps the write and the read
+  // agreed: every limit this form writes is a count and reads back as one.
+  // The membership test is on the upper-cased name so that "usd" is refused
+  // beside "USD": an operator who meant money means it in either casing, and
+  // the refusal has to reach them both times. The unit itself is stored as
+  // typed.
+  if (unit === "" || isCurrencyCode(unit.toUpperCase())) return refuse("unit");
   const measure = draft.measure.trim();
   if (measure === "" || measure === RESERVED_MEASURE) return refuse("measure");
   const consequenceTag = draft.consequenceTag.trim();
   if (consequenceTag === "") return refuse("consequenceTag");
 
-  /** A typed limit in the units the ledger records: micros, or whole units. */
+  // Verbatim: `WHOLE_UNITS` admits "0" and a figure with no leading zero, so
+  // what passes is already the digits the ledger records and there is nothing
+  // to normalise. The figure typed is the figure stored.
   const limitValue = (typed: string): string | null =>
-    amount
-      ? microsFromDecimal(typed)
-      : WHOLE_UNITS.test(typed)
-        ? typed.replace(/^0+(?=\d)/, "")
-        : null;
+    WHOLE_UNITS.test(typed) ? typed : null;
 
   const perCall = draft.perCall.trim();
   const perPeriod = draft.perPeriod.trim();

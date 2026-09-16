@@ -5,16 +5,17 @@
 // draft, and a draft grants nothing.
 //
 // A mandate expires: there is no unbounded option, so both dates are required,
-// and the window runs through the end of the last day. The amount is read from
+// and the window runs through the end of the last day. The figure is read from
 // a call by the measure the tool version declares, so the measure is named here
 // rather than guessed; a tool version that exposes no such measure cannot be
 // given a mandate and the handler refuses the draft. The measure cannot be
 // `calls`, which the field below writes and the gate reads as one per call.
 //
-// The operator also states what the measure counts. No contract answers a tool
-// version's `measures`, so the form cannot read the declaration, and scaling a
-// limit by guessing would file a count of 50 as 50,000,000 — a millionfold
-// more authority than was asked for.
+// Every limit here is whole units and is stored exactly as typed. Scaling one
+// to micros is correct only for a measure the tool declares as an `amount`, and
+// no contract answers a tool version's `measures` — so this form does not
+// scale, and a money limit is asked for over the API or MCP by a caller that
+// holds the declaration. `requestMandate` in actions.ts carries the reasoning.
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import { buttonSecondary, inputBase } from "@/ui/control-styles";
@@ -28,9 +29,6 @@ import { type MandateDraft, requestMandate } from "./actions";
 const TESTID = "request-mandate";
 
 const PERIODS = ["daily", "weekly", "monthly"] as const;
-
-/** What the named measure counts, which decides how its limits are scaled. */
-const KINDS = ["amount", "count"] as const;
 
 /** The starter set of consequence tags (MC spec §6.9 part 1). */
 const CONSEQUENCE_TAGS = [
@@ -74,11 +72,6 @@ function period(form: FormData): MandateDraft["period"] {
   return PERIODS.find((p) => p === raw) ?? "monthly";
 }
 
-function kind(form: FormData): MandateDraft["kind"] {
-  const raw = text(form, "kind");
-  return KINDS.find((k) => k === raw) ?? "amount";
-}
-
 export function RequestMandate({
   org,
   ws,
@@ -108,8 +101,7 @@ export function RequestMandate({
         agentId,
         consequenceTag: text(form, "consequenceTag"),
         measure: text(form, "measure"),
-        kind: kind(form),
-        currency: text(form, "currency"),
+        unit: text(form, "unit"),
         perCall: text(form, "perCall"),
         perPeriod: text(form, "perPeriod"),
         period: period(form),
@@ -173,41 +165,25 @@ export function RequestMandate({
             <input
               id={id("measure")}
               name="measure"
-              defaultValue="amount"
               required
               maxLength={64}
               className={inputBase}
             />
           </Field>
-          <Field name="kind" label={t("kind")} hint={t("kindHint")}>
-            <select
-              id={id("kind")}
-              name="kind"
-              defaultValue="amount"
-              className={inputBase}
-            >
-              {KINDS.map((value) => (
-                <option key={value} value={value}>
-                  {t(`kinds.${value}`)}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field name="currency" label={t("currency")} hint={t("currencyHint")}>
+          <Field name="unit" label={t("unit")} hint={t("unitHint")}>
             <input
-              id={id("currency")}
-              name="currency"
-              defaultValue="USD"
+              id={id("unit")}
+              name="unit"
               required
               maxLength={32}
               className={inputBase}
             />
           </Field>
-          <Field name="perCall" label={t("perCall")}>
+          <Field name="perCall" label={t("perCall")} hint={t("perCallHint")}>
             <input
               id={id("perCall")}
               name="perCall"
-              inputMode="decimal"
+              inputMode="numeric"
               className={inputBase}
             />
           </Field>
@@ -219,7 +195,7 @@ export function RequestMandate({
             <input
               id={id("perPeriod")}
               name="perPeriod"
-              inputMode="decimal"
+              inputMode="numeric"
               className={inputBase}
             />
           </Field>

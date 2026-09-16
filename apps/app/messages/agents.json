@@ -379,8 +379,7 @@
         "body": "The request is recorded as a draft for the role accountable for this consequence to grant or decline. A draft grants nothing.",
         "consequenceTag": "Consequence",
         "measure": "Measure",
-        "measureHint": "The name the tool version declares the amount under, which is how it is read from a call. It cannot be “calls”: every call draws one of those, and the field below sets that limit.",
-        "currency": "Currency or unit",
+        "measureHint": "The name the tool version declares the figure under, which is how it is read from a call. It cannot be “calls”: every call draws one of those, and the field below sets that limit.",
         "perCall": "Per call",
         "perPeriod": "Per period",
         "perPeriodHint": "Name a per-call limit, a per-period limit, or both.",
@@ -400,15 +399,15 @@
         "validToHint": "A mandate expires. There is no unbounded option.",
         "confirm": "Request the mandate",
         "pending": "Requesting",
-        "kind": "What it counts",
-        "kindHint": "An amount is money, and its limits are read as a decimal. A count is whole units of whatever the tool measures. The tool version's declaration says which; the ledger stores each differently, so this cannot be guessed.",
-        "kinds": {
-          "amount": "an amount of money",
-          "count": "a count of units"
-        },
-        "currencyHint": "An ISO 4217 code for an amount (USD). For a count, the unit's own name (rows, recipients) — not a currency code."
+        "unit": "Unit",
+        "unitHint": "What the measure counts, in its own name — rows, recipients, messages. Not a currency code: a limit in money is scaled by the tool's declaration, which nothing here can read, so it is asked for over the API or MCP instead.",
+        "perCallHint": "Whole units of the measure. The figure is recorded exactly as typed and is never scaled, so what is granted is what is asked for."
       },
-      "truncated": "The newest {shown} mandates this agent holds. It holds at least that many, and older ones are not listed here."
+      "truncated": "The newest {shown} mandates this agent holds. It holds at least that many, and older ones are not listed here.",
+      "noneVisibleTitle": "No mandate listed",
+      "noneVisible": "No mandate for this agent is listed for you. That is not the same as the agent holding none: you see the mandates of the agents you created, and this list is empty either way.",
+      "noneVisibleDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate in the workspace and can say whether this agent holds one. Ask one of them, or read the Tools ledger with that role.",
+      "noneEffective": "No mandate this agent holds is in effect, so it cannot carry a consequence. The rows below are a request awaiting a decision, or history."
     }
   }
 }

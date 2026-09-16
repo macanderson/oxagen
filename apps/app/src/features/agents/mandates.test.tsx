@@ -5,6 +5,7 @@
 // an axe check (INV-26). The request dialog's own submit is in
 // mandate-request.test.tsx.
 import { cleanup, render, screen, within } from "@testing-library/react";
+import type { OrgRole } from "@/data/contracts/common";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
@@ -42,24 +43,30 @@ const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { Agent } = await import("./agent");
 
-const ctx = unsafeMint(WsCtx, {
-  userId: "usr_marcusbell",
-  orgId: "7a000000-0000-4000-8000-0000000000a1",
-  orgSlug: "acme",
-  orgName: "Acme Robotics",
-  orgRole: "owner",
-  workspaceId: "7b000000-0000-4000-8000-000000000001",
-  wsSlug: "core-platform",
-  wsName: "Core platform",
-});
+const viewer = (orgRole: OrgRole) =>
+  unsafeMint(WsCtx, {
+    userId: "usr_marcusbell",
+    orgId: "7a000000-0000-4000-8000-0000000000a1",
+    orgSlug: "acme",
+    orgName: "Acme Robotics",
+    orgRole,
+    workspaceId: "7b000000-0000-4000-8000-000000000001",
+    wsSlug: "core-platform",
+    wsName: "Core platform",
+  });
 
-async function renderMandates(mandates: Parameters<typeof agentsSource>[0]["mandates"]) {
+const ctx = viewer("owner");
+
+async function renderMandates(
+  mandates: Parameters<typeof agentsSource>[0]["mandates"],
+  as: OrgRole = "owner",
+) {
   const { source, calls } = agentsSource({
     get: readOk(agentDetail()),
     mandates,
   });
   const element = await Agent({
-    ctx,
+    ctx: as === "owner" ? ctx : viewer(as),
     source,
     agent: "release-bot",
     tab: "mandates",
@@ -153,5 +160,124 @@ describe("Agents › Mandates", () => {
     expect(
       within(held()).getByText(/mandate_ledger_unavailable/),
     ).toHaveAttribute("data-reason", "error");
+  });
+
+  // `readerFilter` narrows a non-accountable reader's answer to the agents
+  // they created and reports the narrowing as a successful list, so an empty
+  // answer to such a reader does not establish that the agent holds nothing.
+  // The "No mandate" state is a claim about the agent's authority, and only a
+  // reader who sees every mandate may be shown it.
+  it.each([["member" as const], ["viewer" as const]])(
+    "does not tell a %s that the agent holds no mandate (negative)",
+    async (role) => {
+      await renderMandates(mandateList([]), role);
+      const section = held();
+      expect(within(section).getByRole("heading")).toHaveTextContent(
+        "No mandate listed",
+      );
+      expect(
+        within(section).getByText(/not the same as the agent holding none/),
+      ).toHaveAttribute("data-state", "empty");
+      expect(
+        within(section).queryByText(/cannot carry a consequence/),
+      ).not.toBeInTheDocument();
+      expect(
+        within(section).getByText(/Owner, Admin, Billing or Compliance/),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it.each([["admin" as const], ["billing" as const], ["compliance" as const]])(
+    "tells a %s the agent holds no mandate, because their answer is every one",
+    async (role) => {
+      await renderMandates(mandateList([]), role);
+      expect(
+        within(held()).getByText(/cannot carry a consequence/),
+      ).toHaveAttribute("data-state", "empty");
+    },
+  );
+
+  it("hedges nothing when a non-accountable reader is answered rows", async () => {
+    await renderMandates(mandateList([mandateRow()]), "member");
+    expect(
+      within(held()).queryByText(/not the same as the agent holding none/),
+    ).not.toBeInTheDocument();
+  });
+
+  // A row is not authority. `request_mandate` writes a draft, so a page that
+  // counted rows stopped warning at the moment the operator asked — the moment
+  // the agent still has none. Revoked and expired rows are history, and an
+  // active row granted ahead of its start day is not in effect yet.
+  it.each([
+    ["draft" as const, {}],
+    ["revoked" as const, {}],
+    ["expired" as const, {}],
+    [
+      "active" as const,
+      {
+        validFrom: "2026-10-01T00:00:00.000Z",
+        validTo: "2026-10-31T00:00:00.000Z",
+      },
+    ],
+    [
+      "active" as const,
+      {
+        validFrom: "2026-01-01T00:00:00.000Z",
+        validTo: "2026-06-30T00:00:00.000Z",
+      },
+    ],
+  ])(
+    "still says a %s mandate carries no consequence, and lists it (negative)",
+    async (status, window) => {
+      await renderMandates(mandateList([mandateRow({ status, ...window })]));
+      const section = held();
+      expect(within(section).getByRole("heading")).toHaveTextContent(
+        "No mandate",
+      );
+      expect(
+        within(section).getByText(/cannot carry a consequence/),
+      ).toHaveAttribute("data-state", "empty");
+      // The row is still shown: the request and the history are the record.
+      expect(within(section).getByTestId("agent-mandate")).toHaveAttribute(
+        "data-status",
+        status,
+      );
+    },
+  );
+
+  it("says nothing of the kind while one mandate is in effect", async () => {
+    await renderMandates(
+      mandateList([mandateRow({ status: "draft" }), mandateRow()]),
+    );
+    const section = held();
+    expect(within(section).getByRole("heading")).toHaveTextContent(
+      "Mandates held",
+    );
+    expect(
+      within(section).queryByText(/cannot carry a consequence/),
+    ).toBeNull();
+  });
+
+  // Two measures in one currency are two dollar figures, and which budget each
+  // governs is the question the accountable reader is asking.
+  it("names each measure when a mandate limits more than one", async () => {
+    await renderMandates(
+      mandateList([
+        mandateRow({
+          authority: [mandateAuthority(), mandateAuthority({ measure: "tax" })],
+        }),
+      ]),
+    );
+    const row = within(held()).getByTestId("agent-mandate");
+    expect(row.textContent).toContain("amount");
+    expect(row.textContent).toContain("tax");
+  });
+
+  it("names no measure when a mandate limits exactly one", async () => {
+    await renderMandates(mandateList([mandateRow()]));
+    const cells = within(held())
+      .getByTestId("agent-mandate")
+      .querySelectorAll("td");
+    expect(cells[2]?.textContent).toBe("$250.00");
   });
 });

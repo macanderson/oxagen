@@ -9,7 +9,7 @@
 // when it names a unit (`calls` is the built-in one), which is why a value is
 // a discriminated union rather than a bare number (INV-09).
 import { z } from "zod";
-import { PublicId } from "./common";
+import { type OrgRole, PublicId } from "./common";
 import { Money } from "./money";
 
 const Instant = z.iso.datetime({ offset: true });
@@ -82,6 +82,13 @@ export type MandateRow = z.infer<typeof MandateRow>;
 export const MandateList = z.object({
   mandates: z.array(MandateRow),
   /**
+   * When the ledger answered. Whether a mandate is in effect is a question
+   * about an instant, and the instant a server-rendered page means is the one
+   * it read at — not whenever a component happens to run. Carrying it on the
+   * answer keeps the clock out of render and makes the judgement reproducible.
+   */
+  asOf: Instant,
+  /**
    * How many rows the read asked for, when the answer filled that many and
    * older mandates may therefore be missing; null when the answer was short of
    * the bound and so is the whole set. `list_mandates` takes no cursor, so a
@@ -91,3 +98,50 @@ export const MandateList = z.object({
   truncatedAt: z.number().int().positive().nullable(),
 });
 export type MandateList = z.infer<typeof MandateList>;
+
+/**
+ * The org roles `list_mandates` answers in full. A reader outside this set is
+ * narrowed by the handler (`readerFilter`, packages/handlers/src/_mandate.ts)
+ * to the agents they created, and the narrowing is silent: the answer is a
+ * successful list, and an empty one is indistinguishable from a workspace or
+ * an agent that genuinely holds no mandate. So a surface asks this before it
+ * says no authority exists, in the same spirit as `truncatedAt` above — say
+ * what the view cannot show rather than assert a fact it has not established.
+ *
+ * The set mirrors `ACCOUNTABLE_ORG_ROLES` there in the app's lowercase
+ * spelling; §2 keeps the platform packages out of the app, so it cannot be
+ * imported. A role added there and not here hedges for a reader who needs no
+ * hedge, which is the direction that cannot mislead. The durable answer is a
+ * visibility flag on `list_mandates`' own output (ARCHITECTURE.md §9).
+ */
+const ACCOUNTABLE_READERS: readonly OrgRole[] = [
+  "owner",
+  "admin",
+  "billing",
+  "compliance",
+];
+
+/** Whether this reader's answer covers every mandate, or only their own agents'. */
+export function readsEveryMandate(role: OrgRole): boolean {
+  return ACCOUNTABLE_READERS.includes(role);
+}
+
+/**
+ * Whether this mandate authorizes a call at `at`. Only an `active` row inside
+ * its validity window does: a `draft` is a request nobody has granted, and
+ * `revoked` and `expired` are history. The window is checked as well as the
+ * status because a row may be granted ahead of the day it starts.
+ *
+ * The surfaces need this because `request_mandate` writes a draft, so a page
+ * that counts rows rather than authority stops warning at the exact moment an
+ * operator asks for a mandate — the moment they have none and most need
+ * telling. The rows themselves are still listed; what they may not do is stand
+ * in for authority the agent does not have.
+ */
+export function isEffective(mandate: MandateRow, at: Date): boolean {
+  if (mandate.status !== "active") return false;
+  const now = at.getTime();
+  return (
+    Date.parse(mandate.validFrom) <= now && now <= Date.parse(mandate.validTo)
+  );
+}

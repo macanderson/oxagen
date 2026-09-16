@@ -284,11 +284,10 @@ describe("requestMandate", () => {
   const draft = {
     agentId: "agt_invoicebot",
     consequenceTag: "moves_money",
-    measure: "amount",
-    kind: "amount" as const,
-    currency: "usd",
-    perCall: "250.00",
-    perPeriod: "2,000.00",
+    measure: "rows",
+    unit: "rows",
+    perCall: "50",
+    perPeriod: "1000",
     period: "monthly" as const,
     callsPerDay: "50",
     tools: "stripe__create_payment@*, aws_billing__purchase_savings_plan@2",
@@ -296,13 +295,11 @@ describe("requestMandate", () => {
     validFrom: "2026-09-01",
     validTo: "2026-12-31",
   };
-  const good = { ...draft, perPeriod: "2000.00" };
+  const good = { ...draft };
 
-  it("asks for a draft with the amounts in micros and the tools split", async () => {
+  it("asks for a draft with the limits as typed and the tools split", async () => {
     invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
-    expect(
-      await requestMandate("acme", "core-platform", good),
-    ).toEqual({
+    expect(await requestMandate("acme", "core-platform", good)).toEqual({
       ok: true,
       value: { mandateId: MANDATE_ID, status: "draft" },
     });
@@ -312,11 +309,11 @@ describe("requestMandate", () => {
         agentId: "agt_invoicebot",
         consequenceTags: ["moves_money"],
         limits: {
-          amount: {
-            perCall: "250000000",
-            perPeriod: "2000000000",
+          rows: {
+            perCall: "50",
+            perPeriod: "1000",
             period: "monthly",
-            currencyOrUnit: "USD",
+            currencyOrUnit: "rows",
           },
           calls: {
             perPeriod: "50",
@@ -338,6 +335,34 @@ describe("requestMandate", () => {
     );
   });
 
+  // The defect this closes, reached twice by two routes: a limit that leaves
+  // this action larger than the operator typed. It was `microsFromDecimal`
+  // scaling every limit, then `microsFromDecimal` scaling whichever the
+  // operator called an amount — and a tool that declares the measure as a
+  // count has the gate read 50000000 as fifty million of them. Nothing here
+  // multiplies now, so there is no figure to get wrong.
+  it.each([
+    ["50", "50"],
+    ["1", "1"],
+    ["0", "0"],
+    ["999999999999999999999999999999", "999999999999999999999999999999"],
+  ])(
+    "stores a per-call limit of %s as %s and never scales it",
+    async (typed, stored) => {
+      invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
+      await requestMandate("acme", "core-platform", {
+        ...good,
+        perCall: typed,
+        perPeriod: "",
+        callsPerDay: "",
+      });
+      const sent = invoke.mock.calls[0]?.[1];
+      expect(sent).toMatchObject({ limits: { rows: { perCall: stored } } });
+      // The figure micros would have made of it, which must appear nowhere.
+      expect(JSON.stringify(sent)).not.toContain(`${stored}000000`);
+    },
+  );
+
   it("names only the limits the person filled in", async () => {
     invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
     await requestMandate("acme", "core-platform", {
@@ -348,10 +373,10 @@ describe("requestMandate", () => {
     expect(invoke.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({
         limits: {
-          amount: {
-            perPeriod: "2000000000",
+          rows: {
+            perPeriod: "1000",
             period: "monthly",
-            currencyOrUnit: "USD",
+            currencyOrUnit: "rows",
           },
         },
       }),
@@ -359,7 +384,6 @@ describe("requestMandate", () => {
   });
 
   it.each([
-    [{ currency: "dollars" }, "currency"],
     [{ measure: "  " }, "measure"],
     [{ consequenceTag: "" }, "consequenceTag"],
     [{ perCall: "", perPeriod: "" }, "perPeriod"],
@@ -372,11 +396,27 @@ describe("requestMandate", () => {
     [{ validTo: "" }, "validTo"],
     [{ validFrom: "2026-12-31", validTo: "2026-09-01" }, "validTo"],
     // `calls` is the built-in measure: the gate reads one per call whatever a
-    // limit says, so a money limit filed under it would be read as a ceiling
-    // of that many calls, and the grant handler exempts it from the
-    // measure-declared check that would otherwise catch it.
+    // limit says, so a limit filed under it would be read as a ceiling of that
+    // many calls, and the grant handler exempts it from the measure-declared
+    // check that would otherwise catch it.
     [{ measure: "calls" }, "measure"],
     [{ measure: "  calls  " }, "measure"],
+    // A limit this form writes is whole units of the named unit, so a decimal
+    // has no meaning in it and is refused rather than truncated.
+    [{ perCall: "", perPeriod: "12.5" }, "perPeriod"],
+    [{ perCall: "1.5", perPeriod: "" }, "perCall"],
+    // A leading zero is refused rather than stripped: "007" is not a figure
+    // the ledger's measure-value shape admits, and rewriting what was typed is
+    // the habit this whole action is built to avoid.
+    [{ perCall: "007", perPeriod: "" }, "perCall"],
+    // A currency code would read back as money (`isCurrencyCode`) beside a
+    // figure that is whole units, and money is the one limit this form cannot
+    // write, because scaling it needs the tool's declaration. Both casings are
+    // refused: an operator who meant money means it either way.
+    [{ unit: "USD" }, "unit"],
+    [{ unit: "usd" }, "unit"],
+    [{ unit: "JPY" }, "unit"],
+    [{ unit: "  " }, "unit"],
   ])("refuses %j before the kernel runs (negative)", async (patch, field) => {
     expect(
       await requestMandate("acme", "core-platform", { ...good, ...patch }),
@@ -389,65 +429,16 @@ describe("requestMandate", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("stores a count limit in whole units, not scaled as money", async () => {
-    // The sibling of the `calls` defect: a measure a tool declares as a count
-    // (`rows`) whose limit went through the money scaling would be filed as
-    // 50,000,000 — a millionfold more authority than the 50 that was asked
-    // for — and the gate compares it against whole-unit counts.
-    invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
-    await requestMandate("acme", "core-platform", {
-      ...good,
-      measure: "rows",
-      kind: "count",
-      currency: "rows",
-      perCall: "50",
-      perPeriod: "1000",
-      callsPerDay: "",
-    });
-    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
-      limits: {
-        rows: {
-          perCall: "50",
-          perPeriod: "1000",
-          period: "monthly",
-          currencyOrUnit: "rows",
-        },
-      },
-    });
-  });
-
-  it.each([
-    // A count is whole units: a decimal has no meaning in them.
-    [
-      {
-        kind: "count" as const,
-        currency: "rows",
-        perCall: "",
-        perPeriod: "12.5",
-      },
-      "perPeriod",
-    ],
-    [
-      {
-        kind: "count" as const,
-        currency: "rows",
-        perCall: "1.5",
-        perPeriod: "",
-      },
-      "perCall",
-    ],
-    // A count denominated in a currency code could not be told from an amount
-    // on the read, and an amount must name a real one.
-    [{ kind: "count" as const, currency: "USD" }, "currency"],
-    [{ kind: "count" as const, currency: "  " }, "currency"],
-    [{ kind: "amount" as const, currency: "GAU" }, "currency"],
-    [{ kind: "amount" as const, currency: "rows" }, "currency"],
-  ])("refuses %j before the kernel runs (negative)", async (patch, field) => {
-    expect(
-      await requestMandate("acme", "core-platform", { ...good, ...patch }),
-    ).toEqual({ ok: false, reason: "invalid", code: "invalid_input", field });
-    expect(invoke).not.toHaveBeenCalled();
-  });
+  it.each([["GAU"], ["RPM"], ["recipients"]])(
+    "admits %s, a unit no currency set holds",
+    async (unit) => {
+      invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
+      await requestMandate("acme", "core-platform", { ...good, unit });
+      expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+        limits: { rows: { currencyOrUnit: unit } },
+      });
+    },
+  );
 
   it("runs the authority through the end of the last day it names", async () => {
     invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
@@ -469,16 +460,16 @@ describe("requestMandate", () => {
     ).toMatchObject({ ok: true });
   });
 
-  it("keeps a money limit and a calls-per-day limit apart, both intact", async () => {
+  it("keeps the named limit and the calls-per-day limit apart, both intact", async () => {
     invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
     await requestMandate("acme", "core-platform", good);
     expect(invoke.mock.calls[0]?.[1]).toMatchObject({
       limits: {
-        amount: {
-          perCall: "250000000",
-          perPeriod: "2000000000",
+        rows: {
+          perCall: "50",
+          perPeriod: "1000",
           period: "monthly",
-          currencyOrUnit: "USD",
+          currencyOrUnit: "rows",
         },
         calls: { perPeriod: "50", period: "daily", currencyOrUnit: "calls" },
       },

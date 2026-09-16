@@ -429,7 +429,6 @@ type Messages = {
         consequenceTag: string;
         measure: string;
         measureHint: string;
-        currency: string;
         perCall: string;
         perPeriod: string;
         perPeriodHint: string;
@@ -449,15 +448,15 @@ type Messages = {
         validToHint: string;
         confirm: string;
         pending: string;
-        kind: string;
-        kindHint: string;
-        kinds: {
-          amount: string;
-          count: string;
-        };
-        currencyHint: string;
+        unit: string;
+        unitHint: string;
+        perCallHint: string;
       };
       truncated: string;
+      noneVisibleTitle: string;
+      noneVisible: string;
+      noneVisibleDetail: string;
+      noneEffective: string;
     };
   };
   audit: {
@@ -1803,6 +1802,8 @@ type Messages = {
         revoked: string;
       };
       truncated: string;
+      emptyVisible: string;
+      emptyVisibleDetail: string;
     };
   };
   ui: {
@@ -1861,6 +1862,7 @@ type Messages = {
       remaining: string;
       label: string;
       labelReserved: string;
+      overLimit: string;
     };
   };
 };

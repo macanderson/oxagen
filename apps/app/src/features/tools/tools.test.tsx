@@ -4,6 +4,7 @@
 // are the ledger's, so a mandate with two measures prints both rather than
 // picking one, and a mandate nobody has granted prints no granter.
 import { cleanup, render, screen, within } from "@testing-library/react";
+import type { OrgRole } from "@/data/contracts/common";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MandateList } from "@/data/contracts/mandates";
 import { type Read, readError } from "@/data/read";
@@ -24,22 +25,28 @@ const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { Tools } = await import("./tools");
 
-const ctx = unsafeMint(WsCtx, {
-  userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-  orgId: "7a000000-0000-4000-8000-0000000000a1",
-  orgSlug: "acme",
-  orgName: "Acme Robotics",
-  orgRole: "billing",
-  workspaceId: "7b000000-0000-4000-8000-000000000001",
-  wsSlug: "core-platform",
-  wsName: "Core platform",
-});
+const viewer = (orgRole: OrgRole) =>
+  unsafeMint(WsCtx, {
+    userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    orgId: "7a000000-0000-4000-8000-0000000000a1",
+    orgSlug: "acme",
+    orgName: "Acme Robotics",
+    orgRole,
+    workspaceId: "7b000000-0000-4000-8000-000000000001",
+    wsSlug: "core-platform",
+    wsName: "Core platform",
+  });
+
+const ctx = viewer("billing");
 
 afterEach(cleanup);
 
-async function renderTools(read: Read<MandateList>) {
+async function renderTools(read: Read<MandateList>, as: OrgRole = "billing") {
   const { source, calls } = toolsSource(read);
-  const element = await Tools({ ctx, source });
+  const element = await Tools({
+    ctx: as === "billing" ? ctx : viewer(as),
+    source,
+  });
   const { container } = render(<IntlProvider>{element}</IntlProvider>);
   return { container, calls };
 }
@@ -132,15 +139,16 @@ describe("Tools › mandates ledger", () => {
 
   it("says nothing about older mandates when the answer was the whole set", async () => {
     await renderTools(mandateList([mandateRow()]));
-    expect(within(ledger()).queryByText(/older ones are not listed/)).toBeNull();
+    expect(
+      within(ledger()).queryByText(/older ones are not listed/),
+    ).toBeNull();
   });
 
   it("is empty when the workspace has granted no mandate", async () => {
     const { container } = await renderTools(mandateList([]));
-    expect(within(ledger()).getByText(/No mandate has been granted/)).toHaveAttribute(
-      "data-state",
-      "empty",
-    );
+    expect(
+      within(ledger()).getByText(/No mandate has been granted/),
+    ).toHaveAttribute("data-state", "empty");
     expect(within(ledger()).queryByRole("table")).toBeNull();
     await expectNoAxe(container);
   });
@@ -164,4 +172,33 @@ describe("Tools › mandates ledger", () => {
     expect(failure).toHaveAttribute("data-reason", "error");
     await expectNoAxe(container);
   });
+
+  // The workspace-wide read is narrowed for a non-accountable reader the same
+  // way the per-agent one is, so an empty ledger is not proof of an empty
+  // ledger unless the reader is one this page is written for.
+  it.each([["member" as const], ["viewer" as const]])(
+    "does not tell a %s that the workspace has granted nothing (negative)",
+    async (role) => {
+      const { container } = await renderTools(mandateList([]), role);
+      expect(
+        within(ledger()).getByText(
+          /not the same as the workspace having granted none/,
+        ),
+      ).toHaveAttribute("data-state", "empty");
+      expect(
+        within(ledger()).queryByText(/No mandate has been granted/),
+      ).toBeNull();
+      await expectNoAxe(container);
+    },
+  );
+
+  it.each([["owner" as const], ["admin" as const], ["compliance" as const]])(
+    "tells a %s the workspace has granted none, because their answer is every one",
+    async (role) => {
+      await renderTools(mandateList([]), role);
+      expect(
+        within(ledger()).getByText(/No mandate has been granted/),
+      ).toHaveAttribute("data-state", "empty");
+    },
+  );
 });

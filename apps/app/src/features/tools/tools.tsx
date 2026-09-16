@@ -17,6 +17,7 @@ export async function Tools({
     <div className="flex flex-col gap-6">
       <MandatesLedger
         read={await source.mandates.list(ctx, { agentId: null })}
+        orgRole={ctx.orgRole}
       />
     </div>
   );

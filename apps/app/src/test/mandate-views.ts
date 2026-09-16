@@ -51,8 +51,9 @@ export function mandateRow(overrides: Partial<MandateRow> = {}): MandateRow {
 export function mandateList(
   mandates: MandateRow[],
   truncatedAt: number | null = null,
+  asOf = "2026-09-16T12:00:00.000Z",
 ): Read<MandateList> {
-  return readOk({ mandates, truncatedAt });
+  return readOk({ mandates, truncatedAt, asOf });
 }
 
 /** The built-in `calls` limit, a count measure beside an amount. */

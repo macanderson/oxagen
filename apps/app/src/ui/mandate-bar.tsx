@@ -7,6 +7,14 @@
 // A reservation is drawn only while one is held, which is what the ledger says
 // when `reserved` is above zero; a measure with no per-period limit has no
 // denominator and so no bar.
+//
+// The two ratios can sum past one, because `update_mandate_limits` may lower a
+// limit under authority already drawn. Clamping each segment on its own and
+// letting flex resolve the overflow would rescale both — 500 settled and 500
+// reserved against a limit lowered to 500 would draw an even split, reading as
+// a bar half used. So the reservation is drawn in the room settlement leaves,
+// neither segment shrinks, and the overcommitment is said in words rather than
+// disappearing into a bar that looks balanced.
 import { useTranslations } from "next-intl";
 import type { MandateAuthority } from "@/data/contracts/mandates";
 import { eyebrow } from "./control-styles";
@@ -27,6 +35,12 @@ export function MandateBar({ authority }: { authority: MandateAuthority }) {
     return null;
   }
   const showReserved = isDrawn(authority.reserved);
+  // The settled segment takes what it measures; the reservation takes what is
+  // left of the track, so the two never total more than the limit they draw.
+  const settledWidth = Math.min(1, Math.max(0, settledRatio));
+  const reservedWidth = Math.min(Math.max(0, reservedRatio), 1 - settledWidth);
+  /** Drawn authority past the limit: the ledger holds more than the limit allows. */
+  const over = settledRatio + reservedRatio > 1;
   const label = t(showReserved ? "labelReserved" : "label", {
     settled: text(authority.settled),
     reserved: text(authority.reserved),
@@ -34,7 +48,11 @@ export function MandateBar({ authority }: { authority: MandateAuthority }) {
     limit: text(perPeriod),
   });
   return (
-    <div data-testid="mandate-bar" data-measure={authority.measure}>
+    <div
+      data-testid="mandate-bar"
+      data-measure={authority.measure}
+      data-over={over ? "true" : undefined}
+    >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className={eyebrow}>
           {t("title", {
@@ -48,19 +66,19 @@ export function MandateBar({ authority }: { authority: MandateAuthority }) {
       </div>
       <div
         role="img"
-        aria-label={label}
+        aria-label={over ? `${label} ${t("overLimit")}` : label}
         className="mt-1.5 flex h-2 w-full overflow-hidden rounded-full bg-muted"
       >
         <i
           data-part="settled"
-          style={{ width: ratioWidth(settledRatio) }}
-          className="block h-full bg-foreground"
+          style={{ width: ratioWidth(settledWidth) }}
+          className="block h-full shrink-0 bg-foreground"
         />
         {showReserved ? (
           <i
             data-part="reserved"
-            style={{ width: ratioWidth(reservedRatio) }}
-            className="block h-full bg-foreground/40"
+            style={{ width: ratioWidth(reservedWidth) }}
+            className="block h-full shrink-0 bg-foreground/40"
           />
         ) : null}
       </div>
@@ -88,6 +106,11 @@ export function MandateBar({ authority }: { authority: MandateAuthority }) {
           </div>
         )}
       </dl>
+      {over ? (
+        <p data-state="over-limit" className="mt-1 text-xs text-foreground">
+          {t("overLimit")}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -9,6 +9,10 @@
 // figure of one measure is carried in that measure's form, counts as the
 // integer string the ledger recorded. The ratios the meter draws are computed
 // here, on integers, so the component does no arithmetic (INV-09).
+//
+// The answer is stamped `asOf` with the instant it was mapped, because whether
+// a mandate is in effect is a question about an instant and a component may
+// not ask a clock during render.
 import type { mandateList } from "@oxagen/oxagen/contracts/mandate.list";
 import type { z } from "zod";
 import type { MandateList, MeasureValue } from "@/data/contracts/mandates";
@@ -58,8 +62,10 @@ function toAuthority(
 export function toMandateList(
   out: Out,
   limit: number,
+  asOf: Date = new Date(),
 ): z.input<typeof MandateList> {
   return {
+    asOf: asOf.toISOString(),
     truncatedAt: out.items.length >= limit ? limit : null,
     mandates: out.items.map((item) => ({
       id: item.id,

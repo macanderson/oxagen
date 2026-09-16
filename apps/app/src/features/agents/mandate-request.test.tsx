@@ -45,7 +45,9 @@ async function open() {
 /** Fills the fields the contract requires and submits. */
 async function ask(user: ReturnType<typeof userEvent.setup>) {
   const form = dialog();
-  await user.type(within(form).getByLabelText("Per period"), "2000.00");
+  await user.type(within(form).getByLabelText("Measure"), "rows");
+  await user.type(within(form).getByLabelText("Unit"), "rows");
+  await user.type(within(form).getByLabelText("Per period"), "2000");
   await user.type(
     within(form).getByLabelText("Tools"),
     "stripe__create_payment@*",
@@ -82,7 +84,8 @@ describe("RequestMandate", () => {
     );
     expect(dialog()).toHaveTextContent("There is no unbounded option.");
     expect(dialog()).toHaveTextContent("It cannot be “calls”");
-    expect(dialog()).toHaveTextContent("this cannot be guessed");
+    expect(dialog()).toHaveTextContent("never scaled");
+    expect(dialog()).toHaveTextContent("Not a currency code");
     await expectNoAxe(document.body);
   });
 
@@ -97,11 +100,10 @@ describe("RequestMandate", () => {
     expect(requestMandate).toHaveBeenCalledWith("acme", "core-platform", {
       agentId: "agt_invoicebot",
       consequenceTag: "moves_money",
-      measure: "amount",
-      kind: "amount",
-      currency: "USD",
+      measure: "rows",
+      unit: "rows",
       perCall: "",
-      perPeriod: "2000.00",
+      perPeriod: "2000",
       period: "monthly",
       callsPerDay: "",
       tools: "stripe__create_payment@*",
@@ -116,14 +118,25 @@ describe("RequestMandate", () => {
     );
   });
 
-  it("asks what the measure counts, since the form cannot read the declaration", async () => {
+  // The form cannot read the tool version's declaration and so cannot know
+  // whether a limit should be scaled to micros. It therefore offers no control
+  // that would decide that, defaults no field to a currency, and asks for
+  // whole units — the one shape it can write without possibly writing a bound
+  // wider than the one typed.
+  it("offers nothing that would scale a limit, and defaults no unit", async () => {
     draw();
     await open();
-    const kind = within(dialog()).getByLabelText("What it counts");
-    expect(
-      [...kind.querySelectorAll("option")].map((o) => o.getAttribute("value")),
-    ).toEqual(["amount", "count"]);
-    expect(kind).toHaveValue("amount");
+    const form = dialog();
+    expect(within(form).queryByLabelText("What it counts")).toBeNull();
+    expect(within(form).queryByLabelText("Currency or unit")).toBeNull();
+    expect(within(form).getByLabelText("Unit")).toHaveValue("");
+    expect(within(form).getByLabelText("Measure")).toHaveValue("");
+    for (const label of ["Per call", "Per period"]) {
+      expect(within(form).getByLabelText(label)).toHaveAttribute(
+        "inputmode",
+        "numeric",
+      );
+    }
   });
 
   it("names a refusal in the dialog and navigates nowhere (negative)", async () => {

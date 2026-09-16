@@ -122,4 +122,65 @@ describe("MandateBar", () => {
     );
     expect(screen.queryByTestId("mandate-bar")).toBeNull();
   });
+
+  // `update_mandate_limits` may lower a limit under authority already drawn,
+  // so the two ratios can total more than one. Clamping each on its own and
+  // letting flex resolve the overflow rescaled both, drawing a half-used bar
+  // over a limit that is fully settled and overcommitted.
+  it("draws an over-limit period as full, not as a balanced bar (negative)", async () => {
+    const { container } = draw(
+      <MandateBar
+        authority={authority({
+          perPeriod: money("500000000"),
+          settled: money("500000000"),
+          reserved: money("500000000"),
+          remaining: null,
+          settledRatio: 1,
+          reservedRatio: 1,
+        })}
+      />,
+    );
+    const parts = [...bar().querySelectorAll("i")].map((part) => [
+      part.dataset.part,
+      part.style.width,
+    ]);
+    expect(parts).toEqual([
+      ["settled", "100%"],
+      ["reserved", "0%"],
+    ]);
+    for (const part of bar().querySelectorAll("i")) {
+      expect(part.className).toContain("shrink-0");
+    }
+    expect(bar()).toHaveAttribute("data-over", "true");
+    expect(screen.getByText(/fully settled and overcommitted/)).toHaveAttribute(
+      "data-state",
+      "over-limit",
+    );
+    expect(meter()).toHaveAccessibleName(
+      expect.stringContaining("overcommitted"),
+    );
+    await expectNoAxe(container);
+  });
+
+  it("leaves a period inside its limit unmarked and unshrunk", () => {
+    draw(<MandateBar authority={authority()} />);
+    expect(bar()).not.toHaveAttribute("data-over");
+    expect(screen.queryByText(/overcommitted/)).toBeNull();
+  });
+
+  it("gives the reservation only the room settlement leaves", () => {
+    draw(
+      <MandateBar
+        authority={authority({ settledRatio: 0.8, reservedRatio: 0.5 })}
+      />,
+    );
+    const parts = [...bar().querySelectorAll("i")].map((part) => [
+      part.dataset.part,
+      part.style.width,
+    ]);
+    expect(parts).toEqual([
+      ["settled", "80%"],
+      ["reserved", "20%"],
+    ]);
+  });
 });

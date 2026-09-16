@@ -54,7 +54,8 @@
       "reserved": "reserved by calls in flight",
       "remaining": "remaining",
       "label": "{settled} settled, {remaining} remaining of {limit}",
-      "labelReserved": "{settled} settled, {reserved} reserved by calls in flight, {remaining} remaining of {limit}"
+      "labelReserved": "{settled} settled, {reserved} reserved by calls in flight, {remaining} remaining of {limit}",
+      "overLimit": "The limit is fully settled and overcommitted: the ledger holds more than it now allows, which a lowered limit does to authority already drawn."
     }
   }
 }
