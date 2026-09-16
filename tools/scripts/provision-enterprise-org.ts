@@ -44,7 +44,11 @@
  *        recoverable by flipping `enabled` back).
  *
  * Plus the tier itself: `org.organizations.plan_type = 'enterprise'`. This is
- * the legacy leg of `resolveOrgTierDetailed`, and it is the right one to use —
+ * the SECOND leg of `resolveOrgTierDetailed`, so the script first checks
+ * whether an entitled subscription already answers the tier question — that leg
+ * wins, and writing `plan_type` under one would print green while changing
+ * nothing. It reports the conflict and exits 2 rather than claiming a success
+ * that is not one. The legacy leg is still the right one to write —
  * the subscription leg requires a real `stripe_subscription_id`, and minting a
  * synthetic one would put a row in front of Stripe reconciliation that no
  * Stripe object backs — `cancelOrgSubscription` and `startSubscriptionUpgrade`
@@ -91,11 +95,15 @@ import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
 import { URL, pathToFileURL } from "node:url";
 import kleur from "kleur";
-import { and, eq, gt, isNull, or } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
 import { db, closeDatabase, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { createCreditLot, CREDIT_REASONS } from "@oxagen/billing";
+import {
+  createCreditLot,
+  CREDIT_REASONS,
+  ENTITLED_SUBSCRIPTION_STATUSES,
+} from "@oxagen/billing";
 import { formatError } from "./lib/format-error";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -356,13 +364,60 @@ async function main(): Promise<void> {
   console.log();
 
   let failures = 0;
+  let subscriptionOverrides = 0;
 
   for (const org of orgs) {
     const label = `${org.name} (${org.slug} · ${org.publicId})`;
     console.log(kleur.bold(`  ▸ ${label}`));
 
     try {
-      // ── 2. Tier + recorded action commitment ───────────────────────────────
+      // ── 2a. Does a subscription already answer the tier question? ──────────
+      //
+      // `resolveOrgTierDetailed` reads the subscription leg FIRST and only then
+      // `organizations.plan_type`. So for an org with an entitled subscription
+      // the writes below are inert — they would land in the column, the script
+      // would print green, and the org would still resolve to whatever its plan
+      // row says. The same is true of the action allowance, which
+      // `resolveOrgActionEntitlement` also takes from the plan row when a
+      // subscription answers. Say so instead of claiming a success that is not
+      // one; changing the plan row itself is not this script's call, because a
+      // plan row is shared by every org subscribed to it.
+      const [entitledSub] = await d
+        .select({
+          stripeSubscriptionId: schema.subscriptions.stripeSubscriptionId,
+          status: schema.subscriptions.status,
+          planSlug: schema.plans.slug,
+          planTier: schema.plans.tier,
+        })
+        .from(schema.subscriptions)
+        .innerJoin(
+          schema.plans,
+          eq(schema.subscriptions.planId, schema.plans.id),
+        )
+        .where(
+          and(
+            eq(schema.subscriptions.orgId, org.id),
+            inArray(schema.subscriptions.status, [
+              ...ENTITLED_SUBSCRIPTION_STATUSES,
+            ]),
+          ),
+        )
+        .limit(1);
+
+      if (entitledSub && entitledSub.planTier !== "enterprise") {
+        console.log(
+          kleur.yellow(
+            `      subscription    : entitled '${entitledSub.status}' subscription on plan '${entitledSub.planSlug}' (tier '${entitledSub.planTier}') WINS over plan_type — the tier write below will not take effect. Move the subscription to an enterprise plan in Stripe, or cancel it, then re-run.`,
+          ),
+        );
+        subscriptionOverrides += 1;
+      } else if (entitledSub) {
+        console.log(
+          `      subscription    : entitled '${entitledSub.status}' subscription already on an enterprise plan ('${entitledSub.planSlug}')`,
+        );
+      }
+
+      // ── 2b. Tier + recorded action commitment ──────────────────────────────
       // These move together because enterprise is the tier whose allowance the
       // meter refuses to infer: setting the tier without recording a figure is
       // exactly the mis-provisioned state `billing_enterprise_allowance_missing`
@@ -609,10 +664,20 @@ async function main(): Promise<void> {
   } else {
     console.log(kleur.green("  Done."));
   }
+  if (subscriptionOverrides > 0) {
+    console.log(
+      kleur.yellow(
+        `  ${subscriptionOverrides} organisation(s) still resolve to a non-enterprise tier through an entitled subscription — the credit floor applies, the tier does not.`,
+      ),
+    );
+  }
   if (failures > 0) {
     console.log(kleur.red(`  ${failures} organisation(s) failed.`));
     process.exit(1);
   }
+  // A tier that did not take is not a success, even though every write
+  // succeeded. Exit non-zero so a scripted caller notices.
+  if (subscriptionOverrides > 0) process.exit(2);
 }
 
 // Only run when invoked directly (`tsx provision-enterprise-org.ts`), never on

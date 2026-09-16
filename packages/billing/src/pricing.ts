@@ -765,6 +765,17 @@ export interface SubscriptionPlanDef {
   annualCents: number;
   /** Included seats. */
   seats: number;
+  /**
+   * Governed actions included per entitlement year (ADR-052 §4.2) — the figure
+   * written to `billing.plans.included_actions_annual` by `billing:stripe-sync`.
+   *
+   * Stated here rather than derived from the tier because the column is
+   * `NOT NULL DEFAULT 25000` (the FREE allowance), so a plan row created
+   * without it silently prices every paid tier at one fifteenth of Scale's
+   * allowance and bills overage from action 25,001. The governed action is the
+   * PRIMARY meter under ADR-052, so that default is not a small error.
+   */
+  includedActionsAnnual: number;
   /** Expected share of total credit revenue — used by the blended-margin solve. */
   weight: number;
   /** Display-only feature bullets for the plan card. See {@link PlanFeatures}. */
@@ -798,6 +809,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
     monthlyCents: 2_000,
     annualCents: 20_000, // 2 months free
     seats: 5,
+    includedActionsAnnual: 250_000,
     weight: 0.35,
     features: {
       list: [
@@ -815,6 +827,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
     monthlyCents: 9_900,
     annualCents: 99_000, // 2 months free
     seats: 25,
+    includedActionsAnnual: 1_500_000,
     weight: 0.2,
     features: {
       list: [
@@ -837,6 +850,14 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
     monthlyCents: 50_000,
     annualCents: 500_000, // 2 months free
     seats: 5,
+    // Spec §7.3 negotiates the enterprise figure per contract, and the
+    // 2026-09-11 migration seeded existing enterprise rows at Scale's allowance
+    // for exactly this reason: an unset figure must not read as unlimited, and
+    // must not read as the free tier either. The signed commitment overwrites
+    // it — on the plan row for a Stripe customer, or on
+    // `org.organizations.negotiated_actions_annual` for one provisioned
+    // directly.
+    includedActionsAnnual: 1_500_000,
     weight: 0.1,
     // Display-only. The SOC2 surface below (ACLs/SSO/SCIM/audit) is gated by
     // `tier === "enterprise"`, not by these strings — they only describe it.

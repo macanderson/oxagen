@@ -54,7 +54,15 @@ time right away is a no-op, and running it after the balance has been spent down
 tops it back up. That makes this the maintenance command as well as the setup
 one.
 
-## Two things to know before you run it
+## Three things to know before you run it
+
+**An entitled subscription outranks `plan_type`.** `resolveOrgTierDetailed`
+reads the subscription leg first, so for an org with an entitled subscription on
+a non-enterprise plan the tier write is inert. The script detects this, says so,
+and exits 2 rather than printing green over a change that did not take. Move the
+subscription to an enterprise plan in Stripe or cancel it, then re-run. The
+credit floor still applies either way.
+
 
 **Enterprise switches a security control ON.** It is the only tier whose orgs run
 the full IAM resolver — `checkIAM` fast-paths every lower tier — so an org whose
