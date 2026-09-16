@@ -11,6 +11,9 @@ import type {
   SpendBudgets,
   SpendDrill,
   SpendFigure,
+  SpendFinding,
+  SpendFindingEvidence,
+  SpendFindings,
   SpendReport,
   SpendWaste,
 } from "@/data/contracts/spend";
@@ -21,10 +24,13 @@ import messages from "../../../messages/spend.json";
 
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
-// The dialogs beside the tabs have their own tests (dialogs.test.tsx).
+// The dialogs beside the tabs and on each finding have their own tests
+// (dialogs.test.tsx).
 vi.mock("./actions", () => ({
   setBudgetAction: vi.fn(),
   exportStatementAction: vi.fn(),
+  recordFindingFixAction: vi.fn(),
+  dismissFindingAction: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
@@ -84,6 +90,8 @@ const byGroup = vi.fn<DataSource["spend"]["byGroup"]>();
 const drill = vi.fn<DataSource["spend"]["drill"]>();
 const waste = vi.fn<DataSource["spend"]["waste"]>();
 const budgets = vi.fn<DataSource["spend"]["budgets"]>();
+const findings = vi.fn<DataSource["spend"]["findings"]>();
+const findingEvidence = vi.fn<DataSource["spend"]["findingEvidence"]>();
 const source: DataSource = {
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: { context: vi.fn() },
@@ -101,7 +109,15 @@ const source: DataSource = {
     toolbelt: vi.fn(),
     incidents: vi.fn(),
   },
-  spend: { byGroup, fleet: vi.fn(), drill, waste, budgets },
+  spend: {
+    byGroup,
+    fleet: vi.fn(),
+    drill,
+    waste,
+    budgets,
+    findings,
+    findingEvidence,
+  },
   org: { members: vi.fn() },
 };
 
@@ -119,6 +135,8 @@ beforeEach(() => {
   drill.mockReset();
   waste.mockReset();
   budgets.mockReset();
+  findings.mockReset();
+  findingEvidence.mockReset();
 });
 
 afterEach(async () => {
@@ -143,7 +161,7 @@ describe("Spend › By operator", () => {
         row("prn_ada", { cost: null, productiveRatio: null }),
       ]),
     );
-    await renderSpend();
+    await renderSpend({ tab: "operator" });
 
     expect(byGroup).toHaveBeenCalledExactlyOnceWith(ctx, "operator", PERIOD);
     const strip = screen.getByText("Spend", { selector: "dt" }).closest("div");
@@ -179,7 +197,7 @@ describe("Spend › By operator", () => {
     byGroup.mockResolvedValue(
       report([row("prn_ada", { cost: null, productiveRatio: null })]),
     );
-    await renderSpend();
+    await renderSpend({ tab: "operator" });
     const ada = rowOf("prn_ada");
     expect(ada.querySelector("[data-testid=money]")).toBeNull();
     expect(within(ada).getAllByText("not recorded")).toHaveLength(3);
@@ -190,7 +208,7 @@ describe("Spend › By operator", () => {
     byGroup.mockResolvedValue(
       report([row("prn_ada", { cost: cost("500000", null) })]),
     );
-    await renderSpend();
+    await renderSpend({ tab: "operator" });
     expect(rowOf("prn_ada").querySelector("[data-basis]")).toHaveTextContent(
       "basis not recorded",
     );
@@ -200,7 +218,7 @@ describe("Spend › By operator", () => {
     byGroup.mockResolvedValue(
       report([], figure({ cost: null, calls: 0, runs: 0 })),
     );
-    await renderSpend();
+    await renderSpend({ tab: "operator" });
     expect(
       screen.getByRole("heading", { name: "No spend to report yet" }),
     ).toBeInTheDocument();
@@ -525,5 +543,237 @@ describe("Spend › refusals", () => {
     await renderSpend({ tab: "waste" });
     expect(document.querySelector('[data-state="error"]')).not.toBeNull();
     expect(document.querySelector("[data-cause]")).toBeNull();
+  });
+});
+
+describe("Spend › Findings", () => {
+  const span = {
+    from: "2026-08-16T00:00:00.000Z",
+    to: "2026-09-15T00:00:00.000Z",
+  };
+
+  function found(over: Partial<SpendFinding> = {}): SpendFinding {
+    return {
+      id: "fnd_01k5rtgh",
+      kind: "unpaged_results",
+      level: "tool",
+      subject: "aws_billing__get_cost_and_usage",
+      saving: cost("984600000"),
+      confidence: "high",
+      window: span,
+      why: "Each run requests thirty days of line items unpaged.",
+      fix: "Request grouped totals; page line items only on drill-down.",
+      runs: 88,
+      calls: 3106,
+      ...over,
+    };
+  }
+
+  const second = found({
+    id: "fnd_01k5rteg",
+    kind: "repeated_shell_commands",
+    level: "agent",
+    subject: "a-intel.core.stella-ci",
+    saving: cost("486200000"),
+    confidence: "medium",
+    runs: 1912,
+    calls: 8841,
+  });
+
+  function listed(over: Partial<SpendFindings> = {}): SpendFindings {
+    return {
+      window: span,
+      saving: cost("1470800000"),
+      spend: cost("18402660000", "mixed"),
+      share: 0.64,
+      annualised: cost("17649600000"),
+      counts: { findings: 2, high: 1, medium: 1, operators: 3 },
+      findings: [found(), second],
+      ...over,
+    };
+  }
+
+  it("leads with the savings identified, prints each finding's share of them, and opens each finding's evidence", async () => {
+    byGroup.mockResolvedValue(report([]));
+    findings.mockResolvedValue(readOk(listed()));
+    await renderSpend({ tab: "findings" });
+
+    expect(findings).toHaveBeenCalledExactlyOnceWith(ctx);
+    const saving = screen
+      .getByText("Savings identified", { selector: "dt" })
+      .closest("div");
+    expect(saving).toHaveTextContent("$1,470.80");
+    expect(saving).toHaveTextContent("gateway observed");
+    expect(
+      screen.getByText("Share of priced spend").closest("div"),
+    ).toHaveTextContent("64%");
+    expect(
+      screen.getByText("A year at this run rate").closest("div"),
+    ).toHaveTextContent("$17,649.60");
+    expect(
+      screen.getByRole("img", {
+        name: "Share of the identified savings by finding",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("66.9%")).toBeInTheDocument();
+    expect(screen.getByText("33.1%")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "2 findings · 3 operators involved · 1 high confidence · 1 medium",
+      ),
+    ).toBeInTheDocument();
+
+    const card = document.querySelector<HTMLElement>(
+      'li[data-finding="fnd_01k5rtgh"]',
+    );
+    expect(card).toHaveAttribute("data-confidence", "high");
+    expect(card).toHaveTextContent("Unpaged results");
+    expect(card).toHaveTextContent("aws_billing__get_cost_and_usage");
+    expect(card).toHaveTextContent("88 runs · 3,106 calls");
+    expect(card).toHaveTextContent("$984.60");
+    expect(card).toHaveTextContent("66.9% of the identified savings");
+    expect(
+      within(card ?? document.body).getByRole("link", { name: "Evidence" }),
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/spend?tab=findings&finding=fnd_01k5rtgh",
+    );
+    expect(
+      within(card ?? document.body).getByRole("button", { name: "Fix" }),
+    ).toBeInTheDocument();
+  });
+
+  it("names the largest eight in the legend and rolls the rest into one entry", async () => {
+    const many = Array.from({ length: 10 }, (_item, index) =>
+      found({ id: `fnd_0${String(index)}`, saving: cost("100000000") }),
+    );
+    byGroup.mockResolvedValue(report([]));
+    findings.mockResolvedValue(
+      readOk(
+        listed({
+          saving: cost("1000000000"),
+          counts: { findings: 10, high: 10, medium: 0, operators: 1 },
+          findings: many,
+        }),
+      ),
+    );
+    await renderSpend({ tab: "findings" });
+    expect(screen.getByText("2 smaller findings")).toBeInTheDocument();
+    expect(screen.getAllByText("10%")).toHaveLength(8);
+    expect(screen.getByText("20%")).toBeInTheDocument();
+    expect(document.querySelectorAll("li[data-finding]")).toHaveLength(10);
+  });
+
+  it("says no finding is open, printing no total it was not given", async () => {
+    byGroup.mockResolvedValue(report([]));
+    findings.mockResolvedValue(
+      readOk(
+        listed({
+          window: null,
+          saving: null,
+          spend: null,
+          share: null,
+          annualised: null,
+          counts: { findings: 0, high: 0, medium: 0, operators: 0 },
+          findings: [],
+        }),
+      ),
+    );
+    await renderSpend({ tab: "findings" });
+    expect(
+      screen.getByRole("heading", { name: "No finding is open" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(document.querySelector("li[data-finding]")).toBeNull();
+    expect(
+      screen.getByText("Savings identified", { selector: "dt" }).closest("div"),
+    ).toHaveTextContent("not recorded");
+    expect(screen.queryByText("$0.00")).toBeNull();
+  });
+
+  it("opens one finding's evidence: the arithmetic and the runs it cites, and no rollup read", async () => {
+    const evidence: SpendFindingEvidence = {
+      finding: found(),
+      calls: 3106,
+      coveredCalls: 2980,
+      measuredTokens: 41200,
+      counterfactualTokens: 1900,
+      measured: { micros: "1030400000", currency: "USD" },
+      counterfactual: { micros: "45800000", currency: "USD" },
+      runs: [
+        {
+          runId: "arun_01k5rn8f3j",
+          startedAt: "2026-09-11T06:00:00.000Z",
+          calls: 36,
+          measuredTokens: 41200,
+          counterfactualTokens: 1900,
+          measured: { micros: "24100000", currency: "USD" },
+          counterfactual: { micros: "1120000", currency: "USD" },
+        },
+      ],
+    };
+    findingEvidence.mockResolvedValue(readOk(evidence));
+    await renderSpend({ tab: "findings", finding: "fnd_01k5rtgh" });
+
+    expect(findingEvidence).toHaveBeenCalledExactlyOnceWith(
+      ctx,
+      "fnd_01k5rtgh",
+    );
+    expect(byGroup).not.toHaveBeenCalled();
+    expect(findings).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("Calls the counterfactual prices").closest("div"),
+    ).toHaveTextContent("2,980 of 3,106");
+    expect(screen.getByText("Tokens").closest("div")).toHaveTextContent(
+      "41,200 measured · 1,900 counterfactual",
+    );
+    expect(
+      screen.getByText("What the cited calls cost").closest("div"),
+    ).toHaveTextContent("$1,030.40");
+    expect(
+      screen.getByRole("link", { name: "arun_01k5rn8f3j" }),
+    ).toHaveAttribute("href", "/acme/core-platform/runs/arun_01k5rn8f3j");
+    expect(
+      screen.getByRole("link", { name: "Back to the findings" }),
+    ).toHaveAttribute("href", "/acme/core-platform/spend?tab=findings");
+  });
+
+  it("says the evidence lists no run where the finding cites none", async () => {
+    findingEvidence.mockResolvedValue(
+      readOk({
+        finding: found(),
+        calls: 3106,
+        coveredCalls: 0,
+        measuredTokens: 41200,
+        counterfactualTokens: 1900,
+        measured: { micros: "1030400000", currency: "USD" },
+        counterfactual: { micros: "45800000", currency: "USD" },
+        runs: [],
+      }),
+    );
+    await renderSpend({ tab: "findings", finding: "fnd_01k5rtgh" });
+    expect(
+      screen.getByText("The evidence lists no run for this finding."),
+    ).toBeInTheDocument();
+  });
+
+  it("replaces the body when the findings read or the evidence read is refused (negative)", async () => {
+    byGroup.mockResolvedValue(report([]));
+    findings.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      permission: "spend.read",
+    });
+    await renderSpend({ tab: "findings" });
+    expect(document.querySelector('[data-state="denied"]')).not.toBeNull();
+    expect(document.querySelector("li[data-finding]")).toBeNull();
+    cleanup();
+
+    findingEvidence.mockResolvedValue(
+      readError("rollup_rebuild_in_progress", 504),
+    );
+    await renderSpend({ tab: "findings", finding: "fnd_01k5rtgh" });
+    expect(document.querySelector('[data-state="error"]')).not.toBeNull();
+    expect(screen.getByRole("navigation")).toBeInTheDocument();
   });
 });

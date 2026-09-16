@@ -1,5 +1,6 @@
-// The Spend page body (#2962; ARCHITECTURE.md §1.2): the cost rollup for the
-// current month by operator, agent (with the models beside it) and tool,
+// The Spend page body (#2962, #2963; ARCHITECTURE.md §1.2): the open costed
+// findings the page leads with and one finding's evidence, the cost rollup for
+// the current month by operator, agent (with the models beside it) and tool,
 // wasted spend by cause, the configured ceilings, and one key's drill. Every
 // read is a noBillingGate kernel read through the spend port; the first read
 // that does not answer replaces the body with its state. Beside the tabs, Export
@@ -13,6 +14,7 @@ import { BudgetDialog } from "./budget-dialog";
 import { DrillSection } from "./drill";
 import { ExportDialog } from "./export-dialog";
 import { SpendStrip } from "./figures";
+import { FindingEvidenceSection, FindingsSection } from "./findings";
 import { ReadFailure, SpendEmpty } from "./states";
 import { BudgetsTable, GroupTable } from "./tables";
 import { SpendTabs } from "./tabs";
@@ -70,6 +72,28 @@ async function body(
   }
   const period = monthToDate(today);
   switch (view.tab) {
+    case "findings": {
+      if (view.finding !== null) {
+        const evidence = await source.spend.findingEvidence(ctx, view.finding);
+        return evidence.ok ? (
+          <FindingEvidenceSection evidence={evidence.value} at={at} />
+        ) : (
+          <ReadFailure read={evidence} />
+        );
+      }
+      const [report, findings] = await Promise.all([
+        source.spend.byGroup(ctx, "operator", period),
+        source.spend.findings(ctx),
+      ]);
+      if (!report.ok) return <ReadFailure read={report} />;
+      if (!findings.ok) return <ReadFailure read={findings} />;
+      return (
+        <>
+          <SpendStrip total={report.value.total} period={period} />
+          <FindingsSection findings={findings.value} at={at} />
+        </>
+      );
+    }
     case "operator":
     case "tool": {
       const report = await source.spend.byGroup(ctx, view.tab, period);

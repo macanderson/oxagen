@@ -101,6 +101,8 @@ export function fleetSource(reads: FleetReads) {
       drill: refuse,
       waste: refuse,
       budgets: refuse,
+      findings: refuse,
+      findingEvidence: refuse,
     },
     org: { members: refuse },
   };

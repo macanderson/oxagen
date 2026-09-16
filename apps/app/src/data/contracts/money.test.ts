@@ -9,6 +9,7 @@ import {
   microsFromDecimal,
   moneyFromMicros,
   mulMicros,
+  ratioOfMicros,
 } from "./money";
 
 const usd = (micros: string) => ({ micros, currency: "USD" });
@@ -37,6 +38,39 @@ describe("moneyFromMicros", () => {
       );
     },
   );
+});
+
+describe("ratioOfMicros", () => {
+  it("divides one finding's saving by the listed total", () => {
+    expect(ratioOfMicros(usd("98460000"), usd("196920000"))).toBe(0.5);
+    expect(ratioOfMicros(usd("1"), usd("8"))).toBe(0.125);
+  });
+
+  it("divides at magnitudes a float would not hold exactly", () => {
+    expect(
+      ratioOfMicros(usd("9007199254740993"), usd("18014398509481986")),
+    ).toBe(0.5);
+  });
+
+  it("answers a ratio above one where the part is larger, clamping nothing", () => {
+    expect(ratioOfMicros(usd("3000000"), usd("2000000"))).toBe(1.5);
+  });
+
+  it("answers null for a zero total, so no share is printed (negative)", () => {
+    expect(ratioOfMicros(usd("5000000"), usd("0"))).toBeNull();
+  });
+
+  it("answers null across two currencies (negative)", () => {
+    expect(
+      ratioOfMicros(usd("5000000"), { micros: "5000000", currency: "EUR" }),
+    ).toBeNull();
+  });
+
+  it("refuses micros that are not an integer string (negative)", () => {
+    expect(() => ratioOfMicros(usd("1.5"), usd("3000000"))).toThrow(
+      "micros must be an integer string",
+    );
+  });
 });
 
 describe("mulMicros", () => {

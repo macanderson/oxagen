@@ -247,6 +247,8 @@ export function agentsSource(reads: AgentReads) {
       drill: refuse,
       waste: refuse,
       budgets: refuse,
+      findings: refuse,
+      findingEvidence: refuse,
     },
     org: { members: refuse },
   };
