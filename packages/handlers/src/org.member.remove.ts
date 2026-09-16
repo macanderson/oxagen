@@ -24,6 +24,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { CLI_SESSION_SCOPE_PURPOSE } from "@oxagen/auth/cli-auth";
 import { and, eq, isNull, count, sql } from "drizzle-orm";
+import { resolveMemberUserId } from "./lib/org-member";
 import { logger } from "./logger";
 
 // System org role names that carry Owner privileges.
@@ -129,6 +130,12 @@ export const orgMemberRemoveHandler: CapabilityHandler<
   // it so they are atomic and RLS-policied. A guard throw rolls the (so-far
   // read-only) transaction back and propagates its HandlerError to the surface.
   await withTenantDb(async (tx) => {
+    // ── Resolve the target's user id ────────────────────────────────────────────
+    // The console names a member by public id (`usr_…`) and never by uuid, which
+    // org_users.user_id is; lib/org-member.ts resolves one form into the other,
+    // bounded by this org, after the actor gate above.
+    const target = await resolveMemberUserId(tx, ctx.orgId, input.targetUserId);
+
     // ── Resolve target membership (IDOR guard) ──────────────────────────────────
     // Verify the target userId belongs to THIS org. `not_found` on mismatch —
     // if the target is not a member of this org, confirm nothing about their
@@ -139,7 +146,7 @@ export const orgMemberRemoveHandler: CapabilityHandler<
       .where(
         and(
           eq(schema.orgUsers.orgId, ctx.orgId),
-          eq(schema.orgUsers.userId, input.targetUserId),
+          eq(schema.orgUsers.userId, target),
         ),
       )
       .limit(1);
@@ -194,7 +201,7 @@ export const orgMemberRemoveHandler: CapabilityHandler<
         .where(
           and(
             eq(schema.principals.orgId, ctx.orgId),
-            eq(schema.principals.parentUserId, input.targetUserId),
+            eq(schema.principals.parentUserId, target),
             eq(schema.principals.kind, "human"),
           ),
         )
@@ -240,7 +247,7 @@ export const orgMemberRemoveHandler: CapabilityHandler<
       .where(
         and(
           eq(schema.principals.orgId, ctx.orgId),
-          eq(schema.principals.parentUserId, input.targetUserId),
+          eq(schema.principals.parentUserId, target),
           eq(schema.principals.kind, "human"),
         ),
       )
@@ -281,7 +288,7 @@ export const orgMemberRemoveHandler: CapabilityHandler<
       .where(
         and(
           eq(schema.orgUsers.orgId, ctx.orgId),
-          eq(schema.orgUsers.userId, input.targetUserId),
+          eq(schema.orgUsers.userId, target),
         ),
       );
 
@@ -300,7 +307,7 @@ export const orgMemberRemoveHandler: CapabilityHandler<
       .where(
         and(
           eq(schema.apiKeys.orgId, ctx.orgId),
-          eq(schema.apiKeys.createdByUserId, input.targetUserId),
+          eq(schema.apiKeys.createdByUserId, target),
           sql`${schema.apiKeys.scope}->>'purpose' = ${CLI_SESSION_SCOPE_PURPOSE}`,
           isNull(schema.apiKeys.deletedAt),
         ),

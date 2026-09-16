@@ -10,10 +10,15 @@ const router = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 const { parseHostedInvoiceUrl } = await import("@/shared/invoice-url");
+const { parsePullRequestUrl } = await import("@/shared/pull-request-url");
 const { routes } = await import("@/shared/safe-path");
-const { HostedInvoiceLink, SafeForm, SafeLink, useNavigate } = await import(
-  "./navigation"
-);
+const {
+  HostedInvoiceLink,
+  PullRequestLink,
+  SafeForm,
+  SafeLink,
+  useNavigate,
+} = await import("./navigation");
 
 afterEach(() => {
   cleanup();
@@ -66,6 +71,18 @@ describe("HostedInvoiceLink", () => {
     if (url === null) throw new Error("fixture url refused");
     render(<HostedInvoiceLink to={url}>invoice</HostedInvoiceLink>);
     const link = screen.getByRole("link", { name: "invoice" });
+    expect(link).toHaveAttribute("href", url);
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+});
+
+describe("PullRequestLink", () => {
+  it("opens the pull request in a new tab without an opener", () => {
+    const url = parsePullRequestUrl("https://github.com/acme/core/pull/519");
+    if (url === null) throw new Error("fixture url refused");
+    render(<PullRequestLink to={url}>pull request</PullRequestLink>);
+    const link = screen.getByRole("link", { name: "pull request" });
     expect(link).toHaveAttribute("href", url);
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");

@@ -69,7 +69,8 @@ function harness(over: {
         Promise.resolve(id === LEDGER_ID ? summary() : null),
       readAttemptEventsSince: memoryEvents([]),
     },
-    readRunCosts: stores.readRunCosts,
+    readRunRollups: stores.readRunRollups,
+    readWitnessFor: stores.readWitnessFor,
     tachoFrames: memoryTachoFrames("none", []),
     dispatch,
   };

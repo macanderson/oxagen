@@ -17,6 +17,14 @@ const preprocessor = path.join(appDir, "knip.preprocessor.ts");
 const UNUSED_FILE = "files orphan.ts";
 const UNUSED_EXPORT = "exports lib.ts unused";
 
+/**
+ * Every case below spawns knip as a child process and waits for it to walk the
+ * fixture. On a loaded CI runner one spawn alone outlasts the 5s default and
+ * the case times out on nothing but scheduling, so each gets the same 30s
+ * budget features/shell/shell-server.test.tsx gives its one slow import.
+ */
+const SPAWN_BUDGET_MS = 30_000;
+
 let fixture: string | undefined;
 
 function knipRun(baseline: unknown): { status: number | null; out: string } {
@@ -50,7 +58,9 @@ afterEach(() => {
   fixture = undefined;
 });
 
-describe("knip baseline", () => {
+// Each case spawns knip on a fresh fixture; the first cold spawn has run past
+// vitest's 5 s default on a loaded CI runner.
+describe("knip baseline", { timeout: 30_000 }, () => {
   it("apps/app's baseline is empty: every export is reachable and every dependency imported (INV-16)", () => {
     const baseline: unknown = JSON.parse(
       readFileSync(path.join(appDir, BASELINE_FILE), "utf8"),
@@ -58,45 +68,69 @@ describe("knip baseline", () => {
     expect(baseline).toEqual([]);
   });
 
-  it("passes when every finding is in the baseline", () => {
-    const run = knipRun([UNUSED_FILE, UNUSED_EXPORT]);
-    expect(run.status).toBe(0);
-    expect(run.out).not.toMatch(/Unused|Stale/);
-  });
+  it(
+    "passes when every finding is in the baseline",
+    () => {
+      const run = knipRun([UNUSED_FILE, UNUSED_EXPORT]);
+      expect(run.status).toBe(0);
+      expect(run.out).not.toMatch(/Unused|Stale/);
+    },
+    SPAWN_BUDGET_MS,
+  );
 
-  it("fails on a finding the baseline does not list", () => {
-    const run = knipRun([UNUSED_FILE]);
-    expect(run.status).toBe(1);
-    expect(run.out).toMatch(/Unused exports \(1\)/);
-    expect(run.out).toContain("unused");
-    expect(run.out).not.toContain("orphan.ts");
-  });
+  it(
+    "fails on a finding the baseline does not list",
+    () => {
+      const run = knipRun([UNUSED_FILE]);
+      expect(run.status).toBe(1);
+      expect(run.out).toMatch(/Unused exports \(1\)/);
+      expect(run.out).toContain("unused");
+      expect(run.out).not.toContain("orphan.ts");
+    },
+    SPAWN_BUDGET_MS,
+  );
 
-  it("fails on a baseline entry knip no longer reports", () => {
-    const run = knipRun([UNUSED_FILE, UNUSED_EXPORT, "exports lib.ts gone"]);
-    expect(run.status).toBe(1);
-    expect(run.out).toContain(`Stale ${BASELINE_FILE} entries (1)`);
-    expect(run.out).toContain("exports lib.ts gone");
-    expect(run.out).not.toMatch(/Unused/);
-  });
+  it(
+    "fails on a baseline entry knip no longer reports",
+    () => {
+      const run = knipRun([UNUSED_FILE, UNUSED_EXPORT, "exports lib.ts gone"]);
+      expect(run.status).toBe(1);
+      expect(run.out).toContain(`Stale ${BASELINE_FILE} entries (1)`);
+      expect(run.out).toContain("exports lib.ts gone");
+      expect(run.out).not.toMatch(/Unused/);
+    },
+    SPAWN_BUDGET_MS,
+  );
 
-  it("refuses a baseline that is not an array", () => {
-    const run = knipRun({ files: [UNUSED_FILE] });
-    expect(run.status).not.toBe(0);
-    expect(run.out).toContain("expected a JSON array of strings");
-    expect(run.out).not.toMatch(/Unused|Stale/);
-  });
+  it(
+    "refuses a baseline that is not an array",
+    () => {
+      const run = knipRun({ files: [UNUSED_FILE] });
+      expect(run.status).not.toBe(0);
+      expect(run.out).toContain("expected a JSON array of strings");
+      expect(run.out).not.toMatch(/Unused|Stale/);
+    },
+    SPAWN_BUDGET_MS,
+  );
 
-  it("refuses a baseline array with a non-string entry", () => {
-    const run = knipRun([UNUSED_FILE, UNUSED_EXPORT, 1]);
-    expect(run.status).not.toBe(0);
-    expect(run.out).toContain("expected a JSON array of strings");
-    expect(run.out).not.toMatch(/Unused|Stale/);
-  });
+  it(
+    "refuses a baseline array with a non-string entry",
+    () => {
+      const run = knipRun([UNUSED_FILE, UNUSED_EXPORT, 1]);
+      expect(run.status).not.toBe(0);
+      expect(run.out).toContain("expected a JSON array of strings");
+      expect(run.out).not.toMatch(/Unused|Stale/);
+    },
+    SPAWN_BUDGET_MS,
+  );
 
-  it("refuses duplicate baseline entries", () => {
-    const run = knipRun([UNUSED_FILE, UNUSED_FILE, UNUSED_EXPORT]);
-    expect(run.status).not.toBe(0);
-    expect(run.out).toContain("duplicate entries");
-  });
+  it(
+    "refuses duplicate baseline entries",
+    () => {
+      const run = knipRun([UNUSED_FILE, UNUSED_FILE, UNUSED_EXPORT]);
+      expect(run.status).not.toBe(0);
+      expect(run.out).toContain("duplicate entries");
+    },
+    SPAWN_BUDGET_MS,
+  );
 });
