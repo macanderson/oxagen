@@ -172,6 +172,7 @@ export async function Agent({
         <MandatesSection
           read={await source.mandates.list(ctx, { agentId: identity.id })}
           orgRole={ctx.orgRole}
+          agentStatus={identity.status}
           org={place.org}
           ws={place.ws}
           agentId={identity.id}

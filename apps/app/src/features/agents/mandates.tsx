@@ -25,6 +25,14 @@
 // it — the empty state declines to assert absence, and the table no longer
 // implies it is everything the agent holds.
 //
+// A retired identity is not offered the request. Retirement archives the agent
+// and suspends its principal, so a mandate granted after it can never be drawn
+// — and neither `request_mandate` nor `grant_mandate` resolves that status
+// (`resolveAgent` filters on `deletedAt`, which retirement does not set), so
+// the write would succeed and put real authority in the ledger against an
+// identity that can never run. The page declines to offer it and says why;
+// closing it on the other surfaces is the handler's, and is filed as #3124.
+//
 // The warning is driven by authority and not by row count. A draft, a revoked
 // row and an expired one all authorize nothing, and `request_mandate` writes a
 // draft — so a page that asked "are there rows?" would stop warning the moment
@@ -32,6 +40,7 @@
 // none. The rows stay in the table, because the request and the history are
 // what the office reads; only the claim about authority is theirs to make.
 import { useFormatter, useTranslations } from "next-intl";
+import type { AgentStatus } from "@/data/contracts/agents";
 import type { OrgRole } from "@/data/contracts/common";
 import {
   blindSpotOf,
@@ -59,8 +68,14 @@ const COLUMNS = [
 export function MandatesSection({
   read,
   orgRole,
+  agentStatus,
   ...place
-}: { read: Read<MandateList>; orgRole: OrgRole } & Place) {
+}: {
+  read: Read<MandateList>;
+  orgRole: OrgRole;
+  /** A retired identity can hold no new authority: the request is not offered. */
+  agentStatus: AgentStatus;
+} & Place) {
   const t = useTranslations("agents.mandates");
   const format = useFormatter();
   const title = t("title");
@@ -75,6 +90,8 @@ export function MandatesSection({
    * reasons, and neither is visible in the rows themselves.
    */
   const blindSpot = read.ok ? blindSpotOf(read.value, orgRole) : null;
+  /** Retirement suspends the principal, so authority granted after it can never be drawn. */
+  const retired = agentStatus === "retired";
   return (
     <section aria-labelledby="agent-mandates" className={`${panel} p-4`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -90,12 +107,21 @@ export function MandatesSection({
             {t("lead")}
           </p>
         </div>
-        <RequestMandate
-          org={place.org}
-          ws={place.ws}
-          agentId={place.agentId}
-          agentSlug={place.agentSlug}
-        />
+        {retired ? (
+          <p
+            data-state="retired"
+            className="max-w-xs text-sm text-muted-foreground"
+          >
+            {t("retired")}
+          </p>
+        ) : (
+          <RequestMandate
+            org={place.org}
+            ws={place.ws}
+            agentId={place.agentId}
+            agentSlug={place.agentSlug}
+          />
+        )}
       </div>
       <div className="mt-3">
         {!read.ok ? (

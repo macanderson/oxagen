@@ -460,6 +460,7 @@ type Messages = {
       partial: string;
       noneListed: string;
       noneListedDetail: string;
+      retired: string;
     };
   };
   audit: {

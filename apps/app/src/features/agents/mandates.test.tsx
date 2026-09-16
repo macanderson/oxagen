@@ -5,6 +5,7 @@
 // an axe check (INV-26). The request dialog's own submit is in
 // mandate-request.test.tsx.
 import { cleanup, render, screen, within } from "@testing-library/react";
+import type { AgentStatus } from "@/data/contracts/agents";
 import type { OrgRole } from "@/data/contracts/common";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -60,9 +61,10 @@ const ctx = viewer("owner");
 async function renderMandates(
   mandates: Parameters<typeof agentsSource>[0]["mandates"],
   as: OrgRole = "owner",
+  status: AgentStatus = "enrolled",
 ) {
   const { source, calls } = agentsSource({
-    get: readOk(agentDetail()),
+    get: readOk(agentDetail({ identity: { status } })),
     mandates,
   });
   const element = await Agent({
@@ -311,6 +313,35 @@ describe("Agents › Mandates", () => {
   it("stays quiet about the page bound while a mandate is in effect", async () => {
     await renderMandates(mandateList([mandateRow()], 100));
     expect(within(held()).queryByText(/may be older than the page/)).toBeNull();
+  });
+
+  // Retirement archives the agent and suspends its principal, and neither
+  // mandate handler resolves that status — so the write would succeed and put
+  // real authority in the ledger against an identity that can never run.
+  it("does not offer the request on a retired identity (negative)", async () => {
+    await renderMandates(mandateList([mandateRow()]), "owner", "retired");
+    const section = held();
+    expect(
+      within(section).queryByRole("button", { name: "Request a mandate" }),
+    ).toBeNull();
+    expect(
+      within(section).getByText(/cannot be given a mandate/),
+    ).toHaveAttribute("data-state", "retired");
+    // What it held is still the record and stays listed.
+    expect(within(section).getByTestId("agent-mandate")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["enrolled" as const],
+    ["unenrolled" as const],
+    ["suspended" as const],
+  ])("offers the request on a %s identity", async (status) => {
+    await renderMandates(mandateList([mandateRow()]), "owner", status);
+    const section = held();
+    expect(
+      within(section).getByRole("button", { name: "Request a mandate" }),
+    ).toBeInTheDocument();
+    expect(within(section).queryByText(/cannot be given a mandate/)).toBeNull();
   });
 
   // Two measures in one currency are two dollar figures, and which budget each
