@@ -3,7 +3,7 @@
  * `apps/app/capability-ui-map.json`.
  *
  * It asserts the Fleet page renders without an error page for a fresh org and
- * that the honesty rule ADR-069 turns on survives into the UI: the page
+ * that the honesty rule ADR-078 turns on survives into the UI: the page
  * explains both tiers, and it never ranks them against each other. A fresh org
  * has no enrolled machines, so this drives the empty state — which is what
  * every customer sees first, and the state where a screen is most likely to
@@ -48,7 +48,7 @@ test("fleet: renders, explains both tiers, and ranks neither", async ({
   );
 
   // Both tiers are named and distinguished, so a reader who has one of each
-  // knows they are not degrees of the same thing (ADR-069 §2).
+  // knows they are not degrees of the same thing (ADR-078 §2).
   const intro = page.getByTestId("fleet-page");
   await expect(intro).toContainText(/wrapped/i);
   await expect(intro).toContainText(/connected/i);

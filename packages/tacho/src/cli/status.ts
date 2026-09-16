@@ -62,7 +62,7 @@ export interface StatusReport {
    * Present when the host connected Claude Desktop. Not called `hooks`,
    * because there are none: a connected app carries an MCP server entry, and
    * `otherServers` is the count of servers in that app Oxagen does not see
-   * (ADR-069 §3).
+   * (ADR-078 §3).
    */
   claudeDesktop?: ReturnType<typeof claudeDesktopPresence>;
   wal?: { sessions: number; unshipped: number; oldest_unshipped_at?: string };

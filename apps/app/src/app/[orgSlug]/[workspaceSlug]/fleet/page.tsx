@@ -1,6 +1,6 @@
 /**
  * Fleet: every machine enrolled in this workspace, and — the point of the
- * screen — what Oxagen actually records for each app on it (ADR-069).
+ * screen — what Oxagen actually records for each app on it (ADR-078).
  *
  * `harnesses` alone says which apps a machine has and nothing about what that
  * coverage means, and the two tiers mean very different things:

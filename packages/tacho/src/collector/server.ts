@@ -42,7 +42,7 @@ export interface CollectorApi {
   sessions: () => Array<Record<string, unknown>>;
   exportSession: (key: string, format: ExportFormat) => string | undefined;
   /**
-   * The local MCP gateway (ADR-069). Absent on a daemon built without one,
+   * The local MCP gateway (ADR-078). Absent on a daemon built without one,
    * in which case `/mcp` is a 404 like any other unknown route.
    */
   mcp?: (

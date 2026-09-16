@@ -42,7 +42,7 @@ export const TACHO_HARNESS_LABELS: Record<TachoHarness, string> = {
 };
 
 /**
- * Which enforcement tier a harness can reach on this machine (ADR-069), using
+ * Which enforcement tier a harness can reach on this machine (ADR-078), using
  * the `enforcement_tier` vocabulary the record already speaks.
  *
  * `harness` — **wrapped.** A `PreToolUse` hook sees every action the agent
@@ -57,7 +57,7 @@ export const TACHO_HARNESS_LABELS: Record<TachoHarness, string> = {
  *
  * Neither dominates the other. Wrapped is broader and weaker; connected is
  * narrower and stronger. Nothing that renders a harness may put them on one
- * axis — see ADR-069 §2.
+ * axis — see ADR-078 §2.
  */
 export const TACHO_HARNESS_TIERS: Record<TachoHarness, "harness" | "gateway"> =
   {

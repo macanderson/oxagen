@@ -1,5 +1,5 @@
 /**
- * A host enrolled by an earlier build is a host in the fleet. ADR-069 added
+ * A host enrolled by an earlier build is a host in the fleet. ADR-078 added
  * four members to `host.json` — `endpoints.mcp`, `mcp_stdio_command`,
  * `displaced_mcp_servers`, and `claude-desktop` as a harness — and every one
  * of them is optional or defaulted for exactly this reason: a file written
@@ -21,7 +21,7 @@ import { bundleSigner, testHostFile, unsignedBundle } from "./test-support";
 const signer = bundleSigner();
 const bundle = signer.sign(unsignedBundle());
 
-/** A host.json exactly as the build before ADR-069 wrote it. */
+/** A host.json exactly as the build before ADR-078 wrote it. */
 function v1File(): Record<string, unknown> {
   const host = testHostFile(signer, bundle) as Record<string, unknown>;
   const copy = JSON.parse(JSON.stringify(host)) as Record<string, unknown>;

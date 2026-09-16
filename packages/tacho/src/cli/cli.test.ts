@@ -1383,7 +1383,7 @@ describe("export and verify", () => {
       ["claude-code", true, false],
       ["codex", true, false],
       ["stella", true, false],
-      // The connected tier (ADR-069): a GUI app, detected on disk rather
+      // The connected tier (ADR-078): a GUI app, detected on disk rather
       // than on PATH, and reported with its tier so no surface has to guess.
       ["claude-desktop", true, false],
     ]);

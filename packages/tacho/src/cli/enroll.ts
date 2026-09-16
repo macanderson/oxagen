@@ -495,7 +495,7 @@ export async function enroll(
       }
     }
     if (harnesses.includes("claude-desktop")) {
-      // The connected tier (ADR-069). No hooks: Claude Desktop has no hook
+      // The connected tier (ADR-078). No hooks: Claude Desktop has no hook
       // surface, so what is written is one MCP server entry pointing at the
       // collector's loopback gateway, and what Oxagen can govern is the
       // toolbelt it serves through it.
@@ -547,7 +547,7 @@ export async function enroll(
           host.host_enrollment_id,
         );
         if (presence.otherServers > 0) {
-          // ADR-069 §3: the operator is entitled to the size of the gap. A
+          // ADR-078 §3: the operator is entitled to the size of the gap. A
           // tool served by another MCP server never reaches Oxagen, and no
           // code here can change that.
           deps.out(

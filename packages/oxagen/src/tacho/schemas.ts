@@ -53,7 +53,7 @@ export const hostSummarySchema = z
     mode: tachoBundleModeSchema,
     harnesses: z.array(z.string()),
     /**
-     * The enforcement tier each of this host's harnesses reaches (ADR-069),
+     * The enforcement tier each of this host's harnesses reaches (ADR-078),
      * using the `enforcement_tier` vocabulary the session record already
      * speaks. `harness` is a *wrapped* app: a PreToolUse hook sees every
      * action it takes, but runs in a process Oxagen does not own, so the

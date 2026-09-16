@@ -82,7 +82,7 @@ export interface DaemonStatus {
   agents?: DaemonAgentSummary[];
   /**
    * One row per MCP client that has called through the local gateway
-   * (ADR-069). A separate list from `agents` on purpose: those are the
+   * (ADR-078). A separate list from `agents` on purpose: those are the
    * wrapped ones, and a surface that merged the two would have to invent a
    * tier for each row after the fact.
    */

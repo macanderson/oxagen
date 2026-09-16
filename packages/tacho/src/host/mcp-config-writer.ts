@@ -1,6 +1,6 @@
 /**
  * The MCP-client config writer: what `settings-writer.ts` is to a *wrapped*
- * harness, this is to a *connected* one (ADR-069).
+ * harness, this is to a *connected* one (ADR-078).
  *
  * A wrapped harness (Claude Code, Codex, Stella) runs a `PreToolUse` hook, so
  * Tacho sees and can refuse every action the agent takes, including the
@@ -247,7 +247,7 @@ export interface McpServerPresence {
 
 /**
  * What is installed in this app's config. `otherServers` is not a warning
- * about those servers; it is the honest size of the gap ADR-069 names — a
+ * about those servers; it is the honest size of the gap ADR-078 names — a
  * connected app can always reach a tool Oxagen never sees by adding one.
  */
 export function oxagenMcpPresence(

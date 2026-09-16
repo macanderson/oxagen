@@ -21,7 +21,7 @@ export const HARNESSES: Harness[] = [
 ];
 
 /**
- * Which enforcement tier each app can reach (ADR-069). Mirrors
+ * Which enforcement tier each app can reach (ADR-078). Mirrors
  * `TACHO_HARNESS_TIERS` in `packages/tacho/src/wire.ts`; the desktop app
  * reads files the CLIs write and shares no runtime code with them, so the
  * list is written twice and `commands.test.ts` is where the two meet.

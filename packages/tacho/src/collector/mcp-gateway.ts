@@ -1,5 +1,5 @@
 /**
- * The local MCP gateway (ADR-069, connected tier).
+ * The local MCP gateway (ADR-078, connected tier).
  *
  * Any MCP client on this machine connects to `http://127.0.0.1:<port>/mcp`
  * and gets the workspace's toolbelt, without ever holding an Oxagen

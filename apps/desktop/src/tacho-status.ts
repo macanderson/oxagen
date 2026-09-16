@@ -11,7 +11,7 @@ export interface TachoHookPresence {
 }
 
 /**
- * What `tacho status` reports about a connected app's MCP config (ADR-069).
+ * What `tacho status` reports about a connected app's MCP config (ADR-078).
  * Not called `hooks`, because there are none.
  */
 export interface TachoMcpPresence {

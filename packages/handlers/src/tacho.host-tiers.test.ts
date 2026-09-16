@@ -1,5 +1,5 @@
 /**
- * The tier a host's apps reach (ADR-069). This is the fact every fleet
+ * The tier a host's apps reach (ADR-078). This is the fact every fleet
  * surface reads to decide what words it may use about a machine, so the
  * mapping is pinned here rather than inferred at each surface.
  */

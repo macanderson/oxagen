@@ -589,7 +589,7 @@
     "list_tacho_hosts": {
       "route": "/[orgSlug]/[workspaceSlug]/fleet",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/fleet/page.tsx",
-      "entry": "Fleet page: the server component calls listFleetAction on load, which invokes list_tacho_hosts and renders one row per machine with the enforcement tier of each app on it (ADR-069)",
+      "entry": "Fleet page: the server component calls listFleetAction on load, which invokes list_tacho_hosts and renders one row per machine with the enforcement tier of each app on it (ADR-078)",
       "testid": "fleet-page",
       "proof": "apps/app/e2e/fleet.spec.ts",
       "verifiedAt": "2026-09-16",

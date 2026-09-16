@@ -166,7 +166,7 @@ export function stripEnrollmentHooks(
       stellaChanged.push(file.path);
     }
   }
-  // The connected tier (ADR-069). Removes exactly the entry enroll wrote and
+  // The connected tier (ADR-078). Removes exactly the entry enroll wrote and
   // puts back whatever it displaced; every other MCP server the user has is
   // left alone, including one that took our key after we wrote ours.
   let claudeDesktopChanged: string | undefined;

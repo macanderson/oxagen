@@ -224,7 +224,7 @@ interface HostRow {
  * does no local work at all; it calls `list_tacho_hosts` and prints what came
  * back.
  *
- * Each app is printed with its tier (ADR-069), because "Claude Code, Claude
+ * Each app is printed with its tier (ADR-078), because "Claude Code, Claude
  * Desktop" says which apps a machine has and nothing about what Oxagen
  * records for them — and those two apps are recorded in entirely different
  * ways. `--json` carries the same `tiers` map the API returns.

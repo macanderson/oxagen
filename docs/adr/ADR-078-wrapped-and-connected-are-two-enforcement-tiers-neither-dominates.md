@@ -1,4 +1,4 @@
-# ADR-069: Wrapped and connected are two enforcement tiers, and neither dominates the other
+# ADR-078: Wrapped and connected are two enforcement tiers, and neither dominates the other
 
 - **Status:** Accepted
 - **Date:** 2026-09-16

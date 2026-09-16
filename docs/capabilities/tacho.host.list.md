@@ -40,7 +40,7 @@ are needed to describe a machine honestly — see below.
 Records from a Tacho host are `client_attested` evidence (ADR-040 section 4): Oxagen can prove what was reported and detect tampering and gaps, and hook-based denial is enforcement at the harness, not at a gateway. Every session carries its `enforcementTier`; nothing here claims prevention where it has observation.
 
 `tiers` maps each of a host's harnesses to the enforcement tier it reaches
-(ADR-069), using the same `enforcement_tier` vocabulary the session record
+(ADR-078), using the same `enforcement_tier` vocabulary the session record
 speaks:
 
 | `tiers[harness]` | Product word | What it records | What it does not |
@@ -51,6 +51,6 @@ speaks:
 **Neither tier dominates the other.** Wrapped is broader and weaker; connected
 is narrower and stronger. A surface that renders them on one axis — a coverage
 meter, "fully" versus "partially" governed, a count that adds them together —
-is wrong in both directions, and ADR-069 section 2 forbids it. One machine
+is wrong in both directions, and ADR-078 section 2 forbids it. One machine
 normally carries both, which is why the tier is per harness rather than per
 host.

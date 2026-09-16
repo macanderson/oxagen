@@ -161,7 +161,7 @@ describe("presence reports the size of the gap, not just our own entry", () => {
     );
     const presence = claudeDesktopPresence(merged.config, ENROLLMENT);
     expect(presence.present).toBe(true);
-    // ADR-069 §3: the operator is entitled to know how much of this app we
+    // ADR-078 §3: the operator is entitled to know how much of this app we
     // do not see, because nothing in code can close that gap.
     expect(presence.otherServers).toBe(2);
     expect(presence.otherServerNames.sort()).toEqual(["filesystem", "slack"]);

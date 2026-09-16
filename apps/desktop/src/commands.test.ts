@@ -304,7 +304,7 @@ describe("wizard and de-register", () => {
     for (const tier of ["harness", "gateway"] as const) {
       expect(TIER_LABEL[tier]).toBeTruthy();
       expect(TIER_RECORDS[tier]).toBeTruthy();
-      // ADR-069 §2: the omission line is as mandatory as the records line.
+      // ADR-078 §2: the omission line is as mandatory as the records line.
       // A surface that shows only what a tier captures reads as coverage it
       // does not have.
       expect(TIER_OMITS[tier]).toBeTruthy();
