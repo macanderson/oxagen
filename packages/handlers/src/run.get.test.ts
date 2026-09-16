@@ -40,6 +40,8 @@ type Over = {
   tachoRows?: TachoFrameRow[];
   /** What RunStore answers for the public id; defaults to the seeded run. */
   found?: boolean;
+  /** The worker run the tacho fixture witnessed; none by default. */
+  witnessFor?: string;
   /** Runs after each fake sleep, with the count so far; a test lands events here. */
   onSleep?: (count: number, log: AttemptEventReadRecord[]) => void;
 };
@@ -67,7 +69,13 @@ function harness(over: Over = {}) {
         ),
       readAttemptEventsSince: memoryEvents(log),
     },
-    readRunCosts: stores.readRunCosts,
+    readRunRollups: stores.readRunRollups,
+    readWitnessFor: (scope, runId) =>
+      Promise.resolve(
+        runId === TACHO_ID && scope.workspaceId === ctx().workspaceId
+          ? (over.witnessFor ?? null)
+          : null,
+      ),
     tachoFrames: memoryTachoFrames(SESSION_UUID, over.tachoRows ?? []),
     now: () => clock,
     sleep: (ms) => {
@@ -404,14 +412,15 @@ describe("get_run", () => {
     const get = createRunGetHandler({
       queries: stores.queries,
       store: { getRunByPublicId: vi.fn(), readAttemptEventsSince: readEvents },
-      readRunCosts: stores.readRunCosts,
+      readRunRollups: stores.readRunRollups,
+      readWitnessFor: async () => null,
       tachoFrames,
       now: () => 0,
       sleep: () => Promise.resolve(),
     });
     const out = await get(input({ runId: TACHO_ID }), ctx());
     expect(readEvents).not.toHaveBeenCalled();
-    expect(stores.costCalls).toEqual([[TACHO_ID]]);
+    expect(stores.rollupCalls).toEqual([[TACHO_ID]]);
     expect(tachoFrames).toHaveBeenCalledWith({
       sessionUuid: SESSION_UUID,
       afterSeq: -1,
@@ -441,5 +450,43 @@ describe("frame cursor", () => {
       decodeFrameCursor(encodeFrameCursor("18446744073709551615")),
     ).toBeNull();
     expect(decodeFrameCursor(encodeFrameCursor("9".repeat(30)))).toBeNull();
+  });
+});
+
+describe("get_run witnessFor (ADR-064)", () => {
+  it("answers the worker run a witness run reported on, and null for every other run", async () => {
+    const WORKER = "tse_7w0rker0000000000000a";
+    const witness = await harness({ witnessFor: WORKER }).get(
+      input({ runId: TACHO_ID }),
+      ctx(),
+    );
+    expect(runGet.output.parse(witness)).toEqual(witness);
+    expect(witness.witnessFor).toBe(WORKER);
+
+    const ledger = await harness({ witnessFor: WORKER }).get(input(), ctx());
+    expect(ledger.witnessFor).toBeNull();
+  });
+
+  it("answers not_found to an API-key caller for a witness run, and no witnessFor on any other run (negative)", async () => {
+    const machine = { ...ctx(), userId: null, apiKeyId: "aky_worker" };
+    const err = await harness({ witnessFor: "tse_7w0rker0000000000000a" })
+      .get(input({ runId: TACHO_ID }), machine)
+      .catch((e: unknown) => e);
+    expect(isHandlerError(err) && err.code).toBe("not_found");
+
+    const plain = await harness().get(input({ runId: TACHO_ID }), machine);
+    expect(plain.run.id).toBe(TACHO_ID);
+    expect(plain.witnessFor).toBeNull();
+  });
+
+  it("refuses a run outside the workspace before reading its witness link (negative)", async () => {
+    const { get } = harness({
+      tacho: [tachoSession({ publicId: TACHO_ID, scope: OTHER_WORKSPACE })],
+      witnessFor: "tse_7w0rker0000000000000a",
+    });
+    const err = await get(input({ runId: TACHO_ID }), ctx()).catch(
+      (e: unknown) => e,
+    );
+    expect(isHandlerError(err) && err.code).toBe("not_found");
   });
 });

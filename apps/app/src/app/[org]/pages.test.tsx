@@ -8,10 +8,11 @@
 // feature (WL-34) and renders the cost rollup's two tiles under its title
 // (#2962); the three Agents routes hand theirs, with the agent, the tab and the
 // cursor the URL names, to the Agents feature (#2956); Spend hands its viewer,
-// the data source and the query to its body (#2962); Billing hands its viewer,
-// the data source, the checkout outcome and the invoices cursor to the Billing
-// feature (WL-38); People renders its sections from org.members. Run and API
-// keys gain their bodies in WL-35 and WL-37.
+// the data source and the query to its body (#2962); Steering hands its viewer,
+// the data source and the query to the Steering feature (#2961); Billing hands
+// its viewer, the data source, the checkout outcome and the invoices cursor to
+// the Billing feature (WL-38); People renders its sections from org.members.
+// Run and API keys gain their bodies in WL-35 and WL-37.
 import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { translator } from "@/test/intl";
@@ -28,6 +29,7 @@ const {
   Agents,
   Agent,
   AgentSource,
+  Steering,
   Spend,
   FleetSpendTiles,
   Roles,
@@ -43,6 +45,9 @@ const {
     Agents: vi.fn((_props: Record<string, unknown>) => null),
     Agent: vi.fn((_props: Record<string, unknown>) => null),
     AgentSource: vi.fn((_props: Record<string, unknown>) => null),
+    Steering: vi.fn((props: { searchParams: Record<string, string> }) => (
+      <p data-testid="steering-body" data-tab={props.searchParams.tab} />
+    )),
     Spend: vi.fn((props: { searchParams: Record<string, string> }) => (
       <p data-testid="spend-body" data-tab={props.searchParams.tab} />
     )),
@@ -59,6 +64,7 @@ vi.mock("@/server/viewer", () => ({ requireViewer }));
 vi.mock("@/features/billing", () => ({ Billing }));
 vi.mock("@/features/fleet", () => ({ Fleet }));
 vi.mock("@/features/agents", () => ({ Agents, Agent, AgentSource }));
+vi.mock("@/features/steering", () => ({ Steering }));
 vi.mock("@/features/spend", () => ({ Spend, FleetSpendTiles }));
 // People stays real, so the organization page still renders a roster; the two
 // sections the #2964 lane adds are stubbed to show what each route hands them.
@@ -71,6 +77,18 @@ vi.mock("@/data/source", () => ({ dataSource: () => source }));
 vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
     Promise.resolve(translator(namespace)),
+}));
+// People is the one feature this file renders for real, so its client island
+// comes with it. The island imports the two server actions, and those import
+// the kernel seam, which loads both handler registries on import (§3.2) — a
+// graph no page test needs and one that never settles under jsdom. The writes
+// have their own tests; here the roster only has to render.
+vi.mock("@/features/organization/actions", () => ({
+  changeMemberRole: vi.fn(),
+  removeOrgMember: vi.fn(),
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
 
 beforeEach(() => {
@@ -93,8 +111,9 @@ const title = translator("pages");
 
 const GAP_LANE: [string, Load][] = [
   ["tools", () => import("./[ws]/tools/page")],
-  ["steering", () => import("./[ws]/steering/page")],
 ];
+
+const STEERING: Load = () => import("./[ws]/steering/page");
 
 const FLEET: Load = () => import("./[ws]/page");
 const AGENTS: Load = () => import("./[ws]/agents/page");
@@ -153,6 +172,30 @@ describe("the Billing page", () => {
       checkout: null,
       cursor: null,
     });
+  });
+});
+
+describe("the Steering page", () => {
+  it("resolves the workspace viewer, names the page once and hands the viewer, the data source and the query to Steering", async () => {
+    const ctx = { orgSlug: "acme", wsSlug: "core-platform" };
+    requireViewer.mockResolvedValue(ctx);
+    await expectPageTitle(
+      await STEERING(),
+      routeProps(SEGMENTS, { tab: "prs", proposal: "prp_1" }),
+      title("steering"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...WS);
+    expect(Steering).toHaveBeenCalledOnce();
+    expect(Steering.mock.calls[0]?.[0]).toEqual({
+      ctx,
+      source,
+      searchParams: { tab: "prs", proposal: "prp_1" },
+    });
+    expect(screen.getByTestId("steering-body")).toHaveAttribute(
+      "data-tab",
+      "prs",
+    );
+    expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
 });
 
@@ -351,6 +394,7 @@ describe("a person requireViewer refuses", () => {
   it.each([
     ...GAP_LANE.map(([key, load]) => [key, load] as const),
     ["billing", BILLING] as const,
+    ["steering", STEERING] as const,
     ["fleet", FLEET] as const,
     ["agents", AGENTS] as const,
     ["agent", AGENT] as const,

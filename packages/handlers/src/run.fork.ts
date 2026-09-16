@@ -33,7 +33,6 @@ import {
   isContentBearingFrame,
   isReplayGrade,
 } from "@oxagen/tacho";
-import { runScope } from "./run.list";
 import {
   defaultRunReadDeps,
   ledgerStore,
@@ -76,8 +75,7 @@ export function createRunForkHandler(
       { ...ctx, userId: await resolveActingUserId(ctx) },
       { org: FORK_ROLES },
     );
-    const scope = runScope(ctx);
-    const run = await resolveRun(deps, scope, input.runId);
+    const run = await resolveRun(deps, ctx, input.runId);
     if (run.source !== "ledger") throw conflict("fork_requires_ledger_run");
 
     const sealed = latestSealedAttempt(

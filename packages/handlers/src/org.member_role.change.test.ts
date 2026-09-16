@@ -276,4 +276,59 @@ describe("orgMemberRoleChangeHandler", () => {
     expect(event.outcome).toBe("success");
     expect(event.capability).toBe("change_member_role");
   });
+
+  it("a member named by public id is resolved to their user id, after the actor gate", async () => {
+    mockTx.select = buildSelectMock([
+      [{ id: "actor-principal-id" }], // 1: actor principal
+      [{ roleName: "Owner" }], // 2: actor PRA = Owner
+      [{ userId: "target-user-uuid" }], // 3: usr_… → users.id, joined to org_users
+      [{ id: "target-ou-id", role: "member" }], // 4: target orgUser
+      [{ id: "admin-role-id", name: "Admin" }], // 5: new role 'Admin' found
+      [{ id: "owner-role-id" }], // 6: Owner role row exists
+      [{ id: "target-principal-id" }], // 7: target principal
+      [], // 8: target does NOT hold Owner PRA → skip guard
+      [{ id: "target-principal-id" }], // 9: mutation existing principal
+    ]);
+
+    const txUpdateWhere = vi.fn().mockResolvedValue([]);
+    const txUpdateSet = vi.fn().mockReturnValue({ where: txUpdateWhere });
+    mockTx.update = vi.fn().mockReturnValue({ set: txUpdateSet });
+    const onConflictDoNothing = vi.fn().mockResolvedValue([]);
+    const values = vi.fn().mockReturnValue({ onConflictDoNothing });
+    mockTx.insert = vi.fn().mockReturnValue({ values });
+
+    const result = await orgMemberRoleChangeHandler(
+      { targetUserId: "usr_7k2m9q4x8r1t5v3w6y0z2a", newRole: "Admin" },
+      makeCtx(),
+    );
+
+    // The answer names the target the caller named, not the uuid it resolved.
+    expect(result).toMatchObject({
+      changed: true,
+      targetUserId: "usr_7k2m9q4x8r1t5v3w6y0z2a",
+      newRole: "Admin",
+    });
+    expect(mockTx.insert).toHaveBeenCalledOnce();
+  });
+
+  it("a public id that names nobody in this org → not_found, nothing written", async () => {
+    mockTx.select = buildSelectMock([
+      [{ id: "actor-principal-id" }], // 1: actor principal
+      [{ roleName: "Owner" }], // 2: actor PRA = Owner
+      [], // 3: the public id resolves to no member of this org
+    ]);
+    mockTx.update = vi.fn();
+    mockTx.insert = vi.fn();
+
+    await expectHandlerError(
+      orgMemberRoleChangeHandler(
+        { targetUserId: "usr_0000000000000000000000", newRole: "Admin" },
+        makeCtx(),
+      ),
+      "not_found",
+      "target_not_member",
+    );
+    expect(mockTx.update).not.toHaveBeenCalled();
+    expect(mockTx.insert).not.toHaveBeenCalled();
+  });
 });

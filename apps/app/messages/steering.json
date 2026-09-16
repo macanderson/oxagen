@@ -1,0 +1,170 @@
+{
+  "steering": {
+    "tabs": {
+      "label": "Steering views",
+      "records": "Records",
+      "proposals": "Proposals",
+      "prs": "Context PRs"
+    },
+    "failure": {
+      "denied": "You cannot see {section} in this workspace. The roles you hold do not include {permission}. An owner can grant it.",
+      "pendingApproval": "Your request to see {section} is waiting for approval: {accessRequestId}.",
+      "error": "{section} could not be loaded: {code}. Nothing was changed."
+    },
+    "pager": {
+      "label": "Pages",
+      "range": "{from} to {to} of {total}",
+      "previous": "Previous page",
+      "next": "Next page"
+    },
+    "status": {
+      "proposed": "proposed",
+      "pr_open": "pull request open",
+      "checks_running": "checks running",
+      "checks_passed": "checks passed",
+      "checks_failed": "checks failed",
+      "merged": "merged",
+      "rejected": "dismissed"
+    },
+    "records": {
+      "title": "Published records",
+      "lead": "A record is in force because a Context PR merged its file into .oxagen/rules/ on the production branch. Saving it here publishes nothing.",
+      "filter": "Filter records by kind",
+      "all": "All",
+      "emptyTitle": "Nothing steers this workspace yet",
+      "empty": "Published records live in .oxagen/rules/ on the workspace repository. A proposal becomes a record when its Context PR merges.",
+      "emptyKind": "No record of that kind is in force in this workspace.",
+      "authority": "A record never grants authority. A constraint can only require or forbid, and a repository record can narrow what a workspace record allows, never widen it.",
+      "facts": {
+        "version": "Version",
+        "commit": "Merge commit",
+        "path": "File",
+        "published": "Published"
+      }
+    },
+    "proposals": {
+      "title": "Proposals",
+      "lead": "A proposal steers nothing. It publishes only when its Context PR passes every check and merges.",
+      "emptyTitle": "No proposals in this workspace",
+      "empty": "Agents propose records through context/append, and a person proposes one with oxagen context propose. Each proposal waits here for a person to open its Context PR or dismiss it.",
+      "checks": "{passed} of {total} checks pass",
+      "source": "Raised by {source}",
+      "support": "Support: {runs} runs, {agents} agents, {records} records, {evidence} evidence links",
+      "runs": "Supporting runs",
+      "agents": "Distinct agents",
+      "records": "Supporting records",
+      "evidence": "Evidence links",
+      "none": "None cited",
+      "viewPr": "Context PR #{number}"
+    },
+    "prs": {
+      "title": "Context PRs",
+      "lead": "One concern, one pull request. The six checks run the same rules as stella context validate.",
+      "empty": "No proposal on this page has a Context PR.",
+      "number": "#{number} on {repository}",
+      "columns": {
+        "pr": "Pull request",
+        "branch": "Branch",
+        "kind": "Kind",
+        "state": "State"
+      }
+    },
+    "pr": {
+      "heading": "Context PR",
+      "title": "Context PR for {lineage}",
+      "machine": "Context PR state",
+      "goToPr": "Go to pull request #{number}",
+      "rejected": "This proposal was dismissed. Its pull request is closed and its branch deleted.",
+      "notOpened": "No pull request is open for this proposal yet.",
+      "modeUnread": "read from .oxagen/rules/governance.toml when the pull request opens",
+      "modes": {
+        "solo": "solo: any workspace member merges, the author included",
+        "team": "team: an org Owner or Admin, or a workspace Owner, other than the author merges",
+        "regulated": "regulated: an org Owner or Admin other than the author merges, recorded as the accountable approver"
+      },
+      "facts": {
+        "repository": "Repository",
+        "branch": "Branch",
+        "branchInto": "{branch} into {base}",
+        "head": "Checked commit",
+        "headUnknown": "not committed yet",
+        "path": "File",
+        "governance": "Governance mode"
+      },
+      "checks": {
+        "title": "Checks",
+        "names": {
+          "schema": "Schema",
+          "lineage_uniqueness": "Lineage uniqueness",
+          "record_hash": "record_hash recomputation",
+          "secret_pii_scan": "Secret and PII scan",
+          "conflict_against_active": "Conflict against active records",
+          "constraint_effect": "Constraint effect is require or forbid"
+        },
+        "statuses": {
+          "pending": "queued",
+          "running": "running",
+          "passed": "pass",
+          "failed": "fail"
+        }
+      },
+      "body": "Pull request body",
+      "onMerge": {
+        "title": "What merge will do",
+        "publishes": "Publish {path} as a record in force",
+        "version": "Move this workspace from steering version {current} to {next}",
+        "promotion": "Write the promotion event to the ledger and a steering_published audit event",
+        "review": "Who merges, under governance mode {review}"
+      },
+      "merged": {
+        "title": "Merged",
+        "commit": "Merge commit",
+        "at": "Merged at",
+        "promotion": "Promotion event",
+        "record": "Published record"
+      }
+    },
+    "actions": {
+      "open": {
+        "open": "Open a Context PR",
+        "title": "Open a Context PR",
+        "rerun": "Run the checks again",
+        "body": "Oxagen opens a branch with the one record file, opens the pull request with the rationale and support, and runs the six checks one at a time. Merge is the publication.",
+        "confirm": "Open the pull request",
+        "rerunConfirm": "Run the checks",
+        "pending": "Working"
+      },
+      "dismiss": {
+        "open": "Dismiss",
+        "title": "Dismiss this proposal",
+        "body": "A dismissed proposal steers nothing. An open Context PR for it is closed and its branch deleted.",
+        "reason": "Reason",
+        "confirm": "Dismiss the proposal",
+        "pending": "Dismissing"
+      },
+      "merge": {
+        "confirm": "Merge pull request",
+        "pending": "Merging",
+        "blocked": "Merge is blocked until every check passes."
+      },
+      "failure": {
+        "orgRoleRequired": "Your role in this organization or workspace does not allow this change. Nothing was changed.",
+        "noPrincipal": "This change needs a signed-in person. Nothing was changed.",
+        "separationOfDuties": "Under this governance mode the author does not merge their own proposal. Another reviewer merges it.",
+        "proposalNotFound": "This proposal is not in this workspace.",
+        "proposalMoved": "This proposal changed after the page loaded. Reload the page to see where it is.",
+        "lineagePrOpen": "Another pull request is already open for this lineage. One concern, one pull request.",
+        "governanceUnreadable": "The workspace repository has a .oxagen/rules/governance.toml that could not be read, so nothing was opened or merged.",
+        "repositoryMissing": "This workspace has no connected GitHub repository to open the pull request on.",
+        "checksNotPassed": "Merge is blocked until every check passes.",
+        "headMoved": "The pull request changed after the checks ran. Run the checks again.",
+        "baseMoved": "The pull request no longer targets the production branch. Nothing was merged.",
+        "githubRefused": "GitHub refused the change. Nothing was published.",
+        "refused": "The change was refused: {code}. Nothing was changed.",
+        "invalid": "Write a reason before you dismiss the proposal.",
+        "pendingApproval": "The change is waiting for approval: {accessRequestId}.",
+        "unavailable": "The change could not be made: {code}. Nothing was changed."
+      }
+    }
+  }
+}

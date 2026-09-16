@@ -63,7 +63,7 @@ export function createRunSummarizeHandler(
       { org: SUMMARIZE_ROLES },
     );
     const scope = runScope(ctx);
-    const run = await resolveRun(deps, scope, input.runId);
+    const run = await resolveRun(deps, ctx, input.runId);
     if (run.item.status === "live") {
       throw new HandlerError({ code: "conflict", reason: "run_not_sealed" });
     }

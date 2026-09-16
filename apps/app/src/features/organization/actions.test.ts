@@ -1,9 +1,11 @@
-// The Organization writes through the real kernel seam: the viewer resolution
-// and the kernel's invoke() are the only fakes, so each case shows what the
-// person gets back and whether the capability ran — ok, invalid (refused
-// before the kernel) and denied (INV-19). Every guard has its negative: the
-// scope this module checks itself, and the contract fields kernelWrite
-// pre-parses before any capability runs.
+// The Organization writes through the real kernel seam (INV-19): the viewer
+// resolution and the kernel's invoke() are the only fakes, so each case shows
+// what the person gets back and whether the capability ran — ok, invalid
+// (refused before the kernel) and denied. Every guard has its negative: the
+// scope this module checks itself, the role set the People writes check
+// themselves, and the contract fields kernelWrite pre-parses before any
+// capability runs. Every refusal is classified by the code the handler threw,
+// never by its message (§3.2).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invoke, requireViewer } = vi.hoisted(() => ({
@@ -30,9 +32,11 @@ const { OrgCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const {
   archiveWorkspace,
+  changeMemberRole,
   createRole,
   createWorkspace,
   deleteRole,
+  removeOrgMember,
   renameWorkspace,
   setRolePermissions,
 } = await import("./actions");
@@ -42,8 +46,11 @@ const ctx = unsafeMint(OrgCtx, {
   orgId: "7a000000-0000-4000-8000-0000000000a1",
   orgSlug: "acme",
   orgName: "Acme Robotics",
-  orgRole: "admin",
+  orgRole: "owner",
 });
+
+/** The member id the roster prints, and the only id the page holds (INV-11). */
+const MEMBER = "usr_7k2m9q4x8r1t5v3w6y0z2a";
 
 /**
  * The CapabilityContext an organization-level write reaches the kernel with:
@@ -80,10 +87,12 @@ const draft = {
 const denied = (name: string) =>
   new kernel.CapabilityError(name, "authz_denied", "denied");
 
+const refusal = (code: "forbidden" | "not_found" | "conflict", reason: string) =>
+  new kernel.HandlerError({ code, reason, message: `${code}: ${reason}` });
+
 beforeEach(() => {
   invoke.mockReset();
-  requireViewer.mockReset();
-  requireViewer.mockResolvedValue(ctx);
+  requireViewer.mockReset().mockResolvedValue(ctx);
 });
 
 describe("createRole", () => {
@@ -222,13 +231,7 @@ describe("createWorkspace", () => {
   });
 
   it("carries a slug already taken to the caller as a conflict (negative)", async () => {
-    invoke.mockRejectedValue(
-      new kernel.HandlerError({
-        code: "conflict",
-        reason: "slug_taken",
-        message: "taken",
-      }),
-    );
+    invoke.mockRejectedValue(refusal("conflict", "slug_taken"));
     expect(
       await createWorkspace("acme", { name: "Research", slug: "research" }),
     ).toEqual({ ok: false, reason: "conflict", code: "slug_taken" });
@@ -297,17 +300,163 @@ describe("archiveWorkspace", () => {
   });
 
   it("carries a workspace that still has agents to the caller as a conflict (negative)", async () => {
-    invoke.mockRejectedValue(
-      new kernel.HandlerError({
-        code: "conflict",
-        reason: "workspace_has_agents",
-        message: "agents",
-      }),
-    );
+    invoke.mockRejectedValue(refusal("conflict", "workspace_has_agents"));
     expect(await archiveWorkspace("acme", "wrk_1")).toEqual({
       ok: false,
       reason: "conflict",
       code: "workspace_has_agents",
     });
+  });
+});
+
+describe("changeMemberRole", () => {
+  it("grants the role the picker named, under the IAM name the contract takes", async () => {
+    invoke.mockResolvedValue({
+      changed: true,
+      targetUserId: MEMBER,
+      orgId: ctx.orgId,
+      previousRole: "member",
+      newRole: "Admin",
+    });
+    expect(await changeMemberRole("acme", MEMBER, "admin")).toEqual({
+      ok: true,
+      value: { role: "admin" },
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme");
+    expect(invoke).toHaveBeenCalledWith(
+      "change_member_role",
+      { targetUserId: MEMBER, newRole: "Admin" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it.each(["member", "viewer", "", "Owner"])(
+    "refuses %o, a role this organization does not grant, before the kernel runs (negative)",
+    async (grant) => {
+      expect(await changeMemberRole("acme", MEMBER, grant)).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "role_not_grantable",
+        field: "role",
+      });
+      expect(invoke).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refuses an empty member id before the kernel runs (negative)", async () => {
+    expect(await changeMemberRole("acme", "", "admin")).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "targetUserId",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a role the actor may not change as denied (negative)", async () => {
+    invoke.mockRejectedValue(refusal("forbidden", "insufficient_role"));
+    expect(await changeMemberRole("acme", MEMBER, "admin")).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "insufficient_role",
+    });
+  });
+
+  it.each([
+    ["a member of another organization", "target_not_member"],
+    ["a role this organization never seeded", "role_not_found"],
+  ])("returns %s as not_found (negative)", async (_what, reason) => {
+    invoke.mockRejectedValue(refusal("not_found", reason));
+    expect(await changeMemberRole("acme", MEMBER, "admin")).toEqual({
+      ok: false,
+      reason: "not_found",
+      code: reason,
+    });
+  });
+
+  it("returns the last owner's demotion as conflict (negative)", async () => {
+    invoke.mockRejectedValue(refusal("conflict", "last_owner"));
+    expect(await changeMemberRole("acme", MEMBER, "billing")).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "last_owner",
+    });
+  });
+
+  it("reports output the contract does not admit as unavailable (negative)", async () => {
+    invoke.mockResolvedValue({ changed: true });
+    expect(await changeMemberRole("acme", MEMBER, "admin")).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "contract_output_mismatch",
+    });
+  });
+});
+
+describe("removeOrgMember", () => {
+  it("removes the member the roster named", async () => {
+    invoke.mockResolvedValue({
+      removed: true,
+      targetUserId: MEMBER,
+      orgId: ctx.orgId,
+    });
+    expect(await removeOrgMember("acme", MEMBER)).toEqual({
+      ok: true,
+      value: { memberId: MEMBER },
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme");
+    expect(invoke).toHaveBeenCalledWith(
+      "remove_org_member",
+      { targetUserId: MEMBER },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("refuses an empty member id before the kernel runs (negative)", async () => {
+    expect(await removeOrgMember("acme", "")).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "targetUserId",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a member who may not remove people as denied (negative)", async () => {
+    invoke.mockRejectedValue(refusal("forbidden", "insufficient_role"));
+    expect(await removeOrgMember("acme", MEMBER)).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "insufficient_role",
+    });
+  });
+
+  it("returns a target outside this organization as not_found (negative)", async () => {
+    invoke.mockRejectedValue(refusal("not_found", "target_not_member"));
+    expect(await removeOrgMember("acme", MEMBER)).toEqual({
+      ok: false,
+      reason: "not_found",
+      code: "target_not_member",
+    });
+  });
+
+  it("returns the last owner's removal as conflict (negative)", async () => {
+    invoke.mockRejectedValue(refusal("conflict", "last_owner"));
+    expect(await removeOrgMember("acme", MEMBER)).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "last_owner",
+    });
+  });
+});
+
+describe("a person the organization refuses", () => {
+  it.each([
+    ["changeMemberRole", () => changeMemberRole("acme", MEMBER, "admin")],
+    ["removeOrgMember", () => removeOrgMember("acme", MEMBER)],
+  ])("%s runs nothing (negative)", async (_name, run) => {
+    requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
+    await expect(run()).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(invoke).not.toHaveBeenCalled();
   });
 });

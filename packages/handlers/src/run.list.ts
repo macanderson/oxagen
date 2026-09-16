@@ -7,9 +7,13 @@
 //   tse_…   wrapped agents in `tacho.sessions`, root sessions only (a subagent
 //           chain is part of its parent's run).
 //
-// Cost and basis for both come from the run's `cost.run_totals` row (ADR-060),
-// which the rollup job rebuilds from the run's frames after its seal; a run
-// with no row yet answers `cost: null`. Nothing here reads ClickHouse.
+// Cost, basis and the witness verdict for both come from the run's
+// `cost.run_totals` row (ADR-060, ADR-064), which the rollup job rebuilds from
+// the run's frames after its seal; a run with no row yet answers `cost: null`
+// and `verdict: null`. Nothing here reads ClickHouse.
+//
+// An API-key caller is shown no witness run (ADR-064): a worker holds API keys,
+// and a run a verdict names as its witness run would show it the witness.
 //
 // The kernel enters the tenant scope before this handler runs, so every
 // Postgres read goes through withTenantDb, whose RLS is the tenant filter. The
@@ -31,6 +35,7 @@ import {
 } from "@oxagen/oxagen/contracts/run.list";
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import { isReplayGrade } from "@oxagen/tacho";
+import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import {
   and,
   desc,
@@ -96,6 +101,7 @@ const runs = schema.agentRuns;
 const events = schema.agentRunEvents;
 const seals = schema.agentRunAttemptSeals;
 const sessions = schema.tachoSessions;
+const verdicts = schema.verdicts;
 
 /** Millisecond precision, so a cursor built from a JS Date compares exactly. */
 const ms = (column: SQL | typeof sessions.startedAt) =>
@@ -125,7 +131,25 @@ function beforeCursor(
   );
 }
 
-export type PageQuery = { cursor: RunCursor | null; limit: number };
+export type PageQuery = {
+  cursor: RunCursor | null;
+  limit: number;
+  /** Leave out every run a verdict names as its witness run: true for an API-key caller. */
+  withoutWitnessRuns: boolean;
+};
+
+/** No verdict in the run's workspace names it as a witness run, when the page asks. */
+function notWitnessRun(
+  q: PageQuery,
+  run: {
+    orgId: typeof runs.orgId | typeof sessions.orgId;
+    workspaceId: typeof runs.workspaceId | typeof sessions.workspaceId;
+    publicId: typeof runs.publicId | typeof sessions.publicId;
+  },
+): SQL | undefined {
+  if (!q.withoutWitnessRuns) return undefined;
+  return sql`not exists (select 1 from ${verdicts} where ${verdicts.orgId} = ${run.orgId} and ${verdicts.workspaceId} = ${run.workspaceId} and ${verdicts.witnessRunId} = ${run.publicId}::text)`;
+}
 
 const ledgerColumns = {
   run: {
@@ -185,6 +209,7 @@ export function ledgerPageQuery(db: QueryDb, scope: RunScope, q: PageQuery) {
         eq(runs.workspaceId, scope.workspaceId),
         eq(runs.specVersion, 2),
         beforeCursor(ledgerStartedAt, runs.publicId, q.cursor),
+        notWitnessRun(q, runs),
       ),
     )
     .orderBy(desc(ms(ledgerStartedAt)), desc(byteOrder(runs.publicId)))
@@ -392,6 +417,7 @@ export function tachoPageQuery(db: QueryDb, scope: RunScope, q: PageQuery) {
         eq(sessions.workspaceId, scope.workspaceId),
         isNull(sessions.parentSessionUuid),
         beforeCursor(sql`${sessions.startedAt}`, sessions.publicId, q.cursor),
+        notWitnessRun(q, sessions),
       ),
     )
     .orderBy(desc(ms(sessions.startedAt)), desc(byteOrder(sessions.publicId)))
@@ -495,6 +521,9 @@ export type RunCost = {
   currency: string;
   costBasis: NonNullable<RunItem["cost"]>["basis"];
 };
+
+/** What a `cost.run_totals` row says about a run: its spend and its witness verdict. */
+type RunRollup = { cost: RunCost | null; verdict: RunItem["verdict"] };
 
 export type TachoSessionColumns = GeneratedSummaryColumns & {
   publicId: string;
@@ -600,7 +629,8 @@ export function microsString(micros: number): string {
  * The run's cost as its rollup row records it. No row yet — the run is open,
  * or the rollup has not covered its seal — means no cost, never zero.
  */
-export function rollupCost(row: RunCost | undefined): RunItem["cost"] {
+function rollupCost(rollup: RunRollup | undefined): RunItem["cost"] {
+  const row = rollup?.cost;
   if (!row) return null;
   return {
     micros: row.costMicros.toString(),
@@ -611,7 +641,7 @@ export function rollupCost(row: RunCost | undefined): RunItem["cost"] {
 
 export function toLedgerRunItem(
   record: LedgerRunRecord,
-  cost: RunItem["cost"],
+  totals: RunRollup | undefined,
 ): RunItem {
   const { run, identity, rollup } = record;
   const status = ledgerRunStatus(run.status);
@@ -628,7 +658,7 @@ export function toLedgerRunItem(
     turns: rollup.opaqueModelCalls === 0 ? rollup.turnIndexes : null,
     steps: rollup.modelCalls + rollup.toolCalls,
     frames: rollup.frames,
-    cost,
+    cost: rollupCost(totals),
     taskRef: identity.goal,
     startedAt: (run.startedAt ?? run.createdAt).toISOString(),
     sealedAt:
@@ -637,6 +667,7 @@ export function toLedgerRunItem(
       status === "live"
         ? null
         : recordedGrade(record.seal?.replayGrade ?? null),
+    verdict: totals?.verdict ?? null,
     name: run.name,
     summary: generatedSummary(run),
   };
@@ -659,7 +690,7 @@ export function tachoRunStatus(outcome: string): RunItem["status"] {
 
 export function toTachoRunItem(
   row: TachoSessionRow,
-  cost: RunItem["cost"],
+  totals: RunRollup | undefined,
 ): RunItem {
   const { session } = row;
   return {
@@ -671,11 +702,12 @@ export function toTachoRunItem(
     turns: session.numTurns,
     steps: session.numModelCalls + session.numToolCalls,
     frames: session.seqCount,
-    cost,
+    cost: rollupCost(totals),
     taskRef: null,
     startedAt: session.startedAt.toISOString(),
     sealedAt: session.sealedAt?.toISOString() ?? null,
     replayGrade: recordedGrade(session.replayGrade),
+    verdict: totals?.verdict ?? null,
     name: session.name,
     summary: generatedSummary(session),
   };
@@ -740,10 +772,10 @@ export type RunQueries = {
 };
 
 /** The `cost.run_totals` rows for a page of runs, by public id; a run with no row is absent. */
-export type ReadRunCosts = (
+export type ReadRunRollups = (
   scope: RunScope,
   runIds: readonly string[],
-) => Promise<Map<string, RunCost>>;
+) => Promise<Map<string, RunRollup>>;
 
 const COST_BASES = new Set([
   "gateway_observed",
@@ -752,7 +784,18 @@ const COST_BASES = new Set([
   "estimated",
 ]);
 
-export const postgresReadRunCosts: ReadRunCosts = async (scope, runIds) => {
+/**
+ * The verdict the rollup recorded, or null: no row, or `none` (no witness
+ * reported). A word outside the CHECK is a broken row and the read fails.
+ */
+function recordedVerdict(word: string | null): RunItem["verdict"] {
+  if (word === null || word === "none") return null;
+  const verdict = PROOF_VERDICTS.find((known) => known === word);
+  if (!verdict) throw new RangeError(`verdict outside the CHECK: ${word}`);
+  return verdict;
+}
+
+export const postgresReadRunRollups: ReadRunRollups = async (scope, runIds) => {
   if (runIds.length === 0) return new Map();
   const rows = await withTenantDb((tx) =>
     tx
@@ -761,6 +804,7 @@ export const postgresReadRunCosts: ReadRunCosts = async (scope, runIds) => {
         costMicros: schema.runTotals.costMicros,
         currency: schema.runTotals.currency,
         costBasis: schema.runTotals.costBasis,
+        verdict: schema.runTotals.verdict,
       })
       .from(schema.runTotals)
       .where(
@@ -771,17 +815,20 @@ export const postgresReadRunCosts: ReadRunCosts = async (scope, runIds) => {
         ),
       ),
   );
-  const out = new Map<string, RunCost>();
+  const out = new Map<string, RunRollup>();
   for (const r of rows) {
-    // A row whose frames priced nothing carries null cost and basis: no cost.
-    if (r.costMicros === null || r.costBasis === null) continue;
-    if (!COST_BASES.has(r.costBasis))
+    if (r.costBasis !== null && !COST_BASES.has(r.costBasis))
       throw new RangeError(`cost basis outside the CHECK: ${r.costBasis}`);
-    out.set(r.runId, {
-      costMicros: r.costMicros,
-      currency: r.currency,
-      costBasis: r.costBasis as RunCost["costBasis"],
-    });
+    // A row whose frames priced nothing carries null cost and basis: no cost.
+    const cost =
+      r.costMicros === null || r.costBasis === null
+        ? null
+        : {
+            costMicros: r.costMicros,
+            currency: r.currency,
+            costBasis: r.costBasis as RunCost["costBasis"],
+          };
+    out.set(r.runId, { cost, verdict: recordedVerdict(r.verdict) });
   }
   return out;
 };
@@ -846,7 +893,7 @@ export async function ledgerEnrichment(
 
 export type RunListDeps = {
   queries: RunQueries;
-  readRunCosts: ReadRunCosts;
+  readRunRollups: ReadRunRollups;
 };
 
 type FleetItem =
@@ -862,7 +909,11 @@ export function createRunListHandler(
       input.cursor === undefined ? null : decodeRunCursor(input.cursor);
     if (input.cursor !== undefined && cursor === null)
       throw invalidCursor(runList.name);
-    const page = { cursor, limit: input.limit };
+    const page = {
+      cursor,
+      limit: input.limit,
+      withoutWitnessRuns: ctx.apiKeyId !== null,
+    };
 
     const [ledger, tacho] = await Promise.all([
       deps.queries.ledgerPage(scope, page),
@@ -900,7 +951,7 @@ export function createRunListHandler(
           item.kind === "ledger" ? [item.row.run.runId] : [],
         ),
       ),
-      deps.readRunCosts(
+      deps.readRunRollups(
         scope,
         merged.items.map((item) => item.id),
       ),
@@ -908,8 +959,8 @@ export function createRunListHandler(
     return {
       runs: merged.items.map((item) =>
         item.kind === "ledger"
-          ? toLedgerRunItem(enrich(item.row), rollupCost(costs.get(item.id)))
-          : toTachoRunItem(item.row, rollupCost(costs.get(item.id))),
+          ? toLedgerRunItem(enrich(item.row), costs.get(item.id))
+          : toTachoRunItem(item.row, costs.get(item.id)),
       ),
       nextCursor: merged.nextCursor,
     };
@@ -918,5 +969,5 @@ export function createRunListHandler(
 
 export const runListHandler = createRunListHandler({
   queries: postgresRunQueries,
-  readRunCosts: postgresReadRunCosts,
+  readRunRollups: postgresReadRunRollups,
 });

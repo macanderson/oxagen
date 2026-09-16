@@ -26,12 +26,12 @@ type Messages = {
     steering: string;
     spend: string;
     people: string;
+    roles: string;
     apiKeys: string;
     billing: string;
   };
   unrecorded: {
     tools: string;
-    steering: string;
     run: {
       frames_wrapped: string;
     };
@@ -808,6 +808,7 @@ type Messages = {
     tabs: {
       label: string;
       people: string;
+      roles: string;
       apiKeys: string;
     };
     roles: {
@@ -823,7 +824,95 @@ type Messages = {
       person: string;
       role: string;
       joined: string;
+      actions: string;
       empty: string;
+    };
+    actions: {
+      readOnly: string;
+      denied: string;
+      fields: {
+        name: string;
+        description: string;
+        scope: string;
+        slug: string;
+        slugHint: string;
+        permissions: string;
+        roleNameHint: string;
+      };
+      createRole: {
+        open: string;
+        title: string;
+        confirm: string;
+        pending: string;
+      };
+      editRole: {
+        open: string;
+        title: string;
+        confirm: string;
+        pending: string;
+      };
+      deleteRole: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+      };
+      createWorkspace: {
+        open: string;
+        title: string;
+        confirm: string;
+        pending: string;
+      };
+      editWorkspace: {
+        open: string;
+        title: string;
+        confirm: string;
+        pending: string;
+      };
+      archiveWorkspace: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+      };
+      role: {
+        open: string;
+        title: string;
+        body: string;
+        label: string;
+        confirm: string;
+        pending: string;
+      };
+      remove: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+      };
+      failure: {
+        orgRoleRequired: string;
+        noPrincipal: string;
+        delegationCeiling: string;
+        roleExists: string;
+        roleNotFound: string;
+        roleInUse: string;
+        systemRoleReadonly: string;
+        slugTaken: string;
+        workspaceNotFound: string;
+        alreadyArchived: string;
+        workspaceHasAgents: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
+        refused: string;
+        lastOwner: string;
+        targetNotMember: string;
+        roleNotGrantable: string;
+        insufficientRole: string;
+      };
     };
     invitations: {
       title: string;
@@ -846,6 +935,60 @@ type Messages = {
       title: string;
       body: string;
     };
+    roleCatalog: {
+      title: string;
+      lead: string;
+      enforcement: {
+        enforced: string;
+        recorded: string;
+      };
+      tableLabel: string;
+      columns: {
+        role: string;
+        kind: string;
+        scope: string;
+        permissions: string;
+        heldBy: string;
+        origin: string;
+        actions: string;
+      };
+      kind: {
+        human: string;
+        agent: string;
+      };
+      scope: {
+        org: string;
+        workspace: string;
+      };
+      origin: {
+        builtIn: string;
+        createdBy: string;
+        custom: string;
+      };
+      noPermissions: string;
+      empty: string;
+      catalog: {
+        title: string;
+        lead: string;
+        covers: string;
+      };
+    };
+    workspaces: {
+      title: string;
+      tableLabel: string;
+      columns: {
+        workspace: string;
+        role: string;
+        status: string;
+        actions: string;
+      };
+      status: {
+        live: string;
+        archived: string;
+      };
+      noRole: string;
+      empty: string;
+    };
   };
   shell: {
     skipToContent: string;
@@ -866,6 +1009,7 @@ type Messages = {
       spend: string;
       organization: string;
       billing: string;
+      roles: string;
       apiKeys: string;
     };
     switcher: {
@@ -1090,6 +1234,174 @@ type Messages = {
       cacheHitRateNote: string;
     };
   };
+  steering: {
+    tabs: {
+      label: string;
+      records: string;
+      proposals: string;
+      prs: string;
+    };
+    failure: {
+      denied: string;
+      pendingApproval: string;
+      error: string;
+    };
+    pager: {
+      label: string;
+      range: string;
+      previous: string;
+      next: string;
+    };
+    status: {
+      proposed: string;
+      pr_open: string;
+      checks_running: string;
+      checks_passed: string;
+      checks_failed: string;
+      merged: string;
+      rejected: string;
+    };
+    records: {
+      title: string;
+      lead: string;
+      filter: string;
+      all: string;
+      emptyTitle: string;
+      empty: string;
+      emptyKind: string;
+      authority: string;
+      facts: {
+        version: string;
+        commit: string;
+        path: string;
+        published: string;
+      };
+    };
+    proposals: {
+      title: string;
+      lead: string;
+      emptyTitle: string;
+      empty: string;
+      checks: string;
+      source: string;
+      support: string;
+      runs: string;
+      agents: string;
+      records: string;
+      evidence: string;
+      none: string;
+      viewPr: string;
+    };
+    prs: {
+      title: string;
+      lead: string;
+      empty: string;
+      number: string;
+      columns: {
+        pr: string;
+        branch: string;
+        kind: string;
+        state: string;
+      };
+    };
+    pr: {
+      heading: string;
+      title: string;
+      machine: string;
+      goToPr: string;
+      rejected: string;
+      notOpened: string;
+      modeUnread: string;
+      modes: {
+        solo: string;
+        team: string;
+        regulated: string;
+      };
+      facts: {
+        repository: string;
+        branch: string;
+        branchInto: string;
+        head: string;
+        headUnknown: string;
+        path: string;
+        governance: string;
+      };
+      checks: {
+        title: string;
+        names: {
+          schema: string;
+          lineage_uniqueness: string;
+          record_hash: string;
+          secret_pii_scan: string;
+          conflict_against_active: string;
+          constraint_effect: string;
+        };
+        statuses: {
+          pending: string;
+          running: string;
+          passed: string;
+          failed: string;
+        };
+      };
+      body: string;
+      onMerge: {
+        title: string;
+        publishes: string;
+        version: string;
+        promotion: string;
+        review: string;
+      };
+      merged: {
+        title: string;
+        commit: string;
+        at: string;
+        promotion: string;
+        record: string;
+      };
+    };
+    actions: {
+      open: {
+        open: string;
+        title: string;
+        rerun: string;
+        body: string;
+        confirm: string;
+        rerunConfirm: string;
+        pending: string;
+      };
+      dismiss: {
+        open: string;
+        title: string;
+        body: string;
+        reason: string;
+        confirm: string;
+        pending: string;
+      };
+      merge: {
+        confirm: string;
+        pending: string;
+        blocked: string;
+      };
+      failure: {
+        orgRoleRequired: string;
+        noPrincipal: string;
+        separationOfDuties: string;
+        proposalNotFound: string;
+        proposalMoved: string;
+        lineagePrOpen: string;
+        governanceUnreadable: string;
+        repositoryMissing: string;
+        checksNotPassed: string;
+        headMoved: string;
+        baseMoved: string;
+        githubRefused: string;
+        refused: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
+    };
+  };
   ui: {
     brand: {
       name: string;
@@ -1097,6 +1409,28 @@ type Messages = {
     };
     dialog: {
       close: string;
+    };
+    record: {
+      kinds: {
+        rule: string;
+        constraint: string;
+        procedure: string;
+        fact: string;
+        memory: string;
+        preference: string;
+      };
+      unclassified: string;
+      force: string;
+      effects: {
+        require: string;
+        forbid: string;
+      };
+      scope: string;
+      scopes: {
+        repository: string;
+        workspace: string;
+      };
+      lineage: string;
     };
     runStatus: {
       live: string;

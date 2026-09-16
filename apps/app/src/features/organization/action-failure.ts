@@ -42,7 +42,7 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("refused", { code: failure.code });
         }
       case "invalid":
-        return t("invalid", { field: failure.field ?? "" });
+        return t("invalid");
       case "pending_approval":
         return t("pendingApproval", {
           accessRequestId: failure.accessRequestId,

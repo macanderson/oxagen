@@ -74,6 +74,7 @@ async function renderRoles(
       budgets: vi.fn(),
     },
     org: { members: vi.fn(), roles, workspaces: vi.fn() },
+    steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
   };
   const view = render(
     <IntlProvider>{await Roles({ ctx, source })}</IntlProvider>,
