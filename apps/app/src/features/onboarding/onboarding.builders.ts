@@ -5,7 +5,7 @@
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { FirstFrame, OnboardingGate } from "@/data/contracts/onboarding";
 import type { DataSource } from "@/data/ports";
-import { type Read, readOk } from "@/data/read";
+import type { Read } from "@/data/read";
 
 export function onboardingGate(
   overrides: Partial<OnboardingGate> = {},
@@ -50,9 +50,9 @@ type Reads = {
 };
 
 type Calls = {
-  state: unknown[][];
-  firstFrame: unknown[][];
-  agent: unknown[][];
+  state: Parameters<DataSource["onboarding"]["state"]>[];
+  firstFrame: Parameters<DataSource["onboarding"]["firstFrame"]>[];
+  agent: Parameters<DataSource["agents"]["get"]>[];
 };
 
 /** A DataSource that answers the reads a test hands it and refuses every other port. */
@@ -68,13 +68,13 @@ export function onboardingSource(reads: Reads): {
     if (read === undefined) throw new Error(`${port} has no answer`);
     return read;
   };
-  const source = {
+  const source: DataSource = {
     onboarding: {
-      state: (...args: unknown[]) => {
+      state: (...args: Parameters<DataSource["onboarding"]["state"]>) => {
         calls.state.push(args);
         return Promise.resolve(answer(reads.state, "onboarding.state"));
       },
-      firstFrame: (...args: unknown[]) => {
+      firstFrame: (...args: Parameters<DataSource["onboarding"]["firstFrame"]>) => {
         calls.firstFrame.push(args);
         return Promise.resolve(
           answer(reads.firstFrame, "onboarding.firstFrame"),
@@ -82,7 +82,7 @@ export function onboardingSource(reads: Reads): {
       },
     },
     agents: {
-      get: (...args: unknown[]) => {
+      get: (...args: Parameters<DataSource["agents"]["get"]>) => {
         calls.agent.push(args);
         return Promise.resolve(answer(reads.agent, "agents.get"));
       },
@@ -111,6 +111,6 @@ export function onboardingSource(reads: Reads): {
       budgets: refuse("spend.budgets"),
     },
     org: { members: refuse("org.members") },
-  } as unknown as DataSource;
+  };
   return { source, calls };
 }

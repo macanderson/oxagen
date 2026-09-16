@@ -14,11 +14,7 @@ import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireUser, requireViewer } from "@/server/viewer";
 import { routes, type SafePath } from "@/shared/safe-path";
-import {
-  AgentForm,
-  type AgentFormValues,
-  agentFieldErrors,
-} from "./agent-form";
+import { AgentForm, type AgentFormValues } from "./agent-form";
 import { OrganizationForm, type OrganizationField } from "./org-form";
 
 /**
