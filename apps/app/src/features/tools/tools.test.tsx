@@ -306,12 +306,12 @@ describe("Tools › kill switches", () => {
     ).toBeInTheDocument();
   });
 
-  it("prints no uuid for a switch the record names by an internal id", async () => {
+  it("does not print the uuid of a target its heading already names", async () => {
     await renderTools({ killSwitches: board() }, { tab: "switches" });
     const workspace = cardOf('[data-switch="emd_01k5c2"]');
-    expect(
-      within(workspace).getByText("named by an internal id"),
-    ).toBeInTheDocument();
+    // One organization and one workspace are in view, so the heading names the
+    // target and the uuid the record carries is not printed as a label.
+    expect(within(workspace).getByText("Workspace")).toBeInTheDocument();
     expect(workspace.textContent).not.toContain(
       "7b000000-0000-4000-8000-000000000001",
     );

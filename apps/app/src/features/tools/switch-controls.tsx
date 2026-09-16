@@ -42,7 +42,7 @@ export function FlipControls({
   denyGeneration: KillSwitchBoard["denyGeneration"];
   /** The card's switch, or null when the header opened the dialog. */
   existing: KillSwitch | null;
-  tone: "flip" | "clear";
+  tone: "header" | "card";
 }) {
   const t = useTranslations("tools.switches.dialog");
   const kinds = useTranslations("tools.switches.kinds");
@@ -98,7 +98,7 @@ export function FlipControls({
         data-testid={
           existing === null ? "tools-flip-open" : `tools-flip-${existing.id}`
         }
-        className={tone === "flip" ? buttonPrimary : buttonSecondary}
+        className={tone === "header" ? buttonPrimary : buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}

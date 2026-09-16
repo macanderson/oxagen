@@ -26,9 +26,13 @@ export function switchesOn(switches: readonly KillSwitch[]): number {
   return switches.filter((s) => s.on).length;
 }
 
-/** The uuid kinds: a target the record names by a database id, never a label. */
-const UUID_KINDS: ReadonlySet<KillSwitch["target"]["kind"]> = new Set([
-  "operator",
+/**
+ * The two kinds whose target this page already names: there is one
+ * organization and one workspace in view, so their database uuid identifies
+ * nothing the heading has not said. Every other kind prints its target — for
+ * an operator that uuid is the only identification the record carries.
+ */
+const SELF_EVIDENT: ReadonlySet<KillSwitch["target"]["kind"]> = new Set([
   "workspace",
   "org",
 ]);
@@ -46,7 +50,7 @@ function SwitchCard({
 }) {
   const t = useTranslations("tools.switches");
   const date = useDate();
-  const namesAUuid = UUID_KINDS.has(item.target.kind);
+  const selfEvident = SELF_EVIDENT.has(item.target.kind);
   return (
     <article
       data-switch={item.id}
@@ -58,9 +62,11 @@ function SwitchCard({
           <h3 className="text-sm font-semibold text-foreground">
             {t(`kinds.${item.target.kind}`)}
           </h3>
-          <p className={`${mono} break-all text-xs text-muted-foreground`}>
-            {namesAUuid ? t("targetUuid") : item.target.ref}
-          </p>
+          {selfEvident ? null : (
+            <p className={`${mono} break-all text-xs text-muted-foreground`}>
+              {item.target.ref}
+            </p>
+          )}
         </div>
         <StateDot
           tone={item.on ? "deny" : "ok"}
@@ -107,7 +113,7 @@ function SwitchCard({
           at={at}
           denyGeneration={denyGeneration}
           existing={item}
-          tone={item.on ? "clear" : "flip"}
+          tone="card"
         />
       ) : null}
     </article>
@@ -168,7 +174,7 @@ export function Switches({
               at={at}
               denyGeneration={denyGeneration}
               existing={null}
-              tone="flip"
+              tone="header"
             />
           ) : null
         }
@@ -179,6 +185,9 @@ export function Switches({
             org: denyGeneration.org,
             workspace: denyGeneration.workspace,
           })}
+        </p>
+        <p className="max-w-prose text-xs text-muted-foreground">
+          {t("noNames")}
         </p>
         {switches.length === 0 ? (
           <p data-state="empty" className="text-sm text-muted-foreground">

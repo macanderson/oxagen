@@ -175,7 +175,6 @@
       "empty": "No kill switch has ever been flipped in this workspace. Flip one to record the first.",
       "allowing": "allowing",
       "denying": "denying",
-      "targetUuid": "named by an internal id",
       "flippedByUnrecorded": "not recorded",
       "takesEffect": "at the next call boundary, through deny generation {generation}",
       "kinds": {
@@ -237,7 +236,8 @@
         "confirmDeny": "Deny now",
         "confirmAllow": "Allow again",
         "pending": "Recording…"
-      }
+      },
+      "noNames": "A flip records the user id of whoever made it. The record carries no display name, so this page prints the id rather than guessing at a person."
     },
     "failure": {
       "back": "Back to Fleet",

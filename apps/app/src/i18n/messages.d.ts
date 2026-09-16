@@ -2001,7 +2001,6 @@ type Messages = {
       empty: string;
       allowing: string;
       denying: string;
-      targetUuid: string;
       flippedByUnrecorded: string;
       takesEffect: string;
       kinds: {
@@ -2064,6 +2063,7 @@ type Messages = {
         confirmAllow: string;
         pending: string;
       };
+      noNames: string;
     };
     failure: {
       back: string;
