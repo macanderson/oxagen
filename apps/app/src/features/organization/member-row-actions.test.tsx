@@ -231,7 +231,7 @@ describe("a refused write", () => {
 });
 
 describe("a role that may not write membership", () => {
-  it("sees why, and neither write (negative)", async () => {
+  it("sees why, and neither write (negative)", () => {
     renderActions({}, false);
     expect(screen.getByTestId("member-actions-denied")).toHaveTextContent(
       "Changing a role and removing a member are Owner and Admin actions.",

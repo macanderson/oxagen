@@ -174,7 +174,7 @@ function ChangeRole({
 }) {
   const t = useTranslations("organization");
   const roleName = useTranslations("organization.roles");
-  const [role, setRole] = useState<string>(currentRole(member));
+  const [role, setRole] = useState<string>(() => currentRole(member));
   const selectId = `member-role-${member.id}`;
   return (
     <WriteDialog
