@@ -71,6 +71,12 @@ export interface DaemonStatus {
   spool_depth?: number;
   last_ingest_at?: string | null;
   last_error?: string | null;
+  /**
+   * Events the control plane refused as malformed. They are off the spool
+   * and leave no error behind, so this count is the only sign they never
+   * reached Oxagen. Absent on a collector that predates the field.
+   */
+  quarantined?: number;
   sessions?: unknown[];
   unobserved_sessions?: string[];
   agents?: DaemonAgentSummary[];
@@ -102,6 +108,14 @@ export interface DesktopState {
   oxagen_on_path: string | null;
   tacho_on_path: string | null;
   cli_install_dir: string;
+  /**
+   * Whether our own links to `oxagen` or `tacho` sit in `cli_install_dir`
+   * right now. Separate from the two `*_on_path` fields, which resolve
+   * against the running process's PATH: a GUI launch on macOS or Linux never
+   * sources a login profile, so they read null even with the links in place.
+   * Absent on a build that predates the field.
+   */
+  cli_links_present?: boolean;
   /**
    * What the launch-time auto-link of `oxagen` and `tacho` did, if the Rust
    * shell ran it this session. Absent on a build that predates it.

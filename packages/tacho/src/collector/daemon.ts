@@ -5,7 +5,7 @@
  * a side effect is injectable so the whole daemon runs in a test against a
  * fake control plane and a scratch `TACHO_HOME`.
  */
-import { readdirSync, readFileSync, unlinkSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import { hostname as osHostname } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -538,6 +538,15 @@ export async function startDaemon(
           ? toProtocolTimestamp(shipper.lastSuccessAt)
           : null,
       last_error: shipper.lastError ?? null,
+      // Events the control plane refused as malformed. The shipper writes
+      // each one to the quarantine directory and marks it shipped, so the
+      // spool drains to zero and no error is left standing: the directory is
+      // the only record that they never reached Oxagen. Counted per read
+      // rather than kept in memory so it survives a daemon restart; `tacho
+      // unenroll --purge` is what clears it.
+      quarantined: readdirSync(paths.quarantine).filter((f) =>
+        f.endsWith(".json"),
+      ).length,
       hooks: detector.presence ?? null,
       unobserved_sessions: detector.unobserved,
       // Every kind of agent this host has run; the daemon's own chain is
@@ -605,6 +614,29 @@ export async function startDaemon(
     );
   }
 
+  /**
+   * Drop refused events once they are as old as the WAL history they belong
+   * to. Nothing else clears the quarantine directory, so without this one
+   * refused event would read as a degraded agent forever; ageing it out on
+   * the WAL's own retention keeps the signal loud while it is fresh and
+   * quiet once the run it came from is gone.
+   */
+  function sweepQuarantine(at: number, retainMs: number): void {
+    let removed = 0;
+    for (const name of readdirSync(paths.quarantine)) {
+      if (!name.endsWith(".json")) continue;
+      const file = join(paths.quarantine, name);
+      try {
+        if (at - statSync(file).mtimeMs < retainMs) continue;
+        unlinkSync(file);
+        removed += 1;
+      } catch {
+        // a file that vanished or cannot be read is one less to sweep
+      }
+    }
+    if (removed > 0) log(`swept ${removed} refused events out of quarantine`);
+  }
+
   let lastRefresh = 0;
   let lastDetect = 0;
   let lastCheckpoint = 0;
@@ -640,6 +672,7 @@ export async function startDaemon(
     if (now() - lastCompact >= 60 * 60_000) {
       lastCompact = now();
       wal.compact(now(), timers.walRetainMs);
+      sweepQuarantine(now(), timers.walRetainMs);
     }
   }
 

@@ -472,7 +472,7 @@ export async function handleHookEvent(
 
     case "SessionEnd": {
       events.push(...record.recorder.ingestHook(raw, env, at, withReplay));
-      deps.registry.seal(input.session_id);
+      deps.registry.seal(record);
       return { events, response: {}, record };
     }
 

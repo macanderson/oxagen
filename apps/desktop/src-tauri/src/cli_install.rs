@@ -10,8 +10,9 @@
 //! are exercised through the Tauri commands and `ensure_cli_installed`. The
 //! functions that decide *what to do* — given what is already on disk — are
 //! plain, pure and unit-tested below: `decide_symlink_action`,
-//! `decide_shim_action`, `decide_path_precedence`, `is_oxagen_managed_path`,
-//! `upsert_path_block`, `remove_path_block`, `profile_path_for`,
+//! `decide_unlink_action`, `decide_shim_action`, `shim_is_ours`,
+//! `decide_path_precedence`, `is_oxagen_managed_path`, `upsert_path_block`,
+//! `remove_path_block`, `profile_path_for`, `fish_file_is_ours`,
 //! `detect_shell_kind`, `path_var_contains`, `auto_link_cli_enabled`.
 
 use serde::Serialize;
@@ -174,10 +175,16 @@ pub fn set_auto_link_cli(mut config: Map<String, Value>, enabled: bool) -> Map<S
     config
 }
 
-fn write_auto_link_cli(enabled: bool) -> Result<(), String> {
+pub(crate) fn write_auto_link_cli(enabled: bool) -> Result<(), String> {
     let path = desktop_config_path();
     let config = set_auto_link_cli(read_json_object(&path), enabled);
     write_json_object(&path, &config)
+}
+
+/// The persisted `autoLinkCli` preference. `remove_local_data` reads it
+/// before it deletes the directory the file lives in.
+pub(crate) fn read_auto_link_cli() -> bool {
+    auto_link_cli_enabled(&read_json_object(&desktop_config_path()))
 }
 
 // ---------------------------------------------------------------------
@@ -258,6 +265,37 @@ pub fn decide_symlink_action(existing: &ExistingLink, target: &Path) -> LinkActi
     }
 }
 
+/// What "Remove links" should do with one candidate path.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnlinkAction {
+    /// Nothing is there.
+    Absent,
+    Remove,
+    /// Something we did not write: left where it is, reported as skipped.
+    Keep,
+}
+
+/// The mirror of `decide_symlink_action`: remove only a symlink this
+/// installer could have written, meaning one pointing at a target we link to
+/// (`ours`) or at any Oxagen-owned location. A regular file, or a symlink
+/// into a Homebrew prefix or a developer checkout that happens to share the
+/// name, survives "Remove links" the same way it survives an install.
+#[allow(dead_code)]
+pub fn decide_unlink_action(existing: &ExistingLink, ours: &[PathBuf]) -> UnlinkAction {
+    match existing {
+        ExistingLink::Absent => UnlinkAction::Absent,
+        ExistingLink::Other => UnlinkAction::Keep,
+        ExistingLink::Symlink(current) => {
+            if ours.iter().any(|t| t == current) || is_oxagen_managed_path(current) {
+                UnlinkAction::Remove
+            } else {
+                UnlinkAction::Keep
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PathPrecedence {
     /// Nothing on PATH claims this name yet: safe to link.
@@ -306,16 +344,22 @@ pub fn windows_shim_content(target: &Path) -> String {
     format!("@\"{}\" %*\r\n", target.display())
 }
 
+/// Whether a `.cmd` shim's content is one we wrote: the `@"` form
+/// `windows_shim_content` produces.
+#[allow(dead_code)]
+pub fn shim_is_ours(text: &str) -> bool {
+    text.starts_with("@\"")
+}
+
 /// Decide what to do with a would-be `.cmd` shim given its current content:
-/// rewrite only when it was written by us (starts with the `@"` form we
-/// write), so a hand-written shim or another vendor's `oxagen.cmd` is left
-/// alone.
+/// rewrite only when it was written by us, so a hand-written shim or another
+/// vendor's `oxagen.cmd` is left alone.
 #[allow(dead_code)]
 pub fn decide_shim_action(existing: Option<&str>, desired: &str) -> ShimAction {
     match existing {
         None => ShimAction::Create,
         Some(text) if text == desired => ShimAction::AlreadyCorrect,
-        Some(text) if text.starts_with("@\"") => ShimAction::Replace,
+        Some(text) if shim_is_ours(text) => ShimAction::Replace,
         Some(_) => ShimAction::Skip,
     }
 }
@@ -380,10 +424,28 @@ fn block_text(dir: &str, eol: &str) -> String {
     format!("{MARKER_BEGIN}{eol}{}{eol}{MARKER_END}{eol}", path_export_line(dir))
 }
 
+/// A directory as a fish single-quoted string, where only `\` and `'` are
+/// special. Unquoted, a home directory with a space in it (`/Users/First
+/// Last/.local/bin`) word-splits into two directories that do not exist
+/// while the install still reports success. `path_export_line` does the same
+/// job for bash and zsh.
+pub fn fish_quote(dir: &str) -> String {
+    format!("'{}'", dir.replace('\\', "\\\\").replace('\'', "\\'"))
+}
+
 /// The whole-file content for the fish profile: fish's own `conf.d` file is
 /// entirely ours, so there is no marker block, just `fish_add_path`.
 pub fn fish_add_path_content(dir: &str) -> String {
-    format!("{MARKER_BEGIN}\nfish_add_path {dir}\n{MARKER_END}\n")
+    format!("{MARKER_BEGIN}\nfish_add_path {}\n{MARKER_END}\n", fish_quote(dir))
+}
+
+/// Whether an existing `conf.d/oxagen.fish` is one we wrote. The file is
+/// whole-file ours, so there is no block to splice: either it opens with our
+/// begin marker and may be rewritten or deleted, or someone else owns the
+/// name and it is left exactly as it is.
+#[allow(dead_code)]
+pub fn fish_file_is_ours(text: &str) -> bool {
+    text.starts_with(MARKER_BEGIN)
 }
 
 /// Whether a line is the one line our block carries between its markers.
@@ -491,6 +553,20 @@ impl Default for CliInstallView {
             note: "Checking whether the CLIs are on PATH…".to_string(),
         }
     }
+}
+
+/// One process-wide lock over the filesystem work: the launch-time install
+/// runs on its own thread and can sit for seconds inside the login-shell
+/// PATH probe, and `CliInstallState`'s mutex is only held long enough to
+/// assign the view. Without this, a "Remove links" click landing inside that
+/// window is undone the moment the probe returns.
+static INSTALL_LOCK: Mutex<()> = Mutex::new(());
+
+/// The guard every install/uninstall pass holds. A panic in an earlier pass
+/// must not lock out every later one, and there is no state to be poisoned:
+/// the lock guards `()`, not data.
+fn install_guard() -> std::sync::MutexGuard<'static, ()> {
+    INSTALL_LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 /// Holds the outcome of the last automatic or manual install/uninstall so
@@ -706,6 +782,11 @@ fn ensure_profile_block(dir: &Path, path_var: &str) -> Result<Option<String>, St
     }
     let dir_text = dir.display().to_string();
     if kind == ShellKind::Fish {
+        // Read before writing: this file is whole-file ours, so a file of
+        // the same name we did not write is never replaced.
+        if matches!(fs::read_to_string(&profile_path), Ok(text) if !fish_file_is_ours(&text)) {
+            return Err(format!("{}: not written by Oxagen, left alone", profile_path.display()));
+        }
         fs::write(&profile_path, fish_add_path_content(&dir_text)).map_err(|e| e.to_string())?;
     } else {
         let existing = fs::read_to_string(&profile_path).unwrap_or_default();
@@ -733,7 +814,7 @@ fn remove_all_profile_blocks() -> Vec<String> {
         }
     }
     let fish = home.join(".config").join("fish").join("conf.d").join("oxagen.fish");
-    if fish.is_file() && fs::remove_file(&fish).is_ok() {
+    if matches!(fs::read_to_string(&fish), Ok(text) if fish_file_is_ours(&text)) && fs::remove_file(&fish).is_ok() {
         touched.push(fish.display().to_string());
     }
     touched
@@ -766,6 +847,13 @@ fn note_for(state: &str, view: &CliInstallView) -> String {
 /// a transient directory if needed, link or shim each one, and (Unix) make
 /// sure the directory is on PATH for new terminals.
 fn install_cli_core() -> CliInstallView {
+    let _guard = install_guard();
+    install_cli_locked()
+}
+
+/// `install_cli_core`'s body, for callers that already hold `INSTALL_LOCK`.
+/// `INSTALL_LOCK` is not reentrant, so nothing here may take it again.
+fn install_cli_locked() -> CliInstallView {
     let dir = cli_install_dir();
     let mut view = CliInstallView {
         state: "pending".to_string(),
@@ -790,14 +878,20 @@ fn install_cli_core() -> CliInstallView {
         }
     }
 
-    // Linux .deb/.rpm etc: externalBin already lives on PATH.
-    if let Some(path_var) = std::env::var_os("PATH") {
-        if path_var_contains(&path_var.to_string_lossy(), &bundled) {
-            view.state = "already".to_string();
-            view.dir = bundled.display().to_string();
-            view.note = note_for("already", &view);
-            return view;
-        }
+    // Linux .deb/.rpm etc: externalBin already lives on PATH. Only a
+    // durable sidecar directory counts. An AppImage mount, a mounted .dmg or
+    // an App Translocation directory can be on PATH for this launch and be
+    // gone by the next one, so that case falls through to the durable copy
+    // and the links below rather than reporting itself installed.
+    let bundled_is_durable_on_path = !sidecar_dir_is_transient()
+        && std::env::var_os("PATH")
+            .map(|p| path_var_contains(&p.to_string_lossy(), &bundled))
+            .unwrap_or(false);
+    if bundled_is_durable_on_path {
+        view.state = "already".to_string();
+        view.dir = bundled.display().to_string();
+        view.note = note_for("already", &view);
+        return view;
     }
 
     #[cfg(not(windows))]
@@ -834,6 +928,16 @@ fn install_cli_core() -> CliInstallView {
     // something that isn't ours is left alone entirely: not linked, and
     // (below) not allowed to trigger the profile-PATH edit on its own.
     let path_var = effective_path_var();
+
+    // The probe above can take seconds, and the caller read the opt-out
+    // before it. Re-read it here, with the lock held and nothing linked yet,
+    // so a "Remove links" that landed in between is not undone.
+    if !read_auto_link_cli() {
+        view.state = "opted_out".to_string();
+        view.note = note_for("opted_out", &view);
+        return view;
+    }
+
     let mut shadowed = Vec::new();
     for name in ["oxagen", "tacho"] {
         let Some(found) = resolve_in_path_var(name, &path_var) else {
@@ -908,8 +1012,7 @@ fn install_cli_core() -> CliInstallView {
 /// main thread. Honours the `autoLinkCli` opt-out and never overwrites
 /// anything the user or another tool put on PATH.
 pub fn ensure_cli_installed() -> CliInstallView {
-    let config = read_json_object(&desktop_config_path());
-    if !auto_link_cli_enabled(&config) {
+    if !read_auto_link_cli() {
         let dir = cli_install_dir();
         let mut view = CliInstallView {
             state: "opted_out".to_string(),
@@ -943,8 +1046,14 @@ pub struct InstallResult {
 /// updates the managed state `desktop_state` reports.
 #[tauri::command]
 pub fn install_cli(state: tauri::State<CliInstallState>) -> Result<InstallResult, String> {
-    write_auto_link_cli(true)?;
-    let view = install_cli_core();
+    // Re-enable inside the lock, so a concurrent "Remove links" cannot turn
+    // the flag back off between this write and the re-read in
+    // `install_cli_locked` and make an explicit click do nothing.
+    let view = {
+        let _guard = install_guard();
+        write_auto_link_cli(true)?;
+        install_cli_locked()
+    };
     if view.state == "failed" {
         *state.0.lock().unwrap() = view.clone();
         return Err(view.note);
@@ -961,18 +1070,84 @@ pub fn install_cli(state: tauri::State<CliInstallState>) -> Result<InstallResult
     Ok(result)
 }
 
+/// Every target a link we wrote can point at: this launch's sidecars and the
+/// durable copy. A link at one of these is ours even when the app has since
+/// moved, which is what `is_oxagen_managed_path` alone cannot tell us about
+/// an unbundled (Linux tarball, developer) sidecar directory.
+#[cfg(not(windows))]
+fn our_link_targets() -> Vec<PathBuf> {
+    let durable = durable_bin_dir();
+    let mut targets: Vec<PathBuf> = ["oxagen", "tacho"].iter().map(|name| durable.join(exe(name))).collect();
+    if let Some(sidecars) = sidecar_dir() {
+        targets.extend(["oxagen", "tacho"].iter().map(|name| sidecars.join(exe(name))));
+    }
+    targets
+}
+
+/// Every candidate "Remove links" considers, each with the verdict from the
+/// same ownership test the install path uses: the symlink per name on Unix,
+/// the `.cmd` shim per name on Windows (the only platform that ever gets
+/// one). `uninstall_cli` acts on this; `cli_links_present` only counts it,
+/// so what the button says and what it does cannot disagree.
+fn unlink_plan() -> Vec<(&'static str, PathBuf, UnlinkAction)> {
+    let dir = cli_install_dir();
+    #[cfg(not(windows))]
+    {
+        let ours = our_link_targets();
+        ["oxagen", "tacho"]
+            .iter()
+            .map(|name| {
+                let link = dir.join(name);
+                let action = decide_unlink_action(&read_existing_link(&link), &ours);
+                (*name, link, action)
+            })
+            .collect()
+    }
+    #[cfg(windows)]
+    {
+        ["oxagen", "tacho"]
+            .iter()
+            .map(|name| {
+                let shim = dir.join(format!("{name}.cmd"));
+                let action = match fs::read_to_string(&shim) {
+                    Ok(text) if shim_is_ours(&text) => UnlinkAction::Remove,
+                    Ok(_) => UnlinkAction::Keep,
+                    Err(_) => UnlinkAction::Absent,
+                };
+                (*name, shim, action)
+            })
+            .collect()
+    }
+}
+
+/// Whether the install directory holds at least one link this app owns.
+/// `on_path` cannot answer this: a GUI launch on macOS or Linux never
+/// sources a shell profile, so the process's own PATH is missing the
+/// install directory even in the second after we linked into it.
+pub fn cli_links_present() -> bool {
+    unlink_plan().iter().any(|(_, _, action)| *action == UnlinkAction::Remove)
+}
+
 /// "Remove links": removes the symlinks/shims this installer wrote, strips
 /// the profile block(s) it added, and turns off automatic re-linking on the
-/// next launch. The sidecars themselves stay with the app.
+/// next launch. The sidecars themselves stay with the app. Ownership is
+/// tested exactly as it is on the way in, so a `oxagen` in the same directory
+/// that we refused to overwrite is also one we refuse to delete.
 #[tauri::command]
 pub fn uninstall_cli(state: tauri::State<CliInstallState>) -> Result<Vec<String>, String> {
+    let _guard = install_guard();
     let dir = cli_install_dir();
     let mut removed = Vec::new();
-    for name in ["oxagen", "tacho"] {
-        for candidate in [dir.join(name), dir.join(format!("{name}.cmd"))] {
-            if candidate.symlink_metadata().is_ok() {
+    let mut skipped = Vec::new();
+    for (name, candidate, action) in unlink_plan() {
+        match action {
+            UnlinkAction::Absent => {}
+            UnlinkAction::Remove => {
                 fs::remove_file(&candidate).map_err(|e| e.to_string())?;
                 removed.push(candidate.display().to_string());
+            }
+            UnlinkAction::Keep => {
+                skipped.push(format!("{name}: {} was not created by Oxagen, left alone", candidate.display()))
             }
         }
     }
@@ -983,7 +1158,7 @@ pub fn uninstall_cli(state: tauri::State<CliInstallState>) -> Result<Vec<String>
         state: "opted_out".to_string(),
         dir: dir.display().to_string(),
         files: Vec::new(),
-        skipped: Vec::new(),
+        skipped,
         profile: None,
         note: note_for("opted_out", &CliInstallView::default()),
     };
@@ -1068,6 +1243,38 @@ mod tests {
         // A Homebrew install: not recognized, leave it.
         let foreign = PathBuf::from("/opt/homebrew/Cellar/oxagen/1.4.0/bin/oxagen");
         assert_eq!(decide_symlink_action(&ExistingLink::Symlink(foreign), target), LinkAction::Skip);
+    }
+
+    // ---- decide_unlink_action ----
+
+    #[test]
+    fn unlink_action_covers_every_branch() {
+        let current = PathBuf::from("/Applications/Oxagen.app/Contents/MacOS/oxagen");
+        let ours = vec![current.clone()];
+        assert_eq!(decide_unlink_action(&ExistingLink::Absent, &ours), UnlinkAction::Absent);
+        // A real binary someone dropped in under our name, not a link.
+        assert_eq!(decide_unlink_action(&ExistingLink::Other, &ours), UnlinkAction::Keep);
+        assert_eq!(decide_unlink_action(&ExistingLink::Symlink(current), &ours), UnlinkAction::Remove);
+        // Locations we no longer link to but still recognize as ours.
+        let stale = PathBuf::from("/Volumes/Oxagen/Oxagen.app/Contents/MacOS/oxagen");
+        assert_eq!(decide_unlink_action(&ExistingLink::Symlink(stale), &ours), UnlinkAction::Remove);
+        let durable = durable_bin_dir().join("oxagen");
+        assert_eq!(decide_unlink_action(&ExistingLink::Symlink(durable), &ours), UnlinkAction::Remove);
+    }
+
+    #[test]
+    fn uninstall_keeps_exactly_what_install_refuses_to_replace() {
+        let target = Path::new("/Applications/Oxagen.app/Contents/MacOS/oxagen");
+        let ours = vec![target.to_path_buf()];
+        for existing in [
+            ExistingLink::Other,
+            ExistingLink::Symlink(PathBuf::from("/opt/homebrew/Cellar/oxagen/1.4.0/bin/oxagen")),
+            ExistingLink::Symlink(PathBuf::from("/usr/local/bin/oxagen")),
+            ExistingLink::Symlink(PathBuf::from("/Users/dev/src/oxagen/bin/oxagen")),
+        ] {
+            assert_eq!(decide_symlink_action(&existing, target), LinkAction::Skip);
+            assert_eq!(decide_unlink_action(&existing, &ours), UnlinkAction::Keep);
+        }
     }
 
     // ---- decide_path_precedence (PATH-shadow avoidance) ----
@@ -1236,8 +1443,28 @@ mod tests {
     #[test]
     fn fish_content_is_whole_file_ownership() {
         let content = fish_add_path_content("/home/dev/.local/bin");
-        assert!(content.contains("fish_add_path /home/dev/.local/bin"));
+        assert!(content.contains("fish_add_path '/home/dev/.local/bin'"));
         assert!(content.contains(MARKER_BEGIN));
+    }
+
+    #[test]
+    fn fish_quotes_the_directory_so_a_space_cannot_split_it() {
+        let content = fish_add_path_content("/Users/First Last/.local/bin");
+        assert!(content.contains("fish_add_path '/Users/First Last/.local/bin'"));
+        // Inside fish single quotes only these two characters are special.
+        assert_eq!(fish_quote(r"/tmp/o'brien\bin"), r"'/tmp/o\'brien\\bin'");
+        // Backslashes are doubled before quotes are escaped, so the escape
+        // we add is never doubled in turn.
+        assert_eq!(fish_quote(r"a\b"), r"'a\\b'");
+    }
+
+    #[test]
+    fn a_fish_file_we_did_not_write_is_not_ours() {
+        assert!(fish_file_is_ours(&fish_add_path_content("/home/dev/.local/bin")));
+        // Someone else's conf.d/oxagen.fish, and an empty one.
+        assert!(!fish_file_is_ours("fish_add_path /opt/homebrew/bin\n"));
+        assert!(!fish_file_is_ours("# my own oxagen setup\n"));
+        assert!(!fish_file_is_ours(""));
     }
 
     // ---- autoLinkCli config merge ----

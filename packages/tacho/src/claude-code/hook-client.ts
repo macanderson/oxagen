@@ -26,6 +26,7 @@ import { DEFAULT_SECRET_ENV_PATTERN, snapshotEnv } from "./context";
 import { hookInputSchema } from "./hooks";
 import {
   parseAnswerBody,
+  psStartInstance,
   stellaAnswer,
   stellaHarnessPid,
   translateStellaPayload,
@@ -147,6 +148,12 @@ export interface HookRunDeps {
    * session). Defaults to walking up from this process's parent with `ps`.
    */
   harnessPid?: () => number;
+  /**
+   * The Stella process instance token (its start time), which keeps a reused
+   * pid off the previous run's chain. Defaults to one `ps` call; `undefined`
+   * from it means the session id falls back to the bare pid form.
+   */
+  harnessInstance?: (pid: number) => string | undefined;
   /** `win32` has no Unix socket, so the hook posts over loopback TCP. */
   platform?: NodeJS.Platform;
 }
@@ -324,7 +331,13 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
     harnessPid = (
       deps.harnessPid ?? (() => stellaHarnessPid(process.ppid, platform))
     )();
-    raw = translateStellaPayload(raw, harnessPid);
+    // Windows has no `ps`, so there the id stays the bare pid form.
+    const instance = (
+      deps.harnessInstance ??
+      ((pid: number) =>
+        platform === "win32" ? undefined : psStartInstance(pid))
+    )(harnessPid);
+    raw = translateStellaPayload(raw, harnessPid, instance);
   }
   const parsed = hookInputSchema.safeParse(raw);
   if (!parsed.success) {

@@ -328,6 +328,7 @@ describe("runTachoHook for Stella and custom agents", () => {
       env: { HOME: "/h" },
       harness: "stella" as const,
       harnessPid: () => 4242,
+      harnessInstance: () => "c0ffee112233",
       platform: "linux" as const,
     };
     const denied = await runTachoHook({
@@ -353,7 +354,8 @@ describe("runTachoHook for Stella and custom agents", () => {
     };
     expect(body.harness).toBe("stella");
     expect(body.payload).toMatchObject({
-      session_id: "stella-4242",
+      // The pid alone would be reused; the process start time is mixed in.
+      session_id: "stella-4242-c0ffee112233",
       hook_event_name: "PreToolUse",
       tool_name: "Bash",
       tool_input: { command: "git push" },
@@ -385,7 +387,8 @@ describe("runTachoHook for Stella and custom agents", () => {
       }),
     });
     expect(started.stdout).toBe("Governed.\n");
-    // Without an injected lookup the pid is found from this process's parent.
+    // Without an injected lookup the pid is found from this process's parent,
+    // and its start time from ps (absent on a host where ps says nothing).
     const found: string[] = [];
     await runTachoHook({
       paths,
@@ -400,7 +403,7 @@ describe("runTachoHook for Stella and custom agents", () => {
     expect(
       (JSON.parse(found[0] ?? "{}") as { payload: { session_id: string } })
         .payload.session_id,
-    ).toMatch(/^stella-\d+$/);
+    ).toMatch(/^stella-\d+(-[0-9a-f]{12})?$/);
   });
 
   it("decides locally in Stella's vocabulary and spools the translated payload when the daemon is down", async () => {
@@ -411,6 +414,8 @@ describe("runTachoHook for Stella and custom agents", () => {
       stdin: STELLA_PRE,
       harness: "stella",
       harnessPid: () => 99,
+      // ps could not read a start time: the id keeps the bare pid form.
+      harnessInstance: () => undefined,
       post: async () => {
         throw new Error("ECONNREFUSED");
       },

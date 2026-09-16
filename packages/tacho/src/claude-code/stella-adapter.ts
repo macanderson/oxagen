@@ -11,12 +11,14 @@
  * id and no transcript path, and no environment variable names the session
  * either. So the adapter synthesizes them:
  *
- *   - `session_id = "stella-<pid>"`, where the pid is the Stella process that
- *     ran the hook. Stella spawns `bash -c <command>`; bash either execs the
- *     hook (the parent is Stella) or forks it (the parent is the shell, and
- *     Stella is the grandparent). The same pid goes to the daemon as
- *     `TACHO_HARNESS_PID`, so the registry sweep seals the chain when Stella
- *     exits: Stella has no SessionEnd.
+ *   - `session_id = "stella-<pid>-<instance>"`, where the pid is the Stella
+ *     process that ran the hook and the instance is a digest of that
+ *     process's start time. Stella spawns `bash -c <command>`; bash either
+ *     execs the hook (the parent is Stella) or forks it (the parent is the
+ *     shell, and Stella is the grandparent). The same pid goes to the daemon
+ *     as `TACHO_HARNESS_PID`, so the registry sweep seals the chain when
+ *     Stella exits: Stella has no SessionEnd. The start time is what keeps a
+ *     reused pid off the retained sealed chain of the run that had it before.
  *   - `tool_use_id` is a digest of the tool name and input, so a PreToolUse
  *     and its PostToolUse pair. Two identical calls in one session share an
  *     id; they are still recorded in order.
@@ -91,8 +93,42 @@ export function stellaToolUseId(name: string, input: unknown): string {
   return `stella_${digest.slice("sha256:".length, "sha256:".length + 24)}`;
 }
 
-export function stellaSessionId(pid: number): string {
-  return `stella-${pid}`;
+/**
+ * A short token for one process instance, from its start time. Undefined for
+ * an empty line, which is what `ps` prints for a pid that is gone.
+ */
+export function startInstanceToken(lstart: string): string | undefined {
+  const text = lstart.trim();
+  if (text.length === 0) return undefined;
+  return digestJcs(text).slice("sha256:".length, "sha256:".length + 12);
+}
+
+/**
+ * The start time of a process as an instance token: one `ps -o lstart=` call
+ * (BSD and GNU `ps` both carry `lstart`) with a short timeout, the same shape
+ * as `psLookup`. Undefined when `ps` cannot answer, and the caller then falls
+ * back to the bare pid form.
+ */
+export function psStartInstance(pid: number): string | undefined {
+  const result = spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    timeout: 2_000,
+  });
+  if (result.status !== 0 || typeof result.stdout !== "string")
+    return undefined;
+  return startInstanceToken(result.stdout);
+}
+
+/**
+ * The synthetic session id for a Stella run. `instance` distinguishes one
+ * process instance from the next: pids are reused, and the daemon retains a
+ * sealed record for days, so `stella-<pid>` alone can put a new run on a
+ * finished run's chain and record it as a resume. Without an instance (no
+ * `ps`, or Windows) the id falls back to the bare pid form.
+ */
+export function stellaSessionId(pid: number, instance?: string): string {
+  return instance === undefined ? `stella-${pid}` : `stella-${pid}-${instance}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -107,12 +143,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * A document that is not a Stella payload (no string `event`) is returned
  * unchanged and fails the hook schema the way any junk does.
  */
-export function translateStellaPayload(raw: unknown, pid: number): unknown {
+export function translateStellaPayload(
+  raw: unknown,
+  pid: number,
+  instance?: string,
+): unknown {
   if (!isRecord(raw) || typeof raw["event"] !== "string") return raw;
   const { event, tool, toolResult, finalText, subagentResult, ...rest } = raw;
   const out: Record<string, unknown> = {
     ...rest,
-    session_id: stellaSessionId(pid),
+    session_id: stellaSessionId(pid, instance),
     hook_event_name: event,
   };
   if (isRecord(tool)) {

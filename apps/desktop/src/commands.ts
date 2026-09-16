@@ -244,7 +244,10 @@ export function describeCliInstall(
     case "skipped":
       return `Skipped linking on launch: ${install.note}`;
     case "opted_out":
-      return `Not linked: you opted out. ${install.note}`;
+      // "Remove links" lands here, and it reports what it refused to delete
+      // (a binary of the same name that Oxagen did not create) the same way
+      // the install path reports what it refused to overwrite.
+      return `Not linked: you opted out. ${install.note}${skipped}`;
     case "failed":
       return `Could not link into ${install.dir}: ${install.note}`;
     case "pending":

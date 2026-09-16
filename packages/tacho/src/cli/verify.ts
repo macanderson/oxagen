@@ -38,8 +38,8 @@ const DEFAULT_TIMEOUT_MS: Record<TachoHarness, number> = {
 /**
  * One headless turn per harness. Claude Code prints a JSON result carrying
  * its session id; Codex CLI (`codex exec`) and Stella (`stella run`) print
- * prose, so their session is matched as the daemon's newest non-internal
- * chain carrying the harness label instead.
+ * prose, so their session is matched as a chain the daemon did not have
+ * before the turn ran, carrying the harness label.
  */
 function headlessTurn(
   harness: TachoHarness,
@@ -112,6 +112,23 @@ export async function verify(
   if (facts.path === undefined)
     return { ok: false, detail: `\`${name}\` is not on PATH` };
   const turn = headlessTurn(harness, options.prompt ?? DEFAULT_PROMPT);
+  // Every chain the daemon already holds. A turn whose own session id cannot
+  // be read is matched by what appears after it: the busiest chain is not the
+  // newest one, and a sealed chain retained from a real session would
+  // otherwise report success while this turn's hooks never fired.
+  const priorListing = (await deps.daemonGet("/sessions")) as
+    | { sessions?: DaemonSession[] }
+    | undefined;
+  if (priorListing?.sessions === undefined && !turn.parsesSession) {
+    return {
+      ok: false,
+      detail:
+        "tachod did not list its sessions, so this turn's chain could not be told from the ones already recorded",
+    };
+  }
+  const before = new Set(
+    (priorListing?.sessions ?? []).map((session) => session.session_uuid),
+  );
   deps.out(
     `Running ${name} ${turn.args[0]} (one headless turn) with hooks installed...`,
   );
@@ -128,7 +145,7 @@ export async function verify(
       const parsed = JSON.parse(run.stdout) as { session_id?: string };
       sessionId = parsed.session_id;
     } catch {
-      // Fall through: the daemon's newest session is the best guess.
+      // Fall through: a chain the daemon did not hold before this turn.
     }
   }
   const deadline =
@@ -145,6 +162,7 @@ export async function verify(
         : sessions
             .filter(
               (s) =>
+                !before.has(s.session_uuid) &&
                 !isInternalSession(s.session_id) &&
                 (s.harness === undefined || s.harness === harness),
             )

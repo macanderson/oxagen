@@ -212,6 +212,59 @@ describe("computeAgentRows: error and pending", () => {
     expect(cc.summary).toBe("recorded, waiting to send");
   });
 
+  it("reports refused events rather than calling an empty spool delivery", () => {
+    // Quarantining takes the event off the spool and clears the error, so
+    // everything else about this state reads exactly like a clean delivery.
+    const s = state({
+      daemon: {
+        uptime_s: 1,
+        spool_depth: 0,
+        last_error: null,
+        last_ingest_at: "2026-09-15T11:59:00Z",
+        quarantined: 2,
+        agents: [agent({ last_seen_at: "2026-09-15T11:57:00Z" })],
+      },
+    });
+    const rows = computeAgentRows(s, null, NOW);
+    const cc = rows.find((r) => r.key === "claude-code")!;
+    expect(cc.health).toBe("degraded");
+    expect(cc.summary).toBe("2 events refused by Oxagen");
+  });
+
+  it("says 'event' for a single refused event", () => {
+    const s = state({
+      daemon: {
+        uptime_s: 1,
+        spool_depth: 0,
+        quarantined: 1,
+        agents: [agent({ last_seen_at: "2026-09-15T11:57:00Z" })],
+      },
+    });
+    const rows = computeAgentRows(s, null, NOW);
+    expect(rows.find((r) => r.key === "claude-code")!.summary).toBe(
+      "1 event refused by Oxagen",
+    );
+  });
+
+  it("does not call a backlogged agent delivered on another agent's ship", () => {
+    // `last_ingest_at` is daemon-global: with a backlog deeper than one
+    // batch, a batch for some other agent can land after this agent's last
+    // run while this agent's own events are still queued.
+    const s = state({
+      daemon: {
+        uptime_s: 1,
+        spool_depth: 40,
+        last_error: null,
+        last_ingest_at: "2026-09-15T11:58:00Z",
+        agents: [agent({ last_seen_at: "2026-09-15T11:57:00Z" })],
+      },
+    });
+    const rows = computeAgentRows(s, null, NOW);
+    const cc = rows.find((r) => r.key === "claude-code")!;
+    expect(cc.health).toBe("pending");
+    expect(cc.summary).toBe("recorded, waiting to send");
+  });
+
   it("degrades a pending state stuck for more than ten minutes", () => {
     const s = state({
       daemon: {

@@ -133,6 +133,50 @@ describe("agent roster", () => {
     expect(legacy.agents()).toEqual([]);
   });
 
+  it("keeps two agents that share one harness session id on separate chains", () => {
+    const clock = clockAt("2026-09-15T10:00:00.000Z");
+    const registry = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now: clock.now,
+    });
+    const first = registry.ensure("sess-1", { customAgent: "reviewer" });
+    start(first.record);
+    registry.seal(first.record);
+    clock.advance(1_000);
+    const second = registry.ensure("sess-1", { customAgent: "builder" });
+    expect(second.created).toBe(true);
+    expect(second.record.sealed).toBe(false);
+    expect(second.record.recorder.sessionUuid).not.toBe(
+      first.record.recorder.sessionUuid,
+    );
+    // The id reported over the wire stays the raw one the harness gave.
+    expect(second.record.harnessSessionId).toBe("sess-1");
+    // The first agent coming back still lands on its own record.
+    expect(registry.ensure("sess-1", { customAgent: "reviewer" }).record).toBe(
+      first.record,
+    );
+    // A caller that names no agent (OTel) takes the live chain.
+    expect(registry.get("sess-1")).toBe(second.record);
+    expect(
+      registry
+        .agents()
+        .map((a) => a.key)
+        .sort(),
+    ).toEqual(["custom:builder", "custom:reviewer"]);
+    // A harness and a custom agent sharing an id are two agents too.
+    expect(registry.ensure("sess-1", { harness: "stella" }).created).toBe(true);
+    const restored = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now: clock.now,
+    });
+    restored.restore(
+      JSON.parse(JSON.stringify(registry.state())) as RegistryState,
+    );
+    expect(restored.list()).toHaveLength(3);
+  });
+
   it("closes a session whose process exited after Stop as completed, and anything else as crashed", () => {
     const clock = clockAt("2026-09-15T10:00:00.000Z");
     const registry = new SessionRegistry({

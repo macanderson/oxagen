@@ -165,6 +165,11 @@ struct DesktopState {
     oxagen_on_path: Option<String>,
     tacho_on_path: Option<String>,
     cli_install_dir: String,
+    /// Whether `cli_install_dir` holds a link this app owns. The two
+    /// `*_on_path` fields cannot stand in for it: they resolve against this
+    /// process's PATH, and a GUI launch on macOS or Linux never sources a
+    /// shell profile, so they read as absent even right after we linked.
+    cli_links_present: bool,
     /// The outcome of the automatic (or most recent manual) PATH install;
     /// see `cli_install::CliInstallView`.
     cli_install: CliInstallView,
@@ -192,6 +197,7 @@ fn desktop_state(app: tauri::AppHandle, install_state: tauri::State<CliInstallSt
         oxagen_on_path: cli_install::on_path("oxagen"),
         tacho_on_path: cli_install::on_path("tacho"),
         cli_install_dir: cli_install::cli_install_dir().display().to_string(),
+        cli_links_present: cli_install::cli_links_present(),
         cli_install: install_state.0.lock().unwrap().clone(),
     }
 }
@@ -243,8 +249,18 @@ fn remove_local_data() -> Result<String, String> {
     if tacho_root().join("host.json").is_file() {
         return Err("this machine is still enrolled; unenroll first".into());
     }
+    // `desktop.json` lives in this directory, so the purge takes the
+    // `autoLinkCli` opt-out with it and the next launch would re-link and
+    // re-edit the profile. "Remove links" then "Remove local data" has to
+    // stay removed, so an opt-out is carried across the delete. An enabled
+    // (default) flag is not rewritten: nothing to remember, and the
+    // directory stays gone.
+    let opted_out = !cli_install::read_auto_link_cli();
     if dir.is_dir() {
         fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
+    }
+    if opted_out {
+        cli_install::write_auto_link_cli(false)?;
     }
     Ok(dir.display().to_string())
 }

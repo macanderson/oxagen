@@ -1,9 +1,9 @@
 /**
  * The session registry (spec plan PR 3): one recorder per live agent
- * session, keyed by the harness session id, with the operator control state
- * a command can set (pause, cancel, message) and the process facts the
- * detector and the kill path need. Persists to `daemon.json` so a daemon
- * restart continues every chain instead of forking it.
+ * session, keyed by the agent and the harness session id, with the operator
+ * control state a command can set (pause, cancel, message) and the process
+ * facts the detector and the kill path need. Persists to `daemon.json` so a
+ * daemon restart continues every chain instead of forking it.
  *
  * It also keeps the agent roster: one entry per kind of agent this host has
  * run (`claude-code`, `codex`, `stella`, or a named custom agent), with when
@@ -153,8 +153,19 @@ export class SessionRegistry {
     return toProtocolTimestamp(this.options.now());
   }
 
+  /**
+   * The record for a harness session id, whoever owns it: the live one
+   * first, then the most recently seen. Two agents can hand out the same id,
+   * so a caller that knows which agent it is goes through `ensure`, which
+   * never crosses from one agent's record to another's.
+   */
   get(harnessSessionId: string): SessionRecord | undefined {
-    return this.sessions.get(harnessSessionId);
+    let best: SessionRecord | undefined;
+    for (const record of this.sessions.values()) {
+      if (record.harnessSessionId !== harnessSessionId) continue;
+      if (best === undefined || preferRecord(record, best)) best = record;
+    }
+    return best;
   }
 
   byUuid(sessionUuid: string): SessionRecord | undefined {
@@ -233,13 +244,53 @@ export class SessionRegistry {
     }));
   }
 
+  /**
+   * The map key. A harness session id is unique only within the agent that
+   * issued it: a custom agent whose harness hands out an id another agent is
+   * already using must not land on that agent's recorder, or two runs share
+   * one hash chain and one roster label. `harnessSessionId` stays the raw id
+   * the harness gave, and that is what every payload reports.
+   */
+  private key(harnessSessionId: string, facts: SessionFacts): string {
+    return `${this.agentOf(facts).key} ${harnessSessionId}`;
+  }
+
+  /**
+   * A record opened before any agent named itself (OTel or the transcript
+   * detector saw the session first) belongs to the agent that names itself
+   * first: it is the same session, and adopting it keeps one chain rather
+   * than forking it. Only the key moves; the events already chained carry the
+   * context the recorder was built with.
+   */
+  private adopt(
+    harnessSessionId: string,
+    facts: SessionFacts,
+  ): SessionRecord | undefined {
+    const unclaimed = this.key(harnessSessionId, {});
+    const record = this.sessions.get(unclaimed);
+    if (record === undefined || record.sealed) return undefined;
+    if (record.harness !== undefined || record.customAgent !== undefined)
+      return undefined;
+    this.sessions.delete(unclaimed);
+    this.sessions.set(this.key(harnessSessionId, facts), record);
+    return record;
+  }
+
   /** Find or open the record for a harness session, absorbing new facts. */
   ensure(
     harnessSessionId: string,
     facts: SessionFacts & { ambient?: boolean } = {},
   ): { record: SessionRecord; created: boolean } {
     const now = this.ts();
-    const existing = this.sessions.get(harnessSessionId);
+    // A caller that names no agent (OTel, the transcript detector) joins
+    // whichever agent already owns the id; a caller that names one only ever
+    // matches its own agent's record, or adopts one nobody has claimed.
+    const named =
+      facts.harness !== undefined || facts.customAgent !== undefined;
+    const existing = named
+      ? (this.sessions.get(this.key(harnessSessionId, facts)) ??
+        this.adopt(harnessSessionId, facts))
+      : this.get(harnessSessionId);
     if (existing) {
       if (facts.transcriptPath !== undefined)
         existing.transcriptPath = facts.transcriptPath;
@@ -271,33 +322,39 @@ export class SessionRegistry {
       ambient: facts.ambient ?? false,
       ...optionalFacts(facts),
     };
-    this.sessions.set(harnessSessionId, record);
+    this.sessions.set(this.key(harnessSessionId, facts), record);
     this.noteAgent(record, true);
     return { record, created: true };
   }
 
   touch(harnessSessionId: string): void {
-    const record = this.sessions.get(harnessSessionId);
+    const record = this.get(harnessSessionId);
     if (record) {
       record.lastSeenAt = this.ts();
       this.noteAgent(record, false);
     }
   }
 
-  /** Mark a chain sealed after `agent_stop` landed on it. */
-  seal(harnessSessionId: string): void {
-    const record = this.sessions.get(harnessSessionId);
+  /**
+   * Mark a chain sealed after `agent_stop` landed on it. A caller holding the
+   * record passes it: a session id alone cannot tell two agents' chains apart.
+   */
+  seal(session: string | SessionRecord): void {
+    const record = typeof session === "string" ? this.get(session) : session;
     if (record) record.sealed = true;
   }
 
-  /** Forget sealed sessions older than `retainMs`. The roster keeps them counted. */
+  /**
+   * Forget sealed sessions older than `retainMs`, and report the harness
+   * session ids dropped. The roster keeps them counted.
+   */
   forgetSealed(retainMs: number): string[] {
     const cutoff = this.options.now() - retainMs;
     const removed: string[] = [];
-    for (const [id, record] of this.sessions) {
+    for (const [key, record] of this.sessions) {
       if (record.sealed && Date.parse(record.lastSeenAt) < cutoff) {
-        this.sessions.delete(id);
-        removed.push(id);
+        this.sessions.delete(key);
+        removed.push(record.harnessSessionId);
       }
     }
     return removed;
@@ -356,7 +413,7 @@ export class SessionRegistry {
 
   restore(state: RegistryState): void {
     for (const persisted of state.sessions) {
-      this.sessions.set(persisted.harnessSessionId, {
+      this.sessions.set(this.key(persisted.harnessSessionId, persisted), {
         harnessSessionId: persisted.harnessSessionId,
         recorder: new SessionRecorder({
           context: contextForHarness(
@@ -381,6 +438,16 @@ export class SessionRegistry {
       this.roster.set(entry.key, { ...entry });
     }
   }
+}
+
+/**
+ * Which of two records for the same session id a caller that named no agent
+ * means: a live chain over a sealed one, then the more recently seen.
+ * `lastSeenAt` is a protocol timestamp, so it sorts as text.
+ */
+function preferRecord(candidate: SessionRecord, best: SessionRecord): boolean {
+  if (candidate.sealed !== best.sealed) return !candidate.sealed;
+  return candidate.lastSeenAt > best.lastSeenAt;
 }
 
 /** The optional session facts, copied only when set (the state file omits absent keys). */

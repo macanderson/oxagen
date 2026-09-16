@@ -9,6 +9,8 @@ import {
   parseAnswerBody,
   parsePsLine,
   psLookup,
+  psStartInstance,
+  startInstanceToken,
   stellaAnswer,
   stellaHarnessPid,
   stellaSessionId,
@@ -56,6 +58,26 @@ describe("stella pid", () => {
     lookups.length = 0;
     expect(stellaHarnessPid(10, "win32", lookup)).toBe(10);
     expect(lookups).toEqual([]);
+  });
+
+  it("mixes the process start time into the session id, so a reused pid is a new session", () => {
+    const token = startInstanceToken("Mon Sep 15 10:22:33 2026") as string;
+    expect(token).toMatch(/^[0-9a-f]{12}$/);
+    // Every hook of one run reads the same start time and so the same id.
+    expect(startInstanceToken("  Mon Sep 15 10:22:33 2026\n")).toBe(token);
+    // The next process to hold the pid started later.
+    expect(startInstanceToken("Mon Sep 15 10:22:34 2026")).not.toBe(token);
+    expect(startInstanceToken("  \n")).toBeUndefined();
+    expect(stellaSessionId(77, token)).toBe(`stella-77-${token}`);
+    // No start time (no ps, or Windows): the bare pid form, as before.
+    expect(stellaSessionId(77)).toBe("stella-77");
+    expect(
+      translateStellaPayload({ event: "Stop", cwd: "/" }, 77, token),
+    ).toMatchObject({ session_id: `stella-77-${token}` });
+    if (process.platform !== "win32") {
+      expect(psStartInstance(process.pid)).toMatch(/^[0-9a-f]{12}$/);
+      expect(psStartInstance(2_147_000_000)).toBeUndefined();
+    }
   });
 });
 

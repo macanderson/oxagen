@@ -21,13 +21,22 @@
  *     the spool is trusted for anything. This is where a custom agent lands
  *     after being quiet for a week: still listed, nothing wrong, just not
  *     running now.
- *  6. the agent was seen (`last_seen_at`) more recently than the last
+ *  6. the control plane refused events outright (`quarantined > 0`) →
+ *     "degraded", "N events refused by Oxagen". Quarantining takes the
+ *     events off the spool and clears the error, so this has to be read
+ *     before either is trusted or refused events read as delivered.
+ *  7. the agent was seen (`last_seen_at`) more recently than the last
  *     successful ship (`last_ingest_at` null or older) and the spool has
  *     not drained → "pending" ("recorded, waiting to send"), or
  *     "degraded" once that has lasted more than ten minutes.
- *  7. seen and shipped (`last_ingest_at >= last_seen_at`, or the spool is
- *     empty with no error) → "healthy".
- *  8. wrapped but never seen → "idle" ("wrapped · no runs recorded yet").
+ *  8. seen, with an empty spool and either a ship at or after the last run
+ *     or no error → "healthy".
+ *  9. wrapped but never seen → "idle" ("wrapped · no runs recorded yet").
+ *
+ * Everything the spool reports (`last_ingest_at`, `spool_depth`,
+ * `last_error`, `quarantined`) is daemon-global; only `last_seen_at` is per
+ * agent. So a reading is never attributed to one agent unless the spool is
+ * empty, which is the only state that holds for every agent at once.
  */
 import type {
   DaemonAgentSummary,
@@ -106,6 +115,7 @@ interface HealthInput {
   lastIngestAt: string | null;
   spoolDepth: number;
   lastError: string | null;
+  quarantined: number;
   now: number;
 }
 
@@ -139,8 +149,26 @@ function healthFor(input: HealthInput): {
         summary: `last run ${ago(input.lastSeenAt, input.now)}`,
       };
     }
+    // The control plane refused these outright: they are off the spool and
+    // leave no error behind, so every reading below would call them
+    // delivered. Say so before anything claims they arrived.
+    if (input.quarantined > 0) {
+      const n = input.quarantined;
+      return {
+        health: "degraded",
+        summary: `${n} event${n === 1 ? "" : "s"} refused by Oxagen`,
+      };
+    }
+    // `lastIngestAt` is the daemon's last successful ship, not this agent's:
+    // the WAL tracks shipped state per session and keeps no ship timestamp,
+    // so there is no per-agent cursor to read. With a backlog deeper than one
+    // batch, another agent's batch landing after this agent's last run would
+    // otherwise read as delivery. An empty spool is what proves this agent's
+    // events left the machine, so it is required here too.
     const shippedAfterSeen =
-      input.lastIngestAt !== null && Date.parse(input.lastIngestAt) >= seenMs;
+      input.spoolDepth === 0 &&
+      input.lastIngestAt !== null &&
+      Date.parse(input.lastIngestAt) >= seenMs;
     const drained = input.spoolDepth === 0 && input.lastError === null;
     if (shippedAfterSeen || drained) {
       return {
@@ -204,6 +232,7 @@ function harnessRow(
     lastIngestAt: state.daemon?.last_ingest_at ?? null,
     spoolDepth: state.daemon?.spool_depth ?? 0,
     lastError: state.daemon?.last_error ?? null,
+    quarantined: state.daemon?.quarantined ?? 0,
     now,
   });
   return {
@@ -238,6 +267,7 @@ function customRow(
     lastIngestAt: daemon.last_ingest_at ?? null,
     spoolDepth: daemon.spool_depth ?? 0,
     lastError: daemon.last_error ?? null,
+    quarantined: daemon.quarantined ?? 0,
     now,
   });
   return {

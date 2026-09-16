@@ -1276,7 +1276,7 @@ describe("export and verify", () => {
     expect(empty.lines.at(-1)).toContain("no sessions");
   });
 
-  it("verify drives Codex through codex exec and matches the newest chain", async () => {
+  it("verify drives Codex through codex exec and matches the chain the turn created", async () => {
     const signer = bundleSigner();
     const calls: string[][] = [];
     const d = deps({
@@ -1288,6 +1288,33 @@ describe("export and verify", () => {
       },
     });
     d.service.running = true;
+    // A retained chain from a real session is busier than a one-prompt verify
+    // turn, so picking the highest seq would report on the wrong session.
+    const stale = {
+      session_id: "sess-yesterday",
+      session_uuid: "22222222-2222-4222-8222-222222222222",
+      sealed: true,
+      seq: 400,
+    };
+    const base = d.daemonGet;
+    d.daemonGet = async (path) =>
+      path === "/sessions"
+        ? {
+            sessions: [
+              stale,
+              ...(calls.length > 0
+                ? [
+                    {
+                      session_id: "sess-verify",
+                      session_uuid: "11111111-1111-4111-8111-111111111111",
+                      sealed: true,
+                      seq: 6,
+                    },
+                  ]
+                : []),
+            ],
+          }
+        : base(path);
     writeHostFile(
       d.paths.hostFile,
       testHostFile(signer, signer.sign(unsignedBundle())),
@@ -1311,6 +1338,21 @@ describe("export and verify", () => {
     expect((await verify({ harness: "codex" }, noCodex)).detail).toContain(
       "codex",
     );
+    // The hooks never fired: the retained chain is not this turn's, so verify
+    // fails rather than reporting that sealed chain as a success.
+    let clock = 0;
+    const quiet = deps({ now: () => (clock += 8_000) });
+    quiet.service.running = true;
+    const quietBase = quiet.daemonGet;
+    quiet.daemonGet = async (path) =>
+      path === "/sessions" ? { sessions: [stale] } : quietBase(path);
+    writeHostFile(
+      quiet.paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle())),
+    );
+    const missed = await verify({ harness: "codex", timeoutMs: 10_000 }, quiet);
+    expect(missed.ok).toBe(false);
+    expect(missed.detail).toContain("never saw the session");
   });
 
   it("detect reports installed harnesses and which are enrolled", () => {
@@ -1782,11 +1824,15 @@ describe("stella", () => {
     ]);
   });
 
-  it("verify runs stella run and waits for the newest Stella chain to be sealed", async () => {
+  it("verify runs stella run and waits for the chain that turn created to be sealed", async () => {
     const signer = bundleSigner();
     const host = testHostFile(signer, signer.sign(unsignedBundle()));
+    // The Stella chain of the verify turn appears only once `stella run` has
+    // been called; `stella-12` is a retained chain from a real session, which
+    // is busier than a one-prompt turn and must never be taken for it.
     const listing =
       (sealed: boolean, withStella = true) =>
+      (ran: () => boolean) =>
       async (path: string) =>
         path === "/health"
           ? { ok: true }
@@ -1807,7 +1853,14 @@ describe("stella", () => {
                     seq: 99,
                     harness: "claude-code",
                   },
-                  ...(withStella
+                  {
+                    session_id: "stella-12",
+                    session_uuid: "old",
+                    sealed: true,
+                    seq: 220,
+                    harness: "stella",
+                  },
+                  ...(withStella && ran()
                     ? [
                         {
                           session_id: "stella-77",
@@ -1832,7 +1885,7 @@ describe("stella", () => {
         };
       },
     });
-    d.daemonGet = listing(true);
+    d.daemonGet = listing(true)(() => calls.length > 0);
     writeHostFile(d.paths.hostFile, host);
     expect(await verify({ harness: "stella" }, d)).toMatchObject({
       ok: true,
@@ -1849,24 +1902,35 @@ describe("stella", () => {
     // Stella's default wait is 45 s: a clock that jumps 10 s per read
     // polls several times before giving up.
     let clock = 0;
-    const slow = deps({ now: () => (clock += 10_000) });
-    slow.daemonGet = listing(false);
+    const slowCalls: string[][] = [];
+    const slow = deps({
+      now: () => (clock += 10_000),
+      exec: (command, args) => {
+        slowCalls.push([command, ...args]);
+        return { status: 0, stdout: "", stderr: "" };
+      },
+    });
+    slow.daemonGet = listing(false)(() => slowCalls.length > 0);
     writeHostFile(slow.paths.hostFile, host);
     const unsealed = await verify({ harness: "stella" }, slow);
     expect(unsealed).toMatchObject({ ok: false, sessionId: "stella-77" });
     expect(unsealed.detail).toContain("Stella sends no SessionEnd");
     expect(clock).toBeGreaterThanOrEqual(40_000);
 
+    // No new Stella chain at all: the retained `stella-12` is sealed and much
+    // busier, and must not be reported as this turn's session.
     let clock2 = 0;
     const unseen = deps({ now: () => (clock2 += 10_000) });
-    unseen.daemonGet = listing(true, false);
+    unseen.daemonGet = listing(true, false)(() => true);
     writeHostFile(unseen.paths.hostFile, host);
-    expect((await verify({ harness: "stella" }, unseen)).detail).toContain(
+    const missed = await verify({ harness: "stella" }, unseen);
+    expect(missed.ok).toBe(false);
+    expect(missed.detail).toContain(
       `is stella reading ${unseen.paths.stellaToml}?`,
     );
 
     const noStella = deps({ stella: () => ({}) });
-    noStella.daemonGet = listing(true);
+    noStella.daemonGet = listing(true)(() => true);
     writeHostFile(noStella.paths.hostFile, host);
     expect((await verify({ harness: "stella" }, noStella)).detail).toBe(
       "`stella` is not on PATH",

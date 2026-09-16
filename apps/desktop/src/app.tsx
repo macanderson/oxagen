@@ -635,6 +635,17 @@ export function App() {
       : "half";
   const agentRows = state ? computeAgentRows(state, tacho, Date.now()) : [];
   const cliInstallNote = describeCliInstall(state?.cli_install);
+  // Whether there is anything for "Remove links" to remove. The two
+  // `*_on_path` fields answer a different question: they resolve against the
+  // running process's PATH, and a GUI launch never sources a login profile,
+  // so they stay null on macOS and Linux even in the moment after the app
+  // linked both tools. Only fall back to them on a build whose Rust shell
+  // does not report `cli_links_present` yet.
+  const cliLinksPresent =
+    state === null
+      ? false
+      : (state.cli_links_present ??
+        (state.oxagen_on_path !== null || state.tacho_on_path !== null));
 
   const orgPicker = (
     <select
@@ -1336,16 +1347,14 @@ export function App() {
         </dl>
         <div className="row">
           <button type="button" onClick={doInstallCli} disabled={busy !== null}>
-            {state?.oxagen_on_path ? "Relink" : "Link into"}{" "}
+            {cliLinksPresent ? "Relink" : "Link into"}{" "}
             <code>{state?.cli_install_dir}</code>
           </button>
           <button
             type="button"
             className="quiet"
             onClick={doRemoveCliLinks}
-            disabled={
-              busy !== null || (!state?.oxagen_on_path && !state?.tacho_on_path)
-            }
+            disabled={busy !== null || !cliLinksPresent}
           >
             {busy === "cli-remove" ? "Removing…" : "Remove links"}
           </button>
