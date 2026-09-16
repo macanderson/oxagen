@@ -302,7 +302,7 @@ describe("Proposals", () => {
     ["proposed", ["Open a Context PR", "Dismiss"]],
     ["pr_open", ["Run the checks again", "Dismiss"]],
     ["checks_failed", ["Run the checks again", "Dismiss"]],
-    ["checks_passed", ["Dismiss"]],
+    ["checks_passed", ["Run the checks again", "Dismiss"]],
     ["merged", []],
     ["rejected", []],
   ])(

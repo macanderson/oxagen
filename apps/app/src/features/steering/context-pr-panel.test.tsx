@@ -159,7 +159,12 @@ describe("once every check passed", () => {
       "Write the promotion event to the ledger and a steering_published audit event",
       "Who merges, under governance mode team: an org Owner or Admin, or a workspace Owner, other than the author merges",
     ]);
-    expect(screen.queryByRole("button", { name: "Run the checks again" })).toBeNull();
+    // The re-run stays offered after the checks pass: when the head moves,
+    // merge_context_pr refuses with `head_moved` and running the checks again
+    // is the only control that clears it.
+    expect(
+      screen.getByRole("button", { name: "Run the checks again" }),
+    ).toBeEnabled();
   });
 
   it("does not link a pull request URL that is not a GitHub pull request page (negative)", () => {
