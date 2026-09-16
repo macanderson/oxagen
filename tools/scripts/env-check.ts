@@ -170,6 +170,7 @@ export const SCHEMA_EXEMPT = new Set<string>([
   "OXAGEN_API_URL",
   "OXAGEN_APP_URL",
   "OXAGEN_DEBUG",
+  "OXAGEN_CLI_DEBUG",
   // CLI local pipeline knobs — read via process.env in the CLI turn pipeline
   // and local tooling; never validated by deployed services
   "OXAGEN_ALLOW_STDIO_MCP",
@@ -320,9 +321,14 @@ const RE_ENV_SUBSCRIPT =
 const RE_ENV_NAME_CONST =
   /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::\s*[^=]+)?=\s*['"]([A-Z][A-Z0-9_]+)['"]/g;
 
-/** process.env[IDENT] — the indirect read the constant above feeds. */
-const RE_ENV_SUBSCRIPT_IDENT =
-  /(?:^|[^\w$])[\w$]*[Ee]nv(?:\([^()]*\))?\[\s*([A-Za-z_$][\w$]*)\s*\]/g;
+/**
+ * `process.env[IDENT]` — the indirect read the constant above feeds. Spelled
+ * out rather than reusing the loose `*[Ee]nv[...]` shape of the literal
+ * pattern: any object named `env` would otherwise match, and one does — the
+ * Tacho settings writer checks `settings.env[TACHO_ENROLLMENT_ENV]`, whose
+ * keys are the harness's variables, not this deployment's.
+ */
+const RE_ENV_SUBSCRIPT_IDENT = /\bprocess\.env\[\s*([A-Za-z_$][\w$]*)\s*\]/g;
 
 /** os.environ["KEY"], os.environ.get("KEY"), os.getenv("KEY"). */
 const RE_PYTHON_ENV =

@@ -1483,6 +1483,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
 
   // ── CLI / tooling ────────────────────────────────────────────────────────────
+  OXAGEN_CLI_DEBUG: {
+    group: "CLI",
+    description:
+      "Set to 1 or true to write the CLI's debug log to ~/.oxagen/logs " +
+      "(apps/cli/src/lib/debug-log.ts). Developer tooling, never set on a " +
+      "deployed service.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_API_TOKEN: {
     group: "CLI",
     description:

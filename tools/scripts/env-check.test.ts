@@ -240,9 +240,11 @@ describe("scanSourceReferences", () => {
           'const SIGNING_SECRET_ENV = "TACHO_ENROLLMENT_SIGNING_SECRET";',
           'export const KEY_ENV = "TACHO_BUNDLE_SIGNING_PRIVATE_KEY";',
           'const NOT_AN_ENV_READ = "SOME_OTHER_CONSTANT";',
+          'const HARNESS_VAR = "TACHO_ENROLLMENT";',
           "const secret = process.env[SIGNING_SECRET_ENV];",
           "const pem = process.env[KEY_ENV];",
           "export const label = NOT_AN_ENV_READ;",
+          "const ok = settings.env[HARNESS_VAR] === id;",
           "",
         ].join("\n"),
       );
@@ -257,10 +259,14 @@ describe("scanSourceReferences", () => {
       // person needs when the key turns out to be missing.
       expect(
         result.referenced.get("TACHO_ENROLLMENT_SIGNING_SECRET")?.[0],
-      ).toMatch(/handler\.ts:4$/);
+      ).toMatch(/handler\.ts:5$/);
       // A string constant that is never used as an env subscript is not a
       // reference; counting one would make any SCREAMING_CASE string look live.
       expect(result.referenced.has("SOME_OTHER_CONSTANT")).toBe(false);
+      // Only `process.env` counts. The Tacho settings writer subscripts a
+      // settings object that happens to be called `env`, whose keys belong to
+      // the harness on the host, not to this deployment.
+      expect(result.referenced.has("TACHO_ENROLLMENT")).toBe(false);
     } finally {
       rmSync(dir, { recursive: true });
     }
