@@ -243,26 +243,61 @@ improvised here.**
 
 ### Every wrapper around `invoke()`, and which ones the check models
 
-Three of these were found by review, each after the previous one was closed, and
+Three of these were found by review, each after the previous one was closed;
 the fourth by enumerating rather than waiting. The list is the point: a check
 that models call sites cannot be trusted further than the set of shapes it
-knows, so the set is written down here instead of being rediscovered.
+reads, so the set is written down here instead of being rediscovered.
 
-| shape | where | modelled |
+**Every row below was verified against a real call in the tree, not against the
+form its author had in mind.** An earlier version of this table claimed
+coverage of "an `invoke()` with a ctx literal" that the check did not have: the
+regex required the third argument to end in an identifier, so a genuinely
+inline `{ …, workspaceId: ORG_ONLY_WS }` — both calls in
+`settings/privacy/org-privacy-actions.ts` — was never examined. A table whose
+value is being something to diff against is worse than no table when a row
+overstates, so each row now names the file it was checked on.
+
+| shape | verified on | modelled |
 |---|---|---|
-| `invoke(name, input, ctx)` with a ctx literal naming the sentinel | `apps/app_deprecated` pages and actions | **yes** — cross-surface pass |
-| `readCapability(viewer, name, input)`, ctx and invoke inside the helper | `main`'s billing governed-actions page | **yes** — the indirect fallback, checks every capability the file names |
-| `kernelRead` / `kernelWrite` on an `OrgCtx` port method, sentinel applied in `src/server/kernel.ts` | `apps/app` (the rebuild) | **yes** — app kernel seam pass, driven by `src/data/ports.ts` |
-| `capabilityContext(c, { requireWorkspace: false })`, sentinel applied inside `apps/api/src/lib/context.ts` | `apps/api` org-scoped routes, e.g. `workspace.create.ts` | **yes** — by name, in the cross-surface pass |
-| `invokeOrgCapability(orgId, userId, name, input)`, ctx, scope and invoke all inside the helper | `apps/app_deprecated/.../governance/_lib/invoke-org.ts` | **yes** — by name; found while enumerating, not by review |
-| `buildContext(headers())` | `apps/mcp` tools | **not needed** — it refuses an empty org or workspace (`context.ts:143`), so an MCP key always carries a real workspace and there is no org-only path |
+| `invoke(name, input, { … })`, ctx inline | `settings/privacy/org-privacy-actions.ts` (2/2 calls) | **yes** |
+| `invoke(name, input, ctx)`, ctx from a local factory | `members/member-actions.ts` → `buildCtx` (2/2) | **yes** — the identifier resolves to its declaration and then to the object the factory returns |
+| `readCapability(viewer, name, input)`, ctx and invoke inside the helper | `main`'s billing governed-actions page | **yes** — the indirect fallback, which checks every capability the file names |
+| `kernelRead` / `kernelWrite` on an `OrgCtx` port method | `apps/app` `data/live/*`, driven by the 13 `OrgCtx` methods in `data/ports.ts` | **yes** |
+| `capabilityContext(c, { requireWorkspace: false })` | `apps/api/src/routes/v1/workspace.create.ts` (1/1) | **yes** |
+| `invokeOrgCapability(orgId, userId, name, input)` | `governance/capabilities/page.tsx` (1/1) | **yes** — found by enumerating, not by review |
+| `buildContext(headers())` | `apps/mcp/src/context.ts:143` | **not needed** — it refuses an empty org or workspace, so an MCP key always carries a real workspace and there is no org-only path |
 
 **A complete enumeration is not possible in general, and this table is a
-snapshot rather than a proof.** Nothing stops the next surface from adding a
-sixth wrapper, and the check would be silent about it exactly as it was silent
-about the first four. What the table does is make the next one cheap to find:
-the question "which wrappers exist" has a written answer to diff against, and
-the rule below says when to ask it.
+snapshot rather than a proof.** Nothing stops the next surface adding an eighth
+shape, and the check would be silent about it exactly as it was silent about the
+first four. What the table buys is that the question has a written answer to
+diff against.
+
+### Parsed, not matched
+
+The call-site analysis is a TypeScript syntactic parse (`ts.createSourceFile` —
+no program, no type checker, no tsconfig), not a set of regexes. It started as
+regexes and failed four times in one review cycle, every time the same way:
+
+1. a prose mention of `withTenantDb` in a header comment read as a call;
+2. a capability named at a helper's call sites rather than at the `invoke()`;
+3. a capability named through `kernelRead`, in another file;
+4. an `invoke()` whose third argument is an inline object literal.
+
+None of those errored. Each **reported clean on a shape it could not read**,
+which in a mandatory CI check is worse than having no check, because it converts
+"nobody has verified this" into "CI says it is fine". A regex that recognises
+arbitrary object literals with nested braces, strings and comments will fail on
+the fifth shape too.
+
+The parse also made the check more precise in two ways it was quietly wrong
+before. Comments and string literals are not nodes, so nothing has to be
+stripped and a table name inside a SQL string is not a table reference. And the
+co-located pass now counts only the `withTenantDb` calls lexically inside a
+sentinel-carrying `runInTenantScope` callback, where before it answered per
+file: `_shared/conversation-page.tsx` scopes one `org_only` `credit_lots` read
+to the sentinel and everything else to the real workspace, and the file-level
+answer called that a finding when it is not one.
 
 ### What the check can and cannot tell you
 
@@ -327,8 +362,11 @@ directly — so it needs the check anyway.
   anything outside Postgres, since Neo4j and ClickHouse scoping is a separate
   seam. It is a net with a known mesh, not a proof.
 
-- **Three blind spots were found by running it against trees it was not written
-  on, and all three were closed rather than documented.** Against `main`, an
+- **Four blind spots were found after the check was first written, and all four
+  were closed rather than documented.** The fourth was not a new surface at all
+  but the check failing to parse a shape its own documentation claimed to cover,
+  which is why the call-site analysis is now a parse and why every row of the
+  wrapper table names the file it was verified on. Against `main`, an
   `invoke()` behind a `readCapability(viewer, name, input)` helper reported
   nothing, because the capability is named at the helper's call sites; that is
   the indirect fallback, and it took `main` from five sites to twelve. Against
@@ -345,10 +383,10 @@ directly — so it needs the check anyway.
   what the table above is for. A fourth wrapper
   (`invokeOrgCapability`, in the deprecated app's governance pages) was found
   that way rather than by review.
-- Its co-located pass is file-scoped in one direction: a file that scopes to the
-  sentinel somewhere and also reads a workspace-scoped table under a real
-  workspace elsewhere is reported. That over-reports rather than under-reports,
-  and the remedy — scoping the sentinel read correctly — is the same either way.
+- The co-located pass used to be file-scoped, reporting a file that scoped to
+  the sentinel somewhere and read a workspace-scoped table under a real
+  workspace elsewhere. The parse ended that: it counts only the `withTenantDb`
+  calls lexically inside a sentinel-carrying callback.
 - **The near-instance worth naming**, because it is the clearest argument for
   the gate preceding the surface. `packages/handlers/src/notification.list.ts`
   and `packages/agent/src/handlers/agent.approval.resolve.ts` (both arriving

@@ -14,9 +14,12 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  callsTo,
+  carriesSentinel,
   findSentinelNarrowedReads,
+  parse,
   pinsNullWorkspace,
-  stripComments,
+  sentinelNames,
   tenantDbRegions,
 } from "./check-org-sentinel-reads.mjs";
 
@@ -150,19 +153,43 @@ export const load = (orgId: string) =>
     expect(findSentinelNarrowedReads(root).findings).toEqual([]);
   });
 
-  it("does not let one pinned read exempt a second unpinned one", () => {
-    const pinned = colocated(
-      "securityEvents",
-      ", isNull(schema.securityEvents.workspaceId)",
-    );
+  it("does not let one pinned read exempt a second unpinned one in the same scope", () => {
     const root = makeTree({
-      "apps/app/src/page.ts":
-        pinned +
-        `export const also = () =>
-  withTenantDb((tx) => tx.select().from(schema.securityEvents));
+      "apps/app/src/page.ts": `import { schema, withTenantDb } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
+const ORG_ONLY_WS = "${SENTINEL}";
+export async function load(orgId: string) {
+  return runInTenantScope({ orgId, workspaceId: ORG_ONLY_WS }, async () => {
+    await withTenantDb((tx) =>
+      tx.select().from(schema.securityEvents).where(isNull(schema.securityEvents.workspaceId)),
+    );
+    return withTenantDb((tx) => tx.select().from(schema.securityEvents));
+  });
+}
 `,
     });
     expect(findSentinelNarrowedReads(root).findings).toHaveLength(1);
+  });
+
+  it("ignores a tenant read outside the sentinel scope in the same file", () => {
+    // conversation-page.tsx: an org_only credit_lots read under the sentinel,
+    // everything else under the real workspace. A file-level answer called that
+    // a finding; it is not one.
+    const root = makeTree({
+      "apps/app/src/page.ts": `import { schema, withTenantDb } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
+const ORG_ONLY_WS = "${SENTINEL}";
+export async function load(orgId: string, wsId: string) {
+  await runInTenantScope({ orgId, workspaceId: ORG_ONLY_WS }, () =>
+    withTenantDb((tx) => tx.select().from(schema.orgUsers)),
+  );
+  return runInTenantScope({ orgId, workspaceId: wsId }, () =>
+    withTenantDb((tx) => tx.select().from(schema.apiKeys)),
+  );
+}
+`,
+    });
+    expect(findSentinelNarrowedReads(root).findings).toEqual([]);
   });
 });
 
@@ -306,47 +333,132 @@ export const helper = () =>
   });
 });
 
-describe("stripComments", () => {
-  it("blanks a prose mention so it does not read as a call", () => {
-    const src = `// WHY withSystemDb AND NOT withTenantDb: …\nconst a = 1;\n`;
-    expect(stripComments(src)).not.toMatch(/withTenantDb/);
-    expect(stripComments(src)).toContain("const a = 1;");
-  });
-
-  it("keeps a URL in code intact — '//' after a colon is not a comment", () => {
-    expect(stripComments('const u = "https://x/y";\n')).toContain(
-      "https://x/y",
+describe("parsing, which replaced the regexes", () => {
+  it("does not read a prose mention of withTenantDb as a call", () => {
+    // The regex era needed a comment stripper for exactly this. Comments are
+    // not nodes, so the parser never saw them in the first place.
+    const sf = parse(
+      `// WHY withSystemDb AND NOT withTenantDb: …\nconst a = 1;\n`,
     );
+    expect(tenantDbRegions(sf)).toHaveLength(0);
   });
 
-  it("preserves line numbering so a finding still points at the right place", () => {
-    const src = "/* one\ntwo */\nconst a = 1;\n";
-    expect(stripComments(src).split("\n")).toHaveLength(src.split("\n").length);
+  it("does not read a table name inside a string as a table", () => {
+    const sf = parse(`const sql = "select * from schema.apiKeys";\n`);
+    expect(tenantDbRegions(sf)).toHaveLength(0);
+  });
+
+  it("finds the call and not the one beside it", () => {
+    const sf = parse(
+      `withTenantDb((tx) => tx.select().from(schema.a));\nwithSystemDb((tx) => tx.select().from(schema.b));\n`,
+    );
+    const regions = tenantDbRegions(sf);
+    expect(regions).toHaveLength(1);
+    expect(regions[0].getText()).toContain("schema.a");
+    expect(regions[0].getText()).not.toContain("schema.b");
   });
 });
 
-describe("tenantDbRegions", () => {
-  it("brace-matches the call rather than running to the end of the file", () => {
-    const src =
-      "withTenantDb((tx) => tx.select().from(schema.a));\nwithSystemDb((tx) => tx.select().from(schema.b));\n";
-    const regions = tenantDbRegions(src);
-    expect(regions).toHaveLength(1);
-    expect(regions[0]).toContain("schema.a");
-    expect(regions[0]).not.toContain("schema.b");
+describe("carriesSentinel", () => {
+  const withSentinel = (ctx: string) =>
+    parse(
+      `const ORG_ONLY_WS = "${SENTINEL}";\nconst x = invoke("c", {}, ${ctx});\n`,
+    );
+
+  function ctxArg(src: ReturnType<typeof parse>) {
+    const call = callsTo(src, "invoke")[0];
+    return carriesSentinel(call.arguments[2], src, sentinelNames(src));
+  }
+
+  it("reads an INLINE object literal, the shape the regex could not", () => {
+    // Both invoke() calls in org-privacy-actions.ts have this shape, and the
+    // regex required the third argument to end in an identifier, so it examined
+    // neither — a mandatory check reporting clean on a shape it could not read.
+    expect(
+      ctxArg(
+        withSentinel(
+          `{ userId: u, orgId: o, workspaceId: ORG_ONLY_WS, apiKeyId: null }`,
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("reads the bare literal inline, with no named constant anywhere", () => {
+    const src = parse(
+      `const x = invoke("c", {}, { orgId: o, workspaceId: "${SENTINEL}" });\n`,
+    );
+    expect(ctxArg(src)).toBe(true);
+  });
+
+  it("resolves a named const to its object", () => {
+    const src = parse(
+      `const ORG_ONLY_WS = "${SENTINEL}";\nconst ctx = { orgId: o, workspaceId: ORG_ONLY_WS };\nconst x = invoke("c", {}, ctx);\n`,
+    );
+    expect(ctxArg(src)).toBe(true);
+  });
+
+  it("resolves a local factory to the object it returns", () => {
+    const src = parse(
+      `const ORG_ONLY_WS = "${SENTINEL}";\nfunction buildCtx(o) { return { orgId: o, workspaceId: ORG_ONLY_WS }; }\nconst ctx = buildCtx(org);\nconst x = invoke("c", {}, ctx);\n`,
+    );
+    expect(ctxArg(src)).toBe(true);
+  });
+
+  it("reads an override after a spread as a real workspace", () => {
+    const src = parse(
+      `const ORG_ONLY_WS = "${SENTINEL}";\nconst base = { workspaceId: ORG_ONLY_WS };\nconst x = invoke("c", {}, { ...base, workspaceId });\n`,
+    );
+    expect(ctxArg(src)).toBe(false);
+  });
+
+  it("reads a real workspace id as a real workspace", () => {
+    expect(ctxArg(withSentinel(`{ orgId: o, workspaceId: ws.id }`))).toBe(
+      false,
+    );
+  });
+
+  it("reads the apps/api capabilityContext seam", () => {
+    const src = parse(
+      `const ctx = capabilityContext(c, { requireWorkspace: false });\nconst x = invoke("c", {}, ctx);\n`,
+    );
+    expect(ctxArg(src)).toBe(true);
+  });
+
+  it("leaves capabilityContext alone when it requires a workspace", () => {
+    const src = parse(
+      `const ctx = capabilityContext(c);\nconst x = invoke("c", {}, ctx);\n`,
+    );
+    expect(ctxArg(src)).toBe(false);
   });
 });
 
 describe("pinsNullWorkspace", () => {
   it("counts an INSERT that names no workspaceId as already NULL-scoped", () => {
-    const region =
-      ".insert(schema.securityEvents).values({ orgId, eventType });";
-    expect(pinsNullWorkspace("securityEvents", [region])).toBe(true);
+    const sf = parse(
+      `withTenantDb((tx) => tx.insert(schema.securityEvents).values({ orgId }));`,
+    );
+    expect(pinsNullWorkspace("securityEvents", tenantDbRegions(sf))).toBe(true);
   });
 
   it("does not exempt an INSERT that names a workspace", () => {
-    const region =
-      ".insert(schema.securityEvents).values({ orgId, workspaceId: ws.id });";
-    expect(pinsNullWorkspace("securityEvents", [region])).toBe(false);
+    const sf = parse(
+      `withTenantDb((tx) => tx.insert(schema.securityEvents).values({ orgId, workspaceId: ws.id }));`,
+    );
+    expect(pinsNullWorkspace("securityEvents", tenantDbRegions(sf))).toBe(
+      false,
+    );
+  });
+
+  it("does not let one pinned read exempt a second unpinned one", () => {
+    const sf = parse(
+      `withTenantDb((tx) => {
+         tx.select().from(schema.securityEvents).where(isNull(schema.securityEvents.workspaceId));
+         return tx.select().from(schema.securityEvents);
+       });`,
+    );
+    expect(pinsNullWorkspace("securityEvents", tenantDbRegions(sf))).toBe(
+      false,
+    );
   });
 });
 

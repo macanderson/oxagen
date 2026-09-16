@@ -85,6 +85,7 @@
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..", "..");
@@ -156,111 +157,321 @@ function* walk(dir) {
   }
 }
 
-/** The identifiers a file binds to the sentinel, plus the literal itself. */
-export function sentinelNames(src) {
-  const names = new Set();
-  for (const m of src.matchAll(
-    new RegExp(`(?:const|let)\\s+(\\w+)[^=\\n]*=\\s*"${SENTINEL}"`, "g"),
-  )) {
-    names.add(m[1]);
+// ── Parsing ──────────────────────────────────────────────────────────────────
+//
+// WHY A PARSER AND NOT A REGEX. The call-site analysis below started as regexes
+// and failed four times in one review cycle, each time by reporting clean on a
+// shape it could not read rather than by erroring: a prose mention of
+// `withTenantDb` in a comment read as a call, a capability named through a
+// helper, a capability named through `kernelRead`, and finally an `invoke()`
+// whose third argument is an inline object literal rather than an identifier.
+// Every one of those is the same failure — something reports success without
+// having done the work — and in a mandatory CI check that is worse than no
+// check, because it turns "nobody has verified this" into "CI says it is fine".
+//
+// A regex that recognises arbitrary object literals with nested braces, strings
+// and comments will fail on the next shape too. `typescript` is already a
+// dependency of this package (see typecheck-staged.mjs), so the calls are
+// parsed. This is a SYNTACTIC parse only — no program, no type checker, no
+// tsconfig — which is fast and needs no build.
+
+/** One file's AST. Comments are not nodes, so nothing has to strip them. */
+export function parse(src, fileName = "f.tsx") {
+  return ts.createSourceFile(
+    fileName,
+    src,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+}
+
+/** Every node in the subtree, depth-first. */
+export function* nodesOf(node) {
+  yield node;
+  for (const child of node.getChildren()) yield* nodesOf(child);
+}
+
+/** Every node in the subtree, depth-first. */
+function* nodes(node) {
+  yield node;
+  for (const child of node.getChildren()) yield* nodes(child);
+}
+
+/** The dotted text of a callee: `withTenantDb`, `tx.query.foo`, `a.b.c`. */
+function calleeText(node) {
+  if (!ts.isCallExpression(node)) return null;
+  const e = node.expression;
+  if (ts.isIdentifier(e)) return e.text;
+  if (ts.isPropertyAccessExpression(e)) return e.getText();
+  return null;
+}
+
+/** Calls to `name` anywhere in the subtree. */
+export function callsTo(root, name) {
+  const out = [];
+  for (const n of nodes(root)) {
+    if (calleeText(n) === name) out.push(n);
   }
-  // The shared constant, however it was imported or aliased.
-  for (const m of src.matchAll(/ORG_ONLY_WORKSPACE_ID(?:\s+as\s+(\w+))?/g)) {
-    names.add(m[1] ?? "ORG_ONLY_WORKSPACE_ID");
+  return out;
+}
+
+/** The identifiers this file binds to the sentinel, plus the shared constant. */
+export function sentinelNames(sourceFile) {
+  const names = new Set(["ORG_ONLY_WORKSPACE_ID"]);
+  for (const n of nodes(sourceFile)) {
+    if (!ts.isVariableDeclaration(n) || !ts.isIdentifier(n.name)) continue;
+    const init = n.initializer;
+    if (init && ts.isStringLiteral(init) && init.text === SENTINEL) {
+      names.add(n.name.text);
+    }
+  }
+  // An aliased import: `import { ORG_ONLY_WORKSPACE_ID as X }`.
+  for (const n of nodes(sourceFile)) {
+    if (!ts.isImportSpecifier(n)) continue;
+    if (n.propertyName?.text === "ORG_ONLY_WORKSPACE_ID") {
+      names.add(n.name.text);
+    }
   }
   return names;
 }
 
-/** Does `value` name the sentinel in this file? */
-export function isSentinelValue(value, names) {
-  const v = value.trim().replace(/[,)}\s].*$/s, "");
-  return v === `"${SENTINEL}"` || v === `'${SENTINEL}'` || names.has(v);
+/** Does this expression node evaluate to the sentinel? */
+export function isSentinelExpression(node, names) {
+  if (node === undefined) return false;
+  if (ts.isStringLiteral(node)) return node.text === SENTINEL;
+  if (ts.isIdentifier(node)) return names.has(node.text);
+  return false;
 }
 
 /**
- * Source with comments blanked out. Every prose mention of `withTenantDb` in a
- * header comment — including the ones the fixes this check enforces left behind
- * explaining why the seam changed — would otherwise read as a call.
+ * How an object literal answers "what workspace does this context carry":
+ * "sentinel", "real" (a workspace it names explicitly, including an override
+ * over a spread), or null when it names no workspace at all.
  */
-export function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
-    .replace(
-      /(^|[^:])\/\/[^\n]*/g,
-      (m, p) => p + " ".repeat(m.length - p.length),
-    );
+export function workspaceOfObject(obj, names) {
+  if (!ts.isObjectLiteralExpression(obj)) return null;
+  let answer = null;
+  for (const prop of obj.properties) {
+    // `{ ...ctx, workspaceId }` — a later property wins, which is the fix
+    // shape, so this loop deliberately keeps the LAST answer.
+    if (ts.isShorthandPropertyAssignment(prop)) {
+      if (prop.name.text === "workspaceId") answer = "real";
+      continue;
+    }
+    if (!ts.isPropertyAssignment(prop)) continue;
+    const key =
+      ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name)
+        ? prop.name.text
+        : null;
+    if (key !== "workspaceId") continue;
+    answer = isSentinelExpression(prop.initializer, names)
+      ? "sentinel"
+      : "real";
+  }
+  return answer;
 }
 
 /**
- * The regions of `src` that are `withTenantDb(...)` calls, brace-matched from
- * the call's opening paren. Collecting tables from the whole file instead would
- * report a file that does its workspace-scoped work through withSystemDb — the
- * correct shape — merely because some other read in it is tenant-scoped.
+ * The object literals a locally-declared function returns. A context is very
+ * often built by a small local factory — `buildCtx(...)`, `buildApiKeyCtx(...)`,
+ * `capabilityContext(...)` — and the shape that matters is what it returns.
  */
-export function tenantDbRegions(src) {
+export function returnedObjects(sourceFile, fnName) {
   const out = [];
-  for (const m of src.matchAll(/\bwithTenantDb\s*\(/g)) {
-    let depth = 0;
-    let i = m.index + m[0].length - 1;
-    for (; i < src.length; i += 1) {
-      const c = src[i];
-      if (c === "(") depth += 1;
-      else if (c === ")") {
-        depth -= 1;
-        if (depth === 0) break;
+  for (const n of nodesOf(sourceFile)) {
+    const isNamed =
+      (ts.isFunctionDeclaration(n) &&
+        n.name !== undefined &&
+        n.name.text === fnName) ||
+      (ts.isVariableDeclaration(n) &&
+        ts.isIdentifier(n.name) &&
+        n.name.text === fnName &&
+        n.initializer !== undefined &&
+        (ts.isArrowFunction(n.initializer) ||
+          ts.isFunctionExpression(n.initializer)));
+    if (!isNamed) continue;
+    const body = ts.isFunctionDeclaration(n) ? n.body : n.initializer;
+    if (body === undefined) continue;
+    for (const inner of nodesOf(body)) {
+      if (ts.isReturnStatement(inner) && inner.expression !== undefined) {
+        out.push(inner.expression);
+      }
+      // `const f = () => ({ … })`
+      if (
+        ts.isArrowFunction(inner) &&
+        inner.body !== undefined &&
+        ts.isParenthesizedExpression(inner.body)
+      ) {
+        out.push(inner.body.expression);
       }
     }
-    out.push(src.slice(m.index, i + 1));
   }
   return out;
 }
 
-/** Every `schema.<name>` and `tx.query.<name>` these sources name. */
-export function tablesNamed(sources) {
+/** The initializer of `const <name> = …` in this file, if there is one. */
+export function declarationOf(sourceFile, name) {
+  for (const n of nodes(sourceFile)) {
+    if (
+      ts.isVariableDeclaration(n) &&
+      ts.isIdentifier(n.name) &&
+      n.name.text === name
+    ) {
+      return n.initializer;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Does this expression carry the sentinel as its workspace? An object literal
+ * is read directly; an identifier is resolved to its declaration in the same
+ * file and read the same way, so both paths are one piece of code rather than
+ * two patterns that drift. A `capabilityContext(c, { requireWorkspace: false })`
+ * call is the API surface's named seam (ADR-068) and carries it by
+ * construction.
+ */
+export function carriesSentinel(expr, sourceFile, names, depth = 0) {
+  if (expr === undefined || depth > 3) return false;
+  if (ts.isObjectLiteralExpression(expr)) {
+    return workspaceOfObject(expr, names) === "sentinel";
+  }
+  if (ts.isIdentifier(expr)) {
+    return carriesSentinel(
+      declarationOf(sourceFile, expr.text),
+      sourceFile,
+      names,
+      depth + 1,
+    );
+  }
+  if (ts.isAwaitExpression(expr)) {
+    return carriesSentinel(expr.expression, sourceFile, names, depth + 1);
+  }
+  if (ts.isCallExpression(expr)) {
+    const callee = calleeText(expr);
+    if (callee === "capabilityContext") {
+      const options = expr.arguments[1];
+      if (options !== undefined && ts.isObjectLiteralExpression(options)) {
+        return options.properties.some(
+          (prop) =>
+            ts.isPropertyAssignment(prop) &&
+            ts.isIdentifier(prop.name) &&
+            prop.name.text === "requireWorkspace" &&
+            prop.initializer.kind === ts.SyntaxKind.FalseKeyword,
+        );
+      }
+      return false;
+    }
+    // A local factory: `const ctx = buildCtx({ … })`. What matters is the
+    // object it returns, and that object is in this file.
+    if (callee !== null) {
+      return returnedObjects(sourceFile, callee).some((obj) =>
+        carriesSentinel(obj, sourceFile, names, depth + 1),
+      );
+    }
+  }
+  return false;
+}
+
+/** The `withTenantDb(…)` calls in this subtree. */
+export function tenantDbRegions(root) {
+  return callsTo(root, "withTenantDb");
+}
+
+/** Every `schema.<name>` and `tx.query.<name>` these subtrees name. */
+export function tablesNamed(roots) {
   const out = new Set();
-  for (const src of [sources].flat()) {
-    for (const m of src.matchAll(/\bschema\.(\w+)/g)) out.add(m[1]);
-    for (const m of src.matchAll(/\btx\.query\.(\w+)\./g)) out.add(m[1]);
+  for (const root of [roots].flat()) {
+    for (const n of nodes(root)) {
+      if (!ts.isPropertyAccessExpression(n)) continue;
+      const e = n.expression;
+      if (ts.isIdentifier(e) && e.text === "schema") out.add(n.name.text);
+      if (
+        ts.isPropertyAccessExpression(e) &&
+        e.name.text === "query" &&
+        ts.isIdentifier(e.expression) &&
+        e.expression.text === "tx"
+      ) {
+        out.add(n.name.text);
+      }
+    }
   }
   return out;
 }
 
 /**
- * Whether every statement in `regions` that touches `name` already pins
+ * Whether every statement in these subtrees that touches `name` already pins
  * `workspace_id IS NULL`.
  *
  * This is the one exemption, and it applies only to `workspace_nullable`. That
  * class's policy admits exactly the rows whose workspace_id IS NULL plus the
  * ones matching the workspace GUC, so a query that already asks for the NULL
  * rows and nothing else gets the same answer under the sentinel as it would
- * under any scope: the predicate and the policy agree, and there is nothing to
- * truncate. Counting rather than merely looking for one `isNull` keeps a
- * second, unpinned read of the same table in the same region from riding the
- * first one's exemption.
+ * under any scope. Counting rather than merely looking for one `isNull` keeps a
+ * second, unpinned read of the same table from riding the first one's
+ * exemption. An INSERT that names no workspaceId writes NULL, which the class's
+ * WITH CHECK accepts under any scope, so it counts as pinned.
  */
-export function pinsNullWorkspace(name, regions) {
+export function pinsNullWorkspace(name, roots) {
   let statements = 0;
   let pinned = 0;
-  const stmt = new RegExp(
-    `\\.(?:from|update|delete)\\(\\s*schema\\.${name}\\b`,
-    "g",
-  );
-  const pin = new RegExp(`isNull\\(\\s*schema\\.${name}\\.workspaceId`, "g");
-  // An INSERT that names no workspaceId writes NULL, which the class's WITH
-  // CHECK accepts under any scope; one that names a value is a statement like
-  // any other and has to account for it.
-  const insert = new RegExp(
-    `\\.insert\\(\\s*schema\\.${name}\\b[\\s\\S]{0,600}?\\.values\\(([\\s\\S]{0,600}?)\\)`,
-    "g",
-  );
-  for (const region of regions) {
-    statements += [...region.matchAll(stmt)].length;
-    pinned += [...region.matchAll(pin)].length;
-    for (const m of region.matchAll(insert)) {
-      statements += 1;
+  const tableIs = (arg) =>
+    arg !== undefined &&
+    ts.isPropertyAccessExpression(arg) &&
+    ts.isIdentifier(arg.expression) &&
+    arg.expression.text === "schema" &&
+    arg.name.text === name;
+
+  for (const root of [roots].flat()) {
+    for (const n of nodes(root)) {
+      if (!ts.isCallExpression(n)) continue;
+      const callee = n.expression;
+      if (!ts.isPropertyAccessExpression(callee)) continue;
+      const method = callee.name.text;
+
       if (
-        !/workspaceId\s*:/.test(m[1]) ||
-        /workspaceId\s*:\s*null/.test(m[1])
+        ["from", "update", "delete"].includes(method) &&
+        tableIs(n.arguments[0])
+      ) {
+        statements += 1;
+        continue;
+      }
+
+      if (method === "insert" && tableIs(n.arguments[0])) {
+        statements += 1;
+        // `.insert(t).values({ … })` — the values() call is the one further out
+        // on the chain whose own callee subtree contains this insert. An INSERT
+        // that names no workspaceId writes NULL, which the class's WITH CHECK
+        // accepts under any scope; one that names a value must account for it.
+        let values;
+        for (const x of nodes(root)) {
+          if (!ts.isCallExpression(x)) continue;
+          if (!ts.isPropertyAccessExpression(x.expression)) continue;
+          if (x.expression.name.text !== "values") continue;
+          if ([...nodes(x.expression)].includes(n)) {
+            values = x;
+            break;
+          }
+        }
+        const obj = values?.arguments?.[0];
+        const ws =
+          obj !== undefined && ts.isObjectLiteralExpression(obj)
+            ? workspaceOfObject(obj, new Set())
+            : null;
+        if (ws === null || ws === "sentinel") pinned += 1;
+        continue;
+      }
+    }
+
+    for (const n of nodes(root)) {
+      if (calleeText(n) !== "isNull") continue;
+      const arg = n.arguments[0];
+      if (
+        arg !== undefined &&
+        ts.isPropertyAccessExpression(arg) &&
+        arg.name.text === "workspaceId" &&
+        tableIs(arg.expression)
       ) {
         pinned += 1;
       }
@@ -270,7 +481,7 @@ export function pinsNullWorkspace(name, regions) {
 }
 
 /** The offending (export, table, class) triples among the names given. */
-export function offenders(names, tableNames, policyClasses, regions) {
+export function offenders(names, tableNames, policyClasses, roots) {
   const out = [];
   for (const name of names) {
     const table = tableNames.get(name);
@@ -280,9 +491,8 @@ export function offenders(names, tableNames, policyClasses, regions) {
     // (auth.users, org.organizations, billing.plans — platform-global rows), so
     // the sentinel cannot narrow it.
     if (cls === undefined || cls === SAFE_CLASS) continue;
-    if (cls === "workspace_nullable" && pinsNullWorkspace(name, regions)) {
+    if (cls === "workspace_nullable" && pinsNullWorkspace(name, roots))
       continue;
-    }
     out.push({ export: name, table, policyClass: cls });
   }
   return out.sort((a, b) => a.table.localeCompare(b.table));
@@ -293,19 +503,26 @@ export function offenders(names, tableNames, policyClasses, regions) {
 export function passColocated(files, tableNames, policyClasses, root = ROOT) {
   const findings = [];
   for (const file of files) {
-    const src = stripComments(readFileSync(file, "utf8"));
-    if (!src.includes("runInTenantScope")) continue;
-    const regions = tenantDbRegions(src);
+    const src = readFileSync(file, "utf8");
+    if (!src.includes("runInTenantScope") || !src.includes("withTenantDb")) {
+      continue;
+    }
+    const sourceFile = parse(src, file);
+    const names = sentinelNames(sourceFile);
+    // Only the withTenantDb calls lexically INSIDE a sentinel-carrying
+    // runInTenantScope callback. A file-level answer conflates a sentinel scope
+    // wrapping one org_only read with real-workspace scopes elsewhere in the
+    // same file, which is a false positive and was one:
+    // _shared/conversation-page.tsx scopes an org-only credit_lots read to the
+    // sentinel and everything else to the real workspace.
+    const regions = [];
+    for (const call of callsTo(sourceFile, "runInTenantScope")) {
+      if (!carriesSentinel(call.arguments[0], sourceFile, names)) continue;
+      const body = call.arguments[1];
+      if (body === undefined) continue;
+      regions.push(...tenantDbRegions(body));
+    }
     if (regions.length === 0) continue;
-    const names = sentinelNames(src);
-    if (names.size === 0) continue;
-    const scoped = [...src.matchAll(/runInTenantScope\(\s*\{([^}]*)\}/g)].some(
-      (m) => {
-        const ws = m[1].match(/workspaceId\s*:\s*([^,}]+)/);
-        return ws !== null && isSentinelValue(ws[1], names);
-      },
-    );
-    if (!scoped) continue;
     const bad = offenders(
       tablesNamed(regions),
       tableNames,
@@ -330,32 +547,39 @@ export function passColocated(files, tableNames, policyClasses, root = ROOT) {
 export function readOrgCtxMethods(root = ROOT) {
   const file = join(root, "apps/app/src/data/ports.ts");
   if (!existsSync(file)) return new Set();
-  const src = stripComments(readFileSync(file, "utf8"));
+  const sourceFile = parse(readFileSync(file, "utf8"), file);
   const org = new Set();
   const ws = new Set();
-  for (const m of src.matchAll(/(\w+)\(ctx:\s*(OrgCtx|WsCtx)\b/g)) {
-    (m[2] === "OrgCtx" ? org : ws).add(m[1]);
+  for (const n of nodesOf(sourceFile)) {
+    if (!ts.isMethodSignature(n) && !ts.isMethodDeclaration(n)) continue;
+    const first = n.parameters[0];
+    if (first === undefined || first.type === undefined) continue;
+    const kind = first.type.getText();
+    if (!ts.isIdentifier(n.name)) continue;
+    if (kind === "OrgCtx") org.add(n.name.text);
+    else if (kind === "WsCtx") ws.add(n.name.text);
   }
   for (const name of ws) org.delete(name);
   return org;
 }
 
-/** The body of each `<name>(ctx…) { … }` method, brace-matched. */
-function methodBodies(src, names) {
+/** The `<name>(ctx…) { … }` methods this file declares, by name. */
+function methodsNamed(sourceFile, names) {
   const out = [];
-  for (const m of src.matchAll(/(?:async\s+)?(\w+)\s*\(\s*ctx\b[^)]*\)\s*\{/g)) {
-    if (!names.has(m[1])) continue;
-    let depth = 0;
-    let i = m.index + m[0].length - 1;
-    for (; i < src.length; i += 1) {
-      const c = src[i];
-      if (c === "{") depth += 1;
-      else if (c === "}") {
-        depth -= 1;
-        if (depth === 0) break;
-      }
+  for (const n of nodesOf(sourceFile)) {
+    if (!ts.isMethodDeclaration(n) && !ts.isPropertyAssignment(n)) continue;
+    const fn = ts.isMethodDeclaration(n) ? n : n.initializer;
+    if (fn === undefined) continue;
+    if (
+      !ts.isMethodDeclaration(fn) &&
+      !ts.isFunctionExpression(fn) &&
+      !ts.isArrowFunction(fn)
+    ) {
+      continue;
     }
-    out.push({ method: m[1], body: src.slice(m.index, i + 1) });
+    const nameNode = ts.isMethodDeclaration(n) ? n.name : n.name;
+    if (!ts.isIdentifier(nameNode) || !names.has(nameNode.text)) continue;
+    out.push({ method: nameNode.text, node: fn });
   }
   return out;
 }
@@ -373,41 +597,48 @@ export function passAppKernelSeam(
   const findings = [];
   for (const file of files) {
     if (!rel(file, root).startsWith("apps/app/src/data/live/")) continue;
-    const src = stripComments(readFileSync(file, "utf8"));
-    if (!/\bkernel(?:Read|Write)\s*\(/.test(src)) continue;
-    for (const { method, body } of methodBodies(src, orgMethods)) {
-      if (!/\bkernel(?:Read|Write)\s*\(/.test(body)) continue;
+    const src = readFileSync(file, "utf8");
+    if (!src.includes("kernelRead") && !src.includes("kernelWrite")) continue;
+    const sourceFile = parse(src, file);
+    for (const { method, node } of methodsNamed(sourceFile, orgMethods)) {
       const capabilities = new Set();
-      for (const m of body.matchAll(/contract:\s*(\w+)/g)) {
-        const name = contractNames.get(m[1]);
-        if (name !== undefined) capabilities.add(name);
-      }
-      for (const m of body.matchAll(/kernelWrite\(\s*ctx\s*,\s*(\w+)/g)) {
-        const name = contractNames.get(m[1]);
-        if (name !== undefined) capabilities.add(name);
-      }
-      for (const capability of capabilities) {
-        const modulePath = handlerModules.get(capability);
-        if (modulePath === undefined) continue;
-        for (const handlerSrc of handlerSources(modulePath, root)) {
-          const regions = tenantDbRegions(handlerSrc);
-          if (regions.length === 0) continue;
-          const bad = offenders(
-            tablesNamed(regions),
-            tableNames,
-            policyClasses,
-            regions,
-          );
-          if (bad.length > 0) {
-            findings.push({
-              pass: "app-kernel-seam",
-              file: `${rel(file, root)} (${method})`,
-              capability,
-              handler: `packages/handlers/src/${modulePath.replace(/^\.\//, "")}.ts`,
-              tables: bad,
-            });
+      for (const call of [
+        ...callsTo(node, "kernelRead"),
+        ...callsTo(node, "kernelWrite"),
+      ]) {
+        for (const arg of call.arguments) {
+          if (ts.isIdentifier(arg)) {
+            const name = contractNames.get(arg.text);
+            if (name !== undefined) capabilities.add(name);
+          }
+          if (!ts.isObjectLiteralExpression(arg)) continue;
+          for (const prop of arg.properties) {
+            if (
+              ts.isPropertyAssignment(prop) &&
+              ts.isIdentifier(prop.name) &&
+              prop.name.text === "contract" &&
+              ts.isIdentifier(prop.initializer)
+            ) {
+              const name = contractNames.get(prop.initializer.text);
+              if (name !== undefined) capabilities.add(name);
+            }
           }
         }
+      }
+      for (const capability of capabilities) {
+        findings.push(
+          ...handlerFindings(
+            capability,
+            handlerModules,
+            tableNames,
+            policyClasses,
+            root,
+            {
+              pass: "app-kernel-seam",
+              file: `${rel(file, root)} (${method})`,
+            },
+          ),
+        );
       }
     }
   }
@@ -459,12 +690,51 @@ export function handlerSources(modulePath, root = ROOT) {
   const base = join(root, "packages/handlers/src");
   const entry = join(base, `${modulePath.replace(/^\.\//, "")}.ts`);
   if (!existsSync(entry)) return [];
-  const sources = [stripComments(readFileSync(entry, "utf8"))];
-  for (const m of sources[0].matchAll(/from\s+"(\.\/[^"]+)"/g)) {
+  const head = readFileSync(entry, "utf8");
+  const sources = [{ src: head, file: entry }];
+  for (const m of head.matchAll(/from\s+"(\.\/[^"]+)"/g)) {
     const dep = join(dirname(entry), `${m[1]}.ts`);
-    if (existsSync(dep)) sources.push(stripComments(readFileSync(dep, "utf8")));
+    if (existsSync(dep)) {
+      sources.push({ src: readFileSync(dep, "utf8"), file: dep });
+    }
   }
   return sources;
+}
+
+/**
+ * The findings a capability's handler produces, shared by the passes so the
+ * handler side is one piece of code rather than three copies.
+ */
+function handlerFindings(
+  capability,
+  handlerModules,
+  tableNames,
+  policyClasses,
+  root,
+  shape,
+) {
+  const modulePath = handlerModules.get(capability);
+  if (modulePath === undefined) return [];
+  const out = [];
+  for (const { src, file } of handlerSources(modulePath, root)) {
+    const regions = tenantDbRegions(parse(src, file));
+    if (regions.length === 0) continue;
+    const bad = offenders(
+      tablesNamed(regions),
+      tableNames,
+      policyClasses,
+      regions,
+    );
+    if (bad.length > 0) {
+      out.push({
+        ...shape,
+        capability,
+        handler: `packages/handlers/src/${modulePath.replace(/^\.\//, "")}.ts`,
+        tables: bad,
+      });
+    }
+  }
+  return out;
 }
 
 export function passCrossSurface(
@@ -477,106 +747,77 @@ export function passCrossSurface(
 ) {
   const findings = [];
   for (const file of files) {
-    const src = stripComments(readFileSync(file, "utf8"));
-    // `invoke(`, or one of the named wrappers that calls it for you.
-    if (
-      !src.includes("invoke(") &&
-      !src.includes("invokeOrgCapability")
-    ) {
+    const src = readFileSync(file, "utf8");
+    if (!src.includes("invoke(") && !src.includes("invokeOrgCapability")) {
       continue;
     }
-    const names = sentinelNames(src);
-    // The ctx object identifiers this file builds with a sentinel workspaceId.
-    const sentinelCtx = new Set();
-    for (const m of src.matchAll(
-      /(?:const|return)\s+(?:(\w+)\s*(?::[^=]+)?=\s*)?\{([\s\S]{0,600}?)\}/g,
-    )) {
-      const ws = m[2].match(/workspaceId\s*:\s*([^,}\n]+)/);
-      if (ws === null || !isSentinelValue(ws[1], names)) continue;
-      if (m[1]) sentinelCtx.add(m[1]);
-      else sentinelCtx.add("*"); // returned inline from a ctx builder
-    }
-    // apps/api: the sentinel is introduced inside capabilityContext, so an
-    // org-scoped route names neither the constant nor the literal — it holds
-    // only `const ctx = capabilityContext(c, { requireWorkspace: false })`.
-    // Modelled by name, like the app kernel seam.
-    for (const m of src.matchAll(
-      /(?:const|let)\s+(\w+)\s*=\s*(?:await\s+)?capabilityContext\([\s\S]{0,200}?requireWorkspace:\s*false/g,
-    )) {
-      sentinelCtx.add(m[1]);
-    }
-
-    // app_deprecated governance: invokeOrgCapability(orgId, userId, name, input)
-    // builds the sentinel ctx AND calls invoke() inside itself, so a caller
-    // names the capability and nothing else.
-    const wrapperCapabilities = new Set();
-    for (const m of src.matchAll(
-      /\binvokeOrgCapability\s*(?:<[^>]*>)?\s*\(\s*[^,]+,\s*[^,]+,\s*"([\w.]+)"/g,
-    )) {
-      wrapperCapabilities.add(m[1]);
-    }
-
-    if (sentinelCtx.size === 0 && wrapperCapabilities.size === 0) continue;
-
-    // The capabilities this file invokes under a sentinel ctx.
-    const invoked = new Set(wrapperCapabilities);
-    // An indirect call — `invoke(name, …)` behind a readCapability(viewer,
-    // name, …) helper — names the capability at the helper's call sites and
-    // not at the invoke. A real one was found on `main`
-    // (apps/app/src/app/[orgSlug]/billing/governed-actions/data.ts), where the
-    // sentinel scope and the invoke are one function and every capability is
-    // named at the helper's call sites three lines away. When the invoke's
-    // first argument resolves to neither a literal nor a contract export,
-    // every capability this file names in either form is checked instead. That
-    // over-approximates — the file could name one it invokes under a real
-    // scope — which is the same direction the co-located pass errs in, and the
-    // remedy is identical either way.
+    const sourceFile = parse(src, file);
+    const names = sentinelNames(sourceFile);
+    const invoked = new Set();
     let indirect = false;
-    for (const m of src.matchAll(
-      /\binvoke\(\s*(?:"([\w.]+)"|(\w+)(?:\.name)?)\s*,[\s\S]{0,400}?,\s*(?:\{\s*\.\.\.\s*)?(\w+)/g,
-    )) {
-      const ctxName = m[3];
-      if (!sentinelCtx.has("*") && !sentinelCtx.has(ctxName)) continue;
-      // A call that overrides workspaceId with a real value is the fix, not the
-      // defect: `{ ...ctx, workspaceId }`.
-      const call = src.slice(m.index, m.index + 400);
-      if (/\.\.\.\s*\w+\s*,\s*workspaceId/.test(call)) continue;
-      if (m[1] !== undefined) invoked.add(m[1]);
-      else if (contractNames.has(m[2])) invoked.add(contractNames.get(m[2]));
-      else indirect = true;
-    }
-    if (indirect) {
-      for (const m of src.matchAll(/"([a-z][a-z0-9_]*)"/g)) {
-        if (handlerModules.has(m[1])) invoked.add(m[1]);
+
+    // invoke(capability, input, ctx, …) — the ctx is read as a node, so an
+    // inline object literal and a named const are the same path.
+    for (const call of callsTo(sourceFile, "invoke")) {
+      const ctxArg = call.arguments[2];
+      if (!carriesSentinel(ctxArg, sourceFile, names)) continue;
+      const nameArg = call.arguments[0];
+      if (nameArg === undefined) continue;
+      if (ts.isStringLiteral(nameArg)) {
+        invoked.add(nameArg.text);
+      } else if (
+        ts.isPropertyAccessExpression(nameArg) &&
+        nameArg.name.text === "name" &&
+        ts.isIdentifier(nameArg.expression) &&
+        contractNames.has(nameArg.expression.text)
+      ) {
+        invoked.add(contractNames.get(nameArg.expression.text));
+      } else {
+        indirect = true;
       }
-      for (const m of src.matchAll(/\b(\w+)\.name\b/g)) {
-        const name = contractNames.get(m[1]);
-        if (name !== undefined) invoked.add(name);
+    }
+
+    // invokeOrgCapability(orgId, userId, capability, input) builds the ctx,
+    // enters the scope and calls invoke() itself, so a caller names the
+    // capability and nothing else.
+    for (const call of callsTo(sourceFile, "invokeOrgCapability")) {
+      const nameArg = call.arguments[2];
+      if (nameArg !== undefined && ts.isStringLiteral(nameArg)) {
+        invoked.add(nameArg.text);
+      }
+    }
+
+    // A capability named nowhere the parse can follow — an invoke() behind a
+    // readCapability(viewer, name, input) helper, as on `main`. Check every
+    // capability the file names in either form. Over-approximates in the same
+    // direction the co-located pass does.
+    if (indirect) {
+      for (const n of nodesOf(sourceFile)) {
+        if (ts.isStringLiteral(n) && handlerModules.has(n.text)) {
+          invoked.add(n.text);
+        }
+        if (
+          ts.isPropertyAccessExpression(n) &&
+          n.name.text === "name" &&
+          ts.isIdentifier(n.expression) &&
+          contractNames.has(n.expression.text)
+        ) {
+          invoked.add(contractNames.get(n.expression.text));
+        }
       }
     }
 
     for (const capability of invoked) {
-      const modulePath = handlerModules.get(capability);
-      if (modulePath === undefined) continue;
-      for (const handlerSrc of handlerSources(modulePath, root)) {
-        const regions = tenantDbRegions(handlerSrc);
-        if (regions.length === 0) continue;
-        const bad = offenders(
-          tablesNamed(regions),
+      findings.push(
+        ...handlerFindings(
+          capability,
+          handlerModules,
           tableNames,
           policyClasses,
-          regions,
-        );
-        if (bad.length > 0) {
-          findings.push({
-            pass: "cross-surface",
-            file: rel(file, root),
-            capability,
-            handler: `packages/handlers/src/${modulePath.replace(/^\.\//, "")}.ts`,
-            tables: bad,
-          });
-        }
-      }
+          root,
+          { pass: "cross-surface", file: rel(file, root) },
+        ),
+      );
     }
   }
   return findings;
@@ -705,7 +946,9 @@ function main() {
   }
 
   const tail =
-    waived > 0 ? ` (${waived} waived, see org-sentinel-reads-baseline.json)` : "";
+    waived > 0
+      ? ` (${waived} waived, see org-sentinel-reads-baseline.json)`
+      : "";
 
   if (findings.length === 0) {
     console.log(
