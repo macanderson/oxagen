@@ -21,6 +21,8 @@ vi.mock("@oxagen/oxagen/kernel", async (importOriginal) => ({
 
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { workspaceCreateRoute } from "./workspace.create";
 import type { AppEnv } from "../../app";
 
@@ -59,9 +61,12 @@ describe("creating the first workspace over REST (#1203)", () => {
     mocks.invoke.mockResolvedValue({ id: "ws_1", slug: "first" });
   });
 
-  it("reaches the handler with an org and no workspace", async () => {
+  it("reaches the handler with an org and the org-only workspace the kernel accepts", async () => {
     // The bootstrap case. This is what returned 400 before the route stopped
-    // demanding a workspace it is being asked to create.
+    // demanding a workspace it is being asked to create, and what raised a
+    // TenantScopeError until the context carried a uuid-shaped workspace id
+    // instead of "" (#3029): create_workspace is scoped, so invoke enters a
+    // tenant scope and asserts both ids before the handler runs.
     const res = await post(
       mount({ orgId: "org_1", workspaceId: null, userId: "u1" }),
     );
@@ -70,9 +75,32 @@ describe("creating the first workspace over REST (#1203)", () => {
     const [, , ctx] = mocks.invoke.mock.calls[0] as [
       string,
       unknown,
-      { orgId: string },
+      { orgId: string; workspaceId: string },
     ];
     expect(ctx.orgId).toBe("org_1");
+    expect(ctx.workspaceId).toBe(ORG_ONLY_WORKSPACE_ID);
+    // The shape the kernel accepts: runInTenantScope asserts both ids are
+    // uuids, and "" is what raised the TenantScopeError this route returned
+    // as a 500 (#3029). The org id here is a real uuid because the middleware
+    // that sets it resolves the org row; the workspace id is the sentinel.
+    expect(() =>
+      runInTenantScope(
+        {
+          orgId: "00000000-0000-0000-0000-0000000000a1",
+          workspaceId: ctx.workspaceId,
+        },
+        () => "entered",
+      ),
+    ).not.toThrow();
+  });
+
+  it("refuses the empty workspace id the kernel cannot enter a scope with (negative)", () => {
+    expect(() =>
+      runInTenantScope(
+        { orgId: "00000000-0000-0000-0000-0000000000a1", workspaceId: "" },
+        () => "entered",
+      ),
+    ).toThrow(/workspaceId/);
   });
 
   it("still works from the workspace-scoped mount, which was not removed", async () => {

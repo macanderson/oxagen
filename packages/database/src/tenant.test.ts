@@ -38,6 +38,7 @@ import {
   withTenantDb,
   withRepeatableReadTenantDb,
   withSystemDb,
+  setTransactionWorkspaceScope,
   assertRlsConnectionSafe,
   assertRlsEnforcedInProduction,
 } from "./tenant";
@@ -260,5 +261,29 @@ describe("assertRlsEnforcedInProduction", () => {
     mocks.isProductionRuntime.mockReturnValue(false);
     mocks.rlsEnforced.mockReturnValue(false);
     expect(() => assertRlsEnforcedInProduction()).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setTransactionWorkspaceScope — the one legal mid-transaction GUC move (#3029)
+// ---------------------------------------------------------------------------
+
+describe("setTransactionWorkspaceScope", () => {
+  it("re-points app.current_workspace_id on the open transaction, locally", async () => {
+    const execute = vi.fn(async (_statement: unknown) => undefined);
+    await setTransactionWorkspaceScope(
+      { execute } as unknown as Parameters<
+        typeof setTransactionWorkspaceScope
+      >[0],
+      WS,
+    );
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    const statement = sqlText(execute.mock.calls[0]?.[0]);
+    expect(statement).toContain("set_config");
+    expect(statement).toContain("app.current_workspace_id");
+    // `true` = transaction-local, so it rolls back with the transaction.
+    expect(statement).toContain("true");
+    expect(statement).toContain(WS);
   });
 });

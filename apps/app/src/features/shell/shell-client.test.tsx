@@ -242,6 +242,7 @@ describe("command menu", () => {
       "Steering",
       "Spend",
       "Organization",
+      "Roles",
       "API keys",
       "Billing",
       "Audit",
