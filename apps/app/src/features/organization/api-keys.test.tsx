@@ -167,7 +167,7 @@ describe("ok", () => {
     await renderApiKeys(readOk([live, revoked]));
     expect(
       screen.getByText(
-        "A key acts as the person who created it: on the API, MCP and the CLI it can do what that person can do, and no more.",
+        "A key acts as the person who created it, in this workspace: on the API, MCP and the CLI it can do what that person can do here, and no more.",
       ),
     ).toBeInTheDocument();
     expect(keysTable()).not.toHaveTextContent(/secret|hash/i);

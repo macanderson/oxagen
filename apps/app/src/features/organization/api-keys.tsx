@@ -43,6 +43,18 @@ export function chooseWorkspace(
   return named?.slug ?? workspaces.value[0]?.slug ?? null;
 }
 
+/**
+ * The keys of the workspace in scope, and the instant they were read — the
+ * clock an expiry is judged against starts when the read returned, so the
+ * table is pure of it (the Fleet reads do the same).
+ */
+async function readKeys(ctx: OrgCtx, source: DataSource) {
+  const inWorkspace = WsCtx.is(ctx) ? ctx : null;
+  const keys =
+    inWorkspace === null ? null : await source.org.apiKeys(inWorkspace);
+  return { current: inWorkspace?.wsSlug ?? null, keys, now: Date.now() };
+}
+
 export async function ApiKeys({
   ctx,
   source,
@@ -53,17 +65,15 @@ export async function ApiKeys({
   source: DataSource;
   workspaces: Read<WorkspaceChoice[]>;
 }) {
-  const inWorkspace = WsCtx.is(ctx) ? ctx : null;
-  const read =
-    inWorkspace === null ? null : await source.org.apiKeys(inWorkspace);
+  const { current, keys, now } = await readKeys(ctx, source);
   return (
     <ApiKeysView
       orgSlug={ctx.orgSlug}
       orgRole={ctx.orgRole}
       workspaces={workspaces}
-      current={inWorkspace?.wsSlug ?? null}
-      read={read}
-      now={Date.now()}
+      current={current}
+      read={keys}
+      now={now}
     />
   );
 }

@@ -295,7 +295,7 @@ describe("rotate", () => {
 });
 
 describe("a key that has expired", () => {
-  it("offers Revoke and no Rotate, because the replacement would carry the expiry that ended it (negative)", async () => {
+  it("offers Revoke and no Rotate, because the replacement would carry the expiry that ended it (negative)", () => {
     renderRow([KEY], false);
     expect(screen.getByRole("button", { name: "Revoke" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Rotate" })).toBeNull();

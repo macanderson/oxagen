@@ -62,7 +62,15 @@ const {
     source: { org: { members, workspaces, apiKeys } },
   };
 });
-vi.mock("@/server/viewer", () => ({ requireViewer }));
+// `WsCtx.is` is how the API keys section tells a workspace scope from an
+// organization one (ADR-069); the viewer classes are branded, so the stub
+// stands in for the brand with the field these fixtures carry.
+vi.mock("@/server/viewer", () => ({
+  requireViewer,
+  WsCtx: {
+    is: (x: unknown) => typeof x === "object" && x !== null && "wsSlug" in x,
+  },
+}));
 vi.mock("@/features/billing", () => ({ Billing }));
 vi.mock("@/features/fleet", () => ({ Fleet }));
 vi.mock("@/features/agents", () => ({ Agents, Agent, AgentSource }));
