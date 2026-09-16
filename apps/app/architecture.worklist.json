@@ -1493,35 +1493,6 @@
       "estimateLinesDelta": 15
     },
     {
-      "id": "G3097-audit",
-      "title": "Gap lane #3097: the Audit page — the deprecated events viewer and its signed export on the rev1 seams, in one PR carrying both halves",
-      "kind": "build",
-      "paths": [
-        "packages/oxagen/src/contracts/audit.log.query.ts",
-        "packages/oxagen/src/contracts/audit.events.export.ts",
-        "packages/handlers/src/audit.log.query.ts",
-        "packages/handlers/src/audit.events.export.ts",
-        "packages/handlers/src/audit.shared.ts",
-        "apps/api/src/routes/v1/audit.events.export.ts",
-        "apps/mcp/src/tools/audit.events.export.ts",
-        "docs/capabilities/audit.log.query.md",
-        "docs/capabilities/audit.events.export.md",
-        "apps/app/src/app/[org]/audit",
-        "apps/app/src/features/audit",
-        "apps/app/src/data/contracts/audit.ts",
-        "apps/app/src/data/live/audit.ts",
-        "apps/app/src/data/live/mappers/audit.ts",
-        "apps/app/src/data/ports.ts",
-        "apps/app/src/data/read.ts",
-        "apps/app/src/features/shell/nav.ts",
-        "apps/app/src/shared/legacy-routes.ts",
-        "apps/app/messages/audit.json"
-      ],
-      "dependsOn": ["WL-33", "WL-36"],
-      "acceptance": "One PR, because the backend half wires contracts that exist rather than building a store. query_audit_log declares noBillingGate, gates with assertOrgRole(Owner, Admin) on the user resolveActingUserId returned, throws HandlerError {code:'forbidden'} in place of both plain Errors, treats ctx.workspaceId === ORG_ONLY_WS as no workspace scope so an org-scope caller without the role is refused rather than handed an empty page, and returns id, ip and userAgent; handler tests against a tier-free org cover Member (forbidden), Admin (org-wide rows) and a workspace Owner at its own workspace. export_audit_events lands with its handler (the deprecated queryAuditForExport keyset walk, serializeAuditExport and signAuditExport moved, not rewritten; a match wider than 50,000 rows is invalid_input; a store failure mid-walk refuses rather than signing a short file), its API route, its MCP tool and its capability doc; docs/capabilities/audit.log.query.md matches the contract; check:manifest and check:audit-coverage pass; no Enterprise gate. The app half: ports.ts gains audit.events and audit.exportEvents, each with a production caller (INV-17); data/contracts/audit.ts carries the view models with every id a PublicId (INV-11) and a field nullable exactly where the contract may not record it (INV-08); data/live/audit.ts reads both through kernelRead with page 'audit' and reports an unmappable answer once as record_unmappable; read.ts gains the audit PageKey and its PAGE_FAILURES row (audit_store_unavailable, org.admin). /{org}/audit is one page.tsx calling requireViewer, with generateMetadata and PageHeader from pages.audit; /{org}/audit/export is a route.ts delegating to handleAuditExport, whose unit test carries the non-member 404 negative (INV-01). Component tests cover loaded, empty, filtered-empty, loading, error, denied and pending approval with expectNoAxe (INV-26); unit tests cover the URL filter guards (an event type nothing writes, an outcome the column cannot hold, an actor that is not a public id, a backwards day range and a negative offset each dropped), the mappers over real contract output, and the export route's refusals. The sidebar, More sheet and ⌘K gain the entry and the cut-era negatives flip; /{org}/security/audit redirects to /{org}/audit and no row sits under /{org}/audit/**. messages/audit.json carries every string, messages.d.ts is regenerated and catalog-used.test.ts is green (INV-12). INV-20's count moves 19 → 20.",
-      "estimateLinesDelta": 1400
-    },
-    {
       "id": "WL-55",
       "title": "Enterprise ungating: every feature, the IAM resolver and the SOC 2 controls are on for every tier; the enterprise tier gates are removed",
       "kind": "refactor",
@@ -1751,6 +1722,35 @@
       "acceptance": "The Plan card offers Upgrade to Build and to Scale (never to the org's current tier, never Enterprise) for Owner and Billing: a 'use server' action calls kernelWrite(start_subscription_upgrade, {plan, interval, successPath, cancelPath}) → parseCheckoutUrl → redirectToCheckout, the WL-44 shape; unit tests invalid, denied (Admin, Member), a non-checkout.stripe.com URL → unavailable with no redirect, ok. The handler resolves the Stripe price by the stripe-sync lookup key (build_v2_month, build_v2_year, scale_v2_month, scale_v2_year), so the Checkout needs no seed-only price (seed.ts:35-37); it checks roles with assertOrgRole on the user resolveActingUserId returns and declares noBillingGate: true, and billing-gates.test.ts (INV-27) gains it. After ?checkout=success the Plan card and the rate block read the new tier from get_subscription and get_contract_rate on the next load (component test on the webhook-synced subscription row). Component tests ok, denied, a prepaid and an invoice-billed org, expectNoAxe. WL-50 binds start_subscription_upgrade's 'app' layer.",
       "estimateLinesDelta": 260,
       "notes": "Maintainer decision 7, 2026-09-15: rev1 keeps an in-app Build/Scale upgrade through Stripe Checkout (start_subscription_upgrade stays). Added although the orchestrator's list did not name it: no existing item builds the upgrade."
+    },
+    {
+      "id": "G3097-audit",
+      "title": "Gap lane #3097: the Audit page — the deprecated events viewer and its signed export on the rev1 seams, in one PR carrying both halves",
+      "kind": "build",
+      "paths": [
+        "packages/oxagen/src/contracts/audit.log.query.ts",
+        "packages/oxagen/src/contracts/audit.events.export.ts",
+        "packages/handlers/src/audit.log.query.ts",
+        "packages/handlers/src/audit.events.export.ts",
+        "packages/handlers/src/audit.shared.ts",
+        "apps/api/src/routes/v1/audit.events.export.ts",
+        "apps/mcp/src/tools/audit.events.export.ts",
+        "docs/capabilities/audit.log.query.md",
+        "docs/capabilities/audit.events.export.md",
+        "apps/app/src/app/[org]/audit",
+        "apps/app/src/features/audit",
+        "apps/app/src/data/contracts/audit.ts",
+        "apps/app/src/data/live/audit.ts",
+        "apps/app/src/data/live/mappers/audit.ts",
+        "apps/app/src/data/ports.ts",
+        "apps/app/src/data/read.ts",
+        "apps/app/src/features/shell/nav.ts",
+        "apps/app/src/shared/legacy-routes.ts",
+        "apps/app/messages/audit.json"
+      ],
+      "dependsOn": ["WL-33", "WL-36"],
+      "acceptance": "One PR, because the backend half wires contracts that exist rather than building a store. query_audit_log declares noBillingGate, gates with assertOrgRole(Owner, Admin) on the user resolveActingUserId returned, throws HandlerError {code:'forbidden'} in place of both plain Errors, treats ctx.workspaceId === ORG_ONLY_WS as no workspace scope so an org-scope caller without the role is refused rather than handed an empty page, and returns id, ip and userAgent; handler tests against a tier-free org cover Member (forbidden), Admin (org-wide rows) and a workspace Owner at its own workspace. export_audit_events lands with its handler (the deprecated queryAuditForExport keyset walk, serializeAuditExport and signAuditExport moved, not rewritten; a match wider than 50,000 rows is invalid_input; a store failure mid-walk refuses rather than signing a short file), its API route, its MCP tool and its capability doc; docs/capabilities/audit.log.query.md matches the contract; check:manifest and check:audit-coverage pass; no Enterprise gate. The app half: ports.ts gains audit.events and audit.exportEvents, each with a production caller (INV-17); data/contracts/audit.ts carries the view models with every id a PublicId (INV-11) and a field nullable exactly where the contract may not record it (INV-08); data/live/audit.ts reads both through kernelRead with page 'audit' and reports an unmappable answer once as record_unmappable; read.ts gains the audit PageKey and its PAGE_FAILURES row (audit_store_unavailable, org.admin). /{org}/audit is one page.tsx calling requireViewer, with generateMetadata and PageHeader from pages.audit; /{org}/audit/export is a route.ts delegating to handleAuditExport, whose unit test carries the non-member 404 negative (INV-01). Component tests cover loaded, empty, filtered-empty, loading, error, denied and pending approval with expectNoAxe (INV-26); unit tests cover the URL filter guards (an event type nothing writes, an outcome the column cannot hold, an actor that is not a public id, a backwards day range and a negative offset each dropped), the mappers over real contract output, and the export route's refusals. The sidebar, More sheet and ⌘K gain the entry and the cut-era negatives flip; /{org}/security/audit redirects to /{org}/audit and no row sits under /{org}/audit/**. messages/audit.json carries every string, messages.d.ts is regenerated and catalog-used.test.ts is green (INV-12). INV-20's count moves 19 → 20.",
+      "estimateLinesDelta": 1400
     }
   ],
   "openQuestions": [
