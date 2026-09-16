@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 // The guard around a value that exists only on one screen. The case it is for
-// is the one a dialog cannot see: the person refreshes, closes the tab, types
-// an address or presses Back while a write is in flight, and the answer — a
-// secret the server hands back exactly once — arrives with nobody to hand it
-// to. The dialog's own close paths are held elsewhere (`openChange`); these
-// are the browser's.
-import { cleanup, act, renderHook } from "@testing-library/react";
+// is the one a dialog cannot see: the person refreshes, closes the tab or
+// types an address while a write is in flight, and the answer — a secret the
+// server hands back exactly once — arrives with nobody to hand it to. The
+// dialog's own close paths are held elsewhere (`openChange`); this holds the
+// browser's unload.
+import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useExitGuard } from "./exit-guard";
 
@@ -16,19 +16,16 @@ function tryToLeave(): boolean {
   );
 }
 
-/** Dispatches the event a Back press produces. */
-function pressBack(): void {
-  window.dispatchEvent(new PopStateEvent("popstate", { state: null }));
-}
-
 let pushState: ReturnType<typeof vi.spyOn>;
+let back: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   pushState = vi.spyOn(window.history, "pushState");
+  back = vi.spyOn(window.history, "back").mockImplementation(() => undefined);
 });
 afterEach(() => {
   // No auto-cleanup is configured in this suite, and a hook left mounted keeps
-  // its window listeners: the next test would then measure this one's guard.
+  // its window listener: the next test would then measure this one's guard.
   cleanup();
   vi.restoreAllMocks();
 });
@@ -36,7 +33,7 @@ afterEach(() => {
 describe("useExitGuard", () => {
   it("holds a refresh, a tab close and an address-bar navigation while at risk", () => {
     renderHook(() => {
-      useExitGuard(true, () => undefined);
+      useExitGuard(true);
     });
     expect(tryToLeave()).toBe(true);
   });
@@ -45,81 +42,65 @@ describe("useExitGuard", () => {
     // A prompt that fires when there is nothing to lose is one people learn to
     // click through, and then it does not work the once it matters.
     renderHook(() => {
-      useExitGuard(false, () => undefined);
+      useExitGuard(false);
     });
+    expect(tryToLeave()).toBe(false);
+  });
+
+  it("stops holding the window once the risk is over", () => {
+    const { rerender } = renderHook(
+      ({ atRisk }: { atRisk: boolean }) => {
+        useExitGuard(atRisk);
+      },
+      { initialProps: { atRisk: true } },
+    );
+    expect(tryToLeave()).toBe(true);
+    rerender({ atRisk: false });
+    expect(tryToLeave()).toBe(false);
+  });
+
+  it("drops the listener when the caller unmounts", () => {
+    const { unmount } = renderHook(() => {
+      useExitGuard(true);
+    });
+    unmount();
+    expect(tryToLeave()).toBe(false);
+  });
+
+  it("holds the window until the last of several guards is done", () => {
+    // Every key write on the page mounts its own dialog and its own guard. The
+    // hook keeps no state outside its own effect, so two armed at once are two
+    // listeners, each asking; the window is free only when neither asks.
+    const first = renderHook(() => {
+      useExitGuard(true);
+    });
+    const second = renderHook(() => {
+      useExitGuard(true);
+    });
+    expect(tryToLeave()).toBe(true);
+    first.unmount();
+    expect(tryToLeave()).toBe(true);
+    second.unmount();
     expect(tryToLeave()).toBe(false);
     expect(pushState).not.toHaveBeenCalled();
   });
 
-  it("turns a Back press back and says so, because beforeunload never fires for one", () => {
-    // Back is a same-document history navigation: the browser runs no unload
-    // and asks nothing. The sentinel pushed on arming is what that Back
-    // consumes, and this pushes another in its place.
-    const onBlocked = vi.fn();
-    renderHook(() => {
-      useExitGuard(true, onBlocked);
-    });
-    expect(pushState).toHaveBeenCalledTimes(1);
-
-    act(() => {
-      pressBack();
-    });
-    expect(onBlocked).toHaveBeenCalledTimes(1);
-    expect(pushState).toHaveBeenCalledTimes(2);
-    // Same URL: Next copies its internal history state onto the entry and
-    // dispatches no router action, so the route and this island's state stay.
-    expect(pushState).toHaveBeenLastCalledWith(null, "");
-  });
-
-  it("ignores a Back press once nothing is at risk (negative)", () => {
-    const onBlocked = vi.fn();
-    const { rerender } = renderHook(
+  it("touches the history stack neither on arming nor on release (negative)", () => {
+    // An earlier form of this guard pushed a duplicate entry for Back to
+    // consume. `router.replace` onto the page it is already on overwrote that
+    // duplicate but left the identical entry beneath it, so every completed
+    // write added a Back press that went nowhere — and reclaiming it from the
+    // cleanup raced that same `replace`. The guard now leaves history alone.
+    const { rerender, unmount } = renderHook(
       ({ atRisk }: { atRisk: boolean }) => {
-        useExitGuard(atRisk, onBlocked);
+        useExitGuard(atRisk);
       },
       { initialProps: { atRisk: true } },
     );
     rerender({ atRisk: false });
-
-    act(() => {
-      pressBack();
-    });
-    expect(onBlocked).not.toHaveBeenCalled();
-    expect(tryToLeave()).toBe(false);
-  });
-
-  it("re-arms nothing when only the callback changes, and calls the newest one", () => {
-    // The caller passes a fresh closure every render. Re-arming on each would
-    // push a history entry per keystroke.
-    const first = vi.fn();
-    const second = vi.fn();
-    const { rerender } = renderHook(
-      ({ onBlocked }: { onBlocked: () => void }) => {
-        useExitGuard(true, onBlocked);
-      },
-      { initialProps: { onBlocked: first } },
-    );
-    rerender({ onBlocked: second });
-    expect(pushState).toHaveBeenCalledTimes(1);
-
-    act(() => {
-      pressBack();
-    });
-    expect(first).not.toHaveBeenCalled();
-    expect(second).toHaveBeenCalledTimes(1);
-  });
-
-  it("drops both listeners when the caller unmounts", () => {
-    const onBlocked = vi.fn();
-    const { unmount } = renderHook(() => {
-      useExitGuard(true, onBlocked);
-    });
+    rerender({ atRisk: true });
     unmount();
-
-    expect(tryToLeave()).toBe(false);
-    act(() => {
-      pressBack();
-    });
-    expect(onBlocked).not.toHaveBeenCalled();
+    expect(pushState).not.toHaveBeenCalled();
+    expect(back).not.toHaveBeenCalled();
   });
 });

@@ -437,22 +437,20 @@ describe("revoke", () => {
 describe("leaving the page", () => {
   // `openChange` holds the dialog's own close paths, and the modal's inert
   // backdrop holds the links behind it. Neither reaches the browser: a
-  // refresh, a tab closing, a typed address or Back unmounts this island
-  // whatever is on screen, and the secret exists only in its state. For a
-  // rotation that is an outage — the replaced key is already revoked.
+  // refresh, a tab closing or a typed address unmounts this island whatever is
+  // on screen, and the secret exists only in its state. For a rotation that is
+  // an outage — the replaced key is already revoked.
   //
   // The value is not written anywhere durable to survive the reload. A secret
   // shown once must not sit in browser storage; the window is held instead.
+  // Back is not held and cannot be — `ui/exit-guard.ts` says why.
   function tryToLeave(): boolean {
     return !window.dispatchEvent(
       new Event("beforeunload", { cancelable: true }),
     );
   }
-  function pressBack(): void {
-    window.dispatchEvent(new PopStateEvent("popstate", { state: null }));
-  }
 
-  it("holds a refresh and turns Back back while the write is in flight", async () => {
+  it("holds a refresh and a tab close while the write is in flight", async () => {
     let answer: (result: unknown) => void = () => undefined;
     rotateApiKey.mockReturnValue(
       new Promise((resolve) => {
@@ -466,23 +464,14 @@ describe("leaving the page", () => {
     );
 
     expect(tryToLeave()).toBe(true);
-    fireEvent(window, new PopStateEvent("popstate", { state: null }));
-    expect(
-      await screen.findByTestId("rotate-api-key-held-back"),
-    ).toHaveTextContent(
-      "Oxagen is still writing this key. Its secret is shown once and cannot be asked for again, so leaving now would lose it. This takes a moment.",
-    );
 
     // A rotation's replacement carries an id of its own, so the roster this
     // row was rendered from does not list it and the showing stands.
-    answer({
-      ok: true,
-      value: { ...minted, id: "aky_0a1b2c3d4e5f6g7h8j9k0m" },
-    });
+    answer({ ok: true, value: { ...minted, id: "aky_0a1b2c3d4e5f6g7h8j9k0m" } });
     expect(await screen.findByTestId("api-key-secret")).toBeInTheDocument();
   });
 
-  it("holds a refresh and turns Back back while the secret is on screen, unacknowledged", async () => {
+  it("goes on holding it while the secret is on screen, unacknowledged", async () => {
     createApiKey.mockResolvedValue({ ok: true, value: minted });
     render(createDialog());
     const dialog = await openDialog("Create a key", "create-api-key");
@@ -493,12 +482,6 @@ describe("leaving the page", () => {
     await screen.findByTestId("api-key-secret");
 
     expect(tryToLeave()).toBe(true);
-    fireEvent(window, new PopStateEvent("popstate", { state: null }));
-    expect(
-      await screen.findByTestId("create-api-key-held-back"),
-    ).toHaveTextContent(
-      "The secret is on this screen and nowhere else. Copy it, then close this — leaving now loses it for good.",
-    );
     // Held, not trapped: Close is the way out, and it ends the showing.
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => {
@@ -514,8 +497,6 @@ describe("leaving the page", () => {
     expect(tryToLeave()).toBe(false);
     await openDialog("Revoke", "revoke-api-key");
     expect(tryToLeave()).toBe(false);
-    pressBack();
-    expect(screen.queryByTestId("revoke-api-key-held-back")).toBeNull();
   });
 
   it("lets the window go once a revoke lands, because it owes no secret (negative)", async () => {
@@ -529,5 +510,23 @@ describe("leaving the page", () => {
       expect(router.replace).toHaveBeenCalledWith(HERE);
     });
     expect(tryToLeave()).toBe(false);
+  });
+
+  it("leaves the history stack alone, so a completed write adds no dead Back stop (negative)", async () => {
+    // The guard used to push a duplicate entry for Back to consume; the
+    // `replace` that ends the write could not reclaim it, so every write left a
+    // Back press that went nowhere.
+    const pushState = vi.spyOn(window.history, "pushState");
+    createApiKey.mockResolvedValue({ ok: true, value: minted });
+    render(createDialog());
+    const dialog = await openDialog("Create a key", "create-api-key");
+    await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Create it" }),
+    );
+    await screen.findByTestId("api-key-secret");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(pushState).not.toHaveBeenCalled();
+    pushState.mockRestore();
   });
 });
