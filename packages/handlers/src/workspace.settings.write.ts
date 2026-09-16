@@ -17,6 +17,24 @@ import { logger } from "./logger";
 const workspaceNotFound = () =>
   new HandlerError({ code: "not_found", reason: "workspace_not_found" });
 
+/**
+ * `archive_workspace` promises the archived workspace's slug "stays taken"
+ * (packages/handlers/src/workspace.archive.ts step 4), and the redirect from
+ * its old slugs in `workspace.workspace_slug_history` rests on that. Editing
+ * an archived workspace's slug breaks both: the `(org_id, slug)` unique index
+ * releases the old value, a new workspace takes it, and a direct slug match
+ * beats the archived workspace's history redirect — so a link to the archived
+ * workspace silently lands somewhere else. An archived workspace has left the
+ * switcher and is a record; it is not edited. Refused the same way a second
+ * archive is.
+ */
+const workspaceArchived = (name: string, archivedAt: Date) =>
+  new HandlerError({
+    code: "conflict",
+    reason: "workspace_archived",
+    message: `${name} was archived on ${archivedAt.toISOString()}; an archived workspace's settings cannot be changed`,
+  });
+
 // Partial update of workspace.workspaces for the workspace `input.workspaceId`
 // names in the org, or the active one. name, slug, avatarUrl and description
 // are all real columns, each set independently — so a concurrent
@@ -32,8 +50,9 @@ const workspaceNotFound = () =>
 //   2. `consequenceRoles` decides who may grant a mandate over money and the
 //      other consequences (ADR-059 decision 1), so writing it also needs the
 //      org Owner.
-//   3. The target is resolved by public id in the org (`not_found`), the
-//      slug rename is captured and the unique index's 23505 reads as
+//   3. The target is resolved by public id in the org (`not_found`), an
+//      archived one is refused (`conflict`, `workspace_archived`), the slug
+//      rename is captured and the unique index's 23505 reads as
 //      `conflict` / `slug_taken`.
 //   4. The resolve runs in whatever scope the caller is in — `workspace.workspaces`
 //      is `org_only`, so it reads under an org-only scope (ADR-068). The write
@@ -80,6 +99,7 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
         avatarUrl: true,
         description: true,
         consequenceRoles: true,
+        archivedAt: true,
       },
     }),
   );
@@ -91,7 +111,14 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
     );
     throw workspaceNotFound();
   }
-  const { id: workspaceId, ...existing } = target;
+  if (target.archivedAt !== null) {
+    logger.warn(
+      { orgId: ctx.orgId, workspaceId: input.workspaceId ?? ctx.workspaceId },
+      "workspace.settings.write: workspace is archived",
+    );
+    throw workspaceArchived(target.name, target.archivedAt);
+  }
+  const { id: workspaceId, archivedAt: _archivedAt, ...existing } = target;
 
   const row = await runInTenantScope(
     {

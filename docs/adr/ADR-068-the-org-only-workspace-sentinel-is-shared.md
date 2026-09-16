@@ -42,11 +42,23 @@ is recorded:
   (workspace only) compare the row's `workspace_id` against the workspace
   GUC in both `USING` and `WITH CHECK`. A row carrying a real workspace id
   written under the sentinel fails that check and Postgres raises `42501`.
+- `workspace_nullable` (org `NOT NULL`, workspace nullable) is the quiet
+  one. Its predicate is `org_id = <org GUC> AND (workspace_id IS NULL OR
+  workspace_id = <workspace GUC>)`, so under the sentinel a read is answered
+  the org-wide rows and nothing else: every row scoped to a real workspace is
+  absent, and nothing is raised. A write is refused with `42501` like the
+  other two; a READ is simply short. That is worse than a refusal, because a
+  refusal stops. `packages/handlers/src/lib/iam-roles.ts`
+  (`activeAssignmentCount`, on `iam.principal_role_assignments`) is the case
+  that found this: `delete_role` counted a role's holders on the caller's own
+  transaction, was answered zero, and deleted the role and its grants out from
+  under live assignment rows.
 
-Two capabilities reachable from an org-only scope leave the `org_only` set,
-and neither was caught before the sentinel shipped, because `42501` is not
+Three capabilities reachable from an org-only scope leave the `org_only` set.
+Neither write was caught before the sentinel shipped, because `42501` is not
 `23505` and so escapes the `isUniqueViolation` catch each handler has — it
-surfaces as a 500:
+surfaces as a 500. The read was caught later still, because it raised nothing
+at all:
 
 - `update_workspace_settings` inserts into `workspace.workspace_slug_history`
   (`standard`) on every slug change. A name-only edit works, which is why
@@ -54,9 +66,18 @@ surfaces as a 500:
 - `create_workspace` bootstraps `workspace.workspace_users`
   (`workspace_only`), `agent.agents` and `environments.environments`
   (`standard`), on the caller's transaction (issue #3029).
+- `delete_role` counts the role's holders in
+  `iam.principal_role_assignments` (`workspace_nullable`) before deleting it.
+  Under the sentinel that count sees only the org-wide assignments, so a role
+  held in a workspace read as held by nobody.
 
 **The rule, and its exception class.** A capability reached from an org-only
-scope may write `org_only` tables directly. A write that touches a
+scope may read and write `org_only` tables directly. An ORG-WIDE READ of a
+`workspace_nullable` table must not be made in the caller's scope at all —
+there is no single workspace to re-enter, because the question spans every
+workspace of the organization — so it goes through `withSystemDb` with the
+`org_id` predicate written out at the call site, the way `list_iam_roles`
+already answered the same question. A write that touches a
 workspace-GUC-scoped table MUST first re-enter the target workspace's scope
 — `runInTenantScope({ ...getPrincipalAttribution(), orgId, workspaceId })`
 around the `withTenantDb` that performs it, the way `archive_workspace`
@@ -104,6 +125,15 @@ creates one over REST.
    onto the new row with `setTransactionWorkspaceScope` before writing anything
    workspace-scoped. `packages/database/integration/org-only-scope-writes.test.ts`
    holds both halves against a real Postgres with RLS enforced.
+
+6. **An org-wide read of a `workspace_nullable` table goes through
+   `withSystemDb` with an explicit `org_id` fence.**
+   `postgresRoleStore.activeAssignmentCount` does, so `delete_role` is answered
+   the organization's holders rather than the scope's. The same integration
+   suite holds this half: it seeds one workspace-scoped and one org-wide
+   assignment of a role and asserts the sentinel's scope is shown one of them,
+   another workspace's scope one, the target workspace's scope both, and an
+   `rls_bypass` read with the org fence both.
 
 ## Consequences
 

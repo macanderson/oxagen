@@ -5,6 +5,7 @@ import {
   EMPLOYEE_SIZE_VALUES,
 } from "@oxagen/config";
 import { registerCapability } from "../registry";
+import { workspaceSlug } from "../workspace-slug";
 
 /**
  * Top-level route segments an organization slug may not take. An org at
@@ -51,27 +52,12 @@ export const RESERVED_ORG_SLUGS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Org-level route segments a workspace slug may not take: a workspace at
- * `/{org}/{slug}` would shadow `/{org}/<segment>`. The set is the union of the
- * rev1 org pages (`api-keys`, `billing`, `audit`) and the org sections of
- * `apps/app_deprecated`, which serves production until cutover.
+ * Re-exported from `../workspace-slug`, which holds the one definition and the
+ * one slug shape every workspace-slug field is built from. It stays reachable
+ * from this path because the onboarding form and this contract's own tests
+ * import it from here.
  */
-export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
-  "access",
-  "api-keys",
-  "audit",
-  "billing",
-  "dashboard",
-  "developer",
-  "governance",
-  "members",
-  "new-workspace",
-  "register",
-  "roles",
-  "security",
-  "settings",
-  "workspaces",
-]);
+export { RESERVED_WORKSPACE_SLUGS } from "../workspace-slug";
 
 const slugShape = z
   .string()
@@ -114,9 +100,8 @@ export const organizationCreateInputBase = z.object({
   workspace: z
     .object({
       name: z.string().min(1).max(120),
-      slug: slugShape.refine((s) => !RESERVED_WORKSPACE_SLUGS.has(s), {
-        message: "workspace slug is a reserved route segment",
-      }),
+      // The shared shape: reserved segments and the one spelling (#3110).
+      slug: workspaceSlug,
     })
     .default(DEFAULT_FIRST_WORKSPACE),
 });

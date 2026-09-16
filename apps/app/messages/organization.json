@@ -167,7 +167,7 @@
       "lead": "What each role allows, and who holds it.",
       "enforcement": {
         "enforced": "Oxagen checks these grants on governed calls.",
-        "recorded": "recorded, not enforced. Oxagen records these grants for the {tier} tier and allows every governed action whatever a role says."
+        "recorded": "recorded for people, enforced for agents. On the {tier} tier Oxagen allows a person every governed action whatever a role says. An agent is checked on every tier: its own grants and the grants of the person it acts for both bound what it may do."
       },
       "tableLabel": "Roles",
       "columns": {

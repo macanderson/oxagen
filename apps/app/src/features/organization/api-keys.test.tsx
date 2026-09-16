@@ -95,7 +95,7 @@ const rowFor = (key: ApiKey) => {
 };
 
 describe("API keys tabs", () => {
-  it("link People and API keys by URL, API keys marked as the current page", async () => {
+  it("link People, Roles and API keys by URL, API keys marked as the current page", async () => {
     await renderApiKeys(readOk([live]));
     const tabs = screen.getByRole("navigation", { name: "Organization" });
     const people = within(tabs).getByRole("link", { name: "People" });
@@ -104,6 +104,19 @@ describe("API keys tabs", () => {
     expect(people).not.toHaveAttribute("aria-current");
     expect(keys).toHaveAttribute("href", "/acme/api-keys");
     expect(keys).toHaveAttribute("aria-current", "page");
+  });
+
+  // This page rendered its own two-entry copy of the strip, so the Roles tab
+  // was unreachable from here the moment Roles was added (#3110). It takes the
+  // shared component now: one place decides which tabs exist, and the next tab
+  // appears on every Organization page at once.
+  it("carry Roles, the same strip every other Organization page shows", async () => {
+    await renderApiKeys(readOk([live]));
+    const tabs = screen.getByRole("navigation", { name: "Organization" });
+    const roles = within(tabs).getByRole("link", { name: "Roles" });
+    expect(roles).toHaveAttribute("href", "/acme/roles");
+    expect(roles).not.toHaveAttribute("aria-current");
+    expect(within(tabs).getAllByRole("link")).toHaveLength(3);
   });
 });
 

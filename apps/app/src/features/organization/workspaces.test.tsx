@@ -125,12 +125,18 @@ describe("ok", () => {
     );
   });
 
-  it("offers create and edit on every row, and archive only where there is something to archive (negative)", async () => {
+  // An archived workspace is offered neither control.
+  // `update_workspace_settings` refuses it (`workspace_archived`): releasing
+  // its slug would let a new workspace take it, and a direct slug match then
+  // beats the archived workspace's slug-history redirect, breaking the
+  // guarantee `archive_workspace` makes. Offering Edit on a row whose every
+  // edit is refused is a control that does nothing.
+  it("offers create, and edit and archive only on a live workspace (negative)", async () => {
     await renderWorkspaces(readOk(list));
     expect(
       screen.getByRole("button", { name: "Create a workspace" }),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Edit" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Edit" })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "Archive" })).toHaveLength(1);
   });
 });

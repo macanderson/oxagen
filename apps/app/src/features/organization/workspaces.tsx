@@ -107,10 +107,17 @@ function WorkspacesView({
               </td>
               {canEdit ? (
                 <td className={cell}>
+                  {/* An archived workspace is a record, not a thing to
+                      edit: `update_workspace_settings` refuses it
+                      (`workspace_archived`), because releasing its slug would
+                      break the redirect `archive_workspace` promises. So it
+                      is offered neither control. */}
                   <div className="flex flex-wrap gap-2">
-                    <EditWorkspace org={org} workspace={workspace} />
                     {workspace.archivedAt === null ? (
-                      <ArchiveWorkspace org={org} workspace={workspace} />
+                      <>
+                        <EditWorkspace org={org} workspace={workspace} />
+                        <ArchiveWorkspace org={org} workspace={workspace} />
+                      </>
                     ) : null}
                   </div>
                 </td>

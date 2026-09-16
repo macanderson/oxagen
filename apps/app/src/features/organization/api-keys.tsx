@@ -1,5 +1,5 @@
 // Organization › API keys (ARCHITECTURE.md §1.2): every key the organization
-// holds, from list_api_keys, under the tabs that link People and API keys. The
+// holds, from list_api_keys, under the shared Organization tabs. The
 // contract returns no secret and no hash, so the table prints the prefix that
 // identifies a key on sight and the instants of its life, and nothing that
 // could be exchanged for access. A refused or failed read replaces the table;
@@ -9,12 +9,11 @@ import type { ApiKey } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { OrgCtx, OrgRole } from "@/server/viewer";
-import { routes } from "@/shared/safe-path";
 import { mono } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
-import { RouteTabs } from "@/ui/route-tabs";
 import { cell, Table } from "@/ui/table";
 import { DateCell, emptyLine } from "./parts";
+import { OrganizationTabs } from "./tabs";
 
 // The expiry clock starts from the instant the read returned, the way Fleet's
 // approval clock does (`features/fleet/fleet.tsx`) — one instant for the whole
@@ -57,21 +56,10 @@ function ApiKeysView({
   const t = useTranslations("organization");
   return (
     <div className="flex flex-col gap-6">
-      <RouteTabs
-        label={t("tabs.label")}
-        tabs={[
-          {
-            to: routes.people(orgSlug),
-            label: t("tabs.people"),
-            current: false,
-          },
-          {
-            to: routes.apiKeys(orgSlug),
-            label: t("tabs.apiKeys"),
-            current: true,
-          },
-        ]}
-      />
+      {/* The shared strip, not a local copy of it: a hand-rolled two-entry
+          list here left the Roles tab unreachable from this page the moment
+          Roles was added (#3110). One component owns which tabs exist. */}
+      <OrganizationTabs org={orgSlug} current="apiKeys" />
       {read.ok ? (
         <Keys keys={read.value} now={now} />
       ) : read.reason === "denied" ? (

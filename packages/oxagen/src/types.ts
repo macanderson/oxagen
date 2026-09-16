@@ -385,11 +385,23 @@ export type PlanTier = "free" | "build" | "scale" | "enterprise";
  * `invoke` enters a tenant scope for every scoped capability, and
  * `runInTenantScope` asserts both ids are uuids, so a surface that has an org
  * but no workspace cannot pass `""`: the call is refused with a
- * `TenantScopeError` before any handler runs. Organization-scoped tables carry
- * `org_only` RLS policies and ignore the workspace GUC, so a uuid-shaped
- * constant that names no real workspace satisfies the scope without widening
- * anything. Every surface builder uses this one constant: `apps/app`'s kernel
- * seam and `apps/api`'s `capabilityContext` when a route needs no workspace.
+ * `TenantScopeError` before any handler runs. This uuid-shaped constant names
+ * no workspace, so it satisfies the assertion without widening anything.
+ *
+ * Whether it is SOUND for a given table is a property of the table, not of the
+ * capability (ADR-068): `packages/database/src/tenant-policy.manifest.ts`
+ * records each one's class, and only `org_only` genuinely ignores the
+ * workspace GUC. A `standard` or `workspace_only` table compares the row's
+ * `workspace_id` against it and raises `42501` — which is not `23505`, so it
+ * escapes an `isUniqueViolation` catch and surfaces as a 500. A
+ * `workspace_nullable` table is worse: it raises nothing and simply hides
+ * every row carrying a real workspace, so a check-then-act reads zero. A
+ * capability reached under this sentinel that touches any of those three must
+ * first re-enter the target workspace's scope, or read org-wide through
+ * `withSystemDb` with an explicit `org_id` fence.
+ *
+ * Every surface builder uses this one constant: `apps/app`'s kernel seam and
+ * `apps/api`'s `capabilityContext` when a route needs no workspace.
  */
 export const ORG_ONLY_WORKSPACE_ID = "00000000-0000-0000-0000-000000000000";
 

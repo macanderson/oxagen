@@ -168,10 +168,60 @@ describe("org.roles", () => {
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: iamRoleList,
-      input: { includeGrants: true },
+      // The bounds are sent: with neither, the read took the contract's 100
+      // default and silently dropped every role past it (#3110).
+      input: { includeGrants: true, limit: 200, offset: 0 },
+      page: "organization",
+    });
+    expect(kernelRead).toHaveBeenCalledOnce();
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  // The Roles section is the organization's whole catalogue and has no paging
+  // control, so a role on a later page is a role nobody can see, edit or
+  // delete. The read walks the pages instead.
+  it("walks every page and hands the section all of the roles", async () => {
+    const second = { ...roleRow, id: "rol_2", name: "agent.deploy" };
+    kernelRead
+      .mockResolvedValueOnce(readOk({ ...rolesOut, hasMore: true, total: 2 }))
+      .mockResolvedValueOnce(
+        readOk({
+          ...rolesOut,
+          roles: [second],
+          hasMore: false,
+          total: 2,
+          offset: 200,
+        }),
+      );
+    const read = await org.roles(ctx);
+    expect(read.ok).toBe(true);
+    if (!read.ok) throw new Error("expected an ok read");
+    expect(read.value.roles.map((r) => r.name)).toEqual([
+      "agent.release",
+      "agent.deploy",
+    ]);
+    expect(kernelRead).toHaveBeenNthCalledWith(2, ctx, {
+      contract: iamRoleList,
+      input: { includeGrants: true, limit: 200, offset: 200 },
       page: "organization",
     });
     expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("passes a refusal on a later page through rather than showing a partial catalogue (negative)", async () => {
+    const denied = { ok: false, reason: "denied", permission: "org.admin" };
+    kernelRead
+      .mockResolvedValueOnce(readOk({ ...rolesOut, hasMore: true, total: 2 }))
+      .mockResolvedValueOnce(denied);
+    expect(await org.roles(ctx)).toEqual(denied);
+  });
+
+  it("stops walking rather than looping for ever when hasMore never clears (negative)", async () => {
+    kernelRead.mockResolvedValue(readOk({ ...rolesOut, hasMore: true }));
+    const read = await org.roles(ctx);
+    expect(read.ok).toBe(true);
+    // The ceiling in org.ts: 40 pages, then it shows what it has.
+    expect(kernelRead).toHaveBeenCalledTimes(40);
   });
 
   it("passes a denied read through (negative)", async () => {

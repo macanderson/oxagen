@@ -189,7 +189,7 @@ describe("whether these grants are resolved", () => {
     );
   });
 
-  it("says they are recorded and not enforced for a tier the resolver skips, and still offers the editor", async () => {
+  it("says a person's grants are recorded and an agent's are enforced, for a tier the resolver skips, and still offers the editor", async () => {
     await renderRoles(
       readOk(
         roleCatalog({
@@ -201,8 +201,13 @@ describe("whether these grants are resolved", () => {
     const line = screen
       .getByRole("region", { name: "Roles" })
       .querySelector('[data-enforced="false"]');
-    expect(line).toHaveTextContent("recorded, not enforced");
+    expect(line).toHaveTextContent("recorded for people, enforced for agents");
     expect(line).toHaveTextContent("free");
+    // checkIAM resolves an agent principal BEFORE the tier fast-path
+    // (packages/iam/src/check-iam.ts), so the older wording — every governed
+    // action allowed whatever a role says — was false for exactly the roles
+    // this page edits.
+    expect(line).toHaveTextContent("checked on every tier");
     // No control on this page is gated on a tier (maintainer decision, 2026-09-15).
     expect(
       screen.getByRole("button", { name: "Create role" }),

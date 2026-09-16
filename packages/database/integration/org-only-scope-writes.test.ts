@@ -9,18 +9,28 @@
  *
  * ADR-068 justified the sentinel on the tables an org-only call was expected to
  * touch — `workspace.workspaces`, `iam.roles`, `iam.role_grants` — all `org_only`
- * in POLICY_MANIFEST, and all of which genuinely ignore the workspace GUC. Two
- * writes reachable from an org-only scope do not stay inside that set:
+ * in POLICY_MANIFEST, and all of which genuinely ignore the workspace GUC. Three
+ * capabilities reachable from an org-only scope do not stay inside that set:
  *
  *   • `update_workspace_settings` inserts into `workspace.workspace_slug_history`
  *     on every slug change. That table is `standard`.
  *   • `create_workspace` bootstraps `workspace.workspace_users` (`workspace_only`),
  *     `agent.agents` and `environments.environments` (`standard`).
+ *   • `delete_role` counts a role's holders in `iam.principal_role_assignments`,
+ *     which is `workspace_nullable`.
  *
  * `standard` and `workspace_only` policies compare the row's `workspace_id`
  * against `app.current_workspace_id`, so under the sentinel every one of those
  * INSERTs is refused with SQLSTATE 42501. It is NOT 23505, so it escapes the
  * `isUniqueViolation` classifiers those handlers catch and surfaces as a 500.
+ *
+ * `workspace_nullable` fails differently and more quietly: its predicate admits
+ * a row when `workspace_id IS NULL` or it matches the GUC, so under the sentinel
+ * a READ is simply answered the org-wide rows and nothing else. No error, a
+ * number that is too small, and `delete_role` acting on it — the role and its
+ * grants deleted out from under live assignments. The fix for a read like that
+ * is not a scope to re-enter (there is no single workspace the question is
+ * about) but `withSystemDb` with the `org_id` fence written out.
  *
  * This suite is the witness. The "refused" cases are what today's org-only
  * callers would hit; the "accepted" cases are the same statements after the fix
@@ -48,6 +58,9 @@ const ORG = "00000000-0000-0000-0021-000000000001";
 const WS = "00000000-0000-0000-0022-000000000001";
 /** `workspace.workspace_users.user_id` carries no FK, so no user row is needed. */
 const USER = "00000000-0000-0000-0023-000000000001";
+/** Likewise `iam.principal_role_assignments.principal_id` / `.role_id`. */
+const PRINCIPAL = "00000000-0000-0000-0024-000000000001";
+const ROLE = "00000000-0000-0000-0025-000000000001";
 
 const APP_ROLE = "org_only_scope_test_role";
 
@@ -73,6 +86,10 @@ beforeAll(async () => {
   await sql.unsafe(
     `GRANT SELECT, INSERT, DELETE ON workspace.workspace_users TO "${APP_ROLE}"`,
   );
+  await sql.unsafe(`GRANT USAGE ON SCHEMA iam TO "${APP_ROLE}"`);
+  await sql.unsafe(
+    `GRANT SELECT, INSERT, DELETE ON iam.principal_role_assignments TO "${APP_ROLE}"`,
+  );
 
   await sql.begin(async (tx) => {
     await tx`SELECT set_config('app.rls_bypass', 'on', true)`;
@@ -90,17 +107,36 @@ beforeAll(async () => {
         (${WS}, 'oos_ws', ${ORG}, 'OrgOnly WS', 'oos-ws', 'ooswa')
       ON CONFLICT (id) DO NOTHING
     `;
+    // Two live holders of one role: one scoped to the workspace, one org-wide.
+    // Neither carries an FK (principal_id and role_id are bare uuids), so no
+    // iam.principals or iam.roles row is needed — the question here is what the
+    // POLICY shows, not what the rows mean.
+    await tx`
+      INSERT INTO iam.principal_role_assignments
+        (public_id, principal_id, role_id, org_id, workspace_id)
+      VALUES
+        ('pra_oos_ws',  ${PRINCIPAL}, ${ROLE}, ${ORG}, ${WS}),
+        ('pra_oos_org', ${PRINCIPAL}, ${ROLE}, ${ORG}, NULL)
+      ON CONFLICT (public_id) DO NOTHING
+    `;
   });
 });
 
 afterAll(async () => {
   await sql.begin(async (tx) => {
     await tx`SELECT set_config('app.rls_bypass', 'on', true)`;
+    await tx`DELETE FROM iam.principal_role_assignments WHERE org_id = ${ORG}`;
     await tx`DELETE FROM workspace.workspace_slug_history WHERE org_id = ${ORG}`;
     await tx`DELETE FROM workspace.workspace_users WHERE workspace_id = ${WS}`;
     await tx`DELETE FROM workspace.workspaces WHERE org_id = ${ORG}`;
     await tx`DELETE FROM org.organizations WHERE id = ${ORG}`;
   });
+  await sql
+    .unsafe(`REVOKE ALL ON iam.principal_role_assignments FROM "${APP_ROLE}"`)
+    .catch(() => undefined);
+  await sql
+    .unsafe(`REVOKE USAGE ON SCHEMA iam FROM "${APP_ROLE}"`)
+    .catch(() => undefined);
   await sql
     .unsafe(`REVOKE ALL ON workspace.workspace_slug_history FROM "${APP_ROLE}"`)
     .catch(() => undefined);
@@ -222,5 +258,51 @@ describe("an org-only scope and the tables an org-only write reaches", () => {
       return { history: history?.n, members: members?.n };
     });
     expect(written).toEqual({ history: "1", members: "1" });
+  });
+
+  // The third class, which ADR-068 did not reason about because the two known
+  // cases were writes. `iam.principal_role_assignments` is `workspace_nullable`:
+  // its USING clause shows a row only when workspace_id IS NULL or equals
+  // app.current_workspace_id. Under the org-only sentinel — which names no
+  // workspace — every assignment scoped to a REAL workspace is simply absent
+  // from the result. Nothing raises. A read that counts is answered a number
+  // that is too small, and a check-then-act on that number acts.
+  //
+  // `delete_role` was exactly that: it counted the role's holders, saw the
+  // org-wide one only, and for a workspace-scoped custom role saw none at all —
+  // then deleted the role and its grants out from under live assignments. The
+  // fix reads the count through withSystemDb with an explicit org fence, the
+  // way `list_iam_roles` already did.
+  describe("a workspace_nullable table hides rather than refuses", () => {
+    const countAssignments = (tx: postgres.TransactionSql) =>
+      tx<{ n: string }[]>`
+        SELECT count(*)::text AS n FROM iam.principal_role_assignments
+        WHERE org_id = ${ORG} AND role_id = ${ROLE}
+      `;
+
+    it("shows the org-wide assignment and hides the workspace-scoped one under the sentinel", async () => {
+      const [row] = await inScope(ORG, ORG_ONLY_WORKSPACE_ID, countAssignments);
+      // Two holders exist. One is visible. Nothing was refused.
+      expect(row?.n).toBe("1");
+    });
+
+    it("hides the other workspace's assignment from a workspace scope too", async () => {
+      const other = "00000000-0000-0000-0022-000000000009";
+      const [row] = await inScope(ORG, other, countAssignments);
+      expect(row?.n).toBe("1");
+    });
+
+    it("shows both to the scope that names the workspace", async () => {
+      const [row] = await inScope(ORG, WS, countAssignments);
+      expect(row?.n).toBe("2");
+    });
+
+    it("shows both to an rls_bypass read with the org fence, which is what the fix uses", async () => {
+      const [row] = await sql.begin(async (tx) => {
+        await tx`SELECT set_config('app.rls_bypass', 'on', true)`;
+        return countAssignments(tx);
+      });
+      expect(row?.n).toBe("2");
+    });
   });
 });

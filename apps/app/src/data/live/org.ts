@@ -46,6 +46,16 @@ function view<S extends z.ZodType>(
   return readError("record_unmappable", 502);
 }
 
+/** The largest page `list_iam_roles` allows, so the walk below is the shortest one. */
+const ROLE_PAGE = 200;
+/**
+ * A stop on the walk. 40 pages is 8,000 roles — orders of magnitude past any
+ * real permission model — so reaching it means the contract stopped clearing
+ * `hasMore`, and looping for ever on a server render is worse than showing the
+ * catalogue up to here.
+ */
+const ROLE_PAGE_CEILING = 40;
+
 export const org: DataSource["org"] = {
   async members(ctx) {
     const read = await kernelRead(ctx, {
@@ -68,13 +78,45 @@ export const org: DataSource["org"] = {
   },
 
   async roles(ctx) {
-    const read = await kernelRead(ctx, {
+    // `list_iam_roles` pages, and the read used to send neither bound — so it
+    // took the contract's 100 default and the mapper dropped `total` and
+    // `hasMore` with it. The Roles section has no paging control and is not
+    // meant to have one: it is the organization's whole catalogue, and a role
+    // past the first page is a role nobody can see, edit or delete. So the
+    // read asks for the largest page the contract allows and walks the rest,
+    // and the section is handed every role there is.
+    const first = await kernelRead(ctx, {
       contract: iamRoleList,
-      input: { includeGrants: true },
+      input: { includeGrants: true, limit: ROLE_PAGE, offset: 0 },
       page: "organization",
     });
-    if (!read.ok) return read;
-    return view(ctx.orgId, RoleCatalog, toRoleCatalog(read.value), "org.roles");
+    if (!first.ok) return first;
+    const roles = [...first.value.roles];
+    let hasMore = first.value.hasMore;
+    // `catalog` and `enforcement` are properties of the organization, not of
+    // the page, so the first page's are the whole read's.
+    for (let page = 1; hasMore && page < ROLE_PAGE_CEILING; page += 1) {
+      // Serial by necessity: a page's offset is the previous page's, and
+      // `total` is known only from a page, so there is nothing to fan out.
+      const next = await kernelRead(ctx, {
+        contract: iamRoleList,
+        input: {
+          includeGrants: true,
+          limit: ROLE_PAGE,
+          offset: page * ROLE_PAGE,
+        },
+        page: "organization",
+      });
+      if (!next.ok) return next;
+      roles.push(...next.value.roles);
+      hasMore = next.value.hasMore;
+    }
+    return view(
+      ctx.orgId,
+      RoleCatalog,
+      toRoleCatalog({ ...first.value, roles }),
+      "org.roles",
+    );
   },
 
   async workspaces(ctx) {

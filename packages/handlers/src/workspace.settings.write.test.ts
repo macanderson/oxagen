@@ -107,6 +107,9 @@ const EXISTING = {
   name: "Research",
   slug: "research",
   description: "old",
+  // The handler selects archivedAt and refuses an archived workspace, so the
+  // row a live workspace returns carries the null.
+  archivedAt: null,
 };
 
 const refusal = async (p: Promise<unknown>) => {
@@ -464,6 +467,51 @@ describe("workspace.settings.write handler", () => {
     expect(insertRow.newSlug).toBe("new-slug");
     expect(insertRow.orgId).toBe(CTX.orgId);
     expect(insertRow.workspaceId).toBe(CTX.workspaceId);
+  });
+
+  // `archive_workspace` promises the archived workspace's slug "stays taken",
+  // and the redirect from its old slugs in workspace_slug_history rests on
+  // that promise. Nothing here checked archivedAt, so an archived workspace
+  // could be re-slugged: the (org_id, slug) unique index released the old
+  // value, a new workspace took it, and a direct slug match then beat the
+  // archived workspace's history redirect — a link to the archived workspace
+  // landed silently on a different one.
+  describe("an archived workspace", () => {
+    const ARCHIVED = {
+      ...EXISTING,
+      archivedAt: new Date("2026-03-04T05:06:07.000Z"),
+    };
+
+    it("is refused a re-slug", async () => {
+      mocks.tenant.roleName = "Admin";
+      mocks.findFirst.mockResolvedValueOnce(ARCHIVED);
+      expect(
+        await refusal(workspaceSettingsWriteHandler({ slug: "reused" }, CTX)),
+      ).toEqual({ code: "conflict", reason: "workspace_archived" });
+    });
+
+    it("is refused every other edit too, and nothing is written", async () => {
+      mocks.tenant.roleName = "Admin";
+      mocks.findFirst.mockResolvedValueOnce(ARCHIVED);
+      expect(
+        await refusal(workspaceSettingsWriteHandler({ name: "Renamed" }, CTX)),
+      ).toEqual({ code: "conflict", reason: "workspace_archived" });
+      expect(mocks.insertValues).not.toHaveBeenCalled();
+      expect(mocks.set).not.toHaveBeenCalled();
+    });
+
+    it("names the instant it was archived, as archive_workspace does", async () => {
+      mocks.tenant.roleName = "Admin";
+      mocks.findFirst.mockResolvedValueOnce(ARCHIVED);
+      const err: unknown = await workspaceSettingsWriteHandler(
+        { slug: "reused" },
+        CTX,
+      ).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect((err as Error).message).toContain("2026-03-04T05:06:07.000Z");
+    });
   });
 
   // The regression this file exists to hold (#3029, ADR-068). The app's
