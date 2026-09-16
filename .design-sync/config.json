@@ -1,0 +1,8 @@
+{
+  "shape": "storybook",
+  "pkg": "@oxagen/ui",
+  "globalName": "OxagenUI",
+  "entry": "packages/ui/src/index.ts",
+  "storybookStatic": ".design-sync/sb-reference",
+  "storybookConfigDir": "packages/ui/.storybook"
+}
