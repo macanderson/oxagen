@@ -51,6 +51,7 @@ const source = {
   },
   org: { members: vi.fn() },
   audit: { events: vi.fn(), exportEvents: vi.fn() },
+  steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
 };
 
 beforeEach(() => {

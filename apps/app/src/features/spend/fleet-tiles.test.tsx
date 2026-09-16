@@ -60,6 +60,7 @@ const source: DataSource = {
   },
   org: { members: refuse },
   audit: { events: refuse, exportEvents: refuse },
+  steering: { records: refuse, proposals: refuse, contextPr: refuse },
 };
 
 function spend(over: Partial<FleetSpend> = {}): Read<FleetSpend> {

@@ -34,6 +34,18 @@ Read those three together and the mechanism is clear. The model is not getting s
 
 Those discarded artifacts are exactly what a reviewer would want.
 
+<Flow
+  title="The loop every repair result shares"
+  steps={[
+    { label: "Generate", detail: "A candidate patch" },
+    { label: "Execute", detail: "Run the tests against the tree" },
+    { label: "Verdict", detail: "Exit code, stack trace, the hunk that failed", emph: true },
+    { label: "Revise", detail: "The next attempt reads the verdict" },
+  ]}
+  loop="repeat until the gate passes"
+  caption="Self-Debugging, ChatRepair, and Reflexion all feed an executable verdict back into the model. Step 3 is the artifact most harnesses throw away."
+/>
+
 ## Sampling is where the determinism goes
 
 The benchmark literature has been transparent about this for five years, in the metric itself.
@@ -41,6 +53,19 @@ The benchmark literature has been transparent about this for five years, in the 
 Codex scored 28.8% pass@1 on HumanEval and 70.2% pass@100.[^4] The gap between those numbers is not a footnote, it is most of the measured capability. A large share of what a model can do is available only through repeated sampling. In a benchmark you keep the sample that passed. In your repository you keep the sample that ran, and you have no oracle telling you it was the good one.
 
 Turning the temperature down does not close this. Ouyang and colleagues studied 829 code generation problems across three benchmarks and found that the proportion of tasks producing no identical test output across repeated requests was 75.76% on CodeContests, 51.00% on APPS, and 47.56% on HumanEval.[^5] They also found that setting temperature to zero reduces nondeterminism without eliminating it.[^5] Same prompt, same model, same repository, different patch.
+
+<Bars
+  title="Tasks with no identical test output across repeated requests"
+  unit="%"
+  max={100}
+  head={["Benchmark", "Share of tasks"]}
+  data={[
+    { label: "CodeContests", value: 75.76 },
+    { label: "APPS", value: 51, display: "51.00%" },
+    { label: "HumanEval", value: 47.56 },
+  ]}
+  caption="Source: Ouyang, Zhang, Harman, and Wang (2023), across 829 code generation problems. Setting temperature to zero reduces the nondeterminism without removing it."
+/>
 
 So nondeterminism is not a defect to engineer away at the model layer. It is a property of the system, and the engineering response is to record which sample you got rather than to pretend you can predict it.
 

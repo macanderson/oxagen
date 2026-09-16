@@ -45,6 +45,7 @@ export type PageKey =
   | "billing"
   | "spend"
   | "audit"
+  | "steering"
   | "shell";
 
 type PageFailure = {
@@ -86,6 +87,12 @@ export const PAGE_FAILURES = {
   audit: {
     error: { code: "audit_store_unavailable", status: 503 },
     permission: "org.admin",
+  },
+  // The published records and the proposals are one record index; a member
+  // without the workspace's steering read is denied on it.
+  steering: {
+    error: { code: "record_index_unavailable", status: 503 },
+    permission: "steering.read",
   },
   // The shell's one read fails with the control plane and needs organization
   // membership alone.

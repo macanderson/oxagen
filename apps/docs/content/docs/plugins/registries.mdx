@@ -1,42 +1,42 @@
 ---
 title: MCP server registries
-description: Add and manage MCP server registries so the marketplace automatically surfaces every server they publish.
+description: Add and manage MCP server registries so the marketplace lists every server they publish.
 ---
 
 ## What is a registry?
 
-An **MCP server registry** is an HTTP endpoint that implements the MCP Registry OpenAPI specification (`/v0.1/servers`). When you add a registry to a workspace, every server it publishes appears in the **MCP Servers** tab of the marketplace. Servers from the registry consume no resources until you explicitly install one.
+An **MCP server registry** is an HTTP endpoint that implements the MCP Registry OpenAPI specification (`/v0.1/servers`). When you add a registry to a workspace, every server it publishes appears in **Marketplace → Agent Tools → MCP Servers**. A listed server uses no resources until you install it.
 
-You install individual servers the same way you install any other plugin: browse the marketplace, select the server, and install it. Registries are the discovery layer; installation is always a separate explicit step.
+You install a server the same way you install any other plugin: browse the marketplace, select the server, and install it. Registries are how you discover servers. Installation is always a separate, explicit step.
 
 ## Default registry
 
-Every new workspace is seeded with the **Official MCP Registry**:
+Oxagen seeds every new workspace with the **Official MCP Registry**:
 
 ```
 https://registry.modelcontextprotocol.io
 ```
 
-This registry is published by the MCP project and lists a broad catalog of community and vendor MCP servers. It is set as the workspace default at workspace creation and can be removed if you don't need it.
+The MCP project publishes this registry. It lists a broad catalog of community and vendor MCP servers. It is the workspace default at creation, and you can remove it if you do not need it.
 
 ## Registries are workspace-scoped
 
-Each workspace manages its own registry list independently. Adding a registry in one workspace has no effect on other workspaces in your org. Registry settings live at **Workspace settings → Plugins → Registries**.
+Each workspace keeps its own registry list. Adding a registry in one workspace has no effect on other workspaces in your org. Manage registries under **Settings → MCP Registries**.
 
 ## The single-default rule
 
 Every workspace has exactly one default registry at all times:
 
-- **First registry added** is automatically the default.
-- **If you remove the default** and other registries remain, the most recently added registry becomes the new default automatically.
-- **If you have exactly one registry**, it is the default and cannot be changed. Add a second registry first if you need to swap.
-- **If you remove all registries**, there is no default and the marketplace shows only servers installed directly by URL.
+- **The first registry you add** becomes the default.
+- **If you remove the default** and other registries remain, the most recently added registry becomes the new default.
+- **If you have exactly one registry**, it is the default and you cannot change that. Add a second registry first if you need to swap.
+- **If you remove every registry**, there is no default, and the marketplace shows only servers installed directly by URL.
 
 There is no manual "Set as default" control.
 
 ## Adding a registry
 
-The platform calls `{base_url}/v0.1/servers`: enter only the host root, without a path suffix.
+The platform calls `{base_url}/v0.1/servers`, so enter only the host root, with no path suffix.
 
 **Example registry URLs:**
 
@@ -45,29 +45,29 @@ https://registry.modelcontextprotocol.io
 https://registry.example.com
 ```
 
-1. Go to **Workspace settings → Plugins → Registries**.
+1. Go to **Settings → MCP Registries**.
 2. Click **Add registry**.
 3. Enter a display name and the base URL.
 4. Click **Add registry** to confirm.
 
-The registry is enabled immediately. Its servers appear in the **MCP Servers** tab of the marketplace. If the registry is unreachable, an error is shown and no servers are listed from it until connectivity is restored.
+The registry is enabled immediately, and its servers appear in the **MCP Servers** tab of the marketplace. If the registry is unreachable, the page shows an error, and the marketplace lists none of its servers until the registry answers again.
 
 ## Removing a registry
 
-1. Go to **Workspace settings → Plugins → Registries**.
+1. Go to **Settings → MCP Registries**.
 2. Click the trash icon next to the registry.
 3. Confirm the removal.
 
-Removing a registry removes its servers from the marketplace view for this workspace. Any servers you have already installed from that registry remain installed and are not automatically uninstalled.
+Removing a registry removes its servers from this workspace's marketplace view. Servers you already installed from that registry stay installed.
 
-If the removed registry was the default and other registries remain, the most recently added registry is promoted to default automatically.
+If the removed registry was the default and other registries remain, Oxagen promotes the most recently added registry to default.
 
 ## Role requirements
 
 | Action | Required role |
 |---|---|
-| View registries | Workspace Member, Owner, or Viewer; or Org Owner/Admin |
+| View registries | Workspace Member, Owner, or Viewer, or Org Owner/Admin |
 | Add a registry | Workspace Owner or Org Owner/Admin |
 | Remove a registry | Workspace Owner or Org Owner/Admin |
 
-Workspace Admin is not granted view access to registries by default.
+The default roles do not let a Workspace Admin view registries.

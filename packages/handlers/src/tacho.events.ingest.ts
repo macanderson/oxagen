@@ -16,6 +16,12 @@
 // on a root session emits `cost/run.sealed` so the rollup job rebuilds the
 // run's `cost.run_totals` row from its frames (ADR-060 §3).
 //
+// Proof (ADR-064): each fresh `proof.observed` frame writes its verdict row
+// (lib/proof.ts) under the run it is part of, the root session named by its
+// `root_session_uuid`, whichever session's chain carried it. A verdict reaching
+// a root sealed before it asks the rollup for the run's row again, so the row
+// carries it.
+//
 // Bodies (ADR-058): a batch may ship the bytes a frame's `content.digest`
 // names. The host is resolved first (a revoked, expired or mismatched host
 // writes nothing), then the control plane verifies each body against the
@@ -31,6 +37,8 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
 import { schema, withTenantDb } from "@oxagen/database";
+import { HandlerError } from "@oxagen/oxagen/handler-error";
+import { PROOF_OBSERVED_KIND } from "@oxagen/run-evidence";
 import { type TachoEvent, verifyChain } from "@oxagen/tacho";
 import {
   insertTachoEvents,
@@ -38,10 +46,11 @@ import {
   type TachoEventInsert,
 } from "@oxagen/telemetry";
 import { recordSpend } from "@oxagen/billing";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { unlockOnboardingGate } from "./lib/onboarding";
 import { eventClient } from "./event-client";
+import { recordProofFrames } from "./lib/proof";
 import {
   type TachoHostRow,
   controlEnvelope,
@@ -508,7 +517,9 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     // What the batch changed about spend: cost each session added, and the
     // root sessions it sealed. Both are acted on after the transaction.
     const spendDeltas: { micros: number; at: Date }[] = [];
-    const sealedRoots: string[] = [];
+    const rollupRoots: string[] = [];
+    // The batch's fresh `proof.observed` frames, by the root session they belong to.
+    const proofsByRoot = new Map<string, TachoEvent[]>();
     let newSessions = 0;
     // The first root session this batch opened: the run the onboarding gate
     // records when this is the organization's first frame (#2967).
@@ -738,6 +749,12 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         await rollupFiles(tx, ctx, sessionId, fresh, now);
         await rollupCommands(tx, ctx, sessionId, fresh, now);
       }
+      for (const event of fresh) {
+        if (event.kind !== PROOF_OBSERVED_KIND) continue;
+        const frames = proofsByRoot.get(event.root_session_uuid) ?? [];
+        frames.push(event);
+        proofsByRoot.set(event.root_session_uuid, frames);
+      }
       if (delta.totalCostMicros > 0)
         spendDeltas.push({ micros: delta.totalCostMicros, at: now });
       if (
@@ -745,7 +762,41 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         sessionRow.parentSessionUuid === null &&
         "sealedAt" in terminalColumns
       )
-        sealedRoots.push(sessionRow.publicId);
+        rollupRoots.push(sessionRow.publicId);
+    }
+
+    // Every session in the batch has its row now, so a root the batch opened
+    // resolves. A root sealed before the verdict already has its cost row and
+    // is rebuilt to carry it. Each witness run the rows name is rebuilt too:
+    // its row names the worker's operator only once a verdict row links it to
+    // the worker, and it usually sealed before that.
+    for (const [rootSessionUuid, frames] of proofsByRoot) {
+      const root = await tx.query.tachoSessions.findFirst({
+        where: and(
+          eq(schema.tachoSessions.orgId, ctx.orgId),
+          eq(schema.tachoSessions.workspaceId, ctx.workspaceId),
+          eq(schema.tachoSessions.sessionUuid, rootSessionUuid),
+          isNull(schema.tachoSessions.parentSessionUuid),
+        ),
+        columns: { publicId: true, sealedAt: true },
+      });
+      if (!root)
+        throw new HandlerError({
+          code: "conflict",
+          reason: "root_session_unrecorded",
+          message: `proof frames name root session ${rootSessionUuid}, which this workspace has not recorded`,
+        });
+      // Attempts are numbered in the order the frames were observed, across
+      // the root's chain and its subagents' chains.
+      frames.sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+      const proofs = await recordProofFrames(
+        tx,
+        { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        root.publicId,
+        frames,
+      );
+      if (proofs.written > 0 && root.sealedAt) rollupRoots.push(root.publicId);
+      rollupRoots.push(...proofs.witnessRunIds);
     }
 
     if (newSessions > 0) {
@@ -786,7 +837,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       recordedHeads,
       control,
       spendDeltas,
-      sealedRoots,
+      rollupRoots,
     };
   });
 
@@ -839,7 +890,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   // The seal event goes out after the batch's frames are in ClickHouse: the
   // rollup job reads tacho_events as soon as it receives the event, and the
   // sweep does not revisit a run whose rollup postdates its seal.
-  for (const runId of result.sealedRoots) {
+  for (const runId of new Set(result.rollupRoots)) {
     try {
       await eventClient.send({
         name: "cost/run.sealed",

@@ -1058,6 +1058,17 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./run.cost")).runCostHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_run_proof",
+    async () =>
+      (await import("./run.proof.get")).runProofHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_disclosure_grain",
+    async () =>
+      (await import("./evidence.disclosure_grain.set"))
+        .disclosureGrainSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_spend",
     async () =>
       (await import("./spend.get")).spendGetHandler as CapabilityHandlerFn,

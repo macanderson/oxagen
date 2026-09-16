@@ -1,17 +1,17 @@
 ---
 title: Governance overview
-description: How Oxagen gives your organization centralized control over AI usage, model access, and plugin governance.
+description: How Oxagen puts every person, agent, and API key under one set of rules, and keeps the answer to every request.
 ---
 
-## The shadow-AI governance problem
+## Where you are
 
-When employees use AI without organizational oversight, you lose visibility into what data is being shared, what models are being used, and what actions are being taken on behalf of your organization. Procurement, legal, and security teams are left trying to write policies for tools they cannot see.
+People across your organization already use AI tools and agents. Nobody can say what data they share, which models they call, or what they do on the organization's behalf. Procurement, legal, and security are asked to write rules for tools they cannot see.
 
-Oxagen solves this by providing a single governed platform. Every AI action, whether taken by a human in the app, an automated agent triggered by a schedule, or an MCP client in a developer's IDE, passes through the same control plane. If an action is not authorized by policy, it does not run.
+Oxagen is the agent control plane for that work. Every governed action passes through the same `invoke()` boundary, whether a person takes it in the app, an agent takes it on a schedule, or an MCP client in a developer's IDE calls it. When a task needs a capability, the agent asks. A rule answers: allowed, denied, or routed to a person. A denied action does not run, and the record keeps every answer.
 
-## The governance model
+## Three scopes
 
-Governance at Oxagen is structured around three scopes:
+Governance in Oxagen has three scopes:
 
 ```text
 Organization → governance rails, billing, global policies
@@ -19,11 +19,11 @@ Organization → governance rails, billing, global policies
           └── Principal → human, agent, or service account
 ```
 
-**The organization** is the customer entity. It owns billing, sets the outer bounds of every policy, and manages the member roster. Org-level policies can be marked `enforced`, meaning workspaces cannot override them.
+**The organization** is the customer entity. It owns billing and the member roster, and it sets the outer bounds for every workspace. The IAM resolver has an org-enforced policy tier that workspaces cannot override, but that tier is not live today. See [RBAC and roles](/docs/governance/rbac).
 
-**Workspaces** are operational units: one per team, project, or environment. Each workspace has its own member roster, model key configuration, and plugin enablement. Workspace administrators can tighten but never expand what the organization has set.
+**Workspaces** are operational units, one per team, project, or environment. Each workspace has its own member roster, model defaults, and plugin installs. A workspace can narrow what the organization allows and never widen it.
 
-**Principals** are humans, agents, and service accounts (API keys). All three are governed by the same role and grant model. An automated agent's capability grants are as visible and auditable as a human user's.
+**Principals** are people, agents, and Oxagen API keys. The same role and grant model governs all three, so an agent's grants are as visible and auditable as a person's.
 
 ## What every action passes through
 
@@ -52,34 +52,35 @@ flowchart TD
 
 Three properties of this path matter for a governance review:
 
-- **An IAM check that cannot be evaluated denies.** A database outage or resolver bug during the check fails closed with `authz_denied`; it never lets the call through.
-- **Approval is a denial with a paper trail.** A `pending_approval` outcome refuses the call now and records an access request (`arq_…`). There is no in-app screen for approving these requests yet.
-- **Every refusal is recorded.** Each denied branch writes a security event with its error code, so the audit log shows attempts, not only successful actions.
+- **An IAM check that cannot be evaluated denies.** A database outage or resolver bug during the check fails closed with `authz_denied`. It never lets the call through.
+- **A call that needs approval is refused now and recorded.** A `pending_approval` outcome refuses the call and records an access request (`arq_…`). There is no in-app screen for answering these requests yet.
+- **Every refusal is recorded.** Each denied branch writes a security event with its error code, so the audit log shows refused calls, not only allowed ones.
 
 ## Key governance controls
 
 ### Role-based access control
 
-Seven built-in human roles, four org-scoped (Owner, Admin, Compliance, Billing) and three workspace-scoped (Owner, Member, Viewer), cover the majority of enterprise access patterns. Agents get three roles of their own (Agent Observer, Agent Contributor, Agent Operator); see [Agent roles](/docs/governance/agent-roles). Roles and their grants are listed read-only under **Governance → Policies**; there is no custom-role builder yet. See [RBAC and roles](/docs/governance/rbac).
+Seven built-in human roles cover most enterprise access patterns. Four are org-scoped (Owner, Admin, Compliance, and Billing), and three are workspace-scoped (Owner, Member, and Viewer). Agents get three roles of their own (Agent Observer, Agent Contributor, and Agent Operator). See [Agent roles](/docs/governance/agent-roles). **Governance → Policies** lists roles and their grants, read-only. There is no custom-role builder yet. See [RBAC and roles](/docs/governance/rbac).
 
-### Plugin allow and deny lists
+### Plugins
 
-Every third-party plugin (MCP server, integration, content tool) must be installed at the org level before any workspace can enable it. Org admins maintain a denylist of servers that may never be installed or enabled regardless of workspace preference. See [Plugin governance](/docs/governance/plugins-governance).
+Every plugin install is workspace-scoped. A plugin installed in one workspace is not visible to any other workspace. The credential a plugin needs stays in Oxagen, held by the workspace, and no agent sees it. There is no org-level plugin denylist today. See [Plugin governance](/docs/governance/plugins-governance).
 
 ### Model governance
 
-Model access is tiered by subscription plan. Workspace administrators can configure default model selection (text, image, and video) for their workspace. Model access can be restricted per workspace: a workspace handling sensitive data can be configured to use only approved models. See [Model governance](/docs/governance/byok-and-models).
+Your subscription plan decides which models are on offer. A workspace Owner or Admin sets the workspace's default text tier and model. There is no per-workspace model allowlist yet, so a default chooses a model but does not forbid others. See [Model governance](/docs/governance/byok-and-models).
 
 ### Access reviews
 
-**Organization → Access → Reviews** lists every member with their role and last activity, with **Confirm** and **Revoke** actions. Each action writes an audit event, so the page doubles as evidence for a quarterly access review.
+**Organization → Access → Reviews** lists every member with their role and last activity, with **Confirm** and **Revoke** actions. Each action writes an audit event, so the page is also the evidence for a quarterly access review.
 
 ## What you cannot do from the app
 
-Some governance controls require your IT administrator:
+Some governance controls need your infrastructure administrator:
 
-- Changing the `TENANT_RLS_ENFORCEMENT_ENABLED` environment variable (controls database-layer RLS enforcement: currently `true` in production).
+- Changing the `TENANT_RLS_ENFORCEMENT_ENABLED` environment variable, which controls database-layer RLS enforcement (`true` in production).
 - Provisioning the non-superuser database role.
-- Configuring SIEM export destinations at the infrastructure level (webhook destinations are configured in-app).
+
+SIEM export is not available. Pull audit events into an external SIEM on a schedule with `query_audit_log`. See [Audit logging](/docs/security/audit-logging).
 
 Contact support@oxagen.ai for infrastructure-level governance changes.

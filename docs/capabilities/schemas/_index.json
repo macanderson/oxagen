@@ -1,5 +1,5 @@
 {
-  "generatedCount": 294,
+  "generatedCount": 296,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1348,6 +1348,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_run_proof",
+      "domain": "run",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -2859,6 +2869,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_disclosure_grain",
+      "domain": "evidence",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

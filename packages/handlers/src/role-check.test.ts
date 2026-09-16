@@ -48,6 +48,8 @@ const ROLE_CHECKED_CONTRACTS = [
   "open_context_pr",
   "query_audit_log",
   "export_audit_events",
+  "get_run_proof",
+  "set_disclosure_grain",
 ] as const;
 
 const AGENT_ROLE_CHECKED_CONTRACTS = [

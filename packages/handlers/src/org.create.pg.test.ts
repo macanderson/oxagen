@@ -248,7 +248,10 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
     }
     // The IAM bootstrap seeds role_grants one insert per capability role
     // (iam-provision.ts step d): 3.8 s on a loaded CI runner at app-rebuild
-    // 340420f10 and past the 5 s default on the next two runs.
+    // 340420f10 and past the 5 s default on the next two runs. The rollback
+    // assertions then add a dozen-plus more round trips, one per billing
+    // table, against a Postgres shared with every other *.pg.test.ts under
+    // coverage — so the 5 s default timed out with no assertion failing.
   }, 30_000);
 
   it("refuses a second organization on the same slug", async () => {

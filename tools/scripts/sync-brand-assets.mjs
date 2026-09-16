@@ -2,7 +2,7 @@
 /**
  * Pull the Oxagen house brand system into every frontend in this repo.
  *
- * The house kit (macanderson/oxagen-house-brand) generates every mark, icon,
+ * The house kit (oxagenai/oxagen-brand) generates every mark, icon,
  * social card and spinner from `build/`. Nothing in it is drawn by hand, so
  * nothing here is copied by hand either: this script is the one seam between
  * the kit and the apps, and re-running it after a kit rebuild re-flows the
@@ -11,7 +11,7 @@
  *   node tools/scripts/sync-brand-assets.mjs [--brand <dir>] [--check]
  *
  * --brand   where the kit is checked out. Defaults to $OXAGEN_HOUSE_BRAND,
- *           then ../oxagen-house-brand beside this repo.
+ *           then ../oxagen-house-brand beside this repo (the kit's former name).
  * --check   verify the vendored files match what the kit would emit, write
  *           nothing, exit non-zero on drift. This is what CI runs.
  *
@@ -277,6 +277,26 @@ function staticSurface(root, brand) {
   );
 }
 
+/**
+ * The branding skill: positioning, voice, vocabulary, worked examples. It is
+ * authored in the kit beside the marks it describes and vendored here so the
+ * agents working this tree read the same words the ads and the site carry.
+ * Edit it in the kit, run the sync, commit both; `--check` fails on drift.
+ */
+function skill() {
+  const walk = (rel) => {
+    for (const entry of readdirSync(join(BRAND, rel), {
+      withFileTypes: true,
+    })) {
+      if (entry.name.startsWith(".")) continue;
+      const child = `${rel}/${entry.name}`;
+      if (entry.isDirectory()) walk(child);
+      else copy(child, `.claude/${child}`);
+    }
+  };
+  walk("skills/oxagen-branding");
+}
+
 /** The face. One copy, in @oxagen/ui, imported by every app. */
 function fonts() {
   const dir = "packages/ui/src/styles/fonts";
@@ -418,7 +438,7 @@ export const STELLA: BrandGeometry = ${JSON.stringify(data.stella, null, 2)};
 try {
   readFileSync(join(BRAND, "tokens/house-tokens.json"));
 } catch {
-  const where = `clone macanderson/oxagen-house-brand beside this repo, or set OXAGEN_HOUSE_BRAND.`;
+  const where = `clone oxagenai/oxagen-brand and point OXAGEN_HOUSE_BRAND at it (the default path is the kit's former name).`;
   if (CHECK) {
     console.log(
       `brand: SKIPPED — no house kit at ${BRAND}, so no asset was verified. ${where}`,
@@ -429,6 +449,7 @@ try {
   process.exit(2);
 }
 
+skill();
 fonts();
 tokens();
 marks();

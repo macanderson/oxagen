@@ -136,6 +136,12 @@ export const SECURITY_EVENT_TYPES = [
   "agent.suspended",
   "agent.resumed",
   "agent.retired",
+  // Witness disclosure (MC spec §8.5 invariant 3, ADR-064, #2955). The grain
+  // is how much a worker is told when a witness it cannot see fails; raising
+  // it above L0 hands the worker detail about the oracle, so only an org
+  // Owner or Admin in a signed-in session changes it. Emitted by the
+  // set_disclosure_grain handler (packages/handlers/src/evidence.disclosure_grain.set.ts).
+  "evidence.disclosure_grain_changed",
   // Governed agent runs (docs/specs/run-evidence-ingress/spec.md). These four
   // are INTEGRITY failures, not ordinary denials: each one means some part of
   // the run-evidence chain was contradicted, and none can be produced by

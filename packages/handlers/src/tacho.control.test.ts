@@ -162,20 +162,19 @@ function tableName(table: unknown): string {
   return "?";
 }
 
-function wire(db: Fake): void {
+const HOST_KEY = {
+  id: "aky_host",
+  scope: { purpose: "tacho_host_v1", host_enrollment_id: HOST_PUBLIC },
+  createdByUserId: OPERATOR.userId,
+  stellaTelemetryEnrollmentId: null,
+};
+
+function wire(db: Fake, apiKey: Record<string, unknown> = HOST_KEY): void {
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         query: {
-          apiKeys: {
-            findFirst: async () => ({
-              id: "aky_host",
-              scope: {
-                purpose: "tacho_host_v1",
-                host_enrollment_id: HOST_PUBLIC,
-              },
-            }),
-          },
+          apiKeys: { findFirst: async () => apiKey },
           tachoHosts: {
             findFirst: async () => db.hosts[0],
             findMany: async () => db.hosts,
@@ -507,6 +506,38 @@ describe("revoke_tacho_enrollment", () => {
     );
     expect(second.revokedAt).toBe("2026-09-01T00:00:00.000Z");
     expect(already.updates).toEqual([]);
+  });
+
+  it("revokes with the operator's `oxagen login` key and refuses the host's own key", async () => {
+    const db: Fake = {
+      hosts: [host()],
+      sessions: [],
+      commands: [],
+      updates: [],
+      inserts: [],
+    };
+    // HOST_KEY names a creator on purpose: its machine purpose alone must
+    // refuse it.
+    wire(db);
+    await expect(
+      tachoEnrollmentRevokeHandler({ hostEnrollmentId: HOST_PUBLIC }, MACHINE),
+    ).rejects.toThrow(/does not act for a person/);
+    expect(db.updates).toEqual([]);
+
+    wire(db, {
+      id: "aky_cli",
+      scope: {},
+      createdByUserId: OPERATOR.userId,
+      stellaTelemetryEnrollmentId: null,
+    });
+    const revoked = await tachoEnrollmentRevokeHandler(
+      { hostEnrollmentId: HOST_PUBLIC, reason: "tacho unenroll" },
+      { ...MACHINE, apiKeyId: "aky_cli" },
+    );
+    expect(revoked.status).toBe("revoked");
+    expect(db.updates.find((u) => u.table === "hosts")?.values).toMatchObject({
+      updatedByUserId: OPERATOR.userId,
+    });
   });
 });
 
