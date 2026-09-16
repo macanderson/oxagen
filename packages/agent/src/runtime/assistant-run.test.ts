@@ -656,6 +656,29 @@ describe("openAssistantRun", () => {
     ).toEqual(["engine_aborted", "turn_failed"]);
   });
 
+  it("admits a turn whose belt holds an external MCP tool", async () => {
+    // The belt names an MCP tool `mcp.<server uuid>.<tool>` and every UUID
+    // has hyphens, which the run spec's capability form does not allow. So
+    // enabling any MCP server — the ordinary documented thing — made every
+    // assistant turn fail here with `assistant_run_not_recorded`, before the
+    // engine was ever contacted. The allowlist now carries the name through
+    // unchanged, so the spec records exactly what the turn was permitted.
+    setupRun();
+    const ledger = fakeStore();
+    const mcpTool =
+      "mcp.9f3e1a2b-4c5d-6e7f-8a9b-0c1d2e3f4a5b.list_pull_requests";
+    await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      surface: "chat",
+      instruction: "a",
+      maxSteps: 1,
+      toolAllowlist: ["recall_memory", mcpTool, "file-mcp.my-server.read_file"],
+      store: ledger.store,
+    });
+    expect(ledger.runs[0]!.spec.tool_policy.allowlist).toContain(mcpTool);
+  });
+
   it("seals the attempt when the admission event cannot be appended", async () => {
     // createRun and createAttempt succeeded, so the rows exist, and the caller
     // never receives a recorder it could seal: without this the run and its

@@ -14,6 +14,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+  isExternalToolIdentity,
   // digest + canonicalization primitives
   canonicalJson,
   digestOfCanonicalJson,
@@ -825,6 +826,56 @@ describe("parseRunSpecV2 tool policy bound", () => {
       mutate(generalRaw(), "tool_policy.allowlist", names),
     );
     expect(spec.tool_policy.allowlist).toHaveLength(300);
+  });
+
+  it("accepts an externally contributed tool, which every real MCP name is", () => {
+    // The belt names an MCP tool `mcp.<server uuid>.<tool>`, and every UUID
+    // contains hyphens, which the capability-name form has none of. Before
+    // the external form existed, enabling ANY MCP server made every assistant
+    // turn fail at admission with `assistant_run_not_recorded` — a total
+    // outage reached by doing the ordinary documented thing.
+    const names = [
+      "mcp.9f3e1a2b-4c5d-6e7f-8a9b-0c1d2e3f4a5b.list_pull_requests",
+      "file-mcp.my-server.read_file",
+      "send_message",
+    ];
+    const spec = parseRunSpecV2(
+      mutate(generalRaw(), "tool_policy.allowlist", names),
+    );
+    expect(spec.tool_policy.allowlist).toEqual(names);
+    // The two forms stay apart: a reader can tell a contributed tool from a
+    // capability the platform defines, because they carry different trust.
+    expect(spec.tool_policy.allowlist.filter(isExternalToolIdentity)).toEqual([
+      "mcp.9f3e1a2b-4c5d-6e7f-8a9b-0c1d2e3f4a5b.list_pull_requests",
+      "file-mcp.my-server.read_file",
+    ]);
+  });
+
+  it("admits external tools without admitting arbitrary strings (negative)", () => {
+    // The point of a separate form rather than a looser capability regex:
+    // widening `capabilityNameSchema` to allow hyphens would have let the run
+    // spec's vocabulary accept anything, and the spec is evidence about what
+    // a run was permitted to do.
+    for (const bad of [
+      "Send_Message",
+      "../etc/passwd",
+      "http://example.com/tool",
+      "not-a-capability",
+      "mcp.-server.tool",
+      "file-mcp.srv.bad tool",
+      "MCP.Server.Tool",
+    ]) {
+      expect(() =>
+        parseRunSpecV2(mutate(generalRaw(), "tool_policy.allowlist", [bad])),
+      ).toThrow(RunSpecValidationError);
+    }
+    // Noted rather than asserted, because it is not what this change decides:
+    // a plain lowercase dotted name like `mcp.server` or `mcp..x` is accepted
+    // by the PRE-EXISTING capability form, which admits dots freely — the
+    // ADR-025 realignment leaves many contracts on dotted stems. The external
+    // form rejects both; the capability form is what lets them through, and
+    // tightening it would reject names already in the registry.
+    expect(isExternalToolIdentity("mcp..x")).toBe(true);
   });
 
   it("still refuses an unbounded allowlist and a duplicate entry (negative)", () => {

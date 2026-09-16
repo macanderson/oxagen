@@ -345,6 +345,53 @@ const capabilityNameSchema = z
   .max(128)
   .regex(/^[a-z][a-z0-9_.]*$/, "expected a lowercase capability name");
 
+/**
+ * The contributor types whose tools a run may be allowed. Both spell their
+ * tools `<prefix>.<server>.<tool>`; `mcp` names the server by its internal
+ * UUID and `file-mcp` by its configured name.
+ */
+const EXTERNAL_TOOL_PREFIXES = ["mcp", "file-mcp"] as const;
+
+/**
+ * An externally contributed tool, as the belt names it. It is a SEPARATE form
+ * from `capabilityNameSchema`, not a loosening of it, and the distinction is
+ * deliberate twice over.
+ *
+ * A platform capability is ADR-025 verb-first snake_case and has no hyphen;
+ * keeping that closed is what stops the run spec's vocabulary — which is
+ * evidence about what a run was permitted to do — from degenerating into
+ * "any string". An external tool's identity is not ours to constrain that
+ * way: every UUID contains hyphens, so admitting `mcp.<uuid>.<tool>` by
+ * widening the capability regex would have admitted everything else too.
+ *
+ * And a reader of a spec can now tell at a glance whether a run was allowed a
+ * capability the platform defines or a tool someone contributed, which carry
+ * different trust. `isExternalToolIdentity` is that test, exported so a reader
+ * does not re-derive it from the prefix.
+ */
+const externalToolNameSchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(
+    /^(?:mcp|file-mcp)\.[A-Za-z0-9][A-Za-z0-9_-]*\.[A-Za-z0-9][A-Za-z0-9._-]*$/,
+    "expected an external tool identity: <mcp|file-mcp>.<server>.<tool>",
+  );
+
+/** True for a name the belt contributed rather than the capability registry. */
+export function isExternalToolIdentity(name: string): boolean {
+  return EXTERNAL_TOOL_PREFIXES.some((p) => name.startsWith(`${p}.`));
+}
+
+/**
+ * What a run's tool allowlist may name: a platform capability, or an
+ * externally contributed tool. The two forms stay distinguishable.
+ */
+const toolIdentitySchema = z.union([
+  capabilityNameSchema,
+  externalToolNameSchema,
+]);
+
 const contextProviderIdSchema = z
   .string()
   .min(1)
@@ -481,7 +528,7 @@ export const TOOL_ALLOWLIST_MAX = 1024;
 
 export const toolPolicySchema = z
   .object({
-    allowlist: uniqueArray(capabilityNameSchema, TOOL_ALLOWLIST_MAX),
+    allowlist: uniqueArray(toolIdentitySchema, TOOL_ALLOWLIST_MAX),
     risk_ceiling: z.enum(TOOL_RISK_LEVELS),
   })
   .strict();
