@@ -66,6 +66,7 @@ async function renderPeople(
       waste: vi.fn(),
       budgets: vi.fn(),
     },
+    onboarding: { state: vi.fn(), firstFrame: vi.fn() },
     org: { members },
   };
   const view = render(

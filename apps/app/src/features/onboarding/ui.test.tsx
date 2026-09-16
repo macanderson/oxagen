@@ -175,11 +175,11 @@ describe("the wrap step", () => {
     issueEnrollmentToken.mockResolvedValue({
       ok: true,
       value: {
-        token: "oxe_1time_7qk4m2nv9xr3t8zpabcdef",
+        token: "oxe_1time_7qk4m2nv9xr3t8zpabcdefghjk",
         expiresAt: "2026-09-15T14:30:00.000Z",
         agentKey: "acme.core.release-bot",
         enrollCommand:
-          "oxagen agent enroll --token oxe_1time_7qk4m2nv9xr3t8zpabcdef",
+          "oxagen agent enroll --token oxe_1time_7qk4m2nv9xr3t8zpabcdefghjk",
       },
     });
     const user = userEvent.setup();
@@ -193,7 +193,7 @@ describe("the wrap step", () => {
       "agt_releasebot",
     );
     expect(screen.getByTestId("enrollment-token-value")).toHaveTextContent(
-      "oxe_1time_7qk4m2nv9xr3t8zpabcdef",
+      "oxe_1time_7qk4m2nv9xr3t8zpabcdefghjk",
     );
     expect(screen.getByTestId("enrollment-token")).toHaveTextContent(
       "oxagen agent enroll --token",

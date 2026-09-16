@@ -102,6 +102,7 @@ const source: DataSource = {
     incidents: vi.fn(),
   },
   spend: { byGroup, fleet: vi.fn(), drill, waste, budgets },
+  onboarding: { state: vi.fn(), firstFrame: vi.fn() },
   org: { members: vi.fn() },
 };
 

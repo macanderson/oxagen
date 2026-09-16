@@ -74,7 +74,7 @@ describe("OnboardingGate", () => {
     await renderGate({ state: { ok: true, value: onboardingGate() } });
     const banner = screen.getByTestId("onboarding-provisional");
     expect(banner).toHaveTextContent(
-      "Core platform is provisional until 29 Sep 2026",
+      "core-platform is provisional until Sep 29, 2026",
     );
     expect(banner).toHaveTextContent(
       "Steering, context records and agent definitions stay off",

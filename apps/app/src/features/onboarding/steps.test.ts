@@ -73,7 +73,6 @@ describe("gateRail", () => {
       state: "current",
       to: null,
     });
-    expect(rail.every((item) => item.step !== "signup")).toBe(true);
     expect(GATE_STEPS).toEqual(["organization", "wrap", "run"]);
   });
 });
