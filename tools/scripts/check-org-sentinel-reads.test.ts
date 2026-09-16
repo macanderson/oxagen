@@ -349,3 +349,154 @@ describe("pinsNullWorkspace", () => {
     expect(pinsNullWorkspace("securityEvents", [region])).toBe(false);
   });
 });
+
+describe("the apps/app kernel seam, where invoke() is in another file", () => {
+  const register = `registerHandler(
+    "list_api_keys",
+    async () => (await import("./api.key.list")).h,
+  );
+`;
+  const handler = `import { schema, withTenantDb } from "@oxagen/database";
+export const h = async (input, ctx) =>
+  withTenantDb((tx) =>
+    tx.select().from(schema.apiKeys).where(eq(schema.apiKeys.orgId, ctx.orgId)),
+  );
+`;
+  const contract = `export const apiKeyList = registerCapability({
+  name: "list_api_keys",
+});
+`;
+  /** A live adapter: no invoke(), no sentinel literal, just kernelRead. */
+  const adapter = `import { kernelRead } from "@/server/kernel";
+import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
+export const org = {
+  async apiKeys(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: apiKeyList,
+      input: {},
+      page: "organization",
+    });
+    return read;
+  },
+};
+`;
+
+  function tree(portsLine: string) {
+    return makeTree({
+      "packages/handlers/src/register.ts": register,
+      "packages/handlers/src/api.key.list.ts": handler,
+      "packages/oxagen/src/contracts/api.key.list.ts": contract,
+      "apps/app/src/data/ports.ts": `export interface DataSource {
+  org: {
+    ${portsLine}
+  };
+}
+`,
+      "apps/app/src/data/live/org.ts": adapter,
+    });
+  }
+
+  it("follows an OrgCtx port method through kernelRead to the handler", () => {
+    // The sentinel appears in NEITHER file: capabilityContext in
+    // src/server/kernel.ts converts an OrgCtx, and that file is not this one.
+    const { findings } = findSentinelNarrowedReads(
+      tree("apiKeys(ctx: OrgCtx): Promise<Read<ApiKey[]>>;"),
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      pass: "app-kernel-seam",
+      file: "apps/app/src/data/live/org.ts (apiKeys)",
+      capability: "list_api_keys",
+      tables: [{ table: "auth.api_keys", policyClass: "standard" }],
+    });
+  });
+
+  it("passes the same method once the port takes a WsCtx", () => {
+    // ADR-073's fix, and the check recognises it.
+    expect(
+      findSentinelNarrowedReads(
+        tree("apiKeys(ctx: WsCtx): Promise<Read<ApiKey[]>>;"),
+      ).findings,
+    ).toEqual([]);
+  });
+
+  it("drops a method name declared both ways rather than guessing", () => {
+    const { findings } = findSentinelNarrowedReads(
+      tree(
+        "apiKeys(ctx: OrgCtx): Promise<Read<ApiKey[]>>;\n    apiKeys(ctx: WsCtx): Promise<Read<ApiKey[]>>;",
+      ),
+    );
+    expect(findings).toEqual([]);
+  });
+});
+
+describe("the baseline, which ratchets down", () => {
+  const register = `registerHandler(
+    "remove_org_member",
+    async () => (await import("./org.member.remove")).h,
+  );
+`;
+  const handler = `import { schema, withTenantDb } from "@oxagen/database";
+export const h = async (input, ctx) =>
+  withTenantDb((tx) => tx.select().from(schema.apiKeys));
+`;
+  const action = `import { invoke } from "@oxagen/oxagen";
+const ORG_ONLY_WS = "${SENTINEL}";
+export async function removeMember(orgId: string, targetUserId: string) {
+  const ctx = { orgId, workspaceId: ORG_ONLY_WS, userId: null, surface: "app" };
+  return invoke("remove_org_member", { targetUserId }, ctx, { surface: "agent" });
+}
+`;
+  const waiver = (file: string) =>
+    JSON.stringify({
+      waived: [
+        { file, capability: "remove_org_member", reason: "x", fixedBy: "#1" },
+      ],
+    });
+
+  it("waives a finding it names, and says how many", () => {
+    const root = makeTree({
+      "packages/handlers/src/register.ts": register,
+      "packages/handlers/src/org.member.remove.ts": handler,
+      "apps/app/src/actions.ts": action,
+      "tools/scripts/org-sentinel-reads-baseline.json": waiver(
+        "apps/app/src/actions.ts",
+      ),
+    });
+    const out = findSentinelNarrowedReads(root);
+    expect(out.findings).toEqual([]);
+    expect(out.waived).toBe(1);
+    expect(out.staleWaivers).toEqual([]);
+  });
+
+  it("reports an entry that matches nothing, so a waiver cannot outlive its defect", () => {
+    const root = makeTree({
+      "packages/handlers/src/register.ts": register,
+      "packages/handlers/src/org.member.remove.ts": handler.replace(
+        /withTenantDb/g,
+        "withSystemDb",
+      ),
+      "apps/app/src/actions.ts": action,
+      "tools/scripts/org-sentinel-reads-baseline.json": waiver(
+        "apps/app/src/actions.ts",
+      ),
+    });
+    const out = findSentinelNarrowedReads(root);
+    expect(out.findings).toEqual([]);
+    expect(out.staleWaivers).toHaveLength(1);
+  });
+
+  it("does not waive a different site with the same capability", () => {
+    const root = makeTree({
+      "packages/handlers/src/register.ts": register,
+      "packages/handlers/src/org.member.remove.ts": handler,
+      "apps/app/src/actions.ts": action,
+      "tools/scripts/org-sentinel-reads-baseline.json": waiver(
+        "apps/app/src/somewhere-else.ts",
+      ),
+    });
+    const out = findSentinelNarrowedReads(root);
+    expect(out.findings).toHaveLength(1);
+    expect(out.staleWaivers).toHaveLength(1);
+  });
+});

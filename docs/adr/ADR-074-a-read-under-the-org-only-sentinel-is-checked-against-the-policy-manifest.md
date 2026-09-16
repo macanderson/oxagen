@@ -113,6 +113,12 @@ of it. This ADR is the enforcement.
    takes:
    - **co-located** — a `runInTenantScope({ …, workspaceId: <sentinel> })` whose
      body reaches `withTenantDb`, which is the app-page and server-action form;
+   - **waived** — a live instance whose fix belongs to another change, listed in
+     `tools/scripts/org-sentinel-reads-baseline.json` with its reason and the
+     change that closes it. The file ratchets down and cannot rot: an entry
+     matching no finding is itself an error, so a waiver cannot outlive the
+     defect it waives. One entry today — `org.apiKeys` in the rebuild, closed by
+     #3116.
    - **not scanned at all** — `*.test.ts` and `*.test.tsx`. A test naming the
      sentinel is not a production read, and a fixture that builds a sentinel ctx
      to exercise a handler is the normal way to test one. This exemption is
@@ -120,6 +126,15 @@ of it. This ADR is the enforcement.
      against `app-rebuild` when it was written, #3116's
      `apps/app/src/features/organization/actions.test.ts` is the only file that
      names the sentinel at all, and it is exempt for this reason.
+   - **the app kernel seam** — `apps/app`, the Mission Control rebuild, calls
+     `invoke()` in no page at all. A data adapter under `src/data/live/` calls
+     `kernelRead` / `kernelWrite`, and the single `invoke()` and the sentinel
+     conversion both live in `src/server/kernel.ts`, where `capabilityContext`
+     maps an `OrgCtx` to the sentinel and leaves a `WsCtx` its workspace. The
+     two halves the cross-surface pass looks for are in different files by
+     design, so it matched neither. This pass models that named seam directly —
+     `src/data/ports.ts` declares which port methods take an `OrgCtx` — rather
+     than trying to infer indirection in general.
    - **cross-surface** — a sentinel ctx handed to `invoke()`, resolved through
      `packages/handlers/src/register.ts` to the handler and the tables it reads,
      which is the form the kernel sets up and no lint rule can see, because the
@@ -174,11 +189,32 @@ including the sites no review flagged.
 | `lib/audit-query.ts` — `security.security_events` | **was membership; now Owner/Admin.** `security/audit/page.tsx` gated with `assertOrgMember`; it now uses `assertSecurityManager`, matching `query_audit_log`'s `ORG_AUDIT_ROLES` and the export route beside it, which already checked `SECURITY_MANAGER_ROLES` | shared. Not named literally by ADR-042 §2, but `emitSecurityEvent` writes it through `withSystemDb` and the governed `audit.log.query` handler reads it through `withSystemDb`: the spine is shared-plane by construction, or nothing written would ever be read |
 | `security/posture.ts` — `security.security_events`, `auth.api_keys` | **was membership; now Owner/Admin.** Not flagged in review. Counts rather than rows, so a smaller leak — but it is still every workspace's posture, and it is the SOC 2 dashboard summarising the feed above. `assertSecurityManager` | shared, as above and `auth` is named by ADR-042 §2 |
 | `developer/tokens/tokens-body.tsx` — `auth.api_keys` | **was membership; now Owner/Admin.** The three actions on the same panel already gated (`buildApiKeyCtx` → `assertOrgAdmin`); the listing did not. `list_api_keys` is high-sensitivity Owner/Admin | shared (`auth`) |
-| `developer/mcp/page.tsx` — `auth.api_keys` | **was membership; now the key is read only for an org admin.** A member keeps the page and the `$OXAGEN_API_KEY` placeholder they already saw, rather than a real prefix from another workspace | shared (`auth`) |
+| `developer/mcp/page.tsx` and `workbench/tools/mcp/page.tsx` — `auth.api_keys` | **the read is gone.** See below | n/a |
 | `developer/tokens/api-key.ts` — `auth.api_keys`, `workspace.workspaces`, `workspace.workspace_users` | already Owner/Admin: both helpers run after `buildApiKeyCtx`, which calls `assertOrgAdmin` before either | shared. `auth` is named; the two `workspace.*` tables are not named by either list, and this is org structure rather than tenant data — the base's own `new-workspace/actions.ts` creates both through `withSystemDb`. Stated as an inference from that precedent, not a citation |
 | `org.member.remove.ts` — `iam.*`, `org.org_users`, `auth.api_keys`, `workspace.*` | already Owner/Admin: this is the governed capability, and its own actor gate runs before the transaction | shared (`IAM`, `org`, `auth`; `workspace.*` as above) |
 | `billing.evidence_retention.ts` — `billing.org_billing_settings`, `billing.credit_ledger` | governed capability; kernel IAM applies | shared (`billing`) |
 | `billing.evidence_retention.ts` — `evidence.retention_policy_versions` | governed capability | **dedicated, and this is the one that was wrong.** ADR-042 §2 names evidence as tenant data. See below |
+
+### The read that should not have been fixed at all
+
+Two MCP install pages read the org's first active key to inject it into the
+client snippets. Correcting that read — one to `withSystemDb`, the other to the
+real workspace — made the page worse, and review caught it: `auth.api_keys`
+keeps only `key_prefix` and `key_hash`, so the most either page can build is
+`ox_abc••••••••`, and `buildSnippets` embeds whatever it is handed as the bearer
+credential. A copied Claude or Cursor configuration would then be *guaranteed*
+to fail authentication, where the `$OXAGEN_API_KEY` placeholder resolves to the
+secret the operator actually saved.
+
+Both reads are deleted. The raw key is shown once at creation and cannot be read
+back, so the environment variable is the only thing on that page that can be
+right, and a snippet that cannot work is worse than one that asks for the secret
+because it looks copy-pasteable.
+
+It is this PR's own failure a third time: correct the read, then print something
+that cannot be right. Worth recording because the instinct the check encourages
+— "this read is narrowed, widen it" — is not always the right move. Sometimes
+the read should not exist.
 
 ### The seam that does not exist
 
@@ -254,13 +290,23 @@ directly — so it needs the check anyway.
 - The check has blind spots, and they are stated in its header rather than left
   to be discovered: a table reached through a helper that is neither the handler
   module nor one of its direct relative imports (it follows one hop, not a call
-  graph); a ctx assembled in a file that never names the sentinel; and anything
-  outside Postgres, since Neo4j and ClickHouse scoping is a separate seam. It is
-  a net with a known mesh, not a proof. One blind spot was found by running it
-  against `main` and closed rather than documented: an `invoke()` behind a
-  helper reported nothing, because the capability is named at the helper's call
-  sites. That is the indirect fallback above, and it is why the check reports
-  twelve sites on `main` where it reported five before.
+  graph); a ctx assembled in a file that never names the sentinel; **any wrapper
+  around `invoke()` other than the two the app-kernel pass knows by name**; and
+  anything outside Postgres, since Neo4j and ClickHouse scoping is a separate
+  seam. It is a net with a known mesh, not a proof.
+
+- **Two blind spots were found by running it against a tree it was not written
+  on, and both were closed rather than documented.** Against `main`, an
+  `invoke()` behind a `readCapability(viewer, name, input)` helper reported
+  nothing, because the capability is named at the helper's call sites; that is
+  the indirect fallback, and it took `main` from five sites to twelve. Against
+  `apps/app` — the rebuild this very branch sits beside — the checker reported
+  nothing at all, because that app calls `invoke()` in no page and routes
+  everything through `kernelRead`; that is the app-kernel pass, and it found one
+  live instance the check had been blind to for a whole review cycle. **The rule
+  the two of them make is that a checker must be run against every tree it will
+  guard, not only the one it was written on.** This one was clean on
+  `app-rebuild` and blind on the app that replaces it.
 - Its co-located pass is file-scoped in one direction: a file that scopes to the
   sentinel somewhere and also reads a workspace-scoped table under a real
   workspace elsewhere is reported. That over-reports rather than under-reports,

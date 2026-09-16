@@ -33,6 +33,18 @@
  *      whose body reaches `withTenantDb`. Every `schema.<table>` named in that
  *      file must be `org_only`. This is the app-page and server-action form.
  *
+ *   C. THE APP KERNEL SEAM — `apps/app` (the Mission Control rebuild) does not
+ *      call `invoke()` in its pages at all. A data adapter under
+ *      `src/data/live/` calls `kernelRead` / `kernelWrite`, and the single
+ *      `invoke()` and the sentinel conversion both live in
+ *      `src/server/kernel.ts`, where `capabilityContext` maps an `OrgCtx` to
+ *      `ORG_ONLY_WORKSPACE_ID` and leaves a `WsCtx` its workspace. So the two
+ *      halves pass B looks for are in different files by design and it matched
+ *      neither. This pass models that named seam directly rather than trying to
+ *      infer indirection in general: `src/data/ports.ts` declares which port
+ *      methods take an `OrgCtx`, and a `kernelRead`/`kernelWrite` inside one of
+ *      those methods carries the sentinel by construction.
+ *
  *   B. CROSS-SURFACE — an `invoke(<capability>, …, ctx)` where ctx's
  *      workspaceId is the sentinel. The capability's handler is resolved
  *      through `packages/handlers/src/register.ts`, and every `schema.<table>`
@@ -48,10 +60,22 @@
  *   - A ctx whose sentinel workspaceId is assembled somewhere else and passed
  *     in as a variable this file never names.
  *   - Anything outside Postgres. Neo4j and ClickHouse scoping is separate.
+ *   - A port method that takes an `OrgCtx` and is named in `ports.ts` with a
+ *     name a `WsCtx` method also uses. Pass C drops such a name rather than
+ *     guess; there are none today.
+ *   - Any OTHER wrapper around `invoke()` that a future surface introduces.
+ *     Pass C knows two names. The lesson pass C exists for is that a checker
+ *     must be run against every tree it will guard, not only the one it was
+ *     written on — this one was clean on `app-rebuild` and blind on
+ *     `apps/app` for a whole review cycle.
  *
  * Both of those are why the fix also moved the sentinel itself into
  * `@oxagen/tenancy`, where its doc comment states the rule once instead of
  * thirty-odd local copies restating it unevenly. See ADR-074.
+ *
+ * A live instance whose fix belongs to another change is waived in
+ * `org-sentinel-reads-baseline.json`, which ratchets down: an entry matching no
+ * finding is itself an error, so the file cannot outlive the defect it waives.
  *
  * Usage:
  *   node tools/scripts/check-org-sentinel-reads.mjs [--json]
@@ -295,6 +319,101 @@ export function passColocated(files, tableNames, policyClasses, root = ROOT) {
   return findings;
 }
 
+// ── Pass C: the apps/app kernelRead / kernelWrite seam ───────────────────────
+
+/**
+ * The port methods that take an `OrgCtx`, from `apps/app/src/data/ports.ts`.
+ * `capabilityContext` in `src/server/kernel.ts` gives exactly those the
+ * sentinel; a `WsCtx` method keeps its real workspace. A name declared both
+ * ways is dropped rather than guessed.
+ */
+export function readOrgCtxMethods(root = ROOT) {
+  const file = join(root, "apps/app/src/data/ports.ts");
+  if (!existsSync(file)) return new Set();
+  const src = stripComments(readFileSync(file, "utf8"));
+  const org = new Set();
+  const ws = new Set();
+  for (const m of src.matchAll(/(\w+)\(ctx:\s*(OrgCtx|WsCtx)\b/g)) {
+    (m[2] === "OrgCtx" ? org : ws).add(m[1]);
+  }
+  for (const name of ws) org.delete(name);
+  return org;
+}
+
+/** The body of each `<name>(ctx…) { … }` method, brace-matched. */
+function methodBodies(src, names) {
+  const out = [];
+  for (const m of src.matchAll(/(?:async\s+)?(\w+)\s*\(\s*ctx\b[^)]*\)\s*\{/g)) {
+    if (!names.has(m[1])) continue;
+    let depth = 0;
+    let i = m.index + m[0].length - 1;
+    for (; i < src.length; i += 1) {
+      const c = src[i];
+      if (c === "{") depth += 1;
+      else if (c === "}") {
+        depth -= 1;
+        if (depth === 0) break;
+      }
+    }
+    out.push({ method: m[1], body: src.slice(m.index, i + 1) });
+  }
+  return out;
+}
+
+export function passAppKernelSeam(
+  files,
+  tableNames,
+  policyClasses,
+  handlerModules,
+  contractNames,
+  root = ROOT,
+) {
+  const orgMethods = readOrgCtxMethods(root);
+  if (orgMethods.size === 0) return [];
+  const findings = [];
+  for (const file of files) {
+    if (!rel(file, root).startsWith("apps/app/src/data/live/")) continue;
+    const src = stripComments(readFileSync(file, "utf8"));
+    if (!/\bkernel(?:Read|Write)\s*\(/.test(src)) continue;
+    for (const { method, body } of methodBodies(src, orgMethods)) {
+      if (!/\bkernel(?:Read|Write)\s*\(/.test(body)) continue;
+      const capabilities = new Set();
+      for (const m of body.matchAll(/contract:\s*(\w+)/g)) {
+        const name = contractNames.get(m[1]);
+        if (name !== undefined) capabilities.add(name);
+      }
+      for (const m of body.matchAll(/kernelWrite\(\s*ctx\s*,\s*(\w+)/g)) {
+        const name = contractNames.get(m[1]);
+        if (name !== undefined) capabilities.add(name);
+      }
+      for (const capability of capabilities) {
+        const modulePath = handlerModules.get(capability);
+        if (modulePath === undefined) continue;
+        for (const handlerSrc of handlerSources(modulePath, root)) {
+          const regions = tenantDbRegions(handlerSrc);
+          if (regions.length === 0) continue;
+          const bad = offenders(
+            tablesNamed(regions),
+            tableNames,
+            policyClasses,
+            regions,
+          );
+          if (bad.length > 0) {
+            findings.push({
+              pass: "app-kernel-seam",
+              file: `${rel(file, root)} (${method})`,
+              capability,
+              handler: `packages/handlers/src/${modulePath.replace(/^\.\//, "")}.ts`,
+              tables: bad,
+            });
+          }
+        }
+      }
+    }
+  }
+  return findings;
+}
+
 // ── Pass B: a sentinel ctx handed to invoke() ────────────────────────────────
 
 /** capability name -> handler module path, from register.ts. */
@@ -442,6 +561,19 @@ function rel(file, root = ROOT) {
   return file.startsWith(root) ? file.slice(root.length + 1) : file;
 }
 
+/** The waived findings, keyed the way a finding is identified. */
+export function readBaseline(root = ROOT) {
+  const file = join(root, "tools/scripts/org-sentinel-reads-baseline.json");
+  if (!existsSync(file)) return [];
+  const parsed = JSON.parse(readFileSync(file, "utf8"));
+  return Array.isArray(parsed.waived) ? parsed.waived : [];
+}
+
+/** A finding's identity for baseline matching: where it is and what it invokes. */
+export function findingKey(f) {
+  return `${f.file}::${f.capability ?? ""}`;
+}
+
 // ── Run ──────────────────────────────────────────────────────────────────────
 
 /** Every finding in the tree, deduplicated. Exported so the test can drive it. */
@@ -466,6 +598,14 @@ export function findSentinelNarrowedReads(root = ROOT) {
       contractNames,
       root,
     ),
+    ...passAppKernelSeam(
+      files,
+      tableNames,
+      policyClasses,
+      handlerModules,
+      contractNames,
+      root,
+    ),
   ];
   // One (file, capability) can be reported more than once — by both passes, or
   // by a handler and one of its relative imports naming different tables. Merge
@@ -483,24 +623,53 @@ export function findSentinelNarrowedReads(root = ROOT) {
     }
     seen.tables.sort((a, b) => a.table.localeCompare(b.table));
   }
+  // Subtract the waived findings, and report any entry that matched nothing —
+  // a stale waiver is the failure mode a baseline has, so it is an error too.
+  const all = [...byKey.values()];
+  const baseline = readBaseline(root);
+  const matched = new Set();
+  const unwaived = all.filter((f) => {
+    const hit = baseline.find((w) => findingKey(w) === findingKey(f));
+    if (hit === undefined) return true;
+    matched.add(findingKey(hit));
+    return false;
+  });
+  const staleWaivers = baseline.filter((w) => !matched.has(findingKey(w)));
   return {
     files: files.length,
     policiedTables: policyClasses.size,
-    findings: [...byKey.values()],
+    findings: unwaived,
+    waived: all.length - unwaived.length,
+    staleWaivers,
   };
 }
 
 function main() {
-  const { files, policiedTables, findings } = findSentinelNarrowedReads();
+  const { files, policiedTables, findings, waived, staleWaivers } =
+    findSentinelNarrowedReads();
 
   if (process.argv.includes("--json")) {
-    console.log(JSON.stringify({ findings }, null, 2));
-    process.exit(findings.length === 0 ? 0 : 1);
+    console.log(JSON.stringify({ findings, waived, staleWaivers }, null, 2));
+    process.exit(findings.length === 0 && staleWaivers.length === 0 ? 0 : 1);
   }
+
+  if (staleWaivers.length > 0) {
+    console.error(
+      `check-org-sentinel-reads: ${staleWaivers.length} baseline entr(y/ies) match no finding. The defect is gone; remove the waiver so the file cannot outlive it.\n`,
+    );
+    for (const w of staleWaivers) {
+      console.error(`  ${w.file}  (${w.capability ?? "—"})`);
+      if (w.fixedBy) console.error(`    fixedBy: ${w.fixedBy}`);
+    }
+    process.exit(1);
+  }
+
+  const tail =
+    waived > 0 ? ` (${waived} waived, see org-sentinel-reads-baseline.json)` : "";
 
   if (findings.length === 0) {
     console.log(
-      `check-org-sentinel-reads: ${files} files, ${policiedTables} policied tables — no read is narrowed by the org-only workspace sentinel.`,
+      `check-org-sentinel-reads: ${files} files, ${policiedTables} policied tables — no read is narrowed by the org-only workspace sentinel${tail}.`,
     );
     process.exit(0);
   }
