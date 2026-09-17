@@ -10,6 +10,7 @@ import {
   parse,
   productionFiles,
   readSource,
+  WHOLE_TREE_TIMEOUT_MS,
   type SourceText,
 } from "./parse";
 
@@ -87,15 +88,19 @@ const probe = (name: string): string[] =>
   publicIdViolations(readSource(`${PROBES}/${name}`));
 
 describe("public ids", () => {
-  it("every id field of a view model in src/data/contracts is a PublicId", () => {
-    const files = productionFiles().filter((file) =>
-      file.startsWith(CONTRACTS_DIR),
-    );
-    expect(files.length).toBeGreaterThan(0);
-    expect(
-      files.flatMap((file) => publicIdViolations(readSource(file))),
-    ).toEqual([]);
-  });
+  it(
+    "every id field of a view model in src/data/contracts is a PublicId",
+    () => {
+      const files = productionFiles().filter((file) =>
+        file.startsWith(CONTRACTS_DIR),
+      );
+      expect(files.length).toBeGreaterThan(0);
+      expect(
+        files.flatMap((file) => publicIdViolations(readSource(file))),
+      ).toEqual([]);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
 
   it("a PublicId, a modified PublicId and a name that only ends in id pass", () => {
     expect(probe("ok.ts")).toEqual([]);

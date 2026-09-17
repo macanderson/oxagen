@@ -94,11 +94,16 @@ const LEDGER_TABLE = "_migrations";
  * has already applied every file up to and including this one — repeatedly,
  * on every deploy, under the old replay-everything semantics — so the
  * bootstrap in `migrate()` below marks exactly this file and everything
- * before it as already applied, WITHOUT re-executing them, the first time it
- * finds an empty ledger in a database that already has other tables. That
- * one skip is what stops the deploy shipping this fix from
- * performing 0021's `DROP TABLE` one more time — the last occurrence of the
- * exact data loss this ledger exists to end.
+ * before it as already applied, WITHOUT re-executing them, on the run that
+ * `decideLedgerAction` classifies as `bootstrap`. That one skip is what stops
+ * the deploy shipping this fix from performing 0021's `DROP TABLE` one more
+ * time — the last occurrence of the exact data loss this ledger exists to end.
+ *
+ * What makes a run a `bootstrap` is the ledger's recorded origin, not the
+ * shape of the database at the time. An earlier version keyed it on "an empty
+ * ledger in a database that already has other tables", a state two different
+ * histories produce and which wants opposite treatment in each — see
+ * LEDGER_ORIGIN_PRE_LEDGER.
  *
  * Do NOT bump this constant when adding a new migration file. It is a
  * one-time cutover marker for the pre-ledger backlog, not a "latest
@@ -110,7 +115,241 @@ const LEDGER_TABLE = "_migrations";
  */
 const PRE_LEDGER_BASELINE_CUTOVER = "0026_stella_operational_events.sql";
 
-async function ensureLedgerTable(ch: ClickHouseClient): Promise<void> {
+/**
+ * The origin of a `_migrations` table, written into the table's own COMMENT by
+ * the CREATE that makes it.
+ *
+ * WHY THIS IS IN THE TABLE DEFINITION AND NOT IN A ROW
+ *   The question the baseline bootstrap turns on — did this database exist
+ *   before the ledger? — is answerable ONLY in the instant before
+ *   `_migrations` is created. Creating the table destroys the evidence: from
+ *   then on, "has tables, has an empty ledger" is produced by two histories
+ *   that want opposite treatment, and no later inspection can tell them apart.
+ *
+ *     a fresh database whose first ledger-aware run created `_migrations` and
+ *     then died inside schema.sql — the 25 pre-cutover files have never run,
+ *     and recording them as applied leaves error_events, claude_sessions,
+ *     usage_events, memory_changes, schema_conformance_events and
+ *     stella_operational_events permanently absent, every insert failing
+ *     forever with nothing saying why;
+ *
+ *     a PRE-LEDGER deployment whose first ledger-aware run created
+ *     `_migrations` and then died inside schema.sql — the same 25 files have
+ *     all run, repeatedly, and running them again replays 0021's
+ *     `DROP TABLE schema_conformance_events`, destroying retained data.
+ *
+ *   Reading that state one way loses tables silently; reading it the other way
+ *   destroys data. The first version of this code took the second branch; the
+ *   fix that landed before this one took the first. Both were guesses, because
+ *   the state does not carry the information needed to decide. Codex caught
+ *   the second one on #3192 (r4035933342), which is the argument for not
+ *   adjudicating the state at all.
+ *
+ *   So the answer is recorded WITH the table, in the same statement that
+ *   creates it. A `CREATE TABLE ... COMMENT '...'` either lands whole or does
+ *   not land, so a `_migrations` written from here on always knows what it
+ *   was born from, and the ambiguous state cannot arise. There is no window
+ *   between "table exists" and "origin known" for a crash to fall into, which
+ *   a marker row inserted after the CREATE would still have left open.
+ *
+ *   `CREATE TABLE IF NOT EXISTS` never rewrites an existing table's comment,
+ *   which is the property wanted: an origin is set once, at birth, and is not
+ *   revised by a later run that can no longer observe what it is describing.
+ */
+const LEDGER_ORIGIN_PRE_LEDGER = "oxagen ledger origin: pre-ledger deployment";
+const LEDGER_ORIGIN_FRESH = "oxagen ledger origin: fresh database";
+
+/** Raised when a ledger predating the origin comment cannot be classified. */
+export class AmbiguousLedgerOriginError extends Error {
+  readonly code = "CLICKHOUSE_LEDGER_ORIGIN_AMBIGUOUS";
+  constructor(message: string) {
+    super(message);
+    this.name = "AmbiguousLedgerOriginError";
+  }
+}
+
+/**
+ * What a run should do about the pre-ledger backlog, from the four facts that
+ * are observable before it touches anything.
+ *
+ * Pure and exported so every state below is a test rather than a mock of the
+ * whole client — the states are the point, and there are only eight of them.
+ *
+ *   "bootstrap" — a pre-ledger deployment. Record every file up to the cutover
+ *                 as applied WITHOUT running it, then proceed.
+ *   "proceed"   — the ledger is the truth. Apply what it does not list.
+ *   "refuse"    — the state is ambiguous and both readings lose something.
+ *                 Stop and say so rather than pick.
+ */
+export function decideLedgerAction(facts: {
+  hasLedgerTable: boolean;
+  hasOtherTables: boolean;
+  ledgerComment: string;
+  appliedCount: number;
+}): {
+  action: "bootstrap" | "proceed" | "refuse";
+  reason: string;
+  /**
+   * An origin to write onto an ALREADY-EXISTING ledger before anything
+   * fallible runs, or null.
+   *
+   * A ledger this call creates is stamped by the CREATE itself. A ledger that
+   * predates the stamp is not, because `CREATE TABLE IF NOT EXISTS` never
+   * rewrites a comment — the same property that stops an origin being revised
+   * by a run that can no longer observe what it describes. That is right for a
+   * ledger that HAS an origin and wrong for one that never got one: the origin
+   * stays unwritten, and a crash inside schema.sql then converts a database we
+   * can decide today into one we must refuse tomorrow (#3192 r4036387110).
+   *
+   * So a legacy ledger is backfilled at the one moment its origin is still
+   * knowable. It is only knowable in one state — empty, with nothing else in
+   * the database, so nothing has ever succeeded and "fresh" is the only
+   * history that fits. A populated legacy ledger is deliberately NOT stamped:
+   * its origin is unknowable and also irrelevant, since rows keep it decidable
+   * for ever, and inventing an origin is worse than having none.
+   */
+  backfillOrigin: string | null;
+} {
+  const { hasLedgerTable, hasOtherTables, ledgerComment, appliedCount } = facts;
+
+  // This call is about to create the ledger, so right now — and only right
+  // now — the database still says what it is. Tables without a ledger is a
+  // deployment that reached that state through prior successful migrate()
+  // runs under replay-everything semantics; nothing at all is a new database.
+  if (!hasLedgerTable) {
+    // The CREATE below stamps this one, so nothing to backfill.
+    return hasOtherTables
+      ? {
+          action: "bootstrap",
+          reason: "tables present, no ledger yet",
+          backfillOrigin: null,
+        }
+      : { action: "proceed", reason: "empty database", backfillOrigin: null };
+  }
+
+  // The ledger exists and remembers what it was born from.
+  if (ledgerComment === LEDGER_ORIGIN_PRE_LEDGER) {
+    // An empty ledger here is not ambiguous: the origin says the backlog was
+    // already applied, so the first run simply died before recording it. This
+    // is the case that would otherwise replay 0021's DROP.
+    return appliedCount === 0
+      ? {
+          action: "bootstrap",
+          reason: "pre-ledger origin, backlog unrecorded",
+          backfillOrigin: null,
+        }
+      : {
+          action: "proceed",
+          reason: "pre-ledger origin, backlog recorded",
+          backfillOrigin: null,
+        };
+  }
+  if (ledgerComment === LEDGER_ORIGIN_FRESH) {
+    // Born empty, so there is no backlog to record and never was. Whatever the
+    // ledger lists is what has run.
+    return { action: "proceed", reason: "fresh origin", backfillOrigin: null };
+  }
+
+  // No origin: a ledger created by a version of this file that did not write
+  // one. Most of these are ordinary working deployments.
+  if (appliedCount > 0) {
+    // It has applied things, so it is in use and its rows are the truth. A
+    // bootstrap here would be recording a backlog that this ledger has already
+    // accounted for.
+    return {
+      action: "proceed",
+      reason: "pre-comment ledger, in use",
+      backfillOrigin: null,
+    };
+  }
+  if (hasOtherTables) {
+    // The one genuinely undecidable state, and the only one that can still
+    // occur: a pre-comment ledger, empty, in a database that has tables.
+    return {
+      action: "refuse",
+      reason: "pre-comment ledger, empty, tables present",
+      backfillOrigin: null,
+    };
+  }
+  // A pre-comment ledger, empty, in a database with nothing else in it. Both
+  // histories agree here: nothing has ever succeeded, so everything must run.
+  // Knowable exactly here, and only here. Stamp it now so a crash inside
+  // schema.sql cannot turn this decidable database into a refusing one.
+  return {
+    action: "proceed",
+    reason: "pre-comment ledger, empty database",
+    backfillOrigin: LEDGER_ORIGIN_FRESH,
+  };
+}
+
+/** The operator-facing text for a `refuse`. */
+export function ambiguousLedgerMessage(
+  database = "the target database",
+): string {
+  const stamp = (origin: string) =>
+    `ALTER TABLE ${LEDGER_TABLE} MODIFY COMMENT '${origin}';`;
+  return [
+    `ClickHouse migrations stopped: ${LEDGER_TABLE} in ${database} carries no origin and has no rows.`,
+    "",
+    "That state has two histories and they want opposite treatment:",
+    "",
+    "  (a) a NEW database whose first ledger-aware migration created",
+    `      ${LEDGER_TABLE} and then failed inside schema.sql. Its migrations`,
+    "      have never run. Recording them as applied would leave error_events,",
+    "      claude_sessions, usage_events, memory_changes,",
+    "      schema_conformance_events and stella_operational_events absent",
+    "      forever.",
+    "",
+    "  (b) an EXISTING pre-ledger deployment whose first ledger-aware",
+    `      migration created ${LEDGER_TABLE} and then failed inside schema.sql.`,
+    "      Its migrations have all run. Running them again replays 0021's",
+    "      DROP TABLE schema_conformance_events and destroys retained data.",
+    "",
+    "Guessing loses tables in one case and data in the other, so this refuses.",
+    "",
+    "To tell them apart, ask whether the migration-only tables are there:",
+    "",
+    "  SELECT name FROM system.tables",
+    "  WHERE database = currentDatabase()",
+    "    AND name IN ('error_events','claude_sessions','usage_events',",
+    "                 'memory_changes','schema_conformance_events',",
+    "                 'stella_operational_events');",
+    "",
+    "Then STAMP THE ORIGIN and re-run. Do not drop the ledger: the partially",
+    "created schema.sql tables stay behind, so the next run would see tables",
+    "with no ledger, read that as a pre-ledger deployment, and record the",
+    "backlog without running it — which is case (a)'s data loss, reached by",
+    "the instructions meant to escape it.",
+    "",
+    "  none of them  -> case (a). Nothing has run, so run everything:",
+    `                   ${stamp(LEDGER_ORIGIN_FRESH)}`,
+    "",
+    "  all of them   -> case (b). The backlog is applied; record, do not run:",
+    `                   ${stamp(LEDGER_ORIGIN_PRE_LEDGER)}`,
+    "",
+    "  a partial set -> stamp FRESH, as in (a). Every migration file is",
+    "                   individually idempotent, so re-running them is safe",
+    "                   except that 0021 drops and recreates",
+    "                   schema_conformance_events, costing at most its 90-day",
+    "                   window of best-effort telemetry. Stamping pre-ledger",
+    "                   instead would silently leave the missing tables absent",
+    "                   for good, and a recoverable loss beats a permanent one.",
+    "",
+    "A ledger created from this version on records its own origin, and a legacy",
+    "ledger is stamped automatically while its origin is still knowable, so",
+    "this cannot happen again to a database that has not already reached this",
+    "state.",
+  ].join("\n");
+}
+
+async function ensureLedgerTable(
+  ch: ClickHouseClient,
+  origin: string,
+): Promise<void> {
+  // The origin literal matters only when this statement actually creates the
+  // table; `IF NOT EXISTS` leaves an existing one — comment included —
+  // untouched, which is what keeps an origin from being rewritten by a run
+  // that can no longer see what it describes.
   await ch.command({
     query: `
       CREATE TABLE IF NOT EXISTS ${LEDGER_TABLE}
@@ -120,30 +359,49 @@ async function ensureLedgerTable(ch: ClickHouseClient): Promise<void> {
       )
       ENGINE = MergeTree
       ORDER BY filename
+      COMMENT '${origin}'
     `,
   });
 }
 
 /**
- * True when the target database already contains at least one table OTHER
- * than the ledger. Called BEFORE `ensureLedgerTable` creates `_migrations`,
- * so the ledger table itself never counts. This is the fresh-install /
- * existing-deployment fork: a genuinely empty database has never run any
- * migration, so every file must still execute in full (0021's `DROP TABLE
- * IF EXISTS` is a no-op against a table that was never created); a database
- * that already has tables reached that state through a PRIOR successful
- * `migrate()` run — a failed one would have thrown and failed the deploy —
- * so every migration file present at that time is known-applied.
+ * What the target database looked like BEFORE this call created anything:
+ * whether `_migrations` was already there, whether any OTHER table was, and
+ * what origin the ledger records if it is present.
+ *
+ * Snapshotted in one query, before `ensureLedgerTable`, so it describes the
+ * database as it arrived rather than as this run leaves it. `hasOtherTables`
+ * excludes the ledger explicitly rather than relying on the call ordering: the
+ * previous version counted every table and justified it with "the ledger never
+ * counts, because this runs first", which held on the FIRST call and was
+ * assumed of every later one.
  */
-async function databaseHasPreExistingTables(
-  ch: ClickHouseClient,
-): Promise<boolean> {
+async function inspectDatabase(ch: ClickHouseClient): Promise<{
+  hasLedgerTable: boolean;
+  hasOtherTables: boolean;
+  ledgerComment: string;
+}> {
   const result = await ch.query({
-    query: `SELECT count() AS c FROM system.tables WHERE database = currentDatabase()`,
+    query: `
+      SELECT
+          countIf(name = '${LEDGER_TABLE}')  AS ledger,
+          countIf(name != '${LEDGER_TABLE}') AS c,
+          anyIf(comment, name = '${LEDGER_TABLE}') AS ledger_comment
+      FROM system.tables
+      WHERE database = currentDatabase()
+    `,
     format: "JSONEachRow",
   });
-  const rows = await result.json<{ c: string }>();
-  return Number(rows[0]?.c ?? "0") > 0;
+  const rows = await result.json<{
+    ledger?: string;
+    c?: string;
+    ledger_comment?: string;
+  }>();
+  return {
+    hasLedgerTable: Number(rows[0]?.ledger ?? "0") > 0,
+    hasOtherTables: Number(rows[0]?.c ?? "0") > 0,
+    ledgerComment: rows[0]?.ledger_comment ?? "",
+  };
 }
 
 /** Filenames already recorded in the ledger. */
@@ -194,42 +452,126 @@ async function migrateOnce(): Promise<void> {
   await ensureDatabase();
   const ch = clickhouse();
 
-  // Snapshot taken BEFORE the ledger table exists, so it can never see itself.
-  const isExistingDeployment = await databaseHasPreExistingTables(ch);
-  await ensureLedgerTable(ch);
+  // Snapshot taken BEFORE this call creates anything, so it describes the
+  // database as it arrived rather than as this run leaves it. This is the last
+  // moment at which an unledgered database still says what it is.
+  const snapshot = await inspectDatabase(ch);
+
+  // The origin is decided here and burned into the CREATE below, so it is
+  // settled before ANY fallible work runs. A crash inside schema.sql or inside
+  // a migration can no longer leave behind a ledger whose meaning has to be
+  // guessed at — see LEDGER_ORIGIN_PRE_LEDGER for the two histories that
+  // otherwise collide, and #3192 (r4035933342) for the second of them.
+  await ensureLedgerTable(
+    ch,
+    snapshot.hasOtherTables ? LEDGER_ORIGIN_PRE_LEDGER : LEDGER_ORIGIN_FRESH,
+  );
+
+  const migrationsDir = join(here, "migrations");
+  const files = existsSync(migrationsDir)
+    ? readdirSync(migrationsDir)
+        .filter((f) => f.endsWith(".sql"))
+        .sort()
+    : [];
+
+  const applied = await appliedMigrations(ch);
+  const decision = decideLedgerAction({
+    hasLedgerTable: snapshot.hasLedgerTable,
+    hasOtherTables: snapshot.hasOtherTables,
+    ledgerComment: snapshot.ledgerComment,
+    appliedCount: applied.size,
+  });
+
+  if (decision.backfillOrigin !== null) {
+    // Before schema.sql, because the whole point is that a failure there must
+    // not find this ledger still originless.
+    //
+    // A failure to write the comment is warned about and not rethrown. The
+    // stamp narrows a FUTURE ambiguity; this run's decision is already made
+    // and correct without it. Failing the migration because a comment could
+    // not be written would turn a working deployment into a broken one to
+    // prevent a state that deployment is not in.
+    try {
+      await ch.command({
+        query: `ALTER TABLE ${LEDGER_TABLE} MODIFY COMMENT '${decision.backfillOrigin}'`,
+      });
+    } catch (err) {
+      process.stderr.write(
+        JSON.stringify({
+          level: "warn",
+          msg: `could not stamp the origin on a pre-existing ${LEDGER_TABLE}; migrations continue, but a failure during this run may leave this database undecidable (see AmbiguousLedgerOriginError)`,
+          err: err instanceof Error ? err.message : String(err),
+        }) + "\n",
+      );
+    }
+  }
+
+  if (decision.action === "refuse") {
+    // Both readings of this state lose something — tables in one direction,
+    // retained data in the other — so it stops and hands the operator the
+    // query that distinguishes them rather than picking a branch for them.
+    throw new AmbiguousLedgerOriginError(ambiguousLedgerMessage());
+  }
+
+  // The one-time bootstrap: a deployment that predates the ledger has already
+  // applied everything up to the cutover, repeatedly, under replay-everything
+  // semantics — record that WITHOUT re-running it. Done BEFORE schema.sql so a
+  // failure there cannot strand the ledger empty. See
+  // PRE_LEDGER_BASELINE_CUTOVER for why a file sorting after the cutover is
+  // deliberately excluded and always executes for real below.
+  if (decision.action === "bootstrap" && applied.size === 0) {
+    const baseline = files.filter((f) => f <= PRE_LEDGER_BASELINE_CUTOVER);
+    // This filter is the ONE place in the runner that decides a file will be
+    // recorded as applied without being executed, and until now it decided it
+    // in silence: the deploy log showed a successful migration whether the
+    // baseline covered the 26 files it was pinned against or a 27th that
+    // nobody meant to skip. A guard on filenames
+    // (tools/scripts/check-ch-migration-ordinals.mjs) refuses the inputs we
+    // have thought of; this says out loud what the decision actually was, for
+    // the ones we have not. It runs at most once per database, so there is no
+    // volume argument against naming every file.
+    process.stdout.write(
+      JSON.stringify({
+        level: "info",
+        msg: "ClickHouse pre-ledger baseline: recording these migrations as applied WITHOUT executing them",
+        cutover: PRE_LEDGER_BASELINE_CUTOVER,
+        reason: decision.reason,
+        recordedWithoutExecuting: baseline,
+        willExecute: files.filter((f) => f > PRE_LEDGER_BASELINE_CUTOVER),
+      }) + "\n",
+    );
+    await recordApplied(ch, baseline);
+    for (const f of baseline) applied.add(f);
+  }
 
   const schemaSql = readFileSync(join(here, "schema.sql"), "utf8");
   for (const stmt of splitStatements(schemaSql)) {
     await ch.command({ query: stmt });
   }
 
-  const migrationsDir = join(here, "migrations");
-  if (existsSync(migrationsDir)) {
-    const files = readdirSync(migrationsDir)
-      .filter((f) => f.endsWith(".sql"))
-      .sort();
-
-    const applied = await appliedMigrations(ch);
-
-    // One-time bootstrap: an existing deployment upgrading to this ledger has
-    // already applied everything up to the pre-ledger cutover, repeatedly —
-    // record that WITHOUT re-running it. See PRE_LEDGER_BASELINE_CUTOVER for
-    // why a file that sorts after the cutover is deliberately excluded here
-    // and always runs for real below.
-    if (isExistingDeployment && applied.size === 0) {
-      const baseline = files.filter((f) => f <= PRE_LEDGER_BASELINE_CUTOVER);
-      await recordApplied(ch, baseline);
-      for (const f of baseline) applied.add(f);
+  // A file is recorded only AFTER all of its statements have returned. A
+  // failure part-way through one throws out of this loop and out of
+  // migrate(), so the file stays unrecorded and the next run replays it from
+  // its first statement — which is the right default: a half-applied file
+  // that the ledger called applied would be invisible forever.
+  //
+  // The cost of that default is that the replay needs every statement in the
+  // file to be individually idempotent, and nothing here checks that. Every
+  // file on disk today qualifies (`CREATE TABLE IF NOT EXISTS`,
+  // `ALTER ... ADD COLUMN/INDEX IF NOT EXISTS`, `DROP TABLE IF EXISTS`), so
+  // this is a constraint on what a future migration may contain rather than a
+  // live defect: a file whose second statement cannot run twice will fail
+  // differently on the retry, and the operator will be reading the SECOND
+  // error rather than the one that actually stopped the deploy. Closing it
+  // properly means per-statement ledger granularity, which ClickHouse's lack
+  // of DDL transactions makes its own piece of work; #2972 carries it.
+  for (const file of files) {
+    if (applied.has(file)) continue;
+    const body = readFileSync(join(migrationsDir, file), "utf8");
+    for (const stmt of splitStatements(body)) {
+      await ch.command({ query: stmt });
     }
-
-    for (const file of files) {
-      if (applied.has(file)) continue;
-      const body = readFileSync(join(migrationsDir, file), "utf8");
-      for (const stmt of splitStatements(body)) {
-        await ch.command({ query: stmt });
-      }
-      await recordApplied(ch, [file]);
-    }
+    await recordApplied(ch, [file]);
   }
 }
 

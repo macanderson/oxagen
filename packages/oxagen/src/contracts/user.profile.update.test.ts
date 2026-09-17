@@ -89,6 +89,16 @@ describe("update_profile contract", () => {
     }
   });
 
+  // MCP authenticates with an API key and `resolveMcpContext` builds every
+  // context with `userId: null`, so a machine credential has no own profile
+  // to change: an MCP tool here could only ever return forbidden. The surface
+  // list is pinned so the tool cannot be re-advertised without the principal
+  // arriving first.
+  it("carries no MCP surface while MCP contexts carry no person", () => {
+    expect(userProfileUpdate.surfaces).toEqual(["api"]);
+    expect(userProfileUpdate.layers).not.toContain("mcp");
+  });
+
   it("answers with the persisted display name and avatar", () => {
     const output = { displayName: "Ada Lovelace", avatarUrl: null };
     expect(userProfileUpdate.output.parse(output)).toEqual(output);

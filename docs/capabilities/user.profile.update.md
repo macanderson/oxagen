@@ -13,7 +13,7 @@ The input carries no user id: the handler acts on the authenticated principal on
 ## Surface
 
 - API: `PATCH /v1/user/profile`
-- MCP: `update_profile`
+- MCP: none. MCP authenticates with an API key and every MCP context carries `userId: null`, so a machine credential has no "own profile" to change; a tool here could only ever return `forbidden`/`no_principal`. The surface returns if MCP grows a session principal.
 - Authentication: session; the caller must carry a person (`forbidden` otherwise)
 - Capability name: `update_profile`
 - Not billed (`noBillingGate: true`): a settings write is never a governed action (ADR-052 exclusion 2).

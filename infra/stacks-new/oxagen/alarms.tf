@@ -406,3 +406,88 @@ resource "aws_cloudwatch_metric_alarm" "node_memory" {
   ok_actions    = [aws_sns_topic.alerts.arn]
   tags          = { Brand = local.brand }
 }
+
+# ---------------------------------------------------------------------------
+# A container restarting over and over (#2813)
+# ---------------------------------------------------------------------------
+
+# THE 2026-09-09 ALARM. A leftover `oxagen-worker` container — a survivor of the
+# architecture ADR-043 removed, never stopped by the cut — crash-looped roughly
+# fourteen times a minute for two days against a column its query still expected
+# and the schema no longer had. Every alarm above stayed OK for all of it. They
+# had to: the ALB's targets were healthy, the node's CPU, memory and disk were
+# unremarkable, and the container listened on loopback with no Caddy route, so
+# nothing health-checked it. It was found by hand, days later, while
+# investigating something else.
+#
+# What is being counted is container starts, from `docker events` on the node
+# (modules/app-node/monitoring.tf). A restart-policy restart is not the
+# `restart` event — Docker emits that only for an explicit `docker restart` —
+# so `start` is the event, and a healthy container emits one per deploy.
+resource "aws_cloudwatch_log_metric_filter" "container_starts" {
+  name           = "oxagen-container-starts"
+  log_group_name = aws_cloudwatch_log_group.service["docker-events"].name
+
+  # The collector writes one line per start, each beginning with this token.
+  # Changing the collector's `--format` without changing this pattern leaves the
+  # alarm permanently OK with nothing to say it has stopped counting, which is
+  # why tools/scripts/check-restart-alarm.mjs holds the two together.
+  pattern = "container_start"
+
+  metric_transformation {
+    name      = "ContainerStarts"
+    namespace = "Oxagen/Node"
+    value     = "1"
+    # No default_value. A 0 per non-matching line would be a lie about a group
+    # where every line matches, and it would not fix what missing data means
+    # here — see treat_missing_data on the alarm.
+  }
+}
+
+# The threshold, and the arithmetic behind it.
+#
+# The incident ran at about 14 starts a minute: 70 in a five-minute period,
+# sustained for two days. A deploy is the opposite shape — deploy-service.sh
+# starts one container per service, so the whole estate coming up after a reboot
+# is nine starts inside a single period, and a CI deploy of app, api and mcp is
+# three. Bursts, not a level.
+#
+# So the alarm looks for a LEVEL: more than 5 starts in each of three
+# consecutive five-minute periods. A deploy cannot reach that however large it
+# is, because it is over inside one period and the next two are zero. A crash
+# loop of one restart a minute or faster reaches it in fifteen minutes; the
+# recorded incident cleared it by fourteen times over.
+#
+# What this does not catch, stated rather than left to be discovered: a
+# container restarting slower than roughly one a minute stays under 5 per period
+# forever. A slow loop is a real failure, and this alarm is not the thing that
+# finds it. Raising the resolution means a per-container metric dimension, which
+# the log metric filter cannot produce — it would need a metric per container
+# name, and the set of names is not known here.
+resource "aws_cloudwatch_metric_alarm" "container_restart_loop" {
+  alarm_name        = "oxagen-container-restart-loop"
+  alarm_description = "A container on the app node is restarting in a loop: more than 5 container starts in each of three consecutive 5-minute periods. A deploy is a single burst inside one period and cannot reach this; on 2026-09-09 a leftover worker held about 70 per period for two days and no alarm here noticed. The log group /oxagen-app/docker-events names the container."
+
+  namespace   = "Oxagen/Node"
+  metric_name = "ContainerStarts"
+  statistic   = "Sum"
+
+  period              = 300
+  evaluation_periods  = 3
+  datapoints_to_alarm = 3
+  threshold           = 5
+  comparison_operator = "GreaterThanThreshold"
+
+  # notBreaching, and this is the honest weak point of the alarm. A healthy node
+  # starts nothing for days at a time, so the metric has no datapoint most of
+  # the time and quiet is indistinguishable from a collector that has died.
+  # `breaching` — the choice node_disk and node_memory make, where the agent is
+  # the only source and no metric means no agent — would page continuously here
+  # instead. What holds the collector up is Restart=always on the unit and the
+  # daily State Manager re-run, neither of which this alarm can see.
+  treat_missing_data = "notBreaching"
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+  tags          = { Brand = local.brand }
+}

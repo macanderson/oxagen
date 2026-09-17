@@ -57,6 +57,21 @@ const ROLE_CHECKED_CONTRACTS = [
   "list_skills",
   "get_run_proof",
   "set_disclosure_grain",
+  // The six the Tools page invokes (#3143). Each already asserted its own
+  // role; none was named here, so the assertion was unpinned and a handler
+  // that dropped it would have passed the whole gate. The page's own tests
+  // could not have caught that: they prove the buttons match what the
+  // contracts declare, which is a claim about the surface, not about whether
+  // the server enforces it. That distinction is the point of INV-29, and for
+  // these six it mattered more than usual — `import_tools` is one of the few
+  // capabilities whose gate admits somebody the org-role check alone would
+  // refuse, so its assertion is the only thing that decides the case.
+  "import_tools",
+  "set_tool_classification",
+  "set_kill_switch",
+  "list_tool_versions",
+  "list_credential_grants",
+  "list_kill_switches",
 ] as const;
 
 const AGENT_ROLE_CHECKED_CONTRACTS = [
