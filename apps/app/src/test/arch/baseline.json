@@ -1,7 +1,1 @@
-[
-  "e2e-files apps/app/e2e missing-entry:page-load.spec.ts",
-  "e2e-files apps/app/e2e missing-entry:pay.spec.ts",
-  "e2e-files apps/app/e2e missing-entry:routes.ts",
-  "e2e-files apps/app_deprecated/e2e spec-outside-apps-app",
-  "e2e-files apps/app_deprecated/playwright.config.ts playwright-config-outside-apps-app"
-]
+[]
