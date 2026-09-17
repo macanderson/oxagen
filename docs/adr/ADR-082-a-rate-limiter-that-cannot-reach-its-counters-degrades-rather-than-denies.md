@@ -100,6 +100,29 @@ able to reason about at 3am.
   buckets in a minute, with the sweep scanning the whole map on every request
   and deleting nothing. `createFixedWindowCounter` now holds a hard maximum and
   evicts the oldest entry, the pattern `cacheLocalDeny` already used.
+- **Two counters bounding one window must read one clock.** The Postgres
+  `window_start` is derived from a timestamp captured before the upsert is
+  awaited. The shadow counter originally read `Date.now()` again afterwards, so
+  a request whose await crossed a window boundary was recorded in Postgres under
+  one window and locally under the next — one request in two windows, which is
+  the same divergence as one allowance spent twice and arrives from the same
+  place. It also cached the resulting denial against a reset time that had
+  already passed, which is not a cached denial at all: the next request drops it
+  and goes back to the store. `hit()` now takes the captured timestamp, and
+  `cacheLocalDeny` refuses a reset time in the past.
+- **The rate-limit headers report the stricter of the two counts.** When the
+  store recovers inside a window the shadow already owns, the shadow is the
+  operative ceiling and the Postgres count is the smaller, irrelevant number. An
+  allowed response that reports the Postgres remainder tells a client it has
+  room and then rejects its next request — worse than no header, because the
+  header is what the client paces against.
+- **Three of the findings on this path were about a crossing, not a state.**
+  Healthy was tested and fully-degraded was tested; store failure mid-request, a
+  window rolling in flight, a store recovering mid-window and a cached deny
+  outliving its window were not. They are now enumerated in a comment above the
+  middleware body. A test that drives a burst entirely inside one window passes
+  against every one of those defects, because the boundary is the defect; what
+  discriminates is a burst that straddles it with the clock frozen either side.
 - **CI went 14/14 green over that defect, and over the quadratic scan under it.**
   A correctness fix introduced a resource-exhaustion bug and the full gate —
   lint, typecheck, unit, coverage, e2e, RLS, RDS — had nothing to say about it,

@@ -353,6 +353,13 @@ export function distributedRateLimiter(
   const localCounter = createFixedWindowCounter(windowMs);
 
   function cacheLocalDeny(key: string, denyUntil: number, now: number): void {
+    // A deny that has already expired is not a deny. The gate at the top of the
+    // middleware would drop it on the very next request and go back to the
+    // store — the round-trip this cache exists to avoid. Callers pass the reset
+    // time of the window the request was counted in, derived from the same
+    // captured clock, so this should not fire; it is a guard against those two
+    // drifting apart again rather than a branch with a known caller.
+    if (denyUntil <= now) return;
     if (localDenyUntilByKey.size >= LOCAL_DENY_CACHE_MAX) {
       for (const [cachedKey, cachedUntil] of localDenyUntilByKey) {
         if (cachedUntil <= now) localDenyUntilByKey.delete(cachedKey);
@@ -365,6 +372,30 @@ export function distributedRateLimiter(
     localDenyUntilByKey.set(key, denyUntil);
   }
 
+  /**
+   * The crossings on this path, enumerated, because three separate findings on
+   * this middleware were all about the state on the way to a state rather than
+   * at it. Healthy and fully-degraded were each covered by a test; none of the
+   * transitions were.
+   *
+   *  1. Store fails mid-request → the `catch` below, which counts against the
+   *     captured `now` so the degraded hit lands in the window the rest of the
+   *     request is about.
+   *  2. Window rolls while the upsert is in flight → both counters derive their
+   *     window from that same `now`. The counter takes it as an argument for
+   *     exactly this reason; re-reading the clock put one request in two
+   *     windows.
+   *  3. Store recovers inside a window the shadow already owns → the headers
+   *     and the decision both use the stricter of the two counts.
+   *  4. A cached deny outliving its window → every `cacheLocalDeny` call passes
+   *     the reset time of the window the request was counted in, and the
+   *     function refuses a reset time that has already passed.
+   *  5. Bucket key resolution awaits before `now` is captured, so the key and
+   *     the window cannot disagree about which request this is.
+   *
+   * A fail-open mount reaches none of this: it has no fallback to seed and
+   * never touches the local counter.
+   */
   return async (c, next) => {
     if (methods !== "all" && !methods.includes(c.req.method)) return next();
 
@@ -421,7 +452,10 @@ export function distributedRateLimiter(
       warnStoreError(opts.keyPrefix, windowMs, err, storeErrorPolicy);
       if (storeErrorPolicy !== "degrade-to-local") return next();
 
-      const local = localCounter.hit(key);
+      // `now`, not the counter's own clock: the upsert that just failed may
+      // have taken this request across a window boundary, and the degraded
+      // count has to land in the window the rest of this request is about.
+      const local = localCounter.hit(key, now);
       c.header("X-RateLimit-Limit", String(max));
       c.header("X-RateLimit-Remaining", String(Math.max(0, max - local.count)));
       c.header("X-RateLimit-Reset", String(Math.ceil(local.resetAt / 1000)));
@@ -449,10 +483,10 @@ export function distributedRateLimiter(
     }
 
     c.header("X-RateLimit-Limit", String(max));
-    c.header("X-RateLimit-Remaining", String(Math.max(0, max - count)));
     c.header("X-RateLimit-Reset", String(resetSeconds));
 
     if (count > max) {
+      c.header("X-RateLimit-Remaining", "0");
       cacheLocalDeny(key, resetAtMs, now);
       const retryAfter = Math.max(1, resetSeconds - Math.ceil(now / 1000));
       c.header("Retry-After", String(retryAfter));
@@ -471,17 +505,35 @@ export function distributedRateLimiter(
     // This changes nothing on a healthy mount. The Postgres count is global and
     // the shadow is per-instance, so the shadow can never exceed it while the
     // store is up and `count > max` always fires first.
+    //
+    // `now` is passed in for the same reason as on the catch path: the upsert
+    // may have taken this request across a window boundary, and a shadow hit
+    // that re-read the clock would land in the NEXT window — counting one
+    // request twice and, worse, caching a denial against a reset time that had
+    // already passed.
+    //
+    // `effectiveCount` is the stricter of the two, and it is what the headers
+    // report. Reporting the Postgres count while the shadow is the operative
+    // ceiling tells a client it has room and then rejects its next request; a
+    // header a client paces against and cannot trust is worse than no header.
+    let effectiveCount = count;
     if (storeErrorPolicy === "degrade-to-local") {
-      const shadow = localCounter.hit(key);
-      if (shadow.count > max) {
-        cacheLocalDeny(key, resetAtMs, now);
-        c.header("X-RateLimit-Remaining", "0");
-        c.header(
-          "Retry-After",
-          String(Math.max(1, resetSeconds - Math.ceil(now / 1000))),
-        );
-        return c.json({ error: "rate_limited" }, 429);
-      }
+      const shadow = localCounter.hit(key, now);
+      effectiveCount = Math.max(count, shadow.count);
+    }
+
+    c.header(
+      "X-RateLimit-Remaining",
+      String(Math.max(0, max - effectiveCount)),
+    );
+
+    if (effectiveCount > max) {
+      cacheLocalDeny(key, resetAtMs, now);
+      c.header(
+        "Retry-After",
+        String(Math.max(1, resetSeconds - Math.ceil(now / 1000))),
+      );
+      return c.json({ error: "rate_limited" }, 429);
     }
 
     return next();

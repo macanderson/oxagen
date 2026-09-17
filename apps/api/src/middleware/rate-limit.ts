@@ -29,7 +29,19 @@ export interface FixedWindowHit {
 
 /** A bounded in-process fixed-window counter. */
 export interface FixedWindowCounter {
-  hit: (key: string) => FixedWindowHit;
+  /**
+   * Count one request against `key`.
+   *
+   * `now` is the caller's captured clock. It exists because
+   * `distributedRateLimiter` derives its Postgres `window_start` from a
+   * timestamp taken BEFORE awaiting the upsert, and if this counter read the
+   * clock again afterwards a request whose await crossed a window boundary
+   * would be recorded in Postgres under one window and here under the next.
+   * One request in two windows is the same class of divergence as one
+   * allowance spent twice, and the only way it cannot recur is for both
+   * counters to derive their window from one captured value.
+   */
+  hit: (key: string, now?: number) => FixedWindowHit;
   /** Tracked keys. Exposed so the bound itself can be asserted in a test. */
   readonly size: number;
 }
@@ -88,8 +100,8 @@ export function createFixedWindowCounter(windowMs: number): FixedWindowCounter {
       return buckets.size;
     },
 
-    hit(key: string): FixedWindowHit {
-      const now = Date.now();
+    hit(key: string, at?: number): FixedWindowHit {
+      const now = at ?? Date.now();
       const bucket = buckets.get(key);
       if (bucket && now < bucket.resetAt) {
         bucket.count += 1;

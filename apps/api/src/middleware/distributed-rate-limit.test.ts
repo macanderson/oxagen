@@ -454,6 +454,119 @@ describe("distributedRateLimiter", () => {
     expect(next).toHaveBeenCalledTimes(2);
   });
 
+  // The crossings, not the steady states. Healthy is covered, fully-degraded is
+  // covered, and both of the two P2s below live at a boundary the earlier cases
+  // step over: a window rolling mid-request, and the store coming back inside a
+  // window the shadow already owns.
+
+  // The Postgres `window_start` is derived from a timestamp captured BEFORE the
+  // upsert is awaited. If the shadow counter reads the clock again afterwards,
+  // a request whose await crossed a window boundary is recorded in Postgres
+  // under one window and locally under the next — one request in two windows.
+  //
+  // A burst entirely inside one window passes against the unfixed code, because
+  // the boundary IS the defect. What separates them is a burst that straddles
+  // it, so the clock is frozen either side and each request's window is pinned.
+  it("counts a boundary-crossing request in the window it started in", async () => {
+    vi.useFakeTimers();
+    try {
+      // One millisecond before the minute rolls. The store call advances the
+      // clock past it, which is what a slow upsert does.
+      vi.setSystemTime(new Date("2026-09-17T12:00:59.999Z"));
+      mocks.withSystemDb.mockImplementation(
+        async (fn: (tx: unknown) => Promise<unknown>) => {
+          vi.advanceTimersByTime(2);
+          // Postgres counts each window from 1, so only the shadow can deny.
+          return fn({ execute: vi.fn().mockResolvedValue([{ count: 1 }]) });
+        },
+      );
+      const mw = distributedRateLimiter({
+        keyPrefix: "preauth",
+        max: 2,
+        bucketKey: trustedClientIpBucketKey,
+        storeErrorPolicy: "degrade-to-local",
+      });
+      const next = vi.fn().mockResolvedValue(undefined);
+      const headers = { "x-oxagen-client-ip": "198.51.100.60" };
+
+      // Starts at 12:00:59.999, finishes at 12:01:00.001. Its shadow hit
+      // belongs to the window ending 12:01:00 — the one the response's
+      // X-RateLimit-Reset names.
+      const crossing = fakeContext({ headers });
+      await mw(crossing, next);
+      expect(responseHeadersOf(crossing)["X-RateLimit-Reset"]).toBe(
+        String(new Date("2026-09-17T12:01:00.000Z").getTime() / 1000),
+      );
+
+      // Two more, now wholly inside the new window. With the shadow hit in the
+      // right window these are its 1st and 2nd; with the boundary-crossing one
+      // wrongly counted here they are its 2nd and 3rd, and the last is a 429.
+      await mw(fakeContext({ headers }), next);
+      const third = (await mw(fakeContext({ headers }), next)) as
+        | { status: number }
+        | undefined;
+
+      expect(third).toBeUndefined();
+      expect(next).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The headers a client paces against. When the store comes back inside a
+  // window the shadow already owns, the shadow is the operative ceiling and the
+  // Postgres count is the smaller, irrelevant one. Reporting the smaller number
+  // tells the client it has room and then rejects its next request.
+  //
+  // Asserting only that the next request is rejected passes against the unfixed
+  // code — the rejection was already right. What discriminates is asserting the
+  // number the client would have paced against, and then that the next outcome
+  // matches it.
+  it("reports the stricter of the two counts once the store recovers", async () => {
+    let storeUp = false;
+    let healthyCount = 0;
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        if (!storeUp) throw new Error("db unavailable");
+        healthyCount += 1;
+        return fn({
+          execute: vi.fn().mockResolvedValue([{ count: healthyCount }]),
+        });
+      },
+    );
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 5,
+      bucketKey: trustedClientIpBucketKey,
+      storeErrorPolicy: "degrade-to-local",
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const headers = { "x-oxagen-client-ip": "198.51.100.61" };
+
+    // Four served by the degraded path: the shadow count for this window is 4.
+    for (let i = 0; i < 4; i += 1) await mw(fakeContext({ headers }), next);
+    expect(next).toHaveBeenCalledTimes(4);
+
+    // The store comes back and reports 1 for this window. The shadow says 5.
+    storeUp = true;
+    const recovered = fakeContext({ headers });
+    const allowed = (await mw(recovered, next)) as
+      | { status: number }
+      | undefined;
+
+    expect(allowed).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(5);
+    // Not "4" — that is `max - count` from the Postgres side, and it is a
+    // promise the next line breaks.
+    expect(responseHeadersOf(recovered)["X-RateLimit-Remaining"]).toBe("0");
+
+    const rejected = (await mw(fakeContext({ headers }), next)) as
+      | { status: number }
+      | undefined;
+    expect(rejected?.status).toBe(429);
+    expect(next).toHaveBeenCalledTimes(5);
+  });
+
   it("leaves a healthy limiter's ceiling exactly where it was", async () => {
     // The shadow gate must be inert while the store is up: the Postgres count
     // is global and the shadow per-instance, so `count > max` always fires
