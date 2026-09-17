@@ -15,7 +15,6 @@ import {
   readSource,
   WHOLE_TREE_TIMEOUT_MS,
   type SourceText,
-  WHOLE_TREE_TIMEOUT_MS,
 } from "./parse";
 
 /**
