@@ -97,10 +97,23 @@ import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
 import { URL, pathToFileURL } from "node:url";
 import kleur from "kleur";
-import { and, count, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
-import { db, closeDatabase, schema } from "@oxagen/database";
+import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { fetchAuthz } from "@oxagen/iam";
+import { grantsOrgOwnerSuperUser, type Role } from "@oxagen/oxagen/iam";
 import {
   createCreditLot,
   CREDIT_REASONS,
@@ -162,6 +175,217 @@ export function sanitizeUrl(raw: string): { host: string; database: string } {
   }
 }
 
+/**
+ * Statuses this script refuses to act on.
+ *
+ * `org.list` and `workspace.list` hide an organisation specifically while its
+ * status is `deleted`, so writing `status: 'active'` over it resurrects the
+ * tenant and re-exposes its retained workspaces and data. Deleting an
+ * organisation is a decision; undoing it is not something a provisioning run
+ * should do on the way past, and the target queries do not filter on status.
+ */
+export const UNPROVISIONABLE_STATUSES: ReadonlySet<string> = new Set([
+  "deleted",
+]);
+
+/** Why this organisation cannot be provisioned, or undefined when it can. */
+export function unprovisionableReason(status: string): string | undefined {
+  return UNPROVISIONABLE_STATUSES.has(status)
+    ? `status is '${status}' — provisioning would set it back to 'active' and re-expose the tenant. Restore it deliberately first, then re-run.`
+    : undefined;
+}
+
+/**
+ * CANDIDATES for "a human who can still act once the enterprise tier switches
+ * the default-deny resolver on" — not the answer.
+ *
+ * ## Why this is no longer the decision
+ *
+ * This predicate used to BE the preflight, and three review findings on #3178
+ * were the same mistake arriving on a different axis:
+ *
+ *   - `principal_role_assignments.org_id` / `workspace_id IS NULL` — where the
+ *     grant applies. A workspace-only Owner does not stop the ORGANISATION
+ *     locking itself out (discussion_r4034318919).
+ *   - `roles.scope_kind = 'org'` — which role was granted. Two system roles are
+ *     named "Owner" and only the org-scoped one is a super-user under resolver
+ *     rule 7.5 (discussion_r4034776760).
+ *   - `principals.parent_user_id` — who the principal actually is. The resolver
+ *     finds a human ONLY by matching the caller's user id to that column
+ *     (`fetch-authz.ts`), so a null or orphaned link is a principal no caller
+ *     can ever resolve to (discussion_r4035774889).
+ *
+ * After each round the predicate looked complete, and each clause was asserted
+ * through `PgDialect` rather than eyeballed. That is the point: an assertion
+ * shows a clause is PRESENT, never that the set is SUFFICIENT. A predicate is
+ * only as good as the resolver it predicts, and nothing tied the two together.
+ *
+ * So the decision moved. `ownerReadiness` below asks the real resolver —
+ * `fetchAuthz` plus rule 7.5's own exported predicate — whether a candidate
+ * would genuinely still be a super-user. This query only proposes candidates.
+ * A clause missing here now costs one extra resolver call and a rejection, not
+ * an organisation locked out, which is the whole reason for the inversion.
+ *
+ * The clauses stay because a candidate list full of principals that cannot
+ * resolve is a slower preflight and a worse refusal message — and because
+ * `users`/`org_users` liveness is the one thing `fetchAuthz` does NOT check
+ * (it matches `parent_user_id` alone), so this is where it belongs.
+ */
+export function orgWideSystemOwnerWhere(orgId: string, now: Date): SQL {
+  const predicate = and(
+    eq(schema.principals.orgId, orgId),
+    // A human, not an agent or service principal: an agent holding Owner does
+    // not keep a person out of the organisation.
+    eq(schema.principals.kind, "human"),
+    eq(schema.principals.status, "active"),
+    // The principal must lead back to a real, usable person.
+    //
+    // `fetch-authz.ts` resolves a human caller by matching their user id to
+    // `principals.parent_user_id` and nothing else. The column is nullable, so
+    // a legacy or hand-made Owner principal can carry NULL — and then NO caller
+    // can ever resolve to it. It is an Owner row that grants Owner to nobody.
+    //
+    // Non-null is necessary and NOT sufficient, which is the trap: the id can
+    // also point at a user who no longer exists, was soft-deleted, or has left
+    // the organisation. All four read identically in `principals` and only the
+    // join tells them apart, so the join at the call site is the real check and
+    // `IS NOT NULL` is the part of it that can live in this predicate.
+    isNotNull(schema.principals.parentUserId),
+    isNull(schema.users.deletedAt),
+    eq(schema.users.status, "active"),
+    eq(schema.principalRoleAssignments.orgId, orgId),
+    isNull(schema.principalRoleAssignments.workspaceId),
+    isNull(schema.principalRoleAssignments.deletedAt),
+    eq(schema.roles.orgId, orgId),
+    // The ORG-scoped Owner. `iam-provision.ts` seeds two system roles named
+    // "Owner" for every organisation — one `scope_kind = 'org'` from ORG_ROLES
+    // and one `scope_kind = 'workspace'` from WORKSPACE_ROLES — both with
+    // `is_system_default = true`. The resolver's rule 7.5 grants org-owner
+    // super-user only for `scopeKind === "org"`, so without this clause an
+    // org-wide assignment to the WORKSPACE Owner satisfied a preflight that the
+    // resolver it predicts would refuse, and the tier switch left the
+    // organisation under default-deny with nobody able to act.
+    //
+    // A separate axis from the assignment's scope above: that one asks where
+    // the grant applies, this one asks which role was granted.
+    eq(schema.roles.scopeKind, "org"),
+    eq(schema.roles.name, "Owner"),
+    // The system-seeded Owner, not a custom role somebody named Owner.
+    eq(schema.roles.isSystemDefault, true),
+    or(
+      isNull(schema.principalRoleAssignments.expiresAt),
+      gt(schema.principalRoleAssignments.expiresAt, now),
+    ),
+  );
+  // `and()` is typed as possibly-undefined because it drops undefined
+  // conditions. Every condition above is a literal, so this cannot happen —
+  // and a `where()` that silently received `undefined` would match every row,
+  // which for this predicate means passing the preflight for any organisation.
+  if (!predicate) {
+    throw new Error("unreachable: the owner-readiness predicate was empty");
+  }
+  return predicate;
+}
+
+/** A principal the candidate query proposes, with the user it leads back to. */
+export interface OwnerCandidate {
+  principalId: string;
+  userId: string;
+}
+
+/** Just enough of `AuthzData` to ask rule 7.5's question. */
+export interface OwnerAuthz {
+  principal: { id: string } | null;
+  roles: readonly Role[];
+}
+
+export interface OwnerReadinessDeps {
+  /** The candidate query — `orgWideSystemOwnerWhere`, in production. */
+  loadCandidates: () => Promise<OwnerCandidate[]>;
+  /** The real resolver — `fetchAuthz`, in production. */
+  fetchAuthzFor: (userId: string) => Promise<OwnerAuthz>;
+}
+
+export interface OwnerReadiness {
+  ready: boolean;
+  considered: number;
+  /** The first candidate the resolver confirmed, or null when none did. */
+  confirmedUserId: string | null;
+}
+
+/**
+ * Does some human still hold org-owner super-user, according to the resolver
+ * that will actually decide it?
+ *
+ * The inversion that ended three rounds of findings. The SQL predicate used to
+ * be the answer, so every clause it lacked was an organisation that could be
+ * locked out; now it only proposes and the resolver disposes. A candidate the
+ * query should have excluded is rejected here instead of provisioned, and a
+ * fourth axis nobody has found yet costs one wasted resolver call rather than a
+ * lockout.
+ *
+ * `fetchAuthz` is the same function the request path calls, and the confirming
+ * test is `grantsOrgOwnerSuperUser` — rule 7.5's own predicate, exported from
+ * the resolver and called by rule 7.5 itself. There is no second
+ * implementation left to drift.
+ *
+ * It stops at the first confirmation: one super-user is what "not locked out"
+ * means, and an organisation with many Owners should not pay for all of them.
+ */
+export async function ownerReadiness(
+  deps: OwnerReadinessDeps,
+): Promise<OwnerReadiness> {
+  const candidates = await deps.loadCandidates();
+  for (const candidate of candidates) {
+    const authz = await deps.fetchAuthzFor(candidate.userId);
+    // No principal means the resolver could not resolve this user at all —
+    // exactly the null/orphaned `parent_user_id` case, caught by the authority
+    // rather than predicted.
+    if (!authz.principal) continue;
+    if (grantsOrgOwnerSuperUser(authz.roles, authz.principal.id)) {
+      return {
+        ready: true,
+        considered: candidates.length,
+        confirmedUserId: candidate.userId,
+      };
+    }
+  }
+  return { ready: false, considered: candidates.length, confirmedUserId: null };
+}
+
+/** The column a plan's governed-action allowance actually lives in. */
+export const PLAN_ALLOWANCE_COLUMN = "billing.plans.included_gau_per_month";
+
+/**
+ * Why `--actions-annual` cannot apply to a subscribed organisation, and what
+ * to change instead.
+ *
+ * Exported so a test can check the remediation against the schema rather than
+ * against itself. This message used to name `included_actions_annual`, which
+ * migration `20260915120000` dropped — so it instructed an operator to edit a
+ * column that no longer exists (discussion_r4036214061). The remediation was
+ * not merely unhelpful, it was impossible, and the operator would sooner
+ * conclude the tool is broken than that the sentence is stale. A refusal is the
+ * one place where being out of date is invisible until somebody is stuck.
+ *
+ * The conversion is stated rather than implied: the caller passed an ANNUAL
+ * figure and the stored column is MONTHLY, so leaving them to infer the x12 is
+ * how a plan gets set to twelve times its intended allowance.
+ */
+export function subscriptionAllowanceRefusal(
+  planSlug: string,
+  actionsAnnual: number,
+): string {
+  const monthly = Math.ceil(actionsAnnual / 12);
+  const n = (v: number) => v.toLocaleString("en-US");
+  return (
+    `--actions-annual cannot apply to an organisation whose allowance comes from plan '${planSlug}'. ` +
+    `Set that plan's ${PLAN_ALLOWANCE_COLUMN} to ${n(monthly)} ` +
+    `(the stored figure is MONTHLY; resolveOrgActionEntitlement reads it as x12, ` +
+    `so ${n(actionsAnnual)}/yr is ${n(monthly)}/mo), or move the subscription, then re-run.`
+  );
+}
+
 export function isLocalHost(host: string): boolean {
   return /^(localhost|127\.0\.0\.1|::1)(:\d+)?$/.test(host);
 }
@@ -217,6 +441,25 @@ export function parseActionsAnnual(raw: string | undefined): number {
   return parseWholeNumberFlag(raw, "--actions-annual", 0);
 }
 
+/**
+ * Whether a recorded commitment may be overwritten with `actionsAnnual`.
+ *
+ * The documented recurring top-up command does not pass `--actions-annual`, so
+ * without this an org provisioned with a negotiated 25,000,000 had that figure
+ * silently replaced by the 1,500,000 default on the next maintenance run — and
+ * the org began paying overage on a commitment nobody changed.
+ *
+ * So: write when the operator asked for a figure, and otherwise only to fill a
+ * column that holds nothing. A stored figure and no flag is a signed commitment
+ * being left alone, not a difference to reconcile.
+ */
+export function shouldWriteAllowance(
+  stored: bigint | number | null | undefined,
+  flagGiven: boolean,
+): boolean {
+  return flagGiven || stored === null || stored === undefined;
+}
+
 export function usdToCents(usd: number): bigint {
   return BigInt(usd) * CENTS_PER_USD;
 }
@@ -259,9 +502,9 @@ async function confirm(question: string): Promise<boolean> {
  * including the credit floor, which is the part someone is usually standing
  * there waiting for — and say plainly which one thing it could not do.
  */
-async function hasNegotiatedAllowanceColumn(
-  d: ReturnType<typeof db>,
-): Promise<boolean> {
+async function hasNegotiatedAllowanceColumn(d: {
+  execute: (q: ReturnType<typeof sql>) => Promise<unknown>;
+}): Promise<boolean> {
   const rows = await d.execute(sql`
     select 1
       from information_schema.columns
@@ -293,7 +536,9 @@ async function main(): Promise<void> {
   const orgRef = flagValue(args, "--org");
   const floorUsd = parseFloorUsd(flagValue(args, "--floor-usd"));
   const floorCents = usdToCents(floorUsd);
-  const actionsAnnual = parseActionsAnnual(flagValue(args, "--actions-annual"));
+  const actionsAnnualFlag = flagValue(args, "--actions-annual");
+  const actionsAnnualGiven = actionsAnnualFlag !== undefined;
+  const actionsAnnual = parseActionsAnnual(actionsAnnualFlag);
 
   if (!email && !orgRef) {
     console.error(
@@ -346,9 +591,9 @@ async function main(): Promise<void> {
   // handful of organisations and production has whatever it has, so the count
   // is the cheapest thing that distinguishes them at a glance.
   if (!DRY_RUN && !SKIP_CONFIRM) {
-    const [fingerprint] = await db()
-      .select({ orgs: count() })
-      .from(schema.organizations);
+    const [fingerprint] = await withSystemDb((tx) =>
+      tx.select({ orgs: count() }).from(schema.organizations),
+    );
     if (!isLocalHost(host)) {
       console.log(kleur.red("  ⚠  Non-local database in --apply mode."));
     }
@@ -371,9 +616,19 @@ async function main(): Promise<void> {
     console.log();
   }
 
-  const d = db();
-
-  const canRecordAllowance = await hasNegotiatedAllowanceColumn(d);
+  // Every operator query below runs through `withSystemDb`, not the raw handle.
+  //
+  // `db()` sets neither the tenant GUCs nor `app.rls_bypass`, and `org_users`,
+  // the billing settings, the spend budgets, the credit lots and the IAM
+  // principals all carry forced RLS. Under enforcement the raw handle found no
+  // organisations for `--email` at all, and `--org --apply` wrote the
+  // unprotected organisation row and then failed the billing-settings insert on
+  // its RLS check, leaving the org half-provisioned. `withSystemDb` is the
+  // intentional, audited bypass, and an operator script provisioning across
+  // tenants is exactly its caller.
+  const canRecordAllowance = await withSystemDb((tx) =>
+    hasNegotiatedAllowanceColumn(tx),
+  );
   if (!canRecordAllowance) {
     console.log(
       kleur.yellow(
@@ -399,32 +654,36 @@ async function main(): Promise<void> {
   };
 
   if (email) {
-    orgs = await d
-      .selectDistinct(cols)
-      .from(schema.organizations)
-      .innerJoin(
-        schema.orgUsers,
-        eq(schema.orgUsers.orgId, schema.organizations.id),
-      )
-      .innerJoin(schema.users, eq(schema.users.id, schema.orgUsers.userId))
-      .where(eq(schema.users.email, email));
+    orgs = await withSystemDb((tx) =>
+      tx
+        .selectDistinct(cols)
+        .from(schema.organizations)
+        .innerJoin(
+          schema.orgUsers,
+          eq(schema.orgUsers.orgId, schema.organizations.id),
+        )
+        .innerJoin(schema.users, eq(schema.users.id, schema.orgUsers.userId))
+        .where(eq(schema.users.email, email)),
+    );
   } else {
     const ref = orgRef as string;
     const isUuid =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
         ref,
       );
-    orgs = await d
-      .select(cols)
-      .from(schema.organizations)
-      .where(
-        isUuid
-          ? eq(schema.organizations.id, ref)
-          : or(
-              eq(schema.organizations.slug, ref),
-              eq(schema.organizations.publicId, ref),
-            ),
-      );
+    orgs = await withSystemDb((tx) =>
+      tx
+        .select(cols)
+        .from(schema.organizations)
+        .where(
+          isUuid
+            ? eq(schema.organizations.id, ref)
+            : or(
+                eq(schema.organizations.slug, ref),
+                eq(schema.organizations.publicId, ref),
+              ),
+        ),
+    );
   }
 
   if (orgs.length === 0) {
@@ -444,6 +703,118 @@ async function main(): Promise<void> {
     console.log(kleur.bold(`  ▸ ${label}`));
 
     try {
+      // ── 2. Refusals, BEFORE anything is written ───────────────────────────
+      //
+      // Both of these used to be discovered after the tier had already been
+      // changed: the deleted-org case was never checked at all, and the IAM
+      // check ran at the end and only printed a warning while the script still
+      // exited zero. A refusal that arrives after the write is not a refusal.
+      const refusal = unprovisionableReason(org.status);
+      if (refusal) {
+        console.log(kleur.red(`      refused         : ${refusal}`));
+        failures += 1;
+        console.log();
+        continue;
+      }
+
+      // Enterprise runs the full IAM resolver, whose default effect is deny. An
+      // org with no usable Owner therefore loses every governed action the
+      // moment the tier lands, and the operator finds out from the customer.
+      // Check before the write, and refuse rather than warn.
+      //
+      // The SQL below proposes candidates; `fetchAuthz` decides. See
+      // `orgWideSystemOwnerWhere` for why the prediction stopped being the
+      // answer.
+      const [ownerWs] = await withSystemDb((tx) =>
+        tx
+          .select({ id: schema.workspaces.id })
+          .from(schema.workspaces)
+          .where(eq(schema.workspaces.orgId, org.id))
+          .limit(1),
+      );
+      // Any workspace resolves an ORG-WIDE assignment: fetchAuthz matches
+      // `workspace_id IS NULL OR workspace_id = $ws`, and the org-wide arm
+      // carries it whichever workspace is named. An org with none yet uses its
+      // own id, the same stand-in the credit write below uses, because
+      // runInTenantScope asserts a uuid rather than reading this one.
+      const ownerScope = { orgId: org.id, workspaceId: ownerWs?.id ?? org.id };
+
+      const readiness = await ownerReadiness({
+        loadCandidates: () =>
+          withSystemDb((tx) =>
+            tx
+              .select({
+                principalId: schema.principals.id,
+                userId: schema.principals.parentUserId,
+              })
+              .from(schema.principals)
+              .innerJoin(
+                schema.principalRoleAssignments,
+                eq(
+                  schema.principalRoleAssignments.principalId,
+                  schema.principals.id,
+                ),
+              )
+              .innerJoin(
+                schema.roles,
+                eq(schema.roles.id, schema.principalRoleAssignments.roleId),
+              )
+              // The user the principal points at must EXIST. An inner join is
+              // the check: an orphaned `parent_user_id` drops the row here, and
+              // no clause on `principals` alone can tell it from a good one.
+              .innerJoin(
+                schema.users,
+                eq(schema.users.id, schema.principals.parentUserId),
+              )
+              // And still be in the organisation. Membership has no soft
+              // delete — leaving removes the row — so the join IS the liveness
+              // check, and a departed Owner stops counting as lockout cover.
+              .innerJoin(
+                schema.orgUsers,
+                and(
+                  eq(schema.orgUsers.userId, schema.users.id),
+                  eq(schema.orgUsers.orgId, org.id),
+                ),
+              )
+              .where(orgWideSystemOwnerWhere(org.id, new Date())),
+          ).then((rows) =>
+            rows.flatMap((r) =>
+              r.userId
+                ? [{ principalId: r.principalId, userId: r.userId }]
+                : [],
+            ),
+          ),
+        fetchAuthzFor: (userId) =>
+          runInTenantScope(ownerScope, () =>
+            fetchAuthz({
+              userId,
+              apiKeyId: null,
+              orgId: org.id,
+              workspaceId: ownerScope.workspaceId,
+              // Rule 7.5 is evaluated per capability, but the answer this
+              // preflight needs is about the ROLE rather than any one
+              // capability. `grantsOrgOwnerSuperUser` reads the roles the
+              // resolver loaded, so the capability named here only has to be
+              // real.
+              capability: "get_org",
+            }),
+          ),
+      });
+
+      if (!readiness.ready) {
+        console.log(
+          kleur.red(
+            `      refused         : the IAM resolver confirms no org-owner super-user for this organisation (${readiness.considered} candidate(s) considered). Enterprise runs the full resolver (default deny), so the tier would lock it out. A workspace-scoped Owner, a workspace-scoped Owner ROLE, and an Owner principal with no live user behind it all read as Owner and none of them is one. Run: pnpm db:backfill-iam -- --apply, then re-run.`,
+          ),
+        );
+        failures += 1;
+        console.log();
+        continue;
+      }
+      console.log(
+        `      iam             : resolver confirms an org-owner super-user`,
+      );
+
       // ── 2a. Does a subscription already answer the tier question? ──────────
       //
       // `resolveOrgTierDetailed` reads the subscription leg FIRST and only then
@@ -455,27 +826,29 @@ async function main(): Promise<void> {
       // subscription answers. Say so instead of claiming a success that is not
       // one; changing the plan row itself is not this script's call, because a
       // plan row is shared by every org subscribed to it.
-      const [entitledSub] = await d
-        .select({
-          stripeSubscriptionId: schema.subscriptions.stripeSubscriptionId,
-          status: schema.subscriptions.status,
-          planSlug: schema.plans.slug,
-          planTier: schema.plans.tier,
-        })
-        .from(schema.subscriptions)
-        .innerJoin(
-          schema.plans,
-          eq(schema.subscriptions.planId, schema.plans.id),
-        )
-        .where(
-          and(
-            eq(schema.subscriptions.orgId, org.id),
-            inArray(schema.subscriptions.status, [
-              ...ENTITLED_SUBSCRIPTION_STATUSES,
-            ]),
-          ),
-        )
-        .limit(1);
+      const [entitledSub] = await withSystemDb((tx) =>
+        tx
+          .select({
+            stripeSubscriptionId: schema.subscriptions.stripeSubscriptionId,
+            status: schema.subscriptions.status,
+            planSlug: schema.plans.slug,
+            planTier: schema.plans.tier,
+          })
+          .from(schema.subscriptions)
+          .innerJoin(
+            schema.plans,
+            eq(schema.subscriptions.planId, schema.plans.id),
+          )
+          .where(
+            and(
+              eq(schema.subscriptions.orgId, org.id),
+              inArray(schema.subscriptions.status, [
+                ...ENTITLED_SUBSCRIPTION_STATUSES,
+              ]),
+            ),
+          )
+          .limit(1),
+      );
 
       if (entitledSub && entitledSub.planTier !== "enterprise") {
         console.log(
@@ -488,6 +861,21 @@ async function main(): Promise<void> {
         console.log(
           `      subscription    : entitled '${entitledSub.status}' subscription already on an enterprise plan ('${entitledSub.planSlug}')`,
         );
+        // `resolveOrgActionEntitlement` takes the subscription plan's allowance
+        // before it looks at `negotiated_actions_annual`, so a figure written
+        // here would be recorded and never read. The script used to write it
+        // and report success, which is how a 25,000,000 commitment kept billing
+        // overage above the plan's seed.
+        if (actionsAnnualGiven) {
+          console.log(
+            kleur.red(
+              `      refused         : ${subscriptionAllowanceRefusal(entitledSub.planSlug, actionsAnnual)}`,
+            ),
+          );
+          failures += 1;
+          console.log();
+          continue;
+        }
       }
 
       // ── 2b. Tier + recorded action commitment ──────────────────────────────
@@ -500,14 +888,21 @@ async function main(): Promise<void> {
       // On a database behind 20260916120000 there is no column to compare or to
       // write, so the allowance half is satisfied by definition and the org
       // keeps `resolveActionAllowance`'s bounded enterprise fallback.
+      // A stored figure the operator did not ask to change is a signed
+      // commitment, not a difference to reconcile. Writing the default over it
+      // on the documented recurring top-up run is how a negotiated allowance
+      // silently shrank and the org began paying overage.
+      const writeAllowance =
+        canRecordAllowance &&
+        shouldWriteAllowance(org.negotiatedActionsAnnual, actionsAnnualGiven);
       const allowanceIsSet =
-        !canRecordAllowance ||
-        (org.negotiatedActionsAnnual !== null &&
-          org.negotiatedActionsAnnual !== undefined &&
-          Number(org.negotiatedActionsAnnual) === actionsAnnual);
-      const recorded = canRecordAllowance
-        ? `, ${actionsAnnual.toLocaleString("en-US")} actions/yr recorded`
-        : " (allowance column absent — bounded fallback applies)";
+        !writeAllowance ||
+        Number(org.negotiatedActionsAnnual) === actionsAnnual;
+      const recorded = !canRecordAllowance
+        ? " (allowance column absent — bounded fallback applies)"
+        : writeAllowance
+          ? `, ${actionsAnnual.toLocaleString("en-US")} actions/yr recorded`
+          : `, ${Number(org.negotiatedActionsAnnual).toLocaleString("en-US")} actions/yr left as recorded (pass --actions-annual to change it)`;
 
       if (tierIsSet && allowanceIsSet) {
         console.log(
@@ -517,40 +912,46 @@ async function main(): Promise<void> {
         console.log(
           kleur.blue(
             `      tier            : would set plan_type '${org.planType}' → 'enterprise', status '${org.status}' → 'active'${
-              canRecordAllowance
+              writeAllowance
                 ? `, negotiated_actions_annual ${org.negotiatedActionsAnnual ?? "NULL"} → ${actionsAnnual}`
-                : " (allowance column absent — skipped)"
+                : canRecordAllowance
+                  ? `, negotiated_actions_annual left at ${org.negotiatedActionsAnnual}`
+                  : " (allowance column absent — skipped)"
             }`,
           ),
         );
       } else {
-        await d
-          .update(schema.organizations)
-          .set({
-            planType: "enterprise",
-            status: "active",
-            ...(canRecordAllowance
-              ? { negotiatedActionsAnnual: BigInt(actionsAnnual) }
-              : {}),
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.organizations.id, org.id));
+        await withSystemDb((tx) =>
+          tx
+            .update(schema.organizations)
+            .set({
+              planType: "enterprise",
+              status: "active",
+              ...(writeAllowance
+                ? { negotiatedActionsAnnual: BigInt(actionsAnnual) }
+                : {}),
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.organizations.id, org.id)),
+        );
         console.log(
           kleur.green(`      tier            : enterprise/active${recorded}`),
         );
       }
 
       // ── 3. Billing settings: no assistant cap, no dunning hold ─────────────
-      const [settings] = await d
-        .select({
-          id: schema.orgBillingSettings.id,
-          assistantSpendCapCents:
-            schema.orgBillingSettings.assistantSpendCapCents,
-          dunningState: schema.orgBillingSettings.dunningState,
-        })
-        .from(schema.orgBillingSettings)
-        .where(eq(schema.orgBillingSettings.orgId, org.id))
-        .limit(1);
+      const [settings] = await withSystemDb((tx) =>
+        tx
+          .select({
+            id: schema.orgBillingSettings.id,
+            assistantSpendCapCents:
+              schema.orgBillingSettings.assistantSpendCapCents,
+            dunningState: schema.orgBillingSettings.dunningState,
+          })
+          .from(schema.orgBillingSettings)
+          .where(eq(schema.orgBillingSettings.orgId, org.id))
+          .limit(1),
+      );
 
       const capIsClear = settings?.assistantSpendCapCents === null;
       const dunningIsClear = settings?.dunningState === "active";
@@ -582,14 +983,18 @@ async function main(): Promise<void> {
           updatedAt: new Date(),
         };
         if (settings) {
-          await d
-            .update(schema.orgBillingSettings)
-            .set(clear)
-            .where(eq(schema.orgBillingSettings.id, settings.id));
+          await withSystemDb((tx) =>
+            tx
+              .update(schema.orgBillingSettings)
+              .set(clear)
+              .where(eq(schema.orgBillingSettings.id, settings.id)),
+          );
         } else {
-          await d
-            .insert(schema.orgBillingSettings)
-            .values({ orgId: org.id, ...clear });
+          await withSystemDb((tx) =>
+            tx
+              .insert(schema.orgBillingSettings)
+              .values({ orgId: org.id, ...clear }),
+          );
         }
         console.log(
           kleur.green(
@@ -599,19 +1004,21 @@ async function main(): Promise<void> {
       }
 
       // ── 4. Spend-budget ceilings ───────────────────────────────────────────
-      const enabledBudgets = await d
-        .select({
-          id: schema.spendBudgets.id,
-          workspaceId: schema.spendBudgets.workspaceId,
-          limitMicros: schema.spendBudgets.limitMicros,
-        })
-        .from(schema.spendBudgets)
-        .where(
-          and(
-            eq(schema.spendBudgets.orgId, org.id),
-            eq(schema.spendBudgets.enabled, true),
+      const enabledBudgets = await withSystemDb((tx) =>
+        tx
+          .select({
+            id: schema.spendBudgets.id,
+            workspaceId: schema.spendBudgets.workspaceId,
+            limitMicros: schema.spendBudgets.limitMicros,
+          })
+          .from(schema.spendBudgets)
+          .where(
+            and(
+              eq(schema.spendBudgets.orgId, org.id),
+              eq(schema.spendBudgets.enabled, true),
+            ),
           ),
-        );
+      );
 
       if (enabledBudgets.length === 0) {
         console.log(`      spend budgets   : none enabled`);
@@ -622,15 +1029,17 @@ async function main(): Promise<void> {
           ),
         );
       } else {
-        await d
-          .update(schema.spendBudgets)
-          .set({ enabled: false, updatedAt: new Date() })
-          .where(
-            and(
-              eq(schema.spendBudgets.orgId, org.id),
-              eq(schema.spendBudgets.enabled, true),
+        await withSystemDb((tx) =>
+          tx
+            .update(schema.spendBudgets)
+            .set({ enabled: false, updatedAt: new Date() })
+            .where(
+              and(
+                eq(schema.spendBudgets.orgId, org.id),
+                eq(schema.spendBudgets.enabled, true),
+              ),
             ),
-          );
+        );
         console.log(
           kleur.green(
             `      spend budgets   : disabled ${enabledBudgets.length} ceiling(s) (rows kept)`,
@@ -645,18 +1054,20 @@ async function main(): Promise<void> {
       // number that reads high is how an org with a "positive" balance gets
       // refused.
       const now = new Date();
-      const lots = await d
-        .select({ remaining: schema.creditLots.remainingCents })
-        .from(schema.creditLots)
-        .where(
-          and(
-            eq(schema.creditLots.orgId, org.id),
-            or(
-              isNull(schema.creditLots.expiresAt),
-              gt(schema.creditLots.expiresAt, now),
+      const lots = await withSystemDb((tx) =>
+        tx
+          .select({ remaining: schema.creditLots.remainingCents })
+          .from(schema.creditLots)
+          .where(
+            and(
+              eq(schema.creditLots.orgId, org.id),
+              or(
+                isNull(schema.creditLots.expiresAt),
+                gt(schema.creditLots.expiresAt, now),
+              ),
             ),
           ),
-        );
+      );
       const current = lots.reduce(
         (acc, r) =>
           acc +
@@ -681,11 +1092,13 @@ async function main(): Promise<void> {
         // workspaceId too. Use a real workspace when the org has one so the GUC
         // is truthful; an org with no workspace yet gets its own id, which no
         // policy on this write path consults.
-        const [ws] = await d
-          .select({ id: schema.workspaces.id })
-          .from(schema.workspaces)
-          .where(eq(schema.workspaces.orgId, org.id))
-          .limit(1);
+        const [ws] = await withSystemDb((tx) =>
+          tx
+            .select({ id: schema.workspaces.id })
+            .from(schema.workspaces)
+            .where(eq(schema.workspaces.orgId, org.id))
+            .limit(1),
+        );
 
         const { effectiveBalanceCents } = await runInTenantScope(
           { orgId: org.id, workspaceId: ws?.id ?? org.id },
@@ -716,22 +1129,9 @@ async function main(): Promise<void> {
         );
       }
 
-      // ── 6. IAM readiness (enterprise runs the full resolver) ───────────────
-      const [principal] = await d
-        .select({ id: schema.principals.id })
-        .from(schema.principals)
-        .where(eq(schema.principals.orgId, org.id))
-        .limit(1);
-
-      if (principal) {
-        console.log(`      iam             : principals present`);
-      } else {
-        console.log(
-          kleur.yellow(
-            `      iam             : NO principals — enterprise runs the full IAM resolver. Run: pnpm db:backfill-iam -- --apply`,
-          ),
-        );
-      }
+      // IAM readiness was checked in step 2, before anything was written. A
+      // warning printed here could only tell the operator about a lockout the
+      // run had already caused.
     } catch (err) {
       failures += 1;
       console.log(kleur.red(`      failed: ${formatError(err)}`));

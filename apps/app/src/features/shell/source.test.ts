@@ -77,6 +77,7 @@ beforeEach(() => {
     id: "usr_marcusbell",
     email: "marcus.bell@acme.example",
     name: "Marcus Bell",
+    avatarUrl: null,
   });
 });
 
@@ -84,7 +85,11 @@ describe("shellSource", () => {
   it("hands the context's organization, the signed-in person and the shell.context read to the shell", async () => {
     expect(await shellSource(ctx, source)).toEqual({
       org: { slug: "acme", name: "Acme Robotics" },
-      viewer: { name: "Marcus Bell", email: "marcus.bell@acme.example" },
+      viewer: {
+        name: "Marcus Bell",
+        email: "marcus.bell@acme.example",
+        avatarUrl: null,
+      },
       context: listed,
       fleetWaiting: null,
     });
@@ -102,10 +107,12 @@ describe("shellSource", () => {
       id: "usr_marcusbell",
       email: "marcus.bell@acme.example",
       name: "",
+      avatarUrl: null,
     });
     expect((await shellSource(ctx, source)).viewer).toEqual({
       name: null,
       email: "marcus.bell@acme.example",
+      avatarUrl: null,
     });
   });
 

@@ -104,6 +104,7 @@ import { toolsSearch } from "./tools.search";
 import { toolsLoad } from "./tools.load";
 import { shellNavCountsGet } from "./shell.nav_counts.get";
 import { userPreferencesSet } from "./user.preferences.set";
+import { userProfileUpdate } from "./user.profile.update";
 import { agentMcpList } from "./agent.mcp.list";
 import { agentMcpResolve } from "./agent.mcp.resolve";
 import { agentMcpRegister } from "./agent.mcp.register";
@@ -619,6 +620,7 @@ export {
   toolsLoad,
   shellNavCountsGet,
   userPreferencesSet,
+  userProfileUpdate,
   runCostGet,
   runProofGet,
   evidenceDisclosureGrainSet,
@@ -945,6 +947,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   toolsLoad,
   shellNavCountsGet,
   userPreferencesSet,
+  userProfileUpdate,
   runCostGet,
   runProofGet,
   evidenceDisclosureGrainSet,

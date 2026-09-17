@@ -12,44 +12,117 @@ import {
   applyGrace,
   applySupersession,
   classifyRuns,
+  graceRemainingMs,
+  isEligibleRun,
   verdictOf,
 } from "./check-main-verified.mjs";
 
+/** A `pipeline.yml` run of the only kind that can answer for a main commit. */
+const push = (over: Record<string, unknown> = {}) => ({
+  event: "push",
+  status: "completed",
+  conclusion: "success",
+  ...over,
+});
+
 describe("classifyRuns", () => {
-  it("counts a concluded run", () => {
-    expect(classifyRuns([{ status: "completed", conclusion: "success" }])).toBe(
-      "concluded",
-    );
+  it("counts a concluded push run", () => {
+    expect(classifyRuns([push()])).toBe("concluded");
     // A failure is still an answer — this guard asks whether anything looked,
     // not whether it liked what it saw.
-    expect(classifyRuns([{ status: "completed", conclusion: "failure" }])).toBe(
-      "concluded",
-    );
+    expect(classifyRuns([push({ conclusion: "failure" })])).toBe("concluded");
   });
 
   it("does NOT count a cancelled run", () => {
     // The witness. Eviction produces exactly this, so treating it as an answer
     // would make the guard blind to the incident it exists for.
+    expect(classifyRuns([push({ conclusion: "cancelled" })])).toBe("none");
+  });
+
+  it("does NOT count a conclusion that proves nothing executed", () => {
+    // The guard's own header names "a workflow that failed to start" as a cause
+    // it catches, so that conclusion cannot also be its answer. `skipped` and
+    // `action_required` are the same class: concluded, nothing run.
+    expect(classifyRuns([push({ conclusion: "startup_failure" })])).toBe(
+      "none",
+    );
+    expect(classifyRuns([push({ conclusion: "skipped" })])).toBe("none");
+    expect(classifyRuns([push({ conclusion: "action_required" })])).toBe(
+      "none",
+    );
+  });
+
+  it("does NOT count a workflow_dispatch run", () => {
+    // pipeline.yml skips checks, tests and e2e for a dispatch, and both deploy
+    // jobs require a push to main, so such a run verified and deployed nothing.
+    expect(classifyRuns([push({ event: "workflow_dispatch" })])).toBe("none");
+    // Nor is one still going an answer on its way.
     expect(
-      classifyRuns([{ status: "completed", conclusion: "cancelled" }]),
+      classifyRuns([
+        push({
+          event: "workflow_dispatch",
+          status: "in_progress",
+          conclusion: null,
+        }),
+      ]),
     ).toBe("none");
   });
 
-  it("separates a run still in flight from no run at all", () => {
-    expect(classifyRuns([{ status: "in_progress", conclusion: null }])).toBe(
-      "in_flight",
+  it("does not assume an unreported event is a push", () => {
+    expect(classifyRuns([{ status: "completed", conclusion: "success" }])).toBe(
+      "none",
     );
+    expect(isEligibleRun(undefined)).toBe(false);
+  });
+
+  it("separates a run still in flight from no run at all", () => {
+    expect(
+      classifyRuns([push({ status: "in_progress", conclusion: null })]),
+    ).toBe("in_flight");
     expect(classifyRuns([])).toBe("none");
     expect(classifyRuns(undefined)).toBe("none");
   });
 
   it("prefers a real conclusion over a cancelled sibling", () => {
+    expect(classifyRuns([push({ conclusion: "cancelled" }), push()])).toBe(
+      "concluded",
+    );
+  });
+
+  it("prefers a real push conclusion over a dispatch sibling", () => {
+    expect(classifyRuns([push({ event: "workflow_dispatch" }), push()])).toBe(
+      "concluded",
+    );
+  });
+});
+
+describe("graceRemainingMs", () => {
+  const GRACE = 10 * 60 * 1000;
+
+  it("is zero when nothing is inside the grace", () => {
     expect(
-      classifyRuns([
-        { status: "completed", conclusion: "cancelled" },
-        { status: "completed", conclusion: "success" },
-      ]),
-    ).toBe("concluded");
+      graceRemainingMs([{ sha: "a", state: "concluded", ageMs: 1 }], GRACE),
+    ).toBe(0);
+    expect(graceRemainingMs([], GRACE)).toBe(0);
+  });
+
+  it("waits out the youngest commit still inside the grace", () => {
+    // Without this the guard suppresses the finding and does not look again
+    // until the next push or the daily cron, so a run that never arrives goes
+    // unreported for a day rather than for the ten minutes the grace promises.
+    const wait = graceRemainingMs(
+      [
+        { sha: "a", state: "too_young", ageMs: GRACE - 60_000 },
+        { sha: "b", state: "too_young", ageMs: GRACE - 120_000 },
+      ],
+      GRACE,
+    );
+    expect(wait).toBeGreaterThan(120_000);
+    expect(wait).toBeLessThan(130_000);
+  });
+
+  it("ignores a commit whose age could not be read", () => {
+    expect(graceRemainingMs([{ sha: "a", state: "too_young" }], GRACE)).toBe(0);
   });
 });
 

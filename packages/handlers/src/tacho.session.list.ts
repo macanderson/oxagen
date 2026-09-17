@@ -3,6 +3,7 @@ import { tachoSessionList } from "@oxagen/oxagen/contracts/tacho.session.list";
 import type { TachoSessionListOutput } from "@oxagen/oxagen/contracts/tacho.session.list";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, desc, eq, gte, inArray, isNull, lt, or } from "drizzle-orm";
+import { sessionReadColumns } from "./lib/tacho-gateway-columns";
 
 type SessionRow = typeof schema.tachoSessions.$inferSelect;
 export type SessionSummary = TachoSessionListOutput["sessions"][number];
@@ -125,6 +126,10 @@ export const tachoSessionListHandler: CapabilityHandler<
         desc(schema.tachoSessions.id),
       ],
       limit: input.limit + 1,
+      // The session list does not show the gateway observation, and must not
+      // go dark for the window in which the column is not there yet
+      // (discussion_r4040558842).
+      columns: await sessionReadColumns(tx),
     });
     const page = rows.slice(0, input.limit);
     const hosts = await hostPublicIds(tx, page);

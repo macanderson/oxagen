@@ -1,0 +1,137 @@
+// The profile action through the real viewer and kernel seams: the session,
+// the pre-scope lookups and the kernel's invoke() are the only fakes, so each
+// case shows what the person gets back and whether update_profile ran.
+//
+// The case that earns this file is the last one: the action passes no user id,
+// because the capability takes none. A profile write that accepted a target id
+// would let a form field name someone else's row.
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { invoke, getSession, orgRole, redirect, captureError } = vi.hoisted(
+  () => ({
+    invoke: vi.fn<typeof import("@oxagen/oxagen").invoke>(),
+    getSession: vi.fn(),
+    orgRole: vi.fn<() => Promise<string | null>>(),
+    redirect: vi.fn((url: string) => {
+      throw new Error(`NEXT_REDIRECT ${url}`);
+    }),
+    captureError: vi.fn(),
+  }),
+);
+vi.mock("@oxagen/oxagen", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/oxagen")>()),
+  invoke,
+}));
+vi.mock("@oxagen/telemetry", () => ({ captureError }));
+vi.mock("@oxagen/handlers/register", () => ({}));
+vi.mock("@oxagen/agent/register", () => ({}));
+vi.mock("next/navigation", () => ({
+  redirect,
+  permanentRedirect: redirect,
+  notFound: () => {
+    throw new Error("NEXT_NOT_FOUND");
+  },
+}));
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  connection: () => Promise.resolve(),
+}));
+vi.mock("next/headers", () => ({
+  headers: () => Promise.resolve(new Headers()),
+}));
+vi.mock("@/server/session", () => ({ getSession }));
+vi.mock("@/server/tenancy-lookups", () => ({
+  systemLookups: {
+    orgBySlug: (slug: string) =>
+      Promise.resolve(
+        slug === "acme"
+          ? { id: ORG_ID, publicId: "org_01", slug: "acme", name: "Acme" }
+          : null,
+      ),
+    orgBySlugHistory: () => Promise.resolve(null),
+    orgRole,
+    mfaPolicy: () => Promise.resolve(null),
+    twoFactorEnabled: () => Promise.resolve(false),
+  },
+}));
+
+const ORG_ID = "7a000000-0000-4000-8000-0000000000a1";
+
+const { updateProfile } = await import("./account-actions");
+
+beforeEach(() => {
+  invoke.mockReset();
+  redirect.mockClear();
+  captureError.mockClear();
+  orgRole.mockResolvedValue("member");
+  getSession.mockResolvedValue({
+    user: { id: "u-marcus", email: "marcus.bell@acme.example" },
+  });
+});
+
+describe("updateProfile", () => {
+  it("sends a signed-out visitor to log in, writing nothing (negative)", async () => {
+    getSession.mockResolvedValue(null);
+    await expect(
+      updateProfile("acme", { displayName: "Marcus B", avatarUrl: "" }),
+    ).rejects.toThrow("NEXT_REDIRECT /login");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("writes the display name and answers with what the handler stored", async () => {
+    invoke.mockResolvedValue({
+      displayName: "Marcus B",
+      avatarUrl: null,
+    });
+    const result = await updateProfile("acme", {
+      displayName: "Marcus B",
+      avatarUrl: "",
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: { displayName: "Marcus B", avatarUrl: null },
+    });
+  });
+
+  it("sends a blank avatar as null, so clearing it clears the column", async () => {
+    invoke.mockResolvedValue({
+      displayName: "Marcus B",
+      avatarUrl: null,
+    });
+    await updateProfile("acme", { displayName: "Marcus B", avatarUrl: "" });
+    expect(invoke).toHaveBeenCalledWith(
+      "update_profile",
+      { displayName: "Marcus B", avatarUrl: null },
+      expect.anything(),
+    );
+  });
+
+  it("passes an avatar URL through untouched", async () => {
+    invoke.mockResolvedValue({
+      displayName: "Marcus B",
+      avatarUrl: "https://cdn.example/a.png",
+    });
+    await updateProfile("acme", {
+      displayName: "Marcus B",
+      avatarUrl: "https://cdn.example/a.png",
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "update_profile",
+      { displayName: "Marcus B", avatarUrl: "https://cdn.example/a.png" },
+      expect.anything(),
+    );
+  });
+
+  it("never sends a user id: the capability acts on the authenticated principal", async () => {
+    invoke.mockResolvedValue({
+      displayName: "Marcus B",
+      avatarUrl: null,
+    });
+    await updateProfile("acme", { displayName: "Marcus B", avatarUrl: "" });
+    const input = invoke.mock.calls[0]?.[1];
+    expect(Object.keys(input ?? {}).sort()).toEqual([
+      "avatarUrl",
+      "displayName",
+    ]);
+  });
+});

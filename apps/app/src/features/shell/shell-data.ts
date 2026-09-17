@@ -7,7 +7,7 @@ import type { Read } from "@/data/read";
 
 export type ShellData = {
   org: { slug: string; name: string };
-  viewer: { name: string | null; email: string };
+  viewer: { name: string | null; email: string; avatarUrl: string | null };
   context: Read<ShellContext>;
   /**
    * Approvals waiting on a person, shown on the Fleet slot. Null until the

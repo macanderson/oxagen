@@ -136,6 +136,71 @@ describe("the shell on /{org}/{ws}", () => {
   });
 });
 
+// The trigger read the name and the email and nothing else, so `viewer.avatarUrl`
+// had no branch that could draw it: the Account dialog's avatar field was
+// write-only from the chrome's point of view, and a reload did not help either
+// because the value arrived and was dropped at the last step.
+describe("the user-menu trigger", () => {
+  function withAvatar(avatarUrl: string | null) {
+    return shellData({
+      viewer: {
+        name: "Marcus Bell",
+        email: "marcus.bell@acme.example",
+        avatarUrl,
+      },
+    });
+  }
+
+  it("draws the persisted image avatar, not the initials", () => {
+    renderShell(withAvatar("https://cdn.example/marcus.png"));
+    const avatar = screen.getByTestId("user-menu-avatar");
+    expect(avatar.dataset.avatar).toBe("image");
+    expect(avatar).toHaveAttribute("src", "https://cdn.example/marcus.png");
+    expect(screen.getByTestId("user-menu-trigger").textContent).toBe("");
+  });
+
+  it("draws a persisted designed avatar, not the initials", () => {
+    renderShell(
+      withAvatar('avatar:v1:{"emoji":"🦊","bg":"#f59e0b","mode":"full"}'),
+    );
+    const avatar = screen.getByTestId("user-menu-avatar");
+    expect(avatar.dataset.avatar).toBe("designed");
+    expect(avatar.textContent).toBe("🦊");
+  });
+
+  it("draws it at the trigger's size, not the editor preview's", () => {
+    renderShell(
+      withAvatar('avatar:v1:{"emoji":"🦊","bg":"#f59e0b","mode":"full"}'),
+    );
+    const avatar = screen.getByTestId("user-menu-avatar");
+    expect(avatar.className).toContain("size-8");
+    expect(avatar.className).not.toContain("size-13");
+  });
+
+  it("falls back to initials when no avatar is set, or the stored value is malformed (negative)", () => {
+    renderShell(withAvatar(null));
+    expect(screen.getByTestId("user-menu-avatar").dataset.avatar).toBe(
+      "initials",
+    );
+    expect(screen.getByTestId("user-menu-trigger").textContent).toBe("MB");
+    cleanup();
+
+    renderShell(withAvatar("javascript:alert(1)"));
+    expect(screen.getByTestId("user-menu-avatar").dataset.avatar).toBe(
+      "initials",
+    );
+    expect(screen.getByTestId("user-menu-trigger").textContent).toBe("MB");
+  });
+
+  it("names the person in the trigger's label whatever the avatar is", () => {
+    renderShell(withAvatar("https://cdn.example/marcus.png"));
+    expect(screen.getByTestId("user-menu-trigger")).toHaveAttribute(
+      "aria-label",
+      "User menu for Marcus Bell",
+    );
+  });
+});
+
 describe("sidebar", () => {
   it("renders exactly the mockup's eight links with Agent IAM naming and the current page", () => {
     renderShell(shellData());
@@ -300,7 +365,7 @@ describe("command menu", () => {
 });
 
 describe("user menu", () => {
-  it("names the viewer and switches theme: light, dark, system; nothing else is offered (negative)", async () => {
+  it("names the viewer, opens Account and switches theme: light, dark, system; nothing else is offered (negative)", async () => {
     const user = userEvent.setup();
     renderShell(shellData());
     await user.click(
@@ -308,7 +373,10 @@ describe("user menu", () => {
     );
     const menu = await screen.findByRole("menu");
     expect(menu).toHaveTextContent("marcus.bell@acme.example");
-    expect(within(menu).getAllByRole("menuitem")).toHaveLength(1);
+    // Account and Switch theme, and nothing else: the dialog spec App. F folds
+    // the account pages into is reached from here.
+    expect(within(menu).getAllByRole("menuitem")).toHaveLength(2);
+    expect(within(menu).getByTestId("open-account")).toBeTruthy();
     await user.click(within(menu).getByTestId("switch-theme"));
     expect(document.documentElement.dataset.theme).toBe("light");
     await user.click(screen.getByTestId("switch-theme"));
@@ -319,7 +387,9 @@ describe("user menu", () => {
 
   it("names a viewer with no recorded name by their email", () => {
     renderShell(
-      shellData({ viewer: { name: null, email: "dana@acme.example" } }),
+      shellData({
+        viewer: { name: null, email: "dana@acme.example", avatarUrl: null },
+      }),
     );
     expect(
       screen.getByRole("button", { name: "User menu for dana@acme.example" }),

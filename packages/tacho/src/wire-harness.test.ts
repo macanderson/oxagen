@@ -9,6 +9,8 @@
 import { describe, expect, it } from "vitest";
 import {
   CONNECTED_HARNESSES,
+  TACHO_ENFORCEMENT_TIER_ATTR,
+  TACHO_GATEWAY_TIER,
   isConnectedHarness,
   isWrappedHarness,
   TACHO_HARNESS_LABELS,
@@ -81,5 +83,21 @@ describe("the tier summaries are the honesty rule in one line each", () => {
       expect(summary.toLowerCase()).not.toContain("better");
       expect(summary.toLowerCase()).not.toContain("limited");
     }
+  });
+});
+
+describe("the gateway enforcement attribute is a wire spelling", () => {
+  // The daemon writes this attribute onto a connected app's tool-call event;
+  // the control plane's ingest reads it to file the call under the `gateway`
+  // tier. Both now take the spelling from the same constant, so a rename is a
+  // type error rather than a silent mismatch. What a shared constant does NOT
+  // stop is changing its VALUE, which is a protocol break: hosts in the field
+  // go on emitting the old spelling, and a control plane looking for a new one
+  // would file every one of their gateway calls as `observe` — the exact
+  // silence discussion_r4034318913 was about. Pinning the literal here makes
+  // that change deliberate.
+  it("is the spelling already deployed hosts emit", () => {
+    expect(TACHO_ENFORCEMENT_TIER_ATTR).toBe("oxagen.enforcement_tier");
+    expect(TACHO_GATEWAY_TIER).toBe("gateway");
   });
 });

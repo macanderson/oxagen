@@ -58,6 +58,21 @@ describe("getAuthUser", () => {
       id: "u2",
       email: "m@acme.example",
       name: "",
+      // Better Auth maps `image` to auth.users.avatar_url; the Account dialog
+      // draws it, so the shell's viewer carries it.
+      avatarUrl: "x",
+    });
+  });
+
+  it("carries a null avatar rather than an empty one, so the dialog draws initials (negative)", async () => {
+    api.getSession.mockResolvedValue({
+      user: { id: "u3", email: "d@acme.example", name: "Dana", image: null },
+    });
+    await expect(getAuthUser()).resolves.toEqual({
+      id: "u3",
+      email: "d@acme.example",
+      name: "Dana",
+      avatarUrl: null,
     });
   });
 
