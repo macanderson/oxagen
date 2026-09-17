@@ -179,6 +179,18 @@ carry braces and clause-like words that no rule in the file is written against.
 None of those is a demonstrated bypass today. That is the point: neither was
 `whereé`, the day before it was.
 
+The strongest evidence for all of this came from round 9 correcting itself.
+Replacing `\b` and `[A-Za-z0-9_]` with Cypher's Unicode classes fixed the
+character classes and left the word scan walking the string one **UTF-16 index**
+at a time. Every identifier character outside the BMP — U+1D431 MATHEMATICAL
+BOLD SMALL X, and `ID_Continue` covers the block — still arrived as a lone
+surrogate, matched no Unicode property, and still split the name, so
+`RETURN n AS where𝐱` still handed the seam the bare keyword `WHERE`. The fix
+aimed at the demonstrated example (an accented letter) and the defect was about
+the grammar (a code point), so a third encoding of it survived the fix meant to
+close the class. It was found by auditing the fix rather than by review, which is
+the only reason it is closed in the same PR instead of being round ten.
+
 ### What follows
 
 This does **not** change the decision below — it strengthens the case for it and
