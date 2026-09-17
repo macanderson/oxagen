@@ -13,7 +13,11 @@ import {
   tachoHostStatusSchema,
 } from "@oxagen/oxagen/tacho/schemas";
 import { gatewayMandateTools } from "@oxagen/iam/machine-key-scope";
-import { digestJcs, type JsonValue } from "@oxagen/tacho";
+import {
+  BUNDLE_FEATURE_GATEWAY_TOOLS,
+  digestJcs,
+  type JsonValue,
+} from "@oxagen/tacho";
 import { schema } from "@oxagen/database";
 import { RETENTION_CONTENT_CLASSES } from "@oxagen/run-ledger";
 import {
@@ -190,10 +194,39 @@ export async function readWorkspaceRetention(
  * a runtime that has not imported its contracts. Absent means *not told*, and
  * the host then serves what it is given, which is what a bundle from before
  * this field means too.
+ *
+ * **Phase 1 of two: emitted only to a host that said it can parse it.**
+ * `policyBundleSchema` is `.strict()` on the host, so a daemon or CLI built
+ * before this field rejects the *whole* mandate the moment a bundle carries
+ * one. The control plane deploys before the fleet upgrades, so emitting it to
+ * everyone would fail every bundle refresh on every installed host — stranding
+ * each on a stale mandate — and would stop an un-upgraded CLI enrolling at
+ * all, since enrollment parses a bundle too. So the host advertises
+ * `BUNDLE_FEATURE_GATEWAY_TOOLS` (`hosts.bundle_features`, written at
+ * enrollment and refreshed from every control poll) and only then is it sent.
+ *
+ * **The gate is a compatibility constraint, not a change of mind about the
+ * control.** An unfiltered `tools/list` is a security hole — it offers a
+ * connected app tools the mandate forbids — and a host that has not
+ * advertised keeps that hole until it upgrades. That is the cost of not
+ * breaking it outright, and it is bounded by the fleet upgrading. Phase 2
+ * makes the field required in `policyBundleSchema` and deletes this gate, so
+ * absent stops being representable. Until then: do not widen this to every
+ * host, and do not delete it as dead weight.
  */
-function gatewayTools(): { gateway_tools?: string[] } {
+function gatewayTools(host: TachoHostRow): { gateway_tools?: string[] } {
+  if (!parsesGatewayTools(host)) return {};
   const tools = gatewayMandateTools();
   return tools.length === 0 ? {} : { gateway_tools: tools };
+}
+
+/** Whether this host named `gateway_tools` among the fields it can parse. */
+function parsesGatewayTools(host: TachoHostRow): boolean {
+  const advertised: unknown = host.bundleFeatures;
+  return (
+    Array.isArray(advertised) &&
+    advertised.includes(BUNDLE_FEATURE_GATEWAY_TOOLS)
+  );
 }
 
 export function unsignedBundle(
@@ -220,7 +253,7 @@ export function unsignedBundle(
     context: { system: null },
     retention,
     mode,
-    ...gatewayTools(),
+    ...gatewayTools(host),
   };
   const etag = digestJcs(content as unknown as JsonValue).slice(
     "sha256:".length,
@@ -374,7 +407,18 @@ export async function controlEnvelope(
   });
 }
 
-/** Touch the host's liveness columns from what the daemon reported. */
+/**
+ * Touch the host's liveness columns from what the daemon reported.
+ *
+ * `bundle_features` is here rather than only at enrollment because it has to
+ * track the code the host is **running**. `wrapper_version` and
+ * `daemon_version` both originate in `host.json`, which `tacho enroll` writes
+ * once and no upgrade rewrites, so a host that upgrades in place keeps
+ * reporting the version it enrolled with forever — which would leave every
+ * upgraded host permanently ungated. The advertisement rides the health
+ * report on every poll instead, so an upgraded host is gated in on its next
+ * one.
+ */
 export async function touchHost(
   tx: TachoTx,
   host: TachoHostRow,
@@ -387,6 +431,7 @@ export async function touchHost(
         hooks_ok?: boolean;
         otel_ok?: boolean;
         bundle_etag?: string;
+        bundle_features?: string[];
       }
     | undefined,
   now: Date,
@@ -409,6 +454,8 @@ export async function touchHost(
     values["hooksLastCheckedAt"] = now;
   }
   if (daemon?.otel_ok !== undefined) values["otelOk"] = daemon.otel_ok;
+  if (daemon?.bundle_features !== undefined)
+    values["bundleFeatures"] = daemon.bundle_features;
   if (daemon?.bundle_etag !== undefined)
     values["bundleEtagServed"] = daemon.bundle_etag;
   await tx

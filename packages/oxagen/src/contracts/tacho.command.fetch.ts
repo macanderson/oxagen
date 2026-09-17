@@ -67,6 +67,13 @@ export const tachoCommandFetch = registerCapability({
           spool_depth: z.number().int().nonnegative().optional(),
           hooks_ok: z.boolean().optional(),
           otel_ok: z.boolean().optional(),
+          /**
+           * The bundle fields this daemon can parse, mirroring
+           * `daemonHealthSchema`. This object is `.strict()` too, so leaving
+           * it out here would refuse the poll of every **upgraded** host —
+           * the same shape of break, in the other direction.
+           */
+          bundle_features: z.array(z.string().max(64)).max(32).optional(),
         })
         .strict()
         .optional(),

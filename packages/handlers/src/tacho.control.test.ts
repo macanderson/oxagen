@@ -415,6 +415,59 @@ describe("fetch_commands", () => {
     ).rejects.toThrow(/API key required/);
     expect(db.updates).toEqual([]);
   });
+
+  it("records the bundle fields the daemon says it can parse", async () => {
+    // The gate on a new bundle field reads this column, and it has to track
+    // the code the host is *running*: `wrapper_version` and `daemon_version`
+    // both come from `host.json`, which `enroll` writes once and no upgrade
+    // rewrites, so a host that upgrades in place would otherwise never be
+    // recognised as able to parse the field.
+    const db: Fake = {
+      hosts: [host({ bundleFeatures: [] })],
+      sessions: [],
+      commands: [],
+      updates: [],
+      inserts: [],
+    };
+    wire(db);
+    await tachoCommandFetchHandler(
+      {
+        ...FETCH,
+        host_enrollment_id: HOST_PUBLIC,
+        acknowledgements: [],
+        daemon: { bundle_features: ["gateway_tools"] },
+      },
+      MACHINE,
+    );
+    expect(db.updates.find((u) => u.table === "hosts")?.values).toMatchObject({
+      bundleFeatures: ["gateway_tools"],
+    });
+  });
+
+  it("leaves the advertisement alone when a poll carries none", async () => {
+    // A daemon too old to advertise must not have its record overwritten with
+    // an empty list on every poll, and must not be silently upgraded either.
+    const db: Fake = {
+      hosts: [host({ bundleFeatures: ["gateway_tools"] })],
+      sessions: [],
+      commands: [],
+      updates: [],
+      inserts: [],
+    };
+    wire(db);
+    await tachoCommandFetchHandler(
+      {
+        ...FETCH,
+        host_enrollment_id: HOST_PUBLIC,
+        acknowledgements: [],
+        daemon: { hooks_ok: true },
+      },
+      MACHINE,
+    );
+    expect(
+      db.updates.find((u) => u.table === "hosts")?.values,
+    ).not.toHaveProperty("bundleFeatures");
+  });
 });
 
 describe("ackPatch", () => {

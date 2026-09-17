@@ -116,6 +116,8 @@ interface HostFacts {
   claudeExecpath?: string | undefined;
   nodeVersion?: string | undefined;
   wrapperVersion?: string | undefined;
+  /** The bundle fields this host's parser understands; see the contract. */
+  bundleFeatures?: string[] | undefined;
   shell?: string | undefined;
   managed: boolean;
   validityDays: number;
@@ -270,6 +272,9 @@ export async function mintHostEnrollment(
       claudeExecpath: facts.claudeExecpath ?? null,
       nodeVersion: facts.nodeVersion ?? null,
       wrapperVersion: facts.wrapperVersion ?? null,
+      // Empty, not null: a client that advertised nothing can parse no gated
+      // field, and the initial bundle below is built from this row.
+      bundleFeatures: facts.bundleFeatures ?? [],
       shell: facts.shell ?? null,
       status: "active",
       enrollmentClaims: claims,

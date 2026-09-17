@@ -23,7 +23,11 @@ import {
   testHostFile,
   unsignedBundle,
 } from "../host/test-support";
-import type { ControlEnvelope, DeliveredCommand } from "../wire";
+import {
+  type ControlEnvelope,
+  type DeliveredCommand,
+  TACHO_BUNDLE_FEATURES,
+} from "../wire";
 import { type DaemonHandle, startDaemon } from "./daemon";
 
 const FIXTURES = join(
@@ -65,6 +69,8 @@ function fakeControlPlane(bundleEtag: string) {
   let refuseNext: number | undefined;
   let down = false;
   const calls: string[] = [];
+  /** Every daemon health report the plane received, newest last. */
+  const reported: unknown[] = [];
   const fetch: FetchLike = async (url, init) => {
     calls.push(url);
     if (down) throw new Error("ECONNREFUSED");
@@ -81,6 +87,7 @@ function fakeControlPlane(bundleEtag: string) {
         refuseNext = undefined;
         return { ok: false, status, text: async () => "refused" };
       }
+      if (body["daemon"] !== undefined) reported.push(body["daemon"]);
       const events = body["events"] as TachoEvent[];
       ingested.push(...events);
       return {
@@ -112,6 +119,7 @@ function fakeControlPlane(bundleEtag: string) {
       };
     }
     if (url.endsWith("/commands")) {
+      if (body["daemon"] !== undefined) reported.push(body["daemon"]);
       acks.push(...(body["acknowledgements"] as unknown[]));
       return {
         ok: true,
@@ -130,6 +138,7 @@ function fakeControlPlane(bundleEtag: string) {
     ingested,
     acks,
     calls,
+    reported,
     queue: (
       command: Omit<
         DeliveredCommand,
@@ -701,6 +710,12 @@ describe("tachod", () => {
     plane.setBundle(next);
     plane.setDenyGeneration({ org: 2, workspace: 1 });
     await handle.tick();
+    // Every poll tells the plane which bundle fields this build can parse, so
+    // a gated field reaches a host that upgraded in place. `host.json`'s
+    // `wrapper_version` cannot answer that: `enroll` writes it once.
+    expect(plane.reported.at(-1)).toMatchObject({
+      bundle_features: [...TACHO_BUNDLE_FEATURES],
+    });
     expect(handle.host().bundle.version).toBe(4);
     expect(handle.host().deny_generation).toEqual({ org: 2, workspace: 1 });
     expect(readHostFile(paths.hostFile)?.bundle.etag).toBe("etag-4");

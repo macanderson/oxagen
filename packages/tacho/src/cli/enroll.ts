@@ -28,6 +28,7 @@ import {
 import { toProtocolTimestamp } from "../timestamp";
 import {
   enrollmentResponseSchema,
+  TACHO_BUNDLE_FEATURES,
   TACHO_HARNESS_LABELS,
   type TachoHarness,
   tachoHarnessSchema,
@@ -349,6 +350,10 @@ export async function enroll(
       ...(claude.path !== undefined ? { claudeExecpath: claude.path } : {}),
       nodeVersion: deps.nodeVersion,
       wrapperVersion: deps.wrapperVersion,
+      // The enrollment response carries this host's first policy bundle, and
+      // we parse it with a `.strict()` schema — so the control plane is told
+      // which bundle fields this build names before it signs one.
+      bundleFeatures: [...TACHO_BUNDLE_FEATURES],
       ...(deps.env["SHELL"] !== undefined ? { shell: deps.env["SHELL"] } : {}),
       managed,
       validityDays: options.validityDays ?? 180,
