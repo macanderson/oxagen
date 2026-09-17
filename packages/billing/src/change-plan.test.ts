@@ -4,11 +4,14 @@
  *
  * Scenarios:
  *  1. changeOrgPlan — no active subscription (free) → returns checkout URL
- *  2. changeOrgPlan — active subscription, upgrade → swaps price (always_invoice)
- *  3. changeOrgPlan — active subscription, downgrade → swaps price (none)
+ *  2. changeOrgPlan — active subscription, bill rises → swaps (always_invoice)
+ *  3. changeOrgPlan — active subscription, bill falls → swaps (none)
  *  4. changeOrgPlan — unknown plan slug → throws
  *  5. createCheckoutSession — org has active sub → throws ActiveSubscriptionError
  *  6. createCheckoutSession — free org (no sub) → creates checkout
+ *  7. #3157 — proration follows price, not the entitlement tier rank:
+ *     Enterprise→Scale invoices (bill doubles) and Scale→Enterprise does not
+ *     (bill halves), which is the opposite of what TIER_ORDER says.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -69,6 +72,7 @@ vi.mock("@oxagen/config/env", () => ({
 }));
 
 // Import AFTER mocks.
+const { SUBSCRIPTION_PLANS } = await import("./pricing");
 const { changeOrgPlan } = await import("./subscriptions");
 const { createCheckoutSession, ActiveSubscriptionError } = await import(
   "./checkout"
@@ -76,17 +80,47 @@ const { createCheckoutSession, ActiveSubscriptionError } = await import(
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
+/**
+ * The catalogue rows the `billing.plans` fixtures below are priced from, so a
+ * reprice moves these tests rather than slipping past them. Named here once;
+ * each proration test asserts the figure it depends on.
+ */
+function catalogPlan(slug: string) {
+  const plan = SUBSCRIPTION_PLANS.find((p) => p.slug === slug);
+  if (!plan) throw new Error(`catalogue has no plan '${slug}'`);
+  return plan;
+}
+
+const BUILD_CATALOG = catalogPlan("build-v2");
+const SCALE_CATALOG = catalogPlan("scale-v2");
+const ENTERPRISE_CATALOG = catalogPlan("enterprise-v2");
+
 const BUILD_PLAN = {
   id: "plan-build-id",
+  slug: BUILD_CATALOG.slug,
   tier: "build",
   stripePriceIdMonthly: "price_build_m",
   stripePriceIdAnnual: "price_build_y",
+  monthlyCents: BUILD_CATALOG.monthlyCents,
+  annualCents: BUILD_CATALOG.annualCents,
 };
 const SCALE_PLAN = {
   id: "plan-scale-id",
+  slug: SCALE_CATALOG.slug,
   tier: "scale",
   stripePriceIdMonthly: "price_scale_m",
-  stripePriceIdAnnual: null,
+  stripePriceIdAnnual: "price_scale_y",
+  monthlyCents: SCALE_CATALOG.monthlyCents,
+  annualCents: SCALE_CATALOG.annualCents,
+};
+const ENTERPRISE_PLAN = {
+  id: "plan-enterprise-id",
+  slug: ENTERPRISE_CATALOG.slug,
+  tier: "enterprise",
+  stripePriceIdMonthly: "price_enterprise_m",
+  stripePriceIdAnnual: "price_enterprise_y",
+  monthlyCents: ENTERPRISE_CATALOG.monthlyCents,
+  annualCents: ENTERPRISE_CATALOG.annualCents,
 };
 
 function makeActiveSub(
@@ -94,6 +128,7 @@ function makeActiveSub(
     stripeSubscriptionId: string;
     seatCount: number;
     planId: string;
+    billingInterval: string;
     plan: { tier: string };
   }> = {},
 ) {
@@ -101,9 +136,22 @@ function makeActiveSub(
     stripeSubscriptionId: "sub_active_001",
     seatCount: 1,
     planId: "plan-build-id",
+    billingInterval: "month",
     plan: { tier: "build" },
     ...overrides,
   };
+}
+
+/**
+ * changeOrgPlan reads `billing.plans` twice before the swap — the target by
+ * slug, then the plan the org is on by id — and `syncSubscriptionFromStripe`
+ * reads it once more afterwards by product id.
+ */
+function stubPlanLookups(target: unknown, current: unknown) {
+  dbQueryMocks.plans.findFirst
+    .mockResolvedValueOnce(target)
+    .mockResolvedValueOnce(current)
+    .mockResolvedValue(target);
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -158,9 +206,13 @@ describe("changeOrgPlan", () => {
   });
 
   it("upgrade (build → scale) → calls upgradeSubscription with 'always_invoice'", async () => {
-    dbQueryMocks.plans.findFirst.mockResolvedValue(SCALE_PLAN);
+    // $199/mo → $999/mo: the bill rises, so the proration is invoiced now.
+    expect(SCALE_CATALOG.monthlyCents).toBeGreaterThan(
+      BUILD_CATALOG.monthlyCents,
+    );
+    stubPlanLookups(SCALE_PLAN, BUILD_PLAN);
     dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({ plan: { tier: "build" } }),
+      makeActiveSub({ planId: "plan-build-id" }),
     );
 
     const result = await changeOrgPlan("org-abc", "scale", "month");
@@ -173,14 +225,8 @@ describe("changeOrgPlan", () => {
   });
 
   it("downgrade (scale → build) → calls upgradeSubscription with 'none'", async () => {
-    // plans.findFirst is called in sequence:
-    //   call 1: target plan lookup by slug → BUILD_PLAN
-    //   call 2: current plan lookup by id  → SCALE_PLAN (current plan is scale)
-    //   call 3: syncSubscriptionFromStripe's resolvePlanId → BUILD_PLAN
-    dbQueryMocks.plans.findFirst
-      .mockResolvedValueOnce(BUILD_PLAN)
-      .mockResolvedValueOnce(SCALE_PLAN)
-      .mockResolvedValue(BUILD_PLAN);
+    // $999/mo → $199/mo: the bill falls, so no proration line is written.
+    stubPlanLookups(BUILD_PLAN, SCALE_PLAN);
 
     dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
       makeActiveSub({ planId: "plan-scale-id" }),
@@ -210,6 +256,171 @@ describe("changeOrgPlan", () => {
     dbQueryMocks.subscriptions.findFirst.mockResolvedValue(null);
     await expect(changeOrgPlan("org-abc", "build", "year")).rejects.toThrow(
       "no year price",
+    );
+  });
+});
+
+// ── #3157: proration follows price, not the entitlement tier rank ───────────
+//
+// TIER_ORDER ranks Enterprise above Scale because Enterprise holds the SOC2
+// entitlements (ACLs, SSO, SCIM, immutable audit). The catalogue prices it
+// below Scale. Every assertion below states the price it depends on, so a
+// reprice fails here loudly instead of quietly flipping a branch.
+
+describe("changeOrgPlan proration direction (#3157)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getSubscriptionMock.mockResolvedValue({
+      id: "sub_active_001",
+      customerId: "cus_001",
+      metadata: { org_id: "org-abc" },
+      status: "active",
+      billingInterval: "month",
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(),
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
+      trialEnd: null,
+      productId: "prod_scale",
+      seatCount: 1,
+    });
+    const upsertChain = {
+      onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+    };
+    dbMocks.insert.mockReturnValue({
+      values: vi.fn().mockReturnValue(upsertChain),
+    });
+  });
+
+  it("the catalogue prices Enterprise below Scale — the premise of the two tests that follow", () => {
+    expect(ENTERPRISE_CATALOG.monthlyCents).toBe(50_000); // $500/mo
+    expect(SCALE_CATALOG.monthlyCents).toBe(99_900); // $999/mo
+    expect(SCALE_CATALOG.monthlyCents).toBeGreaterThan(
+      ENTERPRISE_CATALOG.monthlyCents,
+    );
+    // …while the entitlement rank puts Enterprise on top. The disagreement is
+    // the whole defect: one ordering cannot answer both questions.
+    expect(ENTERPRISE_PLAN.tier).toBe("enterprise");
+    expect(SCALE_PLAN.tier).toBe("scale");
+  });
+
+  it("enterprise → scale ($500/mo → $999/mo, the bill doubles) → 'always_invoice'", async () => {
+    expect(ENTERPRISE_CATALOG.monthlyCents).toBe(50_000);
+    expect(SCALE_CATALOG.monthlyCents).toBe(99_900);
+
+    stubPlanLookups(SCALE_PLAN, ENTERPRISE_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({
+        planId: "plan-enterprise-id",
+        billingInterval: "month",
+      }),
+    );
+
+    const result = await changeOrgPlan("org-abc", "scale-v2", "month");
+
+    expect(result).toBeNull();
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({ prorationBehavior: "always_invoice" }),
+    );
+  });
+
+  it("scale → enterprise ($999/mo → $500/mo, the bill halves) → 'none'", async () => {
+    expect(SCALE_CATALOG.monthlyCents).toBe(99_900);
+    expect(ENTERPRISE_CATALOG.monthlyCents).toBe(50_000);
+
+    stubPlanLookups(ENTERPRISE_PLAN, SCALE_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({ planId: "plan-scale-id", billingInterval: "month" }),
+    );
+
+    const result = await changeOrgPlan("org-abc", "enterprise-v2", "month");
+
+    expect(result).toBeNull();
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({ prorationBehavior: "none" }),
+    );
+  });
+
+  it("same plan, same interval (the bill does not move) → 'none'", async () => {
+    stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({ planId: "plan-scale-id", billingInterval: "month" }),
+    );
+
+    const result = await changeOrgPlan("org-abc", "scale-v2", "month");
+
+    expect(result).toBeNull();
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({ prorationBehavior: "none" }),
+    );
+  });
+
+  it("scale monthly → scale annual ($999 → $9,990 on the next invoice) → 'always_invoice'", async () => {
+    // One plan, two intervals. The per-month rate falls (two months free) and
+    // the amount the next invoice carries rises, and it is the invoice the
+    // proration flag governs.
+    expect(SCALE_CATALOG.monthlyCents).toBe(99_900);
+    expect(SCALE_CATALOG.annualCents).toBe(999_000);
+
+    stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({ planId: "plan-scale-id", billingInterval: "month" }),
+    );
+
+    const result = await changeOrgPlan("org-abc", "scale-v2", "year");
+
+    expect(result).toBeNull();
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({ prorationBehavior: "always_invoice" }),
+    );
+  });
+
+  it("build annual → build monthly (the next invoice falls) → 'none'", async () => {
+    expect(BUILD_CATALOG.annualCents).toBe(199_000);
+    expect(BUILD_CATALOG.monthlyCents).toBe(19_900);
+
+    stubPlanLookups(BUILD_PLAN, BUILD_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({ planId: "plan-build-id", billingInterval: "year" }),
+    );
+
+    const result = await changeOrgPlan("org-abc", "build-v2", "month");
+
+    expect(result).toBeNull();
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({ prorationBehavior: "none" }),
+    );
+  });
+
+  it("a current plan with no resolvable price settles as 'always_invoice' rather than dropping the money", async () => {
+    // A plan row billed annually that carries no annual price, and no
+    // catalogue slug to fall back to. Stripe computes the real difference
+    // under always_invoice and settles it either way; 'none' is the branch
+    // that would lose it.
+    const unpricedCurrent = {
+      id: "plan-custom-id",
+      slug: null,
+      tier: "scale",
+      stripePriceIdMonthly: "price_custom_m",
+      stripePriceIdAnnual: null,
+      monthlyCents: null,
+      annualCents: null,
+    };
+    stubPlanLookups(ENTERPRISE_PLAN, unpricedCurrent);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({ planId: "plan-custom-id", billingInterval: "year" }),
+    );
+
+    await changeOrgPlan("org-abc", "enterprise-v2", "month");
+
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({ prorationBehavior: "always_invoice" }),
     );
   });
 });

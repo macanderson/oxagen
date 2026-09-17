@@ -22,10 +22,17 @@ import type { BillingSubscription } from "./provider";
 // ---------------------------------------------------------------------------
 
 const getSubscriptionMock = vi.fn();
+const previewPlanChangeMock = vi.fn().mockResolvedValue({
+  amountCents: 0,
+  isCharge: false,
+  currency: "usd",
+  prorationDate: 1_700_000_000,
+});
 
 vi.mock("./client", () => ({
   billingProvider: () => ({
     getSubscription: getSubscriptionMock,
+    previewPlanChange: previewPlanChangeMock,
     updateSubscription: vi.fn().mockResolvedValue(undefined),
     cancelSubscription: vi.fn().mockResolvedValue(undefined),
     upgradeSubscription: vi.fn().mockResolvedValue(undefined),
@@ -107,7 +114,9 @@ vi.mock("./customers", () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Seats + entitlements mocks — previewPlanChange / changeOrgPlan may call these.
+// Seats mock — previewPlanChange / changeOrgPlan may call this. `./entitlements`
+// is deliberately NOT mocked: since #3157 the proration decision is a price
+// comparison and this module no longer reads the entitlement tier ordering.
 // ---------------------------------------------------------------------------
 
 vi.mock("./seats", () => ({
@@ -125,10 +134,6 @@ vi.mock("./seats", () => ({
   isSeatLimitError: (e: unknown) =>
     e instanceof Error &&
     (e as { code?: string }).code === "seat_limit_reached",
-}));
-
-vi.mock("./entitlements", () => ({
-  meetsMinimumTier: vi.fn().mockReturnValue(false),
 }));
 
 // Import after mocks.
@@ -271,9 +276,14 @@ describe("changeOrgPlan audit emit", () => {
     // currentPlanRow (tier), and the inner syncSubscriptionFromStripe (product id).
     dbMocks.query.plans.findFirst.mockResolvedValue({
       id: "plan-free-1",
-      tier: "free", // target tier — lower than current "scale" → downgrade (skips grants)
+      slug: "free",
+      // Target price equals the current one here (the same row answers both
+      // lookups), so the bill does not move → proration 'none', grants skipped.
+      tier: "free",
       stripePriceIdMonthly: "price_free_month",
       stripePriceIdAnnual: "price_free_year",
+      monthlyCents: 0,
+      annualCents: 0,
     });
     // Shared subscriptions.findFirst: covers activeSubRow (changeOrgPlan) and the
     // prior-status read inside syncSubscriptionFromStripe.
@@ -281,6 +291,7 @@ describe("changeOrgPlan audit emit", () => {
       stripeSubscriptionId: "sub_test_001",
       seatCount: 1,
       planId: "plan-scale-1",
+      billingInterval: "month",
       status: "active",
     });
     // syncSubscriptionFromStripe pulls the canonical record (active, known org).
@@ -308,9 +319,12 @@ describe("changeOrgPlan audit emit", () => {
     // Target plan exists…
     dbMocks.query.plans.findFirst.mockResolvedValue({
       id: "plan-build-1",
+      slug: "build-v2",
       tier: "build",
       stripePriceIdMonthly: "price_build_month",
       stripePriceIdAnnual: "price_build_year",
+      monthlyCents: 19_900,
+      annualCents: 199_000,
     });
     // …but there is no active subscription → Checkout branch.
     dbMocks.query.subscriptions.findFirst.mockResolvedValue(undefined);
@@ -447,6 +461,82 @@ describe("previewPlanChange — annual price misconfiguration", () => {
     // No throw because interval !== "year".
     expect(result.requiresCheckout).toBe(true);
     expect(result.amountCents).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// previewPlanChange — proration direction on an ACTIVE subscription (#3157)
+//
+// The preview is the number the customer sees before confirming, so it has to
+// reach the same proration flag changeOrgPlan will apply. Both read the price.
+// ---------------------------------------------------------------------------
+
+describe("previewPlanChange — proration follows price, not tier rank", () => {
+  const ENTERPRISE_ROW = {
+    id: "plan-enterprise-1",
+    slug: "enterprise-v2",
+    tier: "enterprise",
+    stripePriceIdMonthly: "price_enterprise_month",
+    stripePriceIdAnnual: "price_enterprise_year",
+    monthlyCents: 50_000, // $500/mo
+    annualCents: 500_000,
+  };
+  const SCALE_ROW = {
+    id: "plan-scale-1",
+    slug: "scale-v2",
+    tier: "scale",
+    stripePriceIdMonthly: "price_scale_month",
+    stripePriceIdAnnual: "price_scale_year",
+    monthlyCents: 99_900, // $999/mo
+    annualCents: 999_000,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    previewPlanChangeMock.mockResolvedValue({
+      amountCents: 49_900,
+      isCharge: true,
+      currency: "usd",
+      prorationDate: 1_700_000_000,
+    });
+  });
+
+  it("enterprise → scale previews under 'always_invoice' because the bill rises", async () => {
+    dbMocks.query.plans.findFirst
+      .mockResolvedValueOnce(SCALE_ROW) // target, by slug
+      .mockResolvedValueOnce(ENTERPRISE_ROW); // current, by id
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
+      stripeSubscriptionId: "sub_test_001",
+      stripeCustomerId: "cus_test_001",
+      planId: "plan-enterprise-1",
+      billingInterval: "month",
+    });
+
+    await previewPlanChange("org-abc-123", "scale-v2", "month");
+
+    expect(previewPlanChangeMock).toHaveBeenCalledWith(
+      "sub_test_001",
+      expect.objectContaining({ prorationBehavior: "always_invoice" }),
+    );
+  });
+
+  it("scale → enterprise previews under 'none' because the bill falls", async () => {
+    dbMocks.query.plans.findFirst
+      .mockResolvedValueOnce(ENTERPRISE_ROW)
+      .mockResolvedValueOnce(SCALE_ROW);
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
+      stripeSubscriptionId: "sub_test_001",
+      stripeCustomerId: "cus_test_001",
+      planId: "plan-scale-1",
+      billingInterval: "month",
+    });
+
+    await previewPlanChange("org-abc-123", "enterprise-v2", "month");
+
+    expect(previewPlanChangeMock).toHaveBeenCalledWith(
+      "sub_test_001",
+      expect.objectContaining({ prorationBehavior: "none" }),
+    );
   });
 });
 

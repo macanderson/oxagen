@@ -9,13 +9,14 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // OXA-1898: lines/statements raised to the 85% gate (measured 94.4).
-      // branches/functions left at prior floors (measured 83.4 / 95.5).
+      // #3157: re-measured at 93.18 lines / 86.88 branches / 94.51 functions /
+      // 93.18 statements. Each floor is floor(measured - 2.5), capped at 90, so
+      // the gate keeps at least 2.5 points of headroom under environment noise.
       thresholds: {
-        lines: 85,
-        branches: 80,
-        functions: 70,
-        statements: 85,
+        lines: 90,
+        branches: 84,
+        functions: 90,
+        statements: 90,
       },
     },
   },

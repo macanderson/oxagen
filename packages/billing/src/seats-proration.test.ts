@@ -138,6 +138,9 @@ function makeActiveSubRow(overrides: Partial<Record<string, unknown>> = {}) {
     stripeCustomerId: "cus_test",
     seatCount: 5,
     planId: "plan-uuid-build",
+    // The interval the org is billed on — the proration decision prices the
+    // current plan on it (#3157).
+    billingInterval: "month",
     status: "active",
     ...overrides,
   };
@@ -423,7 +426,7 @@ describe("previewPlanChange", () => {
     expect(result.amountCents).toBe(20000);
   });
 
-  it("upgrade (active sub, higher tier) — requiresCheckout=false, provider preview used", async () => {
+  it("bill rises ($20/mo → $99/mo) — requiresCheckout=false, provider preview used", async () => {
     // First call (active sub check), second call (current plan lookup),
     // third call (resolveCustomerId).
     subscriptionsFindFirstMock
@@ -440,7 +443,14 @@ describe("previewPlanChange", () => {
         monthlyCents: 9900,
         annualCents: 99000,
       })
-      .mockResolvedValueOnce({ tier: "build" }); // current plan
+      // Current plan, priced: the proration flag is a price comparison, so the
+      // current row has to carry a price for it to compare against.
+      .mockResolvedValueOnce({
+        slug: "build-v2",
+        tier: "build",
+        monthlyCents: 2000,
+        annualCents: 20000,
+      });
 
     previewPlanChangeMock.mockResolvedValue(
       makeProrationPreview({ amountCents: 7500, isCharge: true }),
@@ -452,7 +462,7 @@ describe("previewPlanChange", () => {
     expect(result.amountCents).toBe(7500);
     expect(result.isCharge).toBe(true);
 
-    // Upgrade → always_invoice.
+    // Bill rises → always_invoice.
     const callArgs = previewPlanChangeMock.mock.calls[0] as [
       string,
       { newPriceId: string; prorationBehavior: string },
@@ -460,7 +470,7 @@ describe("previewPlanChange", () => {
     expect(callArgs[1].prorationBehavior).toBe("always_invoice");
   });
 
-  it("downgrade (active sub, lower tier) — prorationBehavior none, amountCents=0", async () => {
+  it("bill falls ($99/mo → $20/mo) — prorationBehavior none, amountCents=0", async () => {
     subscriptionsFindFirstMock
       .mockResolvedValueOnce(makeActiveSubRow({ planId: "plan-scale" }))
       .mockResolvedValueOnce({ stripeCustomerId: "cus_001" });
@@ -474,7 +484,12 @@ describe("previewPlanChange", () => {
         monthlyCents: 2000,
         annualCents: null,
       })
-      .mockResolvedValueOnce({ tier: "scale" }); // current plan
+      .mockResolvedValueOnce({
+        slug: "scale-v2",
+        tier: "scale",
+        monthlyCents: 9900,
+        annualCents: 99000,
+      }); // current plan
 
     previewPlanChangeMock.mockResolvedValue(
       makeProrationPreview({ amountCents: 0, isCharge: false }),

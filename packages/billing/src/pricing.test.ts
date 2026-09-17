@@ -17,6 +17,9 @@ import {
   providerCostUsdMicros,
   solveMeterMarkup,
   derivePricing,
+  planPriceMicros,
+  planPriceDirection,
+  MICRO_USD_PER_CENT,
 } from "./pricing";
 import {
   TIER_ACTION_ALLOWANCES,
@@ -309,5 +312,108 @@ describe("SUBSCRIPTION_PLANS — governed-action allowances", () => {
     for (let i = 1; i < figures.length; i += 1) {
       expect(figures[i]).toBeGreaterThanOrEqual(figures[i - 1] as number);
     }
+  });
+});
+
+// ── Plan price comparison (#3157) ────────────────────────────────────────────
+
+describe("planPriceMicros", () => {
+  it("converts whole cents to micro-USD as a BigInt, never a float", () => {
+    const micros = planPriceMicros({ monthlyCents: 99_900 }, "month");
+    expect(typeof micros).toBe("bigint");
+    expect(micros).toBe(99_900n * MICRO_USD_PER_CENT);
+    expect(MICRO_USD_PER_CENT).toBe(10_000n);
+  });
+
+  it("prices the interval asked for", () => {
+    const plan = { monthlyCents: 99_900, annualCents: 999_000 };
+    expect(planPriceMicros(plan, "month")).toBe(999_000_000n);
+    expect(planPriceMicros(plan, "year")).toBe(9_990_000_000n);
+  });
+
+  it("falls back to the catalogue when the row carries no figure for the interval", () => {
+    const scale = SUBSCRIPTION_PLANS.find((p) => p.slug === "scale-v2");
+    expect(scale).toBeDefined();
+    expect(
+      planPriceMicros({ slug: "scale-v2", annualCents: null }, "year"),
+    ).toBe(BigInt(scale!.annualCents) * MICRO_USD_PER_CENT);
+  });
+
+  it("returns null rather than zero when no price can be resolved", () => {
+    // A missing price is not a free plan, and must never be compared as one.
+    expect(
+      planPriceMicros({ slug: null, annualCents: null }, "year"),
+    ).toBeNull();
+    expect(planPriceMicros(null, "month")).toBeNull();
+  });
+});
+
+describe("planPriceDirection", () => {
+  const enterprise = SUBSCRIPTION_PLANS.find(
+    (p) => p.slug === "enterprise-v2",
+  )!;
+  const scale = SUBSCRIPTION_PLANS.find((p) => p.slug === "scale-v2")!;
+
+  it("reads Enterprise → Scale as an increase, which the tier rank calls a downgrade", () => {
+    expect(enterprise.monthlyCents).toBe(50_000); // $500/mo
+    expect(scale.monthlyCents).toBe(99_900); // $999/mo
+    expect(
+      planPriceDirection(
+        { plan: enterprise, interval: "month" },
+        { plan: scale, interval: "month" },
+      ),
+    ).toBe("increase");
+  });
+
+  it("reads Scale → Enterprise as a decrease, which the tier rank calls an upgrade", () => {
+    expect(
+      planPriceDirection(
+        { plan: scale, interval: "month" },
+        { plan: enterprise, interval: "month" },
+      ),
+    ).toBe("decrease");
+  });
+
+  it("reads a move to the same plan and interval as unchanged", () => {
+    expect(
+      planPriceDirection(
+        { plan: scale, interval: "month" },
+        { plan: scale, interval: "month" },
+      ),
+    ).toBe("unchanged");
+  });
+
+  it("prices each side on its own interval, so monthly → annual is an increase", () => {
+    expect(scale.annualCents).toBe(999_000);
+    expect(
+      planPriceDirection(
+        { plan: scale, interval: "month" },
+        { plan: scale, interval: "year" },
+      ),
+    ).toBe("increase");
+    expect(
+      planPriceDirection(
+        { plan: scale, interval: "year" },
+        { plan: scale, interval: "month" },
+      ),
+    ).toBe("decrease");
+  });
+
+  it("treats an org with no plan behind it as the free tier", () => {
+    expect(
+      planPriceDirection(
+        { plan: null, interval: "month" },
+        { plan: scale, interval: "month" },
+      ),
+    ).toBe("increase");
+  });
+
+  it("says 'unknown' rather than guessing when a side has no resolvable price", () => {
+    expect(
+      planPriceDirection(
+        { plan: { slug: null, annualCents: null }, interval: "year" },
+        { plan: scale, interval: "month" },
+      ),
+    ).toBe("unknown");
   });
 });

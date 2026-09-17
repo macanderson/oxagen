@@ -909,6 +909,92 @@ export const CREDIT_PACKS: CreditPackDef[] = [
   },
 ];
 
+// ── Plan price comparison (money, not features) ──────────────────────────
+
+/**
+ * Micro-USD in one cent. Money in this codebase is integral micro-USD held in
+ * a BigInt; plan prices are stored as whole cents, so the conversion is exact
+ * and no floating-point value is ever constructed.
+ */
+export const MICRO_USD_PER_CENT = 10_000n;
+
+/**
+ * The minimum a plan row has to carry for its price to be resolvable. Shaped
+ * to accept a `billing.plans` row (`slug`, `monthlyCents`, `annualCents`)
+ * directly, so a caller can pass what it already selected.
+ */
+export interface PlanPriceRow {
+  slug?: string | null;
+  monthlyCents?: number | null;
+  annualCents?: number | null;
+}
+
+/**
+ * Price of one billing period of `plan` at `interval`, in micro-USD.
+ *
+ * Resolution order: the plan row's own cents for that interval, then the
+ * {@link SUBSCRIPTION_PLANS} catalogue entry with the same slug. Returns null
+ * when neither carries a figure — `billing.plans.annual_cents` is nullable, so
+ * an annual price genuinely can be absent, and a missing price must not be
+ * read as free.
+ */
+export function planPriceMicros(
+  plan: PlanPriceRow | null | undefined,
+  interval: "month" | "year",
+): bigint | null {
+  if (!plan) return null;
+  const own = interval === "year" ? plan.annualCents : plan.monthlyCents;
+  if (typeof own === "number" && Number.isFinite(own)) {
+    return BigInt(Math.trunc(own)) * MICRO_USD_PER_CENT;
+  }
+  const catalog = plan.slug
+    ? SUBSCRIPTION_PLANS.find((p) => p.slug === plan.slug)
+    : undefined;
+  if (!catalog) return null;
+  const cents =
+    interval === "year" ? catalog.annualCents : catalog.monthlyCents;
+  return BigInt(cents) * MICRO_USD_PER_CENT;
+}
+
+/** Which way the money moves across a plan change. */
+export type PlanPriceDirection =
+  | "increase"
+  | "decrease"
+  | "unchanged"
+  | "unknown";
+
+/**
+ * Compare what an org is billed per period now against what it would be billed
+ * per period after a plan change.
+ *
+ * THIS ANSWERS: *is this plan more expensive?* — the only question a proration
+ * decision may ask. It is NOT the question `meetsMinimumTier` answers (*does
+ * this plan include that feature?*), and the two must never be read off one
+ * ordering again. In the live catalogue they disagree: Enterprise outranks
+ * Scale on features (ACLs, SSO, SCIM, immutable audit) and sits at half its
+ * price. Reading the feature rank as a price direction under-billed every
+ * Enterprise→Scale move and over-billed every Scale→Enterprise one (#3157).
+ *
+ * Each side is priced at the interval it is actually billed on, so a change of
+ * interval on one plan is compared honestly: month→year raises the amount the
+ * next invoice carries even though the per-month rate falls.
+ *
+ * A null `from` plan is an org with no priced plan behind it (the free tier),
+ * worth zero. "unknown" means a side's price could not be resolved at all;
+ * the caller decides what to do with that rather than being handed a guess.
+ */
+export function planPriceDirection(
+  from: { plan: PlanPriceRow | null | undefined; interval: "month" | "year" },
+  to: { plan: PlanPriceRow | null | undefined; interval: "month" | "year" },
+): PlanPriceDirection {
+  const fromMicros = from.plan ? planPriceMicros(from.plan, from.interval) : 0n;
+  const toMicros = planPriceMicros(to.plan, to.interval);
+  if (fromMicros === null || toMicros === null) return "unknown";
+  if (toMicros > fromMicros) return "increase";
+  if (toMicros < fromMicros) return "decrease";
+  return "unchanged";
+}
+
 // ── The margin solve ────────────────────────────────────────────────────
 
 export type ProductKind = "subscription" | "credit_pack";

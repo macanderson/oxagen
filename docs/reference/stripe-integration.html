@@ -192,9 +192,18 @@ matches the provider within one round-trip.</p>
 <h3>Plan changes — <code>changeOrgPlan(orgId, slug, interval)</code></h3>
 <ul>
   <li><strong>No active subscription</strong> (free) → returns a Stripe <em>Checkout</em> URL; caller redirects.</li>
-  <li><strong>Active subscription</strong> → swaps the price in place (no second subscription). Upgrade →
-      <code>always_invoice</code> (charge the proration now) <em>and</em> a prorated grant of the new plan's extra included
-      credits (<code>grantProratedPlanUpgradeCredits</code>). Downgrade → <code>none</code> (keeps access until renewal).</li>
+  <li><strong>Active subscription</strong> → swaps the price in place (no second subscription). The direction is
+      decided from the <em>money</em>: the amount billed per period today, at the interval the org is billed on, against
+      the amount the target plan bills at the interval it is moving to, both taken from <code>billing.plans</code> (with
+      the <code>SUBSCRIPTION_PLANS</code> catalogue as the fallback) and compared in integral micro-USD.
+      Bill rises → <code>always_invoice</code> (charge the proration now) <em>and</em> a prorated grant of the new
+      plan's extra included credits (<code>grantProratedPlanUpgradeCredits</code>). Bill falls or holds →
+      <code>none</code> (keeps access until renewal, no proration line).</li>
+  <li>The entitlement tier ordering (<code>TIER_ORDER</code> / <code>meetsMinimumTier</code>) answers a different
+      question — <em>does this plan include that feature</em> — and is never read as a price direction. The two
+      disagree in the live catalogue: Enterprise outranks Scale on features and costs half as much, so deciding
+      proration from the rank under-billed every Enterprise→Scale move and over-billed every Scale→Enterprise
+      one (#3157).</li>
 </ul>
 <p><code>previewPlanChange</code> simulates the change first (see Seats — same <code>invoices.createPreview</code> mechanism),
 so the UI shows the prorated charge + card before committing.</p>

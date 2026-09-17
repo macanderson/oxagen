@@ -1,28 +1,43 @@
 import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { eq, and, sql } from "drizzle-orm";
-import type { PlanTier } from "@oxagen/oxagen/types";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
 import { getOrgSeatUsage, SeatLimitError } from "./seats";
-import { meetsMinimumTier } from "./entitlements";
+import { planPriceDirection, type PlanPriceRow } from "./pricing";
 
-const VALID_PLAN_TIERS: ReadonlySet<string> = new Set([
-  "free",
-  "build",
-  "scale",
-  "enterprise",
-]);
-
-function isPlanTier(value: string): value is PlanTier {
-  return VALID_PLAN_TIERS.has(value);
-}
-
-// Type assertion helper - validates database strings are valid PlanTiers before comparison
-function checkPlanTier(actual: string, minimum: string): boolean {
-  const actualTier = isPlanTier(actual) ? actual : "free";
-  const minimumTier = isPlanTier(minimum) ? minimum : "free";
-  return meetsMinimumTier(actualTier, minimumTier);
+/**
+ * Proration flag for a plan change, decided from the money and nothing else.
+ *
+ * THIS ANSWERS: *is the org about to be billed more?* The feature ordering in
+ * `entitlements.ts` (`TIER_ORDER` / `meetsMinimumTier`) answers a different
+ * question — *does this plan include that feature?* — and the two orderings do
+ * not agree in the live catalogue: Enterprise outranks Scale on features and
+ * costs half as much. Deciding proration from the feature rank raised no
+ * invoice on Enterprise→Scale, where the bill doubles, and charged one on
+ * Scale→Enterprise, where it halves (#3157). Nothing in this file may read a
+ * tier rank again.
+ *
+ * "unknown" — a plan row carrying no price for the interval it is billed on —
+ * settles as `always_invoice`, which asks Stripe to compute the true prorated
+ * difference and settle it in whichever direction it falls. `none` is the
+ * choice that silently drops money, so it is never the fallback.
+ */
+function prorationForPlanChange(
+  from: { plan: PlanPriceRow | null | undefined; interval: "month" | "year" },
+  to: { plan: PlanPriceRow | null | undefined; interval: "month" | "year" },
+): {
+  prorationBehavior: "always_invoice" | "none";
+  direction: ReturnType<typeof planPriceDirection>;
+} {
+  const direction = planPriceDirection(from, to);
+  return {
+    prorationBehavior:
+      direction === "decrease" || direction === "unchanged"
+        ? "none"
+        : "always_invoice",
+    direction,
+  };
 }
 
 /**
@@ -363,13 +378,17 @@ export async function setSubscriptionSeats(
 /**
  * Change an org's plan to any other plan (any tier → any tier).
  *
- * Upgrade path  (target tier higher, or the SAME tier — meetsMinimumTier treats
- *   a lateral move as an upgrade): swap price immediately and invoice the
+ * The direction is decided from the money: the amount the org is billed per
+ * period today, at the interval it is billed on, against the amount the target
+ * plan bills per period at the interval it is moving to. Tier rank plays no
+ * part — see {@link prorationForPlanChange}.
+ *
+ * Bill rises (or cannot be priced): swap the price immediately and invoice the
  *   proration now.
- * Downgrade path (target tier lower): swap price with proration_behavior
- *   'none' — the new, lower price applies from the next cycle and NO proration
- *   line is written, so the customer is not credited for the unused remainder
- *   of the tier they are leaving.
+ * Bill falls, or does not move: swap the price with proration_behavior 'none'
+ *   — the new price applies from the next cycle and NO proration line is
+ *   written, so the customer is not credited for the unused remainder of the
+ *   plan they are leaving.
  *
  * If the org has NO active subscription (free tier), returns a Checkout
  * session URL for the new plan; the caller must redirect the user.
@@ -403,9 +422,14 @@ export async function changeOrgPlan(
         where: eq(schema.plans.slug, targetPlanSlug),
         columns: {
           id: true,
+          slug: true,
           tier: true,
           stripePriceIdMonthly: true,
           stripePriceIdAnnual: true,
+          // The proration decision is a price comparison, so the price has to
+          // be selected alongside the price id it belongs to.
+          monthlyCents: true,
+          annualCents: true,
         },
       }),
     ),
@@ -420,6 +444,10 @@ export async function changeOrgPlan(
           stripeSubscriptionId: true,
           seatCount: true,
           planId: true,
+          // The interval the org is billed on today. The change may move it,
+          // and each side of the price comparison is priced on its own
+          // interval.
+          billingInterval: true,
         },
       }),
     ),
@@ -451,23 +479,28 @@ export async function changeOrgPlan(
     return { checkoutUrl: result.url };
   }
 
-  // Resolve current plan tier for proration decision. Shared catalog (no RLS) → system.
+  // Resolve the plan the org is on now, for the price comparison below. Shared
+  // catalog (no RLS) → system.
   const currentPlanRow = await withSystemDb((tx) =>
     tx.query.plans.findFirst({
       where: eq(schema.plans.id, activeSubRow.planId),
-      columns: { tier: true },
+      columns: {
+        slug: true,
+        tier: true,
+        monthlyCents: true,
+        annualCents: true,
+      },
     }),
   );
 
-  // Active subscription — swap the price in-place.
-  // Determine proration behavior by comparing tier order.
-  const isUpgrade = checkPlanTier(
-    targetPlan.tier,
-    currentPlanRow?.tier || "free",
+  // Active subscription — swap the price in-place. Proration follows the money.
+  const currentInterval: "month" | "year" =
+    activeSubRow.billingInterval === "year" ? "year" : "month";
+  const { prorationBehavior, direction } = prorationForPlanChange(
+    { plan: currentPlanRow, interval: currentInterval },
+    { plan: targetPlan, interval },
   );
-  const prorationBehavior: "always_invoice" | "none" = isUpgrade
-    ? "always_invoice"
-    : "none";
+  const isUpgrade = direction === "increase";
 
   // Use activeSubRow from now on (renamed to avoid confusion).
   const activeSub = activeSubRow;
@@ -479,6 +512,8 @@ export async function changeOrgPlan(
       interval,
       currentTier: currentPlanRow?.tier,
       targetTier: targetPlan.tier,
+      currentInterval,
+      priceDirection: direction,
       isUpgrade,
       prorationBehavior,
     },
@@ -711,8 +746,14 @@ export interface PlanChangePreview {
  * Simulate a plan change and return what WOULD be charged/credited.
  *
  * - No active subscription: requiresCheckout=true, amountCents = full plan price.
- * - Active subscription + upgrade: proration 'always_invoice'.
- * - Active subscription + downgrade: proration 'none' (no immediate charge).
+ * - Active subscription, bill rises: proration 'always_invoice'.
+ * - Active subscription, bill falls or holds: proration 'none' (no immediate
+ *   charge).
+ *
+ * The direction is the same price comparison {@link changeOrgPlan} makes, from
+ * the same helper. It has to be: this preview is the number the customer is
+ * shown before they confirm, and a preview computed under one proration flag
+ * while the change applies another quotes a price the change will not honour.
  */
 export async function previewPlanChange(
   orgId: string,
@@ -729,6 +770,7 @@ export async function previewPlanChange(
         where: eq(schema.plans.slug, targetPlanSlug),
         columns: {
           id: true,
+          slug: true,
           tier: true,
           stripePriceIdMonthly: true,
           stripePriceIdAnnual: true,
@@ -747,6 +789,9 @@ export async function previewPlanChange(
           stripeSubscriptionId: true,
           stripeCustomerId: true,
           planId: true,
+          // Priced on the interval the org is billed on today — see
+          // prorationForPlanChange.
+          billingInterval: true,
         },
       }),
     ),
@@ -849,17 +894,22 @@ export async function previewPlanChange(
   const currentPlanRow = await withSystemDb((tx) =>
     tx.query.plans.findFirst({
       where: eq(schema.plans.id, activeSub.planId),
-      columns: { tier: true },
+      columns: {
+        slug: true,
+        tier: true,
+        monthlyCents: true,
+        annualCents: true,
+      },
     }),
   );
 
-  const isUpgrade = checkPlanTier(
-    targetPlan.tier,
-    currentPlanRow?.tier || "free",
+  const currentInterval: "month" | "year" =
+    activeSub.billingInterval === "year" ? "year" : "month";
+  const { prorationBehavior, direction } = prorationForPlanChange(
+    { plan: currentPlanRow, interval: currentInterval },
+    { plan: targetPlan, interval },
   );
-  const prorationBehavior: "always_invoice" | "none" = isUpgrade
-    ? "always_invoice"
-    : "none";
+  const isUpgrade = direction === "increase";
 
   const preview = await billingProvider().previewPlanChange(
     activeSub.stripeSubscriptionId,
@@ -873,6 +923,8 @@ export async function previewPlanChange(
       orgId,
       targetPlanSlug,
       interval,
+      currentInterval,
+      priceDirection: direction,
       isUpgrade,
       amountCents: preview.amountCents,
       requiresCheckout: false,

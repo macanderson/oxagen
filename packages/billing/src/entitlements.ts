@@ -19,6 +19,17 @@ import type { PlanTier } from "@oxagen/oxagen/types";
 
 // ── Tier ordering ─────────────────────────────────────────────────────────────
 
+/**
+ * THIS ANSWERS: *does this plan include that feature?* — feature access, and
+ * only that.
+ *
+ * It is not a price order and must never be read as one. Enterprise sits above
+ * Scale here because it holds entitlements Scale does not (ACLs, SSO, SCIM,
+ * the immutable audit log), and below Scale on price — $500/mo against $999/mo
+ * in `pricing.ts`. Reading this rank as a price direction under-billed every
+ * Enterprise→Scale plan change and over-billed every Scale→Enterprise one
+ * (#3157). Money questions go to `planPriceDirection` in `pricing.ts`.
+ */
 const TIER_ORDER: Record<PlanTier, number> = {
   free: 0,
   build: 1,
@@ -26,7 +37,10 @@ const TIER_ORDER: Record<PlanTier, number> = {
   enterprise: 3,
 };
 
-/** True if `actual` meets or exceeds the `minimum` tier. */
+/**
+ * True if `actual` meets or exceeds the `minimum` tier, in feature access.
+ * Never a statement about price — see {@link TIER_ORDER}.
+ */
 export function meetsMinimumTier(actual: PlanTier, minimum: PlanTier): boolean {
   // Record<PlanTier, number> guarantees both keys exist; the non-null assertion
   // is safe because PlanTier is a closed union and all values are present.
