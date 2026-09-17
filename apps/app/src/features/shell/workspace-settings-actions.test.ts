@@ -31,7 +31,9 @@ vi.mock("@/server/viewer", async (importOriginal) => ({
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const {
+  attachGithubInstallation,
   bindWorkspaceRepository,
+  listGithubInstallations,
   listInstallationRepositories,
   readWorkspaceRepository,
 } = await import("./workspace-settings-actions");
@@ -73,6 +75,18 @@ const BOUND = {
     installUrl: null,
     manageUrl: "https://github.com/settings/installations/42",
   },
+};
+
+const CANDIDATES = {
+  installations: [
+    {
+      installationId: "424242",
+      accountLogin: "acme",
+      accountType: "Organization",
+      avatarUrl: "https://avatars.githubusercontent.com/u/1?v=4",
+      repositorySelection: "all",
+    },
+  ],
 };
 
 const LISTING = {
@@ -277,6 +291,112 @@ describe("bindWorkspaceRepository", () => {
       reason: "invalid",
       code: "invalid_input",
       field: "name",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("listGithubInstallations", () => {
+  it("answers the set attach_github_installation will accept", async () => {
+    invoke.mockResolvedValue(CANDIDATES);
+    expect(await listGithubInstallations("acme", "core-platform")).toEqual({
+      ok: true,
+      value: CANDIDATES,
+    });
+  });
+
+  it("reads list_github_installations for the workspace the URL names, with no input", async () => {
+    invoke.mockResolvedValue(CANDIDATES);
+    await listGithubInstallations("acme", "core-platform");
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "list_github_installations",
+      {},
+      expect.objectContaining({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        surface: "app",
+      }),
+    );
+  });
+
+  // The ordinary first-time state. The dialog draws it as the Connect door
+  // rather than as an alarm, so the code has to arrive intact.
+  it("carries the conflict an org that never authorized GitHub gets (negative)", async () => {
+    invoke.mockRejectedValue({
+      code: "conflict",
+      reason: "github_not_authorized",
+    });
+    expect(await listGithubInstallations("acme", "core-platform")).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "conflict",
+    });
+  });
+
+  it("carries a denial across as denied (negative)", async () => {
+    invoke.mockRejectedValue({ code: "authz_denied" });
+    expect(await listGithubInstallations("acme", "core-platform")).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "org.admin",
+    });
+  });
+});
+
+describe("attachGithubInstallation", () => {
+  it("attaches the picked installation and answers what the handler wrote", async () => {
+    invoke.mockResolvedValue({
+      connectionId: "con_abc123",
+      accountLogin: "acme",
+    });
+    expect(
+      await attachGithubInstallation("acme", "core-platform", "424242"),
+    ).toEqual({
+      ok: true,
+      value: { connectionId: "con_abc123", accountLogin: "acme" },
+    });
+  });
+
+  it("names only the installation id, which the handler then verifies", async () => {
+    invoke.mockResolvedValue({
+      connectionId: "con_abc123",
+      accountLogin: null,
+    });
+    await attachGithubInstallation("acme", "core-platform", "424242");
+    expect(invoke.mock.calls[0]?.[0]).toBe("attach_github_installation");
+    expect(invoke.mock.calls[0]?.[1]).toEqual({ installationId: "424242" });
+  });
+
+  // The security property, said back at this seam: an id the connected account
+  // cannot reach is a refusal the dialog prints, not a write.
+  it("reads back an installation the account cannot reach (negative)", async () => {
+    invoke.mockRejectedValue({
+      code: "not_found",
+      reason: "installation_unreachable",
+    });
+    expect(
+      await attachGithubInstallation("acme", "core-platform", "999999"),
+    ).toEqual({
+      ok: false,
+      reason: "not_found",
+      code: "installation_unreachable",
+    });
+  });
+
+  // The contract's pattern is `installationIdOf`'s: a value every reader would
+  // silently skip must not reach the kernel, let alone a connection row.
+  it("refuses an id that is not a plain positive integer before the kernel runs (negative)", async () => {
+    const result = await attachGithubInstallation(
+      "acme",
+      "core-platform",
+      "not-a-number",
+    );
+    expect(result).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "installationId",
     });
     expect(invoke).not.toHaveBeenCalled();
   });
