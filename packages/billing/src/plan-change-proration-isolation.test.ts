@@ -318,10 +318,17 @@ describe("a plan change previewed against an invoice that already carries a pror
     // The mechanism, asserted directly: the adapter passes an anchor and the
     // lines it keeps are the ones carrying it. Without this, a filter that
     // happened to keep the right lines for the wrong reason would pass above.
-    const args = stripeMethods.invoices.createPreview.mock.calls.at(-1)?.[0] as
-      | { subscription_details?: { proration_date?: number } }
-      | undefined;
-    expect(args?.subscription_details?.proration_date).toBeTypeOf("number");
+    //
+    // Found by its `subscription_details` rather than by position. The changed
+    // preview is bracketed by a baseline read on either side of it — both of
+    // which deliberately carry no change and therefore no anchor — so the last
+    // call is no longer the one under test.
+    const changed = stripeMethods.invoices.createPreview.mock.calls
+      .map(
+        (c) => c[0] as { subscription_details?: { proration_date?: number } },
+      )
+      .find((a) => a?.subscription_details !== undefined);
+    expect(changed?.subscription_details?.proration_date).toBeTypeOf("number");
   });
 });
 

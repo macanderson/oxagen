@@ -512,6 +512,65 @@ async function prorationsAlreadyAtAnchor(
   ).length;
 }
 
+/**
+ * The changed preview, bracketed by a baseline read on either side of it.
+ *
+ * One baseline is a time-of-check/time-of-use pair: a change committed AFTER
+ * the baseline returns and BEFORE the changed preview runs stamps its proration
+ * with our second, is absent from the baseline, and is summed as ours.
+ *
+ * WHY THIS AND NOT A LOCK. Corruption requires the interloper to be present in
+ * the changed preview, which means it was committed before that call returned —
+ * so a baseline taken AFTER it sees everything that could have corrupted it.
+ * Serializing our own mutations would not do as well: a Stripe subscription is
+ * also mutated from the Dashboard, the customer portal and any other
+ * integration on the account, none of which will ever take a lock held in this
+ * process, and the lock would be held across provider I/O to buy it.
+ *
+ * WHAT IS LEFT. This narrows the window; it does not provably close it. A
+ * proration present in the changed preview but swept onto a finalised invoice
+ * before the closing read would be invisible to both baselines. That is why
+ * BOTH reads are consulted rather than only the closing one — the opening read
+ * is the only thing that sees that case — and why the residual is stated here
+ * rather than described as fixed. It is bounded by one HTTP round trip and
+ * requires an invoice to finalise inside it (#3157, PR #3171 review).
+ *
+ * Either observation finding a proration at our anchor is contention in this
+ * second, and both refuse. A refusal costs a retry with a fresh anchor; a
+ * stranger's credit summed into an upgrade is a charge never raised.
+ */
+async function previewWithOwnedAnchor(
+  stripe: Stripe,
+  subscriptionId: string,
+  prorationDate: number,
+  subscriptionDetails: Stripe.InvoiceCreatePreviewParams.SubscriptionDetails,
+): Promise<{
+  preview: Stripe.Invoice;
+  lines: Stripe.InvoiceLineItem[];
+  pendingAtAnchor: number;
+}> {
+  const before = await prorationsAlreadyAtAnchor(
+    stripe,
+    subscriptionId,
+    prorationDate,
+  );
+  const preview = await stripe.invoices.createPreview({
+    subscription: subscriptionId,
+    subscription_details: subscriptionDetails,
+  });
+  const lines = await allPreviewLines(stripe, preview, {
+    subscription: subscriptionId,
+    subscription_details:
+      subscriptionDetails as Stripe.InvoiceListUpcomingLinesParams.SubscriptionDetails,
+  });
+  const after = await prorationsAlreadyAtAnchor(
+    stripe,
+    subscriptionId,
+    prorationDate,
+  );
+  return { preview, lines, pendingAtAnchor: Math.max(before, after) };
+}
+
 function stripeSubscriptionToNeutral(
   sub: Stripe.Subscription,
 ): BillingSubscription {
@@ -699,24 +758,16 @@ export class StripeProvider implements BillingProvider {
     const item = sub.items.data[0];
     if (!item) throw new Error("subscription has no items");
     const prorationDate = Math.floor(Date.now() / 1000);
-    const pendingAtAnchor = await prorationsAlreadyAtAnchor(
+    const { preview, lines, pendingAtAnchor } = await previewWithOwnedAnchor(
       stripe,
       subscriptionId,
       prorationDate,
+      {
+        items: [{ id: item.id, quantity: input.seats }],
+        proration_behavior: input.prorationBehavior ?? "always_invoice",
+        proration_date: prorationDate,
+      },
     );
-    const subscriptionDetails = {
-      items: [{ id: item.id, quantity: input.seats }],
-      proration_behavior: input.prorationBehavior ?? "always_invoice",
-      proration_date: prorationDate,
-    };
-    const preview = await stripe.invoices.createPreview({
-      subscription: subscriptionId,
-      subscription_details: subscriptionDetails,
-    });
-    const lines = await allPreviewLines(stripe, preview, {
-      subscription: subscriptionId,
-      subscription_details: subscriptionDetails,
-    });
     return summarizeProration(preview, lines, prorationDate, pendingAtAnchor);
   }
 
@@ -729,24 +780,16 @@ export class StripeProvider implements BillingProvider {
     const item = sub.items.data[0];
     if (!item) throw new Error("subscription has no items");
     const prorationDate = Math.floor(Date.now() / 1000);
-    const pendingAtAnchor = await prorationsAlreadyAtAnchor(
+    const { preview, lines, pendingAtAnchor } = await previewWithOwnedAnchor(
       stripe,
       subscriptionId,
       prorationDate,
+      {
+        items: [{ id: item.id, price: input.newPriceId }],
+        proration_behavior: input.prorationBehavior ?? "always_invoice",
+        proration_date: prorationDate,
+      },
     );
-    const subscriptionDetails = {
-      items: [{ id: item.id, price: input.newPriceId }],
-      proration_behavior: input.prorationBehavior ?? "always_invoice",
-      proration_date: prorationDate,
-    };
-    const preview = await stripe.invoices.createPreview({
-      subscription: subscriptionId,
-      subscription_details: subscriptionDetails,
-    });
-    const lines = await allPreviewLines(stripe, preview, {
-      subscription: subscriptionId,
-      subscription_details: subscriptionDetails,
-    });
     return summarizeProration(preview, lines, prorationDate, pendingAtAnchor);
   }
 

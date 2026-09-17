@@ -291,11 +291,22 @@ matches the provider within one round-trip.</p>
       and charge straddle that boundary is otherwise priced from one side, so an upgrade reads as a downgrade with no
       concurrency involved. Paging is bounded, and past the bound the quote is refused rather than computed from a
       set known to be incomplete. It then takes a baseline preview — the invoice as it stands, with no change
-      simulated, paged the same way — and refuses
+      simulated, paged the same way, <strong>on both sides of the changed preview</strong> — and refuses
       with <code>AmbiguousProrationAnchorError</code> if a proration already sits at that second, rather than
       guessing at a field that might mean ownership. Both preview paths do this, because both derive their anchor
       the same way. A refusal on a same-second collision is recoverable; summing a stranger's credit makes a real
       upgrade read nonpositive, ships <code>none</code>, and the charge is never raised.
+      <br><br>
+      <strong>Why two baseline reads, and what is still open.</strong> One read is a time-of-check/time-of-use pair:
+      a change committed after the baseline returns but before the changed preview runs is absent from the baseline
+      and summed as ours. Corruption requires the interloper to be in the changed preview, so it was committed before
+      that call returned and a baseline taken <em>after</em> it sees everything that could have corrupted it.
+      Serializing our own mutations would do less: a subscription is also changed from the Stripe Dashboard, the
+      customer portal and any other integration on the account, none of which take a lock held in this process — and
+      the lock would be held across provider I/O to buy it. This <em>narrows</em> the window rather than closing it:
+      a proration present in the changed preview but swept onto a finalised invoice before the closing read would be
+      invisible to both baselines, which is why both reads are consulted rather than only the closing one, and why
+      the residual is stated here instead of being described as fixed.
       <em>The preview is the money; which part of it answers the question is a separate question.</em>
       Three cases are distinguished on purpose: no proration lines at all is a true zero; lines carrying the anchor
       are summed (and may legitimately net to zero); lines present with none carrying the anchor cannot be

@@ -156,6 +156,123 @@ function stubPreviews(opts: {
 /** What this change alone moves: +$120, an unambiguous upgrade. */
 const THIS_CHANGE_NET_CENTS = 12_000;
 
+/**
+ * Drives the baseline reads apart by ORDER, so a commit can be interleaved
+ * between them.
+ *
+ * With the bracket the sequence is baseline -> changed preview -> baseline. The
+ * interloper is injected from `appearsFromCall` onward, which is how a change
+ * committed part-way through the pair is modelled; `vanishesFromCall` models
+ * the opposite, a pending proration swept onto a finalised invoice.
+ */
+function stubInterleaved(opts: {
+  appearsFromCall: number;
+  vanishesFromCall?: number;
+}): void {
+  let call = 0;
+  stripeMethods.invoices.createPreview.mockImplementation(
+    async (args: { subscription_details?: { proration_date?: number } }) => {
+      call += 1;
+      const anchor = args.subscription_details?.proration_date;
+      const nowSecond = Math.floor(Date.now() / 1000);
+      const visible =
+        call >= opts.appearsFromCall &&
+        (opts.vanishesFromCall === undefined || call < opts.vanishesFromCall);
+      const pending = visible
+        ? [
+            {
+              proration: true,
+              description: "Unused seats (a decrease landing mid-quote)",
+              amount: -90_000,
+              period: { start: nowSecond, end: nowSecond + 100 },
+            },
+          ]
+        : [];
+      if (anchor === undefined) {
+        return {
+          currency: "usd",
+          total: 0,
+          amount_due: 0,
+          lines: { data: pending, has_more: false },
+        };
+      }
+      return {
+        currency: "usd",
+        total: 12_000,
+        amount_due: 12_000,
+        lines: {
+          has_more: false,
+          data: [
+            ...pending,
+            {
+              proration: true,
+              description: "Unused time on Build",
+              amount: -40_000,
+              period: { start: anchor, end: anchor + 100 },
+            },
+            {
+              proration: true,
+              description: "Remaining time on Scale",
+              amount: 52_000,
+              period: { start: anchor, end: anchor + 100 },
+            },
+          ],
+        },
+      };
+    },
+  );
+}
+
+describe("a change that lands between the baseline and the preview (#3157, PR #3171 review)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stubSubscription();
+  });
+
+  it("refuses when a proration appears at the anchor after the baseline was read", async () => {
+    // The TOCTOU pair: the baseline came back clean, the commit landed, and the
+    // changed preview carries a credit the baseline never saw. One read cannot
+    // detect this; a second one after the preview can.
+    stubInterleaved({ appearsFromCall: 2 });
+
+    await expect(
+      provider.previewPlanChange("sub_001", { newPriceId: "price_scale_m" }),
+    ).rejects.toMatchObject({ code: "PRORATION_ANCHOR_AMBIGUOUS" });
+  });
+
+  it("refuses the interleaved case on the seat path too", async () => {
+    stubInterleaved({ appearsFromCall: 2 });
+
+    await expect(
+      provider.previewSeatChange("sub_001", { seats: 5 }),
+    ).rejects.toMatchObject({ code: "PRORATION_ANCHOR_AMBIGUOUS" });
+  });
+
+  it("refuses when the interloper is gone again by the closing baseline", async () => {
+    // The mirror case, and the reason the opening read is kept rather than
+    // replaced by the closing one: the proration was at our anchor, it was in
+    // the preview we priced, and it had been swept onto a finalised invoice
+    // before the closing read. Only the opening read ever saw it.
+    stubInterleaved({ appearsFromCall: 1, vanishesFromCall: 3 });
+
+    await expect(
+      provider.previewPlanChange("sub_001", { newPriceId: "price_scale_m" }),
+    ).rejects.toMatchObject({ code: "PRORATION_ANCHOR_AMBIGUOUS" });
+  });
+
+  it("still quotes when nothing lands during the window", async () => {
+    // The discriminating negative: bracketing must not refuse every quote.
+    stubInterleaved({ appearsFromCall: 99 });
+
+    const preview = await provider.previewPlanChange("sub_001", {
+      newPriceId: "price_scale_m",
+    });
+
+    expect(preview.amountCents).toBe(THIS_CHANGE_NET_CENTS);
+    expect(preview.isCharge).toBe(true);
+  });
+});
+
 describe("a proration anchor another change already occupies (#3157, PR #3171 review)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
