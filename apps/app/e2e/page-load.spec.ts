@@ -1,5 +1,6 @@
-// The page-load oracle (ARCHITECTURE.md §6.3): every signed-in rev1 surface
-// answers 200 and returns its own catalog title.
+// The page-load oracle (ARCHITECTURE.md §6.3): every rev1 surface answers 200
+// and returns its own catalog title — the signed-in ones on the storage state
+// login.spec.ts saved, the anonymous ones in a fresh context.
 //
 // The title is the assertion because it is the one signal that separates a page
 // that rendered from a page that fell over. An error boundary, a not-found and a
