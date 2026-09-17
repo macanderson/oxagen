@@ -48,6 +48,7 @@ vi.mock(
 const { applyGauReversal, reversibleGau } = await import("./gau-reversals");
 const { reverseGauPurchaseForDispute, reverseGauPurchaseForRefund } =
   await import("./gau-reversals");
+const { reconcilePendingGauReversals } = await import("./gau-reversals");
 
 const ORG = "00000000-0000-0000-0000-00000000a0a1";
 const OTHER_ORG = "00000000-0000-0000-0000-00000000b0b2";
@@ -102,6 +103,8 @@ function seedCheckoutSettlement(overrides: Record<string, unknown> = {}) {
     stripeCheckoutSessionId: "cs_gau_001",
     stripeInvoiceId: "in_gau_001",
     stripePaymentIntentId: "pi_gau_001",
+    // 10,000 GAU at 5,000 micros = 5,000c subtotal; 10% tax = 5,500c charged.
+    chargedCents: 5_500,
     createdAt: NOW,
     settledAt: NOW,
     ...overrides,
@@ -116,7 +119,8 @@ function refundedCharge(
   return {
     id: "ch_gau_001",
     paymentIntentId: "pi_gau_001",
-    amountRefundedCents: 5_000,
+    // The full tax-inclusive charge: 5,000c subtotal + 10% tax.
+    amountRefundedCents: 5_500,
     currency: "usd",
     orgId: ORG,
     metadata: { oxagen_kind: "gau_purchase", org_id: ORG },
@@ -129,7 +133,7 @@ function dispute(overrides: Partial<BillingDispute> = {}): BillingDispute {
     id: "dp_gau_001",
     chargeId: "ch_gau_001",
     paymentIntentId: "pi_gau_001",
-    amountCents: 5_000,
+    amountCents: 5_500,
     currency: "usd",
     reason: "fraudulent",
     status: "needs_response",
@@ -152,31 +156,63 @@ beforeEach(() => {
   });
 });
 
-describe("reversibleGau", () => {
-  const settlement = { quantityGau: 10_000, ratePerGauMicros: 5_000n };
+describe("reversibleGau — the denominator is what was actually paid", () => {
+  // 10,000 GAU at 5,000 micros = a 5,000c SUBTOTAL. With 10% automatic tax the
+  // customer is charged 5,500c, and Stripe's amount_refunded is against that.
+  const taxed = {
+    quantityGau: 10_000,
+    ratePerGauMicros: 5_000n,
+    chargedCents: 5_500,
+  };
+  const untaxed = { ...taxed, chargedCents: 5_000 };
 
-  it("takes every unit when the amount refunded equals the settlement's gross", () => {
-    expect(reversibleGau(settlement, 5_000)).toBe(10_000);
+  it("prorates a partial refund against the tax-inclusive total, not the subtotal", () => {
+    // The regression. Half the money back is half the units. Against the
+    // 5,000c subtotal this reads as 55% and withdraws 5,500 — a tenth more
+    // than was paid back, which is exactly the tax rate.
+    expect(reversibleGau(taxed, 2_750)).toBe(5_000);
+    expect(reversibleGau(taxed, 550)).toBe(1_000);
   });
 
-  it("takes every unit and no more when tax pushes the refund above the gross", () => {
-    expect(reversibleGau(settlement, 5_450)).toBe(10_000);
+  it("an untaxed purchase is unaffected: subtotal and charged total are the same number", () => {
+    // The control. A test that only ever ran untaxed would pass against the
+    // subtotal denominator and prove nothing about the bug above.
+    expect(reversibleGau(untaxed, 2_500)).toBe(5_000);
+    expect(reversibleGau(untaxed, 500)).toBe(1_000);
   });
 
-  it("takes units pro-rata for a partial refund", () => {
-    expect(reversibleGau(settlement, 2_500)).toBe(5_000);
-    expect(reversibleGau(settlement, 1_000)).toBe(2_000);
+  it("takes every unit for a full refund, taxed or not", () => {
+    expect(reversibleGau(taxed, 5_500)).toBe(10_000);
+    expect(reversibleGau(untaxed, 5_000)).toBe(10_000);
+    // Full refunds saturate either way, which is why the bug was invisible
+    // until a partial one.
+    expect(reversibleGau({ ...taxed, chargedCents: null }, 5_500)).toBe(10_000);
+  });
+
+  it("never withdraws more than the quantity, whatever the amount", () => {
+    expect(reversibleGau(taxed, 99_999)).toBe(10_000);
+  });
+
+  it("falls back to the subtotal when the settlement predates charged_cents", () => {
+    // A row written before the column existed has no tax-inclusive figure to
+    // prorate against; the subtotal is the best available and is exact for an
+    // untaxed purchase.
+    const legacy = { ...taxed, chargedCents: null };
+    expect(reversibleGau(legacy, 2_500)).toBe(5_000);
+  });
+
+  it("ignores a zero or absent charged total rather than dividing by it", () => {
+    expect(reversibleGau({ ...taxed, chargedCents: 0 }, 2_500)).toBe(5_000);
   });
 
   it("rounds down, so a partial refund never withdraws more than it paid back", () => {
-    // 1 cent of a 5,000-cent purchase is 2 units exactly; 1.5 cents is not
-    // expressible, so 2 cents buys back 4 and 3 cents 6 — never a rounded-up 7.
-    expect(reversibleGau(settlement, 3)).toBe(6);
+    // 3c of a 5,500c charge is 5.45 units; the floor is 5, never a rounded-up 6.
+    expect(reversibleGau(taxed, 3)).toBe(5);
   });
 
   it("takes nothing for a zero or negative amount", () => {
-    expect(reversibleGau(settlement, 0)).toBe(0);
-    expect(reversibleGau(settlement, -100)).toBe(0);
+    expect(reversibleGau(taxed, 0)).toBe(0);
+    expect(reversibleGau(taxed, -100)).toBe(0);
   });
 });
 
@@ -216,7 +252,7 @@ describe("applyGauReversal — a purchase whose units are still there", () => {
       requestedGau: 10_000,
       reversedGau: 10_000,
       unrecoveredGau: 0,
-      amountCents: 5_000,
+      amountCents: 5_500,
       currency: "usd",
     });
   });
@@ -243,8 +279,10 @@ describe("applyGauReversal — a purchase whose units are still there", () => {
     seedBucket({ purchasedGau: 10_000 });
     seedCheckoutSettlement();
 
+    // Half the money back is half the units — against the tax-inclusive
+    // total, not the 5,000c subtotal, which would have taken 5,500.
     await reverseGauPurchaseForRefund(
-      refundedCharge({ amountRefundedCents: 2_500 }),
+      refundedCharge({ amountRefundedCents: 2_750 }),
     );
 
     expect(store.buckets[0]).toMatchObject({ purchasedGau: 5_000 });
@@ -252,7 +290,7 @@ describe("applyGauReversal — a purchase whose units are still there", () => {
       requestedGau: 5_000,
       reversedGau: 5_000,
       unrecoveredGau: 0,
-      amountCents: 2_500,
+      amountCents: 2_750,
     });
   });
 });
@@ -293,11 +331,11 @@ describe("applyGauReversal — units the customer already spent", () => {
 
   it("takes from purchased before carried", async () => {
     seedBucket({ purchasedGau: 4_000, carriedGau: 4_000 });
-    seedCheckoutSettlement({ quantityGau: 5_000 });
+    seedCheckoutSettlement({ quantityGau: 5_000, chargedCents: 2_750 });
 
-    // 5,000 units at 5,000 micros = 2,500 cents; the refund is that gross.
+    // The whole charge back: all 5,000 units.
     await reverseGauPurchaseForRefund(
-      refundedCharge({ amountRefundedCents: 2_500 }),
+      refundedCharge({ amountRefundedCents: 2_750 }),
     );
 
     // 4,000 out of purchased, 1,000 out of carried — not 5,000 out of carried
@@ -446,14 +484,28 @@ describe("applyGauReversal — idempotency", () => {
 });
 
 describe("applyGauReversal — what it declines to touch", () => {
-  it("returns null when no settlement claims the PaymentIntent", async () => {
+  it("returns null when the charge did not buy units, so the credit clawback gets it", async () => {
     seedBucket({ purchasedGau: 10_000 });
     seedCheckoutSettlement({ stripePaymentIntentId: "pi_something_else" });
 
-    const result = await reverseGauPurchaseForRefund(refundedCharge());
+    const result = await reverseGauPurchaseForRefund(
+      refundedCharge({ metadata: { oxagen_kind: "usage_credits" } }),
+    );
 
     expect(result).toBeNull();
     expect(store.buckets[0]).toMatchObject({ purchasedGau: 10_000 });
+    expect(store.reversals).toHaveLength(0);
+  });
+
+  it("returns null when a gau charge carries no org, since a pending row has nothing to attribute to", async () => {
+    // The residual manual case. Retrying cannot conjure metadata that is not
+    // on the charge, so the handler logs a fatal rather than parking a row it
+    // could never reconcile.
+    const result = await reverseGauPurchaseForRefund(
+      refundedCharge({ orgId: null }),
+    );
+
+    expect(result).toBeNull();
     expect(store.reversals).toHaveLength(0);
   });
 
@@ -477,7 +529,11 @@ describe("applyGauReversal — what it declines to touch", () => {
       stripeCheckoutSessionId: null,
     });
 
-    const result = await reverseGauPurchaseForRefund(refundedCharge());
+    // An auto top-up is charged through an Invoice, so its charge never
+    // carries the Checkout metadata that marks a block purchase.
+    const result = await reverseGauPurchaseForRefund(
+      refundedCharge({ metadata: {} }),
+    );
 
     expect(result).toBeNull();
     expect(store.buckets[0]).toMatchObject({ purchasedGau: 10_000 });
@@ -501,5 +557,163 @@ describe("applyGauReversal — what it declines to touch", () => {
       unrecoveredGau: 0,
     });
     expect(store.buckets[0]).toMatchObject({ purchasedGau: 10_000 });
+  });
+});
+
+describe("a refund that arrives before its purchase (ADR-085 §5)", () => {
+  // Stripe does not order webhook deliveries, and processStripeEvent only
+  // re-dispatches an event whose handler THREW — a handler that returns marks
+  // the event processed forever. So a refund that finds no settlement and
+  // simply returns is a refund that is never seen again, while the retried
+  // grant goes on to hand out the full purchase. These tests run the events in
+  // that order and assert the bucket, because asserting "a reversal was
+  // recorded" passes against a reversal that never reaches the balance.
+
+  it("parks the reversal instead of dropping it", async () => {
+    // No settlement yet: the grant has not run.
+    const result = await reverseGauPurchaseForRefund(refundedCharge());
+
+    expect(result).toMatchObject({ pending: true, applied: true, orgId: ORG });
+    expect(store.reversals).toHaveLength(1);
+    expect(store.reversals[0]).toMatchObject({
+      orgId: ORG,
+      settlementId: null,
+      bucketId: null,
+      stripePaymentIntentId: "pi_gau_001",
+      providerEventId: "ch_gau_001",
+      amountCents: 5_500,
+      // Not knowable yet — the quantity and the rate live on the settlement.
+      requestedGau: 0,
+      reversedGau: 0,
+      unrecoveredGau: 0,
+    });
+  });
+
+  it("the grant then settles it, and the customer is left with no spendable units", async () => {
+    await reverseGauPurchaseForRefund(refundedCharge());
+
+    // The grant lands afterwards. It adds 10,000 and the reconciliation takes
+    // them straight back out, in the same transaction.
+    const bucket = seedBucket({ purchasedGau: 0 });
+    const settlement = seedCheckoutSettlement();
+    const tx = makeFakeGauTx(store);
+    const settled = await reconcilePendingGauReversals(tx, {
+      settlement,
+      paymentIntentId: "pi_gau_001",
+      bucket: { ...bucket, purchasedGau: 10_000 },
+    });
+
+    expect(settled).toHaveLength(1);
+    expect(settled[0]).toMatchObject({
+      pending: false,
+      requestedGau: 10_000,
+      reversedGau: 10_000,
+      unrecoveredGau: 0,
+    });
+    // The row, which is the whole point: the units did not survive the grant.
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 0 });
+    expect(store.reversals[0]).toMatchObject({
+      settlementId: settlement.id,
+      bucketId: bucket.id,
+      requestedGau: 10_000,
+      reversedGau: 10_000,
+      unrecoveredGau: 0,
+    });
+  });
+
+  it("settles a partial refund pro-rata against the tax-inclusive total it was parked with", async () => {
+    await reverseGauPurchaseForRefund(
+      refundedCharge({ amountRefundedCents: 2_750 }),
+    );
+    const bucket = seedBucket({ purchasedGau: 0 });
+    const settlement = seedCheckoutSettlement();
+    const tx = makeFakeGauTx(store);
+
+    await reconcilePendingGauReversals(tx, {
+      settlement,
+      paymentIntentId: "pi_gau_001",
+      bucket: { ...bucket, purchasedGau: 10_000 },
+    });
+
+    // Half the money back, half the units — 5,000 left spendable, not 4,500.
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 5_000 });
+    expect(store.reversals[0]).toMatchObject({
+      requestedGau: 5_000,
+      reversedGau: 5_000,
+    });
+  });
+
+  it("a redelivered refund parks nothing a second time", async () => {
+    await reverseGauPurchaseForRefund(refundedCharge());
+    const second = await reverseGauPurchaseForRefund(refundedCharge());
+
+    expect(second).toMatchObject({ pending: true, applied: false });
+    expect(store.reversals).toHaveLength(1);
+  });
+
+  it("reconciling twice withdraws nothing twice", async () => {
+    await reverseGauPurchaseForRefund(refundedCharge());
+    const bucket = seedBucket({ purchasedGau: 10_000 });
+    const settlement = seedCheckoutSettlement();
+    const tx = makeFakeGauTx(store);
+
+    await reconcilePendingGauReversals(tx, {
+      settlement,
+      paymentIntentId: "pi_gau_001",
+      bucket,
+    });
+    const again = await reconcilePendingGauReversals(tx, {
+      settlement,
+      paymentIntentId: "pi_gau_001",
+      bucket: store.buckets[0] as never,
+    });
+
+    // The second pass matches nothing: the row is no longer pending.
+    expect(again).toHaveLength(0);
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 0 });
+    expect(store.reversals).toHaveLength(1);
+  });
+
+  it("settles two parked reversals against one purchase without over-withdrawing", async () => {
+    await reverseGauPurchaseForRefund(
+      refundedCharge({ id: "ch_a", amountRefundedCents: 2_750 }),
+    );
+    await reverseGauPurchaseForRefund(
+      refundedCharge({ id: "ch_b", amountRefundedCents: 2_750 }),
+    );
+    expect(store.reversals).toHaveLength(2);
+
+    const bucket = seedBucket({ purchasedGau: 0 });
+    const settlement = seedCheckoutSettlement();
+    const tx = makeFakeGauTx(store);
+    const settled = await reconcilePendingGauReversals(tx, {
+      settlement,
+      paymentIntentId: "pi_gau_001",
+      bucket: { ...bucket, purchasedGau: 10_000 },
+    });
+
+    expect(settled).toHaveLength(2);
+    // 5,000 each, and the bucket lands at zero rather than negative — the
+    // clamp still holds across a sequence of reversals.
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 0 });
+  });
+
+  it("leaves an unrelated PaymentIntent's purchase alone", async () => {
+    await reverseGauPurchaseForRefund(refundedCharge());
+    const bucket = seedBucket({ purchasedGau: 10_000 });
+    const settlement = seedCheckoutSettlement({
+      stripePaymentIntentId: "pi_other",
+    });
+    const tx = makeFakeGauTx(store);
+
+    const settled = await reconcilePendingGauReversals(tx, {
+      settlement,
+      paymentIntentId: "pi_other",
+      bucket,
+    });
+
+    expect(settled).toHaveLength(0);
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 10_000 });
+    expect(store.reversals[0]).toMatchObject({ settlementId: null });
   });
 });

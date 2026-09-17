@@ -318,6 +318,7 @@ function paidSession(
     subscriptionId: null,
     invoiceId: "in_gau_001",
     paymentIntentId: "pi_gau_001",
+    amountTotalCents: 5_000,
     ...overrides,
   };
 }

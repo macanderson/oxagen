@@ -3,10 +3,14 @@
 // scope; the organisation is read off the settlement the PaymentIntent names,
 // which is the same bypass `grantGauPurchaseForCheckout` runs the grant under.
 // billing is org_only, no workspace_id.
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { schema, type Tx, withSystemDb } from "@oxagen/database";
 import { readGauEntitlement } from "./contract-terms";
-import { ensureCurrentBucket, periodFor } from "./gau-bucket";
+import {
+  ensureCurrentBucket,
+  periodFor,
+  type GauBucketRow,
+} from "./gau-bucket";
 import { logger } from "./logger";
 import type { BillingDispute, BillingRefundedCharge } from "./provider";
 
@@ -17,10 +21,16 @@ type GauSettlementRow = typeof schema.gauSettlements.$inferSelect;
 
 /** What a reversal did, for the caller's log line and for tests. */
 export interface GauReversalResult {
-  orgId: string;
-  settlementId: string;
-  /** The bucket that was debited: the org's bucket for the current period. */
-  bucketId: string;
+  /**
+   * True when the money came back before the purchase was recorded. Nothing
+   * was withdrawn yet — the row is parked against the PaymentIntent and the
+   * grant reconciles it before it hands out spendable units.
+   */
+  pending: boolean;
+  orgId: string | null;
+  settlementId: string | null;
+  /** The bucket that was debited, or null while pending. */
+  bucketId: string | null;
   /** Units the money reversal is worth (pro-rata on a partial refund). */
   requestedGau: number;
   /** Units actually taken out of the bucket. */
@@ -61,29 +71,42 @@ async function findPurchaseByPaymentIntent(
 /**
  * The units a money reversal of `amountCents` is worth against `settlement`.
  *
- * The settlement's gross is exact in cents: `blockPriceCents` refuses terms
- * whose `rate_per_gau_micros * block_size_gau` is not a whole number of cents,
- * and a purchase is a whole number of blocks, so `quantity * rate / 10000`
- * reconstructs what was charged before tax.
+ * The denominator is what the customer actually paid, tax included
+ * (`charged_cents`, recorded from the Checkout Session's `amount_total`).
+ * Stripe's `amount_refunded` includes refunded tax, so prorating against the
+ * pre-tax subtotal over-withdraws by exactly the tax rate: half of a 5,500c
+ * tax-inclusive charge is 2,750c, which against a 5,000c subtotal reads as 55%
+ * of the units instead of 50%. The error is invisible on a full refund, because
+ * the amount then exceeds the subtotal and saturates at the whole quantity.
  *
- * A reversal at or above that gross takes every unit — tax makes the amount
- * refunded exceed the gross in the ordinary full-refund case, so this is the
- * common branch, not an edge. Below it the reversal is partial and the units
- * come out pro-rata, rounded down: a partial refund should never withdraw more
- * than it paid back.
+ * The subtotal is the fallback for a settlement recorded before `charged_cents`
+ * existed. It is exact in cents — `blockPriceCents` refuses terms whose
+ * `rate_per_gau_micros * block_size_gau` is not a whole number of cents, and a
+ * purchase is a whole number of blocks.
+ *
+ * At or above the denominator every unit goes. Below it the reversal is partial
+ * and the units come out pro-rata, rounded down: a partial refund never
+ * withdraws more than it paid back.
  */
 export function reversibleGau(
-  settlement: Pick<GauSettlementRow, "quantityGau" | "ratePerGauMicros">,
+  settlement: Pick<
+    GauSettlementRow,
+    "quantityGau" | "ratePerGauMicros" | "chargedCents"
+  >,
   amountCents: number,
 ): number {
   if (amountCents <= 0) return 0;
-  const grossCents =
+  const subtotalCents =
     (BigInt(settlement.quantityGau) * settlement.ratePerGauMicros) /
     MICROS_PER_CENT;
-  if (grossCents <= 0n) return settlement.quantityGau;
-  if (BigInt(amountCents) >= grossCents) return settlement.quantityGau;
+  const denominatorCents =
+    settlement.chargedCents !== null && settlement.chargedCents > 0
+      ? BigInt(settlement.chargedCents)
+      : subtotalCents;
+  if (denominatorCents <= 0n) return settlement.quantityGau;
+  if (BigInt(amountCents) >= denominatorCents) return settlement.quantityGau;
   return Number(
-    (BigInt(settlement.quantityGau) * BigInt(amountCents)) / grossCents,
+    (BigInt(settlement.quantityGau) * BigInt(amountCents)) / denominatorCents,
   );
 }
 
@@ -94,6 +117,15 @@ interface ApplyGauReversalArgs {
   paymentIntentId: string | null;
   amountCents: number;
   currency: string;
+  /**
+   * Set when the provider event itself says it was a GAU block purchase
+   * (`metadata.oxagen_kind`), which only a charge carries. With it, a reversal
+   * that finds no settlement is parked as pending instead of being handed on
+   * to the usage-credit clawback; without it, an unmatched event is simply not
+   * ours. `orgId` comes from the same metadata and is what the pending row is
+   * attributed to, since there is no settlement to read it from.
+   */
+  gauPurchaseOrgId?: string | null;
 }
 
 /**
@@ -128,24 +160,22 @@ export async function applyGauReversal(
   const now = new Date();
 
   const result = await withSystemDb(async (tx) => {
-    const settlement = await findPurchaseByPaymentIntent(
-      tx,
-      args.paymentIntentId,
-    );
-    if (!settlement) return null;
+    if (!args.paymentIntentId) return null;
 
-    // Idempotency: Stripe redelivers. Keyed on (settlement, provider event) by
-    // `gau_reversals_settlement_event_idx`, the same shape the credit clawback
-    // keys its ledger row on. A second delivery of one charge or one dispute
-    // reads this row and withdraws nothing.
+    // Idempotency: Stripe redelivers. Keyed on (PaymentIntent, provider event)
+    // by `gau_reversals_payment_intent_event_idx` — the PaymentIntent rather
+    // than the settlement, so the key still holds for a row parked before its
+    // purchase was known. Checked before the settlement lookup for the same
+    // reason.
     const existing = await tx.query.gauReversals.findFirst({
       where: and(
-        eq(schema.gauReversals.settlementId, settlement.id),
+        eq(schema.gauReversals.stripePaymentIntentId, args.paymentIntentId),
         eq(schema.gauReversals.providerEventId, args.providerEventId),
       ),
     });
     if (existing) {
       return {
+        pending: existing.settlementId === null,
         orgId: existing.orgId,
         settlementId: existing.settlementId,
         bucketId: existing.bucketId,
@@ -153,6 +183,51 @@ export async function applyGauReversal(
         reversedGau: existing.reversedGau,
         unrecoveredGau: existing.unrecoveredGau,
         applied: false,
+      } satisfies GauReversalResult;
+    }
+
+    const settlement = await findPurchaseByPaymentIntent(
+      tx,
+      args.paymentIntentId,
+    );
+
+    if (!settlement) {
+      // No purchase recorded for this PaymentIntent. If the event itself says
+      // it was a block purchase, the grant simply has not run yet — Stripe does
+      // not order deliveries, and a grant that failed once is retried later.
+      //
+      // Park the reversal instead of dropping it. Returning here without a row
+      // would mark the webhook processed (processStripeEvent only re-dispatches
+      // an event whose handler THREW), so the refund would never be seen again
+      // while the retried grant went on to hand out the full purchase — the
+      // money-loss this module exists to prevent, reached by the opposite
+      // ordering. `grantGauPurchaseForCheckout` reconciles this row before it
+      // makes any unit spendable.
+      if (!args.gauPurchaseOrgId) return null;
+      await tx.insert(schema.gauReversals).values({
+        orgId: args.gauPurchaseOrgId,
+        settlementId: null,
+        bucketId: null,
+        stripePaymentIntentId: args.paymentIntentId,
+        kind: args.kind,
+        providerEventId: args.providerEventId,
+        // The units are not knowable yet: the quantity and the rate live on
+        // the settlement. The money is, and it is what reconciliation prorates.
+        requestedGau: 0,
+        reversedGau: 0,
+        unrecoveredGau: 0,
+        amountCents: args.amountCents,
+        currency: args.currency,
+      });
+      return {
+        pending: true,
+        orgId: args.gauPurchaseOrgId,
+        settlementId: null,
+        bucketId: null,
+        requestedGau: 0,
+        reversedGau: 0,
+        unrecoveredGau: 0,
+        applied: true,
       } satisfies GauReversalResult;
     }
 
@@ -203,6 +278,7 @@ export async function applyGauReversal(
       orgId: settlement.orgId,
       settlementId: settlement.id,
       bucketId: bucket.id,
+      stripePaymentIntentId: args.paymentIntentId,
       kind: args.kind,
       providerEventId: args.providerEventId,
       requestedGau,
@@ -213,6 +289,7 @@ export async function applyGauReversal(
     });
 
     return {
+      pending: false,
       orgId: settlement.orgId,
       settlementId: settlement.id,
       bucketId: bucket.id,
@@ -236,7 +313,14 @@ export async function applyGauReversal(
     reversedGau: result.reversedGau,
     unrecoveredGau: result.unrecoveredGau,
   };
-  if (!result.applied) {
+  if (result.pending) {
+    logger.warn(
+      line,
+      result.applied
+        ? "billing: gau refund arrived before its purchase — reversal parked, the grant will reconcile it"
+        : "billing: gau reversal already parked, skipping",
+    );
+  } else if (!result.applied) {
     logger.debug(line, "billing: gau reversal already applied, skipping");
   } else if (result.unrecoveredGau > 0) {
     // Not an error: the customer spent what they bought before asking for the
@@ -273,6 +357,10 @@ export async function reverseGauPurchaseForRefund(
     paymentIntentId: charge.paymentIntentId,
     amountCents: charge.amountRefundedCents,
     currency: charge.currency,
+    // Only a charge carries what it bought, and only then can an unmatched
+    // reversal be parked rather than handed to the usage-credit clawback.
+    gauPurchaseOrgId:
+      charge.metadata.oxagen_kind === "gau_purchase" ? charge.orgId : null,
   });
 }
 
@@ -295,4 +383,97 @@ export async function reverseGauPurchaseForDispute(
     amountCents: dispute.amountCents,
     currency: dispute.currency,
   });
+}
+
+/**
+ * Settle every reversal parked against this purchase's PaymentIntent, at the
+ * moment the purchase is recorded.
+ *
+ * Called by `grantGauPurchaseForCheckout` inside the same transaction as the
+ * grant, so a purchase whose money already came back never has spendable units
+ * between the two. The units are computed here and not at park time because
+ * the quantity and the rate live on the settlement, which did not exist yet.
+ *
+ * Idempotent twice over: the grant reaches this only on the delivery that
+ * actually inserted the settlement (`ON CONFLICT DO NOTHING` returns no row on
+ * a redelivery, and the caller stops there), and the lookup itself matches only
+ * rows still carrying `settlement_id IS NULL`, so a second pass finds nothing.
+ *
+ * Returns the reversals it settled, for the caller's log line.
+ */
+export async function reconcilePendingGauReversals(
+  tx: Tx,
+  args: {
+    settlement: Pick<
+      GauSettlementRow,
+      "id" | "orgId" | "quantityGau" | "ratePerGauMicros" | "chargedCents"
+    >;
+    paymentIntentId: string | null;
+    bucket: Pick<GauBucketRow, "id" | "purchasedGau" | "carriedGau">;
+  },
+): Promise<GauReversalResult[]> {
+  if (!args.paymentIntentId) return [];
+  const pending = await tx
+    .select()
+    .from(schema.gauReversals)
+    .where(
+      and(
+        eq(schema.gauReversals.stripePaymentIntentId, args.paymentIntentId),
+        isNull(schema.gauReversals.settlementId),
+      ),
+    );
+  if (pending.length === 0) return [];
+
+  // The bucket's counts move as each reversal takes from them, so they are
+  // tracked here rather than re-read: the caller holds the row lock for the
+  // whole transaction, and a re-read would return the same numbers anyway.
+  let purchased = args.bucket.purchasedGau;
+  let carried = args.bucket.carriedGau;
+  const settled: GauReversalResult[] = [];
+
+  for (const row of pending) {
+    const requestedGau = reversibleGau(args.settlement, row.amountCents);
+    const fromPurchased = Math.min(purchased, requestedGau);
+    const fromCarried = Math.min(carried, requestedGau - fromPurchased);
+    const reversedGau = fromPurchased + fromCarried;
+    purchased -= fromPurchased;
+    carried -= fromCarried;
+
+    await tx
+      .update(schema.gauReversals)
+      .set({
+        settlementId: args.settlement.id,
+        bucketId: args.bucket.id,
+        requestedGau,
+        reversedGau,
+        unrecoveredGau: requestedGau - reversedGau,
+      })
+      .where(eq(schema.gauReversals.id, row.id));
+
+    settled.push({
+      pending: false,
+      orgId: args.settlement.orgId,
+      settlementId: args.settlement.id,
+      bucketId: args.bucket.id,
+      requestedGau,
+      reversedGau,
+      unrecoveredGau: requestedGau - reversedGau,
+      applied: true,
+    });
+  }
+
+  if (
+    purchased !== args.bucket.purchasedGau ||
+    carried !== args.bucket.carriedGau
+  ) {
+    await tx
+      .update(schema.gauBuckets)
+      .set({
+        purchasedGau: purchased,
+        carriedGau: carried,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(schema.gauBuckets.id, args.bucket.id));
+  }
+  return settled;
 }

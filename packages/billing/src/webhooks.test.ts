@@ -691,6 +691,7 @@ describe("processStripeEvent", () => {
       subscriptionId: null,
       invoiceId: null,
       paymentIntentId: null,
+      amountTotalCents: null,
     };
 
     const event = makeWebhookEvent({
@@ -727,6 +728,7 @@ describe("processStripeEvent", () => {
       subscriptionId: null,
       invoiceId: "in_gau_001",
       paymentIntentId: "pi_gau_001",
+      amountTotalCents: 5_000,
     };
 
     const event = makeWebhookEvent({

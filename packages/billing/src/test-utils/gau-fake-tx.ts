@@ -172,6 +172,12 @@ function assertChecks(t: TableName, row: Row): void {
     if (row.kind !== "refund" && row.kind !== "dispute") {
       throw new Error("fake tx: violates gau_reversals_kind_check");
     }
+    // Pending or settled, never half of each.
+    if ((row.settlementId === null) !== (row.bucketId === null)) {
+      throw new Error(
+        "fake tx: violates gau_reversals_pending_consistency_check",
+      );
+    }
     return;
   }
 }
@@ -338,6 +344,17 @@ export function fakeGauExecutor(store: FakeGauStore) {
             store.log.push({ op: "select", table: t });
             return Promise.resolve(rows.slice(0, n));
           },
+          // A select is thenable at every stage in drizzle — `await
+          // tx.select().from(x).where(y)` with no limit runs the query. The
+          // fake used to resolve only on `.limit()`, so an unlimited read
+          // awaited the chain object itself and the caller got something that
+          // was not an array.
+          then: <R>(onFulfilled: (v: Row[]) => R) => {
+            store.log.push({ op: "select", table: t });
+            return Promise.resolve(rows.map((r) => ({ ...r }))).then(
+              onFulfilled,
+            );
+          },
         };
         return chain;
       },
@@ -356,8 +373,13 @@ export function fakeGauExecutor(store: FakeGauStore) {
               ? {
                   stripeCheckoutSessionId: null,
                   stripeInvoiceId: null,
+                  stripePaymentIntentId: null,
+                  chargedCents: null,
                   settledAt: null,
                 }
+              : {}),
+            ...(t === "reversals"
+              ? { settlementId: null, bucketId: null }
               : {}),
             ...v,
           };
@@ -366,13 +388,13 @@ export function fakeGauExecutor(store: FakeGauStore) {
             t === "reversals" &&
             store.reversals.some(
               (r) =>
-                r.settlementId === row.settlementId &&
+                r.stripePaymentIntentId === row.stripePaymentIntentId &&
                 r.providerEventId === row.providerEventId,
             )
           ) {
-            // gau_reversals_settlement_event_idx: the idempotency key.
+            // gau_reversals_payment_intent_event_idx: the idempotency key.
             throw new Error(
-              "fake tx: duplicate key value violates gau_reversals_settlement_event_idx",
+              "fake tx: duplicate key value violates gau_reversals_payment_intent_event_idx",
             );
           }
           tables[t].push(row);

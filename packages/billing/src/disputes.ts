@@ -360,19 +360,23 @@ export async function onChargeRefunded(
         settlementId: gauReversal.settlementId,
         reversedGau: gauReversal.reversedGau,
         unrecoveredGau: gauReversal.unrecoveredGau,
+        pending: gauReversal.pending,
         durationMs: Date.now() - start,
       },
-      "billing: charge.refunded against a gau purchase — units withdrawn, credits untouched",
+      gauReversal.pending
+        ? "billing: charge.refunded arrived before its gau purchase — reversal parked for the grant to settle, credits untouched"
+        : "billing: charge.refunded against a gau purchase — units withdrawn, credits untouched",
     );
     return;
   }
 
   if (charge.metadata.oxagen_kind === "gau_purchase") {
-    // The charge says it bought units but no settlement claims its
-    // PaymentIntent: the grant never ran, or it ran before the settlement
-    // recorded the PaymentIntent. Either way the usage-credit clawback below
-    // would debit a balance this charge never credited, so stop here and say
-    // so rather than taking the wrong money.
+    // The charge says it bought units and no settlement claims its
+    // PaymentIntent — and it could not be parked either, which leaves only one
+    // case: the charge carries no `org_id`, so there is nothing to attribute a
+    // pending reversal to. Retrying will not conjure the metadata, so this is
+    // genuinely manual. The usage-credit clawback below would debit a balance
+    // this charge never credited, so stop rather than take the wrong money.
     logger.fatal(
       {
         alert: "gau_reversal_unmatched",
@@ -381,7 +385,7 @@ export async function onChargeRefunded(
         amountRefundedCents: charge.amountRefundedCents,
         orgId: charge.orgId,
       },
-      "billing: charge.refunded — CRITICAL: refunded gau purchase matches no settlement; units NOT withdrawn — manual intervention required",
+      "billing: charge.refunded — CRITICAL: refunded gau purchase carries no org and matches no settlement; units NOT withdrawn — manual intervention required",
     );
     return;
   }

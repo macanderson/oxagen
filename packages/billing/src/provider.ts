@@ -459,6 +459,12 @@ export interface BillingCheckoutSession {
    * (ADR-085).
    */
   paymentIntentId: string | null;
+  /**
+   * What the session charged, tax included, in cents. The GAU settlement
+   * records it: a refund's amount includes refunded tax, so this is the
+   * denominator a partial reversal must prorate against (ADR-085).
+   */
+  amountTotalCents: number | null;
 }
 
 // ── BillingProvider interface ────────────────────────────────────────────────

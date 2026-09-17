@@ -3344,7 +3344,7 @@
       "writes": []
     }
   ],
-  "contentHash": "1144ae16a2d449cf5c95c4df549291a67a3bcfb8dfd642a80cf173aa417f1163",
+  "contentHash": "df9c7478412a3608783aee9d6e22275d5fada534a867b9227426bdb4ca7be38e",
   "domains": [
     {
       "name": "agent",
@@ -9799,17 +9799,23 @@
         },
         {
           "name": "settlement_id",
-          "nullable": false,
+          "nullable": true,
           "primaryKey": false,
           "references": "postgres:billing.gau_settlements",
           "type": "uuid"
         },
         {
           "name": "bucket_id",
-          "nullable": false,
+          "nullable": true,
           "primaryKey": false,
           "references": "postgres:billing.gau_buckets",
           "type": "uuid"
+        },
+        {
+          "name": "stripe_payment_intent_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "kind",
@@ -9942,6 +9948,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "charged_cents",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bigint"
         },
         {
           "name": "created_at",

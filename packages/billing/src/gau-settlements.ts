@@ -38,6 +38,7 @@ import {
   uninvoicedGau,
   type GauBucketRow,
 } from "./gau-bucket";
+import { reconcilePendingGauReversals } from "./gau-reversals";
 import { logger } from "./logger";
 import { readDefaultPaymentMethod } from "./payment-methods";
 import type { GauTerms } from "./pricing";
@@ -817,6 +818,8 @@ export async function grantGauPurchaseForCheckout(
         // charge.refunded or charge.dispute.created names the PaymentIntent
         // and nothing else reaches back to this row (ADR-085).
         stripePaymentIntentId: session.paymentIntentId,
+        // Tax included: the denominator a partial reversal prorates against.
+        chargedCents: session.amountTotalCents,
         settledAt: now,
       })
       .onConflictDoNothing({
@@ -827,7 +830,7 @@ export async function grantGauPurchaseForCheckout(
       .returning({ id: schema.gauSettlements.id });
     if (inserted.length === 0) return false;
 
-    await ensureCurrentBucket(tx, purchase.orgId, {
+    const granted = await ensureCurrentBucket(tx, purchase.orgId, {
       period,
       terms,
       usedDelta: 0,
@@ -837,6 +840,40 @@ export async function grantGauPurchaseForCheckout(
       .update(schema.gauBuckets)
       .set({ openTopupSettlementId: null, updatedAt: sql`now()` })
       .where(eq(schema.gauBuckets.id, bucket.id));
+
+    // The money for this purchase may already have come back: Stripe does not
+    // order webhook deliveries, and a grant that failed once is retried later,
+    // so `charge.refunded` can be processed first. It parks a pending reversal
+    // against this PaymentIntent rather than dropping it; settle it here, in
+    // this transaction, so the units are never spendable in between (ADR-085).
+    //
+    // Reached only on the delivery that actually inserted the settlement — a
+    // redelivery returns above — and the lookup matches only rows still
+    // pending, so it cannot withdraw twice.
+    const reconciled = await reconcilePendingGauReversals(tx, {
+      settlement: {
+        id: inserted[0]!.id,
+        orgId: purchase.orgId,
+        quantityGau: purchase.quantityGau,
+        ratePerGauMicros: purchase.ratePerGauMicros,
+        chargedCents: session.amountTotalCents,
+      },
+      paymentIntentId: session.paymentIntentId,
+      bucket: granted,
+    });
+    if (reconciled.length > 0) {
+      logger.warn(
+        {
+          orgId: purchase.orgId,
+          sessionId: session.id,
+          paymentIntentId: session.paymentIntentId,
+          quantityGau: purchase.quantityGau,
+          reversals: reconciled.length,
+          reversedGau: reconciled.reduce((n, r) => n + r.reversedGau, 0),
+        },
+        "billing: gau purchase granted against a refund that arrived first — units withdrawn in the same transaction",
+      );
+    }
     return true;
   });
 

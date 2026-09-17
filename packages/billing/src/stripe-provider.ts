@@ -254,6 +254,7 @@ function checkoutSessionToNeutral(
     subscriptionId: resolveSubscriptionRef(sess.subscription),
     invoiceId: resolveRef(sess.invoice),
     paymentIntentId: resolveRef(sess.payment_intent),
+    amountTotalCents: sess.amount_total ?? null,
   };
 }
 

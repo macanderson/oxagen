@@ -935,6 +935,17 @@ export const gauSettlements = billingSchema.table(
      * ADR-085.
      */
     stripePaymentIntentId: text("stripe_payment_intent_id"),
+    /**
+     * What the Checkout Session actually charged, tax included.
+     *
+     * `quantity_gau * rate_per_gau_micros` reconstructs the SUBTOTAL, and a
+     * refund's amount includes refunded tax — so prorating a partial refund
+     * against the subtotal over-withdraws by exactly the tax rate. This is the
+     * denominator that makes a partial reversal proportional to what was
+     * actually paid back. NULL for a settlement recorded before this column
+     * existed. ADR-085.
+     */
+    chargedCents: bigint("charged_cents", { mode: "number" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
@@ -975,6 +986,10 @@ export const gauSettlements = billingSchema.table(
       "gau_settlements_amounts_check",
       sql`${t.quantityGau} > 0 AND ${t.ratePerGauMicros} >= 0 AND (${t.seq} IS NULL OR ${t.seq} >= 0)`,
     ),
+    chargedCentsCheck: check(
+      "gau_settlements_charged_cents_non_negative",
+      sql`${t.chargedCents} IS NULL OR ${t.chargedCents} >= 0`,
+    ),
   }),
 );
 
@@ -1009,16 +1024,24 @@ export const gauReversals = billingSchema.table(
     orgId: uuid("org_id")
       .notNull()
       .references(() => organizations.id),
-    /** The purchase being reversed. */
-    settlementId: uuid("settlement_id")
-      .notNull()
-      .references(() => gauSettlements.id),
+    /**
+     * The purchase being reversed, or NULL while the reversal is *pending*:
+     * the money came back before the purchase was recorded. Stripe does not
+     * order webhook deliveries, and a checkout grant that failed once is
+     * retried later, so a refund can genuinely arrive first. The grant
+     * reconciles against any pending row before it hands out spendable units.
+     */
+    settlementId: uuid("settlement_id").references(() => gauSettlements.id),
     /** The bucket actually debited: the org's bucket for the period the
      * reversal was processed in, which is the only balance the gate reads —
-     * not necessarily the bucket the grant landed on. */
-    bucketId: uuid("bucket_id")
-      .notNull()
-      .references(() => gauBuckets.id),
+     * not necessarily the bucket the grant landed on. NULL while pending. */
+    bucketId: uuid("bucket_id").references(() => gauBuckets.id),
+    /**
+     * The PaymentIntent the reversed money moved on. Always known — it is what
+     * a refund and a dispute both name, and it is how a pending reversal finds
+     * its purchase later.
+     */
+    stripePaymentIntentId: text("stripe_payment_intent_id").notNull(),
     // CHECK: kind IN ('refund','dispute').
     kind: text("kind").notNull(),
     /** The Stripe object that caused it: `ch_…` for a refund, `dp_…` for a
@@ -1040,15 +1063,26 @@ export const gauReversals = billingSchema.table(
   (t) => ({
     // The idempotency key. A redelivered charge.refunded or
     // charge.dispute.created finds this row and withdraws nothing twice.
-    settlementEventIdx: uniqueIndex("gau_reversals_settlement_event_idx").on(
-      t.settlementId,
-      t.providerEventId,
-    ),
+    // Keyed on the PaymentIntent rather than the settlement so it still holds
+    // for a pending row; one PaymentIntent charges one session, so for a
+    // reconciled row it is the same key by another name.
+    paymentIntentEventIdx: uniqueIndex(
+      "gau_reversals_payment_intent_event_idx",
+    ).on(t.stripePaymentIntentId, t.providerEventId),
+    // The reconciliation's lookup: pending reversals awaiting their purchase.
+    pendingIdx: index("gau_reversals_pending_idx")
+      .on(t.stripePaymentIntentId)
+      .where(sql`${t.settlementId} IS NULL`),
     // Readers reach a reversal through its bucket, as they do a settlement.
     bucketIdx: index("gau_reversals_bucket_idx").on(t.bucketId),
     kindCheck: check(
       "gau_reversals_kind_check",
       sql`${t.kind} IN ('refund','dispute')`,
+    ),
+    // Pending or settled, never half of each: one reconciliation resolves both.
+    pendingConsistencyCheck: check(
+      "gau_reversals_pending_consistency_check",
+      sql`(${t.settlementId} IS NULL) = (${t.bucketId} IS NULL)`,
     ),
     quantitiesCheck: check(
       "gau_reversals_quantities_check",
