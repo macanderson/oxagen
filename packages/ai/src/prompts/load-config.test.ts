@@ -17,10 +17,16 @@ const mocks = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
-vi.mock("@oxagen/database", () => ({
-  withTenantDb: mocks.withTenantDb,
-  schema: { workspaces: { id: "id" } },
-}));
+vi.mock("@oxagen/database", () => {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    withTenantDb: mocks.withTenantDb,
+    schema: { workspaces: { id: "id" } },
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 
 vi.mock("drizzle-orm", () => ({ eq: vi.fn() }));
 

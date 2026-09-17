@@ -19,47 +19,53 @@ vi.mock("../create-function", () => ({
   createFunction: mocks.createFunction,
 }));
 
-vi.mock("@oxagen/database", () => ({
-  withTenantDb: mocks.withTenantDb,
-  // schema is aliased as "db" in the source; exported as "schema"
-  schema: {
-    agentExecutions: { id: "id", orgId: "org_id" },
-    schemaVersions: {
-      publicId: "public_id",
-      orgId: "org_id",
-      workspaceId: "workspace_id",
+vi.mock("@oxagen/database", () => {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    withTenantDb: mocks.withTenantDb,
+    // schema is aliased as "db" in the source; exported as "schema"
+    schema: {
+      agentExecutions: { id: "id", orgId: "org_id" },
+      schemaVersions: {
+        publicId: "public_id",
+        orgId: "org_id",
+        workspaceId: "workspace_id",
+      },
+      schemas: {
+        versionId: "version_id",
+        orgId: "org_id",
+        workspaceId: "workspace_id",
+        deletedAt: "deleted_at",
+      },
+      schemaActivations: {
+        orgId: "org_id",
+        workspaceId: "workspace_id",
+        deletedAt: "deleted_at",
+        schemaName: "schema_name",
+      },
+      nodeLabels: {
+        versionId: "version_id",
+        schemaId: "schema_id",
+        orgId: "org_id",
+        deletedAt: "deleted_at",
+      },
+      relationshipTypes: {
+        versionId: "version_id",
+        schemaId: "schema_id",
+        orgId: "org_id",
+        deletedAt: "deleted_at",
+      },
+      schemaProperties: {
+        versionId: "version_id",
+        orgId: "org_id",
+        deletedAt: "deleted_at",
+      },
     },
-    schemas: {
-      versionId: "version_id",
-      orgId: "org_id",
-      workspaceId: "workspace_id",
-      deletedAt: "deleted_at",
-    },
-    schemaActivations: {
-      orgId: "org_id",
-      workspaceId: "workspace_id",
-      deletedAt: "deleted_at",
-      schemaName: "schema_name",
-    },
-    nodeLabels: {
-      versionId: "version_id",
-      schemaId: "schema_id",
-      orgId: "org_id",
-      deletedAt: "deleted_at",
-    },
-    relationshipTypes: {
-      versionId: "version_id",
-      schemaId: "schema_id",
-      orgId: "org_id",
-      deletedAt: "deleted_at",
-    },
-    schemaProperties: {
-      versionId: "version_id",
-      orgId: "org_id",
-      deletedAt: "deleted_at",
-    },
-  },
-}));
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 
 vi.mock("drizzle-orm", async (importOriginal) => {
   const actual = await importOriginal<typeof import("drizzle-orm")>();
