@@ -10,6 +10,7 @@ import {
   resolveActorOrgRole as resolveActorRole,
   resolveOperatorUserId,
 } from "./lib/api-key-authz";
+import { revokeHostEnrollment } from "./lib/tacho-host-revoke";
 import { logger } from "./logger";
 
 function denied(message: string): CapabilityError {
@@ -54,36 +55,12 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
     if (host.status === "revoked" && host.revokedAt) {
       return { revokedAt: host.revokedAt, already: true };
     }
-    await tx
-      .update(schema.tachoHosts)
-      .set({
-        status: "revoked",
-        revokedAt: now,
-        revokeReason: input.reason ?? null,
-        updatedAt: now,
-        updatedByUserId: operatorUserId,
-      })
-      .where(eq(schema.tachoHosts.id, host.id));
-    await tx
-      .update(schema.apiKeys)
-      .set({
-        deletedAt: now,
-        deletedByUserId: operatorUserId,
-        updatedAt: now,
-        updatedByUserId: operatorUserId,
-      })
-      .where(eq(schema.apiKeys.id, host.apiKeyId));
-    await tx.insert(schema.tachoControlCommands).values({
+    await revokeHostEnrollment(tx, host, {
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
-      hostId: host.id,
-      command: "revoke",
-      payload: { reason: input.reason ?? "revoked by operator" },
-      issuedByUserId: operatorUserId,
-      issuedAt: now,
-      expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
-      createdByUserId: operatorUserId,
-      updatedByUserId: operatorUserId,
+      userId: operatorUserId,
+      reason: input.reason ?? null,
+      now,
     });
     return { revokedAt: now, already: false };
   });

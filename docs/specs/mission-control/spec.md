@@ -1411,10 +1411,12 @@ Thirty-five tables in nine schemas in the wedge, thirty-seven for the full produ
 | `id` | uuid (v7) | all | primary key; never shown outside the system |
 | `public_id` | citext | all | prefixed (`org_`, `wrk_`, `agt_`, …), unique; the only id shown in the API and the UI |
 | `created_at`, `updated_at` | timestamptz | all | |
-| `created_by`, `updated_by` | uuid → `auth.users` | tables a person edits | |
-| `deleted_at`, `deleted_by` | timestamptz, uuid | tables a person edits | rows are never hard-deleted |
+| `created_by_id`, `updated_by_id` | uuid → `auth.users` | tables a person edits | |
+| `deleted_at`, `deleted_by_id` | timestamptz, uuid | tables a person edits | rows are never hard-deleted |
 | `org_id` | uuid → `org.organizations` | tenant class `org` and `workspace` | required; enforced by the policies in §5.2 |
 | `workspace_id` | uuid → `wrk.workspaces` | tenant class `workspace` | required; enforced by the policies in §5.2 |
+
+> **Amendment 2026-09-15 (ADR-077).** Attribution columns end in `_id` like every other reference column: `created_by_id`, `updated_by_id`, `deleted_by_id`, and the per-table `<verb>_by` columns below (`invited_by`, `granted_by`, `issued_by`, `approved_by`, `revoked_by`, `placed_by`, `released_by`) are `<verb>_by_id` when they hold a user or principal id. `control.approvals.resolved_by` keeps its name: it is text that may hold `policy:<rule id>`, not a reference. `createdBy` without a suffix is reserved for a resolved display name in a contract output (`iam.role.list`), never a column.
 
 Money is `bigint` micro-USD unless a `currency` column says otherwise. Secrets are `bytea` ciphertext with `key_id` and `digest` beside them (the envelope pattern). Every `jsonb` column is validated against a schema in code before it is written. Enumerations are `text` with a check constraint; their values are listed in the Notes column.
 
@@ -2151,7 +2153,7 @@ How the four grants combine for this role: every GitHub tool is allowed for read
 
 ## Appendix E. The agent tools that survive
 
-The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: **96 agent tools** (78 of them in the wedge), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is **de-registered**, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses `app` from its `layers[]`, loses the `api` / `mcp` / `cli` entries in its `surfaces[]`, or loses its registration in `packages/handlers/src/register.ts`. It does **not** mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; `DEREGISTERED.md` at the repository root records each one with its file paths, and `pnpm check:deregistered` fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under `docs/adr/` that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.
+The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: **97 agent tools** (78 of them in the wedge), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is **de-registered**, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses `app` from its `layers[]`, loses the `api` / `mcp` / `cli` entries in its `surfaces[]`, or loses its registration in `packages/handlers/src/register.ts`. It does **not** mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; `DEREGISTERED.md` at the repository root records each one with its file paths, and `pnpm check:deregistered` fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under `docs/adr/` that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.
 
 **Organization and workspace (11)**
 
@@ -2185,7 +2187,7 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 | `set_agent_role` | assign_agent_role, revoke_agent_role | |
 | `set_role_grants` | (new; grants were seeded) | role's grants and resource scopes; `list_roles` is its read side, folded into `get_agent` and the Tools page |
 
-**Wrapping and control (14)**
+**Wrapping and control (15)**
 
 | Agent tool | Absorbs | Does |
 |---|---|---|
@@ -2197,6 +2199,7 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 | `fetch_commands` | fetch_tacho_commands | control channel; headless |
 | `dispatch_command` | dispatch_tacho_command | pause, resume, steer, cancel, revoke |
 | `list_runs` | list_executions, list_tacho_sessions | by operator, agent, task, tier, verdict |
+| `list_skills` | (new; `tacho.sessions.skills_available` had no reader) | read: the skill names the workspace's harness sessions reported at start, with sessions, harnesses and last seen over a window; Oxagen reports which skills the harness had and runs none (added 2026-09-15 for the Skills page, #3098) |
 | `get_run` | get_tacho_session, get_execution_trace, get_message_execution | run with turns, steps, frames, receipts, cost |
 | `export_run` | export_data (run part) | signed bundle with verifier |
 | `list_approvals` | (new; approvals had no list) | queue with the four-hop chain |

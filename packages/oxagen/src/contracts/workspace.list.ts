@@ -23,7 +23,15 @@ export const workspaceListItemSchema = z.object({
   role: z
     .string()
     .nullable()
-    .describe("The caller's workspace role, or null when they are an org admin without a direct workspace membership"),
+    .describe(
+      "The caller's workspace role, or null when they are an org admin without a direct workspace membership",
+    ),
+  archivedAt: z
+    .string()
+    .nullable()
+    .describe(
+      "ISO-8601 when the workspace was archived (archive_workspace); null while active. Present only when includeArchived is true",
+    ),
 });
 
 export const workspaceList = registerCapability({
@@ -33,11 +41,14 @@ export const workspaceList = registerCapability({
     "List the workspaces inside an organization the authenticated user belongs to. Backs the CLI workspace picker in `oxagen init`.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   agent: { requiresApproval: false, riskLevel: "low", category: "workspace" },
   sensitivity: "low",
   mutates: false,
+  // A console read is never a governed action (ADR-052 exclusion 2); the
+  // app's shell reads this list from an org context on every page load.
+  noBillingGate: true,
   // allow by default: same reasoning as org.list — listing workspaces within an
   // org the caller already belongs to is a user-intrinsic right. The handler
   // enforces membership before listing (not-a-member → error). Keeping this as
@@ -45,11 +56,27 @@ export const workspaceList = registerCapability({
   // before workspace.list was seeded in role_grants. (OXA fix — CLI picker 403.)
   defaultEffect: "allow",
   defaultRoles: {
-    org: { Owner: "allow", Admin: "allow", Member: "allow", Billing: "allow", Compliance: "allow", Viewer: "allow" },
+    org: {
+      Owner: "allow",
+      Admin: "allow",
+      Member: "allow",
+      Billing: "allow",
+      Compliance: "allow",
+      Viewer: "allow",
+    },
     workspace: {},
   },
   input: z.object({
-    orgSlug: z.string().min(1).describe("Slug of the organization whose workspaces to list"),
+    orgSlug: z
+      .string()
+      .min(1)
+      .describe("Slug of the organization whose workspaces to list"),
+    includeArchived: z
+      .boolean()
+      .default(false)
+      .describe(
+        "Also list archived workspaces (the Organization › Workspaces section); the switcher and the CLI picker leave this off",
+      ),
   }),
   output: z.object({
     organization: z.object({

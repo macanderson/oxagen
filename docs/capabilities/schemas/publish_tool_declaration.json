@@ -25,6 +25,7 @@
       "name": {
         "type": "string",
         "minLength": 1,
+        "maxLength": 128,
         "description": "Tool name (snake_case identifier, e.g. read_file) — the workspace-unique key"
       },
       "description": {
@@ -68,6 +69,56 @@
         "type": "object",
         "additionalProperties": {},
         "description": "The full declared manifest body, verbatim"
+      },
+      "consequence_tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": []
+      },
+      "measures": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "amount",
+                "count",
+                "text"
+              ]
+            },
+            "unit": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32
+            },
+            "scale": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 6
+            }
+          },
+          "required": [
+            "path",
+            "type",
+            "unit"
+          ],
+          "additionalProperties": false
+        },
+        "default": {}
+      },
+      "effect_id_path": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
       }
     },
     "required": [

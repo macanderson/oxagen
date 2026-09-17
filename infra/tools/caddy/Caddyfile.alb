@@ -20,25 +20,39 @@
 # bound to 127.0.0.1 on the instance and is not reachable from Docker's
 # bridge network at all.
 
-# The ALB is the only thing that ever connects to this node, so the address
-# Caddy sees as the peer is always the load balancer, never a caller. Declaring
-# the VPC's private ranges trusted lets `{client_ip}` resolve past the ALB to
-# the address the ALB itself observed — the real client. Without this the
-# placeholder returns the load balancer's own private address and every caller
-# looks like the same one.
+# Trust the ALB in front of this node, so the client address survives to the
+# services behind it.
 #
-# `trusted_proxies_strict` is what makes that address trustworthy rather than
-# merely present. Caddy's default reads the LEFTMOST X-Forwarded-For entry,
-# which is whatever the caller wrote, because neither the ALB nor Caddy strips
-# an inbound copy — both append. Strict mode walks the header from the right
-# instead, skipping addresses inside the trusted ranges, so it lands on the
-# entry the ALB appended and a caller-supplied prefix is ignored. Dropping this
-# line does not fail any check; it silently hands `X-Oxagen-Client-Ip` to the
-# caller.
+# Caddy's `reverse_proxy` does NOT append to an inbound X-Forwarded-For unless
+# the immediate peer is a trusted proxy — it REPLACES the header with the peer's
+# own address. Measured against `caddy:2`, the image this node runs: a request
+# arriving with `X-Forwarded-For: 203.0.113.99` reached the upstream as
+# `X-Forwarded-For: 172.17.0.1` with a plain `reverse_proxy`, and as
+# `203.0.113.99, 172.17.0.1` with this block in place. So without it the API
+# never sees a client address at all — only the load balancer's — and no amount
+# of forwarded-header configuration on the application side can recover one.
+#
+# Two things downstream depend on the real client address: the IAM
+# `ip_ranges` / `ip_allow` conditions, which were therefore being evaluated
+# against the ALB, and the pre-authentication rate-limit ceilings on the Tacho
+# and Stella machine routes, which refuse to enforce a bucket they cannot
+# attribute to a caller.
+#
+# `private_ranges` rather than the VPC CIDR: the security group admits the ALB's
+# security group alone (see the header above), so the only peer that can reach
+# this listener is already the load balancer. Naming an exact CIDR here would
+# add a second place for a network change to break the client IP silently.
+#
+# After this deploys, set TRUSTED_PROXY_CIDRS for apps/api to the range these
+# proxies sit in. It is the only way the app attributes a client address: it
+# walks the chain from the right while each entry is a named proxy and stops at
+# the first that is not, so a caller padding the header cannot move the result.
+# Unset, no client address is derived at all and both readers fail safe — the
+# IAM ip_ranges / ip_allow conditions deny, and the pre-authentication IP
+# ceilings skip. See #3167.
 {
 	servers {
 		trusted_proxies static private_ranges
-		trusted_proxies_strict
 	}
 }
 
@@ -83,19 +97,6 @@
 		handle @api {
 			encode gzip zstd
 			reverse_proxy 127.0.0.1:4000 {
-				# The API's pre-authentication rate limiters bucket by client
-				# address, and the only address they are allowed to believe is
-				# one this proxy wrote. `header_up` SETS the field, so a copy a
-				# caller sent under the same name is replaced here and never
-				# reaches the application — which is the whole reason the
-				# limiter trusts this header and not `X-Forwarded-For`, where
-				# both the ALB and Caddy append to whatever the caller started.
-				# Read by `trustedClientIpBucketKey` in
-				# apps/api/src/middleware/distributed-rate-limit.ts; renaming
-				# either side without the other silently collapses every caller
-				# back into one shared bucket.
-				header_up X-Oxagen-Client-Ip {client_ip}
-
 				transport http {
 					response_header_timeout 300s
 				}

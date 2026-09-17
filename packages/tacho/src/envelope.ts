@@ -635,6 +635,11 @@ export const KIND_BODIES = {
     ...pick(...policyKeys),
     ...pick(...integrityKeys),
   }),
+  // A witness verdict on the worker's run (Mission Control spec §8.5,
+  // ADR-064). The chain carries the body as it was produced; its schema is
+  // `proofObservedBodySchema` in @oxagen/run-evidence, which the control
+  // plane's ingest contract applies, so this leaf package holds no copy.
+  "proof.observed": z.object({}).catchall(json),
 } as const;
 
 export type TachoKind = keyof typeof KIND_BODIES;
@@ -716,9 +721,41 @@ export const hostSchema = z
   })
   .strict();
 
+/**
+ * What the harness reports about the Anthropic account behind the session.
+ *
+ * Two members can carry the person's address, and NEITHER is stored, nor is
+ * anything derived from either (#3072). The control plane drops both on the
+ * way in. A stable value computed from this block would be an oracle: the
+ * producer chooses it, and an org Member can read the session back, so guesses
+ * could be matched against a colleague's row. The session's person is
+ * `initiating_principal_id`, which this deployment issues.
+ *
+ * `user_email_digest` is what the round before this one sent: the address
+ * hashed on the host. A collector from this release sends it no longer, because
+ * `sealEvent` hashes every member, which made the persisted seal a commitment
+ * to a guessable value. Still accepted, still discarded.
+ *
+ * `user_email` is the legacy member, still accepted because removing it would
+ * be a silent, uncoordinated break. The wire version is still `tacho/1.0`, so
+ * an installed collector has no signal to upgrade on, and this schema is
+ * `.strict()` inside a request validator that rejects the WHOLE batch — one
+ * event from an un-upgraded host would have taken its batch-mates down with
+ * it, and a sealed WAL entry already carrying the member could never be sent
+ * at all. Neither is stored, so a fleet part-way through an upgrade has no
+ * skew to reconcile: both members are read and dropped.
+ *
+ * The rejection this avoids was at the REQUEST VALIDATOR, not the handler:
+ * `apps/api/src/routes/v1/tacho.events.ingest.ts:56` runs
+ * `tachoEventsIngest.input.parse(rawInput)` before `invoke()`, and that input
+ * is this schema, so a `.strict()` failure on one event fails the whole batch
+ * before any handler sees it.
+ */
 export const anthropicSchema = z
   .object({
     user_id_hash: short.optional(),
+    user_email_digest: digest.optional(),
+    /** Legacy; accepted, never stored. See the note above. */
     user_email: short.optional(),
     account_uuid: short.optional(),
     account_id: short.optional(),
@@ -726,6 +763,43 @@ export const anthropicSchema = z
     api_key_source: short.optional(),
   })
   .strict();
+
+/**
+ * The `anthropic` members that carry the person's address, directly or as a
+ * value computed from it.
+ *
+ * The wire keeps accepting them and the control plane keeps discarding them,
+ * because a WAL entry sealed before #3072 carries one and its seal covers it —
+ * refusing it would strand the very evidence the compatibility work exists to
+ * protect. A sealed entry is immutable; unsealed collector state is not.
+ */
+export const ADDRESS_MEMBERS = ["user_email", "user_email_digest"] as const;
+
+/**
+ * An `anthropic` block with every address-derived member removed.
+ *
+ * Applied wherever such a block is read back IN, rather than only where one is
+ * written out. A fix on the normalization path does not reach state that was
+ * persisted before the fix existed: a collector upgraded mid-session restores a
+ * daemon-state file written by the previous build, and that file still carries
+ * `anthropic.user_email` in plaintext. Spreading it unchanged put the address
+ * back into every subsequent event and into the chain hash sealed over it,
+ * for the remaining life of the session (#3072).
+ *
+ * Targeted rather than a wipe: `account_uuid`, `org_uuid` and the rest are
+ * observations this records on purpose.
+ */
+export function withoutAddressMembers<T extends Record<string, unknown>>(
+  anthropic: T,
+): T {
+  let out: T | undefined;
+  for (const member of ADDRESS_MEMBERS) {
+    if (!(member in anthropic)) continue;
+    out ??= { ...anthropic };
+    delete out[member];
+  }
+  return out ?? anthropic;
+}
 
 export const spanSchema = z
   .object({

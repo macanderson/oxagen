@@ -1,0 +1,263 @@
+{
+  "name": "list_proposals",
+  "domain": "context",
+  "description": "List the workspace's record proposals with their support and Context PR state, newest first, optionally narrowed to one status or lineage",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "proposed",
+          "pr_open",
+          "checks_running",
+          "checks_passed",
+          "checks_failed",
+          "merged",
+          "rejected"
+        ]
+      },
+      "lineageId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "default": 50
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposals": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "lineageId": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "rule",
+                "constraint",
+                "procedure",
+                "fact",
+                "memory",
+                "preference"
+              ]
+            },
+            "force": {
+              "type": "string",
+              "enum": [
+                "must",
+                "should",
+                "may",
+                "info"
+              ]
+            },
+            "constraintEffect": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "require",
+                    "forbid"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sharingScope": {
+              "type": "string",
+              "enum": [
+                "repository",
+                "workspace"
+              ]
+            },
+            "statement": {
+              "type": "string"
+            },
+            "rationale": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "support": {
+              "type": "object",
+              "properties": {
+                "runs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "agents": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "recordIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "evidenceLinks": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "runs",
+                "agents",
+                "recordIds",
+                "evidenceLinks"
+              ],
+              "additionalProperties": false
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "proposed",
+                "pr_open",
+                "checks_running",
+                "checks_passed",
+                "checks_failed",
+                "merged",
+                "rejected"
+              ]
+            },
+            "pr": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "number": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "repository": {
+                      "type": "string"
+                    },
+                    "branch": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "number",
+                    "url",
+                    "repository",
+                    "branch"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "checks": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "passed": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "passed",
+                    "total"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "updatedAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "lineageId",
+            "kind",
+            "force",
+            "constraintEffect",
+            "sharingScope",
+            "statement",
+            "rationale",
+            "source",
+            "support",
+            "status",
+            "pr",
+            "checks",
+            "createdAt",
+            "updatedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "total": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "proposals",
+      "total"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,35 +1,62 @@
 // @vitest-environment jsdom
-/// <reference types="@testing-library/jest-dom" />
-/**
- * page.test.tsx — /cli/complete renders the completion card without a session.
- */
-import * as React from "react";
-import { render, screen, cleanup } from "@testing-library/react";
-import { describe, it, expect, afterEach, vi } from "vitest";
+// /cli/complete names itself pages.cliComplete in the tab and the h1, and says
+// the terminal holds the token (ARCHITECTURE.md §1.2). It renders with no
+// session and reads nothing: the browser that finished the loopback exchange
+// may hold no app cookie, so a page that asked for a viewer would end a
+// successful sign-in on /login (#3091).
+import { screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { translator } from "@/test/intl";
+import { expectPageTitle, renderPage, routeProps } from "@/test/render-page";
 
-vi.mock("@/components/ui/brand", () => ({
-  OxagenWordmark: ({ className }: { className?: string }) => (
-    <span data-testid="wordmark" className={className} />
-  ),
+vi.mock("next-intl/server", () => ({
+  getTranslations: (namespace: string) =>
+    Promise.resolve(translator(namespace)),
 }));
+// The seams this page must not touch, wired to throw. A mock only takes effect
+// on import, so today they are inert; the day the page resolves a viewer or
+// opens the data source, every test below fails instead of the flow silently
+// regaining the gate that sends a cookie-less browser to /login.
+const refuse = (name: string) => () => {
+  throw new Error(`/cli/complete must not call ${name}`);
+};
+vi.mock("@/server/viewer", () => ({
+  requireUser: refuse("requireUser"),
+  requireViewer: refuse("requireViewer"),
+  resolveViewer: refuse("resolveViewer"),
+}));
+vi.mock("@/data/source", () => ({ dataSource: refuse("dataSource") }));
 
-import CliLoginCompletePage, { metadata } from "./page";
-
-afterEach(cleanup);
+const page = await import("./page");
+const t = translator("auth.cli");
 
 describe("/cli/complete", () => {
-  it("tells the user the CLI has its token and the tab can close", () => {
-    render(<CliLoginCompletePage />);
-    expect(
-      screen.getByRole("heading", { name: "Login complete" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/close this tab and return to your terminal/i),
-    ).toBeInTheDocument();
-    expect(screen.getByTestId("wordmark")).toBeInTheDocument();
+  it("pages.cliComplete is the document title and the one h1", async () => {
+    await expectPageTitle(
+      page,
+      routeProps({}),
+      translator("pages")("cliComplete"),
+    );
   });
 
-  it("titles the tab so the browser history reads correctly", () => {
-    expect(metadata.title).toBe("Login complete");
+  it("tells the person the terminal holds the token and the tab can close", async () => {
+    await expectPageTitle(
+      page,
+      routeProps({}),
+      translator("pages")("cliComplete"),
+    );
+    expect(screen.getByTestId("cli-complete")).toHaveTextContent(
+      t("complete.body"),
+    );
+  });
+
+  it("renders with no route arguments at all (negative)", async () => {
+    // The CLI names this address itself, with no query and no segment
+    // (cliLoginCompleteUrl). A page that needed one would render a different
+    // thing for the browser that actually arrives.
+    const container = await renderPage(await page.default());
+    expect(container.querySelector("h1")?.textContent).toBe(
+      translator("pages")("cliComplete"),
+    );
   });
 });

@@ -1,0 +1,269 @@
+{
+  "name": "import_tools",
+  "domain": "tool",
+  "description": "Import a registered MCP server's pinned tools into the workspace registry, or publish hand-authored declarations against it: one immutable tool version per changed manifest, idempotent on an unchanged one; stamps the server's last import.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "serverId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "declarations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "Tool name (snake_case identifier, e.g. read_file) — the workspace-unique key"
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1,
+              "description": "What the tool does"
+            },
+            "input_schema": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "JSON Schema for the tool's input parameters"
+            },
+            "read_only": {
+              "type": "boolean",
+              "default": false
+            },
+            "risk_grade": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ],
+              "description": "Declared risk grade of invoking this tool"
+            },
+            "policy_group": {
+              "type": "string"
+            },
+            "manifest": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "The full declared manifest body, verbatim"
+            },
+            "consequence_tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "measures": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "amount",
+                      "count",
+                      "text"
+                    ]
+                  },
+                  "unit": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32
+                  },
+                  "scale": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 6
+                  }
+                },
+                "required": [
+                  "path",
+                  "type",
+                  "unit"
+                ],
+                "additionalProperties": false
+              },
+              "default": {}
+            },
+            "effect_id_path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "name",
+            "description",
+            "input_schema",
+            "risk_grade",
+            "manifest"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "serverId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "serverId": {
+        "type": "string"
+      },
+      "importDigest": {
+        "type": "string"
+      },
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "toolId": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "checksum": {
+              "type": "string"
+            },
+            "schemaOrigin": {
+              "type": "string",
+              "enum": [
+                "declared",
+                "imported"
+              ]
+            },
+            "consequenceTags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "measures": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "amount",
+                      "count",
+                      "text"
+                    ]
+                  },
+                  "unit": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32
+                  },
+                  "scale": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 6
+                  }
+                },
+                "required": [
+                  "path",
+                  "type",
+                  "unit"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "effectIdPath": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "published": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "toolId",
+            "slug",
+            "name",
+            "version",
+            "checksum",
+            "schemaOrigin",
+            "consequenceTags",
+            "measures",
+            "effectIdPath",
+            "published"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "serverId",
+      "importDigest",
+      "tools"
+    ],
+    "additionalProperties": false
+  }
+}

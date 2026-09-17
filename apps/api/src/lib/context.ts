@@ -1,72 +1,94 @@
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
-import type { CapabilityContext } from "@oxagen/oxagen";
+import { type CapabilityContext, ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import { requireEnv } from "@oxagen/config/env";
+import { ipInRanges } from "@oxagen/oxagen/iam";
 import type { AppEnv } from "../app";
 
 /**
- * How many proxies sit between the client and this process, resolved from the
- * validated env once and memoized. Wrapped in a function (called at first
- * request, not module load) so importing the app never triggers env access —
- * mirroring `rateLimitBudgets()` in middleware/distributed-rate-limit.ts.
+ * The proxies this deployment trusts, named by CIDR. Resolved from the
+ * validated env once and memoized — read on the first request rather than at
+ * module load, so importing the app never triggers env access, mirroring
+ * `rateLimitBudgets()` in middleware/distributed-rate-limit.ts.
  */
-let cachedTrustedProxyHops: number | null = null;
-function trustedProxyHops(): number {
-  if (cachedTrustedProxyHops !== null) return cachedTrustedProxyHops;
-  const env = requireEnv(["TRUSTED_PROXY_HOP_COUNT"] as const);
-  cachedTrustedProxyHops = env.TRUSTED_PROXY_HOP_COUNT;
-  return cachedTrustedProxyHops;
+let cachedTrustedProxyCidrs: string[] | null = null;
+export function trustedProxyCidrs(): string[] {
+  if (cachedTrustedProxyCidrs !== null) return cachedTrustedProxyCidrs;
+  const env = requireEnv(["TRUSTED_PROXY_CIDRS"] as const);
+  cachedTrustedProxyCidrs = env.TRUSTED_PROXY_CIDRS.split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  return cachedTrustedProxyCidrs;
 }
 
 /**
- * The client IP as reported by the last proxy this deployment trusts.
+ * The client address, when — and only when — a proxy this deployment names
+ * vouched for it. `null` otherwise, and `null` means "do not decide anything
+ * with this".
  *
- * Each proxy APPENDS the address it received the request from, so
- * x-forwarded-for reads oldest-first and the entries a client sent itself sit
- * on the LEFT. Behind an ALB, `xff.split(",")[0]` is therefore whatever the
- * caller typed into the header — and this value feeds the IAM `ip_ranges` /
- * `ip_allow` conditions (packages/oxagen/src/iam/conditions.ts), which allow on
- * a CIDR match. One spoofed header entry satisfied an IP allowlist.
+ * Two things read it and both are security decisions: the IAM `ip_ranges` /
+ * `ip_allow` conditions (via `clientIp` on the capability context) and the
+ * pre-authentication rate-limit ceilings. Neither can tell a real client
+ * address from a plausible-looking one, so this function must not hand them
+ * anything it cannot stand behind.
  *
- * With N trusted proxies the client's real address is the Nth entry from the
- * right, because those are the N entries the trusted proxies wrote themselves.
- * A client that prepends extra hops only lengthens the untrusted left-hand side
- * and cannot move the entry this picks.
+ * HOW: walk `x-forwarded-for` from the right while each entry is one of the
+ * proxies named in TRUSTED_PROXY_CIDRS, and stop at the first entry that is
+ * not. That entry is the furthest address a trusted proxy vouched for — the
+ * client. A caller can pad the left of the header all it likes; padding only
+ * lengthens a prefix the walk never reaches, because stopping is decided by
+ * what an entry IS rather than by how many entries there are.
  *
- * TRUSTED_PROXY_HOP_COUNT = 0 means nothing in front of this process rewrote
- * the header, so every entry is caller-supplied and none of it is usable.
+ * WHY NOT A HOP COUNT: counting hops was the previous design and it is gone,
+ * not deprecated. A count trusts ITSELF to be right, while the caller controls
+ * the header's LENGTH — so a count too high by k lets a caller pad k entries
+ * until the arithmetic lands on a value it chose, which is enough to satisfy an
+ * IP allowlist it should fail. Nothing in the request distinguishes that from a
+ * correct deeper chain, so no amount of care at the call site can rescue it,
+ * and a fallback that silently produces an unvouched-for address is worse than
+ * no address at all: it turns "this deployment cannot attribute callers" into
+ * "this allowlist is enforced", which is a lie an operator acts on.
  *
- * NOT an authentication signal, and — with the count set correctly — the
- * authorization signal the IP allowlist needs. A too-low count is what makes
- * that allowlist bypassable; too high yields a proxy's own address and fails
- * closed against a CIDR of real clients.
+ * `x-real-ip` is not consulted. It carries no chain, so nothing can vouch for
+ * it; it is exactly as caller-supplied as anything else when no proxy is named.
  *
- * Exported so the hop arithmetic can be unit-tested directly, the way
- * `deriveBucketKey` is in middleware/distributed-rate-limit.ts.
+ * Returning null is the SAFE direction for both readers. The IAM conditions
+ * already fail closed on a null address, and the rate-limit ceilings skip
+ * rather than pooling every caller into one bucket.
  */
 export function extractClientIp(c: Context<AppEnv>): string | null {
-  const hops = trustedProxyHops();
+  const cidrs = trustedProxyCidrs();
+  if (cidrs.length === 0) return null;
+
   const xff = c.req.header("x-forwarded-for");
-  if (xff && hops > 0) {
-    const chain = xff
-      .split(",")
-      .map((hop) => hop.trim())
-      .filter((hop) => hop.length > 0);
-    // A chain shorter than the trusted-proxy count means a proxy did not append
-    // what this deployment says it does; the leftmost entry is then the oldest
-    // thing any trusted proxy could have written.
-    const candidate = chain[Math.max(0, chain.length - hops)];
-    if (candidate) return candidate;
+  if (!xff) return null;
+
+  const chain = xff
+    .split(",")
+    .map((hop) => hop.trim())
+    .filter((hop) => hop.length > 0);
+
+  let vouchedFor = false;
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const entry = chain[i] as string;
+    if (ipInRanges(entry, cidrs)) {
+      vouchedFor = true;
+      continue;
+    }
+    // Attributable only if a TRUSTED PROXY WROTE IT, which means at least one
+    // trusted entry stood to its right. Without that, the rightmost entry is
+    // whatever the caller sent — what a request that never passed through a
+    // named proxy looks like, whether from a typo in the CIDR list, a network
+    // change, or a path that bypasses the proxy altogether.
+    return vouchedFor ? entry : null;
   }
-  // x-real-ip is set by a single reverse proxy and carries no chain to walk.
-  // It is exactly as trustworthy as that proxy, and no more.
-  const realIp = c.req.header("x-real-ip");
-  return realIp?.trim() || null;
+  // Every entry is a trusted proxy, so none of them is a client.
+  return null;
 }
 
-/** Test seam: drop the memoized hop count so a case can set a different env. */
+/** Test seam: drop the memoized proxy list so a case can set a different env. */
 export function __resetTrustedProxyHopsForTests(): void {
-  cachedTrustedProxyHops = null;
+  cachedTrustedProxyCidrs = null;
 }
 
 /**
@@ -97,7 +119,11 @@ export function capabilityContext(
   }
   return {
     orgId: orgId ?? "",
-    workspaceId: workspaceId ?? "",
+    // A route mounted org-only reaches a scoped capability, and the kernel
+    // enters a tenant scope that asserts a uuid, so an empty workspace id is
+    // refused before the handler runs. The org-only sentinel is what such a
+    // call carries, the same constant the app's kernel seam uses (#3029).
+    workspaceId: workspaceId ?? (orgId ? ORG_ONLY_WORKSPACE_ID : ""),
     userId: c.get("userId") ?? null,
     apiKeyId: c.get("apiKeyId") ?? null,
     // Must be a valid UUID: it flows into non-nullable ClickHouse UUID columns

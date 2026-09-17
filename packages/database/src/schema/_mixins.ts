@@ -50,6 +50,24 @@ export const idMixin = (publicIdPrefix: string) => ({
     .$defaultFn(() => `${publicIdPrefix}_${cryptoRandom(22)}`),
 });
 
+/**
+ * hex_id_mixin — internal UUIDv7 + a prefixed public id whose suffix is 22
+ * lowercase hex characters. The run-evidence domain validates every public id
+ * it pins as `<prefix>_<16..32 lowercase hex>` (packages/run-ledger
+ * run-spec-v2.ts: `repositoryBindingPublicIdSchema`,
+ * `retentionPolicyPublicIdSchema`), which the Crockford alphabet of `idMixin`
+ * does not satisfy (`g`–`z` are outside hex). The tables a RunSpecV2 pins by
+ * public id use this mixin so a row minted with the column default is
+ * admissible.
+ */
+export const hexIdMixin = (publicIdPrefix: string) => ({
+  id: uuid("id").primaryKey().default(uuidv7Default),
+  publicId: citext("public_id")
+    .notNull()
+    .unique()
+    .$defaultFn(() => `${publicIdPrefix}_${cryptoRandomHex(22)}`),
+});
+
 /** audit_mixin — created/updated timestamps and authoring user. */
 export const auditMixin = () => ({
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
@@ -58,8 +76,8 @@ export const auditMixin = () => ({
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
     .notNull()
     .defaultNow(),
-  createdByUserId: uuid("created_by_user_id"),
-  updatedByUserId: uuid("updated_by_user_id"),
+  createdById: uuid("created_by_id"),
+  updatedById: uuid("updated_by_id"),
 });
 
 /** append_only_audit_mixin — created timestamp and authoring user only (no updated fields). */
@@ -67,13 +85,13 @@ export const appendOnlyAuditMixin = () => ({
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .defaultNow(),
-  createdByUserId: uuid("created_by_user_id"),
+  createdById: uuid("created_by_id"),
 });
 
 /** soft_delete_mixin — hard deletes prohibited on org-scoped tables. */
 export const softDeleteMixin = () => ({
   deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
-  deletedByUserId: uuid("deleted_by_user_id"),
+  deletedById: uuid("deleted_by_id"),
 });
 
 /** org_scope_mixin — required on every org-owned table. */
@@ -110,6 +128,15 @@ export const jsonContractMixin = () => ({
 // Crockford base32, 22 chars ≈ 110 bits of entropy. Browser & Node both
 // provide globalThis.crypto in modern runtimes.
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+/** `length` lowercase hex characters from `crypto.getRandomValues`. */
+function cryptoRandomHex(length: number): string {
+  const bytes = new Uint8Array(Math.ceil(length / 2));
+  globalThis.crypto.getRandomValues(bytes);
+  let out = "";
+  for (const b of bytes) out += b.toString(16).padStart(2, "0");
+  return out.slice(0, length);
+}
+
 export function cryptoRandom(length: number): string {
   const bytes = new Uint8Array(length);
   globalThis.crypto.getRandomValues(bytes);

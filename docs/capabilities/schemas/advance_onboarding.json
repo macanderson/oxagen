@@ -1,0 +1,58 @@
+{
+  "name": "advance_onboarding",
+  "domain": "onboarding",
+  "description": "Move the onboarding gate between the wrap and run steps. The run step completes only on the first frame, so unlocked is never a target.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "to": {
+        "type": "string",
+        "enum": [
+          "wrap",
+          "run",
+          "unlocked"
+        ]
+      }
+    },
+    "required": [
+      "to"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "step": {
+        "type": "string",
+        "enum": [
+          "organization",
+          "wrap",
+          "run",
+          "unlocked"
+        ]
+      },
+      "changedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "step",
+      "changedAt"
+    ],
+    "additionalProperties": false
+  }
+}

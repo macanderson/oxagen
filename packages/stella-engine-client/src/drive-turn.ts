@@ -47,19 +47,25 @@ import type {
   TurnRequest,
 } from "./wire";
 
-/** A `provider_request` frame as a handler sees it: the frame minus its tag. */
+/**
+ * A `provider_request` frame as a handler sees it: the frame minus its tag,
+ * plus the frame's `seq`, which is what a ledger records so the receipt of
+ * the answer names the engine frame it answered.
+ */
 export interface ProviderRequestView {
   request_id: string;
   provider_id: string;
   role: ModelCallRoleWire;
   request: CompletionRequest;
+  seq: number;
 }
 
-/** A `tool_request` frame as a handler sees it. */
+/** A `tool_request` frame as a handler sees it, with the frame's `seq`. */
 export interface ToolRequestView {
   request_id: string;
   name: string;
   input: unknown;
+  seq: number;
 }
 
 export interface RequestContext {
@@ -414,13 +420,21 @@ export async function driveTurn(
       case "provider_request": {
         providerCalls += 1;
         const { request_id, provider_id, role, request } = frame;
-        track(answerProvider({ request_id, provider_id, role, request }));
+        track(
+          answerProvider({
+            request_id,
+            provider_id,
+            role,
+            request,
+            seq: seq ?? lastSeq,
+          }),
+        );
         break;
       }
       case "tool_request": {
         toolCalls += 1;
         const { request_id, name, input } = frame;
-        track(answerTool({ request_id, name, input }));
+        track(answerTool({ request_id, name, input, seq: seq ?? lastSeq }));
         break;
       }
       case "requery_request":

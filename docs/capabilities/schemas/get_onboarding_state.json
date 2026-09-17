@@ -1,0 +1,151 @@
+{
+  "name": "get_onboarding_state",
+  "domain": "onboarding",
+  "description": "Where the signed-in person is in the onboarding gate: the current step, the gate's workspace, the first frame once one arrived, and the provisional window until a main repository is bound.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "step": {
+        "type": "string",
+        "enum": [
+          "organization",
+          "wrap",
+          "run",
+          "unlocked"
+        ]
+      },
+      "workspace": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "id",
+              "slug"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "firstFrameAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "firstRunId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "provisional": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "until": {
+                "type": "string"
+              },
+              "mainRepoBoundAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "detectedRepository": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "const": "github"
+                      },
+                      "owner": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "provider",
+                      "owner",
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "until",
+              "mainRepoBoundAt",
+              "detectedRepository"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "step",
+      "workspace",
+      "firstFrameAt",
+      "firstRunId",
+      "provisional"
+    ],
+    "additionalProperties": false
+  }
+}

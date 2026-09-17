@@ -1,0 +1,69 @@
+{
+  "name": "suspend_agent",
+  "domain": "agent",
+  "description": "Suspend or resume an agent identity: a suspended principal anchors no governed run and its belt is empty; resuming restores it without re-issuing anything.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "identity"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "suspended": {
+        "type": "boolean",
+        "default": true
+      },
+      "reason": {
+        "type": "string",
+        "maxLength": 512
+      }
+    },
+    "required": [
+      "agentId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "suspended",
+          "active"
+        ]
+      },
+      "changedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "agentId",
+      "status",
+      "changedAt"
+    ],
+    "additionalProperties": false
+  }
+}

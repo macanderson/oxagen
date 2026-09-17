@@ -134,7 +134,7 @@ the marketplace does not de-register the gate.
 
 | Path | Route |
 |---|---|
-| `apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/` | `/{org}/{ws}/marketplace` |
+| `apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/marketplace/` | `/{org}/{ws}/marketplace` |
 | `.../marketplace/agent-tools/` | `/{org}/{ws}/marketplace/agent-tools` |
 | `.../marketplace/integrations/` | `/{org}/{ws}/marketplace/integrations` |
 | `.../marketplace/integrations/[connectorId]/` | one connector's setup flow |
@@ -210,7 +210,7 @@ this repo; environments configured a runtime Oxagen no longer operates.
 
 Supporting code kept: `packages/plugins/src/environments/`,
 `packages/database/src/schema/environments.ts`, and the UI at
-`apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/environments/` (Appendix F
+`apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/workbench/environments/` (Appendix F
 folds the route into **Agents**).
 
 ---
@@ -388,7 +388,7 @@ packages/plugins/src/environments
 packages/oxagen/src/plugins
 packages/inngest-functions/src/functions/plugin.catalog-sync.ts
 packages/database/src/schema/plugin.ts
-apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace
+apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/marketplace
 packages/ingestion/src/pipeline.ts
 packages/ingestion/src/connectors/index.ts
 packages/ingestion/src/connectors/github
@@ -412,7 +412,7 @@ packages/oxagen/src/contracts/agent.environment.bind.ts
 packages/oxagen/src/contracts/agent.environment.unbind.ts
 packages/oxagen/src/contracts/agent.environment.list.ts
 packages/database/src/schema/environments.ts
-apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/environments
+apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/workbench/environments
 packages/oxagen/src/contracts/prompt.settings.read.ts
 packages/oxagen/src/contracts/prompt.settings.write.ts
 packages/oxagen/src/contracts/secret.import_env.ts

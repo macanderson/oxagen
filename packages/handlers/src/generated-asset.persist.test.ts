@@ -114,7 +114,7 @@ describe("persistGeneratedAsset", () => {
     expect(row.status).toBe("ready");
     expect(row.storageProvider).toBe("vercel-blob");
     expect(row.userId).toBe("user-1");
-    expect(row.createdByUserId).toBe("user-1");
+    expect(row.createdById).toBe("user-1");
     // sizeBytes is persisted as a bigint from the storage byte count.
     expect(row.sizeBytes).toBe(BigInt(2048));
     // storageUrl is the private blob URL (not a public CDN URL).

@@ -19,6 +19,7 @@ import { toProtocolTimestamp } from "../timestamp";
 import {
   isWrappedHarness,
   TACHO_HARNESS_LABELS,
+  type TachoDeliveryMode,
   type TachoHarness,
   type WrappedHarness,
 } from "../wire";
@@ -73,6 +74,23 @@ export function contextForHarness(
   };
 }
 
+/**
+ * Prompt content an operator queued for the next boundary: a `message`, or a
+ * `steer` with the mode the control plane resolved (spec section 7.3; both
+ * modes are recorded on the frame that carries it). `expiresAt` is the row's
+ * deadline; the boundary that would inject the item checks it first, so an
+ * item the control plane reads as `expired` is never injected.
+ */
+export interface QueuedPrompt {
+  id: string;
+  text: string;
+  command: "message" | "steer";
+  requestedMode: TachoDeliveryMode | null;
+  deliveryMode: TachoDeliveryMode | null;
+  degradedReason: string | null;
+  expiresAt: string | null;
+}
+
 /** The daemon's own chain (`tachod-<ulid>`) is host bookkeeping, not an agent. */
 export function isInternalSession(harnessSessionId: string): boolean {
   return harnessSessionId.startsWith("tachod-");
@@ -81,8 +99,8 @@ export function isInternalSession(harnessSessionId: string): boolean {
 export interface SessionControl {
   paused: string | null;
   cancelled: string | null;
-  /** Operator messages to inject at the next boundary. */
-  messages: Array<{ id: string; text: string }>;
+  /** Operator prompt content to inject at the next boundary. */
+  messages: QueuedPrompt[];
 }
 
 export interface SessionFacts {
@@ -124,7 +142,9 @@ export interface SessionRecord extends SessionFacts {
 export interface PersistedSession extends SessionFacts {
   harnessSessionId: string;
   recorder: RecorderState;
-  control: SessionControl;
+  control: Omit<SessionControl, "messages"> & {
+    messages: Array<Pick<QueuedPrompt, "id" | "text"> & Partial<QueuedPrompt>>;
+  };
   startedAt: string;
   lastSeenAt: string;
   sealed: boolean;
@@ -157,6 +177,32 @@ export interface RegistryState {
   sessions: PersistedSession[];
   /** Absent in files written before the roster existed. */
   agents?: AgentRosterEntry[];
+}
+
+/**
+ * The daemon-state file as a `RegistryState`, or `undefined` if it is not one.
+ *
+ * The daemon used to cast the parsed JSON straight to this type. A cast is an
+ * assertion that the shape is right, and this is the one place where the shape
+ * is known to be wrong: the file on disk was written by whichever build was
+ * running before the upgrade, which is precisely why a legacy
+ * `anthropic.user_email` survived #3072's fix (`SessionRecorder.restore` now
+ * scrubs it, and this stops the cast that let an arbitrary object reach it).
+ *
+ * Deliberately shallow and forgiving about members it does not know. Rejecting
+ * a state file loses a live session's chain cursor, which is worse than the
+ * unknown member — so this validates the envelope and hands the rest to
+ * `restore`, which sanitizes what it reads. Over-accepting structure is
+ * recoverable; letting the address through is not.
+ */
+export function parseRegistryState(value: unknown): RegistryState | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const candidate = value as Partial<RegistryState>;
+  if (candidate.schema !== "tacho.daemon-state.v1") return undefined;
+  if (!Array.isArray(candidate.sessions)) return undefined;
+  if (candidate.agents !== undefined && !Array.isArray(candidate.agents))
+    return undefined;
+  return candidate as RegistryState;
 }
 
 export interface RegistryOptions {
@@ -492,7 +538,20 @@ export class SessionRegistry {
             : { customAgent: persisted.customAgent }),
           restore: persisted.recorder,
         }),
-        control: persisted.control,
+        control: {
+          paused: persisted.control.paused,
+          cancelled: persisted.control.cancelled,
+          // A state file written before steer carried `{ id, text }` only:
+          // a queued message with no mode and no deadline recorded.
+          messages: persisted.control.messages.map((m) => ({
+            command: "message",
+            requestedMode: null,
+            deliveryMode: null,
+            degradedReason: null,
+            expiresAt: null,
+            ...m,
+          })),
+        },
         startedAt: persisted.startedAt,
         lastSeenAt: persisted.lastSeenAt,
         sealed: persisted.sealed,

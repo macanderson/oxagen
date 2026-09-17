@@ -54,7 +54,7 @@ export const repoResumeHandler: CapabilityHandler<typeof repoResume> = async (
       .update(schema.sourceConnections)
       .set({
         status: "connected",
-        updatedByUserId: ctx.userId ?? undefined,
+        updatedById: ctx.userId ?? undefined,
         updatedAt: now,
       })
       .where(eq(schema.sourceConnections.id, existing.id));

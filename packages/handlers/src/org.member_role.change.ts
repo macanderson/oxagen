@@ -5,20 +5,22 @@
 //   2. Resolve actor's principal and check they hold Owner or Admin role in the
 //      org via principal_role_assignments (IAM, not legacy org_users.role).
 //   3. Resolve target membership — verify the target userId belongs to ctx.orgId
-//      (IDOR guard: 404 if target is not in this org).
-//   4. Resolve the requested newRole — must exist as an org-scoped system role.
-//   5. Last-owner guard — block if demoting the last Owner.
+//      (IDOR guard: `not_found` if target is not in this org).
+//   4. Resolve the requested newRole — must exist as an org-scoped system role
+//      (`not_found` otherwise).
+//   5. Last-owner guard — `conflict` if demoting the last Owner.
 //   6. In a transaction:
 //      a. Remove any existing org-scoped role assignments for the principal.
 //      b. Insert the new role assignment.
 //      c. Update legacy org_users.role to stay consistent.
 //   7. Emit org.role_changed security event (fire-and-forget).
 
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberRoleChange } from "@oxagen/oxagen/contracts/org.member_role.change";
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq, isNull } from "drizzle-orm";
+import { resolveMemberUserId } from "./lib/org-member";
 import { logger } from "./logger";
 
 const OWNER_ROLE_NAME = "Owner";
@@ -44,6 +46,13 @@ async function resolveActorPrincipalAndRole(
         eq(schema.principals.orgId, orgId),
         eq(schema.principals.parentUserId, userId),
         eq(schema.principals.kind, "human"),
+        // A member's principal is org-level: iam-provision creates it with no
+        // workspace, and an agent principal that shares the same
+        // parent_user_id is what the kind filter above excludes. Pinning
+        // workspace_id IS NULL says so in the query rather than relying on it,
+        // and keeps the read identical under an org-only scope, where
+        // iam.principals (workspace_nullable) admits exactly the NULL rows.
+        isNull(schema.principals.workspaceId),
         eq(schema.principals.status, "active"),
       ),
     )
@@ -81,11 +90,19 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
       { orgId: ctx.orgId },
       "org.member.role.change: rejected — no authenticated principal",
     );
-    throw new Error("Unauthorized: no authenticated principal");
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "unauthenticated",
+      message: "No authenticated principal",
+    });
   }
   if (!ctx.orgId) {
     logger.warn({}, "org.member.role.change: rejected — missing orgId");
-    throw new Error("Forbidden: orgId is required");
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "org_scope_required",
+      message: "orgId is required",
+    });
   }
 
   const actorId = ctx.userId ?? ctx.apiKeyId ?? "system";
@@ -94,7 +111,7 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
   // withTenantDb opens one RLS-scoped transaction for the current org. The actor
   // role gate, the IDOR and last-owner guards, plus the role swap all run inside
   // it so they are atomic and RLS-policied; a guard throw rolls back and
-  // propagates a 403/404. Resolving the actor role inside this same transaction
+  // propagates its HandlerError. Resolving the actor role inside this same transaction
   // (rather than in a prior, separate one) closes a TOCTOU window: a concurrent
   // demotion of the actor between an earlier check and the write could otherwise
   // let a now-unauthorized actor complete the change.
@@ -111,10 +128,19 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
         { orgId: ctx.orgId, actorId, actorRole },
         "org.member.role.change: rejected — insufficient org role",
       );
-      throw new Error(
-        "Forbidden: only org Owners and Admins can change member roles",
-      );
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "insufficient_role",
+        message: "Only org Owners and Admins can change member roles",
+      });
     }
+
+    // ── Resolve the target's user id ────────────────────────────────────────────
+    // The console names a member by public id (`usr_…`) and never by uuid, which
+    // org_users.user_id is; lib/org-member.ts resolves one form into the other
+    // inside this transaction, after the gate, so a caller the org refuses
+    // learns nothing about who is in it.
+    const target = await resolveMemberUserId(tx, ctx.orgId, input.targetUserId);
 
     // ── Resolve target membership (IDOR guard) ──────────────────────────────────
     const [targetOrgUser] = await tx
@@ -123,7 +149,7 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
       .where(
         and(
           eq(schema.orgUsers.orgId, ctx.orgId),
-          eq(schema.orgUsers.userId, input.targetUserId),
+          eq(schema.orgUsers.userId, target),
         ),
       )
       .limit(1);
@@ -133,7 +159,11 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
         { orgId: ctx.orgId, targetUserId: input.targetUserId },
         "org.member.role.change: target not a member of this org",
       );
-      throw new Error("Not found: target user is not a member of this org");
+      throw new HandlerError({
+        code: "not_found",
+        reason: "target_not_member",
+        message: "Target user is not a member of this org",
+      });
     }
 
     // ── Resolve new role row ────────────────────────────────────────────────────
@@ -157,9 +187,11 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
       // Org-scoped system roles are seeded by bootstrapOrgIAM's ORG_ROLES list
       // (Owner, Admin, Compliance, Billing). "Member" and "Viewer" are
       // WORKSPACE-scoped and are deliberately not offered here.
-      throw new Error(
-        `Role '${input.newRole}' does not exist in this org. Valid org roles: Owner, Admin, Compliance, Billing.`,
-      );
+      throw new HandlerError({
+        code: "not_found",
+        reason: "role_not_found",
+        message: `Role '${input.newRole}' does not exist in this org. Valid org roles: Owner, Admin, Compliance, Billing.`,
+      });
     }
 
     // ── Last-owner guard ──────────────────────────────────────────────────────
@@ -185,8 +217,15 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
           .where(
             and(
               eq(schema.principals.orgId, ctx.orgId),
-              eq(schema.principals.parentUserId, input.targetUserId),
+              eq(schema.principals.parentUserId, target),
               eq(schema.principals.kind, "human"),
+              // A member's principal is org-level: iam-provision creates it with no
+              // workspace, and an agent principal that shares the same
+              // parent_user_id is what the kind filter above excludes. Pinning
+              // workspace_id IS NULL says so in the query rather than relying on it,
+              // and keeps the read identical under an org-only scope, where
+              // iam.principals (workspace_nullable) admits exactly the NULL rows.
+              isNull(schema.principals.workspaceId),
             ),
           )
           .limit(1);
@@ -236,9 +275,12 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
                 },
                 "org.member.role.change: blocked — would demote last org owner",
               );
-              throw new Error(
-                "Cannot demote the last org owner. Promote another member to Owner first.",
-              );
+              throw new HandlerError({
+                code: "conflict",
+                reason: "last_owner",
+                message:
+                  "Cannot demote the last org owner. Promote another member to Owner first.",
+              });
             }
           }
         }
@@ -253,8 +295,15 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
       .where(
         and(
           eq(schema.principals.orgId, ctx.orgId),
-          eq(schema.principals.parentUserId, input.targetUserId),
+          eq(schema.principals.parentUserId, target),
           eq(schema.principals.kind, "human"),
+          // A member's principal is org-level: iam-provision creates it with no
+          // workspace, and an agent principal that shares the same
+          // parent_user_id is what the kind filter above excludes. Pinning
+          // workspace_id IS NULL says so in the query rather than relying on it,
+          // and keeps the read identical under an org-only scope, where
+          // iam.principals (workspace_nullable) admits exactly the NULL rows.
+          isNull(schema.principals.workspaceId),
         ),
       )
       .limit(1);
@@ -269,9 +318,9 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
         .update(schema.principalRoleAssignments)
         .set({
           deletedAt: new Date(),
-          deletedByUserId: actorId,
+          deletedById: actorId,
           updatedAt: new Date(),
-          updatedByUserId: actorId,
+          updatedById: actorId,
         })
         .where(
           and(
@@ -290,8 +339,8 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
           roleId: newRoleRow.id,
           orgId: ctx.orgId,
           assignedBy: actorId,
-          createdByUserId: actorId,
-          updatedByUserId: actorId,
+          createdById: actorId,
+          updatedById: actorId,
         })
         .onConflictDoNothing();
     }
@@ -305,12 +354,12 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
       .set({
         role: input.newRole,
         updatedAt: new Date(),
-        updatedByUserId: actorId,
+        updatedById: actorId,
       })
       .where(
         and(
           eq(schema.orgUsers.orgId, ctx.orgId),
-          eq(schema.orgUsers.userId, input.targetUserId),
+          eq(schema.orgUsers.userId, target),
         ),
       );
 

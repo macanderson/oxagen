@@ -17,7 +17,7 @@ export const userWorkspacePreferencesWrite = registerCapability({
   // preference is set exclusively in the web app. MCP/agent surfaces read it
   // but must not silently rewrite a user's default.
   surfaces: ["api"],
-  layers: ["schema", "api", "docs", "unit", "app"],
+  layers: ["schema", "api", "docs", "unit"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "user" },
   sensitivity: "low",

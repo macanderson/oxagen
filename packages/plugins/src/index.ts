@@ -23,6 +23,12 @@ export type {
   WorkspaceSecret,
   WorkspaceCredentialStatus,
 } from "./credentials/workspace-credential";
+export {
+  findCredentialConnection,
+  recordCredentialGrant,
+  revokeCredentialGrants,
+} from "./credentials/credential-grants";
+export type { CredentialConnection } from "./credentials/credential-grants";
 export * from "./registry";
 export * from "./oauth";
 export {

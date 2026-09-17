@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { toolDeclarationPublish } from "./tool.declaration.publish";
+import {
+  TOOL_NAME_MAX_LENGTH,
+  toolDeclarationPublish,
+} from "./tool.declaration.publish";
 import { getCapability } from "../registry";
 
 const VALID_INPUT = {
@@ -30,6 +33,28 @@ describe("tool.declaration.publish capability", () => {
     const parsed = toolDeclarationPublish.input.parse(VALID_INPUT);
     expect(parsed.name).toBe("read_file");
     expect(parsed.read_only).toBe(false);
+  });
+
+  it("rejects a name longer than a run spec's tool identity can carry", () => {
+    // Not a cosmetic bound. The tool is governed under
+    // `mcp.<server uuid>.<name>`, which openAssistantRun pins into the run
+    // spec's tool policy — and the spec pins every materialized tool, so a
+    // name the registry accepts and the spec refuses fails admission for
+    // every assistant turn in the workspace, not just this tool's calls.
+    expect(() =>
+      toolDeclarationPublish.input.parse({
+        ...VALID_INPUT,
+        name: "a".repeat(TOOL_NAME_MAX_LENGTH + 1),
+      }),
+    ).toThrow();
+    // The boundary itself is accepted: a bound that also refuses the longest
+    // legal name is the same outage with a better message.
+    expect(() =>
+      toolDeclarationPublish.input.parse({
+        ...VALID_INPUT,
+        name: "a".repeat(TOOL_NAME_MAX_LENGTH),
+      }),
+    ).not.toThrow();
   });
 
   it("rejects a missing name", () => {

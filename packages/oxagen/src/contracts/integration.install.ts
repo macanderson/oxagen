@@ -8,7 +8,7 @@ export const integrationInstall = registerCapability({
     "Install a plugin instance from catalog or custom URL. Fetches schema, validates config, and installs in workspace scope.",
   mode: "async",
   surfaces: ["api", "mcp", "cli", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "plugin" },
   sensitivity: "high",

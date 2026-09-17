@@ -136,48 +136,65 @@ function endOfGrantMonth(grantDate: Date): Date {
 // Free signup grant — 500 credits, never expiring
 // ---------------------------------------------------------------------------
 
-const FREE_SIGNUP_CREDITS = 500n; // 500 credits = $5.00
+/** The signup grant: 500 credits = $5.00, never expiring. */
+export const FREE_SIGNUP_CREDITS = 500n;
 
 /**
- * Grant 500 non-expiring free credits to a newly-created org.
- * Called immediately after org creation so the org can start using the
- * platform without a payment method.
+ * Write the $5 signup grant for `orgId` on a running transaction: the ledger
+ * row, a non-expiring `free_grant` lot and the balance mirror. Returns false
+ * when the org already holds it (the ledger row conflicted) and writes
+ * nothing else.
  *
- * Idempotency is enforced atomically via INSERT … ON CONFLICT DO NOTHING
- * on the credit_ledger unique key (org_id, reason, reference_type,
- * reference_id). No separate SELECT is needed.
+ * `create_org` calls this on its bootstrap transaction, so an org and its
+ * grant commit together (apps/app/ARCHITECTURE.md §9, 2026-09-15): the grant
+ * is what funds the in-app agent's platform-paid turns of a new org
+ * (ADR-053 §2), and without it the credit gate refuses the first turn.
+ *
+ * Idempotency is enforced atomically via INSERT … ON CONFLICT DO NOTHING on
+ * the credit_ledger unique key (org_id, reason, reference_type, reference_id).
+ */
+export async function grantSignupCredits(
+  tx: DbTx,
+  orgId: string,
+): Promise<boolean> {
+  const granted = await tryInsertGrantLedger(
+    tx,
+    orgId,
+    CREDIT_REASONS.GRANT_SIGNUP,
+    "org",
+    orgId,
+    FREE_SIGNUP_CREDITS,
+  );
+  if (!granted) return false;
+  await insertLotAndMirrorBalance(
+    tx,
+    orgId,
+    "free_grant",
+    FREE_SIGNUP_CREDITS,
+    new Date(),
+    null,
+  );
+  return true;
+}
+
+/**
+ * The signup grant on its own system transaction, for a caller that created
+ * the org elsewhere: the deprecated app's onboarding action
+ * (apps/app_deprecated/src/app/(onboarding)/new-organization/actions.ts),
+ * which serves production until cutover.
  */
 export async function grantFreeCredits(orgId: string): Promise<void> {
   const start = Date.now();
-  let granted = false;
 
   // tenancy: system bypass via withSystemDb. grantFreeCredits runs immediately
-  // after org creation (onboarding action + organizationCreateHandler), where
+  // after org creation (the deprecated onboarding action), where
   // there is NO active tenant scope yet — the org-creation transaction is itself
   // a system-level write, and the orgId is supplied explicitly. Using
   // withTenantDb here throws TenantScopeError ("no_tenant_scope") under enforced
   // RLS, silently dropping the $5 signup grant. credit_* tables are org_only and
   // every write is scoped by the explicit orgId. Mirrors grantPlanCreditsForInvoicePaid
   // / grantCreditPackForCheckout.
-  await withSystemDb(async (tx) => {
-    granted = await tryInsertGrantLedger(
-      tx,
-      orgId,
-      CREDIT_REASONS.GRANT_SIGNUP,
-      "org",
-      orgId,
-      FREE_SIGNUP_CREDITS,
-    );
-    if (!granted) return; // Already granted — conflict, nothing to do.
-    await insertLotAndMirrorBalance(
-      tx,
-      orgId,
-      "free_grant",
-      FREE_SIGNUP_CREDITS,
-      new Date(),
-      null,
-    );
-  });
+  const granted = await withSystemDb((tx) => grantSignupCredits(tx, orgId));
 
   if (granted) {
     logger.info(

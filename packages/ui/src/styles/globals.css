@@ -169,6 +169,12 @@
        state ramp must stay visibly unlike the gold. */
     --_clay: oklch(0.579 0.214 27.2); /* error — true red (hsl 0 72% 51%) */
     --_clay-light: oklch(0.617 0.191 24.7); /* error (dark, hsl 0 72% 58%) */
+    /* Error as TEXT. The error hue is a mark colour: --_clay is 4.4:1 on the
+       light panel and --_clay-light 4.4:1 on the dark one, both under the
+       4.5:1 floor for body text. The inks are the same hue moved in lightness
+       until they pass on every surface text sits on (page, panel, popover). */
+    --_clay-ink: oklch(0.52 0.195 27.2); /* light: 5.3:1 paper, 5.6:1 panel, 5.8:1 popover */
+    --_clay-ink-light: oklch(0.7 0.16 25); /* dark: 6.6:1 canvas, 6.3:1 panel, 5.8:1 popover */
     --_moss: oklch(0.529 0.106 154.4); /* #2F7D4F — success (light, 5.0:1 on paper) */
     --_moss-light: oklch(0.769 0.119 149.1); /* success (dark) */
     /* Warning sits at a clearly ORANGE hue (~52), well away from the gold at
@@ -232,6 +238,7 @@
     --warning-foreground: oklch(0.2 0.03 60);
     --error: var(--_clay);
     --error-foreground: oklch(1 0 0);
+    --error-ink: var(--_clay-ink); /* error words and figures; --error stays the mark */
     --info: var(--_slate);
     --info-foreground: oklch(1 0 0);
 
@@ -462,6 +469,7 @@
     --warning-foreground: oklch(0.2 0.03 60);
     --error: var(--_clay-light);
     --error-foreground: oklch(1 0 0);
+    --error-ink: var(--_clay-ink-light);
     --info: var(--_slate-light);
     --info-foreground: oklch(0.18 0.01 230);
 
@@ -592,6 +600,7 @@
       --warning-foreground: oklch(0.2 0.03 60);
       --error: var(--_clay-light);
       --error-foreground: oklch(1 0 0);
+      --error-ink: var(--_clay-ink-light);
       --info: var(--_slate-light);
       --info-foreground: oklch(0.18 0.01 230);
 
@@ -720,6 +729,7 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-error: var(--error);
   --color-error-foreground: var(--error-foreground);
+  --color-error-ink: var(--error-ink);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
 

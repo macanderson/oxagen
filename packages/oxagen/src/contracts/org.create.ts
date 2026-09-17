@@ -5,16 +5,94 @@ import {
   EMPLOYEE_SIZE_VALUES,
 } from "@oxagen/config";
 import { registerCapability } from "../registry";
+import { workspaceSlug } from "../workspace-slug";
+
+/**
+ * Top-level route segments an organization slug may not take. An org at
+ * `/{slug}` would lose its root page or its workspaces to the route that owns
+ * the segment (`/invite/core` is an invitation token, `/api/...` the API). The
+ * set covers every top-level segment of `apps/app/src/app` (sign-in flows,
+ * organization creation, the CLI and GitHub callbacks, the API), the legacy
+ * root routes of `apps/app_deprecated` that cutover redirects claim (`account`,
+ * `actions`, `onboarding`, `welcome`), and the static and metadata paths the
+ * proxy matcher skips. Refused by the input schema so every surface (API, MCP,
+ * app) applies the same rule.
+ */
+export const RESERVED_ORG_SLUGS: ReadonlySet<string> = new Set([
+  // sign-in flows and invitations
+  "login",
+  "signup",
+  "verify",
+  "two-factor",
+  "forgot-password",
+  "reset-password",
+  "invite",
+  // organization creation and the legacy onboarding gate
+  "welcome",
+  "new-organization",
+  // callbacks and API
+  "api",
+  "cli",
+  "github",
+  // legacy root routes of apps/app_deprecated
+  "account",
+  "actions",
+  "onboarding",
+  // Next internals, static assets and metadata routes the proxy skips
+  "_next",
+  "brand",
+  "favicon",
+  "fonts",
+  "manifest",
+  "pwa",
+  "robots",
+  "sitemap",
+  "social",
+  "spinner",
+]);
+
+/**
+ * Re-exported from `../workspace-slug`, which holds the one definition and the
+ * one slug shape every workspace-slug field is built from.
+ *
+ * They stay reachable from THIS path on purpose: `apps/app` may import platform
+ * code only through `@oxagen/oxagen/contracts/*` (ARCHITECTURE.md §2, INV-03,
+ * enforced by `apps/app/src/test/arch/import-graph.test.ts`), so a contract
+ * file is the app's doorway to a shared shape. The onboarding form reads both
+ * from here, and the definition is still in one place.
+ */
+export {
+  RESERVED_WORKSPACE_SLUGS,
+  WORKSPACE_SLUG_PATTERN,
+} from "../workspace-slug";
+
+const slugShape = z
+  .string()
+  .min(2)
+  .max(40)
+  .regex(/^[a-z0-9-]+$/, "lowercase letters, digits, and hyphens only");
+
+/**
+ * The first workspace is part of the org bootstrap: an org with no workspace
+ * has no Fleet page to land on. Callers that do not name one get the
+ * convention every existing surface used ("Default" at `default`).
+ */
+const DEFAULT_FIRST_WORKSPACE_NAME = "Default";
+const DEFAULT_FIRST_WORKSPACE_SLUG = "default";
+// Assembled from the two constants: check_manifest takes the first quoted
+// name literal in a contract file as the capability name.
+export const DEFAULT_FIRST_WORKSPACE = {
+  name: DEFAULT_FIRST_WORKSPACE_NAME,
+  slug: DEFAULT_FIRST_WORKSPACE_SLUG,
+} as const;
 
 // Exported so MCP and other surfaces can spread `.shape` without re-declaring
 // field constraints. The superRefine validation is layered on top below.
 export const organizationCreateInputBase = z.object({
   name: z.string().min(1).max(120),
-  slug: z
-    .string()
-    .min(2)
-    .max(40)
-    .regex(/^[a-z0-9-]+$/, "lowercase letters, digits, and hyphens only"),
+  slug: slugShape.refine((s) => !RESERVED_ORG_SLUGS.has(s), {
+    message: "slug is a reserved route segment",
+  }),
   // Organization creation is not a billing entitlement grant. Privileged plans
   // are established only through the canonical subscription lifecycle.
   planSlug: z.literal("free").default("free"),
@@ -26,15 +104,26 @@ export const organizationCreateInputBase = z.object({
   // Billing email/address were removed with billing.org_billing_profiles
   // (migration 20260802130000): the collected data was never read — Stripe
   // captures the billing address at checkout and is the source of truth.
+  workspace: z
+    .object({
+      name: z.string().min(1).max(120),
+      // The shared shape: reserved segments and the one spelling (#3110).
+      slug: workspaceSlug,
+    })
+    .default(DEFAULT_FIRST_WORKSPACE),
 });
 
 export const organizationCreate = registerCapability({
   name: "create_org",
   domain: "org",
-  description: "Create a new organization with a globally-unique slug",
+  description:
+    "Create a new organization with a globally-unique slug, its owner membership, IAM bootstrap and first workspace",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
+  // Pre-tenant: the caller has no org yet. The kernel skips the billing gate
+  // and the recorder for an unscoped invoke, and the app reaches it with a
+  // PretenantCtx.
   scoped: false,
   agent: {
     requiresApproval: true,
@@ -79,6 +168,10 @@ export const organizationCreate = registerCapability({
     slug: z.string(),
     type: z.string(),
     createdAt: z.string(),
+    workspace: z.object({
+      publicId: z.string(),
+      slug: z.string(),
+    }),
   }),
 });
 

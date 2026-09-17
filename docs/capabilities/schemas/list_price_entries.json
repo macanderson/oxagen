@@ -1,0 +1,155 @@
+{
+  "name": "list_price_entries",
+  "domain": "cost",
+  "description": "List the price book this organization is priced against: every provider list price effective at an instant and the organization's negotiated rows, in integer micros per million units with the window each is effective over.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "at": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "at": {
+        "type": "string"
+      },
+      "entries": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "orgId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "provider": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "modelAliases": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "region": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tokenClass": {
+              "type": "string",
+              "enum": [
+                "input_uncached",
+                "cache_read",
+                "cache_write_5m",
+                "cache_write_1h",
+                "output",
+                "reasoning",
+                "server_tool_request",
+                "embedding_input",
+                "rerank",
+                "image",
+                "video_second"
+              ]
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "token",
+                "request",
+                "image",
+                "second"
+              ]
+            },
+            "currency": {
+              "type": "string"
+            },
+            "microsPerMillion": {
+              "type": "string"
+            },
+            "effectiveFrom": {
+              "type": "string"
+            },
+            "effectiveTo": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "list",
+                "negotiated",
+                "override"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "orgId",
+            "provider",
+            "model",
+            "modelAliases",
+            "region",
+            "tokenClass",
+            "unit",
+            "currency",
+            "microsPerMillion",
+            "effectiveFrom",
+            "effectiveTo",
+            "source"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "at",
+      "entries"
+    ],
+    "additionalProperties": false
+  }
+}

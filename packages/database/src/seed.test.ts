@@ -6,7 +6,7 @@
  * No live DB is required — `withSystemDb` is mocked to call the provided
  * callback with a chainable mock transaction object. The tests assert:
  *
- *  1. seedPlatform() inserts the free plan row (insert → values → onConflictDoNothing).
+ *  1. seedPlatform() upserts the free plan row (insert → values → onConflictDoUpdate).
  *  2. seedDev() performs the org / user / workspace / agent version inserts in order.
  *  3. seedDev() branches into the "create version" path when activeVersionId is null.
  *  4. seedDev() skips the version insert when activeVersionId is already set.
@@ -35,9 +35,11 @@ const mocks = vi.hoisted(() => {
 
   // ── insert chain ─────────────────────────────────────────────────────────
   const onConflictDoNothingMock = vi.fn().mockResolvedValue(undefined);
-  const valuesMock = vi
-    .fn()
-    .mockReturnValue({ onConflictDoNothing: onConflictDoNothingMock });
+  const onConflictDoUpdateMock = vi.fn().mockResolvedValue(undefined);
+  const valuesMock = vi.fn().mockReturnValue({
+    onConflictDoNothing: onConflictDoNothingMock,
+    onConflictDoUpdate: onConflictDoUpdateMock,
+  });
   const insertMock = vi.fn().mockReturnValue({ values: valuesMock });
 
   // ── update chain ─────────────────────────────────────────────────────────
@@ -66,6 +68,7 @@ const mocks = vi.hoisted(() => {
     fromMock,
     selectMock,
     onConflictDoNothingMock,
+    onConflictDoUpdateMock,
     valuesMock,
     insertMock,
     updateWhereMock,
@@ -93,9 +96,11 @@ function resetAllMocks() {
   mocks.fromMock.mockReset().mockReturnValue({ where: mocks.whereMock });
   mocks.selectMock.mockReset().mockReturnValue({ from: mocks.fromMock });
   mocks.onConflictDoNothingMock.mockReset().mockResolvedValue(undefined);
-  mocks.valuesMock
-    .mockReset()
-    .mockReturnValue({ onConflictDoNothing: mocks.onConflictDoNothingMock });
+  mocks.onConflictDoUpdateMock.mockReset().mockResolvedValue(undefined);
+  mocks.valuesMock.mockReset().mockReturnValue({
+    onConflictDoNothing: mocks.onConflictDoNothingMock,
+    onConflictDoUpdate: mocks.onConflictDoUpdateMock,
+  });
   mocks.insertMock.mockReset().mockReturnValue({ values: mocks.valuesMock });
   mocks.updateWhereMock.mockReset().mockResolvedValue(undefined);
   mocks.updateSetMock
@@ -138,21 +143,26 @@ describe("seedPlatform()", () => {
     expect(mocks.withSystemDbMock).toHaveBeenCalledOnce();
   });
 
-  it("inserts the free plan with insert/values/onConflictDoNothing", async () => {
+  it("upserts the free plan with insert/values/onConflictDoUpdate", async () => {
     await seedPlatform();
 
     expect(mocks.insertMock).toHaveBeenCalledOnce();
     expect(mocks.valuesMock).toHaveBeenCalledOnce();
-    expect(mocks.onConflictDoNothingMock).toHaveBeenCalledOnce();
+    expect(mocks.onConflictDoUpdateMock).toHaveBeenCalledOnce();
   });
 
-  it("uses onConflictDoNothing with a target option (idempotent)", async () => {
+  it("rewrites an existing free row's GAU terms to the v1 published figures", async () => {
     await seedPlatform();
-    const conflictArg = mocks.onConflictDoNothingMock.mock.calls[0]?.[0] as
-      | { target: unknown }
+    const arg = mocks.onConflictDoUpdateMock.mock.calls[0]?.[0] as
+      | { target: unknown; set: Record<string, unknown> }
       | undefined;
-    expect(conflictArg).toBeDefined();
-    expect(conflictArg).toHaveProperty("target");
+    expect(arg).toHaveProperty("target");
+    expect(arg?.set).toMatchObject({
+      currency: "usd",
+      ratePerGauMicros: 5_000n,
+      blockSizeGau: 5_000,
+      includedGauPerMonth: 5_000,
+    });
   });
 });
 

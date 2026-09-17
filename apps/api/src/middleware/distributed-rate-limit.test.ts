@@ -26,8 +26,13 @@ vi.mock("@oxagen/config/env", async (importOriginal) => {
   return { ...actual, requireEnv: mocks.requireEnv };
 });
 
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SQL } from "drizzle-orm";
+import { logger } from "./logger";
+import { __resetTrustedProxyHopsForTests } from "../lib/context";
 import {
   authorizationFingerprintBucketKey,
+  enrolledMachineBucketKey,
   distributedRateLimiter,
   deriveBucketKey,
   rateLimitBudgets,
@@ -36,7 +41,7 @@ import {
 
 type FakeContextOpts = {
   method?: string;
-  vars?: Partial<{ workspaceId: string; orgId: string }>;
+  vars?: Partial<{ workspaceId: string; orgId: string; apiKeyId: string }>;
   headers?: Record<string, string>;
 };
 
@@ -73,6 +78,9 @@ function scriptCount(count: number): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // extractClientIp memoizes the hop count on first use; drop it so each case
+  // can set its own TRUSTED_PROXY_HOP_COUNT.
+  __resetTrustedProxyHopsForTests();
   // Keep the opportunistic cleanup (Math.random < 0.01) from firing so
   // withSystemDb is called exactly once per counted request.
   vi.spyOn(Math, "random").mockReturnValue(0.5);
@@ -84,90 +92,91 @@ afterEach(() => {
 });
 
 describe("pre-authentication bucket keys", () => {
-  // The regression #3167 is named for: off Vercel this returned a constant, so
-  // every caller on the internet shared one bucket and one Postgres row.
-  it("gives each edge-reported client address its own bucket off Vercel", () => {
+  // This used to return the constant "ip:unverified" for every off-Vercel
+  // caller, i.e. always in production. On a fail-closed pre-auth mount that
+  // hands anyone who can reach the host the power to take the whole ingress
+  // offline with `max + 1` requests. Two callers must never share a bucket, and
+  // where no client can be identified the limiter must skip rather than pool.
+  it("gives two off-Vercel callers two different buckets", () => {
     vi.stubEnv("VERCEL", "");
+    mocks.requireEnv.mockReturnValue({
+      TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
+      TRUSTED_PROXY_HOP_COUNT: 1,
+    });
 
-    expect(
-      trustedClientIpBucketKey(
-        fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.1" } }),
-      ),
-    ).toBe("ip:198.51.100.1");
-    expect(
-      trustedClientIpBucketKey(
-        fakeContext({ headers: { "x-oxagen-client-ip": "2001:db8::1" } }),
-      ),
-    ).toBe("ip:2001:db8::1");
+    // The trailing entry is the named proxy: an address is only attributable
+    // when a trusted proxy wrote it.
+    const first = trustedClientIpBucketKey(
+      fakeContext({ headers: { "x-forwarded-for": "198.51.100.1, 10.0.0.5" } }),
+    );
+    const second = trustedClientIpBucketKey(
+      fakeContext({ headers: { "x-forwarded-for": "198.51.100.2, 10.0.0.5" } }),
+    );
+
+    expect(first).toBe("ip:198.51.100.1");
+    expect(second).toBe("ip:198.51.100.2");
+    expect(first).not.toBe(second);
   });
 
-  it("ignores the caller-writable forwarding headers off Vercel", () => {
+  it("stops at the first entry that is not a trusted proxy, whatever the caller prepends", () => {
     vi.stubEnv("VERCEL", "");
+    mocks.requireEnv.mockReturnValue({
+      TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
+      TRUSTED_PROXY_HOP_COUNT: 2,
+    });
 
-    // Only the edge header is written by a proxy that replaces a caller's copy;
-    // x-forwarded-for is appended to by both the ALB and Caddy, and x-real-ip
-    // is set by neither.
     expect(
       trustedClientIpBucketKey(
         fakeContext({
           headers: {
-            "x-oxagen-client-ip": "198.51.100.1",
-            "x-forwarded-for": "203.0.113.9",
-            "x-real-ip": "203.0.113.8",
-            "x-vercel-forwarded-for": "203.0.113.7",
+            // A caller prepending entries only lengthens a prefix the walk
+            // never reaches: it stops on what an entry IS, not on how many.
+            "x-forwarded-for": "evil, 10.9.9.9, 198.51.100.7, 10.0.0.5",
           },
         }),
       ),
-    ).toBe("ip:198.51.100.1");
-    expect(
-      trustedClientIpBucketKey(
-        fakeContext({
-          headers: {
-            "x-forwarded-for": "203.0.113.9",
-            "x-real-ip": "203.0.113.8",
-          },
-        }),
-      ),
-    ).toBe("ip:unverified");
+    ).toBe("ip:198.51.100.7");
   });
 
-  it("falls back to the unverified bucket for anything that is not an address", () => {
+  it("refuses to enforce a ceiling whose proxies the deployment has not named", () => {
+    // A hop count is not enough on this mount: one that is too high lets a
+    // caller pad x-forwarded-for until the arithmetic lands on a value the
+    // caller chose, which means a fresh bucket per request and no ceiling at
+    // all. Undeclared proxies are an unattributable request.
     vi.stubEnv("VERCEL", "");
+    mocks.requireEnv.mockReturnValue({
+      TRUSTED_PROXY_CIDRS: "",
+      TRUSTED_PROXY_HOP_COUNT: 1,
+    });
 
-    for (const value of [
-      "not-an-ip",
-      "198.51.100.1, 203.0.113.9",
-      " ",
-      "f".repeat(46),
-    ]) {
-      expect(
-        trustedClientIpBucketKey(
-          fakeContext({ headers: { "x-oxagen-client-ip": value } }),
-        ),
-      ).toBe("ip:unverified");
-    }
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-forwarded-for": "198.51.100.1" } }),
+      ),
+    ).toBeNull();
   });
 
-  it("trusts only Vercel's own header when running on Vercel", () => {
-    vi.stubEnv("VERCEL", "1");
+  it("returns null when no trusted proxy chain can be read", () => {
+    vi.stubEnv("VERCEL", "");
+    mocks.requireEnv.mockReturnValue({
+      TRUSTED_PROXY_CIDRS: "",
+      TRUSTED_PROXY_HOP_COUNT: 0,
+    });
 
-    // There is no Caddy in front of a Vercel deployment, so an edge header
-    // arriving there came from the caller and must not be believed.
     expect(
       trustedClientIpBucketKey(
-        fakeContext({
-          headers: {
-            "x-vercel-forwarded-for": "203.0.113.1, 10.0.0.1",
-            "x-oxagen-client-ip": "198.51.100.1",
-          },
-        }),
+        fakeContext({ headers: { "x-forwarded-for": "198.51.100.1" } }),
       ),
-    ).toBe("ip:203.0.113.1");
+    ).toBeNull();
+    // Including x-real-ip, which on a zero-trusted-proxy deployment is just as
+    // caller-supplied. Believing it would let a credential-stuffing client mint
+    // a fresh bucket per request by rotating the header, evading this ceiling
+    // entirely rather than being slowed by it.
     expect(
       trustedClientIpBucketKey(
-        fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.1" } }),
+        fakeContext({ headers: { "x-real-ip": "198.51.100.1" } }),
       ),
-    ).toBe("ip:unverified");
+    ).toBeNull();
   });
 
   it("normalizes a bearer credential and returns only a SHA-256 fingerprint", () => {
@@ -479,5 +488,183 @@ describe("rateLimitBudgets", () => {
     const second = rateLimitBudgets();
     expect(second).toBe(first);
     expect(mocks.requireEnv).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("driver parameter binding", () => {
+  // Regression for the outage in which every enrolled Tacho host got
+  // 503 `rate_limit_unavailable`. Both statements interpolated a JS `Date`
+  // into a raw `sql` template. drizzle only converts a Date when the statement
+  // is built from a typed column, so the Date reached postgres.js verbatim,
+  // whose Bind path calls `Buffer.byteLength(value)` and throws
+  // ERR_INVALID_ARG_TYPE for anything that is not a string or Buffer. The
+  // limiter therefore threw on EVERY request and had never written a counter:
+  // fail-open surfaces stopped limiting silently and fail-closed pre-auth
+  // ceilings answered 503.
+  //
+  // The scripted `execute` in these tests accepts any argument, which is why
+  // CI stayed green through it. So assert on the parameters drizzle would
+  // actually hand the driver, by compiling the SQL through the real dialect.
+  function compileParams(sqlChunk: unknown): unknown[] {
+    return new PgDialect().sqlToQuery(sqlChunk as SQL).params;
+  }
+
+  /** Every param must be something postgres.js can serialize (never a Date). */
+  function expectDriverSerializable(params: readonly unknown[]): void {
+    for (const param of params) {
+      expect(param).not.toBeInstanceOf(Date);
+      expect(["string", "number", "boolean"]).toContain(typeof param);
+    }
+  }
+
+  it("binds the counter window as a string, not a Date", async () => {
+    const executed: unknown[] = [];
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          execute: vi.fn(async (chunk: unknown) => {
+            executed.push(chunk);
+            return [{ count: 1 }];
+          }),
+        }),
+    );
+
+    const next = vi.fn();
+    await distributedRateLimiter({ keyPrefix: "probe", max: 10 })(
+      fakeContext(),
+      next,
+    );
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(executed).toHaveLength(1);
+    const params = compileParams(executed[0]);
+    // bucket_key, then the window — both text by the time the driver sees them.
+    expect(params).toHaveLength(2);
+    expect(params[0]).toBe("probe:ip:unknown");
+    expect(typeof params[1]).toBe("string");
+    expect(Date.parse(params[1] as string)).not.toBeNaN();
+    expectDriverSerializable(params);
+  });
+
+  it("binds the stale-window sweep cutoff as a string, not a Date", async () => {
+    // Force the 1%-sampled opportunistic sweep to fire.
+    vi.spyOn(Math, "random").mockReturnValue(0);
+
+    const executed: unknown[] = [];
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          execute: vi.fn(async (chunk: unknown) => {
+            executed.push(chunk);
+            return [{ count: 1 }];
+          }),
+        }),
+    );
+
+    await distributedRateLimiter({ keyPrefix: "probe", max: 10 })(
+      fakeContext(),
+      vi.fn(),
+    );
+
+    // The increment, then the sweep in its own transaction.
+    expect(executed).toHaveLength(2);
+    const sweepParams = compileParams(executed[1]);
+    expect(sweepParams).toHaveLength(1);
+    expect(typeof sweepParams[0]).toBe("string");
+    expectDriverSerializable(sweepParams);
+  });
+});
+
+describe("store-error logging", () => {
+  // The outage above was hard to diagnose because the warn logged
+  // `err.message` only, and drizzle's DrizzleQueryError message is just the SQL
+  // text — the real TypeError sat in `cause` and never reached CloudWatch.
+  it("logs the whole cause chain, not just the wrapper's message", async () => {
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+    const wrapped = new Error("Failed query: INSERT ...", {
+      cause: new TypeError('The "string" argument must be of type string'),
+    });
+    mocks.withSystemDb.mockRejectedValue(wrapped);
+
+    const next = vi.fn();
+    await distributedRateLimiter({ keyPrefix: "probe", max: 10 })(
+      fakeContext(),
+      next,
+    );
+
+    expect(next).toHaveBeenCalledOnce(); // fail-open default
+    expect(warn).toHaveBeenCalledOnce();
+    const logged = (warn.mock.calls[0]?.[0] as { err: string }).err;
+    expect(logged).toContain("Failed query");
+    expect(logged).toContain('The "string" argument must be of type string');
+  });
+});
+
+describe("enrolled-machine bucket key", () => {
+  // The post-auth Tacho and Stella ceilings are sized per host, but they used
+  // the default derivation, which keys on workspaceId — so every host enrolled
+  // into one workspace shared a single 30/min counter and they would all have
+  // hit 429 together the moment these counters started working.
+  it("gives each enrolled credential its own bucket within one workspace", () => {
+    const hostA = enrolledMachineBucketKey(
+      fakeContext({ vars: { apiKeyId: "key-a", workspaceId: "ws-1" } }),
+    );
+    const hostB = enrolledMachineBucketKey(
+      fakeContext({ vars: { apiKeyId: "key-b", workspaceId: "ws-1" } }),
+    );
+
+    expect(hostA).toBe("machine:key-a");
+    expect(hostB).toBe("machine:key-b");
+    expect(hostA).not.toBe(hostB);
+  });
+
+  it("prefers the credential over the workspace it is scoped to", () => {
+    expect(
+      enrolledMachineBucketKey(
+        fakeContext({ vars: { apiKeyId: "key-a", workspaceId: "ws-1" } }),
+      ),
+    ).not.toContain("ws-1");
+  });
+
+  it("falls back to the previous workspace derivation without an API key", () => {
+    expect(
+      enrolledMachineBucketKey(fakeContext({ vars: { workspaceId: "ws-1" } })),
+    ).toBe("ws:ws-1");
+    expect(
+      enrolledMachineBucketKey(fakeContext({ vars: { orgId: "org-1" } })),
+    ).toBe("org:org-1");
+    expect(enrolledMachineBucketKey(fakeContext())).toBe("ip:unknown");
+  });
+});
+
+describe("unattributable bucket", () => {
+  // A ceiling whose bucket cannot be attributed to one caller is not a ceiling.
+  // On a fail-closed pre-auth mount it is strictly worse than nothing: one
+  // abuser exhausts the shared counter and everyone else is denied. The
+  // limiter must pass the request through instead — the per-credential ceiling
+  // beside it still applies.
+  it("skips entirely when the resolver cannot name a bucket", async () => {
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+    scriptCount(1);
+
+    const next = vi.fn();
+    const c = fakeContext();
+    const res = await distributedRateLimiter({
+      keyPrefix: "preauth-ip",
+      max: 1,
+      bucketKey: () => null,
+      methods: "all",
+      storeErrorPolicy: "degrade-to-local",
+    })(c, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res).toBeUndefined();
+    // Never counted: no store round-trip at all.
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
+    // And never denied, despite fail-closed.
+    expect(c.json).not.toHaveBeenCalled();
+    // The operator can see the deployment is not enforcing it.
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0]?.[1]).toContain("TRUSTED_PROXY_CIDRS");
   });
 });

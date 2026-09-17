@@ -10,7 +10,7 @@ export const tachoHostList = registerCapability({
     "List the machines enrolled as Tacho hosts in this workspace with their status, liveness, and counters.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "app", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

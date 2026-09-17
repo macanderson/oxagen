@@ -59,6 +59,7 @@ vi.mock("@oxagen/handlers", () => ({
 
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import {
   capabilityContext,
   __resetTrustedProxyHopsForTests,
@@ -124,22 +125,23 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
     apiKeyId: null,
   };
 
-  const originalHopCount = process.env.TRUSTED_PROXY_HOP_COUNT;
+  const originalCidrs = process.env.TRUSTED_PROXY_CIDRS;
 
-  /** The hop count is memoized on first read, so set it and drop the cache. */
-  function setTrustedProxyHops(count: string): void {
-    process.env.TRUSTED_PROXY_HOP_COUNT = count;
+  /** The proxy list is memoized on first read, so set it and drop the cache. */
+  function setTrustedProxyCidrs(cidrs: string): void {
+    process.env.TRUSTED_PROXY_CIDRS = cidrs;
     __resetTrustedProxyHopsForTests();
   }
 
   beforeEach(() => {
-    setTrustedProxyHops("1");
+    // Empty is the default, and a case that names proxies must not change how
+    // the next one attributes an address.
+    setTrustedProxyCidrs("");
   });
 
   afterEach(() => {
-    if (originalHopCount === undefined)
-      delete process.env.TRUSTED_PROXY_HOP_COUNT;
-    else process.env.TRUSTED_PROXY_HOP_COUNT = originalHopCount;
+    if (originalCidrs === undefined) delete process.env.TRUSTED_PROXY_CIDRS;
+    else process.env.TRUSTED_PROXY_CIDRS = originalCidrs;
     __resetTrustedProxyHopsForTests();
   });
 
@@ -150,81 +152,95 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
     return ((await res.json()) as { clientIp: string | null }).clientIp;
   }
 
-  it("returns the single entry a one-hop proxy wrote", async () => {
-    expect(await clientIpFor({ "x-forwarded-for": "10.0.0.1" })).toBe(
-      "10.0.0.1",
-    );
-  });
+  // ── attribution ───────────────────────────────────────────────────────────
 
-  it("takes the rightmost hop, not the caller-supplied leftmost one", async () => {
-    // The bypass: everything left of the trusted proxy's own write is a string
-    // the caller chose.
+  it("returns the entry the trusted proxy wrote", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
     expect(
-      await clientIpFor({
-        "x-forwarded-for": "10.0.0.1, 172.16.0.2, 192.168.0.3",
-      }),
-    ).toBe("192.168.0.3");
-  });
-
-  it("trims whitespace around the chosen hop", async () => {
-    expect(
-      await clientIpFor({ "x-forwarded-for": "  10.0.0.1  ,  172.16.0.2  " }),
-    ).toBe("172.16.0.2");
-  });
-
-  it("skips the extra proxy's own address when two hops are trusted", async () => {
-    // CDN → ALB → app: the CDN appends the client, the ALB appends the CDN.
-    setTrustedProxyHops("2");
-    expect(
-      await clientIpFor({ "x-forwarded-for": "203.0.113.7, 192.0.2.44" }),
+      await clientIpFor({ "x-forwarded-for": "203.0.113.7, 10.0.0.5" }),
     ).toBe("203.0.113.7");
   });
 
-  it("a longer spoofed prefix cannot move the chosen hop", async () => {
-    setTrustedProxyHops("2");
+  it("walks past every trusted proxy, however many appended", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8, 172.16.0.0/12");
     expect(
       await clientIpFor({
-        "x-forwarded-for": "10.0.0.1, 10.0.0.2, 203.0.113.7, 192.0.2.44",
+        "x-forwarded-for": "203.0.113.7, 172.16.0.2, 10.0.0.5",
       }),
     ).toBe("203.0.113.7");
   });
 
-  it("ignores x-forwarded-for entirely when no proxy is trusted", async () => {
-    // Nothing in front rewrote the header, so every entry is caller-supplied.
-    setTrustedProxyHops("0");
+  it("trims whitespace around the chosen entry", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
     expect(
-      await clientIpFor({ "x-forwarded-for": "10.0.0.1, 192.168.0.3" }),
+      await clientIpFor({ "x-forwarded-for": "  203.0.113.7 ,  10.0.0.5  " }),
+    ).toBe("203.0.113.7");
+  });
+
+  it("drops empty segments rather than mis-walking on a leading comma", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(
+      await clientIpFor({ "x-forwarded-for": " , 203.0.113.7, 10.0.0.5" }),
+    ).toBe("203.0.113.7");
+  });
+
+  // ── the bypasses this replaced a hop count to close ───────────────────────
+
+  it("is unmoved by a caller padding the header", async () => {
+    // Under a hop count this was the bypass: the caller controls the LENGTH, so
+    // a count too high by k lands the arithmetic on an entry the caller wrote.
+    // Here the walk stops on what an entry IS, so the prefix is never reached.
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(
+      await clientIpFor({
+        "x-forwarded-for": "198.51.100.1, 10.9.9.9, 203.0.113.7, 10.0.0.5",
+      }),
+    ).toBe("203.0.113.7");
+  });
+
+  it("refuses a chain that never reaches a trusted proxy", async () => {
+    // Nothing vouched for the rightmost entry, so it is whatever the caller
+    // sent — a typo in the CIDR list, a network change, or a path that
+    // bypasses the proxy all look like this.
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(await clientIpFor({ "x-forwarded-for": "203.0.113.7" })).toBeNull();
+    expect(
+      await clientIpFor({ "x-forwarded-for": "10.0.0.5, 203.0.113.7" }),
     ).toBeNull();
   });
 
-  it("falls back to the leftmost entry when the chain is shorter than the count", async () => {
-    // A proxy did not append what this deployment says it does; the oldest
-    // entry is the best candidate left, and better than nothing.
-    setTrustedProxyHops("3");
+  it("refuses when every entry is a trusted proxy", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
     expect(
-      await clientIpFor({ "x-forwarded-for": "203.0.113.7, 192.0.2.44" }),
-    ).toBe("203.0.113.7");
+      await clientIpFor({ "x-forwarded-for": "10.0.0.4, 10.0.0.5" }),
+    ).toBeNull();
   });
 
-  it("drops empty segments rather than falling through on a leading comma", async () => {
+  // ── no proxies named: attribute nothing ───────────────────────────────────
+
+  it("derives no address at all when no proxies are named", async () => {
+    // The deployment has not said what stands in front of it, so nothing in
+    // the request is vouched for. Returning the readable-but-unvouched-for
+    // address is what made an IP allowlist judge the load balancer.
+    expect(
+      await clientIpFor({ "x-forwarded-for": "203.0.113.7, 10.0.0.5" }),
+    ).toBeNull();
+  });
+
+  it("does not consult x-real-ip, which nothing can vouch for", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(await clientIpFor({ "x-real-ip": "203.0.113.7" })).toBeNull();
     expect(
       await clientIpFor({
-        "x-forwarded-for": " , 10.0.0.2",
-        "x-real-ip": "5.5.5.5",
+        "x-real-ip": "203.0.113.7",
+        "x-forwarded-for": "198.51.100.1",
       }),
-    ).toBe("10.0.0.2");
+    ).toBeNull();
   });
 
-  it("falls back to x-real-ip when x-forwarded-for is absent", async () => {
-    expect(await clientIpFor({ "x-real-ip": "1.2.3.4" })).toBe("1.2.3.4");
-  });
-
-  it("returns null when both headers are absent", async () => {
+  it("returns null when no forwarding header is present", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
     expect(await clientIpFor({})).toBeNull();
-  });
-
-  it("returns null when x-real-ip is empty and x-forwarded-for is absent", async () => {
-    expect(await clientIpFor({ "x-real-ip": "" })).toBeNull();
   });
 });
 
@@ -268,7 +284,9 @@ describe("capabilityContext requireOrg", () => {
     // The shape a bootstrap route needs: the caller has an org and is asking
     // for their first workspace. Before this existed the only way to get past
     // the workspace check was requireOrg:false, which dropped the org check
-    // too.
+    // too. The workspace id such a call carries is the org-only sentinel, not
+    // the empty string: the kernel enters a tenant scope that asserts a uuid,
+    // so an empty id was refused before the handler ran (#3029, ADR-068).
     const res = await withContext(
       {},
       (c) => capabilityContext(c, { requireWorkspace: false }),
@@ -277,7 +295,7 @@ describe("capabilityContext requireOrg", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { orgId: string; workspaceId: string };
     expect(body.orgId).toBe("o1");
-    expect(body.workspaceId).toBe("");
+    expect(body.workspaceId).toBe(ORG_ONLY_WORKSPACE_ID);
   });
 
   it("still refuses a missing org when only the workspace check is waived", async () => {
@@ -368,5 +386,41 @@ describe("capabilityContext requireOrg", () => {
     });
     const body = (await res.json()) as { userId: string };
     expect(body.userId).toBe("user-123");
+  });
+});
+
+// ── INV-31: no surface builds a platform-operator binding ─────────────────────
+//
+// `set_org_billing_terms` is reachable only from a `CapabilityContext` carrying
+// a binding minted by `createPlatformOperatorContext` (packages/oxagen). The
+// kernel refuses any other value on that field, and the second half of the
+// invariant is that no surface's context builder puts one there at all — not
+// even `undefined`, which a later spread could overwrite unnoticed
+// (apps/app/ARCHITECTURE.md §4, INV-31).
+
+describe("capabilityContext and the platform-operator binding", () => {
+  it("builds no platformOperator key at all", async () => {
+    const res = await withContext(
+      {},
+      (c) => ({ hasKey: "platformOperator" in capabilityContext(c) }),
+      { orgId: "o1", workspaceId: "w1", userId: "u1", apiKeyId: null },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { hasKey: boolean };
+    expect(body.hasKey).toBe(false);
+  });
+
+  it("builds no platformOperator key on the bootstrap shape either", async () => {
+    const res = await withContext(
+      {},
+      (c) => ({
+        hasKey:
+          "platformOperator" in capabilityContext(c, { requireOrg: false }),
+      }),
+      { orgId: null, workspaceId: null, userId: null, apiKeyId: null },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { hasKey: boolean };
+    expect(body.hasKey).toBe(false);
   });
 });

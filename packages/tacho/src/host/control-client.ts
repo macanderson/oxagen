@@ -13,6 +13,8 @@ import {
   type DaemonHealth,
   type IngestResponse,
   ingestResponseSchema,
+  TACHO_BATCH_SCHEMA,
+  TACHO_COMMANDS_SCHEMA,
   type TachoBatch,
 } from "../wire";
 
@@ -28,16 +30,82 @@ export type FetchLike = (
   ok: boolean;
   status: number;
   text: () => Promise<string>;
+  /**
+   * Optional so every existing fake control plane in the tests stays valid.
+   * A real `fetch` always provides it, and without it the client simply has
+   * no rate-limit hint to pass on and falls back to blind backoff.
+   */
+  headers?: { get: (name: string) => string | null };
 }>;
+
+/**
+ * What the control plane said about our budget on the last response.
+ *
+ * The API sets `X-RateLimit-Remaining` / `X-RateLimit-Reset` on every counted
+ * response and `Retry-After` on a 429, and the daemon used to ignore all three
+ * and guess with exponential backoff instead. Guessing is strictly worse than
+ * being told: a blind 60s sleep can idle through a window that resets in five
+ * seconds, and a blind retry can spend a budget the server has already said is
+ * gone. Every field is optional because a hint is an optimisation — the client
+ * must work against a server, or a test double, that sends none of them.
+ */
+export interface RateLimitHint {
+  /** Requests left in the current window. */
+  remaining?: number;
+  /** When the window resets, epoch milliseconds. */
+  resetAtMs?: number;
+  /** How long the server asked us to wait, milliseconds. */
+  retryAfterMs?: number;
+}
+
+/** Seconds, or an HTTP-date, to milliseconds from now. Undefined if neither. */
+function parseRetryAfter(
+  value: string | null,
+  nowMs: number,
+): number | undefined {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? undefined : Math.max(0, at - nowMs);
+}
+
+function readRateLimitHint(
+  headers: { get: (name: string) => string | null } | undefined,
+  nowMs: number,
+): RateLimitHint | undefined {
+  if (!headers) return undefined;
+  const hint: RateLimitHint = {};
+  const remaining = Number(headers.get("x-ratelimit-remaining"));
+  if (Number.isFinite(remaining)) hint.remaining = remaining;
+  // X-RateLimit-Reset is epoch SECONDS (see the API middleware), not a delta.
+  const reset = Number(headers.get("x-ratelimit-reset"));
+  if (Number.isFinite(reset) && reset > 0) hint.resetAtMs = reset * 1000;
+  const retryAfter = parseRetryAfter(headers.get("retry-after"), nowMs);
+  if (retryAfter !== undefined) hint.retryAfterMs = retryAfter;
+  return Object.keys(hint).length > 0 ? hint : undefined;
+}
 
 export class ControlError extends Error {
   readonly status: number;
   readonly body: string;
-  constructor(status: number, body: string, message?: string) {
+  /**
+   * What the server said about waiting, when it said anything. Carried on the
+   * error so the Shipper can honour a 429's `Retry-After` instead of doubling
+   * its own backoff past the window the server actually named.
+   */
+  readonly rateLimit: RateLimitHint | undefined;
+  constructor(
+    status: number,
+    body: string,
+    message?: string,
+    rateLimit?: RateLimitHint,
+  ) {
     super(message ?? `control plane answered ${status}: ${body.slice(0, 256)}`);
     this.name = "ControlError";
     this.status = status;
     this.body = body;
+    this.rateLimit = rateLimit;
   }
 }
 
@@ -57,6 +125,15 @@ export interface ControlClientOptions {
   fetch?: FetchLike;
   timeoutMs?: number;
   userAgent?: string;
+  /**
+   * Called after every response that carried rate-limit headers, success or
+   * failure. The Shipper uses it to pace a backlog drain against the budget
+   * the server reports, rather than firing every queued batch at once and
+   * discovering the ceiling by being refused.
+   */
+  onRateLimit?: (hint: RateLimitHint) => void;
+  /** Injectable clock, so Retry-After parsing is testable. */
+  now?: () => number;
 }
 
 export interface ControlClient {
@@ -77,6 +154,7 @@ export function createControlClient(
   const fetchImpl: FetchLike =
     options.fetch ?? ((input, init) => fetch(input, init) as never);
   const timeoutMs = options.timeoutMs ?? 15_000;
+  const nowMs = options.now ?? Date.now;
 
   async function post(url: string, body: unknown): Promise<unknown> {
     const controller = new AbortController();
@@ -99,7 +177,10 @@ export function createControlClient(
       clearTimeout(timer);
     }
     const text = await response.text();
-    if (!response.ok) throw new ControlError(response.status, text);
+    const hint = readRateLimitHint(response.headers, nowMs());
+    if (hint) options.onRateLimit?.(hint);
+    if (!response.ok)
+      throw new ControlError(response.status, text, undefined, hint);
     try {
       return JSON.parse(text);
     } catch {
@@ -107,6 +188,7 @@ export function createControlClient(
         response.status,
         text,
         "control plane answered non-JSON",
+        hint,
       );
     }
   }
@@ -115,7 +197,7 @@ export function createControlClient(
     ingest: async (events, daemon) =>
       ingestResponseSchema.parse(
         await post(options.endpoints.ingest, {
-          schema: "tacho.batch.v1",
+          schema: TACHO_BATCH_SCHEMA,
           host_enrollment_id: options.hostEnrollmentId,
           events,
           ...(daemon !== undefined ? { daemon } : {}),
@@ -131,6 +213,7 @@ export function createControlClient(
     commands: async (acknowledgements = [], daemon) =>
       commandsResponseSchema.parse(
         await post(options.endpoints.commands, {
+          schema: TACHO_COMMANDS_SCHEMA,
           host_enrollment_id: options.hostEnrollmentId,
           acknowledgements,
           ...(daemon !== undefined ? { daemon } : {}),

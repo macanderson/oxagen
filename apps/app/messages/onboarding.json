@@ -1,0 +1,189 @@
+{
+  "onboarding": {
+    "errors": {
+      "orgNameRequired": "Enter the organization's name.",
+      "orgNameTooLong": "Use at most 120 characters.",
+      "slugInvalid": "Use 2–40 lowercase letters, digits and hyphens, starting and ending with a letter or digit.",
+      "slugReserved": "That address is used by an Oxagen page. Pick another.",
+      "workspaceNameRequired": "Enter a name for the first workspace.",
+      "workspaceNameTooLong": "Use at most 80 characters.",
+      "workspaceSlugInvalid": "Use 2–40 lowercase letters, digits and hyphens.",
+      "workspaceSlugReserved": "That address is used by an organization page. Pick another.",
+      "slugTaken": "That address belongs to another organization. Pick a different one.",
+      "agentSlugInvalid": "Use up to 18 lowercase letters, digits and hyphens, starting and ending with a letter or digit.",
+      "agentNameRequired": "Enter a name for the agent.",
+      "agentNameTooLong": "Use at most 128 characters.",
+      "agentDescriptionTooLong": "Use at most 1024 characters.",
+      "agentHarnessInvalid": "Pick one of the harnesses Oxagen wraps.",
+      "failed": "The organization could not be created. Nothing was saved; try again.",
+      "denied": "This account may not create an organization."
+    },
+    "organization": {
+      "eyebrow": "Create your organization",
+      "title": "Name your organization",
+      "lead": "The organization is the tenant: it owns its own graph database, its own encryption key, its billing account, and the namespace that appears in every agent key.",
+      "name": "Organization name",
+      "slug": "Address",
+      "slugHint": "Mission Control lives at /{slug}. You can change the address later.",
+      "workspaceTitle": "First workspace",
+      "workspaceName": "Workspace name",
+      "workspaceSlug": "Workspace address",
+      "workspaceHint": "A workspace is a governance partition: one main repo, one ontology, one steering set, its own agents, tool grants and budgets.",
+      "creates": "Creates the organization {name} and its first workspace.",
+      "submit": "Create organization",
+      "pending": "Creating…"
+    },
+    "gate": {
+      "title": "Finish setting up this workspace",
+      "lead": "Mission Control opens when an agent you wrapped has talked to Oxagen. That first frame is also the installer's smoke test, so one path covers both.",
+      "railLabel": "Onboarding",
+      "steps": {
+        "organization": "Name the organization",
+        "wrap": "Wrap an agent",
+        "run": "Start a run"
+      },
+      "subs": {
+        "organization": "Tenant, namespace and the first workspace",
+        "wrap": "Claude Code, an SDK agent or your own loop",
+        "run": "The first frame is what opens Mission Control"
+      },
+      "state": {
+        "done": "done",
+        "current": "current step",
+        "todo": "not started"
+      },
+      "provisional": {
+        "badge": "provisional",
+        "title": "{workspace} is provisional until {until}",
+        "body": "Runs record and spend counts. Steering, context records and agent definitions stay off until a main repo is bound, because there is nowhere to publish them to.",
+        "detected": "Bind {repository}",
+        "binding": "Binding…",
+        "noRepository": "No enrolled host has reported a GitHub remote for this workspace. Bind a repository from the register flow once one has."
+      },
+      "firstRun": {
+        "badge": "first run",
+        "title": "The first frame arrived",
+        "body": "This workspace recorded <run></run> when the gate opened. The tiles below read off the runs it has kept since.",
+        "open": "Open the first run"
+      }
+    },
+    "register": {
+      "eyebrow": "Step {n} of 3",
+      "railLabel": "Register an agent",
+      "steps": {
+        "name": "Name the agent",
+        "wrap": "Wrap the agent",
+        "run": "Wait for the first frame"
+      },
+      "state": {
+        "done": "done",
+        "current": "current step",
+        "todo": "not started"
+      },
+      "caption": "Registration completes when the agent has talked to Oxagen. That first frame is also the installer's smoke test, so one path covers both.",
+      "noAgent": {
+        "title": "No agent to wrap yet",
+        "body": "This step works on the identity the first step mints. Start from Name the agent.",
+        "start": "Name the agent"
+      },
+      "name": {
+        "title": "Name the agent",
+        "lead": "The slug is reserved now and is immutable. The agent itself exists once its first frame reaches Oxagen.",
+        "slug": "Slug",
+        "slugHint": "The last segment of the agent key becomes {slug}.",
+        "agentName": "Display name",
+        "agentNameHint": "What the fleet lists this identity as.",
+        "harness": "Harness",
+        "harnessHint": "Decides how the agent is wrapped on the next step. It is recorded on the identity and does not change afterwards.",
+        "description": "Description",
+        "descriptionHint": "Optional. What this agent is for.",
+        "note": "Continuing mints the identity, its delegated principal and one long-lived credential shown once. The definition file is committed separately, and the first frame is what puts the agent on Fleet.",
+        "submit": "Continue",
+        "pending": "Registering…",
+        "registered": {
+          "title": "{name} is registered",
+          "body": "This credential is shown once and is never recoverable. Set it as OXAGEN_AGENT_TOKEN wherever the agent runs.",
+          "expires": "Expires {at}",
+          "continue": "Continue to wrap"
+        }
+      },
+      "wrap": {
+        "title": "Wrap the agent",
+        "lead": "A wrapped agent routes through at least one gateway seam: the model proxy, the tool gateway, or both. The enforcement tier is computed per run from what was actually routed.",
+        "agentKey": "Agent key",
+        "harness": "Harness",
+        "notRecorded": "not recorded",
+        "host": {
+          "title": "Enrol this machine",
+          "body": "The token below is what a machine presents to become this agent's host. Presenting it mints the host's scoped key, the signed enrollment the collector verifies offline, and the initial policy bundle.",
+          "mint": "Mint the one-time token",
+          "pending": "Minting…",
+          "again": "Mint another token"
+        },
+        "sdk": {
+          "title": "Wrap it in your own process",
+          "body": "oxagen.agent.wrap() installs the proxy base URL, a frame emitter, the checkpoint gate before each turn, and the Oxagen MCP endpoint as the agent's tool server.",
+          "install": "Install the SDK, then wrap the agent where it starts:",
+          "credential": "Set the credential that was shown once at registration as OXAGEN_AGENT_TOKEN. The gateway mints short-lived run tokens from it at run start, and revoking the credential ends every run token at the next call."
+        },
+        "token": {
+          "label": "One-time enrollment token",
+          "once": "Shown once, single use, and consumed the first time it is presented.",
+          "expires": "Expires {at}",
+          "command": "Run this on the machine the agent works from:"
+        },
+        "back": "Back",
+        "continue": "I have already installed it",
+        "advancing": "Saving…"
+      },
+      "run": {
+        "title": "Wait for the first frame",
+        "lead": "The agent appears on Fleet when its first frame reaches Oxagen. Nothing here completes on a timer.",
+        "waiting": {
+          "title": "Waiting for the first frame",
+          "body": "Start the agent on the machine that enrolled. This page waits on the record itself, one call at a time, and re-reads while a host is enrolled.",
+          "again": "Check again",
+          "checking": "Checking…"
+        },
+        "host": {
+          "enrolled": "Host enrolled {at}",
+          "none": "No host has enrolled for this agent. The token from the previous step is what enrols one.",
+          "heartbeat": "Collector last reported {at}",
+          "noHeartbeat": "The collector has not reported yet.",
+          "hooksOk": "Hooks written and checked.",
+          "hooksMissing": "The collector reports the harness hooks are missing. Calls it does not route are recorded, not governed.",
+          "hooksUnreported": "The collector has not reported the hooks yet."
+        },
+        "received": {
+          "title": "First frame received",
+          "body": "<run></run> is recorded and the agent is on Fleet. Its enforcement tier is computed from what was actually routed.",
+          "at": "Received {at}",
+          "open": "Open in Fleet"
+        },
+        "repository": {
+          "title": "Repository detected",
+          "body": "Read from the git remote of the directory the installer ran in. Binding it installs the GitHub App: repo binding, Context PRs, checks, merge handling and the code graph.",
+          "bind": "Bind {repository} as the main repo",
+          "binding": "Binding…",
+          "skip": "Skipping leaves {workspace} provisional until {until}. Runs record and spend counts, and steering, context records and agent definitions stay off until a main repo is bound."
+        }
+      },
+      "failure": {
+        "orgRoleRequired": "This account may not register agents here. An organization owner or admin can.",
+        "noPrincipal": "The call carried no person Oxagen could check a role for. Nothing ran.",
+        "agentNotFound": "That agent is not in this workspace. Nothing was written.",
+        "slugTaken": "An agent in this workspace already holds that slug. Pick another.",
+        "gateNotFound": "This workspace is not the organization's onboarding workspace, so it has no gate to move.",
+        "alreadyUnlocked": "The gate is already open. Mission Control is unlocked.",
+        "firstFrameRequired": "The run step completes when the first frame arrives. It cannot be skipped.",
+        "githubNotConnected": "No GitHub App installation reaches this workspace. Connect GitHub, then bind the repository.",
+        "repositoryNotInstalled": "This workspace's GitHub App installation cannot see that repository.",
+        "mainRepoBound": "This workspace already binds a different main repository.",
+        "refused": "The write was refused: {code}. Nothing was changed.",
+        "invalid": "The form was refused before the write ran. Check the fields above.",
+        "pendingApproval": "The write is waiting for approval, request {accessRequestId}.",
+        "unavailable": "The write did not complete: {code}. Nothing was changed."
+      }
+    }
+  }
+}

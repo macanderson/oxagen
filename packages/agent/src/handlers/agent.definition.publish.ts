@@ -85,7 +85,7 @@ export async function agentDefinitionPublishHandler(
       .set({
         activeVersionId: version.id,
         status: "active",
-        updatedByUserId: userId,
+        updatedById: userId,
       })
       .where(
         and(

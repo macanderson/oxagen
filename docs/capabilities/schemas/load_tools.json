@@ -1,0 +1,100 @@
+{
+  "name": "load_tools",
+  "domain": "tools",
+  "description": "Return the full definitions of capabilities the in-app agent may call, by name: description, input schema and the governance facts a caller plans by. A name outside that set is reported as unknown.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "names": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "required": [
+      "names"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string"
+            },
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            "riskLevel": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ]
+            },
+            "requiresApproval": {
+              "type": "boolean"
+            },
+            "readOnly": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "name",
+            "description",
+            "inputSchema",
+            "riskLevel",
+            "requiresApproval",
+            "readOnly"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "unknown": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "tools",
+      "unknown"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,209 @@
+{
+  "name": "get_gau_bucket",
+  "domain": "billing",
+  "description": "Read the organization's governed action unit bucket for the current month: the billing mode, the period, the units included, purchased, carried forward, used and remaining, plus the invoice thresholds of an invoice-billed organization or the auto top-up state of a prepaid one.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": [
+          "prepaid",
+          "invoice"
+        ]
+      },
+      "period": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "additionalProperties": false
+      },
+      "includedGau": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "purchasedGau": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "carriedGau": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "usedGau": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "remainingGau": {
+        "type": "integer"
+      },
+      "invoice": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "gauMax": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uninvoicedGau": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "invoicedThisPeriodGau": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "pastDue": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "gauMax",
+              "uninvoicedGau",
+              "invoicedThisPeriodGau",
+              "pastDue"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "autoTopup": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "blocks": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "paymentMethod": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "brand": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "last4": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "brand",
+                      "last4"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "lastAttempt": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "at": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "paid",
+                          "open",
+                          "failed"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "at",
+                      "status"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "enabled",
+              "blocks",
+              "paymentMethod",
+              "lastAttempt"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "mode",
+      "period",
+      "includedGau",
+      "purchasedGau",
+      "carriedGau",
+      "usedGau",
+      "remainingGau",
+      "invoice",
+      "autoTopup"
+    ],
+    "additionalProperties": false
+  }
+}

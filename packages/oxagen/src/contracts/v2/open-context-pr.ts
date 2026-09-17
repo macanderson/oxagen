@@ -103,7 +103,9 @@ export const openContextPr = defineTool({
      */
     sharingScope: z
       .enum(["workspace", "repository"])
-      .describe("Selects the target repo: main for workspace, linked for repository"),
+      .describe(
+        "Selects the target repo: main for workspace, linked for repository",
+      ),
 
     /**
      * Set when a repository-scoped record is being published — §10.2: "Each may

@@ -14,6 +14,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+  isExternalToolIdentity,
   // digest + canonicalization primitives
   canonicalJson,
   digestOfCanonicalJson,
@@ -30,6 +31,7 @@ import {
   compareRunRowIdentity,
   assertRunRowMatchesSpec,
   TRUSTED_RUN_SPEC_SECTIONS,
+  TOOL_ALLOWLIST_MAX,
   type RunSpecV2,
   type RunRowIdentity,
   type CallerRunInfluence,
@@ -789,6 +791,108 @@ describe("parseRunSpecV2 workspace policy", () => {
     );
     expect(spec.workspace_policy.environment_id).toBeUndefined();
     expect(spec.workspace_policy.sandbox_required).toBe(true);
+  });
+
+  // ADR-076. A general run touches no repository and may need no sandbox —
+  // the in-app agent's turn is answered in-process through kernel.invoke().
+  // Pinning `true` there does not sandbox the run, it makes the seal attest to
+  // a sandbox that never existed.
+  it("lets a general run say it was not sandboxed", () => {
+    const spec = parseRunSpecV2(
+      mutate(generalRaw(), "workspace_policy.sandbox_required", false),
+    );
+    expect(spec.workspace_policy.sandbox_required).toBe(false);
+  });
+
+  it("still refuses a non-boolean sandbox_required on a general run (negative)", () => {
+    for (const value of ["true", 1, null]) {
+      expect(() =>
+        parseRunSpecV2(
+          mutate(generalRaw(), "workspace_policy.sandbox_required", value),
+        ),
+      ).toThrow(RunSpecValidationError);
+    }
+  });
+});
+
+// The catalogue a general run may call is the whole registered set — ~271
+// capabilities when the bound was raised from 256. A bound below the catalogue
+// leaves an empty allowlist as the only expressible policy, which says the
+// opposite of what such a run does.
+describe("parseRunSpecV2 tool policy bound", () => {
+  it("accepts an allowlist the size of the capability catalogue", () => {
+    const names = Array.from({ length: 300 }, (_, i) => `do_thing_${i}`);
+    const spec = parseRunSpecV2(
+      mutate(generalRaw(), "tool_policy.allowlist", names),
+    );
+    expect(spec.tool_policy.allowlist).toHaveLength(300);
+  });
+
+  it("accepts an externally contributed tool, which every real MCP name is", () => {
+    // The belt names an MCP tool `mcp.<server uuid>.<tool>`, and every UUID
+    // contains hyphens, which the capability-name form has none of. Before
+    // the external form existed, enabling ANY MCP server made every assistant
+    // turn fail at admission with `assistant_run_not_recorded` — a total
+    // outage reached by doing the ordinary documented thing.
+    const names = [
+      "mcp.9f3e1a2b-4c5d-6e7f-8a9b-0c1d2e3f4a5b.list_pull_requests",
+      "file-mcp.my-server.read_file",
+      "send_message",
+    ];
+    const spec = parseRunSpecV2(
+      mutate(generalRaw(), "tool_policy.allowlist", names),
+    );
+    expect(spec.tool_policy.allowlist).toEqual(names);
+    // The two forms stay apart: a reader can tell a contributed tool from a
+    // capability the platform defines, because they carry different trust.
+    expect(spec.tool_policy.allowlist.filter(isExternalToolIdentity)).toEqual([
+      "mcp.9f3e1a2b-4c5d-6e7f-8a9b-0c1d2e3f4a5b.list_pull_requests",
+      "file-mcp.my-server.read_file",
+    ]);
+  });
+
+  it("admits external tools without admitting arbitrary strings (negative)", () => {
+    // The point of a separate form rather than a looser capability regex:
+    // widening `capabilityNameSchema` to allow hyphens would have let the run
+    // spec's vocabulary accept anything, and the spec is evidence about what
+    // a run was permitted to do.
+    for (const bad of [
+      "Send_Message",
+      "../etc/passwd",
+      "http://example.com/tool",
+      "not-a-capability",
+      "mcp.-server.tool",
+      "file-mcp.srv.bad tool",
+      "MCP.Server.Tool",
+    ]) {
+      expect(() =>
+        parseRunSpecV2(mutate(generalRaw(), "tool_policy.allowlist", [bad])),
+      ).toThrow(RunSpecValidationError);
+    }
+    // Noted rather than asserted, because it is not what this change decides:
+    // a plain lowercase dotted name like `mcp.server` or `mcp..x` is accepted
+    // by the PRE-EXISTING capability form, which admits dots freely — the
+    // ADR-025 realignment leaves many contracts on dotted stems. The external
+    // form rejects both; the capability form is what lets them through, and
+    // tightening it would reject names already in the registry.
+    expect(isExternalToolIdentity("mcp..x")).toBe(true);
+  });
+
+  it("still refuses an unbounded allowlist and a duplicate entry (negative)", () => {
+    expect(() =>
+      parseRunSpecV2(
+        mutate(
+          generalRaw(),
+          "tool_policy.allowlist",
+          Array.from({ length: TOOL_ALLOWLIST_MAX + 1 }, (_, i) => `do_t_${i}`),
+        ),
+      ),
+    ).toThrow(RunSpecValidationError);
+    expect(() =>
+      parseRunSpecV2(
+        mutate(generalRaw(), "tool_policy.allowlist", ["do_thing", "do_thing"]),
+      ),
+    ).toThrow(RunSpecValidationError);
   });
 });
 

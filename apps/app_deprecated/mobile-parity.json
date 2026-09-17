@@ -1,0 +1,172 @@
+{
+  "entries": [
+    {
+      "file": "apps/app_deprecated/src/components/conversations/conversation-nav.tsx",
+      "match": "hidden shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-background transition-[width] duration-200 ease-in-out md:flex",
+      "kind": "reflow",
+      "equivalent": "Desktop persistent conversation sidebar; the same ConversationList renders instead behind the md:hidden trigger button + slide-in Sheet defined earlier in this file, giving identical conversation switching from a thumb-reachable trigger."
+    },
+    {
+      "file": "apps/app_deprecated/src/components/shell/sidebar.tsx",
+      "match": "relative hidden h-full shrink-0 flex-col overflow-hidden border-sidebar-border bg-sidebar-bg text-sidebar-fg md:flex",
+      "kind": "reflow",
+      "equivalent": "Desktop floating primary navigation rail; MobileBottomBar (components/shell/mobile-bottom-bar.tsx) is the mobile primary navigation below md, sharing the same getSidebarConfig items so the destinations are identical."
+    },
+    {
+      "file": "apps/app_deprecated/src/components/shell/shell-frame.tsx",
+      "match": "hidden md:inline-flex",
+      "kind": "reflow",
+      "equivalent": "The header's sidebar-collapse toggle is desktop-only chrome; mobile has no floating sidebar to collapse since navigation is provided entirely by the fixed MobileBottomBar, per this file's own header comment."
+    },
+    {
+      "file": "apps/app_deprecated/src/components/shell/shell-frame.tsx",
+      "match": "hidden md:block",
+      "kind": "reflow",
+      "equivalent": "The persistent AgentBottomBar quick-launcher is desktop chrome; on mobile the bottom edge is owned by MobileBottomBar, whose primary \"Ask\" tab routes to the identical agent conversation surface, and in-flight conversation state lives in that surface itself."
+    },
+    {
+      "file": "apps/app_deprecated/src/components/shell/shell-frame.tsx",
+      "match": "hidden min-w-0 flex-1 sm:block",
+      "kind": "reflow",
+      "equivalent": "The persistent header AskBar is desktop-only; the same ask capability is reachable on mobile via the \"Ask\" primary tab shared by MobileBottomBar's getSidebarConfig, which routes to the identical /ask page."
+    },
+    {
+      "file": "apps/app_deprecated/src/components/shell/balance-pill.tsx",
+      "match": "max-sm:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop compact balance label hides below sm, where the adjacent sm:hidden label renders the same balance without cents to fit the mobile header. The billing link, low-balance treatment, exact aria-label, and 44px touch target remain available."
+    },
+    {
+      "file": "apps/app_deprecated/src/components/shell/ask/command-menu.tsx",
+      "match": "hidden rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:block",
+      "kind": "reflow",
+      "equivalent": "Only the keyboard-shortcut hint badge on a quick-action row is hidden below sm; the row itself remains fully visible and tappable, and keyboard shortcuts are inherently a desktop-only input model with no mobile equivalent to display."
+    },
+    {
+      "file": "apps/app_deprecated/src/components/shell/ask/ask-bar.tsx",
+      "match": "hidden sm:inline-flex items-center gap-0.5 rounded-md",
+      "kind": "reflow",
+      "equivalent": "The \"/\" keyboard-shortcut hint chip is decorative only; the search input beneath it stays fully rendered and focusable by tap on every viewport, so no functionality is hidden, only the keyboard hint."
+    },
+    {
+      "file": "apps/app_deprecated/src/components/org/org-switcher.tsx",
+      "match": "hidden min-w-0 text-left leading-tight md:grid",
+      "kind": "reflow",
+      "equivalent": "Only the org name + plan text beside the avatar hides below md; the switcher trigger (avatar + chevron, 44px target) stays visible and the menu popup lists every organization with its full name, so switching orgs works identically on mobile."
+    },
+    {
+      "file": "apps/app_deprecated/src/components/knowledge/graph-explorer/graph-toolbar.tsx",
+      "match": "hidden sm:inline",
+      "kind": "reflow",
+      "equivalent": "Pause/Resume, Add node, and Add edge text labels hide below sm, but each icon button stays visible, clickable, and titled, and all four actions are also reachable as full-text items in the toolbar's compact overflow Menu (CompactActions) at any width."
+    },
+    {
+      "file": "apps/app_deprecated/src/components/knowledge/graph-explorer/graph-explorer.tsx",
+      "match": "hidden w-60 shrink-0 border-r border-border lg:block",
+      "kind": "reflow",
+      "equivalent": "The inline node/edge type-visibility filter panel is desktop-only; on mobile the identical filterPanel content opens in a bottom Sheet (mobileFiltersOpen state, rendered later in this file) triggered by the same FilterToggle control."
+    },
+    {
+      "file": "apps/app_deprecated/src/app/[orgSlug]/access/sessions/page.tsx",
+      "match": "hidden px-4 sm:grid",
+      "kind": "reflow",
+      "equivalent": "The labeled column-header row is desktop-only; each session row below re-presents the same device, IP, started/last-active, and revoke fields stacked in a single column (grid-cols-1) with icons and inline context standing in for the header labels."
+    },
+    {
+      "file": "apps/app_deprecated/src/app/[orgSlug]/access/reviews/page.tsx",
+      "match": "hidden px-4 sm:grid",
+      "kind": "reflow",
+      "equivalent": "The labeled column-header row is desktop-only; each member row below re-presents the same member, role, joined, and last-active fields stacked in a single column (grid-cols-1), with the role Badge and dates still fully legible without the header labels."
+    },
+    {
+      "file": "apps/app_deprecated/src/app/account/security/page.tsx",
+      "match": "hidden px-4 sm:grid",
+      "kind": "reflow",
+      "equivalent": "The labeled column-header row is desktop-only; each active-session row below re-presents the same device, IP, started/last-active, and revoke fields stacked in a single column (grid-cols-1) with icons and inline context standing in for the header labels."
+    },
+    {
+      "file": "apps/app_deprecated/src/app/[orgSlug]/settings/layout.tsx",
+      "match": "hidden w-48 shrink-0 md:block",
+      "kind": "reflow",
+      "equivalent": "Settings section nav re-presented on mobile as MobileSettingsNav \u2014 a sticky bottom-sheet section switcher above the app bottom bar with 44px targets and the identical item list."
+    },
+    {
+      "file": "apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/settings/layout.tsx",
+      "match": "hidden w-48 shrink-0 md:block",
+      "kind": "reflow",
+      "equivalent": "Settings section nav re-presented on mobile as MobileSettingsNav \u2014 a sticky bottom-sheet section switcher above the app bottom bar with 44px targets and the identical item list."
+    },
+    {
+      "file": "apps/app_deprecated/src/app/[orgSlug]/security/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip (Overview/MFA/Audit/Compliance/Trust) is hidden below md; MobileSettingsNav renders immediately after with the identical tab list as a sticky bottom-sheet switcher, so every tab stays reachable on mobile."
+    },
+    {
+      "file": "apps/app_deprecated/src/app/[orgSlug]/billing/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Billing\") in this layout \u2014 a sticky mobile section switcher with the identical Subscription/Usage/Revenue/Invoices destinations."
+    },
+    {
+      "file": "apps/app_deprecated/src/app/[orgSlug]/members/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Members\") in this layout \u2014 a sticky mobile section switcher with the identical People/Invited destinations."
+    },
+    {
+      "file": "apps/app_deprecated/src/app/[orgSlug]/developer/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Developer\") in this layout \u2014 a sticky mobile section switcher with the identical MCP/Tokens destinations."
+    },
+    {
+      "file": "apps/app_deprecated/src/app/[orgSlug]/access/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip (Sessions/Reviews) is hidden below md; MobileSettingsNav renders immediately after with the identical tab list as a sticky bottom-sheet switcher, so both tabs stay reachable on mobile."
+    },
+    {
+      "file": "apps/app_deprecated/src/app/[orgSlug]/governance/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip (Hub/Capabilities/Policies) is hidden below md; MobileSettingsNav renders immediately after with the identical tab list as a sticky bottom-sheet switcher, so every tab stays reachable on mobile."
+    },
+    {
+      "file": "apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/marketplace/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Marketplace\") in this layout \u2014 a sticky mobile section switcher with the identical Agent Tools/Integrations destinations."
+    },
+    {
+      "file": "apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Agent Tools\") in this layout \u2014 a sticky mobile section switcher with the identical All Tools/Skills/MCP/Capabilities destinations."
+    },
+    {
+      "file": "apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/knowledge/layout.tsx",
+      "match": "mb-6 max-md:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop PageTabs strip hides below md; the same tabs array renders as MobileSettingsNav (label \"Knowledge\") in this layout \u2014 a sticky mobile section switcher with the identical Knowledge tab destinations."
+    },
+    {
+      "file": "apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/tools-catalog.tsx",
+      "match": "hidden sm:inline-flex",
+      "kind": "reflow",
+      "equivalent": "The grid/list layout SegmentedControl hides below sm because the catalog collapses to a single column on mobile, where grid and list render identically; every tool card, filter, and action in the catalog remains fully rendered and operable."
+    },
+    {
+      "file": "apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/tools-catalog.tsx",
+      "match": "hidden sm:inline",
+      "kind": "reflow",
+      "equivalent": "Only the long \"Install more in Marketplace\" label hides below sm; the adjacent sm:hidden span renders the shorter \"Install\" label on the same fully tappable button, so the action is identical on mobile."
+    },
+    {
+      "file": "apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/tools-catalog.tsx",
+      "match": "hidden shrink-0 items-center gap-1.5 sm:flex",
+      "kind": "reflow",
+      "equivalent": "Only the supplementary domain/risk metadata badges hide below sm in the list rows; the tool entry itself (name, description, and its install/equip affordances) remains fully rendered and operable on mobile, and the same metadata stays available from the tool's detail surface."
+    }
+  ]
+}

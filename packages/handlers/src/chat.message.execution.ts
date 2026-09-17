@@ -21,7 +21,7 @@ export const chatMessageExecutionHandler: CapabilityHandler<
         eq(schema.messages.orgId, ctx.orgId),
         eq(schema.messages.workspaceId, ctx.workspaceId),
       ),
-      columns: { id: true, conversationId: true },
+      columns: { id: true, conversationId: true, metadata: true },
     });
 
     if (!message) {
@@ -59,8 +59,8 @@ export const chatMessageExecutionHandler: CapabilityHandler<
           input.estimatedCostUsd != null
             ? String(input.estimatedCostUsd)
             : null,
-        createdByUserId: ctx.userId ?? null,
-        updatedByUserId: ctx.userId ?? null,
+        createdById: ctx.userId ?? null,
+        updatedById: ctx.userId ?? null,
       })
       .returning({
         id: schema.agentExecutions.id,
@@ -91,8 +91,8 @@ export const chatMessageExecutionHandler: CapabilityHandler<
             latencyMs: step.latencyMs ?? null,
             inputTokens: step.inputTokens ?? null,
             outputTokens: step.outputTokens ?? null,
-            createdByUserId: ctx.userId ?? null,
-            updatedByUserId: ctx.userId ?? null,
+            createdById: ctx.userId ?? null,
+            updatedById: ctx.userId ?? null,
           })),
         )
         .returning({ id: schema.agentExecutionSteps.id });
@@ -126,15 +126,24 @@ export const chatMessageExecutionHandler: CapabilityHandler<
 
     // 4. Update message execution metadata in same transaction (atomic with execution writes)
     if (input.updateMessageMetadata) {
+      // Merge, never replace. The message row already carries metadata its
+      // writer put there — the in-app agent stamps `surface` and the `arun_…`
+      // run id the flyout links — and overwriting the object would take the
+      // link to the run away in the act of recording the execution.
+      const existing =
+        typeof message.metadata === "object" && message.metadata !== null
+          ? (message.metadata as Record<string, unknown>)
+          : {};
       await tx
         .update(schema.messages)
         .set({
           metadata: {
+            ...existing,
             executionId: execution.id,
             status: input.status,
             completedAt: execution.createdAt,
           },
-          updatedByUserId: ctx.userId ?? null,
+          updatedById: ctx.userId ?? null,
         })
         .where(eq(schema.messages.id, input.messageId));
     }

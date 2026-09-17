@@ -67,7 +67,7 @@ export const schemaDeleteHandler: CapabilityHandler<
     if (labelIds.length) {
       await tx
         .update(db.schemaProperties)
-        .set({ deletedAt: now, updatedByUserId: ctx.userId })
+        .set({ deletedAt: now, updatedById: ctx.userId })
         .where(
           and(
             inArray(db.schemaProperties.nodeLabelId, labelIds),
@@ -78,7 +78,7 @@ export const schemaDeleteHandler: CapabilityHandler<
     if (relIds.length) {
       await tx
         .update(db.schemaProperties)
-        .set({ deletedAt: now, updatedByUserId: ctx.userId })
+        .set({ deletedAt: now, updatedById: ctx.userId })
         .where(
           and(
             inArray(db.schemaProperties.relationshipTypeId, relIds),
@@ -90,19 +90,19 @@ export const schemaDeleteHandler: CapabilityHandler<
     if (labelIds.length) {
       await tx
         .update(db.nodeLabels)
-        .set({ deletedAt: now, updatedByUserId: ctx.userId })
+        .set({ deletedAt: now, updatedById: ctx.userId })
         .where(inArray(db.nodeLabels.id, labelIds));
     }
     if (relIds.length) {
       await tx
         .update(db.relationshipTypes)
-        .set({ deletedAt: now, updatedByUserId: ctx.userId })
+        .set({ deletedAt: now, updatedById: ctx.userId })
         .where(inArray(db.relationshipTypes.id, relIds));
     }
 
     await tx
       .update(db.schemas)
-      .set({ deletedAt: now, updatedByUserId: ctx.userId })
+      .set({ deletedAt: now, updatedById: ctx.userId })
       .where(eq(db.schemas.id, schemaRow.id));
 
     return {

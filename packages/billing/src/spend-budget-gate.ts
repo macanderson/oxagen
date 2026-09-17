@@ -3,11 +3,15 @@
  * spend ceiling. `assertWithinSpendBudget` is injected into the
  * kernel via setBudgetAdmissionGate (bootstrapBillingRuntime) and runs on EVERY
  * scoped, metered invoke() — so it must be cheap. Two short-TTL caches (budget
- * config + ClickHouse spend, both keyed by scope) keep the steady-state guard a
+ * config + period spend, both keyed by scope) keep the steady-state guard a
  * sub-millisecond map read; a stubbed-reader timing test asserts the cached path
- * adds <5ms. The gate FAILS OPEN on any DB/telemetry error — a degraded store
- * must never block every invocation — but a real ceiling breach throws
- * BudgetExceededError (a DENY, mapped to 402 at the surfaces).
+ * adds <5ms. Spend comes from the recorders' running counter in Postgres
+ * (./spend-counter.ts, spec §12.5, ADR-060 §5): the ClickHouse sum it replaced
+ * stalled with the store and, failing open, zeroed the ceiling while the
+ * customer kept being charged (#2820). The gate still FAILS OPEN on a DB
+ * error — a degraded store must never block every invocation — but a real
+ * ceiling breach throws BudgetExceededError (a DENY, mapped to 402 at the
+ * surfaces).
  *
  * Soft thresholds (50/80/95%) emit an in-app notification to org admins once per
  * threshold per period (deduped by a conditional watermark UPDATE); 100% is the
@@ -16,7 +20,7 @@
  */
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq, sql } from "drizzle-orm";
-import { sumSpendMicros } from "@oxagen/telemetry";
+import { sumSpendCounter } from "./spend-counter";
 import {
   BudgetExceededError,
   evaluateSpendBudget,
@@ -37,7 +41,7 @@ import { logger } from "./logger";
 export interface SpendGateDeps {
   /** Load every enabled ceiling applicable to the active scope (org + workspace). */
   loadBudgets: () => Promise<SpendBudgetRow[]>;
-  /** Sum period-to-date spend (micro-USD) for a scope window. */
+  /** Sum period-to-date spend (micro-USD) for a scope window, from the recorders' counter. */
   readSpend: (args: {
     orgId: string;
     workspaceId: string | null;
@@ -70,7 +74,7 @@ const DEFAULT_TTL_SPEND_MS = 15_000;
 
 const productionDeps: SpendGateDeps = {
   loadBudgets: getScopeBudgets,
-  readSpend: sumSpendMicros,
+  readSpend: sumSpendCounter,
   now: () => Date.now(),
   claimThreshold: claimBudgetThreshold,
   notify: (notice) => {
@@ -228,7 +232,7 @@ export async function assertWithinSpendBudget(
         limitMicros: budget.limitMicros,
       });
     } catch (err) {
-      // A spend read failure (ClickHouse down) must never block a turn — fail
+      // A spend read failure (Postgres down) must never block a turn — fail
       // open for THIS budget and continue to the next.
       logger.error(
         {
@@ -281,7 +285,7 @@ export async function assertWithinSpendBudget(
 async function deliverBudgetThresholdNotification(
   notice: BudgetThresholdNotice,
 ): Promise<void> {
-  const { budget, threshold, verdict } = notice;
+  const { budget } = notice;
   const admins = await withTenantDb((tx) =>
     tx
       .select({ userId: schema.orgUsers.userId })
@@ -295,6 +299,26 @@ async function deliverBudgetThresholdNotification(
   );
   if (admins.length === 0) return;
 
+  await withTenantDb((tx) =>
+    tx.insert(schema.notifications).values(
+      budgetThresholdNotificationRows(
+        notice,
+        admins.map((a) => a.userId),
+      ),
+    ),
+  );
+}
+
+/**
+ * The feed rows for one threshold crossing, one per admin. A crossing at 100%
+ * or more is the MC spec §7.7 `budget.breached` event; a warning below the
+ * ceiling reports no event.
+ */
+export function budgetThresholdNotificationRows(
+  notice: BudgetThresholdNotice,
+  adminUserIds: readonly string[],
+): Array<typeof schema.notifications.$inferInsert> {
+  const { budget, threshold, verdict } = notice;
   const scopeLabel = budget.scope === "org" ? "organization" : "workspace";
   const isHardStop = threshold >= 100;
   const pct = Math.round(verdict.ratio * 100);
@@ -305,20 +329,16 @@ async function deliverBudgetThresholdNotification(
     ? `The ${budget.period} spend ceiling has been reached (${pct}% of the limit). ` +
       `New metered agent runs are being denied until the budget is raised or the period resets.`
     : `The ${budget.period} spend has reached ${pct}% of the ceiling. Review usage in Billing → Budgets.`;
-
-  await withTenantDb((tx) =>
-    tx.insert(schema.notifications).values(
-      admins.map((a) => ({
-        orgId: budget.orgId,
-        workspaceId: budget.workspaceId,
-        userId: a.userId,
-        kind: "security" as const,
-        title,
-        body,
-        deepLink: "/settings/billing/budgets",
-      })),
-    ),
-  );
+  return adminUserIds.map((userId) => ({
+    orgId: budget.orgId,
+    workspaceId: budget.workspaceId,
+    userId,
+    kind: "security" as const,
+    event: isHardStop ? ("budget.breached" as const) : null,
+    title,
+    body,
+    deepLink: "/settings/billing/budgets",
+  }));
 }
 
 // ── Panel status (burn + projection) ──────────────────────────────────────────
@@ -339,11 +359,12 @@ export interface SpendBudgetStatus {
 /**
  * Live status for every configured ceiling in the active scope — the app
  * Budgets panel's data. Reads spend FRESH (bypasses the gate's short-TTL cache)
- * so the panel is accurate, not up-to-15s stale. A spend-read failure is
- * swallowed per budget — that ceiling reports spentMicros = 0 and state 'ok' so
- * the panel still renders it. A CONFIG-load failure is NOT swallowed and
- * propagates to the caller: unlike the enforcement gate there is nothing safe to
- * fail open to, and rendering an empty panel would read as "no budgets set".
+ * so the panel is accurate, not up-to-15s stale. A spend-read failure and a
+ * CONFIG-load failure both propagate to the caller. Unlike the enforcement gate
+ * there is nothing safe to fail open to: a ceiling whose spend was not read has
+ * no position, and answering spentMicros = 0 would report it `ok` however far
+ * past its limit it is (#3064), just as an empty list would read as "no budgets
+ * set".
  *
  * Loads DISABLED ceilings too (listSpendBudgets, not the enforcement path's
  * enabled-only getScopeBudgets) — the panel is the only surface that can re-enable
@@ -355,30 +376,19 @@ export async function getSpendBudgetStatuses(
   > = {},
 ): Promise<SpendBudgetStatus[]> {
   const loadBudgets = overrides.loadBudgets ?? listSpendBudgets;
-  const readSpend = overrides.readSpend ?? sumSpendMicros;
+  const readSpend = overrides.readSpend ?? sumSpendCounter;
   const now = new Date((overrides.now ?? (() => Date.now()))());
 
   const budgets = await loadBudgets();
   const statuses: SpendBudgetStatus[] = [];
   for (const budget of budgets) {
     const window = spendBudgetWindow(budget.period, budget.windowDays, now);
-    let spentMicros = 0n;
-    try {
-      spentMicros = await readSpend({
-        orgId: budget.orgId,
-        workspaceId: budget.workspaceId,
-        periodStart: window.start,
-        periodEnd: window.end,
-      });
-    } catch (err) {
-      logger.error(
-        {
-          err: err instanceof Error ? err.message : String(err),
-          budgetId: budget.id,
-        },
-        "billing: getSpendBudgetStatuses — spend read failed, reporting 0",
-      );
-    }
+    const spentMicros = await readSpend({
+      orgId: budget.orgId,
+      workspaceId: budget.workspaceId,
+      periodStart: window.start,
+      periodEnd: window.end,
+    });
     const verdict = evaluateSpendBudget({
       spentMicros,
       limitMicros: budget.limitMicros,

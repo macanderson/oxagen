@@ -255,7 +255,7 @@ describe("control client", () => {
     expect((await c.bundle("e")).not_modified).toBe(true);
     expect(
       (
-        await c.commands([{ command_id: "c", outcome: "applied" }], {
+        await c.commands([{ command_id: "c", status: "applied" }], {
           version: "1",
         })
       ).acknowledged,
@@ -265,7 +265,8 @@ describe("control client", () => {
       body: { host_enrollment_id: "tch_0123456789abcdefghjkmn", etag: "e" },
     });
     expect(seen[1]?.body).toMatchObject({
-      acknowledgements: [{ command_id: "c", outcome: "applied" }],
+      schema: "tacho.commands.v2",
+      acknowledgements: [{ command_id: "c", status: "applied" }],
       daemon: { version: "1" },
     });
     await expect(c.ingest([])).rejects.toThrow(); // "{}" is not an ingest response

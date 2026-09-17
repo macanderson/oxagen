@@ -1,0 +1,57 @@
+{
+  "name": "dismiss_proposal",
+  "domain": "context",
+  "description": "Reject a record proposal with a reason. Refused once the proposal has merged.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposalId": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      }
+    },
+    "required": [
+      "proposalId",
+      "reason"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposalId": {
+        "type": "string"
+      },
+      "status": {
+        "const": "rejected"
+      }
+    },
+    "required": [
+      "proposalId",
+      "status"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "name": "authorize_cli",
+  "domain": "auth",
+  "description": "Mint the single-use PKCE authorization code that lets the Oxagen CLI obtain an API key for one org and workspace after the signed-in person consents.",
+  "mode": "sync",
+  "surfaces": [],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "codeChallenge": {
+        "type": "string",
+        "description": "Base64url SHA-256 of the CLI's PKCE code_verifier (RFC 7636)"
+      },
+      "codeChallengeMethod": {
+        "const": "S256",
+        "description": "The PKCE transform; S256 is the only accepted method"
+      },
+      "redirectUri": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The CLI's loopback listener (http://127.0.0.1:<port>/…); the handler refuses any non-loopback target"
+      },
+      "label": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120,
+        "description": "Human label for the API key the code will be exchanged for"
+      },
+      "state": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The CLI's CSRF token; the consent page echoes it on the loopback redirect and the invocation records it"
+      }
+    },
+    "required": [
+      "codeChallenge",
+      "codeChallengeMethod",
+      "redirectUri",
+      "label",
+      "state"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "code": {
+        "type": "string",
+        "description": "The single-use authorization code, valid for five minutes, to send to the loopback redirect"
+      }
+    },
+    "required": [
+      "code"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { avatarUrlOutputSchema } from "../avatar";
+import { consequenceRolesSchema } from "../mandates/schemas";
 
 const workspaceSettingsOutput = z.object({
   name: z.string(),
@@ -9,13 +10,17 @@ const workspaceSettingsOutput = z.object({
   // Nullable avatar: an https:// URL or a designed-avatar spec string
   // ("avatar:v1:<json>"). Null when the workspace has no avatar set.
   avatarUrl: avatarUrlOutputSchema,
+  // The effective consequence-role map (ADR-059 decision 1): every starter
+  // tag plus the workspace's own, each with the org roles that may grant,
+  // change or revoke a mandate for it. Overrides applied over the defaults.
+  consequenceRoles: consequenceRolesSchema,
 });
 
 export const workspaceSettingsRead = registerCapability({
   name: "get_workspace_settings",
   domain: "workspace",
   description:
-    "Read the active workspace's general settings: name, slug, and description.",
+    "Read the active workspace's general settings: name, slug, description, and the effective consequence-role map for mandates.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],

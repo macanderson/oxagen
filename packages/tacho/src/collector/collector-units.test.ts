@@ -17,7 +17,7 @@ import { mergeTachoSettings } from "../host/settings-writer";
 import { scratchPaths, TEST_ENROLLMENT } from "../host/test-support";
 import { Wal } from "../host/wal";
 import { minimalSession } from "../test-helpers";
-import type { DeliveredCommand } from "../wire";
+import { TACHO_MAX_BATCH, type DeliveredCommand } from "../wire";
 import { Detector, listTranscripts } from "./detector";
 import {
   exportOtlpJson,
@@ -68,6 +68,10 @@ function command(overrides: Partial<DeliveredCommand>): DeliveredCommand {
     command: "pause",
     session_uuid: null,
     payload: {},
+    requested_mode: null,
+    delivery_mode: null,
+    degraded_reason: null,
+    reason: null,
     issued_at: "2026-09-10T10:00:00.000Z",
     expires_at: null,
     ...overrides,
@@ -118,6 +122,16 @@ describe("inbox", () => {
           session_uuid: uuid,
           payload: {},
         }),
+        command({
+          id: "st",
+          command: "steer",
+          session_uuid: uuid,
+          payload: { text: "use staging" },
+          requested_mode: "interrupt",
+          delivery_mode: "next_step",
+          degraded_reason: "harness_tier",
+          expires_at: "2026-09-10T11:00:00.000Z",
+        }),
         command({ id: "r", command: "resume", session_uuid: uuid }),
         command({ id: "k", command: "kill", session_uuid: uuid }),
         command({ id: "c", command: "cancel", session_uuid: uuid }),
@@ -139,7 +153,9 @@ describe("inbox", () => {
           command: "message",
           payload: { text: "all hands" },
         }),
-        command({ id: "hp", command: "pause" }),
+        // The row's reason travels as `reason`; a row queued before the
+        // column existed carries it in the payload.
+        command({ id: "hp", command: "pause", reason: "fleet hold" }),
         command({
           id: "hrv",
           command: "revoke",
@@ -150,12 +166,13 @@ describe("inbox", () => {
       deps,
     );
     const acks = Object.fromEntries(
-      result.acknowledgements.map((a) => [a.command_id, a.outcome]),
+      result.acknowledgements.map((a) => [a.command_id, a.status]),
     );
     expect(acks).toEqual({
       p: "applied",
-      m: "delivered",
+      m: "received",
       m0: "failed",
+      st: "received",
       r: "applied",
       k: "applied",
       c: "applied",
@@ -163,17 +180,31 @@ describe("inbox", () => {
       x: "expired",
       nf: "failed",
       hrb: "applied",
-      hm: "delivered",
+      hm: "received",
       hp: "applied",
       hrv: "applied",
       bad: "failed",
     });
-    expect(record.control.paused).toBe("operator pause");
+    expect(
+      result.acknowledgements.find((a) => a.command_id === "x")?.detail,
+    ).toMatch(/expired/);
+    expect(record.control.paused).toBe("fleet hold");
     expect(record.control.cancelled).toBe("operator cancel");
     expect(record.control.messages.map((m) => m.text)).toEqual([
       "wrap up",
+      "use staging",
       "all hands",
     ]);
+    expect(record.control.messages[1]).toEqual({
+      id: "st",
+      text: "use staging",
+      command: "steer",
+      requestedMode: "interrupt",
+      deliveryMode: "next_step",
+      degradedReason: "harness_tier",
+      expiresAt: "2026-09-10T11:00:00.000Z",
+    });
+    expect(record.control.messages[0]?.expiresAt).toBeNull();
     expect(kills).toEqual(["4242:SIGKILL", "4242:SIGTERM"]);
     expect(refreshed).toBe(1);
     expect(suspended).toBe("offboarded");
@@ -247,7 +278,22 @@ describe("registry", () => {
     expect(record.sealed).toBe(true);
     expect(never.sealed).toBe(true);
     expect(registry.sweep(() => true, 1)).toEqual([]);
+    // A queued steer keeps its deadline across a daemon restart, so the
+    // boundary after the restart still refuses to inject it past expiry; a
+    // state file written before steer carried `{ id, text }` only.
+    record.control.messages.push({
+      id: "cmd_steer",
+      text: "use staging",
+      command: "steer",
+      requestedMode: "next_step",
+      deliveryMode: "next_step",
+      degradedReason: null,
+      expiresAt: "2026-09-10T11:00:00.000Z",
+    });
     const state = registry.state();
+    const legacy = state.sessions.find((s) => s.harnessSessionId === "sess-1");
+    if (legacy === undefined) throw new Error("no persisted session");
+    legacy.control.messages.push({ id: "cmd_old", text: "wrap up" });
     const restored = new SessionRegistry({
       context: CONTEXT,
       scope: TEST_ENROLLMENT,
@@ -258,6 +304,26 @@ describe("registry", () => {
     expect(back?.recorder.chainCursor).toEqual(record.recorder.chainCursor);
     expect(back?.pid).toBe(4242);
     expect(back?.sealed).toBe(true);
+    expect(back?.control.messages).toEqual([
+      {
+        id: "cmd_steer",
+        text: "use staging",
+        command: "steer",
+        requestedMode: "next_step",
+        deliveryMode: "next_step",
+        degradedReason: null,
+        expiresAt: "2026-09-10T11:00:00.000Z",
+      },
+      {
+        id: "cmd_old",
+        text: "wrap up",
+        command: "message",
+        requestedMode: null,
+        deliveryMode: null,
+        degradedReason: null,
+        expiresAt: null,
+      },
+    ]);
     const continued = back?.recorder.sealCollectorEvent("oxagen:notification", {
       notification_type: "after-restart",
     });
@@ -434,6 +500,7 @@ describe("shipper", () => {
     client: Partial<ControlClient>,
     dir: string,
     now: () => number,
+    hostEnrollmentId?: string,
   ) {
     const controls: unknown[] = [];
     const logs: string[] = [];
@@ -449,6 +516,7 @@ describe("shipper", () => {
       now,
       minBackoffMs: 1_000,
       maxBackoffMs: 4_000,
+      ...(hostEnrollmentId !== undefined ? { hostEnrollmentId } : {}),
     });
     return { s, controls, logs };
   }
@@ -489,6 +557,208 @@ describe("shipper", () => {
     expect(wal.stats().unshipped).toBe(0);
     expect(controls.length).toBeGreaterThan(0);
     expect(logs.some((l) => l.includes("quarantined"))).toBe(true);
+  });
+
+  // ── Orphaned events after a re-enrollment ──────────────────────────────────
+  //
+  // Re-enrolling mints a new host_enrollment_id and leaves whatever is still
+  // spooled stamped with the old one. The control plane 403s a batch if ANY
+  // event in it names a different host, and a 403 is retryable (a revoked key
+  // is also a 403), so one orphaned event at the head of the WAL wedges the
+  // queue forever. A real host had five enrollment ids in one WAL and 30,206
+  // of 45,135 events unshippable, with nothing drained since the first
+  // re-enrollment.
+
+  it("quarantines events from a previous enrollment instead of wedging the queue", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    // Stamp the whole session with an enrollment this host no longer has.
+    const orphaned = events.map((e) => ({
+      ...e,
+      agent: { ...e.agent, host_enrollment_id: "tch_previous_enrollment" },
+    })) as typeof events;
+    wal.append(orphaned);
+
+    const shipped: number[] = [];
+    const { s, logs } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          shipped.push(batch.length);
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+      "tch_current_enrollment",
+    );
+
+    const result = await s.drain();
+    // Nothing was sent — every event belonged to the old enrollment — and the
+    // WAL advanced past them rather than offering them again forever.
+    expect(shipped).toHaveLength(0);
+    expect(result.quarantined).toBe(orphaned.length);
+    expect(wal.stats().unshipped).toBe(0);
+    expect(logs.some((l) => l.includes("previous enrollment"))).toBe(true);
+  });
+
+  it("still ships this host's own events in a batch that also held orphans", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const mine = minimalSession();
+    wal.append(mine);
+    const theirs = minimalSession().map((e) => ({
+      ...e,
+      session_uuid: `${e.session_uuid}-old`,
+      agent: { ...e.agent, host_enrollment_id: "tch_previous_enrollment" },
+    })) as typeof mine;
+    wal.append(theirs);
+
+    let sentTotal = 0;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          sentTotal += batch.length;
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+      mine[0]?.agent.host_enrollment_id,
+    );
+
+    const result = await s.drain();
+    expect(sentTotal).toBe(mine.length);
+    expect(result.shipped).toBe(mine.length);
+    expect(result.quarantined).toBe(theirs.length);
+    expect(wal.stats().unshipped).toBe(0);
+  });
+
+  // ── Rate-limit awareness (throughput under many agents) ────────────────────
+  //
+  // One tachod carries every agent on a machine — 222 sessions on the machine
+  // that prompted this — so agent count becomes event volume, not request
+  // volume, and the batching absorbs it. What does not absorb is a backlog:
+  // 45,000 spooled events are 226 batches, and `drain()` used to fire them
+  // back to back, spend a per-minute ceiling in seconds, and then take a 429
+  // for every batch after it while blind exponential backoff climbed to its
+  // cap. The server already says what is left and how long to wait; these
+  // tests pin that the daemon listens.
+
+  it("waits exactly as long as a 429 asked, without escalating its own backoff", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    wal.append(minimalSession());
+    let clock = 0;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async () => {
+          throw new ControlError(429, "rate_limited", undefined, {
+            retryAfterMs: 3_000,
+          });
+        },
+      },
+      paths.quarantine,
+      () => clock,
+    );
+
+    await s.drain();
+    // minBackoffMs is 1s here; the server said 3s, and the server wins.
+    clock = 2_999;
+    expect(s.ready()).toBe(false);
+    clock = 3_000;
+    expect(s.ready()).toBe(true);
+
+    // A second 429 asking the same wait gets the same wait — obeying a ceiling
+    // is not a degrading control plane and must not ratchet the blind backoff.
+    await s.drain();
+    clock = 6_000;
+    expect(s.ready()).toBe(true);
+  });
+
+  it("falls back to X-RateLimit-Reset when a 429 carries no Retry-After", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    wal.append(minimalSession());
+    let clock = 0;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async () => {
+          throw new ControlError(429, "rate_limited", undefined, {
+            resetAtMs: Date.now() + 8_000,
+          });
+        },
+      },
+      paths.quarantine,
+      () => clock,
+    );
+    await s.drain();
+    // Past maxBackoffMs (4s), so blind exponential backoff would already be
+    // ready here. Only the server's reset hint keeps it waiting at 5s.
+    clock = 5_000;
+    expect(s.ready()).toBe(false);
+  });
+
+  it("stops draining when the server reports the window is spent", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    // Enough events to need more than one batch: TACHO_MAX_BATCH is 200, so an
+    // unpaced drain would issue several requests back to back. That burst is
+    // precisely what a real backlog does and what the pacing has to stop.
+    for (let i = 0; i < 60; i += 1) wal.append(minimalSession());
+    const before = wal.stats().unshipped;
+    expect(before).toBeGreaterThan(TACHO_MAX_BATCH);
+
+    let calls = 0;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          calls += 1;
+          // The first response says this was the last request in the window.
+          s.noteRateLimit({ remaining: 0, resetAtMs: 60_000 });
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+
+    // One request, not a loop: the drain stopped the moment the server said the
+    // window was spent, instead of firing every remaining batch into a 429.
+    // `shipped` must be non-zero — without it this assertion is also satisfied
+    // by the batch FAILING once, which is how it would pass against a Shipper
+    // that has no noteRateLimit at all.
+    const result = await s.drain();
+    expect(calls).toBe(1);
+    expect(result.shipped).toBeGreaterThan(0);
+    // Held until the window turns over, then free to continue.
+    expect(s.ready()).toBe(false);
+  });
+
+  it("drains without pacing when the server sends no rate-limit headers", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    for (let i = 0; i < 3; i += 1) wal.append(minimalSession());
+    let calls = 0;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          calls += 1;
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    await s.drain();
+    expect(calls).toBeGreaterThan(0);
+    expect(wal.stats().unshipped).toBe(0);
   });
 
   it("backs off exponentially on transport failure and retries after a 5xx", async () => {

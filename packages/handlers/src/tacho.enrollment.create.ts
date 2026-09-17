@@ -1,63 +1,36 @@
-// tacho.enrollment.create.ts — the ONLY writer of the server-owned Tacho host
-// scope (`tacho_host_v1`) on an API key, and of a tacho.hosts row.
+// tacho.enrollment.create.ts — the operator's way to enrol a host (spec
+// section 5.2). The host row and the server-owned Tacho host scope
+// (`tacho_host_v1`) are minted by lib/tacho-host-enroll.ts, which `enroll_host`
+// shares; this handler decides who may enrol and as which agent key.
 //
-// Flow (spec section 5.2):
+// Flow:
 //   1. Auth + role gate (org Owner/Admin), same as api.key.create.
-//   2. Signing material present: the enrollment HMAC secret and the bundle
-//      Ed25519 key. Missing either is a deployment defect; refuse here
-//      rather than mint a document no host could verify.
-//   3. Endpoint gate: the machine endpoints in the document must be ones THIS
-//      deployment serves.
-//   4. Derive the host's agentKey from the org and workspace namespaces
+//   2. Signing material present: the enrollment HMAC secret, the bundle
+//      Ed25519 key, and an HTTPS endpoint this deployment serves.
+//   3. Derive the host's agentKey from the org and workspace namespaces
 //      (ADR-024) and the hostname.
-//   5. Mint the key and the host row in one transaction; the scope and the
-//      host reference each other, so the host public id is minted first.
-//   6. Sign the claims, sign the initial bundle, and return everything once.
+//   4. Mint the key and the host row in one transaction, sign the claims and
+//      the initial bundle, and return everything once.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { tachoEnrollmentCreate } from "@oxagen/oxagen/contracts/tacho.enrollment.create";
-import {
-  type EnrollmentClaims,
-  TACHO_ENROLLMENT_CLAIMS_SCHEMA,
-} from "@oxagen/oxagen/tacho/schemas";
 import { schema, withTenantDb } from "@oxagen/database";
 import { cryptoRandom } from "@oxagen/database/schema";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { digestBytes } from "@oxagen/tacho";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import {
   API_KEY_AUTHORIZED_ROLES as AUTHORIZED_ROLES,
   resolveActorOrgRole as resolveActorRole,
-  generateApiKey,
   noOperatorMessage,
   resolveOperatorUserId,
 } from "./lib/api-key-authz";
 import {
-  TACHO_GATEWAY_SCOPE_PURPOSE,
-  TACHO_HOST_SCOPE_PURPOSE,
-} from "./lib/tacho-enrollment";
-import { signTachoEnrollment } from "./lib/tacho-enrollment-signing";
-import {
-  readDenyGeneration,
-  requireBundleSigner,
-  signBundle,
-  unsignedBundle,
-  type TachoHostRow,
-} from "./lib/tacho-host";
+  enrollmentDocument,
+  mintHostEnrollment,
+  requireEnrollmentSigning,
+} from "./lib/tacho-host-enroll";
 import { logger } from "./logger";
-
-const SIGNING_SECRET_ENV = "TACHO_ENROLLMENT_SIGNING_SECRET";
-const ISSUER = "oxagen";
-const AUDIENCE = "tacho-collector";
-const CREDENTIAL_ENV = "TACHO_HOST_API_KEY";
-const DEFAULT_ENDPOINT = "https://api.oxagen.sh/v1/tacho";
-/**
- * Where this deployment's workspace MCP endpoint lives, for the claim the
- * host's local gateway dials. Unset means the claim omits it and the host
- * falls back to its own derivation from `api_url`.
- */
-const MCP_ENDPOINT_ENV = "TACHO_MCP_ENDPOINT";
 
 function denied(message: string): CapabilityError {
   return new CapabilityError(
@@ -65,18 +38,6 @@ function denied(message: string): CapabilityError {
     "authz_denied",
     message,
   );
-}
-
-/** The machine endpoint bases this deployment serves. HTTPS only. */
-export function resolveAllowedEndpoints(): string[] {
-  const raw = process.env["TACHO_INGEST_ENDPOINTS"];
-  const entries = raw
-    ? raw
-        .split(",")
-        .map((entry) => entry.trim().replace(/\/+$/, ""))
-        .filter(Boolean)
-    : [DEFAULT_ENDPOINT];
-  return entries.filter((entry) => entry.startsWith("https://"));
 }
 
 /** `cc-<hostname slug>`, capped at ADR-024's 18-character agent slug. */
@@ -89,12 +50,6 @@ export function agentSlugFor(hostname: string): string {
     .slice(0, 15)
     .replace(/-+$/, "");
   return `cc-${slug.length > 0 ? slug : "host"}`;
-}
-
-/** The digest of the raw key material, whatever encoding the host chose. */
-export function deviceKeyFingerprint(devicePublicKey: string): string {
-  const base64 = devicePublicKey.slice("ed25519:".length);
-  return digestBytes(Buffer.from(base64, "base64"));
 }
 
 export const tachoEnrollmentCreateHandler: CapabilityHandler<
@@ -116,53 +71,10 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
     throw denied("Forbidden: only org Owners and Admins can enrol Tacho hosts");
   }
 
-  const secret = process.env[SIGNING_SECRET_ENV];
-  if (!secret) {
-    logger.error(
-      {},
-      `tacho.enrollment.create: ${SIGNING_SECRET_ENV} is not set — cannot sign an enrollment`,
-    );
-    throw new Error(
-      `Tacho enrollment signing is not configured: ${SIGNING_SECRET_ENV} is unset`,
-    );
-  }
-  const signer = requireBundleSigner("create_tacho_enrollment");
-
-  const allowedEndpoints = resolveAllowedEndpoints();
-  const endpointBase = allowedEndpoints[0];
-  if (!endpointBase) {
-    throw new Error(
-      "Tacho enrollment has no HTTPS endpoint to sign: TACHO_INGEST_ENDPOINTS is empty",
-    );
-  }
-
+  const signing = requireEnrollmentSigning("create_tacho_enrollment");
   const issuedAt = new Date();
-  const expiresAt = new Date(
-    issuedAt.getTime() + input.validityDays * 24 * 60 * 60 * 1000,
-  );
-  const mcpEndpointRaw = process.env[MCP_ENDPOINT_ENV];
-  const mcpEndpoint =
-    typeof mcpEndpointRaw === "string" && mcpEndpointRaw.startsWith("https://")
-      ? mcpEndpointRaw
-      : undefined;
-  const hostEnrollmentId = `tch_${cryptoRandom(22)}`;
-  const { rawKey, keyPrefix, keyHash } = generateApiKey();
-  // A second credential, for the local MCP gateway (ADR-078). It is separate
-  // from the host key on purpose: the host key reports events and fetches its
-  // mandate, and the gateway serves tools to a connected app. Those are
-  // different jobs with different blast radii, and one credential doing both
-  // is what let a connected app inherit the host's authority. The purpose on
-  // each is what `machineKeyDenial` constrains them by.
-  const gatewayKey = generateApiKey();
-  const fingerprint = deviceKeyFingerprint(input.devicePublicKey);
 
-  const {
-    host,
-    apiKeyPublicId,
-    gatewayApiKeyPublicId,
-    agentKey,
-    denyGeneration,
-  } = await withTenantDb(async (tx) => {
+  const minted = await withTenantDb(async (tx) => {
     const org = await tx.query.organizations.findFirst({
       where: eq(schema.organizations.id, ctx.orgId),
       columns: { namespace: true },
@@ -178,147 +90,29 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
       throw denied("Forbidden: organization or workspace namespace not found");
     }
     const baseSlug = agentSlugFor(input.hostname);
-    let agentKeyCandidate = `${org.namespace}.${workspace.namespace}.${baseSlug}`;
+    let agentKey = `${org.namespace}.${workspace.namespace}.${baseSlug}`;
     const clash = await tx.query.tachoHosts.findFirst({
       where: and(
         eq(schema.tachoHosts.orgId, ctx.orgId),
-        eq(schema.tachoHosts.agentKey, agentKeyCandidate),
+        eq(schema.tachoHosts.agentKey, agentKey),
+        ne(schema.tachoHosts.status, "revoked"),
       ),
       columns: { id: true },
     });
     if (clash) {
-      agentKeyCandidate = `${org.namespace}.${workspace.namespace}.${baseSlug.slice(0, 13)}-${cryptoRandom(4)}`;
+      agentKey = `${org.namespace}.${workspace.namespace}.${baseSlug.slice(0, 13)}-${cryptoRandom(4)}`;
     }
-
-    const [key] = await tx
-      .insert(schema.apiKeys)
-      .values({
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        keyPrefix,
-        keyHash,
-        name: `tacho host ${input.hostname}`,
-        scope: {
-          purpose: TACHO_HOST_SCOPE_PURPOSE,
-          host_enrollment_id: hostEnrollmentId,
-        },
-        expiresAt,
-        createdByUserId: operatorUserId,
-        updatedByUserId: operatorUserId,
-      })
-      .returning({
-        id: schema.apiKeys.id,
-        publicId: schema.apiKeys.publicId,
-      });
-    if (!key) {
-      throw new Error(
-        "Internal error: failed to create the Tacho host API key",
-      );
-    }
-
-    const [gateway] = await tx
-      .insert(schema.apiKeys)
-      .values({
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        keyPrefix: gatewayKey.keyPrefix,
-        keyHash: gatewayKey.keyHash,
-        name: `tacho gateway ${input.hostname}`,
-        scope: {
-          purpose: TACHO_GATEWAY_SCOPE_PURPOSE,
-          host_enrollment_id: hostEnrollmentId,
-        },
-        expiresAt,
-        createdByUserId: operatorUserId,
-        updatedByUserId: operatorUserId,
-      })
-      .returning({
-        id: schema.apiKeys.id,
-        publicId: schema.apiKeys.publicId,
-      });
-    if (!gateway) {
-      throw new Error(
-        "Internal error: failed to create the Tacho gateway API key",
-      );
-    }
-
-    const claims: EnrollmentClaims = {
-      schema: TACHO_ENROLLMENT_CLAIMS_SCHEMA,
-      issuer: ISSUER,
-      audience: AUDIENCE,
-      host_enrollment_id: hostEnrollmentId,
-      organization_id: ctx.orgId,
-      workspace_id: ctx.workspaceId,
-      agent_key: agentKeyCandidate,
-      ingest_endpoint: `${endpointBase}/events`,
-      bundle_endpoint: `${endpointBase}/bundle`,
-      commands_endpoint: `${endpointBase}/commands`,
-      // Signed rather than derived: the host would otherwise guess it by
-      // swapping `api.` for `mcp.` in api_url, which is wrong for any
-      // deployment whose MCP host is not named that way.
-      ...(mcpEndpoint === undefined ? {} : { mcp_endpoint: mcpEndpoint }),
-      credential_env: CREDENTIAL_ENV,
-      device_key_fingerprint: fingerprint,
-      harnesses: input.harnesses,
-      issued_at_unix_s: Math.floor(issuedAt.getTime() / 1000),
-      expires_at_unix_s: Math.floor(expiresAt.getTime() / 1000),
-    };
-    const signatureHex = signTachoEnrollment(claims, secret);
-
-    const [inserted] = await tx
-      .insert(schema.tachoHosts)
-      .values({
-        publicId: hostEnrollmentId,
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        agentKey: agentKeyCandidate,
-        apiKeyId: key.id,
-        hostname: input.hostname,
-        hostnameDigest: digestBytes(input.hostname),
-        platform: input.platform,
-        osVersion: input.osVersion ?? null,
-        arch: input.arch ?? null,
-        osUser: input.osUser,
-        osUserDigest: digestBytes(input.osUser),
-        devicePublicKey: input.devicePublicKey,
-        deviceKeyFingerprint: fingerprint,
-        harnesses: input.harnesses,
-        claudeVersionAtEnroll: input.claudeVersion ?? null,
-        claudeExecpath: input.claudeExecpath ?? null,
-        nodeVersion: input.nodeVersion ?? null,
-        wrapperVersion: input.wrapperVersion ?? null,
-        shell: input.shell ?? null,
-        status: "active",
-        enrollmentClaims: claims,
-        enrollmentSignature: signatureHex,
-        expiresAt,
-        managed: input.managed,
-        mode: "observe",
-        createdByUserId: operatorUserId,
-        updatedByUserId: operatorUserId,
-      })
-      .returning();
-    if (!inserted) {
-      throw new Error("Internal error: failed to create the Tacho host");
-    }
-    const denyGeneration = await readDenyGeneration(
-      tx as never,
-      ctx.orgId,
-      ctx.workspaceId,
-    );
-    return {
-      host: inserted as TachoHostRow,
-      apiKeyPublicId: key.publicId,
-      gatewayApiKeyPublicId: gateway.publicId,
-      agentKey: agentKeyCandidate,
-      denyGeneration,
-    };
+    return mintHostEnrollment(tx, {
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      userId: operatorUserId,
+      agentKey,
+      agent: null,
+      facts: input,
+      signing,
+      issuedAt,
+    });
   });
-
-  const bundle = signBundle(
-    signer,
-    unsignedBundle(host, denyGeneration, issuedAt),
-  );
 
   emitSecurityEvent({
     eventType: "api_key.created",
@@ -335,26 +129,11 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
     {
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
-      hostEnrollmentId,
-      agentKey,
+      hostEnrollmentId: minted.hostEnrollmentId,
+      agentKey: minted.host.agentKey,
     },
     "tacho.enrollment.create: host enrolled",
   );
 
-  return {
-    hostEnrollmentId,
-    agentKey,
-    apiKeyPublicId,
-    apiKey: rawKey,
-    gatewayApiKeyPublicId,
-    gatewayApiKey: gatewayKey.rawKey,
-    enrollment: {
-      claims: host.enrollmentClaims as EnrollmentClaims,
-      signature_hex: host.enrollmentSignature,
-      verification_secret_env: SIGNING_SECRET_ENV,
-    },
-    policyBundle: bundle,
-    bundlePublicKeyPem: signer.publicKeyPem,
-    expiresAt: expiresAt.toISOString(),
-  };
+  return enrollmentDocument(minted, signing, issuedAt);
 };

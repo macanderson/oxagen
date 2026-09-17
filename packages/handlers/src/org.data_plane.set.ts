@@ -113,7 +113,7 @@ export const orgDataPlaneSetHandler: CapabilityHandler<
       lastVerifiedAt: null,
       rotatedAt: dedicated ? now : null,
       updatedAt: now,
-      updatedByUserId: ctx.userId ?? null,
+      updatedById: ctx.userId ?? null,
     };
 
     if (existing) {
@@ -129,7 +129,7 @@ export const orgDataPlaneSetHandler: CapabilityHandler<
       .values({
         orgId: ctx.orgId,
         kind,
-        createdByUserId: ctx.userId ?? null,
+        createdById: ctx.userId ?? null,
         ...mutation,
       })
       .returning();

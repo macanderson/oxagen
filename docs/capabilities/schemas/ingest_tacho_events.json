@@ -125,7 +125,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -348,6 +349,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -824,7 +828,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -1047,6 +1052,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -1645,7 +1653,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -1868,6 +1877,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -2272,7 +2284,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -2495,6 +2508,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -2809,7 +2825,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -3032,6 +3049,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -3508,7 +3528,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -3731,6 +3752,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -4113,7 +4137,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -4336,6 +4361,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -4718,7 +4746,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -4941,6 +4970,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -5323,7 +5355,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -5546,6 +5579,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -5928,7 +5964,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -6151,6 +6188,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -6609,7 +6649,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -6832,6 +6873,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -7308,7 +7352,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -7531,6 +7576,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -8007,7 +8055,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -8230,6 +8279,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -8706,7 +8758,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -8929,6 +8982,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -9243,7 +9299,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -9466,6 +9523,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -9942,7 +10002,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -10165,6 +10226,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -10641,7 +10705,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -10864,6 +10929,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -11132,7 +11200,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -11355,6 +11424,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -11632,7 +11704,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -11855,6 +11928,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -12546,7 +12622,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -12769,6 +12846,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -13060,7 +13140,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -13283,6 +13364,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -13574,7 +13658,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -13797,6 +13882,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -14395,7 +14483,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -14618,6 +14707,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -15052,7 +15144,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -15275,6 +15368,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -15638,7 +15734,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -15861,6 +15958,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -16224,7 +16324,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -16447,6 +16548,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -16818,7 +16922,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -17041,6 +17146,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -17505,7 +17613,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -17728,6 +17837,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -18268,7 +18380,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -18491,6 +18604,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -18859,7 +18975,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -19082,6 +19199,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -19450,7 +19570,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -19673,6 +19794,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -20041,7 +20165,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -20264,6 +20389,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -20632,7 +20760,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -20855,6 +20984,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -21223,7 +21355,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -21446,6 +21579,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -21814,7 +21950,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -22037,6 +22174,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -22635,7 +22775,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -22858,6 +22999,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -23226,7 +23370,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -23449,6 +23594,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -23907,7 +24055,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -24130,6 +24279,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -24493,7 +24645,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -24716,6 +24869,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -25079,7 +25235,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -25302,6 +25459,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -25760,7 +25920,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -25983,6 +26144,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -26441,7 +26605,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -26664,6 +26829,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -27051,7 +27219,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -27274,6 +27443,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -27708,7 +27880,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -27931,6 +28104,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -28222,7 +28398,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -28445,6 +28622,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -28736,8 +28916,480 @@
                 "body"
               ],
               "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "v": {
+                  "const": "tacho/1.0"
+                },
+                "event_id": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "event_id_idem": {
+                  "type": "string"
+                },
+                "session_id": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "session_uuid": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "root_session_uuid": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "parent_session_uuid": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "seq": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "ts": {
+                  "type": "string"
+                },
+                "fidelity": {
+                  "type": "string",
+                  "enum": [
+                    "sdk",
+                    "ambient",
+                    "proxy"
+                  ]
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "hook",
+                    "otel_log",
+                    "otel_metric",
+                    "otel_span",
+                    "transcript",
+                    "result",
+                    "collector",
+                    "control_plane"
+                  ]
+                },
+                "hook_event_name": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "hook_source_kind": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "otel_event_name": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "harness_event_sequence": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "agent": {
+                  "type": "object",
+                  "properties": {
+                    "agent_key": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "fleet_id": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "runtime": {
+                      "type": "string",
+                      "enum": [
+                        "claude-code",
+                        "claude-agent-sdk",
+                        "custom",
+                        "stella",
+                        "proxy",
+                        "codex"
+                      ]
+                    },
+                    "harness": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "harness_version": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "wrapper_version": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "attestation": {
+                      "type": "string"
+                    },
+                    "host_enrollment_id": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "agent_principal_id": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "initiating_principal_id": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "enforcement_tier": {
+                      "type": "string",
+                      "enum": [
+                        "gateway",
+                        "harness",
+                        "observe"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "agent_key",
+                    "fleet_id",
+                    "runtime",
+                    "harness",
+                    "wrapper_version"
+                  ],
+                  "additionalProperties": false
+                },
+                "subagent": {
+                  "type": "object",
+                  "properties": {
+                    "subagent_id": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "subagent_type": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "spawn_depth": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 255
+                    },
+                    "spawn_tool_use_id": {
+                      "type": "string",
+                      "maxLength": 512
+                    }
+                  },
+                  "required": [
+                    "subagent_id"
+                  ],
+                  "additionalProperties": false
+                },
+                "turn": {
+                  "type": "object",
+                  "properties": {
+                    "turn_seq": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "prompt_id": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "turn_id": {
+                      "type": "string",
+                      "maxLength": 512
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "context": {
+                  "type": "object",
+                  "properties": {
+                    "cwd": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "project_dir": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "git_branch": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "git_head_sha": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "git_remote_digest": {
+                      "type": "string"
+                    },
+                    "git_dirty": {
+                      "type": "boolean"
+                    },
+                    "worktree_path": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "worktree_branch": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "permission_mode": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "effort": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "model": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "entrypoint": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "query_source": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "session_kind": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "terminal_type": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "app_version": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "output_style": {
+                      "type": "string",
+                      "maxLength": 512
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "host": {
+                  "type": "object",
+                  "properties": {
+                    "hostname_digest": {
+                      "type": "string"
+                    },
+                    "os_type": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "os_version": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "host_arch": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "os_user_digest": {
+                      "type": "string"
+                    },
+                    "claude_pid": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "claude_ppid": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "claude_parent_process": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "claude_execpath": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "is_child_session": {
+                      "type": "boolean"
+                    },
+                    "bridge_session_id": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "has_tty": {
+                      "type": "boolean"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "anthropic": {
+                  "type": "object",
+                  "properties": {
+                    "user_id_hash": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "account_uuid": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "account_id": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "org_uuid": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "api_key_source": {
+                      "type": "string",
+                      "maxLength": 512
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "span": {
+                  "type": "object",
+                  "properties": {
+                    "trace_id": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "span_id": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "parent_span_id": {
+                      "type": "string",
+                      "maxLength": 512
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "attrs": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "default": {}
+                },
+                "content": {
+                  "type": "object",
+                  "properties": {
+                    "digest": {
+                      "type": "string"
+                    },
+                    "bytes_ref": {
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "redactions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "reason": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "original_digest": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "reason",
+                          "original_digest"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "default": []
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "raw_source_digest": {
+                  "type": "string"
+                },
+                "prev_hash": {
+                  "type": "string"
+                },
+                "hash": {
+                  "type": "string"
+                },
+                "kind": {
+                  "const": "proof.observed"
+                },
+                "body": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "v",
+                "event_id",
+                "event_id_idem",
+                "session_id",
+                "session_uuid",
+                "root_session_uuid",
+                "seq",
+                "ts",
+                "fidelity",
+                "source",
+                "agent",
+                "prev_hash",
+                "hash",
+                "kind",
+                "body"
+              ],
+              "additionalProperties": false
             }
           ]
+        }
+      },
+      "bodies": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "event_id_idem": {
+              "type": "string"
+            },
+            "content_type": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "bytes_base64": {
+              "type": "string",
+              "maxLength": 1398104
+            }
+          },
+          "required": [
+            "event_id_idem",
+            "content_type",
+            "bytes_base64"
+          ],
+          "additionalProperties": false
         }
       },
       "daemon": {
@@ -28820,6 +29472,32 @@
           "additionalProperties": false
         }
       },
+      "body_rejections": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "event_id_idem": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "unknown_event",
+                "digest_mismatch",
+                "credential_detected",
+                "retention_digest_only",
+                "no_content_digest"
+              ]
+            }
+          },
+          "required": [
+            "event_id_idem",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      },
       "control": {
         "type": "object",
         "properties": {
@@ -28869,6 +29547,7 @@
                     "pause",
                     "resume",
                     "cancel",
+                    "steer",
                     "message",
                     "revoke",
                     "refresh_bundle",
@@ -28890,6 +29569,58 @@
                   "type": "object",
                   "additionalProperties": {}
                 },
+                "requested_mode": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "next_step",
+                        "interrupt",
+                        "turn_boundary"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "delivery_mode": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "next_step",
+                        "interrupt",
+                        "turn_boundary"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "degraded_reason": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 64
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "issued_at": {
                   "type": "string"
                 },
@@ -28909,6 +29640,10 @@
                 "command",
                 "session_uuid",
                 "payload",
+                "requested_mode",
+                "delivery_mode",
+                "degraded_reason",
+                "reason",
                 "issued_at",
                 "expires_at"
               ],
@@ -28929,6 +29664,7 @@
       "accepted",
       "event_ids",
       "chain_breaks",
+      "body_rejections",
       "control"
     ],
     "additionalProperties": false

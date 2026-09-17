@@ -176,15 +176,15 @@ helpers; migrations should be hand-written for clarity.
 |-----------------------|--------------------------------------------|
 | `created_at`          | `timestamptz not null default now()`       |
 | `updated_at`          | `timestamptz not null default now()`       |
-| `created_by_user_id`  | `uuid null`                                |
-| `updated_by_user_id`  | `uuid null`                                |
+| `created_by_id`  | `uuid null`                                |
+| `updated_by_id`  | `uuid null`                                |
 
 #### 5.3 `soft_delete_mixin`
 
 | Column                | Type              |
 |-----------------------|-------------------|
 | `deleted_at`          | `timestamptz null`|
-| `deleted_by_user_id`  | `uuid null`       |
+| `deleted_by_id`  | `uuid null`       |
 
 Hard deletes are prohibited on tenant-scoped tables.
 
@@ -981,7 +981,7 @@ Mixins: `id_mixin`.
 | `reason`          | `text not null`                   |
 | `reference_type`  | `text null`                       |
 | `reference_id`    | `uuid null`                       |
-| `created_by_user_id` | `uuid null`                    |
+| `created_by_id` | `uuid null`                    |
 | `created_at`      | `timestamptz not null default now()` |
 
 Allowed `reason`: `grant_signup`, `grant_plan_renewal`, `grant_manual`,

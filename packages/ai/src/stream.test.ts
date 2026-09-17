@@ -3,6 +3,7 @@ import { CREDIT_REASONS } from "@oxagen/billing";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
+  recordSpend: vi.fn(),
   streamText: vi.fn(),
   insertTokenUsage: vi.fn(),
   hashPrompt: vi.fn(),
@@ -49,6 +50,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
     ...real,
     providerCostUsdMicros: mocks.providerCostUsdMicros,
     chargeUsageCredits: mocks.chargeUsageCredits,
+    recordSpend: mocks.recordSpend,
   };
 });
 vi.mock("./models", () => ({

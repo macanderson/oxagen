@@ -50,25 +50,44 @@ export interface CredentialOptions {
  * Credentials come from flags, then `OXAGEN_*` env, then the CLI's own
  * `~/.config/oxagen/config.json` that `oxagen login` writes.
  */
-export function resolveCredentials(
-  options: CredentialOptions,
+function configPicker(
   env: Record<string, string | undefined>,
   home: string,
-): { credentials: Credentials } | { missing: string[] } {
+): (
+  flag: string | undefined,
+  envKey: string,
+  configKey: string,
+) => string | undefined {
   const config = (readJsonFileIfExists(oxagenConfigPath(home)) ?? {}) as Record<
     string,
     unknown
   >;
-  const pick = (
-    flag: string | undefined,
-    envKey: string,
-    configKey: string,
-  ): string | undefined =>
+  return (flag, envKey, configKey) =>
     flag ??
     env[envKey] ??
     (typeof config[configKey] === "string"
       ? (config[configKey] as string)
       : undefined);
+}
+
+/** The control plane's base URL: the flag, then `OXAGEN_API_URL`, then the CLI config, then production. */
+export function resolveApiUrl(
+  options: Pick<CredentialOptions, "apiUrl">,
+  env: Record<string, string | undefined>,
+  home: string,
+): string {
+  const pick = configPicker(env, home);
+  return (
+    pick(options.apiUrl, "OXAGEN_API_URL", "apiUrl") ?? "https://api.oxagen.sh"
+  ).replace(/\/+$/, "");
+}
+
+export function resolveCredentials(
+  options: CredentialOptions,
+  env: Record<string, string | undefined>,
+  home: string,
+): { credentials: Credentials } | { missing: string[] } {
+  const pick = configPicker(env, home);
   const token = pick(options.token, "OXAGEN_API_TOKEN", "token");
   const org = pick(options.org, "OXAGEN_ORG_ID", "orgSlug");
   const workspace = pick(
@@ -76,8 +95,6 @@ export function resolveCredentials(
     "OXAGEN_WORKSPACE_ID",
     "workspaceSlug",
   );
-  const apiUrl =
-    pick(options.apiUrl, "OXAGEN_API_URL", "apiUrl") ?? "https://api.oxagen.sh";
   const missing: string[] = [];
   if (token === undefined) missing.push("--token (or `oxagen login`)");
   if (org === undefined) missing.push("--org");
@@ -88,7 +105,7 @@ export function resolveCredentials(
       token: token as string,
       org: org as string,
       workspace: workspace as string,
-      apiUrl: apiUrl.replace(/\/+$/, ""),
+      apiUrl: resolveApiUrl(options, env, home),
     },
   };
 }

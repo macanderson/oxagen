@@ -23,6 +23,7 @@
 import { existsSync, realpathSync, writeFileSync, rmSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import ts from "typescript";
 
 const TS_EXT = /\.(ts|tsx|mts|cts)$/;
 // Root-level tooling config files (vitest.config.ts, tailwind.config.ts,
@@ -62,13 +63,36 @@ const files = process.argv
   .filter((f) => TS_EXT.test(f) && !CONFIG_FILE.test(f));
 if (files.length === 0) process.exit(0); // nothing typecheckable staged
 
+// The file set a tsconfig compiles, after its `include`/`exclude` and any
+// `extends`. A staged file the owning config excludes — apps/app's
+// architecture probes under src/test/arch/probes, each written to fail a rule
+// — is never compiled by the real build, so it is not compiled here either.
+const compiledSets = new Map();
+function compiledSet(tsconfig) {
+  if (!compiledSets.has(tsconfig)) {
+    const { config } = ts.readConfigFile(tsconfig, ts.sys.readFile);
+    const parsed = ts.parseJsonConfigFileContent(
+      config,
+      ts.sys,
+      dirname(tsconfig),
+    );
+    compiledSets.set(
+      tsconfig,
+      new Set(parsed.fileNames.map((f) => resolve(f))),
+    );
+  }
+  return compiledSets.get(tsconfig);
+}
+
 // Group changed files by their owning tsconfig.
 const groups = new Map();
 for (const file of files) {
   const tsconfig = nearestTsconfig(file);
   if (!tsconfig) continue; // no tsconfig governs this file — skip it
+  const abs = resolve(repoRoot, file);
+  if (!compiledSet(tsconfig).has(abs)) continue; // excluded by the owning config
   if (!groups.has(tsconfig)) groups.set(tsconfig, []);
-  groups.get(tsconfig).push(resolve(repoRoot, file));
+  groups.get(tsconfig).push(abs);
 }
 
 let failed = false;
@@ -80,7 +104,25 @@ for (const [tsconfig, absFiles] of groups) {
     tempPath,
     JSON.stringify({
       extends: "./tsconfig.json",
-      compilerOptions: { noEmit: true },
+      // `declaration` off, always. This hook typechecks; it never emits. With
+      // `declaration: true` (tsconfig.base sets it, and only some packages
+      // override it) tsc additionally reports declaration-emit PORTABILITY
+      // diagnostics — chiefly TS2883, "the inferred type of X cannot be named
+      // without a reference to <some type> ... A type annotation is necessary."
+      // Whether a type is nameable depends on what else is in the program, and
+      // this config narrows the program to the staged files, so the same source
+      // that is clean under the package's real `include` reports TS2883 here.
+      // A merge stages every incoming file, which is how one ordinary merge
+      // commit produced ~40 of these against apps/app_deprecated while
+      // `turbo run typecheck --filter=@oxagen/app-deprecated` was green — a
+      // hook that fails open, because the way past it is `--no-verify`, which
+      // skips the format, lint and atlas checks too. Declaration portability
+      // is a property of the real build and CI typechecks the real build.
+      compilerOptions: {
+        noEmit: true,
+        declaration: false,
+        declarationMap: false,
+      },
       files: absFiles.map((f) => relative(pkgDir, f)),
       // Load only ambient declaration files (next-env.d.ts, src/types/*.d.ts,
       // etc.) on top of `files` — NOT the whole source tree. Carries the global
