@@ -1,6 +1,6 @@
 ---
 name: oxagen-testing
-description: Test conventions in the Oxagen monorepo — co-located *.test.ts files, the vitest coverage-threshold ratchet (never lower, cap 90, keep 2.5% headroom), e2e conventions under apps/app/e2e, and the hard rule to only run narrow, targeted test commands. Use when writing tests, touching a vitest.config.ts, or deciding what to run after a code change.
+description: Test conventions in the Oxagen monorepo — co-located *.test.ts files, the vitest coverage-threshold ratchet (never lower, cap 90, keep 2.5% headroom), the three-spec e2e rule under apps/app/e2e, and the hard rule to only run narrow, targeted test commands. Use when writing tests, touching a vitest.config.ts, or deciding what to run after a code change.
 ---
 
 # Oxagen testing conventions
@@ -52,13 +52,21 @@ export default defineConfig({
 
 ## E2E conventions (`apps/app/e2e/`)
 
-Any user-facing flow added or changed needs a Playwright e2e test. Screenshots go to `apps/app/e2e/screenshots/` — delete and recreate that directory on every run (it's gitignored). Capture screenshots of key success states, not just the happy-path assertion.
+`apps/app/e2e` holds exactly three specs and gains no fourth (ARCHITECTURE.md §6.3):
+
+- **`login.spec.ts`** — the sign-in journey. The proxy gates an anonymous visit, the seeded owner signs in on a production build, and the storage state the other two projects run on is saved.
+- **`pay.spec.ts`** — a real Stripe Checkout session for a GAU purchase. The only check that catches a price archived out from under `billing.plans`. Skips when `STRIPE_E2E` is not `"1"` (a fork PR has no test key).
+- **`page-load.spec.ts`** — walks `e2e/routes.ts`, the rev1 route table, and asserts each surface answers 200, does not redirect, carries its own catalog title, and logs no console error.
+
+Everything else — a form, a dialog, a permission refusal, an empty state — is proven by a component test beside the component and a unit test beside the action. That is the trade: e2e is the slowest and flakiest evidence in the repo, so it is spent on the three journeys that cross a process boundary no unit test can.
+
+No screenshots. `playwright.config.ts` sets `trace: "retain-on-failure"`, and the trace is the artifact when a spec fails.
 
 ## Gate before marking a PR ready
 
 1. `pnpm gate` — lint (`--max-warnings 0`), typecheck, coverage, tests, builds, migrations, all green.
 2. Dispatch the `test-completeness-judge` skill/agent before committing a finished body of work — re-run until approved.
-3. E2E parity: a changed user-facing flow without a matching `apps/app/e2e/*.spec.ts` is incomplete.
+3. A changed user-facing flow is proven by a component test and an action unit test. Touch the three e2e specs only when the change alters sign-in, payment, or the rev1 route table (`apps/app/e2e/routes.ts`).
 
 ## Violations to avoid
 
@@ -67,5 +75,6 @@ Any user-facing flow added or changed needs a Playwright e2e test. Screenshots g
 - Bumping a threshold with zero headroom (i.e. setting it equal to or above measured coverage) — CI will flake on the next run.
 - Bumping a threshold past 90.
 - Adding new logic (route, contract, utility) with no co-located test.
-- Shipping a UI-facing change with no `apps/app/e2e/` spec and no screenshot evidence.
+- Adding a fourth spec to `apps/app/e2e` instead of a component test.
+- Shipping a UI-facing change with neither a component test nor a runtime artifact under `verifications/<session>/`.
 - Creating a new `__tests__/` directory for a test that has one obvious source-file home — co-locate instead.

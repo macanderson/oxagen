@@ -546,7 +546,7 @@ export const flows: Flow[] = [
     ],
     refs: [
       "apps/api/src/routes/v1/chat.stream.ts#chatStreamRoute",
-      "apps/api/src/routes/v1/chat-memory.ts#recallWorkspaceMemoryMessage",
+      "packages/agent/src/runtime/assistant-recall.ts#recallWorkspaceMemoryMessage",
       "apps/api/src/routes/v1/chat-stream-translator.ts#createApiStreamTranslator",
       "packages/ai/src/funding-source.ts#resolveModelFundingSource",
       "packages/billing/src/turn-credit-gate.ts#evaluateTurnCreditGate",
@@ -825,9 +825,9 @@ export const flows: Flow[] = [
     kind: "sequence",
     id: "metering",
     section: "billing",
-    title: "From governed action to credit debit (ADR-052)",
+    title: "From governed action to GAU bucket debit (ADR-052, ADR-055)",
     claim:
-      "Tokens are reported, never billed; the billable unit is the outermost invoke(). The counter is incremented first, then priced, and a failed debit leaves the action counted but uncharged.",
+      "Tokens are reported, never billed; the billable unit is the outermost invoke(). The debit to the organisation's month bucket is one upsert committed before anything else, so a failed auto top-up claim leaves the action counted and the request intact.",
     lanes: [
       {
         id: "kernel",
@@ -840,7 +840,7 @@ export const flows: Flow[] = [
         sub: "@oxagen/billing bootstrap",
       },
       { id: "meter", label: "recordGovernedAction", sub: "action-metering.ts" },
-      { id: "credits", label: "consumeCredits", sub: "credit lots" },
+      { id: "bucket", label: "ensureCurrentBucket", sub: "gau-bucket.ts" },
       PG,
       {
         id: "stripe",
@@ -858,44 +858,45 @@ export const flows: Flow[] = [
       },
       {
         from: "recorder",
-        to: "pg",
-        label: "resolveOrgActionEntitlement(orgId)",
-        detail: "tier + included_actions_annual from plans × subscriptions",
-      },
-      {
-        from: "recorder",
         to: "meter",
-        label: "recordGovernedAction({ orgId, capability, tier, runId })",
+        label: "recordGovernedAction({ orgId, actions, capability, runId })",
+        detail:
+          "the recorder resolves terms itself; a caller cannot claim cheaper ones",
       },
       {
         from: "meter",
         to: "pg",
-        label: "incrementActionCounter(+actions)",
-        detail: "billing.governed_action_counters — count first, then price",
+        label: "resolveGauEntitlement · readOrgBillingSettings",
+        detail:
+          "contracted terms, prepaid or invoice mode, periodFor → the org's month",
+      },
+      {
+        from: "meter",
+        to: "bucket",
+        label: "ensureCurrentBucket({ period, terms, usedDelta: actions })",
+      },
+      {
+        from: "bucket",
+        to: "pg",
+        label: "INSERT … ON CONFLICT DO UPDATE used_gau + actions",
+        detail:
+          "billing.gau_buckets — lazy create and debit in one statement, row lock",
         style: { accent: true },
       },
       {
         from: "meter",
         to: "meter",
-        label: "billable = beyond allowance · band = by period total",
-        detail: "shadow mode or inside allowance → no debit",
-      },
-      {
-        from: "meter",
-        to: "credits",
-        label: "consumeCredits(microCredits, reason: consume_execution)",
-        detail: "referenceType governed_action · referenceId = runId or NULL",
-      },
-      {
-        from: "credits",
-        to: "pg",
-        label: "credit_lots · credit_ledger · credit_balances",
+        label: "remainingGau = included + purchased + carried − used",
+        detail: "negative when overdrawn",
       },
       {
         from: "meter",
         to: "pg",
-        label: "incrementActionCounter(charged)",
-        detail: "counted vs charged is the audit answer",
+        label:
+          "claimAutoTopup (prepaid · remaining ≤ 0 · auto top-up on · card saved)",
+        detail:
+          "billing.gau_settlements — at most one episode, committed before any provider call",
+        style: { dashed: true },
       },
       {
         from: "stripe",
@@ -907,10 +908,14 @@ export const flows: Flow[] = [
       },
     ],
     refs: [
+      "packages/billing/src/bootstrap.ts#setUsageRecorder",
       "packages/billing/src/action-metering.ts#recordGovernedAction",
-      "packages/billing/src/action-metering.ts#incrementActionCounter",
-      "packages/billing/src/plan-allowance.ts#resolveOrgActionEntitlement",
-      "packages/billing/src/metering.ts#meterCreditsForUsage",
+      "packages/billing/src/contract-terms.ts#resolveGauEntitlement",
+      "packages/billing/src/billing-settings.ts#readOrgBillingSettings",
+      "packages/billing/src/gau-bucket.ts#periodFor",
+      "packages/billing/src/gau-bucket.ts#ensureCurrentBucket",
+      "packages/billing/src/gau-bucket.ts#remainingGau",
+      "packages/billing/src/gau-settlements.ts#claimAutoTopup",
       "packages/billing/src/webhooks.ts#processStripeEvent",
       "packages/billing/src/grants.ts#grantPlanCreditsForInvoicePaid",
       "apps/api/src/routes/stripe.ts",

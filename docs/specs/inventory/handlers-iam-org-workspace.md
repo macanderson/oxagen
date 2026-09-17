@@ -9,41 +9,41 @@
 ### Requirement: Authenticated user creates a new organization
 
 <!-- id: organization.create.organizationCreateHandler -->
-<!-- entities: User, Organization, OrgUser, Principal, Role, RoleGrant -->
+<!-- entities: User, Organization, OrgUser, Principal, Role, RoleGrant, Workspace, WorkspaceUser -->
 <!-- enforced: organization.create.organizationCreateHandler() -->
-<!-- test: organization.create.test.ts -->
+<!-- test: org.create.test.ts, org.create.pg.test.ts -->
 
-When an authenticated user submits a valid organization creation request with name, slug, type, and optional billing details, the system SHALL create a new org row, assign the creator as owner, bootstrap IAM (7 system roles, owner principal, owner role assignment, and role grants from every capability's defaultRoles), grant free credits, and seed default workspace resources. Slug MUST be unique across all orgs; duplicate attempts return a friendly error. Business-type orgs persist website/industry/employeeSize; personal orgs leave these fields null. Billing profile is persisted if billingEmail or billingAddress is provided.
+When an authenticated user submits a valid organization creation request with name, slug, type and an optional first workspace, the system SHALL, in one system transaction, create the org row with a server-derived namespace, assign the creator as owner, bootstrap IAM (7 system roles, owner principal, owner role assignment, and role grants from every capability's defaultRoles) and create the first workspace with the creator as owner, its built-in agent, default MCP registry and default environment (`workspace-bootstrap.ts`, shared with `create_workspace`). Nothing billing-shaped is written (ADR-055 §3.9 item 14). Slug MUST be unique across all orgs and MUST NOT be a reserved route segment (`RESERVED_ORG_SLUGS` in the contract); the workspace slug MUST NOT be an org-level route segment (`RESERVED_WORKSPACE_SLUGS`). Business-type orgs persist website/industry/employeeSize; personal orgs leave these fields null.
 
-#### Scenario: Happy path — authenticated user creates personal org
-<!-- test: organization.create.test.ts:returns new org publicId, name, slug, type, ISO createdAt -->
+#### Scenario: Happy path — a signed-in user with no memberships creates an org
+<!-- test: org.create.pg.test.ts:bootstraps the org, the owner membership, IAM and the first workspace in one call, and writes no billing row -->
 
-- **WHEN** ctx.userId is set AND input.type === "personal" AND no existing org has input.slug
-- **THEN** insert organizations row (name, slug, type="personal", status="active", website/industry/employeeSize=null), insert orgUsers row (orgId, userId, role="owner"), call bootstrapOrgIAM (upsert 7 system roles, upsert owner principal, assign owner "Owner" role, seed role_grants), call grantFreeCredits(orgId), emit organization.created security event, return {publicId, name, slug, type, createdAt as ISO string}
+- **WHEN** ctx.userId is set AND no existing org has input.slug
+- **THEN** insert organizations row (name, slug, derived namespace, type, status="active"), insert orgUsers row (orgId, userId, role="owner"), call bootstrapOrgIAM on the same transaction, call bootstrapWorkspace on the same transaction (workspaces row, workspaceUsers owner row, qa-chat agent, default registry, default environment), emit organization.created security event, return {publicId, name, slug, type, createdAt as ISO string, workspace: {publicId, slug}}; every billing.* table keyed by org_id has no row for the new org
 
-#### Scenario: Authenticated user creates business org with billing address
-<!-- test: organization.create.test.ts:inserts billing profile with US address — region and country uppercased -->
+#### Scenario: No first workspace named
+<!-- test: org.create.test.ts:creates the Default workspace when the input names none -->
 
-- **WHEN** ctx.userId is set AND input.type === "business" AND input.billingAddress.country === "US" AND all billing fields provided
-- **THEN** insert organizations row (name, slug, type="business", website/industry/employeeSize preserved), insert orgBillingProfiles row (billingEmail, addressLine1/2, city, region uppercased, postalCode, country uppercased, placeId), emit organization.created event, return org details
+- **WHEN** input.workspace is absent
+- **THEN** the contract defaults it to { name: "Default", slug: "default" } and the handler creates that workspace
+
+#### Scenario: Reserved slug
+<!-- test: org.create.test.ts (contract):refuses every reserved org slug at the slug path -->
+
+- **WHEN** input.slug is a top-level route segment (login, api, invite, …) OR input.workspace.slug is an org-level route segment (billing, api-keys, …)
+- **THEN** the contract's input schema refuses it before any handler runs
 
 #### Scenario: Unauthenticated user attempts org creation
-<!-- test: organization.create.test.ts:throws when userId is null -->
+<!-- test: org.create.test.ts:throws when userId is null -->
 
 - **WHEN** ctx.userId is null
 - **THEN** throw Error "organization.create requires an authenticated user"
 
 #### Scenario: Slug collision detected during insert
-<!-- test: organization.create.test.ts:throws friendly error on unique_violation (race condition) -->
+<!-- test: org.create.test.ts:throws a friendly error on unique_violation (race condition path) -->
 
-- **WHEN** unique_violation (code 23505) is raised during org insert (race condition)
-- **THEN** throw Error "slug "{slug}" already in use"
-
-#### Scenario: Free credits grant fails (non-fatal)
-<!-- test: organization.create.test.ts:does not throw when grantFreeCredits fails — org creation still succeeds -->
-
-- **WHEN** grantFreeCredits(orgId) raises an error after org creation transaction commits
-- **THEN** log error but do not fail the handler; org creation and IAM bootstrap succeed; credits grant can be re-applied manually
+- **WHEN** unique_violation (code 23505) is raised during the bootstrap transaction (race condition)
+- **THEN** throw Error "slug "{slug}" already in use"; nothing from the transaction persists
 
 ---
 
@@ -152,7 +152,7 @@ When an authenticated principal declines a pending invitation by publicId, the i
 <!-- test: org.member.invite.decline.test.ts -->
 
 - **WHEN** ctx.userId or ctx.apiKeyId is set AND invitation.status === "pending"
-- **THEN** mark invitations row status="declined", updatedAt=now, updatedByUserId=actorId; return {invitationPublicId, status: "declined"}
+- **THEN** mark invitations row status="declined", updatedAt=now, updatedById=actorId; return {invitationPublicId, status: "declined"}
 
 #### Scenario: Invitation not found
 <!-- test: org.member.invite.decline.test.ts -->
@@ -339,7 +339,7 @@ When an authenticated user creates a workspace for ctx.orgId, the system SHALL c
 <!-- test: workspace.create.test.ts:workspace created successfully -->
 
 - **WHEN** ctx.userId is set AND ctx.orgId is set AND no workspace exists with (orgId=ctx.orgId, slug=input.slug)
-- **THEN** insert workspaces row (orgId, name, slug, createdByUserId, updatedByUserId); insert workspace_users row (workspaceId, userId, role="owner", joinedAt=now); call bootstrapWorkspaceAgents (idempotent seed); call seedWorkspaceDefaultRegistry (idempotent seed); call seedWorkspaceDefaultCapabilities (idempotent seed); call seedWorkspaceDefaultSkills (idempotent seed); emit workspace.created event; return {publicId, name, slug, orgSlug, createdAt as ISO string}
+- **THEN** insert workspaces row (orgId, name, slug, createdById, updatedById); insert workspace_users row (workspaceId, userId, role="owner", joinedAt=now); call bootstrapWorkspaceAgents (idempotent seed); call seedWorkspaceDefaultRegistry (idempotent seed); call seedWorkspaceDefaultCapabilities (idempotent seed); call seedWorkspaceDefaultSkills (idempotent seed); emit workspace.created event; return {publicId, name, slug, orgSlug, createdAt as ISO string}
 
 #### Scenario: Slug collision (race condition)
 <!-- test: workspace.create.test.ts:slug conflict (race) -->
@@ -526,13 +526,13 @@ When an authenticated user writes user.preferences, the system SHALL upsert the 
 <!-- test: user.preferences.write.test.ts:preferences updated -->
 
 - **WHEN** ctx.userId is set AND no user_preferences row exists AND input provides some fields
-- **THEN** build insertValues with userId, createdByUserId, updatedByUserId, fontSize (or default "medium"), density (or default "comfortable"), enterToSubmit (or default false), pendingPromptBehavior (or default "queue"), plus any provided model fields; execute insert onConflictDoUpdate; re-read row; return full {fontSize, density, enterToSubmit, pendingPromptBehavior, defaultTextTier, defaultTextModel}
+- **THEN** build insertValues with userId, createdById, updatedById, fontSize (or default "medium"), density (or default "comfortable"), enterToSubmit (or default false), pendingPromptBehavior (or default "queue"), plus any provided model fields; execute insert onConflictDoUpdate; re-read row; return full {fontSize, density, enterToSubmit, pendingPromptBehavior, defaultTextTier, defaultTextModel}
 
 #### Scenario: User updates existing preferences (update)
 <!-- test: user.preferences.write.test.ts -->
 
 - **WHEN** ctx.userId is set AND user_preferences row exists AND input provides some fields
-- **THEN** build updateSet with only provided fields (undefined fields skipped) plus updatedByUserId=ctx.userId; execute upsert onConflictDoUpdate set updateSet; re-read row; return full state
+- **THEN** build updateSet with only provided fields (undefined fields skipped) plus updatedById=ctx.userId; execute upsert onConflictDoUpdate set updateSet; re-read row; return full state
 
 #### Scenario: Unauthenticated user attempts write
 <!-- test: user.preferences.write.test.ts -->
@@ -630,7 +630,7 @@ When a user accepts an invitation, provisionMemberPrincipal creates a least-priv
 <!-- entities: PrincipalRoleAssignment -->
 <!-- enforced: org.member.remove.orgMemberRemoveHandler(), org.member.role.change.orgMemberRoleChangeHandler() -->
 
-When role assignments are revoked (due to member removal or role change), the system soft-deletes the principal_role_assignments row (sets deletedAt, deletedByUserId, updatedAt, updatedByUserId) rather than hard-deleting. This preserves the audit trail for compliance.
+When role assignments are revoked (due to member removal or role change), the system soft-deletes the principal_role_assignments row (sets deletedAt, deletedById, updatedAt, updatedById) rather than hard-deleting. This preserves the audit trail for compliance.
 
 ---
 

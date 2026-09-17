@@ -4,9 +4,12 @@
 // Soft-deletes the active principal_role_assignments row (audit trail
 // preserved; agent.role.assign resurrects it on re-assign). Revocation is
 // pure narrowing, so it carries no tier gate and no delegation-ceiling check.
-// Idempotent: revoking an unheld role returns revoked=false.
+// Idempotent: revoking an unheld role returns revoked=false. Role gate:
+// org Owner or Admin (assertOrgRole, INV-29), for the signed-in user or the
+// creator of the API key (resolveActingUserId), who is recorded as the actor.
 
 import { withTenantDb, schema } from "@oxagen/database";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq, isNull } from "drizzle-orm";
 import pino from "pino";
 import { agentRoleRevoke } from "@oxagen/oxagen/contracts/agent.role.revoke";
@@ -19,7 +22,6 @@ import {
   AgentPrincipalMissingError,
   emitAgentRoleAudit,
   resolveAgentForRoles,
-  resolveEffectiveAssigner,
   resolveRoleByName,
 } from "./_agent-role";
 
@@ -34,16 +36,18 @@ export async function agentRoleRevokeHandler(
   input: AgentRoleRevokeInput,
   ctx: CapabilityContext,
 ): Promise<AgentRoleRevokeOutput> {
-  if (!ctx.userId && !ctx.apiKeyId) {
-    throw new Error("Unauthorized: no authenticated principal");
-  }
   if (!ctx.orgId || !ctx.workspaceId) {
     throw new Error("Forbidden: org and workspace scope are required");
   }
+  const actingUserId = await resolveActingUserId(ctx);
+  await assertOrgRole(
+    { ...ctx, userId: actingUserId },
+    { org: ["Owner", "Admin"] },
+  );
+  // assertOrgRole refused a call with no acting user.
+  const actorUserId = actingUserId as string;
 
   const result = await withTenantDb(async (tx) => {
-    const actorUserId = await resolveEffectiveAssigner(tx, ctx);
-
     const agent = await resolveAgentForRoles(
       tx,
       input.agentId,
@@ -57,9 +61,9 @@ export async function agentRoleRevokeHandler(
       .update(schema.principalRoleAssignments)
       .set({
         deletedAt: new Date(),
-        deletedByUserId: actorUserId,
+        deletedById: actorUserId,
         updatedAt: new Date(),
-        updatedByUserId: actorUserId,
+        updatedById: actorUserId,
       })
       .where(
         and(

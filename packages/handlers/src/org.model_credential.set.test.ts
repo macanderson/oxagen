@@ -146,7 +146,7 @@ describe("org.model_credential.set handler", () => {
     expect(written.keyHint).toBe("wxyz");
     expect(written.provider).toBe("openrouter");
     expect(written.orgId).toBe(CTX.orgId);
-    expect(written.createdByUserId).toBe(CTX.userId);
+    expect(written.createdById).toBe(CTX.userId);
     // No plaintext key anywhere in the persisted row.
     expect(JSON.stringify(written)).not.toContain(API_KEY);
     expect(JSON.stringify(written)).not.toContain("super-secret");
@@ -159,7 +159,7 @@ describe("org.model_credential.set handler", () => {
     expect(written.status).toBe("active");
     expect(written.lastVerifiedAt).toBeNull();
     expect(written.rotatedAt).toBeInstanceOf(Date);
-    expect(written.updatedByUserId).toBe(CTX.userId);
+    expect(written.updatedById).toBe(CTX.userId);
   });
 
   it("rotates in place: updates the live row instead of inserting a second one", async () => {

@@ -1313,8 +1313,8 @@ CREATE TABLE mcp.registries (
   public_id          citext NOT NULL UNIQUE,
   created_at         timestamptz NOT NULL DEFAULT now(),
   updated_at         timestamptz NOT NULL DEFAULT now(),
-  created_by_user_id uuid,
-  updated_by_user_id uuid,
+  created_by_id uuid,
+  updated_by_id uuid,
   org_id             uuid,
   name               text NOT NULL,
   base_url           text NOT NULL,
@@ -1337,8 +1337,8 @@ CREATE TABLE mcp.catalog_servers (
   public_id           citext NOT NULL UNIQUE,
   created_at          timestamptz NOT NULL DEFAULT now(),
   updated_at          timestamptz NOT NULL DEFAULT now(),
-  created_by_user_id  uuid,
-  updated_by_user_id  uuid,
+  created_by_id  uuid,
+  updated_by_id  uuid,
   registry_id         uuid NOT NULL REFERENCES mcp.registries(id) ON DELETE CASCADE,
   name                text NOT NULL,
   version             text NOT NULL,
@@ -1379,10 +1379,10 @@ CREATE TABLE plugin.org_listings (
   public_id          citext NOT NULL UNIQUE,
   created_at         timestamptz NOT NULL DEFAULT now(),
   updated_at         timestamptz NOT NULL DEFAULT now(),
-  created_by_user_id uuid,
-  updated_by_user_id uuid,
+  created_by_id uuid,
+  updated_by_id uuid,
   deleted_at         timestamptz,
-  deleted_by_user_id uuid,
+  deleted_by_id uuid,
   org_id             uuid NOT NULL,
   plugin_type        text NOT NULL,
   catalog_server_id  uuid REFERENCES mcp.catalog_servers(id) ON DELETE SET NULL,
@@ -1415,8 +1415,8 @@ CREATE TABLE plugin.org_denylist (
   public_id          citext NOT NULL UNIQUE,
   created_at         timestamptz NOT NULL DEFAULT now(),
   updated_at         timestamptz NOT NULL DEFAULT now(),
-  created_by_user_id uuid,
-  updated_by_user_id uuid,
+  created_by_id uuid,
+  updated_by_id uuid,
   org_id             uuid NOT NULL,
   plugin_type        text NOT NULL,
   server_name        text NOT NULL,
@@ -1436,8 +1436,8 @@ CREATE TABLE mcp.credentials (
   public_id               citext NOT NULL UNIQUE,
   created_at              timestamptz NOT NULL DEFAULT now(),
   updated_at              timestamptz NOT NULL DEFAULT now(),
-  created_by_user_id      uuid,
-  updated_by_user_id      uuid,
+  created_by_id      uuid,
+  updated_by_id      uuid,
   org_id                  uuid NOT NULL,
   workspace_id            uuid NOT NULL,
   org_listing_id          uuid NOT NULL REFERENCES plugin.org_listings(id) ON DELETE CASCADE,
@@ -1475,8 +1475,8 @@ CREATE TABLE notification.notifications (
   public_id          citext NOT NULL UNIQUE,
   created_at         timestamptz NOT NULL DEFAULT now(),
   updated_at         timestamptz NOT NULL DEFAULT now(),
-  created_by_user_id uuid,
-  updated_by_user_id uuid,
+  created_by_id uuid,
+  updated_by_id uuid,
   org_id             uuid NOT NULL,
   workspace_id       uuid,
   user_id            uuid NOT NULL,
@@ -4307,7 +4307,7 @@ VERIFY: needs the listing's `endpointUrl` (join `pluginOrgListings` on `orgListi
 
 ### Grounded conventions (verified from codebase)
 
-- **`notification.notifications` schema** (`packages/database/src/schema/notification.ts`): columns `id uuid PK`, `publicId citext`, `createdAt/updatedAt/createdByUserId/updatedByUserId` (audit), `orgId uuid`, `workspaceId uuid nullable`, `userId uuid`, `kind text` CHECK `IN ('system','approval','run','member','security')`, `title text`, `body text nullable`, `deepLink text nullable`, `unread boolean DEFAULT true`, `archived boolean DEFAULT false`, `emailedAt timestamptz nullable`. Drizzle export: `schema.notifications`.
+- **`notification.notifications` schema** (`packages/database/src/schema/notification.ts`): columns `id uuid PK`, `publicId citext`, `createdAt/updatedAt/createdById/updatedById` (audit), `orgId uuid`, `workspaceId uuid nullable`, `userId uuid`, `kind text` CHECK `IN ('system','approval','run','member','security')`, `title text`, `body text nullable`, `deepLink text nullable`, `unread boolean DEFAULT true`, `archived boolean DEFAULT false`, `emailedAt timestamptz nullable`. Drizzle export: `schema.notifications`.
 - **`sendEmail(input: SendEmailInput)`** in `@oxagen/notifications` (`packages/notifications/src/send-email.ts`): validates via `sendEmailInputSchema`, dispatches via configured SMTP transport. `SendEmailInput` fields: `to` (string | string[]), `subject`, `text?`, `html?`, `from?`, `replyTo?`, `cc?`, `bcc?` — must supply at least `text` or `html`.
 - **`org.org_users`** (`packages/database/src/schema/org.ts`): `orgId uuid`, `userId uuid`, `role text`. `org.organizations.settings jsonb DEFAULT '{}'`.
 - **`auth.users`** (`packages/database/src/schema/auth.ts`): `id uuid`, `email citext NOT NULL`.

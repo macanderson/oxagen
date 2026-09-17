@@ -602,6 +602,59 @@ describe("T5: V1/V2 event discriminant", () => {
     ).rejects.toThrow(/agent_runs_v2_identity_check/);
   });
 
+  it("admits a general V2 run with no repository binding", async () => {
+    // A general run frames context and calls tools but binds no repository
+    // (run-spec-v2.ts generalRunSpecV2Schema): every repository column is NULL
+    // and the rest of the V2 identity is complete. Before migration
+    // 20260914190000 the CHECK refused this row, so the ledger could admit no
+    // general run at all.
+    const rows = await asSystem(
+      (tx) => tx<{ id: string }[]>`
+        INSERT INTO agent.agent_runs
+          (public_id, org_id, workspace_id, surface, status, spec,
+           spec_version, run_kind, spec_digest,
+           initiating_principal_id, agent_principal_id, agent_id, agent_version_id,
+           agent_version_checksum, authorization_snapshot_id,
+           retention_policy_id, retention_policy_digest, max_attempts)
+        VALUES
+          ('raf_test_run_general', ${ORG_A}, ${WS_A}, 'external', 'pending', '{}'::jsonb,
+           2, 'general', ${DIGEST_B},
+           gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), gen_random_uuid(),
+           ${DIGEST_C}, ${SNAPSHOT_ID},
+           ${RETENTION_ID}, ${DIGEST_A}, 3)
+        RETURNING id
+      `,
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("rejects a general V2 run that carries a repository binding", async () => {
+    // The repository columns follow run_kind in both directions: a general
+    // run may not smuggle repository authority in through the typed columns.
+    await expect(
+      asSystem(
+        (tx) => tx`
+          INSERT INTO agent.agent_runs
+            (public_id, org_id, workspace_id, surface, status, spec,
+             spec_version, run_kind, spec_digest,
+             initiating_principal_id, agent_principal_id, agent_id, agent_version_id,
+             agent_version_checksum, authorization_snapshot_id,
+             repository_binding_id, repository_provider, provider_repository_id,
+             repository_connection_id, configured_default_ref, base_commit_sha, base_tree_sha,
+             retention_policy_id, retention_policy_digest, max_attempts)
+          VALUES
+            ('raf_test_run_general_bound', ${ORG_A}, ${WS_A}, 'external', 'pending', '{}'::jsonb,
+             2, 'general', ${DIGEST_B},
+             gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), gen_random_uuid(),
+             ${DIGEST_C}, ${SNAPSHOT_ID},
+             ${BINDING_ID}, 'github', '918273645',
+             ${CONNECTION_ID}, 'main', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+             ${RETENTION_ID}, ${DIGEST_A}, 3)
+        `,
+      ),
+    ).rejects.toThrow(/agent_runs_v2_identity_check/);
+  });
+
   it("rejects a V1 run that smuggles in a trusted principal", async () => {
     await expect(
       asSystem(

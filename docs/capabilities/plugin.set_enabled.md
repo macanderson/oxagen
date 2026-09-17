@@ -3,7 +3,7 @@
 **Domain:** plugin
 **Mode:** sync
 **Scope:** org / workspace (selected by the `scope` argument)
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 **Risk level:** medium
 
 ## Intent

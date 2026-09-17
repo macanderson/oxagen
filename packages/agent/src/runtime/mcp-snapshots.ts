@@ -26,7 +26,7 @@ export interface CaptureSnapshotArgs {
   workspaceId: string;
   mcpServerId: string;
   descriptors: McpToolDescriptor[];
-  createdByUserId?: string | null;
+  createdById?: string | null;
 }
 
 /**
@@ -50,7 +50,7 @@ export async function captureToolSnapshots(
       description: d.description,
       inputSchema: d.inputSchema,
     } as object,
-    createdByUserId: args.createdByUserId ?? null,
+    createdById: args.createdById ?? null,
   }));
   await withTenantDb((tx) => tx.insert(schema.mcpToolSnapshots).values(values));
   return values.length;

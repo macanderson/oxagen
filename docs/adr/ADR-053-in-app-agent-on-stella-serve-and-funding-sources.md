@@ -161,3 +161,61 @@ subsidy to whoever prompts most.
   set its assistant cap.
 - The node runs one more container. Its health is part of the deploy's
   health check, and its bearer token is a parameter beside the others.
+
+## Amendment, 2026-09-15 (#2968): the turn is a run, and the three shell decisions
+
+**Every turn is a run in the evidence ledger.** `openAssistantRun`
+(`packages/agent/src/runtime/assistant-run.ts`) admits the turn before the
+engine is contacted, under the workspace's managed interactive agent acting
+through the `oxagen.assistant` service principal, with the asking person's
+human principal as the initiating principal. Every provider and tool request
+the host answers for `stella-serve` is recorded first, as
+`model.engine_call_completed` or `tool.engine_call_completed` keyed by the
+engine frame's `seq`, and a receipt that cannot be written rejects the request
+and cancels the turn. The seal carries verdict `waived` for a completed turn,
+`cancelled` for an aborted one and `failed` for an engine failure. A turn the
+ledger cannot admit does not answer (`assistant_run_not_recorded`). The run is
+admitted on the `chat` or `api-chat` surface, and `list_runs`,
+`list_recent_runs` and `search_tools` exclude both: the assistant is Oxagen's,
+and its turns are never the customer's runs.
+
+**One gate path for every adapter.** `POST /chat/stream`, `POST
+/assistant/ask` and the MCP tool all reach the turn through
+`kernel.invoke("ask_assistant")`; the SSE route carries its hooks and
+overrides beside the invoke. The contract declares `noBillingGate: true`, so
+the turn is never a governed action, and the handler runs the turn outside its
+own invoke's frame (`runOutsideGovernedAction`), so each tool call stays a
+top-level governed action as §1 requires. The contract's roles are checked in
+the turn for every organisation tier. The turn's message id is the persisted
+user message, so `resolve_approval` finds the person who asked.
+
+**The tool list is the belt.** The engine is declared every governed tool plus
+`search_tools` and `load_tools`; each completion shows the provider the pinned
+belt, the two meta-tools and what the model loaded by name, under
+`assertToolListFitsProvider` (#2611).
+
+Decisions 1–3 of #2968, each the issue's recommendation, adopted:
+
+1. **The flyout is in rev1.** The maintainer kept the in-app agent on
+   2026-09-14 ("dont cut the in app agent"); `apps/app/ARCHITECTURE.md` §0 and
+   §1.2 carry it as a shell feature of the #2968 lane.
+2. **Where the engine runs and how its health is read.** As §1 of this ADR: a
+   container on the node, reached over HTTP at `STELLA_SERVE_URL` with
+   `STELLA_SERVE_TOKEN`. The API probes it through `get_assistant_engine`
+   (`GET /readyz`, three attempts, two seconds each) and answers `ready`,
+   `starting`, `draining`, `unreachable` or `unconfigured` with the attempts
+   made. The incident row the recommendation names needs an incident store,
+   and rev1 has none (Audit is cut to the archive at seal), so the contract
+   carries `incident: null` until one exists.
+3. **Assistant billing.** The run is free to the customer: verdict `waived`,
+   no GAU debit (`noBillingGate` on `ask_assistant`), absent from Fleet and
+   from spend. Each tool call inside the turn is still a governed action. Tokens under the `platform`
+   source still debit the organisation's platform-funded assistant balance
+   under `consume_assistant_tokens`, which is the per-organisation cap of §3;
+   under ADR-055 that balance is never invoiced, so §3's "billed back as its
+   own line" does not reach a statement. The balance is funded by the $5
+   signup grant: the maintainer decided on 2026-09-15 to restore it in
+   `create_org` (`grantSignupCredits` on the org's bootstrap transaction,
+   ADR-055 §13, `apps/app/ARCHITECTURE.md` §9). `set_org_billing_terms`
+   stays an idempotent terms upsert and carries no grant.
+

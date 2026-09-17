@@ -2,6 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { contextRecordPublish } from "@oxagen/oxagen/contracts/context.record.publish";
 import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
+import { assertWorkspaceNotProvisional } from "./lib/onboarding";
 import { logger } from "./logger";
 import { sha256Hex } from "./registry-digest";
 
@@ -28,6 +29,9 @@ export const contextRecordPublishHandler: CapabilityHandler<
 
   const orgId = ctx.orgId;
   const workspaceId = ctx.workspaceId;
+
+  // A provisional workspace has no main repository to publish to (#2967).
+  await assertWorkspaceNotProvisional({ orgId, workspaceId });
 
   const findExisting = async () => {
     const rows = await withTenantDb((tx) =>
@@ -59,8 +63,8 @@ export const contextRecordPublishHandler: CapabilityHandler<
     provenance,
     isLatest: true,
     publishedAt: sql`now()`,
-    createdByUserId: ctx.userId ?? undefined,
-    updatedByUserId: ctx.userId ?? undefined,
+    createdById: ctx.userId ?? undefined,
+    updatedById: ctx.userId ?? undefined,
   };
 
   // Version-publish path against an existing record row: idempotent when the
@@ -130,7 +134,7 @@ export const contextRecordPublishHandler: CapabilityHandler<
           activeVersionId: versionRow.id,
           activatedByUserId: ctx.userId ?? undefined,
           activatedAt: sql`now()`,
-          updatedByUserId: ctx.userId ?? undefined,
+          updatedById: ctx.userId ?? undefined,
           updatedAt: sql`now()`,
         })
         .where(eq(schema.contextRecords.id, existing.id));
@@ -167,8 +171,8 @@ export const contextRecordPublishHandler: CapabilityHandler<
           slug,
           title: input.title,
           status: "active",
-          createdByUserId: ctx.userId ?? undefined,
-          updatedByUserId: ctx.userId ?? undefined,
+          createdById: ctx.userId ?? undefined,
+          updatedById: ctx.userId ?? undefined,
         })
         .returning({
           id: schema.contextRecords.id,

@@ -61,8 +61,8 @@ export async function getOrCreateRegistry(
       .values({
         orgId,
         workspaceId,
-        createdByUserId: userId,
-        updatedByUserId: userId,
+        createdById: userId,
+        updatedById: userId,
         enforcementMode: "lenient",
         conformanceFloor: "0.50",
       })
@@ -79,8 +79,8 @@ export async function getOrCreateRegistry(
         registryId: registry.id,
         versionNumber: 1,
         status: "draft",
-        createdByUserId: userId,
-        updatedByUserId: userId,
+        createdById: userId,
+        updatedById: userId,
       })
       .returning();
 
@@ -89,7 +89,7 @@ export async function getOrCreateRegistry(
     // Update registry with draftVersionId
     const [updated] = await tx
       .update(db.schemaRegistries)
-      .set({ draftVersionId: draft.id, updatedByUserId: userId })
+      .set({ draftVersionId: draft.id, updatedById: userId })
       .where(eq(db.schemaRegistries.id, registry.id))
       .returning();
 
@@ -218,7 +218,7 @@ export async function publishDraft(
         label: label ?? null,
         changeSummary: changeSummary ?? null,
         versionNumber: nextNumber,
-        updatedByUserId: userId,
+        updatedById: userId,
       })
       .where(eq(db.schemaVersions.id, draftVersionId))
       .returning();
@@ -240,8 +240,8 @@ export async function publishDraft(
         versionNumber: nextNumber + 1,
         status: "draft",
         parentVersionId: published.id,
-        createdByUserId: userId,
-        updatedByUserId: userId,
+        createdById: userId,
+        updatedById: userId,
       })
       .returning();
 
@@ -272,8 +272,8 @@ export async function publishDraft(
           description: s.description,
           source: s.source,
           connectorId: s.connectorId,
-          createdByUserId: userId,
-          updatedByUserId: userId,
+          createdById: userId,
+          updatedById: userId,
         })
         .returning();
       if (newSchema) schemaIdMap.set(s.id, newSchema.id);
@@ -311,8 +311,8 @@ export async function publishDraft(
           displayName: l.displayName,
           description: l.description,
           naturalKeyProps: l.naturalKeyProps,
-          createdByUserId: userId,
-          updatedByUserId: userId,
+          createdById: userId,
+          updatedById: userId,
         })
         .returning();
       if (newLabel) labelIdMap.set(l.id, newLabel.id);
@@ -347,8 +347,8 @@ export async function publishDraft(
           startLabel: r.startLabel,
           endLabel: r.endLabel,
           cardinality: r.cardinality,
-          createdByUserId: userId,
-          updatedByUserId: userId,
+          createdById: userId,
+          updatedById: userId,
         })
         .returning();
       if (newRel) relIdMap.set(r.id, newRel.id);
@@ -387,15 +387,15 @@ export async function publishDraft(
         itemType: p.itemType,
         constraints: p.constraints,
         example: p.example,
-        createdByUserId: userId,
-        updatedByUserId: userId,
+        createdById: userId,
+        updatedById: userId,
       });
     }
 
     // 9. Update registry draftVersionId pointer
     await tx
       .update(db.schemaRegistries)
-      .set({ draftVersionId: newDraft.id, updatedByUserId: userId })
+      .set({ draftVersionId: newDraft.id, updatedById: userId })
       .where(eq(db.schemaRegistries.id, registryId));
 
     logger.info(
@@ -483,7 +483,7 @@ export async function pinVersion(
     // Update pin
     await tx
       .update(db.schemaRegistries)
-      .set({ pinnedVersionId: targetVersion.id, updatedByUserId: userId })
+      .set({ pinnedVersionId: targetVersion.id, updatedById: userId })
       .where(eq(db.schemaRegistries.id, registryRowId));
 
     await invalidatePinnedSchemaCache(workspaceId);
@@ -535,8 +535,8 @@ export async function getOrCreateDraftSchema(
       name: schemaName,
       displayName: schemaName,
       source: "user",
-      createdByUserId: userId,
-      updatedByUserId: userId,
+      createdById: userId,
+      updatedById: userId,
     })
     .returning();
 
@@ -561,8 +561,8 @@ export async function getOrCreateDraftSchema(
       workspaceId,
       schemaName,
       enabled: false,
-      createdByUserId: userId,
-      updatedByUserId: userId,
+      createdById: userId,
+      updatedById: userId,
     });
   }
 

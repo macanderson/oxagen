@@ -97,7 +97,7 @@ export const orgModelCredentialSetHandler: CapabilityHandler<
       lastVerifiedAt: null,
       rotatedAt: now,
       updatedAt: now,
-      updatedByUserId: ctx.userId ?? null,
+      updatedById: ctx.userId ?? null,
     };
 
     if (existing) {
@@ -112,7 +112,7 @@ export const orgModelCredentialSetHandler: CapabilityHandler<
       .insert(schema.modelCredentials)
       .values({
         orgId: ctx.orgId,
-        createdByUserId: ctx.userId ?? null,
+        createdById: ctx.userId ?? null,
         ...mutation,
       })
       .returning();

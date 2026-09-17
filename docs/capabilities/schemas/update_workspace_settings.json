@@ -1,7 +1,7 @@
 {
   "name": "update_workspace_settings",
   "domain": "workspace",
-  "description": "Update the active workspace's general settings (partial): name, slug, and description. Routes the workspace settings edit through the kernel so the same fields are reachable from the agent, MCP, and CLI with metering + audit.",
+  "description": "Update a workspace's general settings (partial): name, slug, description, and the consequence-role overrides for mandates. The active workspace unless workspaceId names another one in the organization. The handler checks roles: org Owners and Admins edit any workspace of the organization; the Owner or Admin of the workspace the call is scoped to edits that workspace only, without workspaceId. Only an org Owner writes consequenceRoles.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -24,6 +24,9 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
       "name": {
         "type": "string",
         "minLength": 1,
@@ -31,8 +34,8 @@
       },
       "slug": {
         "type": "string",
-        "minLength": 1,
-        "maxLength": 100
+        "minLength": 2,
+        "maxLength": 40
       },
       "description": {
         "anyOf": [
@@ -55,6 +58,21 @@
             "type": "null"
           }
         ]
+      },
+      "consequenceRoles": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "Owner",
+              "Admin",
+              "Compliance",
+              "Billing"
+            ]
+          }
+        }
       }
     },
     "additionalProperties": false
@@ -88,13 +106,29 @@
             "type": "null"
           }
         ]
+      },
+      "consequenceRoles": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "Owner",
+              "Admin",
+              "Compliance",
+              "Billing"
+            ]
+          }
+        }
       }
     },
     "required": [
       "name",
       "slug",
       "description",
-      "avatarUrl"
+      "avatarUrl",
+      "consequenceRoles"
     ],
     "additionalProperties": false
   }

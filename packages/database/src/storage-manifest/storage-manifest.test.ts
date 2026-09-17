@@ -19,6 +19,7 @@ const EXPECTED_PG_SCHEMAS = [
   "billing",
   "chat",
   "content",
+  "cost",
   "environments",
   "evidence",
   "iam",
@@ -31,6 +32,7 @@ const EXPECTED_PG_SCHEMAS = [
   "ratelimit",
   "schema_registry",
   "security",
+  "tools",
   "workspace",
 ] as const;
 

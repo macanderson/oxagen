@@ -39,7 +39,7 @@ export const updateWorkspace = defineTool({
   name: "update_workspace",
   domain: "workspace",
   description:
-    "Update a workspace (partial): identity, governance mode, retention mode, promotion thresholds, the memory decay policy, the per-turn dollar budget, and the market-router policy. Only the fields supplied change.",
+    "Update a workspace (partial): identity, the consequence-role map that decides who may grant a mandate, governance mode, retention mode, promotion thresholds, the memory decay policy, the per-turn dollar budget, and the market-router policy. Only the fields supplied change.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -96,11 +96,28 @@ export const updateWorkspace = defineTool({
   mutates: true,
 
   input: z.object({
-    // ---- identity (update_workspace_settings, carried by reference) --------
+    // ---- target and identity (update_workspace_settings, carried by reference)
+    /**
+     * Which workspace of the org to update; omitted, the one the call is
+     * scoped to. The Organization › Workspaces section edits from an org
+     * scope, so the target travels by public id.
+     */
+    workspaceId: workspaceSettingsWrite.input.shape.workspaceId,
     name: workspaceSettingsWrite.input.shape.name,
     slug: workspaceSettingsWrite.input.shape.slug,
     description: workspaceSettingsWrite.input.shape.description,
     avatarUrl: workspaceSettingsWrite.input.shape.avatarUrl,
+
+    /**
+     * ADR-059 decision 1, carried by reference from
+     * `update_workspace_settings`: consequence tag → the org roles that may
+     * grant, change or revoke a mandate for it. Governing a workspace is
+     * exactly where this belongs — it decides who is allowed to hand an agent
+     * bounded authority to move money or alter production, which is the same
+     * question `governanceMode` below answers for Context changes. Replaces
+     * the stored overrides as a whole; omit = unchanged.
+     */
+    consequenceRoles: workspaceSettingsWrite.input.shape.consequenceRoles,
 
     // ---- governance (new; Appendix A wrk.workspaces) ----------------------
     /**
@@ -191,6 +208,14 @@ export const updateWorkspace = defineTool({
     slug: workspaceSettingsWrite.output.shape.slug,
     description: workspaceSettingsWrite.output.shape.description,
     avatarUrl: workspaceSettingsWrite.output.shape.avatarUrl,
+
+    /**
+     * The EFFECTIVE map, not the overrides the call sent: every starter tag
+     * plus the workspace's own, each resolved against the defaults. Same
+     * shape `update_workspace_settings` and `get_workspace_settings` return,
+     * so a partial update's caller learns the tags it did not send.
+     */
+    consequenceRoles: workspaceSettingsWrite.output.shape.consequenceRoles,
 
     governanceMode: z.enum(["solo", "team", "regulated"]),
     /** Null means "inherit the organization's" — see the input field. */

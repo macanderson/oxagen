@@ -335,3 +335,64 @@ export const modelCredentials = orgSchema.table(
     ),
   }),
 );
+
+// ── onboarding_state ─────────────────────────────────────────────────────────
+// The onboarding gate (MC spec App. F, mockup `OB_STEPS`; #2967). One row per
+// organization, written by `create_org` at the moment the organization exists
+// (the mockup's `organization` step is complete), advanced by
+// `advance_onboarding` between `wrap` and `run`, and closed by the first frame
+// `ingest_tacho_events` accepts from one of the organization's hosts, which is
+// the only writer of `unlocked` and of `first_frame_at` / `first_run_id`. The
+// provisional window (spec §3: 14 days without a main repo) is `provisional_
+// until` with `main_repo_bound_at` null; `bind_main_repository` closes it. An
+// organization created before this table existed has no row: it was never
+// provisional and no first frame is known for it, and every reader treats the
+// missing row as an open gate with no window. Org-only RLS.
+export const PROVISIONAL_DAYS = 14;
+
+export const onboardingState = orgSchema.table(
+  "onboarding_state",
+  {
+    orgId: uuid("org_id").primaryKey(),
+    // The gate's workspace: the first one, made by create_org. App-enforced.
+    workspaceId: uuid("workspace_id").notNull(),
+    step: text("step").notNull().default("wrap"),
+    firstFrameAt: timestamp("first_frame_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    // The public id of the run the first frame opened (`tse_…`), the row Fleet reads.
+    firstRunId: text("first_run_id"),
+    provisionalUntil: timestamp("provisional_until", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    mainRepoBoundAt: timestamp("main_repo_bound_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    // The git remote the enrolling host reported: `{ provider, owner, name }`.
+    // Written once by enroll_host while the gate is open; the app offers it
+    // to bind_main_repository. Null until a host reports one.
+    detectedRepository: jsonb("detected_repository"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    stepCheck: check(
+      "onboarding_state_step_check",
+      sql`${t.step} IN ('wrap', 'run', 'unlocked')`,
+    ),
+    // `unlocked`, the instant and the run id arrive together, from the one
+    // writer (`unlockOnboardingGate`): a row is unlocked exactly when it
+    // carries the frame that opened it.
+    firstFrameCheck: check(
+      "onboarding_state_first_frame_check",
+      sql`(${t.step} = 'unlocked') = (${t.firstFrameAt} IS NOT NULL) AND (${t.firstFrameAt} IS NULL) = (${t.firstRunId} IS NULL)`,
+    ),
+  }),
+);

@@ -6,6 +6,7 @@ import { z } from "zod";
 // behavior lives in generate-object.test.ts; here we mock ./cache so no DB is
 // touched and assert the hit-skips-everything / miss-writes-through contract.
 const mocks = vi.hoisted(() => ({
+  recordSpend: vi.fn(),
   generateObject: vi.fn(),
   insertTokenUsage: vi.fn(),
   hashPrompt: vi.fn(),
@@ -39,6 +40,7 @@ vi.mock("@oxagen/telemetry", () => ({
 vi.mock("@oxagen/billing", () => ({
   providerCostUsdMicros: mocks.providerCostUsdMicros,
   chargeUsageCredits: mocks.chargeUsageCredits,
+  recordSpend: mocks.recordSpend,
   // The module under test names a reason constant; the factory must carry it.
   CREDIT_REASONS: { CONSUME_ASSISTANT_TOKENS: "consume_assistant_tokens" },
 }));

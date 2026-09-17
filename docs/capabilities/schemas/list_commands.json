@@ -1,0 +1,221 @@
+{
+  "name": "list_commands",
+  "domain": "control",
+  "description": "The delivery report for one run: every command addressed to it, newest first, with its status, the requested and achieved delivery mode, and the frame an applied command landed on.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 50
+      }
+    },
+    "required": [
+      "runId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "commands": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "command": {
+              "type": "string",
+              "enum": [
+                "pause",
+                "resume",
+                "cancel",
+                "steer",
+                "message",
+                "revoke",
+                "refresh_bundle",
+                "kill"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "queued",
+                "sent",
+                "received",
+                "acknowledged",
+                "applied",
+                "cancelled",
+                "expired",
+                "failed"
+              ]
+            },
+            "requestedMode": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "next_step",
+                    "interrupt",
+                    "turn_boundary"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "deliveryMode": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "next_step",
+                    "interrupt",
+                    "turn_boundary"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "degradedReason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "issuedAt": {
+              "type": "string"
+            },
+            "expiresAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sentAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "acknowledgedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "appliedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "appliedAtSeq": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "detail": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "command",
+            "status",
+            "requestedMode",
+            "deliveryMode",
+            "degradedReason",
+            "reason",
+            "issuedAt",
+            "expiresAt",
+            "sentAt",
+            "acknowledgedAt",
+            "appliedAt",
+            "appliedAtSeq",
+            "detail"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "commands"
+    ],
+    "additionalProperties": false
+  }
+}

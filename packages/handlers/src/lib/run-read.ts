@@ -1,0 +1,231 @@
+// run-read.ts — resolving a run in the caller's workspace and reading its
+// frames from the store that recorded it (ADR-058).
+//
+// `arun_…` is an evidence-ledger run: the header row comes from
+// `agent.agent_runs` with its identity joins and its latest seal, the frames
+// from `agent.agent_run_events` through the ledger store. `tse_…` is a
+// wrapped session: the header from `tacho.sessions`, the frames from
+// ClickHouse `tacho_events` through the telemetry read seam. Both readers
+// answer the one `RunFrame` shape (`@oxagen/run-ledger`), cursored on the
+// run's own sequence, so every capability over a recording reads it the same
+// way.
+//
+// A run the caller's workspace does not hold is `not_found`, whichever store
+// minted its id: the ledger store fences the org through RLS and the identity
+// query fences the workspace as well, which also holds on a stack that runs
+// with the RLS bypass on. A witness run is `not_found` to an API-key caller
+// (ADR-064): a worker holds API keys and never sees a witness or its run.
+import type { CapabilityContext } from "@oxagen/oxagen";
+import { HandlerError } from "@oxagen/oxagen/handler-error";
+import type { RunItem } from "@oxagen/oxagen/contracts/run.list";
+import {
+  createPostgresRunStore,
+  ledgerFrame,
+  type RunFrame,
+  type RunStore,
+  tachoFrame,
+} from "@oxagen/run-ledger";
+import { deferredEvidenceArchive } from "@oxagen/run-ledger/evidence-store";
+import { selectTachoEvents } from "@oxagen/telemetry";
+import {
+  ledgerEnrichment,
+  type LedgerRunRecord,
+  type LedgerRunRow,
+  postgresReadRunRollups,
+  postgresRunQueries,
+  type ReadRunRollups,
+  type RunQueries,
+  runScope,
+  type RunScope,
+  type TachoSessionRow,
+  toLedgerRunItem,
+  toTachoRunItem,
+} from "../run.list";
+import { readWitnessFor } from "./proof";
+
+/** The most frames one read of either store returns. */
+const FRAME_READ_MAX = 500;
+
+type ResolvedSource =
+  | {
+      source: "ledger";
+      /** `agent_runs.id`. */
+      runId: string;
+      row: LedgerRunRow;
+      record: LedgerRunRecord;
+      item: RunItem;
+    }
+  | {
+      source: "tacho";
+      sessionUuid: string;
+      row: TachoSessionRow;
+      item: RunItem;
+    };
+
+export type ResolvedRun = ResolvedSource & {
+  /** The worker run this run witnessed (ADR-064); null for any other run. */
+  witnessFor: string | null;
+};
+
+type TachoFrameReader = typeof selectTachoEvents;
+
+export type RunReadDeps = {
+  queries: Pick<
+    RunQueries,
+    "ledgerIdentity" | "ledgerRollups" | "ledgerSeals" | "tachoSession"
+  >;
+  store: Pick<RunStore, "getRunByPublicId" | "readAttemptEventsSince">;
+  readRunRollups: ReadRunRollups;
+  /** The worker run a witness run was for (ADR-064); null for any other run. */
+  readWitnessFor: (scope: RunScope, runId: string) => Promise<string | null>;
+  tachoFrames: TachoFrameReader;
+};
+
+export const runNotFound = () =>
+  new HandlerError({ code: "not_found", reason: "run_not_found" });
+
+/**
+ * The run behind a public id, with its header and its witness link, or
+ * `not_found`: for a run outside the caller's workspace, and for a witness run
+ * when the caller holds an API key.
+ */
+export async function resolveRun(
+  deps: RunReadDeps,
+  ctx: CapabilityContext,
+  publicId: string,
+): Promise<ResolvedRun> {
+  const scope = runScope(ctx);
+  const run = await resolveSource(deps, scope, publicId);
+  const witnessFor = await deps.readWitnessFor(scope, publicId);
+  if (witnessFor !== null && ctx.apiKeyId !== null) throw runNotFound();
+  return { ...run, witnessFor };
+}
+
+async function resolveSource(
+  deps: RunReadDeps,
+  scope: RunScope,
+  publicId: string,
+): Promise<ResolvedSource> {
+  if (publicId.startsWith("tse_")) {
+    const row = await deps.queries.tachoSession(scope, publicId);
+    if (!row) throw runNotFound();
+    const costs = await deps.readRunRollups(scope, [publicId]);
+    return {
+      source: "tacho",
+      sessionUuid: row.session.sessionUuid,
+      row,
+      item: toTachoRunItem(row, costs.get(publicId)),
+    };
+  }
+  const summary = await deps.store.getRunByPublicId(publicId);
+  if (!summary) throw runNotFound();
+  const row = await deps.queries.ledgerIdentity(scope, summary.runId);
+  if (!row) throw runNotFound();
+  const [enrich, costs] = await Promise.all([
+    ledgerEnrichment(deps, scope, [summary.runId]),
+    deps.readRunRollups(scope, [publicId]),
+  ]);
+  const record = enrich(row);
+  return {
+    source: "ledger",
+    runId: summary.runId,
+    row,
+    record,
+    item: toLedgerRunItem(record, costs.get(publicId)),
+  };
+}
+
+/**
+ * The cursor a read from the start uses: the ledger numbers frames from 1,
+ * a wrapped session from 0.
+ */
+export function startCursorSeq(run: ResolvedRun): string {
+  return run.source === "ledger" ? "0" : "-1";
+}
+
+/** The frames strictly after `afterSeq`, ascending, at most `limit`. */
+export async function readFrames(
+  deps: RunReadDeps,
+  run: ResolvedRun,
+  afterSeq: string,
+  limit: number,
+): Promise<RunFrame[]> {
+  if (run.source === "ledger") {
+    const events = await deps.store.readAttemptEventsSince(
+      run.runId,
+      afterSeq,
+      limit,
+    );
+    return events.map(ledgerFrame);
+  }
+  const rows = await deps.tachoFrames({
+    sessionUuid: run.sessionUuid,
+    afterSeq: Number(afterSeq),
+    limit,
+  });
+  return rows.map(tachoFrame);
+}
+
+/**
+ * Every frame of the run up to `cap`, read page by page. Answers whether the
+ * cap cut the read short, so a caller can say so rather than present a
+ * prefix as the whole.
+ */
+export async function readAllFrames(
+  deps: RunReadDeps,
+  run: ResolvedRun,
+  cap: number,
+): Promise<{ frames: RunFrame[]; complete: boolean }> {
+  const frames: RunFrame[] = [];
+  let after = startCursorSeq(run);
+  for (;;) {
+    const want = Math.min(FRAME_READ_MAX, cap - frames.length + 1);
+    if (want <= 0) break;
+    const page = await readFrames(deps, run, after, want);
+    frames.push(...page);
+    const last = page.at(-1);
+    if (!last || page.length < want) break;
+    after = last.seq;
+  }
+  if (frames.length > cap) {
+    return { frames: frames.slice(0, cap), complete: false };
+  }
+  return { frames, complete: true };
+}
+
+/** The one frame at `seq`, or null. */
+export async function readFrameAt(
+  deps: RunReadDeps,
+  run: ResolvedRun,
+  seq: string,
+): Promise<RunFrame | null> {
+  const before = (BigInt(seq) - 1n).toString();
+  const [frame] = await readFrames(deps, run, before, 1);
+  return frame && frame.seq === seq ? frame : null;
+}
+
+/**
+ * The ledger as every handler reads it. A compacted attempt's frames live in
+ * its archive segment (spec §13.3), so a reader needs the archive; the seam
+ * is deferred because handlers construct at module load, before the storage
+ * driver's environment is required.
+ */
+export function ledgerStore(): RunStore {
+  return createPostgresRunStore({ archive: deferredEvidenceArchive });
+}
+
+export function defaultRunReadDeps(): RunReadDeps {
+  // Construction is pure: nothing connects until a read runs inside the scope.
+  const ledger = ledgerStore();
+  return {
+    queries: postgresRunQueries,
+    store: {
+      getRunByPublicId: (id) => ledger.getRunByPublicId(id),
+      readAttemptEventsSince: (id, after, limit) =>
+        ledger.readAttemptEventsSince(id, after, limit),
+    },
+    readRunRollups: postgresReadRunRollups,
+    readWitnessFor,
+    tachoFrames: selectTachoEvents,
+  };
+}

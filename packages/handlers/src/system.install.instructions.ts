@@ -22,6 +22,25 @@ const PROD_APP_URL = process.env["APP_URL"] ?? "https://app.oxagen.sh";
 // stays a placeholder the reader substitutes.
 const API_KEY_URL = `${PROD_APP_URL}/<your-org-slug>/developer/tokens`;
 
+/**
+ * The two credential placeholders, and why there are two.
+ *
+ * A shell expands `$OXAGEN_API_KEY`, so a CLI snippet can name the variable and
+ * the operator never pastes the secret. **JSON does not expand anything.** A
+ * config file carrying `$OXAGEN_API_KEY` sends that literal string as the
+ * bearer credential, and the client fails to authenticate with no indication
+ * why — the user followed the instructions exactly.
+ *
+ * Exported because the app's Developer → MCP page builds the same snippets for
+ * a human (`developer/mcp/mcp-install-snippets.ts`) and the two drifted apart
+ * once already: the page used the shell variable in its JSON tabs. Two places
+ * generating install instructions that must agree share the strings rather than
+ * a comment asking the next author to remember.
+ */
+export const SHELL_API_KEY_PLACEHOLDER = "$OXAGEN_API_KEY";
+/** What a reader replaces by hand in a JSON config. */
+export const JSON_API_KEY_PLACEHOLDER = "<your-api-key>";
+
 // ── Step builders ─────────────────────────────────────────────────────────────
 
 function stepsForClaudeCode(_wsSlug: string | undefined): InstallStep[] {
@@ -35,7 +54,7 @@ function stepsForClaudeCode(_wsSlug: string | undefined): InstallStep[] {
       label: "Add the Oxagen MCP server to Claude Code",
       // The URL is positional: `claude mcp add` has no `--url` flag, and passing
       // one makes the command fail.
-      command: `claude mcp add --transport http oxagen "${mcpUrl}" --header "Authorization: Bearer $OXAGEN_API_KEY"`,
+      command: `claude mcp add --transport http oxagen "${mcpUrl}" --header "Authorization: Bearer ${SHELL_API_KEY_PLACEHOLDER}"`,
     },
     {
       label: "Verify the server appears in the tool list",
@@ -100,7 +119,7 @@ function stepsForClaudeDesktop(_wsSlug: string | undefined): InstallStep[] {
             "Authorization:${OXAGEN_AUTH_HEADER}",
           ],
           env: {
-            OXAGEN_AUTH_HEADER: "Bearer <your-api-key>",
+            OXAGEN_AUTH_HEADER: `Bearer ${JSON_API_KEY_PLACEHOLDER}`,
           },
         },
       },
@@ -119,8 +138,7 @@ function stepsForClaudeDesktop(_wsSlug: string | undefined): InstallStep[] {
         "open ~/Library/Application\\ Support/Claude/claude_desktop_config.json",
     },
     {
-      label:
-        "Add the Oxagen server entry (merge into existing config) and replace <your-api-key> with the key you just generated",
+      label: `Add the Oxagen server entry (merge into existing config) and replace ${JSON_API_KEY_PLACEHOLDER} with the key you just generated`,
       command: configEntry,
     },
     {
@@ -143,7 +161,7 @@ function stepsForCodex(_wsSlug: string | undefined): InstallStep[] {
     {
       label:
         "Export the key, then add the Oxagen MCP server to Codex (writes [mcp_servers.oxagen] to ~/.codex/config.toml)",
-      command: `export OXAGEN_API_KEY=<your-api-key>\ncodex mcp add oxagen --url "${mcpUrl}" --bearer-token-env-var OXAGEN_API_KEY`,
+      command: `export OXAGEN_API_KEY=${JSON_API_KEY_PLACEHOLDER}\ncodex mcp add oxagen --url "${mcpUrl}" --bearer-token-env-var OXAGEN_API_KEY`,
     },
     {
       label: "Confirm the server is registered",
@@ -165,7 +183,7 @@ function stepsForVscode(_wsSlug: string | undefined): InstallStep[] {
             url: mcpUrl,
             type: "http",
             headers: {
-              Authorization: "Bearer <your-api-key>",
+              Authorization: `Bearer ${JSON_API_KEY_PLACEHOLDER}`,
             },
           },
         },
@@ -180,13 +198,39 @@ function stepsForVscode(_wsSlug: string | undefined): InstallStep[] {
       command: API_KEY_URL,
     },
     {
-      label:
-        "Add the Oxagen server to your VS Code settings.json and replace <your-api-key> with the key you just generated",
+      label: `Add the Oxagen server to your VS Code settings.json and replace ${JSON_API_KEY_PLACEHOLDER} with the key you just generated`,
       command: settingsEntry,
     },
     {
       label:
         "Reload the VS Code window — Oxagen tools are available in the Copilot/MCP panel",
+    },
+  ];
+}
+
+/**
+ * The wrap for a hook-based harness when the caller holds an enrollment token
+ * (#2967): the scripted path spec §14.1 names. The token is single use and
+ * expires, so the step says so.
+ */
+function stepsForEnrollment(
+  client: "claude-code" | "codex",
+  token: string,
+): InstallStep[] {
+  return [
+    {
+      label: "Install the Oxagen CLI",
+      command: "npm install -g @oxagen/cli",
+    },
+    {
+      label:
+        "Enrol this machine with the one-time token: device key, host credential, collector service and the harness hooks (the token is single use and expires unused)",
+      command: `oxagen agent enroll --token ${token} --harness ${client}`,
+    },
+    {
+      label:
+        "Start a session — its first frame is what registers the agent on Fleet",
+      command: client === "claude-code" ? "claude" : "codex",
     },
   ];
 }
@@ -207,8 +251,11 @@ const STEP_BUILDERS: Record<
 export const systemInstallInstructionsHandler: CapabilityHandler<
   typeof systemInstallInstructions
 > = async (input, _ctx) => {
-  const builder = STEP_BUILDERS[input.client];
-  const steps = builder(input.workspaceSlug);
+  const steps =
+    input.enrollmentToken !== undefined &&
+    (input.client === "claude-code" || input.client === "codex")
+      ? stepsForEnrollment(input.client, input.enrollmentToken)
+      : STEP_BUILDERS[input.client](input.workspaceSlug);
 
   return {
     client: input.client,

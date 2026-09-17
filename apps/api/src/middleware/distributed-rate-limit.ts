@@ -69,7 +69,8 @@ export interface DistributedRateLimitOptions {
   /**
    * Optional unprefixed bucket suffix for pre-authentication or other custom
    * scopes. The limiter always prepends `keyPrefix`, preventing cross-surface
-   * collisions. Resolvers must return non-secret, bounded values.
+   * collisions. Resolvers must return non-secret, bounded values. A resolver
+   * that reads the request body returns a promise.
    *
    * Returning `null` means "this request cannot be attributed to a bucket",
    * and the limiter SKIPS — it does not count, and it does not deny, not even
@@ -78,7 +79,9 @@ export interface DistributedRateLimitOptions {
    * bucket is not a ceiling, it is one abuser's power to lock everyone else
    * out. See `trustedClientIpBucketKey`.
    */
-  bucketKey?: (c: Context<AppEnv>) => string | null;
+  bucketKey?: (
+    c: Context<AppEnv>,
+  ) => string | null | Promise<string | null>;
 }
 
 const DEFAULT_WINDOW_MS = 60_000;
@@ -345,7 +348,7 @@ export function distributedRateLimiter(
 
     let key: string;
     if (opts.bucketKey) {
-      const suffix = opts.bucketKey(c);
+      const suffix = await opts.bucketKey(c);
       if (suffix === null) {
         warnUnattributable(opts.keyPrefix, windowMs);
         return next();

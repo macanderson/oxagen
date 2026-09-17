@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { workspaceCreate } from "./workspace.create";
 
 describe("workspace.create capability", () => {
+  it("is a settings write, never a governed action (INV-28), with no e2e layer", () => {
+    expect(workspaceCreate.noBillingGate).toBe(true);
+    expect(workspaceCreate.mutates).toBe(true);
+    expect(workspaceCreate.layers).not.toContain("e2e");
+  });
+
   it("parses a valid input", () => {
     const parsed = workspaceCreate.input.parse({
       name: "Default",

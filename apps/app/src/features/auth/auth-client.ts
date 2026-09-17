@@ -1,0 +1,105 @@
+// Browser-side Better Auth calls (ARCHITECTURE.md §3.8), behind one seam so
+// forms stay testable and so the Better Auth client (and its env reader) loads
+// only when a live call runs. It is the one browser module that imports
+// @oxagen/auth/client; the server half is src/server/session.ts. A destination
+// Better Auth navigates to (the social sign-in `callbackURL`) is a SafePath.
+import type { SafePath } from "@/shared/safe-path";
+import { type AuthOutcomeKey, authOutcomeKey } from "./auth-errors";
+
+export type ClientAuthResult =
+  | { ok: true; twoFactor?: boolean; needsVerification?: boolean }
+  | { ok: false; outcome: AuthOutcomeKey };
+
+type BetterAuthReply = {
+  data?: unknown;
+  error?: { code?: string; status?: number; message?: string } | null;
+};
+
+/** Where a sign-in that stopped for a second factor resumes. Read by the two-factor form. */
+const PENDING_NEXT_KEY = "oxagen.auth.next";
+
+async function client() {
+  const { authClient } = await import("@oxagen/auth/client");
+  return authClient;
+}
+
+function fail(reply: BetterAuthReply): ClientAuthResult | null {
+  return reply.error
+    ? { ok: false, outcome: authOutcomeKey(reply.error) }
+    : null;
+}
+
+export async function liveSignIn(input: {
+  email: string;
+  password: string;
+  rememberMe: boolean;
+}): Promise<ClientAuthResult> {
+  const reply: BetterAuthReply = await (await client()).signIn.email(input);
+  const failed = fail(reply);
+  if (failed) return failed;
+  const { data } = reply;
+  return {
+    ok: true,
+    twoFactor:
+      typeof data === "object" &&
+      data !== null &&
+      "twoFactorRedirect" in data &&
+      data.twoFactorRedirect === true,
+  };
+}
+
+export async function liveSignUp(input: {
+  name: string;
+  email: string;
+  password: string;
+}): Promise<ClientAuthResult> {
+  const reply: BetterAuthReply = await (await client()).signUp.email(input);
+  const failed = fail(reply);
+  if (failed) return failed;
+  // With email verification required Better Auth creates the user but issues no session token.
+  const { data } = reply;
+  const token =
+    typeof data === "object" && data !== null && "token" in data
+      ? data.token
+      : null;
+  return { ok: true, needsVerification: !token };
+}
+
+export async function liveVerifyTwoFactor(input: {
+  method: "totp" | "backup";
+  code: string;
+}): Promise<ClientAuthResult> {
+  const c = await client();
+  const reply =
+    input.method === "totp"
+      ? await c.twoFactor.verifyTotp({ code: input.code })
+      : await c.twoFactor.verifyBackupCode({ code: input.code });
+  return fail(reply) ?? { ok: true };
+}
+
+/** Social sign-in: Better Auth sends the browser to the provider, then back to `callbackURL`. */
+export async function liveSignInSocial(input: {
+  provider: "google" | "github";
+  callbackURL: SafePath;
+}): Promise<void> {
+  await (await client()).signIn.social(input);
+}
+
+export function rememberPendingNext(next: SafePath): void {
+  try {
+    sessionStorage.setItem(PENDING_NEXT_KEY, next);
+  } catch {
+    // Storage can be unavailable (private mode); the two-factor page then lands on "/".
+  }
+}
+
+/** The stored destination, unsanitised: storage is page-writable, so the reader runs it through sanitizeNext. */
+export function takePendingNext(): string | null {
+  try {
+    const value = sessionStorage.getItem(PENDING_NEXT_KEY);
+    sessionStorage.removeItem(PENDING_NEXT_KEY);
+    return value;
+  } catch {
+    return null;
+  }
+}

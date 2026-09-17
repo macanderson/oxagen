@@ -56,6 +56,24 @@ export type {
   PersistedDecisionOutcome,
 } from "./live-agent-run-authorization";
 
+export { resourceScopeDigestOf } from "./resource-scope";
+
+export { assertNoActiveKillSwitch } from "./kill-switch-guard";
+
+export {
+  flipKillSwitchOff,
+  flipKillSwitchOn,
+  matchKillSwitch,
+  readActiveKillSwitches,
+  readActiveKillSwitchesForTargets,
+  readKillSwitches,
+} from "./kill-switch";
+export type {
+  KillSwitchDeny,
+  KillSwitchRow,
+  KillSwitchTargetKind,
+} from "./kill-switch";
+
 export { emitAudit } from "./emit-audit";
 export type { EmitAuditArgs } from "./emit-audit";
 
@@ -72,3 +90,14 @@ export type {
   AgentRunAuthzContext,
   ResolveAgentRunAuthzContextArgs,
 } from "./agent-run-context";
+
+// The delegation ceiling: a granter cannot hand out more than they hold. One
+// implementation for assign_agent_role and the role editor (ADR-063).
+export {
+  findDelegationCeilingViolations,
+  postgresDelegationCeilingReads,
+} from "./delegation-ceiling";
+export type {
+  ConferredGrant,
+  DelegationCeilingReads,
+} from "./delegation-ceiling";

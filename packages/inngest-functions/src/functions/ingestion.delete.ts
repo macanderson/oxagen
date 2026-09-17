@@ -264,13 +264,13 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
               WHERE  connection_id = ${connectionId}::uuid
             `);
               // Soft-delete the connection itself so audit history is preserved.
-              // The column is deleted_by_user_id — connection.list filters on
+              // The column is deleted_by_id — connection.list filters on
               // deleted_at IS NULL, so this UPDATE is what retires the row.
               await tx.execute(sql`
               UPDATE ingestion.source_connections
               SET    status             = 'deleted',
                      deleted_at         = NOW(),
-                     deleted_by_user_id = ${requestedBy}::uuid,
+                     deleted_by_id = ${requestedBy}::uuid,
                      updated_at         = NOW()
               WHERE  id     = ${connectionId}::uuid
               AND    org_id = ${orgId}::uuid

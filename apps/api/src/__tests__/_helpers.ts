@@ -46,15 +46,21 @@ export async function fetchApp(
 
 // ── Auth seam mock factories ──────────────────────────────────────────────────
 
-/** Successful API-key resolution — pre-binds org + workspace scope. */
+/** Successful API-key resolution — pre-binds org + workspace scope; `userId` is set for a CLI session key. */
 export function makeApiKeyOk(
-  overrides?: Partial<{ apiKeyId: string; orgId: string; workspaceId: string }>,
+  overrides?: Partial<{
+    apiKeyId: string;
+    orgId: string;
+    workspaceId: string;
+    userId: string | null;
+  }>,
 ): ApiKeyResolution {
   return {
     ok: true,
     apiKeyId: overrides?.apiKeyId ?? "key-id-test",
     orgId: overrides?.orgId ?? TEST_ORG_ID,
     workspaceId: overrides?.workspaceId ?? TEST_WORKSPACE_ID,
+    userId: overrides?.userId ?? null,
   };
 }
 

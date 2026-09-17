@@ -153,7 +153,7 @@ describe("schemaRegistryConfigHandler", () => {
       },
     ]);
 
-    // No fields changed — just updatedByUserId touches the row.
+    // No fields changed — just updatedById touches the row.
     const result = await schemaRegistryConfigHandler({}, CTX);
     expect(result.registryId).toBe("scr_abc");
   });

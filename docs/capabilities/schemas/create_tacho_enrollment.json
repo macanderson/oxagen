@@ -52,7 +52,8 @@
         "items": {
           "type": "string",
           "enum": [
-            "claude-code"
+            "claude-code",
+            "codex"
           ]
         }
       },
@@ -171,7 +172,8 @@
                 "items": {
                   "type": "string",
                   "enum": [
-                    "claude-code"
+                    "claude-code",
+                    "codex"
                   ]
                 }
               },

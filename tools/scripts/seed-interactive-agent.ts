@@ -103,7 +103,7 @@ async function main(): Promise<void> {
       id: schema.workspaces.id,
       orgId: schema.workspaces.orgId,
       slug: schema.workspaces.slug,
-      createdByUserId: schema.workspaces.createdByUserId,
+      createdById: schema.workspaces.createdById,
     })
     .from(schema.workspaces)
     .orderBy(schema.workspaces.createdAt);
@@ -137,7 +137,7 @@ async function main(): Promise<void> {
     }
 
     // Resolve a user to attribute the seed write to: the workspace owner, else
-    // its creator. createdByUserId is the durable fallback.
+    // its creator. createdById is the durable fallback.
     const [owner] = await d
       .select({ userId: schema.workspaceUsers.userId })
       .from(schema.workspaceUsers)
@@ -149,7 +149,7 @@ async function main(): Promise<void> {
       )
       .limit(1);
 
-    const userId = owner?.userId ?? ws.createdByUserId;
+    const userId = owner?.userId ?? ws.createdById;
     if (!userId) {
       const msg = "no owner or creator user to attribute the seed write to";
       results.push({

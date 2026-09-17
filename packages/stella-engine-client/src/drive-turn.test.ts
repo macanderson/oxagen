@@ -57,6 +57,7 @@ describe("driveTurn", () => {
   it("runs the golden turn to completion, answering both ports and forwarding events with seq", async () => {
     const { engine, client } = setup();
     const events: Array<[string, number]> = [];
+    const requests: Array<[string, number]> = [];
     const result = await driveTurn(client, {
       request: {
         provider_id: "openrouter",
@@ -64,6 +65,15 @@ describe("driveTurn", () => {
       },
       handlers: goldenHandlers({
         onEvent: (event: AgentEvent, seq) => events.push([event.type, seq]),
+        onProviderRequest: async (req, ctx) => {
+          requests.push([req.request_id, req.seq]);
+          if (req.request_id === "prov-1-1") await ctx.deltas(goldenDelta);
+          return goldenProviderAnswer(req.request_id);
+        },
+        onToolRequest: async (req) => {
+          requests.push([req.request_id, req.seq]);
+          return goldenToolAnswer;
+        },
       }),
       sleep: noSleep,
     });
@@ -83,6 +93,13 @@ describe("driveTurn", () => {
       ["text_delta", 7],
       ["text", 8],
       ["turn_complete", 9],
+    ]);
+    // Every reverse request reaches its handler with the frame's own seq,
+    // the value a ledger receipt names.
+    expect(requests).toEqual([
+      ["prov-1-0", 1],
+      ["tool-1-0", 3],
+      ["prov-1-1", 5],
     ]);
     expect(engine.posts.map((p) => `${p.route}:${p.status}`)).toEqual([
       "provider-result:200",

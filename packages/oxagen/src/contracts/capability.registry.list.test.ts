@@ -22,10 +22,13 @@ describe("capability.registry.list capability", () => {
     });
   });
 
-  it("declares the app layer (UI parity promise) plus api/mcp/unit/docs", () => {
+  it("keeps api/mcp/unit/docs and drops the app layer (ADR-081)", () => {
     expect(capabilityRegistryList.layers).toEqual(
-      expect.arrayContaining(["api", "mcp", "unit", "docs", "app"]),
+      expect.arrayContaining(["api", "mcp", "unit", "docs"]),
     );
+    // Rev1 ships no registry browser, so the UI promise is retired, not the
+    // capability: it stays reachable on api, mcp and cli.
+    expect(capabilityRegistryList.layers).not.toContain("app");
   });
 
   it("defaults limit=500, offset=0 on empty input", () => {

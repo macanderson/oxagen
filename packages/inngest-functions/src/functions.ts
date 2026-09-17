@@ -1,4 +1,8 @@
 import { billingDunningSweep } from "./functions/billing.dunning-sweep";
+import { billingGauClose } from "./functions/billing.gau-close";
+import { costRunRollup } from "./functions/cost.run-rollup";
+import { costDailyRollup } from "./functions/cost.daily-rollup";
+import { costFindings, costFindingsNightly } from "./functions/cost.findings";
 import { securityAuditPartitionRollover } from "./functions/security.audit-partition-rollover";
 import { pluginOauthRefreshWatcher } from "./functions/plugin.oauth-refresh-watcher";
 import {
@@ -10,6 +14,7 @@ import {
   privacyErasureExecuteOnFailure,
 } from "./functions/privacy.erasure.execute";
 import { authSessionExpiryAudit } from "./functions/auth.session-expiry-audit";
+import { mandateExpiry } from "./functions/mandate.expiry";
 import { ingestionPipeline } from "./functions/ingestion.pipeline";
 import {
   ingestionDeleteConnection,
@@ -23,10 +28,17 @@ import { ingestionConnectionPoll } from "./functions/ingestion.connection-poll";
 import { ingestionWebhookProvision } from "./functions/ingestion.webhook-provision";
 import { ingestionWebhookRenew } from "./functions/ingestion.webhook-renew";
 import { mcpToolSnapshotRetention } from "./functions/mcp.tool-snapshot-retention";
+import { mcpCredentialGrantRetention } from "./functions/mcp.credential-grant-retention";
 import { pluginCatalogSync } from "./functions/plugin.catalog-sync";
 import { schemaReconcile } from "./functions/schema.reconcile";
 import { memoryDecayPass } from "./functions/memory.decay-pass";
 import { observabilityCaptureFailure } from "./functions/observability.capture-failure";
+import {
+  evidenceRunExport,
+  evidenceRunExportOnFailure,
+} from "./functions/evidence.run-export";
+import { evidenceFrameCompaction } from "./functions/evidence.frame-compaction";
+import { runSummarize } from "./functions/run.summarize";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -35,6 +47,11 @@ import { observabilityCaptureFailure } from "./functions/observability.capture-f
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const functions: any[] = [
   billingDunningSweep,
+  billingGauClose,
+  costRunRollup,
+  costDailyRollup,
+  costFindings,
+  costFindingsNightly,
   securityAuditPartitionRollover,
   pluginOauthRefreshWatcher,
   privacyExportProcess,
@@ -42,6 +59,7 @@ export const functions: any[] = [
   privacyErasureExecute,
   privacyErasureExecuteOnFailure,
   authSessionExpiryAudit,
+  mandateExpiry,
   ingestionPipeline,
   ingestionDeleteConnection,
   ingestionDeleteConnectionOnFailure,
@@ -53,8 +71,13 @@ export const functions: any[] = [
   ingestionWebhookProvision,
   ingestionWebhookRenew,
   mcpToolSnapshotRetention,
+  mcpCredentialGrantRetention,
   pluginCatalogSync,
   schemaReconcile,
   memoryDecayPass,
   observabilityCaptureFailure,
+  evidenceRunExport,
+  evidenceRunExportOnFailure,
+  evidenceFrameCompaction,
+  runSummarize,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);

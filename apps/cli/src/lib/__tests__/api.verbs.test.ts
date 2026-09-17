@@ -241,14 +241,17 @@ describe("apiPutOrThrow", () => {
   it("PUTs JSON to the same URL the read path uses", async () => {
     fetchMock.mockResolvedValue(ok({ budgets: [] }));
     await expect(
-      apiPutOrThrow("billing/budget", { scope: "org", limitUsd: 500 }),
+      apiPutOrThrow("billing/budget", {
+        scope: "org",
+        limit: { micros: "500000000", currency: "USD" },
+      }),
     ).resolves.toEqual({ budgets: [] });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://api.oxagen.sh/v1/acme/prod/billing/budget");
     expect(init.method).toBe("PUT");
     expect(JSON.parse(String(init.body))).toEqual({
       scope: "org",
-      limitUsd: 500,
+      limit: { micros: "500000000", currency: "USD" },
     });
   });
 

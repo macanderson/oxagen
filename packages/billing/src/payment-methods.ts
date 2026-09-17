@@ -8,7 +8,7 @@
  * fresh view.
  */
 
-import { withTenantDb, schema } from "@oxagen/database";
+import { withSystemDb, withTenantDb, schema } from "@oxagen/database";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { ensureStripeCustomer } from "./customers";
@@ -109,6 +109,48 @@ export async function listOrgPaymentMethods(
   }));
 }
 
+// ── readDefaultPaymentMethod ──────────────────────────────────────────────────
+
+/** The saved card auto top-up charges (ADR-055 §5). */
+export interface DefaultPaymentMethod {
+  stripePaymentMethodId: string;
+  brand: string | null;
+  last4: string | null;
+}
+
+/**
+ * The org's default `billing.payment_methods` row, or null when none is saved.
+ *
+ * A DB-only read of the mirror, never a provider call: the GAU gate reads it
+ * on every governed action to tell a Free org that must save a card from a
+ * prepaid org whose auto top-up could not run, and the recorder reads it
+ * before claiming a top-up episode. Runs inside the caller's tenant scope;
+ * `opts.system` routes it through `withSystemDb` for the close job and the
+ * platform-operator handler, which run with none.
+ */
+export async function readDefaultPaymentMethod(
+  orgId: string,
+  opts?: { system?: boolean },
+): Promise<DefaultPaymentMethod | null> {
+  const runner = opts?.system ? withSystemDb : withTenantDb;
+  const row = await runner((tx) =>
+    tx.query.paymentMethods.findFirst({
+      where: and(
+        eq(schema.paymentMethods.orgId, orgId),
+        eq(schema.paymentMethods.isDefault, true),
+        isNull(schema.paymentMethods.deletedAt),
+      ),
+      columns: { stripePaymentMethodId: true, brand: true, last4: true },
+    }),
+  );
+  if (!row) return null;
+  return {
+    stripePaymentMethodId: row.stripePaymentMethodId,
+    brand: row.brand,
+    last4: row.last4,
+  };
+}
+
 // ── createPaymentMethodSetupIntent ────────────────────────────────────────────
 
 /**
@@ -178,7 +220,7 @@ export async function syncPaymentMethodsFromStripe(
             expYear: pm.expYear,
             isDefault: pm.id === defaultPmId,
             deletedAt: null,
-            deletedByUserId: null,
+            deletedById: null,
           })),
         )
         .onConflictDoUpdate({
@@ -191,7 +233,7 @@ export async function syncPaymentMethodsFromStripe(
             expYear: sql`excluded.exp_year`,
             isDefault: sql`excluded.is_default`,
             deletedAt: null, // Un-soft-delete if it re-appears.
-            deletedByUserId: null,
+            deletedById: null,
             updatedAt: new Date(),
           },
         }),

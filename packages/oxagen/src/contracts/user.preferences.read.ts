@@ -32,6 +32,8 @@ export const userPreferencesRead = registerCapability({
     defaultTextModel: z.string().nullable(),
     timezone: z.string(),
     language: z.string(),
+    /** The Account dialog's theme choice; `system` follows the device. */
+    theme: z.enum(["system", "light", "dark"]),
   }),
 });
 

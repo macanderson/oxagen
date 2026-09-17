@@ -150,8 +150,8 @@ export const telemetryStellaEnrollHandler: CapabilityHandler<
         stellaTelemetryEnrollmentId: enrollmentId,
         stellaTelemetryEnrolledAt: issuedAt,
         expiresAt,
-        createdByUserId: ctx.userId,
-        updatedByUserId: ctx.userId,
+        createdById: ctx.userId,
+        updatedById: ctx.userId,
       })
       .returning({ publicId: schema.apiKeys.publicId }),
   );
