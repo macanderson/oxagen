@@ -3344,7 +3344,7 @@
       "writes": []
     }
   ],
-  "contentHash": "7e5818ec4f852b781d33b258ce47ec344f014fa7e47bf83350033d6091571fa8",
+  "contentHash": "6b4ad34f6dfd209c9d6cb4143ab81720e63243a453810ee9a808a0f0b5f43349",
   "domains": [
     {
       "name": "agent",
@@ -18221,6 +18221,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "integer"
+        },
+        {
+          "name": "bundle_features",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
         },
         {
           "name": "sessions_count",
