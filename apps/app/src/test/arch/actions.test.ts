@@ -16,6 +16,34 @@ import {
   type SourceText,
 } from "./parse";
 
+/**
+ * A source file parsed WITHOUT parent pointers, for the directive scan only.
+ *
+ * Selecting the `"use server"` modules means reading the first statement of all
+ * 293 production files, and `parse` sets `setParentNodes`, which the scan does
+ * not need — only `actionViolations` does, on the 11 that survive. Measured on
+ * this tree: parsing all with parents 460ms, without 191ms. That is what put
+ * this test over the 5s default timeout in CI under load (run 35210969739),
+ * where the whole shard took 411s.
+ *
+ * A substring pre-filter on the raw text is far faster still (15ms) and was
+ * tried first, but it is a heuristic in the one direction that matters. Too
+ * many files selected is harmless, because `directiveOf` rejects them; a module
+ * carrying the directive whose text lacks the literal — `"use\u0020server"`
+ * cooks to the directive and does not contain it — would be skipped silently,
+ * and the test would go quietly blind rather than fail. Counting the two sets
+ * proves they agree on today's tree and nothing more. Parsing exactly is not a
+ * heuristic, so there is no property left to guard.
+ */
+const scan = (source: SourceText): ts.SourceFile =>
+  ts.createSourceFile(
+    source.file,
+    source.text,
+    ts.ScriptTarget.Latest,
+    false,
+    source.file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+
 const RULE = "actions";
 const PROBES = "src/test/arch/probes/actions";
 const VIEWER_RESOLVERS: ReadonlySet<string> = new Set([
@@ -262,15 +290,7 @@ describe("server actions", () => {
   it('every "use server" module under src/ keeps the action contract', () => {
     const modules = productionFiles()
       .map(readSource)
-      // Cheap pre-filter before the expensive one. `directiveOf` needs a full
-      // `ts.createSourceFile` with parent pointers, and a module whose text
-      // never mentions the directive cannot carry it — so parsing all 293
-      // production files to read 11 leading statements was the whole cost of
-      // this test, and it is what put it over the 5s default timeout in CI
-      // under load (run 35210969739). 293 parses become 12. Verified to select
-      // exactly the same modules as parsing every file.
-      .filter((source) => source.text.includes("use server"))
-      .filter((source) => directiveOf(parse(source)) === "use server");
+      .filter((source) => directiveOf(scan(source)) === "use server");
     expect(modules.length).toBeGreaterThan(0);
     expect(modules.flatMap(actionViolations)).toEqual([]);
   });
