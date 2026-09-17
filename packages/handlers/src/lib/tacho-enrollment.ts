@@ -33,3 +33,33 @@ export function requestsReservedTachoPurpose(scope: unknown): boolean {
     scope.purpose === TACHO_HOST_SCOPE_PURPOSE
   );
 }
+
+/**
+ * The same question for the GATEWAY purpose, deliberately a separate predicate.
+ *
+ * `api.key.revoke` and `api.key.rotate` refuse a reserved purpose only when the
+ * capability they name achieves what the refused operation was for, and their
+ * module comment is explicit that being server-owned is NOT that test and that
+ * reasoning about "the set of server-owned purposes" is how two wrong refusals
+ * got in. Widening `requestsReservedTachoPurpose` would silently change what
+ * those two refuse. So this predicate exists for the one caller whose answer is
+ * unambiguous — MINTING.
+ *
+ * Nothing legitimately self-asserts this purpose: enrollment inserts the
+ * gateway key directly (`lib/tacho-host-enroll.ts`), never through
+ * `create_api_key`, so refusing it removes no capability from anyone.
+ *
+ * It matters because `retireEnrollmentKeys` now selects on the purpose to keep
+ * a host revocation from reaching keys the enrollment did not mint
+ * (discussion_r4036214055). A purpose a caller could write themselves is not a
+ * server-owned selector, and the host purpose was already guarded here while
+ * this one was not.
+ */
+export function requestsReservedTachoGatewayPurpose(scope: unknown): boolean {
+  return (
+    typeof scope === "object" &&
+    scope !== null &&
+    "purpose" in scope &&
+    scope.purpose === TACHO_GATEWAY_SCOPE_PURPOSE
+  );
+}

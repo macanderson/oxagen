@@ -6,6 +6,10 @@
 // A column the command row gains later is added here and both callers follow.
 import { schema, type Tx } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
+import {
+  TACHO_GATEWAY_SCOPE_PURPOSE,
+  TACHO_HOST_SCOPE_PURPOSE,
+} from "./tacho-enrollment";
 
 const REVOKE_COMMAND_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -55,6 +59,21 @@ export async function retireEnrollmentKeys(
       and(
         eq(schema.apiKeys.orgId, args.orgId),
         isNull(schema.apiKeys.deletedAt),
+        // BOTH halves, because only one of them is the server's.
+        //
+        // `create_api_key` takes `scope` as `z.record(z.unknown())` — free-form
+        // and caller-supplied — and a host's enrollment id is PUBLIC. So an
+        // Owner or Admin can put `host_enrollment_id` on an ordinary key, by
+        // intent or by coincidence, and on the enrollment id alone this
+        // statement would soft-delete it when that host is revoked. A
+        // destructive sweep whose targets are chosen by data the server does
+        // not own has a blast radius nobody controls.
+        //
+        // `purpose` is the half the server does own: `api.key.create` refuses a
+        // caller-supplied reserved Tacho purpose, so only enrollment mints one.
+        // Requiring it bounds the sweep to credentials this enrollment really
+        // minted (discussion_r4036214055).
+        sql`${schema.apiKeys.scope} ->> 'purpose' IN (${TACHO_HOST_SCOPE_PURPOSE}, ${TACHO_GATEWAY_SCOPE_PURPOSE})`,
         sql`${schema.apiKeys.scope} ->> 'host_enrollment_id' = ${host.publicId}`,
       ),
     )
@@ -63,6 +82,13 @@ export async function retireEnrollmentKeys(
   // absence from the sweep means the row predates the scope marker or was
   // already retired. Retire it by id rather than leaving a live key behind;
   // `deleted_at IS NULL` makes the second case a no-op rather than a re-stamp.
+  //
+  // This fallback is why narrowing the sweep above strands nothing: a LEGACY
+  // host key carrying neither purpose nor enrollment id is still retired here,
+  // by the id the host row itself records. That id is server-owned in the
+  // strongest sense — `tacho_hosts.api_key_id` is written at enrollment — so
+  // the narrow predicate and this fallback together cover every host key
+  // without covering anybody else's.
   if (swept.some((k) => k.id === host.apiKeyId)) return swept.length;
   const byId = await tx
     .update(schema.apiKeys)

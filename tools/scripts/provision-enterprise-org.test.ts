@@ -11,7 +11,9 @@
  * The module's `main()` is guarded behind an invoked-directly check, so
  * importing it here opens no database connection.
  */
+import { getTableColumns } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { schema } from "@oxagen/database";
 import { describe, it, expect } from "vitest";
 import { resolve, type Role } from "@oxagen/oxagen/iam";
 import {
@@ -23,6 +25,8 @@ import {
   parseFloorUsd,
   orgWideSystemOwnerWhere,
   ownerReadiness,
+  PLAN_ALLOWANCE_COLUMN,
+  subscriptionAllowanceRefusal,
   sanitizeUrl,
   shouldWriteAllowance,
   topUpCents,
@@ -472,5 +476,54 @@ describe("ownerReadiness", () => {
     });
     expect(result.ready).toBe(false);
     expect(result.considered).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Operator-facing remediation, checked against the schema
+// ---------------------------------------------------------------------------
+
+describe("subscriptionAllowanceRefusal", () => {
+  // This message named `included_actions_annual` until migration
+  // 20260915120000 dropped that column, so it told operators to edit something
+  // that does not exist (r4036214061). Nothing caught it, because a string is
+  // only wrong to the person already stuck on it.
+  //
+  // So the column is checked against the Drizzle table rather than against
+  // another copy of the same literal. Drop or rename it and this fails here
+  // instead of in front of an operator.
+  it("names a column that exists in billing.plans", () => {
+    const [schemaName, tableName, columnName] =
+      PLAN_ALLOWANCE_COLUMN.split(".");
+    expect(schemaName).toBe("billing");
+    expect(tableName).toBe("plans");
+    const columns = Object.values(getTableColumns(schema.plans)).map(
+      (c) => c.name,
+    );
+    expect(columns).toContain(columnName);
+    // And the column it used to name really is gone, so this test is not
+    // passing on a coincidence of both being present.
+    expect(columns).not.toContain("included_actions_annual");
+  });
+
+  it("converts the annual flag to the monthly figure the column stores", () => {
+    // The caller passed --actions-annual; the column is monthly. Leaving them
+    // to infer the x12 is how a plan gets set to twelve times its allowance.
+    const message = subscriptionAllowanceRefusal("scale-v2", 1_200_000);
+    expect(message).toContain("100,000");
+    expect(message).toContain("1,200,000");
+    expect(message).toMatch(/MONTHLY/);
+    expect(message).toContain("billing.plans.included_gau_per_month");
+  });
+
+  it("rounds a figure that does not divide by twelve UP, never short", () => {
+    // Rounding down would quietly record less than the operator negotiated.
+    expect(subscriptionAllowanceRefusal("p", 13)).toContain(" 2 ");
+  });
+
+  it("names the plan the operator has to change", () => {
+    expect(subscriptionAllowanceRefusal("enterprise-v2", 12)).toContain(
+      "'enterprise-v2'",
+    );
   });
 });

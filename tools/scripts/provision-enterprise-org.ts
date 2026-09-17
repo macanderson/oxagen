@@ -353,6 +353,39 @@ export async function ownerReadiness(
   return { ready: false, considered: candidates.length, confirmedUserId: null };
 }
 
+/** The column a plan's governed-action allowance actually lives in. */
+export const PLAN_ALLOWANCE_COLUMN = "billing.plans.included_gau_per_month";
+
+/**
+ * Why `--actions-annual` cannot apply to a subscribed organisation, and what
+ * to change instead.
+ *
+ * Exported so a test can check the remediation against the schema rather than
+ * against itself. This message used to name `included_actions_annual`, which
+ * migration `20260915120000` dropped — so it instructed an operator to edit a
+ * column that no longer exists (discussion_r4036214061). The remediation was
+ * not merely unhelpful, it was impossible, and the operator would sooner
+ * conclude the tool is broken than that the sentence is stale. A refusal is the
+ * one place where being out of date is invisible until somebody is stuck.
+ *
+ * The conversion is stated rather than implied: the caller passed an ANNUAL
+ * figure and the stored column is MONTHLY, so leaving them to infer the x12 is
+ * how a plan gets set to twelve times its intended allowance.
+ */
+export function subscriptionAllowanceRefusal(
+  planSlug: string,
+  actionsAnnual: number,
+): string {
+  const monthly = Math.ceil(actionsAnnual / 12);
+  const n = (v: number) => v.toLocaleString("en-US");
+  return (
+    `--actions-annual cannot apply to an organisation whose allowance comes from plan '${planSlug}'. ` +
+    `Set that plan's ${PLAN_ALLOWANCE_COLUMN} to ${n(monthly)} ` +
+    `(the stored figure is MONTHLY; resolveOrgActionEntitlement reads it as x12, ` +
+    `so ${n(actionsAnnual)}/yr is ${n(monthly)}/mo), or move the subscription, then re-run.`
+  );
+}
+
 export function isLocalHost(host: string): boolean {
   return /^(localhost|127\.0\.0\.1|::1)(:\d+)?$/.test(host);
 }
@@ -836,7 +869,7 @@ async function main(): Promise<void> {
         if (actionsAnnualGiven) {
           console.log(
             kleur.red(
-              `      refused         : --actions-annual cannot apply to an organisation whose allowance comes from plan '${entitledSub.planSlug}'. Change that plan's included_actions_annual, or move the subscription, then re-run.`,
+              `      refused         : ${subscriptionAllowanceRefusal(entitledSub.planSlug, actionsAnnual)}`,
             ),
           );
           failures += 1;

@@ -92,7 +92,11 @@ const host = () => ({
   apiKeyId: HOST_KEY_ID,
 });
 
-const args = { orgId: ORG, userId: USER, now: new Date("2026-09-17T09:00:00Z") };
+const args = {
+  orgId: ORG,
+  userId: USER,
+  now: new Date("2026-09-17T09:00:00Z"),
+};
 
 beforeEach(() => {
   updates = [];
@@ -107,7 +111,9 @@ const keyUpdates = () => updates.filter((u) => u.table === "api_keys");
 describe("retireEnrollmentKeys", () => {
   it("selects by the enrollment marker both credentials carry", async () => {
     const n = await retireEnrollmentKeys(fakeTx() as never, host(), args);
-    const sweep = keyUpdates().find((u) => u.sql.includes("host_enrollment_id"));
+    const sweep = keyUpdates().find((u) =>
+      u.sql.includes("host_enrollment_id"),
+    );
     expect(sweep).toBeDefined();
     // The enrollment id, not the single api_key_id, is what selects the rows.
     expect(sweep?.params).toContain(ENROLLMENT);
@@ -132,6 +138,53 @@ describe("retireEnrollmentKeys", () => {
     expect(
       keyUpdates().filter((u) => u.params.includes(HOST_KEY_ID)),
     ).toHaveLength(1);
+    expect(n).toBe(1);
+  });
+
+  // ── The sweep must not reach credentials the enrollment did not mint ──────
+  //
+  // `create_api_key` takes `scope` as `z.record(z.unknown())`, and a host's
+  // enrollment id is PUBLIC. So an Owner or Admin can put `host_enrollment_id`
+  // on an ordinary key — deliberately, or by coincidence in their own metadata
+  // — and on that marker alone revoking the host soft-deleted their key too
+  // (discussion_r4036214055). A destructive statement whose targets come from
+  // caller-supplied data has a blast radius the server does not control.
+  //
+  // WHAT THESE TWO CASES PROVE, AND WHAT THEY DO NOT. The fixture compiles the
+  // predicate and records it; no database evaluates it. So they prove the
+  // `purpose` constraint is in the WHERE, with both server-owned constants as
+  // parameters, alongside the enrollment id. They do NOT prove Postgres
+  // excludes the unrelated row — `IN` plus `=` is not subtle, but only a run
+  // against a real table with all three rows in it would show the exclusion.
+  // That is the same residue as the rest of this file and it is worth naming:
+  // an assertion on a clause is not an observation of a row.
+  it("selects on the server-owned purpose, not the public enrollment id alone", async () => {
+    await retireEnrollmentKeys(fakeTx() as never, host(), args);
+    const sweep = keyUpdates().find((u) =>
+      u.sql.includes("host_enrollment_id"),
+    );
+    // The half the server owns: api.key.create refuses a caller-supplied
+    // reserved Tacho purpose, so only enrollment can have written one.
+    expect(sweep?.sql).toContain("'purpose'");
+    expect(sweep?.params).toContain("tacho_host_v1");
+    expect(sweep?.params).toContain("tacho_gateway_v1");
+    // Still ANDed with the enrollment id, so the sweep stays scoped to THIS
+    // host rather than retiring every Tacho key in the organisation.
+    expect(sweep?.params).toContain(ENROLLMENT);
+  });
+
+  it("leaves a legacy host key reachable through the id fallback", async () => {
+    // The population this sweep exists for. A host enrolled before the marker
+    // carries NEITHER purpose nor enrollment id, so narrowing the predicate
+    // would strand it — except that `tacho_hosts.api_key_id` is written at
+    // enrollment and is server-owned in the strongest sense. The fallback
+    // selects on that id and nothing else, so it carries no purpose clause.
+    sweptRows = [];
+    const n = await retireEnrollmentKeys(fakeTx() as never, host(), args);
+    const fallback = keyUpdates().find((u) => u.params.includes(HOST_KEY_ID));
+    expect(fallback).toBeDefined();
+    expect(fallback?.sql).not.toContain("'purpose'");
+    expect(fallback?.params).not.toContain(ENROLLMENT);
     expect(n).toBe(1);
   });
 
