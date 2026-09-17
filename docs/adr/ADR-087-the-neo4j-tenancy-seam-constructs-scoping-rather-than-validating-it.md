@@ -395,6 +395,116 @@ That is the strongest available statement of why the answer is construction.
 Every round's enumeration is bounded, and the supply of categories is not — or
 at least, nothing in eleven rounds has given any evidence of its edge.
 
+### Round 13: the sixth thing, and the one that makes round 12 a spelling
+
+Round 13 reported this:
+
+```cypher
+MATCH (n WHERE {orgId: $orgId} IS NOT NULL) RETURN n
+```
+
+A map literal is never null, so the predicate is constant-true and every
+tenant's `n` comes back while `orgId: $orgId` supplies the anchor. Set beside
+round 12's
+
+```cypher
+MATCH (n WHERE COLLECT { MATCH (m) RETURN m.orgId = $orgId AS mine } <> [])
+RETURN n
+```
+
+the two are **one defect in two spellings**. Both braces sit in
+`MATCH (n WHERE …)`; both were claimed by `opensPatternMap` because the
+enclosing paren is a pattern. Round 12's brace happened to be a subquery brace,
+so ordering `opensSubquery` first closed it — correctly, and that ordering is
+kept and still pinned. But it closed one brace MEANING inside the region and
+left the REGION open, and round 13 walked back in with the other meaning.
+
+**The sixth thing this structure decides is WHERE INSIDE A CONSTRUCT a token
+sits.** Rounds 1–11 asked four questions of a bracket — which clause, which
+bracket kind, which brace kind, which anchor shape — and round 12 added the
+order they are asked in. All six were asked of a bracket as though a bracket
+were homogeneous. It is not. A node pattern is
+
+```
+( [variable] [labelExpression] [propertyMap] [WHERE expression] )
+```
+
+and a relationship pattern is that shape inside `[…]`. The property map comes
+BEFORE the `WHERE`, so the `WHERE` is the point at which the property-map
+position ENDS and ordinary expression syntax begins. "Is the enclosing paren a
+pattern?" is true for the whole frame, inline predicate included — it was
+answering a question one level coarser than the one the grammar asks.
+
+The fix asks the grammar's question: a pattern's inline `WHERE` retires that
+frame's property-map position, and every brace and every bracket after it in the
+frame is an expression. Enumerating the region rather than the finding, **fifteen
+queries reached it**: a map literal bare, parenthesised, in a `CASE` arm, as a
+map VALUE holding the comparison, and after a map projection; the same on a
+RELATIONSHIP pattern, on the second node of a path, under `OPTIONAL MATCH`, under
+`MERGE`, after a label expression, and inside a quantified path pattern; a
+pattern property map inside a subquery inside the region; one inline predicate
+nested inside another; a pattern comprehension inside the region; and a grouping
+paren inside it, which round 11's `=`-then-`(` rule re-admits as a node pattern
+one bracket deeper. Review reported one. **Fifteen-for-one.**
+
+That last one is worth naming on its own, because it is round 11 and round 13
+interacting: round 11 correctly widened `opensPattern` to accept `(` after `=`,
+`,`, `-`, `>`, `<`, `|`, `(` and `[` inside a graph-pattern clause, since
+`MATCH p = (a)` spells a node pattern exactly that way. An inline predicate is
+inside a graph-pattern clause and can contain every one of those characters. So
+the region has to be a DEPTH rather than a per-frame flag — a bracket opened
+inside the region is expression syntax too — or the rule closes at one level and
+re-opens at the next.
+
+#### What the region does NOT reach, and why that is the rule and not an exception
+
+A subquery brace opens a clause sequence of its own, so the enclosing pattern's
+inline predicate does not reach into it:
+`MATCH (n WHERE EXISTS { MATCH (m {orgId: $orgId}) })` keeps its map as a real
+anchor. This is the same reading that already saves and restores `clause` across
+a brace, applied to the same stack, and the check that it is right rather than
+convenient is that the top-level spelling
+`MATCH (n) WHERE EXISTS { MATCH (m {orgId: $orgId}) }` has anchored since round
+10 — the two spellings had better not disagree. (That the anchor narrows `m`
+while the query returns `n` is the separate, pre-existing limitation this ADR
+records for `MATCH (a {orgId: $orgId}) MATCH (b) RETURN b`. It is not a position
+error, and closing it is not what a position rule is for.)
+
+#### The measured cost
+
+Two things, both fail-closed, both **0 of the 63** corpus queries.
+
+- An anchor written ONLY inside an inline predicate —
+  `MATCH (n WHERE n.orgId = $orgId)` — is refused. This is not new in round 13:
+  the region was never the `WHERE` clause, because clause keywords are recognised
+  only at paren/bracket depth 0 and the pattern's own bracket is open. It is
+  recorded because the region now has a name, and a reader would otherwise expect
+  the rule to have made that text a predicate position. Making it one is a real
+  improvement and a different change: it would have to keep the region's text
+  while still refusing every brace inside it, which needs clause tracking inside
+  a paren-nested subquery — the thing round 12 declined to build because it OPENS
+  kept regions.
+- A BARE variable spelled `where` — `MATCH (where {orgId: $orgId})` — reads as
+  opening the region and costs that query its anchor. It is the same
+  undecidable-without-a-parser class this ADR records for `RETURN n AS where`,
+  landing on the safe side of it, and it is unreachable in Cypher besides:
+  `WHERE` is reserved, so the database requires the backticks that
+  `stripLiteralsAndComments` has already emptied.
+
+#### What this says about the method, a third time
+
+Rounds 10, 11, 12 and 13 have gone eleven-for-one, thirteen-for-two,
+seven-for-one and fifteen-for-one. The yield is not the point; the CATEGORY is.
+Round 12 named precedence and said "there is no evidence the other [question] is
+clean". Round 13 is not the fourth question — it is the discovery that all of
+them were being asked at the wrong granularity. Round 12 could not have seen
+that from inside its own frame, and neither could round 11 from inside its own,
+which is now the fourth consecutive round for which that is true.
+
+It is also the first round where the previous round's fix is **not** wrong and is
+still not enough. That distinction matters for what it implies: correcting the
+reported spelling is not converging, because the spellings are not the thing.
+
 ### What follows
 
 This does **not** change the decision below — it strengthens the case for it and
@@ -421,7 +531,8 @@ narrows what any interim work should be.
   trusts.
 
 Neither interim option should be built ahead of (2), and neither was built in
-PR #3193, which closed two demonstrated P1 bypasses and nothing more.
+PR #3193, which closed the demonstrated P1 bypasses — and, in round 13, the
+region they were spellings of — and nothing more.
 
 ## Decision
 

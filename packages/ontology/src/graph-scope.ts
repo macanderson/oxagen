@@ -594,10 +594,64 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
 
   let paren = 0;
   let bracket = 0;
-  // One entry per open `(` / `[`: true when THAT bracket opened a pattern. The
-  // stack is what makes `{…}` classification exact — the innermost enclosing
-  // bracket decides, so a map inside a call inside a pattern is still a call's.
-  const bracketFrames: Array<{ isPattern: boolean; braceDepth: number }> = [];
+  // One entry per open `(` / `[`: whether THAT bracket opened a pattern, and
+  // whether that pattern's PROPERTY-MAP POSITION HAS ALREADY CLOSED. The stack
+  // is what makes `{…}` classification exact — the innermost enclosing bracket
+  // decides, so a map inside a call inside a pattern is still a call's.
+  //
+  // `inlinePredicate` is the round-thirteen correction, and like round eleven it
+  // REPLACES a question rather than adding a case. A node pattern is
+  //
+  //     ( [variable] [labelExpression] [propertyMap] [WHERE expression] )
+  //
+  // and a relationship pattern is the same shape inside `[…]`. The property map
+  // comes BEFORE the `WHERE`, so the `WHERE` is the point at which the
+  // property-map position ENDS and ordinary expression syntax begins. Every
+  // brace and every bracket after it in that frame is an expression.
+  //
+  // The scanner used to ask only "is the enclosing paren a pattern?", which is
+  // true for the whole frame, inline predicate included. The round-12 and
+  // round-13 findings are that one gap in two spellings:
+  //
+  //     MATCH (n WHERE {orgId: $orgId} IS NOT NULL) RETURN n       (round 13)
+  //     MATCH (n WHERE COLLECT { MATCH (m) RETURN m.orgId = $orgId
+  //                              AS mine } <> []) RETURN n         (round 12)
+  //
+  // Neither predicate can be false — a map literal is never null, and a COLLECT
+  // over an unfiltered MATCH is non-empty whenever any node exists — so every
+  // tenant's `n` comes back while the guard reads a tenant binding. Round 12's
+  // was closed by ordering `opensSubquery` first, which is correct on its own
+  // terms and is kept; it closed one brace MEANING inside the region and left
+  // the REGION open, which is what round 13 then demonstrated with another.
+  //
+  // Enumerating the region rather than the finding, fifteen queries reached it:
+  // a map literal bare, parenthesised, in a CASE, as a map VALUE holding the
+  // comparison, and after a map projection; the same on a RELATIONSHIP pattern,
+  // on a second node in the path, under `OPTIONAL MATCH`, under `MERGE`, after
+  // a label expression, and inside a quantified path pattern; a pattern
+  // property map inside a subquery inside the region; one inline predicate
+  // nested inside another; a pattern comprehension inside the region; and a
+  // grouping paren inside it, which round 11's `=`-then-`(` rule re-admitted as
+  // a pattern. One rule answers all fifteen, which is the test that it is the
+  // right rule rather than a sixteenth case.
+  //
+  // The flag is set on the frame and dies when the frame pops, so it cannot
+  // leak past the pattern it belongs to: `MATCH (a WHERE a.x = 1)-[r]->(b
+  // {orgId: $orgId})` still anchors on `b`'s map, and a map written BEFORE the
+  // `WHERE` — `MATCH (n {orgId: $orgId} WHERE n.x = 1)` — is still the real
+  // anchor Cypher says it is.
+  const bracketFrames: Array<{
+    isPattern: boolean;
+    braceDepth: number;
+    inlinePredicate: boolean;
+  }> = [];
+  // How many open frames are in their inline-predicate region. A frame opened
+  // INSIDE one is expression syntax too, so this is a DEPTH rather than a
+  // per-frame read: `MATCH (n WHERE true = ({orgId: $orgId} IS NOT NULL))`
+  // opens a grouping paren after `=`, which `opensPattern` classifies as a node
+  // pattern (`MATCH p = (a)` spells one exactly that way), and the map inside
+  // that paren would otherwise be read as its property map.
+  let inlinePredicateFrames = 0;
   // One entry per open `{`: which of Cypher's THREE brace meanings it is.
   //
   //  - `"pattern"` — an inline pattern property map, `MATCH (n {orgId: $orgId})`.
@@ -657,7 +711,24 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
   // subquery in Cypher, and whatever clause the expression sits in is still in
   // force after it. It fixes `CALL { … } RETURN …` the same way — the outer
   // clause reverts to `CALL` rather than inheriting the subquery's last clause.
-  const braceClause: Array<{ clause: string; mergeMapFilters: boolean }> = [];
+  //
+  // The inline-predicate region saves and restores WITH the clause, and for the
+  // same reason. A pattern's inline `WHERE` belongs to THAT pattern; a subquery
+  // brace opens a new clause sequence whose own patterns are not inside it, so
+  // `MATCH (n WHERE EXISTS { MATCH (m {orgId: $orgId}) })` keeps its map as a
+  // real anchor — exactly as the top-level spelling
+  // `MATCH (n) WHERE EXISTS { MATCH (m {orgId: $orgId}) }` already does. (That
+  // the anchor narrows `m` while the query returns `n` is the separate,
+  // pre-existing limitation ADR-087 records for `MATCH (a {orgId: $orgId})
+  // MATCH (b) RETURN b`; it is not a position error, and the two spellings had
+  // better not disagree about it.) Restoring on `}` rather than decrementing on
+  // the frame pop is also what keeps the depth from drifting if the input is
+  // unbalanced.
+  const braceClause: Array<{
+    clause: string;
+    mergeMapFilters: boolean;
+    inlinePredicateFrames: number;
+  }> = [];
   let mapDepth = 0;
   let clause = "";
   // True once a clause has introduced a graph variable, and the condition under
@@ -666,16 +737,22 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
   let mergeMapFilters = false;
 
   const enclosingBracket = () => bracketFrames[bracketFrames.length - 1];
+  // True anywhere inside a pattern's inline `WHERE`, at any bracket depth.
+  const insideInlinePredicate = () => inlinePredicateFrames > 0;
   // A `{` is a pattern property map only when the bracket that encloses it is a
   // pattern AND no brace has been opened inside that bracket yet. The second
   // half is what stops `MATCH (n {meta: {orgId: $orgId}})`: the node paren is
   // still the nearest enclosing BRACKET at the inner brace, so bracket kind
   // alone would read a map nested in a pattern map as another pattern map.
+  // The third condition is the inline predicate: past the frame's `WHERE` the
+  // property-map position is over, so a brace there is an expression however
+  // pattern-ish its enclosing bracket is.
   const opensPatternMap = () => {
     const encl = enclosingBracket();
     return (
       encl !== undefined &&
       encl.isPattern &&
+      !encl.inlinePredicate &&
       encl.braceDepth === braceKinds.length
     );
   };
@@ -737,6 +814,42 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
         if (word === "MERGE") mergeMapFilters = !boundAGraphVariable;
         if (GRAPH_BINDING_CLAUSES.has(word)) boundAGraphVariable = true;
       }
+      // A `WHERE` written INSIDE a pattern's own bracket is the inline node /
+      // relationship predicate. It never reaches the branch above — that one
+      // requires depth 0, and the pattern's `(`/`[` is open — which is correct,
+      // because an inline predicate does not start a top-level clause. What it
+      // does do is CLOSE the property-map position of the bracket it sits in,
+      // and that is what is recorded here.
+      //
+      // Both conditions are load-bearing. `startsAClause` is what keeps a
+      // property key (`{where: 1, orgId: $orgId}`), a label (`(n:Where {…})`), a
+      // map value and a parameter from spoofing the region — the same
+      // disqualifiers the clause branch relies on. The brace-depth equality is
+      // what keeps a `WHERE` written INSIDE a brace opened in this frame — a
+      // subquery's own clause, `(n {k: COLLECT { MATCH (m) WHERE … }})` — from
+      // retiring the frame's map position, since that `WHERE` belongs to the
+      // subquery and not to the pattern.
+      //
+      // What it cannot decide is a BARE variable spelled `where`
+      // (`MATCH (where {orgId: $orgId})`), which is read as opening the region
+      // and costs that query its anchor. That is the fail-closed direction, and
+      // it is unreachable in Cypher besides: `WHERE` is a reserved word, so the
+      // database requires the backticks that `stripLiteralsAndComments` has
+      // already emptied by the time the word scan runs. It is the same
+      // undecidable-without-a-parser class ADR-087 records for `RETURN n AS
+      // where`, landing here on the safe side of it.
+      if (word === "WHERE" && startsAClause(src, i, j)) {
+        const encl = enclosingBracket();
+        if (
+          encl !== undefined &&
+          encl.isPattern &&
+          !encl.inlinePredicate &&
+          encl.braceDepth === braceKinds.length
+        ) {
+          encl.inlinePredicate = true;
+          inlinePredicateFrames += 1;
+        }
+      }
       if (keeping()) for (let k = i; k < j; k += 1) out[k] = src[k]!;
       i = j;
       continue;
@@ -745,21 +858,32 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
     if (ch === "(") {
       paren += 1;
       bracketFrames.push({
-        isPattern: opensPattern(src, i, clause),
+        // Inside an inline predicate every bracket is expression syntax, so the
+        // character test is not even asked. Without this, round 11's admission
+        // of `(` after `=`, `,`, `-`, `>`, `<`, `|`, `(` and `[` — every one of
+        // which an inline predicate can contain — would re-open the region one
+        // grouping paren deeper.
+        isPattern: !insideInlinePredicate() && opensPattern(src, i, clause),
         braceDepth: braceKinds.length,
+        inlinePredicate: false,
       });
     } else if (ch === ")") {
       paren = Math.max(0, paren - 1);
-      bracketFrames.pop();
+      if (bracketFrames.pop()?.inlinePredicate === true) {
+        inlinePredicateFrames = Math.max(0, inlinePredicateFrames - 1);
+      }
     } else if (ch === "[") {
       bracket += 1;
       bracketFrames.push({
-        isPattern: opensPattern(src, i, clause),
+        isPattern: !insideInlinePredicate() && opensPattern(src, i, clause),
         braceDepth: braceKinds.length,
+        inlinePredicate: false,
       });
     } else if (ch === "]") {
       bracket = Math.max(0, bracket - 1);
-      bracketFrames.pop();
+      if (bracketFrames.pop()?.inlinePredicate === true) {
+        inlinePredicateFrames = Math.max(0, inlinePredicateFrames - 1);
+      }
     } else if (ch === "{") {
       // PRECEDENCE, and it is load-bearing in its own right. Both classifiers
       // can be true at the same `{`, and which is asked FIRST is a fifth thing
@@ -796,7 +920,11 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
           : "map";
       braceKinds.push(kind);
       if (kind === "map") mapDepth += 1;
-      braceClause.push({ clause, mergeMapFilters });
+      braceClause.push({ clause, mergeMapFilters, inlinePredicateFrames });
+      // A subquery is a clause sequence of its own, so the enclosing pattern's
+      // inline predicate does not reach into it. Only a subquery brace does
+      // this: a map literal is an expression that stays inside the region.
+      if (kind === "subquery") inlinePredicateFrames = 0;
     } else if (ch === "}") {
       if (braceKinds.pop() === "map") mapDepth = Math.max(0, mapDepth - 1);
       // Restore BEFORE the keeping() test below, so the `}` itself is judged by
@@ -805,6 +933,7 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
       if (saved) {
         clause = saved.clause;
         mergeMapFilters = saved.mergeMapFilters;
+        inlinePredicateFrames = saved.inlinePredicateFrames;
       }
       // `boundAGraphVariable` deliberately does NOT restore. It only ever makes
       // a later MERGE map stop counting, so letting an inner `MATCH` set it is

@@ -1514,3 +1514,252 @@ describe("applyGraphScope", () => {
     ).toThrow(/Reserved scope parameter/);
   });
 });
+
+// ── The inline predicate is a region, not a list of shapes ───────────────────
+//
+// Round twelve reported a SUBQUERY brace inside `MATCH (n WHERE …)`; round
+// thirteen reported a MAP LITERAL brace in the same place. They are one defect.
+// A node pattern is
+//
+//     ( [variable] [labelExpression] [propertyMap] [WHERE expression] )
+//
+// and a relationship pattern is that shape inside `[…]`, so the `WHERE` is the
+// point where the property-map position ENDS. Everything after it in that
+// bracket is ordinary expression syntax. The scanner had been asking only
+// whether the enclosing bracket is a pattern — true for the whole frame — so
+// every brace and every bracket written in the region inherited the standing of
+// the pattern's own property map.
+//
+// Ordering `opensSubquery` first (round twelve's fix, kept and still pinned
+// above) closed one brace MEANING in the region. This closes the REGION, which
+// is why the cases below are enumerated from the grammar rather than from what
+// was demonstrated: fifteen queries reach it and one rule answers all of them.
+//
+// Every case here fails against the parent commit.
+describe("an inline pattern predicate ends the property-map position", () => {
+  const bypasses: Array<[name: string, cypher: string]> = [
+    // The reported spelling. A map literal is never null, so the predicate is
+    // constant-true and every tenant's `n` is returned.
+    [
+      "a map literal (review's round-13 case)",
+      "MATCH (n WHERE {orgId: $orgId} IS NOT NULL) RETURN n",
+    ],
+    // The same map, reached by every other route an expression offers.
+    [
+      "a map literal parenthesised",
+      "MATCH (n WHERE ({orgId: $orgId}) IS NOT NULL) RETURN n",
+    ],
+    [
+      "a map literal in a CASE arm",
+      "MATCH (n WHERE CASE WHEN true THEN {orgId: $orgId} END IS NOT NULL) RETURN n",
+    ],
+    [
+      "a map whose VALUE holds the whole comparison",
+      "MATCH (n WHERE {k: n.orgId = $orgId} IS NOT NULL) RETURN n",
+    ],
+    [
+      "a map nested one level inside another map",
+      "MATCH (n WHERE {a: {orgId: $orgId}} IS NOT NULL) RETURN n",
+    ],
+    [
+      "a map following a map PROJECTION in the same predicate",
+      "MATCH (n WHERE n{.orgId} IS NOT NULL AND {orgId: $orgId} IS NOT NULL) RETURN n",
+    ],
+    // A grouping paren inside the region. Round eleven admits `(` after `=`
+    // inside a graph-pattern clause, because `MATCH p = (a)` spells a node
+    // pattern exactly that way — so without the region the map would be that
+    // "pattern"'s property map one bracket deeper.
+    [
+      "a grouping paren inside the predicate",
+      "MATCH (n WHERE true = ({orgId: $orgId} IS NOT NULL)) RETURN n",
+    ],
+    // A pattern comprehension inside the region: same, via `[`.
+    [
+      "a pattern comprehension inside the predicate",
+      "MATCH (n WHERE size([(n)-->(m {orgId: $orgId}) | m]) > 0) RETURN n",
+    ],
+    // The region is not a property of node patterns — a relationship pattern
+    // carries an inline predicate in exactly the same position.
+    [
+      "on a RELATIONSHIP pattern rather than a node",
+      "MATCH (a)-[r WHERE {orgId: $orgId} IS NOT NULL]->(b) RETURN a",
+    ],
+    // Nor of the first pattern in the path, nor of MATCH specifically.
+    [
+      "on the second node of a path",
+      "MATCH (a)-[r]->(m WHERE {orgId: $orgId} IS NOT NULL) RETURN a",
+    ],
+    [
+      "under OPTIONAL MATCH",
+      "OPTIONAL MATCH (n WHERE {orgId: $orgId} IS NOT NULL) RETURN n",
+    ],
+    [
+      "under MERGE, where a pattern map would otherwise filter",
+      "MERGE (n WHERE {orgId: $orgId} IS NOT NULL) RETURN n",
+    ],
+    [
+      "after a label expression",
+      "MATCH (n:GraphNode WHERE {orgId: $orgId} IS NOT NULL) RETURN n",
+    ],
+    [
+      "inside a quantified path pattern",
+      "MATCH ((a WHERE {orgId: $orgId} IS NOT NULL)-[r]->(b)){1,3} RETURN a",
+    ],
+    // One inline predicate inside another, through a subquery. The inner
+    // pattern gets its own region; the map is in it.
+    [
+      "an inline predicate nested inside another",
+      "MATCH (n WHERE EXISTS { MATCH (m WHERE {orgId: $orgId} IS NOT NULL) RETURN m }) RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of bypasses) {
+    it(`is not a property map: ${name}`, () => {
+      expect(keepFilteringPositions(cypher)).not.toContain("$orgId");
+    });
+  }
+
+  it("is discriminating: the anchor's exact syntax is present in every case", () => {
+    // Each query above carries `orgId: $orgId` or `<var>.orgId = $orgId`
+    // verbatim, so the guard regex matches the raw text and only the position
+    // rule refuses it. Without this the block could pass on a regex that had
+    // stopped matching anything.
+    for (const [, cypher] of bypasses) {
+      expect(/(?:[A-Za-z]\.orgId\s*=|\borgId\s*:)\s*\$orgId/.test(cypher)).toBe(
+        true,
+      );
+    }
+  });
+
+  // The other direction, held to the same standard. A pattern property map is
+  // written BEFORE the `WHERE`, so it is outside the region and is the real
+  // anchor Cypher says it is; and the region dies with the bracket it belongs
+  // to, so a later pattern in the same clause is untouched.
+  const stillAnchors: Array<[name: string, cypher: string]> = [
+    [
+      "a property map BEFORE the inline predicate on the same node",
+      "MATCH (n {orgId: $orgId} WHERE {x: 1} IS NOT NULL) RETURN n",
+    ],
+    [
+      "a property map before an ordinary inline predicate",
+      "MATCH (n {orgId: $orgId} WHERE n.x > 1) RETURN n",
+    ],
+    [
+      "a later node's property map in the same path",
+      "MATCH (a WHERE a.x = 1)-[r]->(b {orgId: $orgId}) RETURN b",
+    ],
+    [
+      "a later RELATIONSHIP's property map in the same path",
+      "MATCH (a WHERE a.x = 1)-[r {orgId: $orgId}]->(b) RETURN r",
+    ],
+    [
+      "a comma-separated second pattern's map",
+      "MATCH (a WHERE a.x = 1), (b {orgId: $orgId}) RETURN b",
+    ],
+    [
+      "a following MATCH's property map",
+      "MATCH (a WHERE a.x = 1) MATCH (b {orgId: $orgId}) RETURN b",
+    ],
+    [
+      "a following MERGE's property map",
+      "MERGE (a {orgId: $orgId}) MERGE (b WHERE b.x = 1) RETURN a",
+    ],
+    // A subquery brace opens its OWN clause sequence, so the enclosing
+    // pattern's inline predicate does not reach into it — the same reading that
+    // already saves and restores `clause` across a brace. The top-level
+    // spelling of this query is pinned as anchoring in the block above, and the
+    // two had better not disagree.
+    [
+      "a pattern map inside a subquery inside the predicate",
+      "MATCH (n WHERE EXISTS { MATCH (m {orgId: $orgId}) }) RETURN n",
+    ],
+    // The region is entered on a WHERE that STARTS A CLAUSE. The same
+    // disqualifiers the clause branch uses keep a property key, a label and a
+    // map value from spoofing it.
+    [
+      "a map key spelled `where`",
+      "MATCH (n {where: 1, orgId: $orgId}) RETURN n",
+    ],
+    ["a label spelled `Where`", "MATCH (n:Where {orgId: $orgId}) RETURN n"],
+    [
+      "a property spelled `where` in a real WHERE",
+      "MATCH (n) WHERE n.where = 1 AND n.orgId = $orgId RETURN n",
+    ],
+    [
+      "a backtick-escaped variable spelled `where`",
+      "MATCH (`where` {orgId: $orgId}) RETURN 1",
+    ],
+    // Unrelated shapes, re-pinned here because this change touches the bracket
+    // stack every one of them rides on.
+    ["a plain node property map", "MATCH (n {orgId: $orgId}) RETURN n"],
+    [
+      "a plain relationship property map",
+      "MATCH (a)-[r {orgId: $orgId}]->(b) RETURN r",
+    ],
+    ["a plain WHERE", "MATCH (n) WHERE n.orgId = $orgId RETURN n"],
+  ];
+
+  for (const [name, cypher] of stillAnchors) {
+    it(`still anchors: ${name}`, () => {
+      expect(keepFilteringPositions(cypher)).toContain("$orgId");
+    });
+  }
+
+  // THE MEASURED COST, stated rather than discovered later.
+  //
+  // An anchor written ONLY inside an inline predicate — `MATCH (n WHERE
+  // n.orgId = $orgId)` — is refused. That is not new in this change: the region
+  // is never the `WHERE` clause, because clause keywords are recognised at
+  // paren/bracket depth 0 and the pattern's own bracket is open, so the
+  // predicate's text was already being blanked before this commit. It is
+  // recorded here because the region now has a name, and someone reading the
+  // rule would otherwise expect it to have made the text a predicate position.
+  //
+  // Making it one is a real improvement and a DIFFERENT change: it would have
+  // to keep the region's text while still refusing every brace inside it, and
+  // it would need clause tracking inside a paren-nested subquery, which the
+  // scanner does not have. Fail-closed, 0 of the 63 corpus queries.
+  it("does not turn the region into a predicate position", () => {
+    expect(
+      keepFilteringPositions("MATCH (n WHERE n.orgId = $orgId) RETURN n"),
+    ).not.toContain("$orgId");
+    expect(
+      keepFilteringPositions(
+        "MATCH (a)-[r WHERE r.orgId = $orgId]->(b) RETURN a",
+      ),
+    ).not.toContain("$orgId");
+    // The pattern-map spelling of the same intent is unaffected.
+    expect(
+      keepFilteringPositions("MATCH (n {orgId: $orgId}) RETURN n"),
+    ).toContain("$orgId");
+  });
+
+  // A BARE variable spelled `where` opens the region and costs that query its
+  // anchor. It is the fail-closed side of the class ADR-087 records for
+  // `RETURN n AS where`, and it is unreachable in Cypher besides: `WHERE` is a
+  // reserved word, so the database requires the backticks that
+  // `stripLiteralsAndComments` has already emptied — which is why the escaped
+  // spelling is pinned as still anchoring above.
+  it("reads a bare variable spelled `where` as opening the region", () => {
+    expect(
+      keepFilteringPositions("MATCH (where {orgId: $orgId}) RETURN where"),
+    ).not.toContain("$orgId");
+  });
+
+  // The SCOPE guard's projection drops the pattern-map position outright
+  // (round eight), so none of this could reach it. Asserted so the asymmetry
+  // stays a recorded property rather than a coincidence.
+  it("the scope guard was already immune, by round eight's policy split", () => {
+    for (const cypher of [
+      `MATCH (n WHERE {a: n.label IN $${SCOPE_LABELS_PARAM}} IS NOT NULL) RETURN n`,
+      `MATCH (n WHERE n.label IN $${SCOPE_LABELS_PARAM}) RETURN n`,
+    ]) {
+      expect(keepPredicatePositions(cypher)).not.toContain(
+        `$${SCOPE_LABELS_PARAM}`,
+      );
+      expect(() => assertScopeMarkers(cypher, { labels: ["Doc"] })).toThrow(
+        GraphScopeError,
+      );
+    }
+  });
+});

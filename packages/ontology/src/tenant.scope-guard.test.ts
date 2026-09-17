@@ -906,6 +906,148 @@ describe("tenancy guard — a keyword-shaped name does not break a real clause",
   }
 });
 
+// ── The inline pattern predicate, end to end ────────────────────────────────
+//
+// The projection-level enumeration lives in `graph-scope.test.ts`. These drive
+// the same shapes through the real seam, because the thing that matters is
+// whether `scopedSession().run()` lets the query reach Neo4j, and the two
+// findings this closes were both reported as reads that reach it.
+//
+// Round twelve reported a subquery brace inside `MATCH (n WHERE …)`; round
+// thirteen reported a map literal in the same place. A node pattern is
+// `( [variable] [labels] [propertyMap] [WHERE expr] )`, so the `WHERE` is where
+// the property-map position ends — both braces are expressions, and so is every
+// bracket after it in that frame.
+describe("tenancy guard — an inline pattern predicate is not a property map", () => {
+  const bypasses: Array<[name: string, cypher: string]> = [
+    [
+      "a map literal (review's round-13 case)",
+      "MATCH (n WHERE {orgId: $orgId} IS NOT NULL) RETURN n",
+    ],
+    [
+      "a map literal parenthesised",
+      "MATCH (n WHERE ({orgId: $orgId}) IS NOT NULL) RETURN n",
+    ],
+    [
+      "a map literal in a CASE arm",
+      "MATCH (n WHERE CASE WHEN true THEN {orgId: $orgId} END IS NOT NULL) RETURN n",
+    ],
+    [
+      "a map whose VALUE holds the comparison",
+      "MATCH (n WHERE {k: n.orgId = $orgId} IS NOT NULL) RETURN n",
+    ],
+    [
+      "a map nested inside another map",
+      "MATCH (n WHERE {a: {orgId: $orgId}} IS NOT NULL) RETURN n",
+    ],
+    [
+      "a map after a map projection",
+      "MATCH (n WHERE n{.orgId} IS NOT NULL AND {orgId: $orgId} IS NOT NULL) RETURN n",
+    ],
+    [
+      "a grouping paren inside the predicate",
+      "MATCH (n WHERE true = ({orgId: $orgId} IS NOT NULL)) RETURN n",
+    ],
+    [
+      "a pattern comprehension inside the predicate",
+      "MATCH (n WHERE size([(n)-->(m {orgId: $orgId}) | m]) > 0) RETURN n",
+    ],
+    [
+      "on a relationship pattern",
+      "MATCH (a)-[r WHERE {orgId: $orgId} IS NOT NULL]->(b) RETURN a",
+    ],
+    [
+      "on the second node of a path",
+      "MATCH (a)-[r]->(m WHERE {orgId: $orgId} IS NOT NULL) RETURN a",
+    ],
+    [
+      "under OPTIONAL MATCH",
+      "OPTIONAL MATCH (n WHERE {orgId: $orgId} IS NOT NULL) RETURN n",
+    ],
+    ["under MERGE", "MERGE (n WHERE {orgId: $orgId} IS NOT NULL) RETURN n"],
+    [
+      "after a label expression",
+      "MATCH (n:GraphNode WHERE {orgId: $orgId} IS NOT NULL) RETURN n",
+    ],
+    [
+      "inside a quantified path pattern",
+      "MATCH ((a WHERE {orgId: $orgId} IS NOT NULL)-[r]->(b)){1,3} RETURN a",
+    ],
+    [
+      "an inline predicate nested inside another",
+      "MATCH (n WHERE EXISTS { MATCH (m WHERE {orgId: $orgId} IS NOT NULL) RETURN m }) RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of bypasses) {
+    it(`rejects: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(false);
+    });
+  }
+
+  it("is discriminating: the OLD guard accepted every one of them", () => {
+    // Each case carries the anchor's exact syntax, so the guard regex matches
+    // the raw text and only the position rule refuses it. Asserted against the
+    // pre-fix guard so the block cannot pass on a regex that stopped matching.
+    for (const [, cypher] of bypasses) {
+      expect(OLD_GUARD.test(cypher)).toBe(true);
+      expect(keepFilteringPositions(cypher)).not.toContain("$orgId");
+    }
+  });
+
+  const stillAccepted: Array<[name: string, cypher: string]> = [
+    [
+      "a property map written BEFORE the inline predicate",
+      "MATCH (n {orgId: $orgId} WHERE {x: 1} IS NOT NULL) RETURN n",
+    ],
+    [
+      "a later node's property map in the same path",
+      "MATCH (a WHERE a.x = 1)-[r]->(b {orgId: $orgId}) RETURN b",
+    ],
+    [
+      "a later relationship's property map",
+      "MATCH (a WHERE a.x = 1)-[r {orgId: $orgId}]->(b) RETURN r",
+    ],
+    [
+      "a following MATCH's property map",
+      "MATCH (a WHERE a.x = 1) MATCH (b {orgId: $orgId}) RETURN b",
+    ],
+    [
+      "a pattern map inside a subquery inside the predicate",
+      "MATCH (n WHERE EXISTS { MATCH (m {orgId: $orgId}) }) RETURN n",
+    ],
+    [
+      "a map key spelled `where`",
+      "MATCH (n {where: 1, orgId: $orgId}) RETURN n",
+    ],
+    ["a label spelled `Where`", "MATCH (n:Where {orgId: $orgId}) RETURN n"],
+    [
+      "a backtick-escaped variable spelled `where`",
+      "MATCH (`where` {orgId: $orgId}) RETURN 1",
+    ],
+  ];
+
+  for (const [name, cypher] of stillAccepted) {
+    it(`still accepts: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(true);
+    });
+  }
+
+  // The measured cost. An anchor written ONLY inside an inline predicate is
+  // refused — which predates this change, since the region was never the WHERE
+  // clause — and a bare variable spelled `where` opens the region, which Cypher
+  // reserves against anyway. Both are fail-closed and cost 0 of the 63 corpus
+  // queries the block below collects.
+  it("refuses an anchor written only inside an inline predicate", async () => {
+    await expect(
+      guardAccepts("MATCH (n WHERE n.orgId = $orgId) RETURN n"),
+    ).resolves.toBe(false);
+    await expect(
+      guardAccepts("MATCH (where {orgId: $orgId}) RETURN where"),
+    ).resolves.toBe(false);
+  });
+});
+
 // ── the repo corpus ──────────────────────────────────────────────────────────
 
 /** Walk up from this file until the pnpm workspace root. */
