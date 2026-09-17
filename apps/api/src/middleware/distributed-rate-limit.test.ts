@@ -26,8 +26,12 @@ vi.mock("@oxagen/config/env", async (importOriginal) => {
   return { ...actual, requireEnv: mocks.requireEnv };
 });
 
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SQL } from "drizzle-orm";
+import { logger } from "./logger";
 import {
   authorizationFingerprintBucketKey,
+  enrolledMachineBucketKey,
   distributedRateLimiter,
   deriveBucketKey,
   rateLimitBudgets,
@@ -36,7 +40,7 @@ import {
 
 type FakeContextOpts = {
   method?: string;
-  vars?: Partial<{ workspaceId: string; orgId: string }>;
+  vars?: Partial<{ workspaceId: string; orgId: string; apiKeyId: string }>;
   headers?: Record<string, string>;
 };
 
@@ -479,5 +483,151 @@ describe("rateLimitBudgets", () => {
     const second = rateLimitBudgets();
     expect(second).toBe(first);
     expect(mocks.requireEnv).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("driver parameter binding", () => {
+  // Regression for the outage in which every enrolled Tacho host got
+  // 503 `rate_limit_unavailable`. Both statements interpolated a JS `Date`
+  // into a raw `sql` template. drizzle only converts a Date when the statement
+  // is built from a typed column, so the Date reached postgres.js verbatim,
+  // whose Bind path calls `Buffer.byteLength(value)` and throws
+  // ERR_INVALID_ARG_TYPE for anything that is not a string or Buffer. The
+  // limiter therefore threw on EVERY request and had never written a counter:
+  // fail-open surfaces stopped limiting silently and fail-closed pre-auth
+  // ceilings answered 503.
+  //
+  // The scripted `execute` in these tests accepts any argument, which is why
+  // CI stayed green through it. So assert on the parameters drizzle would
+  // actually hand the driver, by compiling the SQL through the real dialect.
+  function compileParams(sqlChunk: unknown): unknown[] {
+    return new PgDialect().sqlToQuery(sqlChunk as SQL).params;
+  }
+
+  /** Every param must be something postgres.js can serialize (never a Date). */
+  function expectDriverSerializable(params: readonly unknown[]): void {
+    for (const param of params) {
+      expect(param).not.toBeInstanceOf(Date);
+      expect(["string", "number", "boolean"]).toContain(typeof param);
+    }
+  }
+
+  it("binds the counter window as a string, not a Date", async () => {
+    const executed: unknown[] = [];
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          execute: vi.fn(async (chunk: unknown) => {
+            executed.push(chunk);
+            return [{ count: 1 }];
+          }),
+        }),
+    );
+
+    const next = vi.fn();
+    await distributedRateLimiter({ keyPrefix: "probe", max: 10 })(
+      fakeContext(),
+      next,
+    );
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(executed).toHaveLength(1);
+    const params = compileParams(executed[0]);
+    // bucket_key, then the window — both text by the time the driver sees them.
+    expect(params).toHaveLength(2);
+    expect(params[0]).toBe("probe:ip:unknown");
+    expect(typeof params[1]).toBe("string");
+    expect(Date.parse(params[1] as string)).not.toBeNaN();
+    expectDriverSerializable(params);
+  });
+
+  it("binds the stale-window sweep cutoff as a string, not a Date", async () => {
+    // Force the 1%-sampled opportunistic sweep to fire.
+    vi.spyOn(Math, "random").mockReturnValue(0);
+
+    const executed: unknown[] = [];
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          execute: vi.fn(async (chunk: unknown) => {
+            executed.push(chunk);
+            return [{ count: 1 }];
+          }),
+        }),
+    );
+
+    await distributedRateLimiter({ keyPrefix: "probe", max: 10 })(
+      fakeContext(),
+      vi.fn(),
+    );
+
+    // The increment, then the sweep in its own transaction.
+    expect(executed).toHaveLength(2);
+    const sweepParams = compileParams(executed[1]);
+    expect(sweepParams).toHaveLength(1);
+    expect(typeof sweepParams[0]).toBe("string");
+    expectDriverSerializable(sweepParams);
+  });
+});
+
+describe("store-error logging", () => {
+  // The outage above was hard to diagnose because the warn logged
+  // `err.message` only, and drizzle's DrizzleQueryError message is just the SQL
+  // text — the real TypeError sat in `cause` and never reached CloudWatch.
+  it("logs the whole cause chain, not just the wrapper's message", async () => {
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+    const wrapped = new Error("Failed query: INSERT ...", {
+      cause: new TypeError('The "string" argument must be of type string'),
+    });
+    mocks.withSystemDb.mockRejectedValue(wrapped);
+
+    const next = vi.fn();
+    await distributedRateLimiter({ keyPrefix: "probe", max: 10 })(
+      fakeContext(),
+      next,
+    );
+
+    expect(next).toHaveBeenCalledOnce(); // fail-open default
+    expect(warn).toHaveBeenCalledOnce();
+    const logged = (warn.mock.calls[0]?.[0] as { err: string }).err;
+    expect(logged).toContain("Failed query");
+    expect(logged).toContain('The "string" argument must be of type string');
+  });
+});
+
+describe("enrolled-machine bucket key", () => {
+  // The post-auth Tacho and Stella ceilings are sized per host, but they used
+  // the default derivation, which keys on workspaceId — so every host enrolled
+  // into one workspace shared a single 30/min counter and they would all have
+  // hit 429 together the moment these counters started working.
+  it("gives each enrolled credential its own bucket within one workspace", () => {
+    const hostA = enrolledMachineBucketKey(
+      fakeContext({ vars: { apiKeyId: "key-a", workspaceId: "ws-1" } }),
+    );
+    const hostB = enrolledMachineBucketKey(
+      fakeContext({ vars: { apiKeyId: "key-b", workspaceId: "ws-1" } }),
+    );
+
+    expect(hostA).toBe("machine:key-a");
+    expect(hostB).toBe("machine:key-b");
+    expect(hostA).not.toBe(hostB);
+  });
+
+  it("prefers the credential over the workspace it is scoped to", () => {
+    expect(
+      enrolledMachineBucketKey(
+        fakeContext({ vars: { apiKeyId: "key-a", workspaceId: "ws-1" } }),
+      ),
+    ).not.toContain("ws-1");
+  });
+
+  it("falls back to the previous workspace derivation without an API key", () => {
+    expect(
+      enrolledMachineBucketKey(fakeContext({ vars: { workspaceId: "ws-1" } })),
+    ).toBe("ws:ws-1");
+    expect(
+      enrolledMachineBucketKey(fakeContext({ vars: { orgId: "org-1" } })),
+    ).toBe("org:org-1");
+    expect(enrolledMachineBucketKey(fakeContext())).toBe("ip:unknown");
   });
 });

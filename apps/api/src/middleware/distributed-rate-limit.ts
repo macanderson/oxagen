@@ -117,6 +117,33 @@ export function deriveBucketKey(c: Context<AppEnv>, keyPrefix: string): string {
 }
 
 /**
+ * One enrolled machine, one bucket.
+ *
+ * The post-auth ceilings on the Tacho and Stella machine routes are documented
+ * and sized per host, but they were using the default `deriveBucketKey`, which
+ * picks `workspaceId`. Every enrolled machine carries a distinct API key and
+ * shares its workspace, so a handful of daemons would exhaust one counter
+ * between them and all receive 429 — and the first minutes after this limiter
+ * starts counting for the first time are exactly when every host drains its
+ * backlog at once. Key on the enrolled credential instead.
+ *
+ * Falls back to the workspace when no API key is on the context, which on these
+ * routers means something other than an enrolled machine reached them; that is
+ * the behaviour these mounts had before, so the fallback is never worse.
+ *
+ * Exported for the same reason as `deriveBucketKey`: so the derivation can be
+ * unit-tested without a live DB.
+ */
+export function enrolledMachineBucketKey(c: Context<AppEnv>): string {
+  const apiKeyId = c.get("apiKeyId");
+  if (apiKeyId) return `machine:${apiKeyId}`;
+  const workspaceId = c.get("workspaceId");
+  if (workspaceId) return `ws:${workspaceId}`;
+  const orgId = c.get("orgId");
+  return orgId ? `org:${orgId}` : `ip:${clientIp(c)}`;
+}
+
+/**
  * Header the AWS edge sets from its own view of the connection. Caddy writes it
  * with `header_up`, which SETS the field — any copy a caller sent is replaced
  * before the request reaches this process — and fills it from Caddy's
@@ -221,6 +248,28 @@ export function authorizationFingerprintBucketKey(c: Context<AppEnv>): string {
 // Throttle store-error warnings to at most one per window per route group, so a
 // store outage logs a signal without drowning the logs in one line per request.
 const lastWarnAtByPrefix = new Map<string, number>();
+
+/**
+ * Flatten an error and its `cause` chain into one string.
+ *
+ * This used to log `err.message` alone. Drizzle wraps every failure in a
+ * DrizzleQueryError whose message is only the SQL text and the bound params, so
+ * the actual reason — a driver TypeError, a Postgres SQLSTATE, a dead socket —
+ * lived in `cause` and never reached CloudWatch. Production spent that outage
+ * showing a query that looked perfectly valid and no reason for it to fail.
+ * Whatever breaks this store next, the log should name it.
+ */
+function describeError(err: unknown): string {
+  const seen = new Set<unknown>();
+  const parts: string[] = [];
+  let current: unknown = err;
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    parts.push(current instanceof Error ? current.message : String(current));
+    current = current instanceof Error ? current.cause : undefined;
+  }
+  return parts.join(" <- ");
+}
 function warnStoreError(
   keyPrefix: string,
   windowMs: number,
@@ -233,7 +282,7 @@ function warnStoreError(
   logger.warn(
     {
       keyPrefix,
-      err: err instanceof Error ? err.message : String(err),
+      err: describeError(err),
       storeErrorPolicy,
     },
     storeErrorPolicy === "degrade-to-local"
@@ -250,8 +299,15 @@ function warnStoreError(
  */
 function sweepStaleWindows(olderThan: Date): void {
   void withSystemDb(async (tx) => {
+    // `.toISOString()` + an explicit cast, never the Date itself — see the
+    // note on the increment upsert in `distributedRateLimiter` below. A raw
+    // Date bound through `sql` throws in the driver before Postgres is even
+    // reached, and this sweep swallows its errors, so the bug was silent here:
+    // every sampled sweep since this limiter shipped has thrown and deleted
+    // nothing.
     await tx.execute(sql`
-      DELETE FROM ratelimit.rate_limit_counters WHERE window_start < ${olderThan}
+      DELETE FROM ratelimit.rate_limit_counters
+      WHERE window_start < ${olderThan.toISOString()}::timestamptz
     `);
   }).catch(() => {
     /* best-effort — see doc comment */
@@ -323,9 +379,25 @@ export function distributedRateLimiter(
     let count: number;
     try {
       count = await withSystemDb(async (tx) => {
+        // The window is bound as ISO-8601 text with an explicit ::timestamptz
+        // cast, NOT as a Date. drizzle's `sql` template hands an interpolated
+        // value straight to the driver as a bind parameter, and postgres.js
+        // serializes parameters with `Buffer.byteLength(value)`, which throws
+        //   TypeError [ERR_INVALID_ARG_TYPE]: The "string" argument must be of
+        //   type string or an instance of Buffer or ArrayBuffer. Received an
+        //   instance of Date
+        // for anything that is not already a string. (Drizzle converts Dates
+        // for you when the statement is built from a typed table column; raw
+        // `sql` has no column type to convert against, so it does not.)
+        //
+        // That threw on EVERY request, so this limiter had never once written
+        // a counter: fail-open surfaces (chat, and the post-auth tacho/Stella
+        // ceilings) silently stopped limiting, and the fail-closed pre-auth
+        // ceilings on /v1/tacho/* and /v1/telemetry/stella/* answered 503
+        // `rate_limit_unavailable` to every enrolled host. Keep the cast.
         const rows = (await tx.execute(sql`
           INSERT INTO ratelimit.rate_limit_counters AS c (bucket_key, window_start, count)
-          VALUES (${key}, ${windowStart}, 1)
+          VALUES (${key}, ${windowStart.toISOString()}::timestamptz, 1)
           ON CONFLICT (bucket_key, window_start)
           DO UPDATE SET count = c.count + 1
           RETURNING c.count
