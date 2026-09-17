@@ -35,18 +35,41 @@
  *     machine credential added later is refused until somebody says what it is
  *     for.
  *
- * It constrains machine keys only. A key with no `purpose` is what
- * `oxagen login` mints for a person, and it keeps acting for its creator
- * exactly as before. `cli_session_v1` (`CLI_SESSION_SCOPE_PURPOSE`) carries a
- * purpose too, but it is not a machine credential: `resolveApiKey`
- * (`packages/auth/src/resolvers/api-key.ts`) resolves it to the *person* who
- * approved the `oxagen login` flow — re-checking their org/workspace
- * membership on every call — and treats every other purpose as a bare
- * machine key with `userId: null`. Before this exemption existed, every CLI
- * session key fell into the "unrecognised purpose" branch below and was
- * denied every capability, which broke `oxagen login`'s org/workspace picker
- * outright.
+ * ## What it does not constrain
+ *
+ * It constrains machine keys only, and there are two kinds of key it lets
+ * past.
+ *
+ * A key with **no `purpose`** is a plain org API key. It has always acted for
+ * whoever holds it, under whatever role gate the handler runs, and this gate
+ * leaves it exactly as it was. (It is no longer what `oxagen login` mints —
+ * that changed in #2997, and the sentence that used to say otherwise here is
+ * the belief this module's CLI-session bug was built on.)
+ *
+ * A key carrying **`cli_session_v1`** (`CLI_SESSION_SCOPE_PURPOSE`) is a
+ * person's terminal session. `resolveApiKey`
+ * (`packages/auth/src/resolvers/api-key.ts`) resolves it to the user who
+ * approved the `oxagen login` flow, re-checking that user's org and workspace
+ * membership on every call, and resolves every other key to `userId: null`.
+ * So it is a person's credential — but only on a surface that took that
+ * answer. `apps/mcp` discarded it, and a surface that discards it hands this
+ * gate a credential with a person's exemption and no person: the handler role
+ * gate (`assertCallerRole`) short-circuits on a context with no `userId`, and
+ * on a non-enterprise org it is the only role gate that runs.
+ *
+ * The exemption is therefore conditional on the caller: `userId` is part of
+ * the question, and a CLI session key presented with no resolved person is
+ * **denied**, not exempted. That makes the paragraph above true by
+ * construction rather than by the continued good behaviour of a file in
+ * another package.
+ *
+ * The exemption has been lost once already — #3222 added it, and #3178's
+ * squash, whose branch predated that merge, overwrote this file without it
+ * while keeping the paragraph that describes it, so `oxagen login`'s
+ * org/workspace picker was denied outright again. The tests below pin the
+ * behaviour rather than the prose.
  */
+import { CLI_SESSION_SCOPE_PURPOSE } from "@oxagen/oxagen/cli-session";
 import {
   hasColumn,
   HOST_GATEWAY_COLUMN,
@@ -160,6 +183,17 @@ export interface MachineKeyCheck {
   orgId: string;
   apiKeyId: string | null | undefined;
   capabilityName: string;
+  /**
+   * The person this surface resolved the credential to, or null when it
+   * resolved none.
+   *
+   * Required rather than optional so that adding a surface is a compile error
+   * until it answers the question. A surface that cannot answer it has not
+   * resolved a person, and `null` is the honest answer — which this gate reads
+   * as "not a person's credential" for the one purpose whose exemption depends
+   * on there being one.
+   */
+  userId: string | null | undefined;
 }
 
 /**
@@ -289,7 +323,7 @@ async function recordGatewayInvocation(
 export async function machineKeyDenial(
   check: MachineKeyCheck,
 ): Promise<string | undefined> {
-  const { apiKeyId, orgId, capabilityName } = check;
+  const { apiKeyId, orgId, capabilityName, userId } = check;
   if (!apiKeyId || !orgId) return undefined;
 
   const scope = await readKeyScope(orgId, apiKeyId);
@@ -301,10 +335,22 @@ export async function machineKeyDenial(
     return `Forbidden: this credential is no longer valid, so it may not invoke ${capabilityName}.`;
   }
 
-  // No purpose: a person's key, acting for its creator. Unchanged.
+  // No purpose: a plain org key, under whatever role gate its handler runs.
   if (scope.kind === "personal") return undefined;
 
   const { purpose } = scope;
+
+  // A CLI session key is a person's terminal session, so it carries no machine
+  // mandate — but only where a person came with it. `resolveApiKey` resolves
+  // that person and re-checks their membership; a surface that drops the
+  // answer leaves this gate a credential whose exemption rests on a person
+  // nothing downstream can see, and `assertCallerRole` waves a context with no
+  // `userId` straight through. Fail closed on the surface, not on the key.
+  if (purpose === CLI_SESSION_SCOPE_PURPOSE) {
+    return userId
+      ? undefined
+      : `Forbidden: this CLI session credential resolved to no person on this surface, so it may not invoke ${capabilityName}. A CLI session acts for the user who approved \`oxagen login\`; sign in again, or use a credential minted for this surface.`;
+  }
 
   if (purpose === TACHO_GATEWAY_PURPOSE) {
     // The observation the enforcement tier is derived from.
