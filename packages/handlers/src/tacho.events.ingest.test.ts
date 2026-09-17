@@ -308,6 +308,12 @@ interface FakeDb {
    */
   hideSessionFromRead: boolean;
   /**
+   * Raise the row's tier immediately after the read, modelling a
+   * promotion-only re-send committing in between. It moves NO seq, which is
+   * what makes it the case a head-only optimistic guard misses.
+   */
+  promoteTierOnRead: string | undefined;
+  /**
    * Hide the session from the NEXT read only. The conflict path with the row
    * still visible afterwards: `existing` is undefined, the INSERT conflicts,
    * and the re-read that follows sees the row the winner left — which is how
@@ -383,6 +389,7 @@ function fakeDb(): FakeDb {
     ],
     updates: [],
     hideSessionFromRead: false,
+    promoteTierOnRead: undefined,
     hideSessionFromNextRead: false,
     advanceSeqCountOnRead: undefined,
     gatewayChains: [],
@@ -538,6 +545,10 @@ function wire(db: FakeDb): void {
               if (db.advanceSeqCountOnRead !== undefined) {
                 row["seqCount"] = db.advanceSeqCountOnRead;
                 db.advanceSeqCountOnRead = undefined;
+              }
+              if (db.promoteTierOnRead !== undefined) {
+                row["enforcementTier"] = db.promoteTierOnRead;
+                db.promoteTierOnRead = undefined;
               }
               return snapshot;
             },
@@ -1798,6 +1809,45 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     expect(db.models).toEqual([]);
     expect(db.files).toEqual([]);
     expect(mocks.recordSpend).not.toHaveBeenCalled();
+  });
+
+  it("refuses an update whose tier moved under the read", async () => {
+    // The head is not the only tier-relevant state. A promotion-only re-send —
+    // same frames, already recorded, so no new seq — raises
+    // `enforcement_tier` and leaves `seq_count` exactly where this batch read
+    // it. A concurrent terminal batch that derived `observe` then matches the
+    // head and writes an observe-derived `replayGrade` onto a row that is now
+    // `gateway`: the sealed tier and the signed grade disagree, for good.
+    const db = fakeDb();
+    const events = sessionWithContent("gateway");
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      // As this request reads it.
+      enforcementTier: "observe",
+      sealedAt: null,
+      seqCount: 0,
+      lastHash: null,
+      chainVerified: true,
+      genesisHash: (events[0] as TachoEvent).hash,
+    });
+    // …and the promotion commits immediately after this request's read, which
+    // moves no seq at all.
+    db.promoteTierOnRead = "gateway";
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+
+    const row = db.sessions.get(SESSION);
+    expect(row?.["enforcementTier"]).toBe("gateway");
+    // Nothing from the stale fold landed — in particular not a grade computed
+    // from `observe`.
+    expect(row?.["replayGrade"]).toBeUndefined();
+    expect(row?.["sealedAt"] ?? null).toBeNull();
   });
 
   it("writes none of a refused batch's events, and acknowledges them anyway", async () => {

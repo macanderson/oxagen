@@ -1230,9 +1230,21 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         //
         // `seq_count` is written only here and only ever forward, so matching
         // it IS the question "is this still the row `fresh` was computed
-        // against". A refusal costs one round trip: the batch is not
-        // acknowledged, the daemon keeps it, and the next read sees the real
-        // head.
+        // against". A refusal costs one round trip: the batch is re-sent by the
+        // daemon's spool, and the next read sees the real head.
+        //
+        // The TIER has to be matched too, and separately, because it is the one
+        // piece of tier-relevant state that moves WITHOUT the head. A
+        // promotion-only re-send — same frames, already recorded, so no new
+        // seq — raises `enforcement_tier` and leaves `seq_count` exactly where
+        // this batch read it. A concurrent terminal batch that derived
+        // `observe` then still matches the head, and writes an observe-derived
+        // `replayGrade` onto a row that is now `gateway`: the sealed tier and
+        // the signed grade disagree, and a sealed session is never regraded.
+        //
+        // `common`'s grade is computed from `effectiveTier`, which is computed
+        // from `existing.enforcementTier` — so matching the tier is the same
+        // question as matching the head, asked of the other input.
         const written = await tx
           .update(schema.tachoSessions)
           .set(common)
@@ -1240,6 +1252,10 @@ export const tachoEventsIngestHandler: CapabilityHandler<
             and(
               eq(schema.tachoSessions.id, existing.id),
               eq(schema.tachoSessions.seqCount, existing.seqCount),
+              eq(
+                schema.tachoSessions.enforcementTier,
+                existing.enforcementTier,
+              ),
             ),
           )
           .returning({ id: schema.tachoSessions.id });
