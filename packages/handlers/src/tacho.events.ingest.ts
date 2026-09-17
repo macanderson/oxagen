@@ -261,7 +261,7 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
  * passed unconditionally, because nothing predates a session being opened by
  * the same batch (#3221, discussion_r4036718127, discussion_r4040352859).
  *
- * Now both halves come from `tacho.gateway_invocations`, written where
+ * Now both halves come from `tacho.gateway_chains`, written where
  * `machineKeyDenial` authenticated the host's `tacho_gateway_v1` credential and
  * ruled on the call. A batch submitter cannot cause a row there: it would need
  * the gateway credential, which never leaves the daemon. So a forged
@@ -295,24 +295,25 @@ async function gatewayInvocationsFor(
   if (!invocationTable) return answers;
   if (gatewayObservationFor(host) === null) return answers;
   if (chains.length === 0) return answers;
+  // No aggregate: `tacho.gateway_chains` holds one row per (host, chain), so
+  // the newest call on a chain IS the row's `lastSeenAt`. The bound is a unique
+  // index rather than a convention, which is what lets this be a plain read.
   const rows = await tx
     .select({
-      chain: schema.tachoGatewayInvocations.chainSessionUuid,
-      at: sql<Date>`max(${schema.tachoGatewayInvocations.createdAt})`,
+      chain: schema.tachoGatewayChains.chainSessionUuid,
+      at: schema.tachoGatewayChains.lastSeenAt,
     })
-    .from(schema.tachoGatewayInvocations)
+    .from(schema.tachoGatewayChains)
     .where(
       and(
-        eq(schema.tachoGatewayInvocations.hostId, host.id),
-        inArray(schema.tachoGatewayInvocations.chainSessionUuid, chains),
+        eq(schema.tachoGatewayChains.hostId, host.id),
+        inArray(schema.tachoGatewayChains.chainSessionUuid, chains),
       ),
-    )
-    .groupBy(schema.tachoGatewayInvocations.chainSessionUuid);
+    );
   for (const row of rows) {
-    // `max()` comes back as a Date from the driver, but a string from some
-    // pooled paths; normalise rather than trust, because the value is compared
-    // against a session's `createdAt` and a string comparison would silently
-    // read as "always after".
+    // Normalised rather than trusted: some pooled paths hand back a string,
+    // and the value is compared against a session's `createdAt`, where a string
+    // comparison would silently read as "always after".
     const at = row.at instanceof Date ? row.at : new Date(row.at);
     if (!isNaN(at.getTime())) answers.set(row.chain, at);
   }
@@ -367,7 +368,7 @@ export function gatewayObservationFor(host: GatewayObservable): Date | null {
  *  1. The control plane authorised a call on this host's gateway credential.
  *     Its own record, unreachable from any submission.
  *  2. The call was served for *this* chain. `invocationAt` is the newest
- *     `tacho.gateway_invocations` row matching the session's uuid, written
+ *     `tacho.gateway_chains` row matching the session's uuid, written
  *     where the gateway credential was authenticated — so the correlation is
  *     the server's too, not the batch's (#3221). Null means the table has no
  *     record of this chain, which is the answer for every chain nobody's
@@ -748,7 +749,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     // Which of this batch's chains the control plane's own records say it
     // served a gateway call for (#3221). One grouped read for the whole batch,
     // and skipped entirely when no promotion is possible — including while
-    // `tacho.gateway_invocations` is still an unapplied migration, where
+    // `tacho.gateway_chains` is still an unapplied migration, where
     // naming the table would raise 42P01 and abort the transaction.
     const gatewayInvocations = await gatewayInvocationsFor(
       tx,

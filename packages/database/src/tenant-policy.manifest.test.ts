@@ -159,7 +159,7 @@ describe("tenant policy manifest", () => {
     // The count below is a ratchet — it makes adding a table deliberate — but
     // a ratchet only notices that the NUMBER moved, so a table can be added
     // and the pin bumped while the manifest entry is forgotten. That is
-    // exactly what happened to `tacho.gateway_invocations` (#3221): the
+    // exactly what happened to `tacho.gateway_chains` (#3221): the
     // migration installed standard tenant RLS and the table carried both org
     // columns, and the manifest, which is where that is DECLARED, did not
     // mention it. The manifest is what generated RLS migrations are built
@@ -195,7 +195,7 @@ describe("tenant policy manifest", () => {
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
     //
-    // 111 as of tacho.gateway_invocations (#3221), the control plane's record
+    // 111 as of tacho.gateway_chains (#3221), the control plane's record
     // of each authorised local-MCP-gateway call and the daemon chain it was
     // serving. It landed unregistered on its first push: the migration
     // installs standard tenant RLS and the table carries both org columns, but

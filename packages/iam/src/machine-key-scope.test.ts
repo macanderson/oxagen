@@ -14,10 +14,16 @@ const hostUpdates: Array<Record<string, unknown>> = [];
 const hostWritePlanes: string[] = [];
 /** Whether the database claims to have `gateway_last_seen_at` yet. */
 let gatewayColumnPresent = true;
-/** Whether it claims to have `tacho.gateway_invocations` yet (#3221). */
-let invocationTablePresent = true;
-/** Every `tacho.gateway_invocations` row the gate wrote, in order. */
-const invocationInserts: Array<Record<string, unknown>> = [];
+/** Whether it claims to have `tacho.gateway_chains` yet (#3221). */
+let chainTablePresent = true;
+/** Every `tacho.gateway_chains` upsert the gate made, in order. */
+const chainUpserts: Array<Record<string, unknown>> = [];
+/**
+ * The ROWS those upserts leave behind, keyed the way the unique index keys
+ * them. Modelled rather than counted, because the property under test is that
+ * the table is bounded by chains and not by calls.
+ */
+const chainRows = new Map<string, Record<string, unknown>>();
 /** The host row the gate reads, or undefined for a host it cannot find. */
 let hostRow: Record<string, unknown> | undefined = {
   id: "host-uuid",
@@ -39,10 +45,33 @@ const fakeTx = () => ({
     }),
   }),
   insert: () => ({
-    values: async (values: Record<string, unknown>) => {
-      invocationInserts.push(values);
-      return [];
-    },
+    // One row per (host, chain): the gate upserts and only `lastSeenAt` moves.
+    values: (values: Record<string, unknown>) => ({
+      onConflictDoUpdate: async (args: {
+        target: unknown[];
+        set: Record<string, unknown>;
+      }) => {
+        chainUpserts.push(values);
+        // Keyed by the columns the statement ACTUALLY names as its conflict
+        // target, not by the pair this fixture would have guessed. The mocked
+        // `schema.tachoGatewayChains` maps each property to its SQL name, so a
+        // target that forgets `chain_session_uuid` collapses two chains into
+        // one row here exactly as the unique index would refuse to.
+        const byColumn: Record<string, string> = {
+          host_id: "hostId",
+          chain_session_uuid: "chainSessionUuid",
+        };
+        const key = args.target
+          .map((column) => String(values[byColumn[String(column)] ?? ""]))
+          .join("\u0000");
+        const existing = chainRows.get(key);
+        chainRows.set(
+          key,
+          existing === undefined ? { ...values } : { ...existing, ...args.set },
+        );
+        return [];
+      },
+    }),
   }),
 });
 
@@ -50,23 +79,26 @@ vi.mock("@oxagen/database", () => ({
   schema: {
     apiKeys: { id: "id", orgId: "org_id", deletedAt: "deleted_at" },
     tachoHosts: { id: "id", orgId: "org_id", publicId: "public_id" },
-    tachoGatewayInvocations: { hostId: "host_id" },
+    tachoGatewayChains: {
+      hostId: "host_id",
+      chainSessionUuid: "chain_session_uuid",
+    },
   },
   HOST_GATEWAY_COLUMN: {
     schema: "tacho",
     table: "hosts",
     column: "gateway_last_seen_at",
   },
-  GATEWAY_INVOCATION_COLUMN: {
+  GATEWAY_CHAIN_COLUMN: {
     schema: "tacho",
-    table: "gateway_invocations",
+    table: "gateway_chains",
     column: "chain_session_uuid",
   },
   // Per column, not one answer for both. The host column and the invocations
   // table ship in DIFFERENT migrations, so either can be the one still pending
   // and a shared answer would describe a state no deployment is ever in.
   hasColumn: async (_tx: unknown, ref: { table: string }) =>
-    ref.table === "hosts" ? gatewayColumnPresent : invocationTablePresent,
+    ref.table === "hosts" ? gatewayColumnPresent : chainTablePresent,
   // The plane `withOrgPlaneSystemDb` opened the transaction on, published by
   // the seam rather than resolved a second time by the probe (#3223).
   ambientPlaneKey: async () => `plane-of:${hostWritePlanes.at(-1) ?? ""}`,
@@ -111,9 +143,10 @@ beforeEach(() => {
   getCapability.mockReset();
   hostUpdates.length = 0;
   hostWritePlanes.length = 0;
-  invocationInserts.length = 0;
+  chainUpserts.length = 0;
+  chainRows.clear();
   gatewayColumnPresent = true;
-  invocationTablePresent = true;
+  chainTablePresent = true;
   hostRow = {
     id: "host-uuid",
     orgId: ORG,
@@ -393,7 +426,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
     expect(hostWritePlanes).toEqual([ORG]);
   });
 
-  it("files the CHAIN the gateway named, not just the host (#3221)", async () => {
+  it("records the CHAIN the gateway named, not just the host (#3221)", async () => {
     // The correlation. The host timestamp says a gateway call happened; this
     // row says which of the host's chains it happened for. Without it the
     // answer came from an attribute on the submitted batch, so a holder of the
@@ -409,19 +442,61 @@ describe("a served gateway call is recorded where the tier can read it", () => {
       capabilityName: "query_ontology",
       gatewaySessionUuid: "tachod-abc",
     });
-    expect(invocationInserts).toHaveLength(1);
-    expect(invocationInserts[0]).toMatchObject({
+    expect(chainUpserts).toHaveLength(1);
+    expect(chainUpserts[0]).toMatchObject({
       chainSessionUuid: "tachod-abc",
-      capabilityName: "query_ontology",
-      outcome: "allowed",
       // From the HOST ROW, resolved through the key's own scope — never from
       // anything the caller sent.
       hostId: "host-uuid",
       orgId: ORG,
     });
+    expect(chainUpserts[0]?.["lastSeenAt"]).toBeInstanceOf(Date);
   });
 
-  it("files a refusal as an invocation too", async () => {
+  it("keeps one row per chain however many calls it serves", async () => {
+    // The bound (AGENTS.md storage boundaries). A row per authorised call
+    // would be an append-only audit stream growing with gateway traffic inside
+    // the transactional database, which is what ClickHouse is for — and the
+    // per-call history is already there, on the `tool_call` and
+    // `policy_decision` events the daemon seals onto this very chain. Postgres
+    // holds only what ingest must read inside a transaction.
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    for (let i = 0; i < 5; i += 1) {
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_g",
+        capabilityName: "query_ontology",
+        gatewaySessionUuid: "tachod-abc",
+      });
+    }
+    expect(chainUpserts).toHaveLength(5);
+    expect(chainRows.size).toBe(1);
+  });
+
+  it("keeps the chains of one host apart", async () => {
+    // Bounded by chains, not collapsed to the host: the whole point of the
+    // table is that it says WHICH chain, so two chains are two rows.
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    for (const chain of ["tachod-abc", "tachod-def"]) {
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_g",
+        capabilityName: "query_ontology",
+        gatewaySessionUuid: chain,
+      });
+    }
+    expect(chainRows.size).toBe(2);
+  });
+
+  it("records a refused call on the chain too", async () => {
     getCapability.mockReturnValue({ ...readOnlyMcp, mutates: true });
     keyWithScope({
       purpose: TACHO_GATEWAY_PURPOSE,
@@ -434,10 +509,15 @@ describe("a served gateway call is recorded where the tier can read it", () => {
       gatewaySessionUuid: "tachod-abc",
     });
     expect(denial).toMatch(/outside this agent's mandate/);
-    expect(invocationInserts[0]).toMatchObject({ outcome: "refused" });
+    // A call Oxagen stopped is evidence that Oxagen was enforcing, so it
+    // advances `lastSeenAt` exactly as a success does. The ruling itself is not
+    // stored here — it is in ClickHouse, on the `policy_decision` the daemon
+    // sealed onto this very chain.
+    expect(chainUpserts).toHaveLength(1);
+    expect(chainUpserts[0]?.["chainSessionUuid"]).toBe("tachod-abc");
   });
 
-  it("files no invocation when the caller named no chain", async () => {
+  it("records no chain when the caller named none", async () => {
     // A daemon too old to send the header. A row naming no chain is not
     // evidence about any session, so none is written and the host timestamp
     // stands alone — which leaves the session on the host's own mode rather
@@ -453,15 +533,15 @@ describe("a served gateway call is recorded where the tier can read it", () => {
       capabilityName: "query_ontology",
     });
     expect(hostUpdates).toHaveLength(1);
-    expect(invocationInserts).toEqual([]);
+    expect(chainUpserts).toEqual([]);
   });
 
-  it("files no invocation while its migration is pending", async () => {
-    // `tacho.gateway_invocations` arrives in its own migration, applied by
+  it("records no chain while its migration is pending", async () => {
+    // `tacho.gateway_chains` arrives in its own migration, applied by
     // hand after the deploy (#1275). Naming an absent TABLE raises 42P01,
     // which aborts the transaction exactly as a missing column does — and the
     // host stamp, whose own migration HAS landed, must still be written.
-    invocationTablePresent = false;
+    chainTablePresent = false;
     getCapability.mockReturnValue(readOnlyMcp);
     keyWithScope({
       purpose: TACHO_GATEWAY_PURPOSE,
@@ -476,7 +556,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
       }),
     ).toBeUndefined();
     expect(hostUpdates).toHaveLength(1);
-    expect(invocationInserts).toEqual([]);
+    expect(chainUpserts).toEqual([]);
   });
 
   it("writes nothing for a host the key's scope names but the org lacks", async () => {
@@ -496,7 +576,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
       gatewaySessionUuid: "tachod-abc",
     });
     expect(hostUpdates).toEqual([]);
-    expect(invocationInserts).toEqual([]);
+    expect(chainUpserts).toEqual([]);
   });
 
   it("ignores a chain named on a credential that is not a gateway", async () => {
@@ -517,7 +597,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
       capabilityName: allowed as string,
       gatewaySessionUuid: "tachod-abc",
     });
-    expect(invocationInserts).toEqual([]);
+    expect(chainUpserts).toEqual([]);
   });
 
   it("records nothing for the HOST key, which serves no connected app", async () => {

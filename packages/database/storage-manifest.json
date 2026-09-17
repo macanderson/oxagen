@@ -3353,7 +3353,7 @@
       "writes": []
     }
   ],
-  "contentHash": "97379f803f0da6027394c7e225e9575b9b1650337589aee24cc0842c3a3deac7",
+  "contentHash": "9d56c4dd0058749421c8a7db5d52e48a645a076ad0b8ae3c8f991f512b668e7e",
   "domains": [
     {
       "name": "agent",
@@ -3689,7 +3689,7 @@
         "postgres:tacho.checkpoints",
         "postgres:tacho.control_commands",
         "postgres:tacho.enrollment_tokens",
-        "postgres:tacho.gateway_invocations",
+        "postgres:tacho.gateway_chains",
         "postgres:tacho.hosts",
         "postgres:tacho.incidents",
         "postgres:tacho.session_commands",
@@ -17817,18 +17817,6 @@
           "type": "citext"
         },
         {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
           "name": "org_id",
           "nullable": false,
           "primaryKey": false,
@@ -17853,21 +17841,21 @@
           "type": "text"
         },
         {
-          "name": "capability_name",
+          "name": "first_seen_at",
           "nullable": false,
           "primaryKey": false,
-          "type": "text"
+          "type": "timestamp with time zone"
         },
         {
-          "name": "outcome",
+          "name": "last_seen_at",
           "nullable": false,
           "primaryKey": false,
-          "type": "text"
+          "type": "timestamp with time zone"
         }
       ],
       "domain": "tacho",
-      "id": "postgres:tacho.gateway_invocations",
-      "name": "gateway_invocations",
+      "id": "postgres:tacho.gateway_chains",
+      "name": "gateway_chains",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true

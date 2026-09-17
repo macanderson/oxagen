@@ -296,11 +296,11 @@ interface FakeDb {
   controlCommands: Array<Record<string, unknown>>;
   updates: Array<{ table: string; values: Record<string, unknown> }>;
   /**
-   * `tacho.gateway_invocations` — the control plane's own record of which
-   * chain it was serving when it authorised a gateway call (#3221). Empty by
+   * `tacho.gateway_chains` — the control plane's own record of which of this
+   * host's chains its gateway has served, one row each (#3221). Empty by
    * default, which is the honest state: no chain has been served.
    */
-  gatewayInvocations: Array<{ chainSessionUuid: string; createdAt: Date }>;
+  gatewayChains: Array<{ chainSessionUuid: string; lastSeenAt: Date }>;
   /** The workspace's latest retention policy row; none by default. */
   retentionPolicy:
     | { mode: string; retainedContentClasses: string[] }
@@ -357,7 +357,7 @@ function fakeDb(): FakeDb {
       },
     ],
     updates: [],
-    gatewayInvocations: [],
+    gatewayChains: [],
     retentionPolicy: undefined,
   };
 }
@@ -368,8 +368,8 @@ function fakeDb(): FakeDb {
  *
  * `machineKeyDenial` writes both halves in one place when it authorises a call
  * presenting the host's `tacho_gateway_v1` credential: the host timestamp, and
- * a `tacho.gateway_invocations` row naming the daemon chain the caller was
- * serving. The helper writes both for the same reason — a fixture that set
+ * a `tacho.gateway_chains` row naming the daemon chain the caller was
+ * serving (upserted — one row per chain, not one per call). The helper writes both for the same reason — a fixture that set
  * only the timestamp would be describing a state the writer cannot produce.
  *
  * Without both, no batch can reach the `gateway` tier, whatever the batch
@@ -381,7 +381,7 @@ function watchedGatewayHost(
   chain = SESSION,
 ): void {
   (db.hosts[0] as Record<string, unknown>)["gatewayLastSeenAt"] = at;
-  db.gatewayInvocations.push({ chainSessionUuid: chain, createdAt: at });
+  db.gatewayChains.push({ chainSessionUuid: chain, lastSeenAt: at });
 }
 
 function tableName(table: unknown): string {
@@ -458,25 +458,18 @@ function wire(db: FakeDb): void {
         // invocations for the chains the batch names, newest per chain.
         select: () => ({
           from: () => ({
-            where: () => ({
-              groupBy: async () => {
-                // Every row this fixture holds, newest per chain. The real
-                // statement narrows by host id and by the chains the batch
-                // names; neither narrowing is modelled, because `inArray`
-                // does not bind its list as a `Param` and a fake that
-                // pretended to read it would be asserting its own guess. The
-                // fixture holds one host's rows, and the handler looks each
-                // chain up by name — so a chain nobody served is still a
-                // miss, which is the property these tests are about.
-                const newest = new Map<string, Date>();
-                for (const row of db.gatewayInvocations) {
-                  const seen = newest.get(row.chainSessionUuid);
-                  if (seen === undefined || row.createdAt > seen)
-                    newest.set(row.chainSessionUuid, row.createdAt);
-                }
-                return [...newest].map(([chain, at]) => ({ chain, at }));
-              },
-            }),
+            // Every row this fixture holds. The real statement narrows by
+            // host id and by the chains the batch names; neither narrowing is
+            // modelled, because `inArray` does not bind its list as a `Param`
+            // and a fake that pretended to read it would be asserting its own
+            // guess. The fixture holds one host's rows, and the handler looks
+            // each chain up by name — so a chain nobody served is still a
+            // miss, which is the property these tests are about.
+            where: async () =>
+              db.gatewayChains.map((row) => ({
+                chain: row.chainSessionUuid,
+                at: row.lastSeenAt,
+              })),
           }),
         }),
         insert: (table: unknown) => ({
@@ -1870,7 +1863,7 @@ describe("enforcementTierOf", () => {
     // batch answered that question itself, by carrying
     // `oxagen.enforcement_tier`, so any submitter could point a real
     // observation at any session. Now the answer comes from
-    // `tacho.gateway_invocations` and a chain nobody's gateway served has no
+    // `tacho.gateway_chains` and a chain nobody's gateway served has no
     // row there, whatever the batch says about it.
     expect(enforcementTierOf(null, watched("observe"), null, true)).toBe(
       "observe",

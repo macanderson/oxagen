@@ -49,7 +49,7 @@
  */
 import {
   ambientPlaneKey,
-  GATEWAY_INVOCATION_COLUMN,
+  GATEWAY_CHAIN_COLUMN,
   hasColumn,
   HOST_GATEWAY_COLUMN,
   schema,
@@ -262,8 +262,6 @@ async function recordGatewayInvocation(
   orgId: string,
   hostEnrollmentId: string | undefined,
   chainSessionUuid: string | null,
-  capabilityName: string,
-  outcome: "allowed" | "refused",
 ): Promise<void> {
   if (!hostEnrollmentId) return;
   // The ORGANISATION'S plane, not the shared one. `tacho.hosts` is tenant data
@@ -289,12 +287,8 @@ async function recordGatewayInvocation(
     // from one another: they ship in different migrations and either can be
     // the one still pending.
     const hostColumn = await hasColumn(tx, HOST_GATEWAY_COLUMN, planeKey);
-    const invocations = await hasColumn(
-      tx,
-      GATEWAY_INVOCATION_COLUMN,
-      planeKey,
-    );
-    if (!hostColumn && !invocations) return;
+    const chains = await hasColumn(tx, GATEWAY_CHAIN_COLUMN, planeKey);
+    if (!hostColumn && !chains) return;
 
     // The host row, read once and by the server's own attribution: the public
     // id comes from the KEY'S scope, never from the request. An invocation
@@ -325,15 +319,40 @@ async function recordGatewayInvocation(
     // as it did before. That is the honest degradation: a daemon too old to
     // send the header keeps its sessions on the host's own mode rather than
     // being promoted on a correlation nobody made.
-    if (invocations && chainSessionUuid !== null) {
-      await tx.insert(schema.tachoGatewayInvocations).values({
-        orgId: host.orgId,
-        workspaceId: host.workspaceId,
-        hostId: host.id,
-        chainSessionUuid,
-        capabilityName,
-        outcome,
-      });
+    //
+    // UPSERT, one row per (host, chain) rather than one per call. A row per
+    // call would be an append-only audit stream growing with gateway traffic
+    // inside the transactional database, which is what AGENTS.md's storage
+    // table assigns to ClickHouse. Nothing is lost: the per-call history is
+    // already there and is richer — `recordGatewayCall` seals a `tool_call` or
+    // `policy_decision` carrying the tool, the connected app and the outcome
+    // onto this very chain, and ingest writes it through `insertTachoEvents`.
+    // Postgres holds only the bounded fact ingest has to read inside a
+    // transaction: this host's gateway served this chain, most recently then.
+    //
+    // A refusal advances `lastSeenAt` exactly as a success does. `outcome` is
+    // still computed above because it is what the caller is told; it is not
+    // stored here, because a call Oxagen stopped is evidence that Oxagen was
+    // enforcing, which is the only thing the tier asks.
+    if (chains && chainSessionUuid !== null) {
+      const at = new Date();
+      await tx
+        .insert(schema.tachoGatewayChains)
+        .values({
+          orgId: host.orgId,
+          workspaceId: host.workspaceId,
+          hostId: host.id,
+          chainSessionUuid,
+          firstSeenAt: at,
+          lastSeenAt: at,
+        })
+        .onConflictDoUpdate({
+          target: [
+            schema.tachoGatewayChains.hostId,
+            schema.tachoGatewayChains.chainSessionUuid,
+          ],
+          set: { lastSeenAt: at },
+        });
     }
   });
 }
@@ -395,10 +414,6 @@ export async function machineKeyDenial(
     // record is a call the tier will not reflect, and silently under-reporting
     // enforcement is the failure this whole path exists to end. It is one
     // indexed UPDATE by public id.
-    //
-    // The mandate is evaluated first so the record can say how the call was
-    // ruled on, and it is a pure function of the capability — no I/O, nothing
-    // that can fail between deciding and recording.
     const permitted = gatewayMayInvoke(capabilityName);
     await recordGatewayInvocation(
       orgId,
@@ -407,8 +422,6 @@ export async function machineKeyDenial(
       // SESSION rather than only about a host (#3221). Read only here, on the
       // one credential whose authentication it can attest anything about.
       check.gatewaySessionUuid ?? null,
-      capabilityName,
-      permitted ? "allowed" : "refused",
     );
     if (!permitted) {
       return `Forbidden: ${capabilityName} is outside this agent's mandate. A connected app may call read-only, non-sensitive workspace tools through the Oxagen gateway; changing that is a mandate change, made in Oxagen.`;

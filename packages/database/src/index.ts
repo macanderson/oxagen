@@ -57,7 +57,7 @@ export {
   type ProbeTx,
 } from "./column-probe";
 export {
-  GATEWAY_INVOCATION_COLUMN,
+  GATEWAY_CHAIN_COLUMN,
   HOST_GATEWAY_COLUMN,
   SESSION_GATEWAY_COLUMN,
 } from "./schema/tacho";

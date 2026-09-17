@@ -886,8 +886,8 @@ export const SESSION_GATEWAY_COLUMN = {
 } as const;
 
 /**
- * Every gateway call the control plane authorised, and the daemon chain the
- * caller was serving when it did.
+ * Which of a host's daemon chains the control plane has served a gateway call
+ * for, and when it last did.
  *
  * ## Why a row rather than a timestamp
  *
@@ -905,6 +905,26 @@ export const SESSION_GATEWAY_COLUMN = {
  * request, and files the two together. A batch submitter cannot cause a row
  * here: it would need the gateway credential, which never leaves the daemon.
  *
+ * ## One row per chain, not per call
+ *
+ * Bounded correlation state, which is what Postgres is for. A row per
+ * authorised call would be an append-only audit stream growing with gateway
+ * traffic forever inside the transactional database — what AGENTS.md's storage
+ * table assigns to ClickHouse and names as a thing Postgres is never for.
+ *
+ * Nothing is lost by collapsing it. The per-call history already exists in
+ * ClickHouse, and it is richer than a row here would be:
+ * `recordGatewayCall` seals a `tool_call` or `policy_decision` event carrying
+ * the tool, the connected app and the outcome onto the very chain this row
+ * names, and ingest writes those through `insertTachoEvents`. The only
+ * question Postgres must answer inside a transaction is the one ingest asks —
+ * has this host's gateway served this chain, and how recently.
+ *
+ * `lastSeenAt` rather than the first: a chain that has served gateway calls for
+ * a week should not be judged on the one it opened with. A refused call
+ * advances it too, because a call Oxagen stopped is evidence that Oxagen was
+ * enforcing, not evidence that it was not.
+ *
  * ## What the chain id is, and is not
  *
  * `chain_session_uuid` is named by the caller — but by a caller holding the
@@ -921,19 +941,14 @@ export const SESSION_GATEWAY_COLUMN = {
  * row here regularly precedes the session it refers to, and the join happens
  * at read time.
  *
- * ## Append-only
- *
- * A row is a record of something that happened, so nothing updates or deletes
- * one; the grants in the migration are SELECT and INSERT. In particular a row
- * is NOT consumed when ingest matches it. Consuming would let a forged batch
- * that reached the table first burn a real observation belonging to the
- * session that earned it, which trades this defect for a worse one.
+ * Nothing deletes a row, and ingest does NOT consume one on match. Consuming
+ * would let a forged batch that arrived first burn a real record belonging to
+ * the session that earned it, which trades this defect for a worse one.
  */
-export const tachoGatewayInvocations = tachoSchema.table(
-  "gateway_invocations",
+export const tachoGatewayChains = tachoSchema.table(
+  "gateway_chains",
   {
-    ...idMixin("tgi"),
-    ...appendOnlyAuditMixin(),
+    ...idMixin("tgc"),
     ...orgScopeMixin(),
     /** The host whose gateway credential was authenticated. App-enforced FK. */
     hostId: uuid("host_id").notNull(),
@@ -944,36 +959,23 @@ export const tachoGatewayInvocations = tachoSchema.table(
      * as text.
      */
     chainSessionUuid: text("chain_session_uuid").notNull(),
-    /** What was called, for the operator reading a session's evidence. */
-    capabilityName: text("capability_name").notNull(),
-    /**
-     * Whether the mandate allowed it.
-     *
-     * Both outcomes are recorded and both count as evidence. A refusal is not
-     * weaker evidence that Oxagen enforced something — it is the strongest
-     * there is, the case where Oxagen actually stopped a call, and it is
-     * exactly what the session needs to be able to show.
-     */
-    outcome: text("outcome").notNull(),
+    firstSeenAt: ts("first_seen_at").notNull().defaultNow(),
+    /** What ingest reads. Moved forward by every served call, refusals too. */
+    lastSeenAt: ts("last_seen_at").notNull().defaultNow(),
   },
   (t) => ({
-    // The read ingest makes: this host's invocations, for the chains in the
-    // batch it is holding.
-    chainIdx: index("tacho_gateway_invocations_chain_idx").on(
+    // The upsert target AND the read ingest makes. One index serves both
+    // because there is one row per (host, chain) — the bound stated as a
+    // constraint rather than as an intention.
+    hostChainUniq: uniqueIndex("tacho_gateway_chains_host_chain_uniq").on(
       t.hostId,
       t.chainSessionUuid,
-      t.createdAt,
-    ),
-    outcomeCheck: check(
-      "tacho_gateway_invocations_outcome_check",
-      sql`${t.outcome} IN ('allowed', 'refused')`,
     ),
   }),
 );
 
 /**
- * A column of {@link tachoGatewayInvocations}, for the deploy-before-migrate
- * probe.
+ * A column of {@link tachoGatewayChains}, for the deploy-before-migrate probe.
  *
  * One ref answers for the whole table: `information_schema.columns` has no row
  * for a column of a table that does not exist, so a probe for this reads
@@ -982,8 +984,8 @@ export const tachoGatewayInvocations = tachoSchema.table(
  * TABLE raises 42P01, which aborts the transaction exactly as 42703 does, and
  * would turn a pending migration into failed ingestion for every host.
  */
-export const GATEWAY_INVOCATION_COLUMN = {
+export const GATEWAY_CHAIN_COLUMN = {
   schema: "tacho",
-  table: "gateway_invocations",
+  table: "gateway_chains",
   column: "chain_session_uuid",
 } as const;

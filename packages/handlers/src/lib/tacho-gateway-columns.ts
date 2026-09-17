@@ -34,7 +34,7 @@
 
 import {
   ambientPlaneKey,
-  GATEWAY_INVOCATION_COLUMN,
+  GATEWAY_CHAIN_COLUMN,
   hasColumn,
   HOST_GATEWAY_COLUMN,
   SESSION_GATEWAY_COLUMN,
@@ -84,7 +84,7 @@ export async function sessionReadColumns(
 }
 
 /**
- * Whether `tacho.gateway_invocations` exists yet (#3221).
+ * Whether `tacho.gateway_chains` exists yet (#3221).
  *
  * A TABLE, not a column — but asked the same way, because
  * `information_schema.columns` has no row for a column of a table that does
@@ -97,5 +97,5 @@ export async function sessionReadColumns(
 export async function gatewayInvocationColumnReady(
   tx: ProbeTx,
 ): Promise<boolean> {
-  return hasColumn(tx, GATEWAY_INVOCATION_COLUMN, await ambientPlaneKey());
+  return hasColumn(tx, GATEWAY_CHAIN_COLUMN, await ambientPlaneKey());
 }

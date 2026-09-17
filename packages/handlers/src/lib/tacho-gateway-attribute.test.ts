@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest";
  *
  * The attribute is still written, so it is still there to be picked up by the
  * next person who needs to know which chain served a gateway call. This test is
- * the note that says: ask `tacho.gateway_invocations`, which is the control
+ * the note that says: ask `tacho.gateway_chains`, which is the control
  * plane's own record, not the batch.
  */
 
