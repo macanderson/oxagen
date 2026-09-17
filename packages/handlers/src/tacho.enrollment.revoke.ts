@@ -3,7 +3,7 @@ import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { tachoEnrollmentRevoke } from "@oxagen/oxagen/contracts/tacho.enrollment.revoke";
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import {
   API_KEY_AUTHORIZED_ROLES as AUTHORIZED_ROLES,
   noOperatorMessage,
@@ -21,9 +21,24 @@ function denied(message: string): CapabilityError {
 }
 
 /**
- * Revoke a host: retire its key, mark it revoked, and queue a `revoke`
+ * Revoke a host: retire its keys, mark it revoked, and queue a `revoke`
  * command so a collector mid-poll learns immediately rather than at its next
  * bundle refresh. Idempotent: revoking a revoked host answers the same.
+ *
+ * ## Why the keys are found by scope rather than by column
+ *
+ * Enrollment mints two credentials (ADR-078): the host's control-plane key,
+ * whose id `tacho_hosts.api_key_id` carries, and a second key for the local MCP
+ * gateway, whose id is carried nowhere. Revoking only `api_key_id` therefore
+ * left the gateway key valid until it expired, so an operator who revoked a
+ * lost or copied host had not actually taken the connected app's authority
+ * away — it could keep invoking its read-only MCP mandate.
+ *
+ * Both keys record `scope.host_enrollment_id`, which enrollment writes and
+ * nothing else uses as an identifier, so the enrollment is the thing every key
+ * of the host has in common. Revoking by that predicate retires the pair in the
+ * same transaction and, unlike a second column, cannot be half-populated for a
+ * host enrolled before this change or miss a third credential added later.
  */
 export const tachoEnrollmentRevokeHandler: CapabilityHandler<
   typeof tachoEnrollmentRevoke
@@ -64,7 +79,9 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
         updatedByUserId: operatorUserId,
       })
       .where(eq(schema.tachoHosts.id, host.id));
-    await tx
+    // Every live key minted for this enrollment: the control-plane key and the
+    // MCP gateway key, and anything a later enrollment adds beside them.
+    const retired = await tx
       .update(schema.apiKeys)
       .set({
         deletedAt: now,
@@ -72,7 +89,33 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
         updatedAt: now,
         updatedByUserId: operatorUserId,
       })
-      .where(eq(schema.apiKeys.id, host.apiKeyId));
+      .where(
+        and(
+          eq(schema.apiKeys.orgId, ctx.orgId),
+          isNull(schema.apiKeys.deletedAt),
+          sql`${schema.apiKeys.scope} ->> 'host_enrollment_id' = ${host.publicId}`,
+        ),
+      )
+      .returning({ id: schema.apiKeys.id });
+    // The control-plane key is the one credential this host provably has, so
+    // its absence from the scope sweep means the row predates the scope marker.
+    // Retire it by id rather than leaving a live key behind.
+    if (!retired.some((k) => k.id === host.apiKeyId)) {
+      await tx
+        .update(schema.apiKeys)
+        .set({
+          deletedAt: now,
+          deletedByUserId: operatorUserId,
+          updatedAt: now,
+          updatedByUserId: operatorUserId,
+        })
+        .where(
+          and(
+            eq(schema.apiKeys.id, host.apiKeyId),
+            isNull(schema.apiKeys.deletedAt),
+          ),
+        );
+    }
     await tx.insert(schema.tachoControlCommands).values({
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
