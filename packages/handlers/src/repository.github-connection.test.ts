@@ -33,8 +33,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 import {
   GITHUB_PROVIDER,
+  attachWorkspaceGithubInstallation,
   installationIdOf,
   resolveWorkspaceGithubInstallation,
+  workspaceGithubConnectionFilter,
 } from "./repository.github-connection";
 
 const SCOPE = {
@@ -305,5 +307,185 @@ describe("installationIdOf refuses everything its regex exists to refuse", () =>
     // a number would silently retarget the request.
     const id = "99999999999999999999";
     expect(installationIdOf({ installationId: id })).toBe(id);
+  });
+});
+
+// ── the writer, and why it is the same predicate as the reader ───────────────
+//
+// `attachWorkspaceGithubInstallation` picks the row an attach lands on and
+// `resolveWorkspaceGithubInstallation` picks the row every repository
+// capability reads. A predicate the two nearly share is two predicates: the day
+// they diverge, one writes an installation onto a row the other never reads,
+// and the product goes on acting through a stale installation with nothing on
+// screen to show for the connect that just succeeded. They share one function,
+// and this is what says so.
+
+/** A `tx` that records the select's SQL, the update's SET and the insert's VALUES. */
+function attachTx(rows: readonly unknown[]) {
+  const db = drizzle.mock({ schema });
+  const select = db.select.bind(db) as unknown as (fields: unknown) => {
+    from: (t: unknown) => {
+      where: (c: unknown) => {
+        orderBy: (o: unknown) => { limit: (n: number) => { toSQL: () => CapturedSql } };
+      };
+    };
+  };
+  const captured: {
+    sql?: CapturedSql;
+    updateSet?: Record<string, unknown>;
+    insertValues?: Record<string, unknown>;
+  } = {};
+
+  const tx = {
+    select: (fields: unknown) => ({
+      from: (table: unknown) => ({
+        where: (condition: unknown) => ({
+          orderBy: (order: unknown) => ({
+            limit: (n: number) => {
+              captured.sql = select(fields)
+                .from(table)
+                .where(condition)
+                .orderBy(order)
+                .limit(n)
+                .toSQL();
+              return rows;
+            },
+          }),
+        }),
+      }),
+    }),
+    update: () => ({
+      set: (values: Record<string, unknown>) => {
+        captured.updateSet = values;
+        return { where: async () => undefined };
+      },
+    }),
+    insert: () => ({
+      values: (values: Record<string, unknown>) => {
+        captured.insertValues = values;
+        return {
+          returning: async () => [
+            { id: "conn-new-uuid", publicId: "con_new" },
+          ],
+        };
+      },
+    }),
+  };
+  return { tx, captured };
+}
+
+async function runAttach(
+  rows: readonly unknown[],
+  installationId = "555",
+  actingUserId: string | null = "u_acting",
+) {
+  const { tx, captured } = attachTx(rows);
+  mocks.withTenantDb.mockImplementationOnce(
+    async (fn: (t: unknown) => Promise<unknown>) => fn(tx),
+  );
+  const result = await attachWorkspaceGithubInstallation({
+    ...SCOPE,
+    installationId,
+    actingUserId,
+  });
+  return { result, captured };
+}
+
+describe("attachWorkspaceGithubInstallation", () => {
+  it("picks its row with the very predicate the readers use", async () => {
+    const { captured } = await runAttach([]);
+    // Same function, so the same SQL — asserted against the emitted text rather
+    // than against a fake chain that would discard the predicate entirely.
+    expect(captured.sql?.sql).toContain('"ingestion"."source_connections"');
+    expect(captured.sql?.sql).toMatch(/"org_id" = \$\d+/);
+    expect(captured.sql?.sql).toMatch(/"workspace_id" = \$\d+/);
+    expect(captured.sql?.sql).toMatch(/"connector_id" = \$\d+/);
+    expect(captured.sql?.sql).toContain('"deleted_at" is null');
+    expect(captured.sql?.params).toContain(GITHUB_PROVIDER);
+    // …and the same tie-break, so the row written is the row read.
+    expect(captured.sql?.sql).toMatch(/order by .*"created_at" desc/i);
+  });
+
+  it("and that predicate is, character for character, the reader's", async () => {
+    // The claim the whole shared function exists to make. Both sides are
+    // rendered through drizzle and their WHERE clauses compared as text, so a
+    // change to one that is not a change to the other fails here rather than in
+    // production, where it reads as "the connect succeeded and nothing
+    // happened".
+    const whereOf = (sql: string) =>
+      sql.slice(sql.indexOf(" where "), sql.indexOf(" order by "));
+    const reader = await emittedSql();
+    const { captured } = await runAttach([]);
+    expect(whereOf(captured.sql?.sql ?? "")).toBe(whereOf(reader.sql));
+    expect(workspaceGithubConnectionFilter(SCOPE)).toBeDefined();
+  });
+
+  it("merges the installation into an existing connection without clobbering it", async () => {
+    const { result, captured } = await runAttach([
+      {
+        id: "conn-uuid",
+        publicId: "con_ABC",
+        deliveryConfig: {
+          owner: "acme",
+          repo: "platform",
+          syncDepthDays: 30,
+        },
+      },
+    ]);
+    expect(captured.insertValues).toBeUndefined();
+    expect(captured.updateSet).toMatchObject({
+      deliveryConfig: {
+        owner: "acme",
+        repo: "platform",
+        syncDepthDays: 30,
+        installationId: "555",
+      },
+      updatedById: "u_acting",
+    });
+    // Status is left alone: a workspace that already binds a repository is
+    // `connected`, and choosing an installation again is not a demotion.
+    expect(captured.updateSet).not.toHaveProperty("status");
+    expect(result).toEqual({ connectionId: "conn-uuid", publicId: "con_ABC" });
+  });
+
+  it("creates the workspace's GitHub connection when it has none", async () => {
+    const { result, captured } = await runAttach([]);
+    expect(captured.updateSet).toBeUndefined();
+    expect(captured.insertValues).toMatchObject({
+      orgId: SCOPE.orgId,
+      workspaceId: SCOPE.workspaceId,
+      connectorId: GITHUB_PROVIDER,
+      deliveryConfig: { installationId: "555" },
+      createdById: "u_acting",
+    });
+    // `pending_setup`, not `connected`: `status = 'connected'` is what the
+    // ingestion poll scheduler claims, and a workspace with no record-type
+    // mappings does not belong in the sync loop. `bind_main_repository`
+    // promotes it.
+    expect(captured.insertValues?.["status"]).toBe("pending_setup");
+    expect(result).toEqual({ connectionId: "conn-new-uuid", publicId: "con_new" });
+  });
+
+  it("writes no attribution when there is no acting user (negative)", async () => {
+    const { captured } = await runAttach([], "555", null);
+    expect(captured.insertValues).not.toHaveProperty("createdById");
+  });
+
+  it("throws rather than answering a connection it did not create (negative)", async () => {
+    const { tx } = attachTx([]);
+    const noRow = {
+      ...tx,
+      insert: () => ({ values: () => ({ returning: async () => [] }) }),
+    };
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (t: unknown) => Promise<unknown>) => fn(noRow),
+    );
+    await expect(
+      attachWorkspaceGithubInstallation({
+        ...SCOPE,
+        installationId: "555",
+        actingUserId: null,
+      }),
+    ).rejects.toThrow("insert returned no row");
   });
 });
