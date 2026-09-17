@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { withSystemDb } from "@oxagen/database";
 import { requireEnv } from "@oxagen/config/env";
 import { logger } from "./logger";
+import { extractClientIp } from "../lib/context";
 import type { AppEnv } from "../app";
 
 /**
@@ -69,8 +70,15 @@ export interface DistributedRateLimitOptions {
    * Optional unprefixed bucket suffix for pre-authentication or other custom
    * scopes. The limiter always prepends `keyPrefix`, preventing cross-surface
    * collisions. Resolvers must return non-secret, bounded values.
+   *
+   * Returning `null` means "this request cannot be attributed to a bucket",
+   * and the limiter SKIPS — it does not count, and it does not deny, not even
+   * when `failClosedOnStoreError` is set. A resolver must never substitute a
+   * shared constant for an identity it cannot establish: every caller in one
+   * bucket is not a ceiling, it is one abuser's power to lock everyone else
+   * out. See `trustedClientIpBucketKey`.
    */
-  bucketKey?: (c: Context<AppEnv>) => string;
+  bucketKey?: (c: Context<AppEnv>) => string | null;
 }
 
 const DEFAULT_WINDOW_MS = 60_000;
@@ -128,17 +136,53 @@ export function enrolledMachineBucketKey(c: Context<AppEnv>): string {
 }
 
 /**
- * Vercel replaces `x-vercel-forwarded-for` from its trusted network boundary,
- * unlike caller-controlled `x-forwarded-for`. Outside Vercel, collapse all
- * traffic into one conservative bucket rather than trusting a spoofable IP.
+ * The client address, as far as this deployment can actually vouch for it, or
+ * `null` when it cannot vouch for one at all.
+ *
+ * This used to return the constant `ip:unverified` for every caller whenever
+ * `VERCEL !== "1"` — which is always, since production runs on AWS behind an
+ * ALB and Caddy. A single bucket shared by every caller on the internet is not
+ * a rate limit; it is shared fate. It was harmless only because the counter
+ * store threw on every request, and this PR fixes that: on these fail-closed
+ * pre-auth mounts, one client sending `max + 1` requests in a window would take
+ * the entire Tacho and Stella ingress offline for everyone, before any
+ * credential was checked. That is a denial of service handed to anyone who can
+ * reach the host.
+ *
+ * So: derive a real client address. `extractClientIp` (lib/context.ts) already
+ * does the hardened version of this — it walks the forwarded-for chain from the
+ * RIGHT by TRUSTED_PROXY_HOP_COUNT, so entries a caller prepends itself can
+ * never move the entry it picks, and it is the same derivation the IAM
+ * `ip_ranges` / `ip_allow` conditions are judged on.
+ *
+ * Returning `null` is deliberate and load-bearing: it means this deployment has
+ * no trusted proxy chain to read, so there is no per-client bucket to enforce,
+ * and the limiter SKIPS rather than lumping everyone together (see the
+ * `bucketKey` contract). An unattributable ceiling is worse than no ceiling,
+ * because it converts one abuser into an outage for every other caller. The
+ * per-credential ceiling mounted beside this one is unaffected either way.
+ *
+ * NOTE: the granularity of this bucket is exactly as good as
+ * TRUSTED_PROXY_HOP_COUNT. Production is client -> ALB -> Caddy, and both
+ * append, so the chain is two entries deep and the count must be 2; the env
+ * default is 1, which yields the load balancer's own address and buckets every
+ * caller behind an ALB node together. Correct that value and this becomes a
+ * true per-client ceiling. It is tracked on #3167 rather than changed here
+ * because it is a production environment change that wants a live header
+ * capture to confirm the hop depth first.
  */
-export function trustedVercelIpBucketKey(c: Context<AppEnv>): string {
-  if (process.env.VERCEL !== "1") return "ip:unverified";
-  const trustedForwardedFor = c.req
-    .header("x-vercel-forwarded-for")
-    ?.split(",", 1)[0]
-    ?.trim();
-  return `ip:${trustedForwardedFor || "unverified"}`;
+export function trustedClientIpBucketKey(c: Context<AppEnv>): string | null {
+  // Vercel replaces `x-vercel-forwarded-for` at its own trusted network
+  // boundary, so it needs no hop arithmetic. Kept for preview deployments.
+  if (process.env.VERCEL === "1") {
+    const trustedForwardedFor = c.req
+      .header("x-vercel-forwarded-for")
+      ?.split(",", 1)[0]
+      ?.trim();
+    return trustedForwardedFor ? `ip:${trustedForwardedFor}` : null;
+  }
+  const clientAddress = extractClientIp(c);
+  return clientAddress ? `ip:${clientAddress}` : null;
 }
 
 /** Domain separator — see authorizationFingerprintBucketKey. */
@@ -237,6 +281,24 @@ function sweepStaleWindows(olderThan: Date): void {
   });
 }
 
+/**
+ * A ceiling that cannot name who it is limiting is not being enforced, and that
+ * is a deployment fact an operator should be able to see rather than infer from
+ * a counter that never moves. Throttled per prefix like the store-error warn.
+ */
+const lastUnattributableWarnAtByPrefix = new Map<string, number>();
+function warnUnattributable(keyPrefix: string, windowMs: number): void {
+  const now = Date.now();
+  if (now - (lastUnattributableWarnAtByPrefix.get(keyPrefix) ?? 0) < windowMs)
+    return;
+  lastUnattributableWarnAtByPrefix.set(keyPrefix, now);
+  logger.warn(
+    { keyPrefix },
+    "distributed rate limiter has no attributable bucket for this request — " +
+      "skipping (check TRUSTED_PROXY_HOP_COUNT for this deployment)",
+  );
+}
+
 export function distributedRateLimiter(
   opts: DistributedRateLimitOptions,
 ): MiddlewareHandler<AppEnv> {
@@ -260,9 +322,17 @@ export function distributedRateLimiter(
   return async (c, next) => {
     if (methods !== "all" && !methods.includes(c.req.method)) return next();
 
-    const key = opts.bucketKey
-      ? `${opts.keyPrefix}:${opts.bucketKey(c)}`
-      : deriveBucketKey(c, opts.keyPrefix);
+    let key: string;
+    if (opts.bucketKey) {
+      const suffix = opts.bucketKey(c);
+      if (suffix === null) {
+        warnUnattributable(opts.keyPrefix, windowMs);
+        return next();
+      }
+      key = `${opts.keyPrefix}:${suffix}`;
+    } else {
+      key = deriveBucketKey(c, opts.keyPrefix);
+    }
     const now = Date.now();
     const windowStartMs = Math.floor(now / windowMs) * windowMs;
     const resetAtMs = windowStartMs + windowMs;

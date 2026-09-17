@@ -29,13 +29,14 @@ vi.mock("@oxagen/config/env", async (importOriginal) => {
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { logger } from "./logger";
+import { __resetTrustedProxyHopsForTests } from "../lib/context";
 import {
   authorizationFingerprintBucketKey,
   enrolledMachineBucketKey,
   distributedRateLimiter,
   deriveBucketKey,
   rateLimitBudgets,
-  trustedVercelIpBucketKey,
+  trustedClientIpBucketKey,
 } from "./distributed-rate-limit";
 
 type FakeContextOpts = {
@@ -77,6 +78,9 @@ function scriptCount(count: number): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // extractClientIp memoizes the hop count on first use; drop it so each case
+  // can set its own TRUSTED_PROXY_HOP_COUNT.
+  __resetTrustedProxyHopsForTests();
   // Keep the opportunistic cleanup (Math.random < 0.01) from firing so
   // withSystemDb is called exactly once per counted request.
   vi.spyOn(Math, "random").mockReturnValue(0.5);
@@ -88,29 +92,52 @@ afterEach(() => {
 });
 
 describe("pre-authentication bucket keys", () => {
-  it("collapses all off-Vercel IP headers into one unverified bucket", () => {
+  // This used to return the constant "ip:unverified" for every off-Vercel
+  // caller, i.e. always in production. On a fail-closed pre-auth mount that
+  // hands anyone who can reach the host the power to take the whole ingress
+  // offline with `max + 1` requests. Two callers must never share a bucket, and
+  // where no client can be identified the limiter must skip rather than pool.
+  it("gives two off-Vercel callers two different buckets", () => {
     vi.stubEnv("VERCEL", "");
+    mocks.requireEnv.mockReturnValue({ TRUSTED_PROXY_HOP_COUNT: 1 });
+
+    const first = trustedClientIpBucketKey(
+      fakeContext({ headers: { "x-forwarded-for": "198.51.100.1" } }),
+    );
+    const second = trustedClientIpBucketKey(
+      fakeContext({ headers: { "x-forwarded-for": "198.51.100.2" } }),
+    );
+
+    expect(first).toBe("ip:198.51.100.1");
+    expect(second).toBe("ip:198.51.100.2");
+    expect(first).not.toBe(second);
+  });
+
+  it("walks the forwarded-for chain from the right, so a prepended hop cannot move it", () => {
+    vi.stubEnv("VERCEL", "");
+    mocks.requireEnv.mockReturnValue({ TRUSTED_PROXY_HOP_COUNT: 2 });
 
     expect(
-      trustedVercelIpBucketKey(
+      trustedClientIpBucketKey(
         fakeContext({
           headers: {
-            "x-forwarded-for": "198.51.100.1",
-            "x-vercel-forwarded-for": "203.0.113.1",
+            // A caller prepending "evil" only lengthens the untrusted left.
+            "x-forwarded-for": "evil, 198.51.100.7, 10.0.0.5",
           },
         }),
       ),
-    ).toBe("ip:unverified");
+    ).toBe("ip:198.51.100.7");
+  });
+
+  it("returns null when no trusted proxy chain can be read", () => {
+    vi.stubEnv("VERCEL", "");
+    mocks.requireEnv.mockReturnValue({ TRUSTED_PROXY_HOP_COUNT: 0 });
+
     expect(
-      trustedVercelIpBucketKey(
-        fakeContext({
-          headers: {
-            "x-forwarded-for": "198.51.100.2",
-            "x-vercel-forwarded-for": "203.0.113.2",
-          },
-        }),
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-forwarded-for": "198.51.100.1" } }),
       ),
-    ).toBe("ip:unverified");
+    ).toBeNull();
   });
 
   it("normalizes a bearer credential and returns only a SHA-256 fingerprint", () => {
@@ -510,5 +537,37 @@ describe("enrolled-machine bucket key", () => {
       enrolledMachineBucketKey(fakeContext({ vars: { orgId: "org-1" } })),
     ).toBe("org:org-1");
     expect(enrolledMachineBucketKey(fakeContext())).toBe("ip:unknown");
+  });
+});
+
+describe("unattributable bucket", () => {
+  // A ceiling whose bucket cannot be attributed to one caller is not a ceiling.
+  // On a fail-closed pre-auth mount it is strictly worse than nothing: one
+  // abuser exhausts the shared counter and everyone else is denied. The
+  // limiter must pass the request through instead — the per-credential ceiling
+  // beside it still applies.
+  it("skips entirely when the resolver cannot name a bucket", async () => {
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+    scriptCount(1);
+
+    const next = vi.fn();
+    const c = fakeContext();
+    const res = await distributedRateLimiter({
+      keyPrefix: "preauth-ip",
+      max: 1,
+      bucketKey: () => null,
+      methods: "all",
+      failClosedOnStoreError: true,
+    })(c, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res).toBeUndefined();
+    // Never counted: no store round-trip at all.
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
+    // And never denied, despite fail-closed.
+    expect(c.json).not.toHaveBeenCalled();
+    // The operator can see the deployment is not enforcing it.
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0]?.[1]).toContain("TRUSTED_PROXY_HOP_COUNT");
   });
 });

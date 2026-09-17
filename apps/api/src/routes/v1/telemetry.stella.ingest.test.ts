@@ -427,15 +427,68 @@ describe("POST /v1/telemetry/stella/operational", () => {
 
     const response = await post(VALID_BATCH, {
       authorization: "Bearer middleware_order_key",
-      "x-vercel-forwarded-for": "203.0.113.70",
+      // A forwarded-for chain the deployment can read. Without one there is no
+      // client to attribute, and the IP counter deliberately skips rather than
+      // pooling every caller into one bucket — see the case below.
+      "x-forwarded-for": "198.51.100.70",
     });
 
     expect(response.status).toBe(200);
     expect(order.slice(0, 3)).toEqual([
-      "stella-preauth-ip:ip:unverified",
+      "stella-preauth-ip:ip:198.51.100.70",
       expect.stringMatching(/^stella-preauth-credential:credential:/),
       "auth",
     ]);
+  });
+
+  it("gives two callers two IP buckets rather than pooling them", async () => {
+    const keys: string[] = [];
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          execute: vi.fn().mockImplementation(async (query: unknown) => {
+            const key = (query as { queryChunks?: unknown[] }).queryChunks?.at(
+              1,
+            );
+            if (typeof key === "string" && key.startsWith("stella-preauth-ip"))
+              keys.push(key);
+            return [{ count: 1 }];
+          }),
+        }),
+    );
+
+    await post(VALID_BATCH, { "x-forwarded-for": "198.51.100.1" });
+    await post(VALID_BATCH, { "x-forwarded-for": "198.51.100.2" });
+
+    expect(keys).toEqual([
+      "stella-preauth-ip:ip:198.51.100.1",
+      "stella-preauth-ip:ip:198.51.100.2",
+    ]);
+  });
+
+  it("skips the IP counter, rather than denying, when no client can be identified", async () => {
+    // This mount is fail-closed. If an unidentifiable request were counted into
+    // a shared bucket, one caller sending max+1 in a window would take the
+    // whole Stella ingress offline for everyone, before any credential check.
+    const keys: string[] = [];
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          execute: vi.fn().mockImplementation(async (query: unknown) => {
+            const key = (query as { queryChunks?: unknown[] }).queryChunks?.at(
+              1,
+            );
+            if (typeof key === "string" && key.startsWith("stella-preauth-ip"))
+              keys.push(key);
+            return [{ count: 1 }];
+          }),
+        }),
+    );
+
+    const response = await post(VALID_BATCH);
+
+    expect(response.status).toBe(200);
+    expect(keys).toEqual([]);
   });
 
   it("mounts the exact POST route and rejects other methods", async () => {

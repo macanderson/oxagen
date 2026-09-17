@@ -11,7 +11,7 @@ import {
   distributedRateLimiter,
   enrolledMachineBucketKey,
   rateLimitBudgets,
-  trustedVercelIpBucketKey,
+  trustedClientIpBucketKey,
 } from "./middleware/distributed-rate-limit";
 import { health } from "./routes/health";
 import { stripeWebhook } from "./routes/stripe";
@@ -266,7 +266,7 @@ app.use(
   distributedRateLimiter({
     keyPrefix: "stella-preauth-ip",
     max: 3_000,
-    bucketKey: trustedVercelIpBucketKey,
+    bucketKey: trustedClientIpBucketKey,
     methods: "all",
     failClosedOnStoreError: true,
   }),
@@ -300,7 +300,7 @@ app.use(
   distributedRateLimiter({
     keyPrefix: "tacho-preauth-ip",
     max: 6_000,
-    bucketKey: trustedVercelIpBucketKey,
+    bucketKey: trustedClientIpBucketKey,
     methods: "all",
     failClosedOnStoreError: true,
   }),
