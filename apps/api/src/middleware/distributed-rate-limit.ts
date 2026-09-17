@@ -162,14 +162,21 @@ export function enrolledMachineBucketKey(c: Context<AppEnv>): string {
  * because it converts one abuser into an outage for every other caller. The
  * per-credential ceiling mounted beside this one is unaffected either way.
  *
- * NOTE: the granularity of this bucket is exactly as good as
- * TRUSTED_PROXY_HOP_COUNT. Production is client -> ALB -> Caddy, and both
- * append, so the chain is two entries deep and the count must be 2; the env
- * default is 1, which yields the load balancer's own address and buckets every
- * caller behind an ALB node together. Correct that value and this becomes a
- * true per-client ceiling. It is tracked on #3167 rather than changed here
- * because it is a production environment change that wants a live header
- * capture to confirm the hop depth first.
+ * The ceiling is therefore enforced ONLY where the deployment has declared its
+ * proxy depth, by setting TRUSTED_PROXY_HOP_COUNT explicitly. The schema
+ * default of 1 is a guess, and a guessed depth here is not a smaller version of
+ * the right answer — it is the same failure one step down. Production is
+ * client -> ALB -> Caddy and both append, so the chain is two deep; at the
+ * default of 1 this would resolve to the load balancer's own address and put
+ * every caller behind one ALB node in a single bucket, which on a fail-closed
+ * pre-auth mount one of them can exhaust for all the others. An undeclared
+ * depth is an unattributable request, so it skips.
+ *
+ * That leaves an unconfigured deployment exactly where it is today — this
+ * counter has never once incremented — rather than switching on a ceiling
+ * nobody has told us how to attribute. Declaring the depth turns it on, and
+ * `.env.example` ships the value. Confirming production's depth against a live
+ * header capture is tracked on #3167.
  */
 export function trustedClientIpBucketKey(c: Context<AppEnv>): string | null {
   // Vercel replaces `x-vercel-forwarded-for` at its own trusted network
@@ -181,6 +188,10 @@ export function trustedClientIpBucketKey(c: Context<AppEnv>): string | null {
       ?.trim();
     return trustedForwardedFor ? `ip:${trustedForwardedFor}` : null;
   }
+  // Deliberately the raw env rather than the validated one: the question here
+  // is whether an operator DECLARED the depth, and the schema's `.default(1)`
+  // erases exactly that distinction.
+  if (!process.env.TRUSTED_PROXY_HOP_COUNT) return null;
   const clientAddress = extractClientIp(c);
   return clientAddress ? `ip:${clientAddress}` : null;
 }

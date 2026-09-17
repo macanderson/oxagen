@@ -99,6 +99,7 @@ describe("pre-authentication bucket keys", () => {
   // where no client can be identified the limiter must skip rather than pool.
   it("gives two off-Vercel callers two different buckets", () => {
     vi.stubEnv("VERCEL", "");
+    vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "1");
     mocks.requireEnv.mockReturnValue({ TRUSTED_PROXY_HOP_COUNT: 1 });
 
     const first = trustedClientIpBucketKey(
@@ -115,6 +116,7 @@ describe("pre-authentication bucket keys", () => {
 
   it("walks the forwarded-for chain from the right, so a prepended hop cannot move it", () => {
     vi.stubEnv("VERCEL", "");
+    vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "2");
     mocks.requireEnv.mockReturnValue({ TRUSTED_PROXY_HOP_COUNT: 2 });
 
     expect(
@@ -129,8 +131,25 @@ describe("pre-authentication bucket keys", () => {
     ).toBe("ip:198.51.100.7");
   });
 
+  it("refuses to enforce a ceiling the deployment has not declared a depth for", () => {
+    // The schema default of 1 is a guess. Guessing here resolves to the load
+    // balancer's own address and puts every caller behind one proxy node in a
+    // single bucket — which, on a fail-closed pre-auth mount, one of them can
+    // exhaust for all the others. An undeclared depth is unattributable.
+    vi.stubEnv("VERCEL", "");
+    vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "");
+    mocks.requireEnv.mockReturnValue({ TRUSTED_PROXY_HOP_COUNT: 1 });
+
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-forwarded-for": "198.51.100.1" } }),
+      ),
+    ).toBeNull();
+  });
+
   it("returns null when no trusted proxy chain can be read", () => {
     vi.stubEnv("VERCEL", "");
+    vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "0");
     mocks.requireEnv.mockReturnValue({ TRUSTED_PROXY_HOP_COUNT: 0 });
 
     expect(

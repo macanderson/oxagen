@@ -306,9 +306,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "Rate limiting",
     description:
       "How many proxies sit in front of apps/api and append to x-forwarded-for. " +
-      "The client IP the IAM ip_ranges allowlist checks is the Nth entry from the " +
-      "right; entries left of it are caller-supplied. Optional — defaults to 1 " +
-      "(one ALB) in packages/config/src/env.ts. 0 disables the header entirely.",
+      "The client IP is the Nth entry from the right; entries left of it are " +
+      "caller-supplied. Two things depend on it: the IAM ip_ranges allowlist, " +
+      "and the pre-authentication IP ceilings on the Tacho and Stella machine " +
+      "routes. Set it to the REAL depth for the deployment — a wrong value " +
+      "resolves to a proxy's own address, which puts every caller behind that " +
+      "node in one rate-limit bucket that any of them can exhaust for the rest. " +
+      "Those ceilings are enforced only where this is set explicitly; unset, " +
+      "they skip rather than pool callers. 0 means nothing in front is trusted, " +
+      "so x-forwarded-for AND x-real-ip are both refused. Optional — the schema " +
+      "defaults to 1 (one ALB) in packages/config/src/env.ts, but that default " +
+      "is a guess and only the allowlist falls back to it.",
     secret: false,
     clientExposed: false,
     services: ["api"],

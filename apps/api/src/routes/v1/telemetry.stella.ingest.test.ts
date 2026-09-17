@@ -425,11 +425,11 @@ describe("POST /v1/telemetry/stella/operational", () => {
       };
     });
 
+    // The IP ceiling is enforced only where the deployment declares its proxy
+    // depth; without that it skips rather than pooling callers (see below).
+    vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "1");
     const response = await post(VALID_BATCH, {
       authorization: "Bearer middleware_order_key",
-      // A forwarded-for chain the deployment can read. Without one there is no
-      // client to attribute, and the IP counter deliberately skips rather than
-      // pooling every caller into one bucket — see the case below.
       "x-forwarded-for": "198.51.100.70",
     });
 
@@ -457,6 +457,7 @@ describe("POST /v1/telemetry/stella/operational", () => {
         }),
     );
 
+    vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "1");
     await post(VALID_BATCH, { "x-forwarded-for": "198.51.100.1" });
     await post(VALID_BATCH, { "x-forwarded-for": "198.51.100.2" });
 
