@@ -9,32 +9,59 @@ import type { Session } from "neo4j-driver";
 import { neo4jBreaker } from "@oxagen/telemetry";
 import { session } from "./client";
 import { dedicatedSession } from "./data-plane-driver";
-import { applyGraphScope, GraphScopeError } from "./graph-scope";
+import {
+  applyGraphScope,
+  GraphScopeError,
+  stripLiteralsAndComments,
+} from "./graph-scope";
 import type { GraphScope } from "./graph-scope";
 
 export { GraphScopeError };
 export type { GraphScope };
 
-// A scoped query must reference the tenant on a node (read) or in a MERGE key.
-// The guard checks that `orgId` appears somewhere in the Cypher string so that
-// every query filters or writes the tenant dimension.
-const SCOPE_GUARD = /\borgId\b/;
+// A scoped query must bind the tenant on a node (read) or in a MERGE key.
+//
+// Two things make this a real guard rather than a spell-check.
+//
+// 1) It runs on the SANITIZED text. `stripLiteralsAndComments` (shared with the
+//    Phase-3 marker guard in ./graph-scope.ts — one implementation, not two)
+//    blanks `//` and block comments, string literals and backtick identifiers
+//    first, so `orgId` named only in a comment or inside a quoted value cannot
+//    satisfy it.
+// 2) It requires the token in a FILTERING position — `orgId` immediately
+//    followed by `:` or `=`. That is exactly the two ways Cypher binds a
+//    tenant: a pattern/MERGE key map (`{orgId: $orgId, …}`) and a predicate or
+//    SET target (`n.orgId = $orgId`). Merely mentioning the token — as a RETURN
+//    alias (`RETURN n.name AS orgId`), inside a longer property name
+//    (`notOrgIdReally`), or as a bare word — no longer counts.
+//
+// Deliberately NOT accepted, though they would also be scoping: the reversed
+// comparison (`$orgId = n.orgId`) and membership (`orgId IN $orgIds`). No query
+// in the repo uses either, and each extra accepted shape is another way for a
+// query that does not actually scope to slip through. A new query that hits a
+// false reject fails loudly at authoring time with the message below, which
+// names the two accepted forms.
+const SCOPE_GUARD = /\borgId\s*[:=]/;
 
 /**
  * Return a Neo4j session bound to the active tenant scope. Throws
  * TenantScopeError immediately if there is no active tenant scope (checked at
  * scopedSession() call time, not lazily inside run()). The returned session's
  * run():
- *  1. Rejects Cypher that doesn't reference `orgId` (seam-bypass guard).
+ *  1. Rejects Cypher that does not BIND `orgId` in a pattern/MERGE key
+ *     (`{orgId: $orgId}`) or a predicate/SET target (`n.orgId = $orgId`),
+ *     checked against the text with comments and string literals stripped
+ *     (seam-bypass guard).
  *  2. Injects `$orgId` and `$workspaceId` into every params object so the
  *     Cypher never has to thread them manually.
  *
  * Agent RBAC Phase 3 (spec §3.6): pass an optional `GraphScope` to bind the
  * session to an agent principal's graph-access ceiling. When a scope is given,
  * run() additionally, ON TOP of the tenancy guarantees above:
- *  3. Requires the query to reference the reserved scope markers
- *     (`$__scopeLabels`/`$__scopeRelTypes`) for each constrained dimension —
- *     same bypass-guard style as tenancy — and injects those allow-lists as
+ *  3. Requires the query to FILTER on the reserved scope markers
+ *     (`… IN $__scopeLabels` / `… IN $__scopeRelTypes`) for each constrained
+ *     dimension — same bypass-guard style as tenancy, same sanitize-then-
+ *     require-a-filtering-position rule — and injects those allow-lists as
  *     parameters the query builder consumes in its WHERE clauses.
  *  4. Clamps the traversal budget server-side: literal `LIMIT`s down to
  *     `maxNodes` (adds one when absent), variable-length hop bounds to
@@ -81,9 +108,12 @@ export function scopedSession(scope?: GraphScope): {
 
   return {
     async run(cypher: string, params: Record<string, unknown> = {}) {
-      if (!SCOPE_GUARD.test(cypher)) {
+      // Sanitize before testing: a mention of `orgId` in a comment or inside a
+      // string literal must not satisfy the tenancy guard. The error quotes the
+      // ORIGINAL text, which is what the author wrote and has to fix.
+      if (!SCOPE_GUARD.test(stripLiteralsAndComments(cypher))) {
         throw new TenantScopeError(
-          `Cypher over a scoped session must filter by $orgId: ${cypher.slice(0, 80)}`,
+          `Cypher over a scoped session must bind the tenant as \`{orgId: $orgId}\` or \`.orgId = $orgId\`: ${cypher.slice(0, 80)}`,
         );
       }
       const sess = await ensureSession();

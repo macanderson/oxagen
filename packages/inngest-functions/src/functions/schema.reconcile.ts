@@ -730,8 +730,17 @@ Return only the derived property key-value pairs in the derivedProps field.`,
 
               // Write back to Neo4j only if something changed.
               if (relUpdated) {
+                // Anchor the write to the SAME tenant the batch read anchored
+                // to. An elementId is a global graph address, so an unanchored
+                // `MATCH ()-[r]->()` would write any relationship in the store
+                // whose id happened to collide — and it never ran at all,
+                // because the scoped-session tenancy guard rejects Cypher that
+                // binds no orgId. $orgId/$workspaceId are injected by the seam.
                 await session.run(
-                  `MATCH ()-[r]->() WHERE elementId(r) = $relElemId SET r += $props`,
+                  `MATCH (a:GraphNode)-[r]->(b:GraphNode)
+                   WHERE elementId(r) = $relElemId
+                     AND a.orgId = $orgId AND a.workspaceId = $workspaceId
+                   SET r += $props`,
                   { relElemId, props: newProps },
                 );
                 updatedRelationships++;

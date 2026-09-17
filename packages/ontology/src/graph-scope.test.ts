@@ -155,6 +155,56 @@ describe("assertScopeMarkers", () => {
     ).toThrow(GraphScopeError);
   });
 
+  // Discriminating: each of these mentions the marker where the OLD presence
+  // check (`/\$__scopeLabels\b/` anywhere in the sanitized text) accepted it,
+  // while nothing is actually filtered by the allow-list.
+  it("treats a marker in a RETURN projection as absent (not a filter)", () => {
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (n) RETURN n, $${SCOPE_LABELS_PARAM} AS allowed`,
+        withMarkers(true, false),
+      ),
+    ).toThrow(GraphScopeError);
+  });
+
+  it("treats a marker in a size() expression as absent (not a filter)", () => {
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (a)-[r]->(b) RETURN r, size($${SCOPE_REL_TYPES_PARAM}) AS n`,
+        withMarkers(false, true),
+      ),
+    ).toThrow(GraphScopeError);
+  });
+
+  it("treats a marker bound by WITH but never applied as absent", () => {
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (n) WITH n, $${SCOPE_LABELS_PARAM} AS allowed RETURN n`,
+        withMarkers(true, false),
+      ),
+    ).toThrow(GraphScopeError);
+  });
+
+  it("accepts the membership forms the handlers actually write", () => {
+    for (const cypher of [
+      `MATCH (n) WHERE n.label IN $${SCOPE_LABELS_PARAM} RETURN n`,
+      `MATCH (n) WHERE any(l IN labels(n) WHERE l IN $${SCOPE_LABELS_PARAM}) RETURN n`,
+      `MATCH (n) WHERE ALL(x IN nodes(p) WHERE any(l IN labels(x) WHERE l IN $${SCOPE_LABELS_PARAM})) RETURN n`,
+    ]) {
+      expect(() =>
+        assertScopeMarkers(cypher, withMarkers(true, false)),
+      ).not.toThrow();
+    }
+    for (const cypher of [
+      `MATCH (a)-[r]->(b) WHERE type(r) IN $${SCOPE_REL_TYPES_PARAM} RETURN r`,
+      `MATCH p=(a)-[*]->(b) WHERE ALL(rel IN relationships(p) WHERE type(rel) IN $${SCOPE_REL_TYPES_PARAM}) RETURN b`,
+    ]) {
+      expect(() =>
+        assertScopeMarkers(cypher, withMarkers(false, true)),
+      ).not.toThrow();
+    }
+  });
+
   it("treats a prefix-collision marker as absent (word boundary)", () => {
     expect(() =>
       assertScopeMarkers(

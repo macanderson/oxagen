@@ -69,10 +69,24 @@ export const RESERVED_SCOPE_PARAMS = [
   SCOPE_REL_TYPES_PARAM,
 ] as const;
 
-// Bypass-guard markers: the query must reference these when the corresponding
-// dimension is constrained. `\b` after the name prevents a prefix collision.
-const LABELS_MARKER = new RegExp(`\\$${SCOPE_LABELS_PARAM}\\b`);
-const REL_TYPES_MARKER = new RegExp(`\\$${SCOPE_REL_TYPES_PARAM}\\b`);
+// Bypass-guard markers: the query must USE these in a filtering position when
+// the corresponding dimension is constrained.
+//
+// `IN` is required, not just the parameter name, for the same reason the
+// tenancy guard in ./tenant.ts requires `orgId` next to `:` or `=`: a name that
+// merely appears somewhere satisfies a presence check without filtering
+// anything. `RETURN $__scopeLabels AS allowed` would have passed the old
+// presence check while the traversal read every label the agent is not allowed
+// to see. Both allow-lists are list-valued, so every legitimate consumption of
+// them is a membership test — `l IN $__scopeLabels`,
+// `type(r) IN $__scopeRelTypes` — which is exactly what all five production
+// call sites in packages/handlers write. `\b` after the name still prevents a
+// prefix collision ($__scopeLabelsExtra).
+const LABELS_MARKER = new RegExp(`\\bIN\\s*\\$${SCOPE_LABELS_PARAM}\\b`, "i");
+const REL_TYPES_MARKER = new RegExp(
+  `\\bIN\\s*\\$${SCOPE_REL_TYPES_PARAM}\\b`,
+  "i",
+);
 
 // ── Write-clause detection (read-mode defense in depth) ──────────────────────
 // Note: the capability layer is the primary gate (graph_write-category
@@ -178,14 +192,16 @@ export function assertReadOnly(cypher: string): void {
  * cannot silently return out-of-scope data.
  *
  * The marker is looked for in the query with literals and comments removed, so
- * a marker mentioned only in a comment or a string does not satisfy the guard —
- * it has to be a real predicate. Error messages quote the original text.
+ * a marker mentioned only in a comment or a string does not satisfy the guard,
+ * and it must sit in a membership test (`… IN $__scopeLabels`) rather than
+ * anywhere at all — it has to be a real predicate. Error messages quote the
+ * original text.
  */
 export function assertScopeMarkers(cypher: string, scope: GraphScope): void {
   const sanitized = stripLiteralsAndComments(cypher);
   if (scope.labels !== undefined && !LABELS_MARKER.test(sanitized)) {
     throw new GraphScopeError(
-      `Agent-scoped Cypher constrains labels but does not reference $${SCOPE_LABELS_PARAM}: ${cypher.slice(0, 80)}`,
+      `Agent-scoped Cypher constrains labels but does not filter on $${SCOPE_LABELS_PARAM}: ${cypher.slice(0, 80)}`,
     );
   }
   if (
@@ -193,7 +209,7 @@ export function assertScopeMarkers(cypher: string, scope: GraphScope): void {
     !REL_TYPES_MARKER.test(sanitized)
   ) {
     throw new GraphScopeError(
-      `Agent-scoped Cypher constrains relationship types but does not reference $${SCOPE_REL_TYPES_PARAM}: ${cypher.slice(0, 80)}`,
+      `Agent-scoped Cypher constrains relationship types but does not filter on $${SCOPE_REL_TYPES_PARAM}: ${cypher.slice(0, 80)}`,
     );
   }
 }
