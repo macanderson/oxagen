@@ -8,6 +8,7 @@ import type { ShellData } from "./shell-data";
 const SHELL_VIEWER = {
   name: "Marcus Bell",
   email: "marcus.bell@acme.example",
+  avatarUrl: null,
 } as const;
 
 const SHELL_ORG = { slug: "acme", name: "Acme Robotics" } as const;

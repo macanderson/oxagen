@@ -393,6 +393,78 @@ describe("api.key.rotate handler — protected agent credential scope", () => {
   });
 });
 
+describe("api.key.rotate handler — protected Tacho gateway scope", () => {
+  /**
+   * The gateway key (ADR-078). Rotating it here hands the operator a fresh
+   * secret with nowhere to put it: the daemon reads the gateway credential
+   * from its enrollment record, so the local gateway would serve nothing and
+   * the operator would hold a string.
+   *
+   * Refusable only as of this change. The rule this handler works to is that
+   * the path a refusal names must ACHIEVE what the refused operation was for —
+   * being server-owned is not the test. "A fresh gateway credential on a
+   * working host" is revoke_tacho_enrollment plus re-enrolling, and that only
+   * became whole here: `retireEnrollmentKeys` now selects
+   * `purpose IN (tacho_host_v1, tacho_gateway_v1)`, so revoking the enrollment
+   * retires this key instead of stranding it live.
+   */
+  it("refuses to rotate a gateway key and names the enrollment path", async () => {
+    const insertSpy = vi.fn();
+    const updateSpy = vi.fn();
+    const protectedRow: OldRow = {
+      ...OLD_ROW,
+      scope: {
+        purpose: "tacho_gateway_v1",
+        host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+      },
+    };
+    vi.clearAllMocks();
+    setupHappyPath(
+      "Owner",
+      protectedRow,
+      NEW_ROW,
+      vi.fn(),
+      insertSpy,
+      updateSpy,
+    );
+
+    await expect(apiKeyRotateHandler(BASE_INPUT, TEST_CTX)).rejects.toThrow(
+      /revoke_tacho_enrollment/,
+    );
+    expect(mocks.generateApiKey).not.toHaveBeenCalled();
+    expect(insertSpy).not.toHaveBeenCalled();
+    expect(updateSpy).not.toHaveBeenCalled();
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The case that catches an OVER-BROAD predicate. `create_api_key` takes
+   * `scope` as free-form `z.record(z.unknown())` and a host's enrollment id is
+   * public, so an Owner can put `host_enrollment_id` on an ordinary key. A
+   * guard keyed off the enrollment id — rather than off `purpose`, the half the
+   * server owns — would refuse to rotate a key that has nothing to do with
+   * Tacho and leave its holder no way to replace it.
+   */
+  it("ROTATES an ordinary key whose scope merely mentions an enrollment id", async () => {
+    const insertSpy = vi.fn();
+    const updateSpy = vi.fn();
+    const ordinary: OldRow = {
+      ...OLD_ROW,
+      scope: {
+        host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+        env: "prod",
+      },
+    };
+    vi.clearAllMocks();
+    setupHappyPath("Owner", ordinary, NEW_ROW, vi.fn(), insertSpy, updateSpy);
+
+    await expect(
+      apiKeyRotateHandler(BASE_INPUT, TEST_CTX),
+    ).resolves.toBeDefined();
+    expect(insertSpy).toHaveBeenCalled();
+  });
+});
+
 describe("api.key.rotate handler — happy path", () => {
   beforeEach(() => {
     vi.clearAllMocks();

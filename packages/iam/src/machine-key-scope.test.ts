@@ -7,13 +7,47 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const findFirst = vi.fn();
+/** Every `tacho_hosts` write the gate made, in order. */
+const hostUpdates: Array<Record<string, unknown>> = [];
+
+/** The orgs whose PLANE the host write was opened against, in order. */
+const hostWritePlanes: string[] = [];
+/** Whether the database claims to have `gateway_last_seen_at` yet. */
+let gatewayColumnPresent = true;
+
+const fakeTx = () => ({
+  query: { apiKeys: { findFirst } },
+  update: () => ({
+    set: (values: Record<string, unknown>) => ({
+      where: async () => {
+        hostUpdates.push(values);
+        return [];
+      },
+    }),
+  }),
+});
 
 vi.mock("@oxagen/database", () => ({
   schema: {
     apiKeys: { id: "id", orgId: "org_id", deletedAt: "deleted_at" },
+    tachoHosts: { orgId: "org_id", publicId: "public_id" },
   },
-  withSystemDb: (fn: (tx: unknown) => unknown) =>
-    fn({ query: { apiKeys: { findFirst } } }),
+  HOST_GATEWAY_COLUMN: {
+    schema: "tacho",
+    table: "hosts",
+    column: "gateway_last_seen_at",
+  },
+  hasColumn: async () => gatewayColumnPresent,
+  planeKeyFor: async (orgId: string) => `plane-of:${orgId}`,
+  withSystemDb: (fn: (tx: unknown) => unknown) => fn(fakeTx()),
+  // The seam the host write must use. `withSystemDb` always targets the SHARED
+  // plane, and `tacho.hosts` is tenant data, so on a dedicated plane that write
+  // matches nothing and the observation never arrives
+  // (discussion_r4040617216).
+  withOrgPlaneSystemDb: (orgId: string, fn: (tx: unknown) => unknown) => {
+    hostWritePlanes.push(orgId);
+    return fn(fakeTx());
+  },
 }));
 
 const getCapability = vi.fn();
@@ -33,6 +67,8 @@ const {
   TACHO_HOST_PURPOSE,
 } = await import("./machine-key-scope");
 
+const { CLI_SESSION_SCOPE_PURPOSE } = await import("@oxagen/auth/cli-auth");
+
 const ORG = "11111111-1111-4111-8111-111111111111";
 
 function keyWithScope(scope: unknown): void {
@@ -42,6 +78,9 @@ function keyWithScope(scope: unknown): void {
 beforeEach(() => {
   findFirst.mockReset();
   getCapability.mockReset();
+  hostUpdates.length = 0;
+  hostWritePlanes.length = 0;
+  gatewayColumnPresent = true;
   listCapabilities.mockReset();
   listCapabilities.mockReturnValue([]);
 });
@@ -71,15 +110,7 @@ describe("a person's credential is untouched", () => {
     ).toBeUndefined();
   });
 
-  it("treats a missing key and a null scope as no purpose", async () => {
-    findFirst.mockResolvedValue(undefined);
-    expect(
-      await machineKeyDenial({
-        orgId: ORG,
-        apiKeyId: "aky_gone",
-        capabilityName: "query_ontology",
-      }),
-    ).toBeUndefined();
+  it("treats a null scope as no purpose", async () => {
     keyWithScope(null);
     expect(
       await machineKeyDenial({
@@ -88,6 +119,35 @@ describe("a person's credential is untouched", () => {
         capabilityName: "query_ontology",
       }),
     ).toBeUndefined();
+  });
+});
+
+describe("a key that is no longer there", () => {
+  // `resolveApiKey` and this gate are two separate reads. Revocation soft-deletes
+  // the row between them, and the row vanishing used to read as "no purpose" —
+  // i.e. a person's key — which on a non-enterprise org the tier fast-path then
+  // allows outright. A host key racing its own revocation got one unrestricted
+  // invocation outside its mandate.
+  it("denies rather than falling through to the personal-key path", async () => {
+    findFirst.mockResolvedValue(undefined);
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_gone",
+        capabilityName: "query_ontology",
+      }),
+    ).toMatch(/no longer valid/);
+  });
+
+  it("denies a capability a live personal key would have been allowed", async () => {
+    findFirst.mockResolvedValue(undefined);
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_gone",
+        capabilityName: "set_model_credential",
+      }),
+    ).toMatch(/set_model_credential/);
   });
 });
 
@@ -207,6 +267,126 @@ describe("the gateway key", () => {
     });
     expect(denial).toContain("mandate");
     expect(denial).toContain("delete_workspace");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The observation the enforcement tier is derived from
+// ---------------------------------------------------------------------------
+//
+// discussion_r4036718127 (P1). The tier used to be read off an attribute on the
+// submitted batch, which anything holding the local OTLP bearer can set. This
+// is the other thing: the one moment the control plane KNOWS a gateway call
+// happened, because it authenticated a server-minted, per-host credential and
+// is about to serve the call. `tacho.events.ingest` derives `gateway` from the
+// column this writes and from nothing a submitter sends.
+describe("a served gateway call is recorded where the tier can read it", () => {
+  const readOnlyMcp = { surfaces: ["api", "mcp"], mutates: false } as const;
+
+  it("stamps the host on an ALLOWED call", async () => {
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_g",
+        capabilityName: "query_ontology",
+      }),
+    ).toBeUndefined();
+    expect(hostUpdates).toHaveLength(1);
+    expect(hostUpdates[0]?.["gatewayLastSeenAt"]).toBeInstanceOf(Date);
+    // On the ORGANISATION'S plane. `tacho.hosts` is tenant data, so a write on
+    // the shared plane would match nothing for an org with a dedicated one and
+    // report success (discussion_r4040617216).
+    expect(hostWritePlanes).toEqual([ORG]);
+  });
+
+  it("writes nothing when the migration has not been applied", async () => {
+    // The column arrives with migration 20260917140000, which production
+    // applies by hand after the deploy (#1275). Naming it before then raises
+    // 42703, which aborts the transaction and turns a note into a DENIED
+    // gateway call.
+    gatewayColumnPresent = false;
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_g",
+        capabilityName: "query_ontology",
+      }),
+      // Still allowed: a missing observation is not a reason to refuse a call
+      // the credential is entitled to make.
+    ).toBeUndefined();
+    expect(hostUpdates).toEqual([]);
+  });
+
+  it("stamps the host on a call it REFUSED", async () => {
+    // A refusal is not weaker evidence of enforcement than a success — it is
+    // the strongest there is, the case where Oxagen actually stopped
+    // something, and the case the operator most needs the session to show
+    // (discussion_r4040685657).
+    //
+    // An earlier version asserted the opposite here, reasoning that a refused
+    // call must not raise a tier. What must not raise a tier is a
+    // CLIENT-ATTESTED claim. This is the server's own record that it
+    // authenticated this host's gateway credential and ruled on the request,
+    // which a refusal satisfies exactly as well as a success does.
+    getCapability.mockReturnValue({ ...readOnlyMcp, mutates: true });
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    const denial = await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_g",
+      capabilityName: "delete_workspace",
+    });
+    // Still refused. Recording the attempt does not permit it.
+    expect(denial).toMatch(/outside this agent's mandate/);
+    expect(hostUpdates).toHaveLength(1);
+    expect(hostUpdates[0]?.["gatewayLastSeenAt"]).toBeInstanceOf(Date);
+    expect(hostWritePlanes).toEqual([ORG]);
+  });
+
+  it("records nothing for the HOST key, which serves no connected app", async () => {
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_HOST_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    const allowed = [
+      ...(MACHINE_KEY_CAPABILITIES[TACHO_HOST_PURPOSE] ?? []),
+    ][0];
+    expect(allowed).toBeDefined();
+    await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_h",
+      capabilityName: allowed as string,
+    });
+    expect(hostUpdates).toHaveLength(0);
+  });
+
+  it("records nothing when the scope names no host", async () => {
+    // An observation that cannot be attributed to a host is not evidence about
+    // any session, and guessing which host it belonged to would be worse than
+    // having no record at all.
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({ purpose: TACHO_GATEWAY_PURPOSE });
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_g",
+        capabilityName: "query_ontology",
+      }),
+    ).toBeUndefined();
+    expect(hostUpdates).toHaveLength(0);
   });
 });
 

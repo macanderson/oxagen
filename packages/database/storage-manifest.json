@@ -3188,6 +3188,15 @@
       "writes": []
     },
     {
+      "domain": "user",
+      "name": "update_profile",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "workspace",
       "name": "update_prompt_settings",
       "reads": [],
@@ -3344,7 +3353,7 @@
       "writes": []
     }
   ],
-  "contentHash": "fd958f208534617b2082cbb27a760dc5104b7a2dc707b6ece570c8d7139a0858",
+  "contentHash": "cdd32aec1cb698162b532c3dff282107bc91cbe369f9cacc554ea4c57bf2574c",
   "domains": [
     {
       "name": "agent",
@@ -18090,6 +18099,12 @@
           "type": "timestamp with time zone"
         },
         {
+          "name": "gateway_last_seen_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
           "name": "spool_depth",
           "nullable": false,
           "primaryKey": false,
@@ -19560,6 +19575,12 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "gateway_observed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         },
         {
           "name": "bundle_mode",

@@ -1458,6 +1458,7 @@ type Messages = {
     userMenu: {
       switchTheme: string;
       themeNow: string;
+      account: string;
     };
     commands: {
       title: string;
@@ -1484,6 +1485,21 @@ type Messages = {
     drawer: {
       title: string;
       close: string;
+    };
+    account: {
+      title: string;
+      save: string;
+      saving: string;
+      saved: string;
+      displayName: string;
+      avatar: string;
+      avatarHint: string;
+      email: string;
+      emailHint: string;
+      invalid: string;
+      denied: string;
+      failed: string;
+      avatarPlaceholder: string;
     };
   };
   skills: {

@@ -1,8 +1,38 @@
 import { describe, expect, it } from "vitest";
 import { userPreferencesRead } from "./user.preferences.read";
+import type { SystemOrgRole, SystemWorkspaceRole } from "../types";
 import { getCapability } from "../registry";
 
+/**
+ * The role enumerations as values: adding a role to either union fails to
+ * compile here until someone has decided what it means for a person's own
+ * settings. The org map named `Member` and `Viewer`, which are workspace
+ * roles, and omitted `Compliance` and `Billing`, which are the org roles it
+ * needed, so an enterprise org seeded grants for Owner and Admin alone.
+ */
+const EVERY_ORG_ROLE: Record<SystemOrgRole, true> = {
+  Owner: true,
+  Admin: true,
+  Compliance: true,
+  Billing: true,
+};
+const EVERY_WORKSPACE_ROLE: Record<SystemWorkspaceRole, true> = {
+  Owner: true,
+  Member: true,
+  Viewer: true,
+};
+
 describe("user.preferences.read capability", () => {
+  it("is self-scoped: intrinsically allowed, and every real role at each scope", () => {
+    expect(userPreferencesRead.defaultEffect).toBe("allow");
+    expect(Object.keys(userPreferencesRead.defaultRoles.org).sort()).toEqual(
+      Object.keys(EVERY_ORG_ROLE).sort(),
+    );
+    expect(
+      Object.keys(userPreferencesRead.defaultRoles.workspace).sort(),
+    ).toEqual(Object.keys(EVERY_WORKSPACE_ROLE).sort());
+  });
+
   it("parses a valid (empty) input object", () => {
     const parsed = userPreferencesRead.input.parse({});
     expect(parsed).toEqual({});
