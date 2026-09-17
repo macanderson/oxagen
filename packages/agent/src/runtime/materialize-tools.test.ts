@@ -477,14 +477,14 @@ describe("materializeTools", () => {
       tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }
     ).execute({ y: "1" });
 
-    const call = mocks.createApprovalRequest.mock.calls[0]?.[0] as {
-      digestInput: unknown;
-      inputPreview: unknown;
-    };
-    expect(call.digestInput).toEqual({ y: 1, mode: "safe" });
+    const call = mocks.createApprovalRequest.mock.calls.at(0)?.at(0) as
+      | { digestInput: unknown; inputPreview: unknown }
+      | undefined;
+    expect(call).toBeDefined();
+    expect(call?.digestInput).toEqual({ y: 1, mode: "safe" });
     // The preview stays raw on purpose: it is what the person is shown, and
     // showing them a value the model did not send would misreport the request.
-    expect(call.inputPreview).toEqual({ y: "1" });
+    expect(call?.inputPreview).toEqual({ y: "1" });
   });
 
   it("parks the call under approvalMode park: the request is created, the event fires, nothing waits and the handler never runs", async () => {
