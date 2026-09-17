@@ -1,4 +1,4 @@
-# ADR-082: An org-only read of a workspace-scoped table raises, and the static check retires
+# ADR-086: An org-only read of a workspace-scoped table raises, and the static check retires
 
 - **Status:** Accepted
 - **Date:** 2026-09-17

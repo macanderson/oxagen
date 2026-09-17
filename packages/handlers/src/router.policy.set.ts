@@ -39,7 +39,7 @@ export const routerPolicySetHandler: CapabilityHandler<
   // this workspace's row.
   const targetWorkspaceId = scope === "org" ? null : ctx.workspaceId;
 
-  // The seam follows the scope, and the two are not interchangeable (ADR-082).
+  // The seam follows the scope, and the two are not interchangeable (ADR-086).
   //
   // ORG scope touches the row whose `workspace_id` is NULL, and an org-level
   // caller carries the org-only sentinel — under which `withTenantDb` refuses

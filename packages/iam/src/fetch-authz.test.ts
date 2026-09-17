@@ -37,7 +37,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     db: mocks.dbFn,
     // withOrgDb: pass-through — invokes the callback with the same fake tx the
     // handler expects. No scope GUC overhead in unit tests. The read is
-    // organisation-wide (ADR-082); which seam it uses is a database-visible
+    // organisation-wide (ADR-086); which seam it uses is a database-visible
     // property, so the rls-integration suite is where that is witnessed.
     withOrgDb: async (fn: (tx: unknown) => Promise<unknown>) =>
       fn(mocks.dbFn()),

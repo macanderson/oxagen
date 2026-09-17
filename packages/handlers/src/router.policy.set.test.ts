@@ -87,7 +87,7 @@ describe("set_routing_policy scope guard", () => {
     ).rejects.toThrow(/requires a workspace context/);
   });
 
-  // The org row is reached through withOrgDb, never withTenantDb (ADR-082).
+  // The org row is reached through withOrgDb, never withTenantDb (ADR-086).
   // `workspace.routing_policy` is `workspace_nullable`, so its policy names the
   // workspace GUC — and under the org-only sentinel that GUC is not a uuid, so
   // a withTenantDb statement against this table refuses with 22P02 before it

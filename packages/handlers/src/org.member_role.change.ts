@@ -109,7 +109,7 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
 
   // ── Scoped reads + mutation (single org-wide transaction) ────────────────────
   // withOrgDb opens one RLS-scoped transaction ACROSS the organisation's
-  // workspaces (ADR-082). Changing a member's ORG role is an organisation-level
+  // workspaces (ADR-086). Changing a member's ORG role is an organisation-level
   // act and the app invokes it with the org-only workspace sentinel, so
   // `withTenantDb` would now refuse every statement here outright:
   // `iam.principals` and `iam.principal_role_assignments` are

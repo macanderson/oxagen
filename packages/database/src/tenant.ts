@@ -25,7 +25,7 @@ export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
  * '')::uuid`, so a value that is not a uuid makes that policy RAISE — SQLSTATE
  * 22P02, `invalid input syntax for type uuid` — instead of quietly narrowing.
  *
- * That is the whole of ADR-082. Before it, an org-only scope carried the nil
+ * That is the whole of ADR-086. Before it, an org-only scope carried the nil
  * uuid into the GUC and Postgres HID rows rather than refusing: a
  * `workspace_nullable` table answered with its `workspace_id IS NULL` rows
  * alone, a `standard` or `workspace_only` table answered with nothing, and in

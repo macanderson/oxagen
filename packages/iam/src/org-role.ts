@@ -128,7 +128,7 @@ async function findAssignedRoles(
  * assignment whose `expires_at` is in the past no longer grants its role.
  *
  * Runs inside the caller's tenant scope, reading ORGANISATION-WIDE
- * (`withOrgDb`, ADR-082). Every one of the three reads below runs on org-level
+ * (`withOrgDb`, ADR-086). Every one of the three reads below runs on org-level
  * surfaces that carry no workspace, where `withTenantDb` now refuses a read of
  * `iam.principals` (`workspace_nullable`) or `auth.api_keys` (`standard`)
  * outright rather than narrowing it. The narrowing that matters is in the

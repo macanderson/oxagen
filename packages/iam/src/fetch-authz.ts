@@ -167,7 +167,7 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
   // (principal_role_assignments) can THEMSELVES be workspace-scoped, however,
   // so we must filter those by workspaceId here — see the PRA query below.
   //
-  // The read is ORGANISATION-WIDE (withOrgDb, ADR-082), and every query below
+  // The read is ORGANISATION-WIDE (withOrgDb, ADR-086), and every query below
   // carries its own org fence or is keyed off rows that do. It has to be: this
   // function runs on EVERY invoke(), including the org-level surfaces that
   // carry no workspace at all, and under an org-only scope `withTenantDb` now

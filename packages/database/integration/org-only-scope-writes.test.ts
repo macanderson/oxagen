@@ -30,7 +30,7 @@
  * error, a number that is too small, and `delete_role` acting on it — the role
  * and its grants deleted out from under live assignments.
  *
- * #3132 (ADR-082) ended the asymmetry. Under an org-only scope `withTenantDb`
+ * #3132 (ADR-086) ended the asymmetry. Under an org-only scope `withTenantDb`
  * now sets the GUC to a value that is NOT a uuid, so the cast raises 22P02 and
  * the READ refuses like the write always did. The write refusals below
  * therefore changed SQLSTATE — 42501 to 22P02 — and the read that used to
@@ -164,7 +164,7 @@ afterAll(async () => {
 
 /**
  * One transaction, non-superuser, policies live, in the scope named — with the
- * SAME workspace-GUC translation `withTenantDb` does (#3132, ADR-082). An
+ * SAME workspace-GUC translation `withTenantDb` does (#3132, ADR-086). An
  * org-only scope carries the nil uuid in the SCOPE and
  * `ORG_ONLY_WORKSPACE_GUC` in the GUC, which is not a uuid, so a policy that
  * casts it raises instead of narrowing. Restating the translation here rather

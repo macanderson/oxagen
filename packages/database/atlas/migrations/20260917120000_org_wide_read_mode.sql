@@ -11,7 +11,7 @@
 -- when TENANT_RLS_ENFORCEMENT_ENABLED=false) disables filtering; tenant
 -- sessions get app.current_org_id / app.current_workspace_id via withTenantDb.
 --
--- Org-wide-aware (ADR-082): app.org_wide='on', set by withOrgDb and nothing
+-- Org-wide-aware (ADR-086): app.org_wide='on', set by withOrgDb and nothing
 -- else, widens the READ of an org-scoped table to every workspace in the
 -- organisation while the org fence still holds. It is absent from WITH CHECK,
 -- so writes stay pinned to the workspace in scope, and absent from

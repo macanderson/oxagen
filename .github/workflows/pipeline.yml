@@ -214,7 +214,7 @@ jobs:
       # rounds, every one reporting CLEAN rather than erroring (ADR-074). The
       # enforcement moved into Postgres — an org-only scope now carries a
       # workspace GUC that is not a uuid, so the policy RAISES instead of
-      # narrowing (#3132, ADR-082). Its witness is the rls-integration job
+      # narrowing (#3132, ADR-086). Its witness is the rls-integration job
       # below, which drives the assertion off POLICY_MANIFEST rather than off a
       # parse of the call sites. Do not reinstate a static replacement here.
 

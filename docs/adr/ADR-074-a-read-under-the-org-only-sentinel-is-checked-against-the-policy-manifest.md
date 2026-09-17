@@ -1,7 +1,7 @@
 # ADR-074: A read under the org-only workspace sentinel is checked against the policy manifest
 
 - **Status:** Accepted; **decision 3 superseded by
-  [ADR-082](./ADR-082-an-org-only-read-of-a-workspace-scoped-table-raises.md)**
+  [ADR-086](./ADR-086-an-org-only-read-of-a-workspace-scoped-table-raises.md)**
   (2026-09-17). The enforcement this ADR chose — `pnpm
   check:org-sentinel-reads` — did not converge, which is what the section
   "This check is best-effort, and it does not converge" below says in its own
@@ -10,7 +10,7 @@
   `app.current_workspace_id` to a value that is not a uuid, so a policy that
   casts it RAISES at plan time rather than narrowing. That is the move the
   "Where the enforcement belongs" section below recommends and the
-  "Refusing at the database" alternative sets aside; ADR-082 is the record of
+  "Refusing at the database" alternative sets aside; ADR-086 is the record of
   taking it, of the `withOrgDb` seam that made it possible, and of what the
   runtime mechanism does and does not cover. **The check's job — enumerating
   the call sites so the refusal could be turned on — is finished.**
@@ -589,7 +589,7 @@ right end for it. Tracked as #3132, whose definition of done includes deleting
 this script and its baseline.
 
 **That is what happened.** #3132 landed the refusal and deleted the script,
-its baseline and its CI step; ADR-082 records it. One thing the enumeration
+its baseline and its CI step; ADR-086 records it. One thing the enumeration
 turned up that this section did not anticipate: the refusal is raised while
 the statement is PLANNED, because Postgres folds stable functions during
 selectivity estimation. So it does not depend on a hidden row being scanned —
