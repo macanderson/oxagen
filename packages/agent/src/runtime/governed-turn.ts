@@ -44,8 +44,10 @@ import {
 } from "@oxagen/ai";
 import {
   driveTurn,
+  type CompletionResult,
   type CompletionUsage,
   type StellaEngineClient,
+  type ToolOutput,
   type TurnOutcomeWire,
 } from "@oxagen/stella-engine-client";
 import {
@@ -163,14 +165,33 @@ export interface GovernedTurnInput {
   instruction: string;
   /** Multimodal parts attached to this turn's user message. */
   attachments?: readonly GovernedTurnAttachment[];
-  /** The materialised, governed tool set (`materializeTools().tools`). */
+  /**
+   * The materialised, governed tool set (`materializeTools().tools`), or a
+   * belt's `tools` (`createToolBelt`): every tool the engine may be asked
+   * for, meta-tools included.
+   */
   tools: ToolSet;
+  /**
+   * What the provider is shown on each completion (`createToolBelt().
+   * modelTools`). Omitted, the model sees every tool in `tools`. The list
+   * is checked against the provider's per-request cap before the turn
+   * starts, on the shape the first completion will send.
+   */
+  modelTools?: () => ToolSet;
   /**
    * Model-safe aliases of the tools that mutate. The engine serialises them
    * from the contracts' `read_only` bit; this list is also applied host-side
    * so a misdeclared contract cannot interleave two writes.
    */
   mutatingToolNames?: readonly string[];
+  /**
+   * Model-facing alias → canonical capability name, as `materializeTools`
+   * built it. The engine asks for tools by the sanitized alias; the ledger
+   * must attribute the call to the capability the run spec authorized, so
+   * every receipt resolves through this map. A name absent from it is already
+   * canonical (the belt's own meta-tools).
+   */
+  toolNameMap?: Readonly<Record<string, string>>;
   /**
    * Per-alias governance facts (`materializeTools().governance`), declared to
    * the engine as each tool's contract. A tool with no entry is declared high
@@ -201,6 +222,83 @@ export interface GovernedTurnInput {
    * `STELLA_SERVE_TOKEN`.
    */
   engine?: StellaEngineClient;
+  /**
+   * The run this turn is recorded as. The in-app agent always passes one
+   * (`openAssistantRun`); a caller that passes none records nothing, which
+   * is the shape a unit test of the loop alone takes.
+   */
+  ledger?: TurnLedger;
+}
+
+/** A completion the host answered, as the ledger records it. */
+export interface TurnLedgerModelCall {
+  /** The `provider_request` frame's seq. */
+  seq: number;
+  requestId: string;
+  role: string;
+  provider: string;
+  model: string;
+  outcome: "completed" | "failed" | "cancelled";
+  usage?: CompletionUsage;
+}
+
+/**
+ * The host is about to invoke a tool. Written BEFORE the call so a mutation
+ * that commits can never be absent from the record (see
+ * `tool.engine_call_started`).
+ */
+export interface TurnLedgerToolIntent {
+  /** The `tool_request` frame's seq. */
+  seq: number;
+  requestId: string;
+  /** The canonical capability name — the identity the run spec authorized. */
+  toolName: string;
+  /** The model-facing alias, when it differs from the canonical name. */
+  toolAlias?: string;
+  input: unknown;
+}
+
+/** A tool call the host answered, as the ledger records it. */
+export interface TurnLedgerToolCall {
+  /** The `tool_request` frame's seq. */
+  seq: number;
+  requestId: string;
+  /**
+   * The canonical capability name. For an external MCP tool the engine asks
+   * by a sanitized, sometimes collision-suffixed alias; recording that alias
+   * here made the evidence impossible to join back to the capability that was
+   * actually authorized, so the identity is always the canonical name and the
+   * alias travels beside it.
+   */
+  toolName: string;
+  /** The model-facing alias, when it differs from the canonical name. */
+  toolAlias?: string;
+  outcome: "completed" | "failed" | "denied" | "cancelled";
+  input: unknown;
+  output?: unknown;
+  error?: string;
+  durationMs: number;
+}
+
+/** How the turn ended, as the ledger seals it. */
+export type TurnLedgerOutcome =
+  | { status: "completed"; text: string }
+  | { status: "aborted"; reason: string }
+  | { status: "failed"; error: string };
+
+/**
+ * The run the turn is recorded as (MC spec §14.1). Every reverse request is
+ * recorded BEFORE its answer is posted to the engine: a receipt that cannot
+ * be written rejects the request, and the turn is cancelled rather than
+ * answered from a path the ledger did not see. `seal` runs once, after the
+ * engine's outcome or the failure that ended the turn.
+ */
+export interface TurnLedger {
+  modelCall(record: TurnLedgerModelCall): Promise<void>;
+  /** Write-ahead: recorded before the tool runs, and never counted as a call. */
+  toolCallStarted(record: TurnLedgerToolIntent): Promise<void>;
+  toolCall(record: TurnLedgerToolCall): Promise<void>;
+  seal(outcome: TurnLedgerOutcome): Promise<void>;
 }
 
 export interface GovernedTurnResult {
@@ -360,7 +458,11 @@ export async function runGovernedTurn(
   // 92.4% of the cacheable prefix — took a manual measurement, and a number
   // nobody can see is a number nobody manages. The list grows one tool at a
   // time, and each one looks free.
-  const toolBudget = assertToolListFitsProvider(modelId, tools);
+  const shown = input.modelTools;
+  const modelTools = shown
+    ? () => schemaOnlyTools(shown())
+    : () => schemaOnlyTools(tools);
+  const toolBudget = assertToolListFitsProvider(modelId, modelTools());
   logger.info(
     {
       modelId,
@@ -406,7 +508,7 @@ export async function runGovernedTurn(
     workerTier: tier,
     ...(input.credential ? { credential: input.credential } : {}),
     system: input.system,
-    tools: schemaOnlyTools(tools),
+    tools: modelTools,
     telemetry: input.telemetry,
     fundedBy,
     effort: input.effort,
@@ -448,11 +550,55 @@ export async function runGovernedTurn(
   const emit = (list: EnginePart[]): void => {
     for (const part of list) parts.push(part);
   };
-  const settle = (outcome: TurnOutcomeWire): void => {
+  const ledger = input.ledger;
+  // The seal is the last write of the turn. It runs after the engine's
+  // outcome (or the failure that ended the turn) and before the result
+  // promises settle, so a caller that awaits `finalText` holds a sealed run.
+  const sealLedger = async (outcome: TurnLedgerOutcome): Promise<void> => {
+    if (!ledger) return;
+    try {
+      await ledger.seal(outcome);
+    } catch (err) {
+      logger.error(
+        { err, outcome: outcome.status },
+        "assistant run seal failed",
+      );
+      throw err;
+    }
+  };
+  // The first receipt that could not be written. The turn it cancelled ends
+  // with the engine's aborted outcome, and the result promises reject with
+  // this error: a turn that could not be recorded does not answer.
+  let receiptError: { error: unknown } | null = null;
+  const settle = async (outcome: TurnOutcomeWire): Promise<void> => {
+    await sealLedger(
+      outcome.status === "completed"
+        ? { status: "completed", text: outcome.text }
+        : { status: "aborted", reason: outcome.reason },
+    );
     emit(mapper.finish(outcome, hostUsage));
     parts.end();
+    if (receiptError) {
+      rejectText(receiptError.error);
+      rejectUsage(receiptError.error);
+      return;
+    }
     resolveText(mapper.text);
     resolveUsage({ ...hostUsage });
+  };
+  // A receipt that cannot be written ends the turn: the engine is cancelled
+  // and the request that owned the receipt is rejected, so no answer built
+  // on an unrecorded step reaches the model or the person. The receipt is
+  // built inside the try, so a recorder that throws while building it (a
+  // digest over a value that is not plain JSON) cancels the turn the same way.
+  const recorded = async (write: () => Promise<void>): Promise<void> => {
+    try {
+      await write();
+    } catch (err) {
+      receiptError ??= { error: err };
+      turnAbort.abort();
+      throw err;
+    }
   };
 
   void driveTurn(client, {
@@ -469,15 +615,86 @@ export async function runGovernedTurn(
     signal: turnAbort.signal,
     handlers: {
       onProviderRequest: async (request, context) => {
+        const receipt = {
+          seq: request.seq,
+          requestId: request.request_id,
+          role: request.role,
+          provider: request.provider_id,
+        };
         if (budgetGuard && (await budgetGuard(hostUsage)) === "stop") {
+          // The request that hit the budget is the evidence for why the run
+          // stopped. Aborting before writing it sealed the run `cancelled`
+          // with no record of the request that caused it, so "the budget
+          // stopped this turn" was unprovable — and that is precisely what a
+          // customer disputing a bill asks us to show. The event schema
+          // already carries `cancelled`; the model is the configured one
+          // because the request never reached the provider, the same as the
+          // failure path below.
+          if (ledger) {
+            await recorded(() =>
+              ledger.modelCall({
+                ...receipt,
+                model: modelId,
+                outcome: "cancelled",
+              }),
+            );
+          }
           turnAbort.abort();
           throw Object.assign(new Error("turn budget exhausted"), {
             name: "AbortError",
           });
         }
-        return provider(request, context);
+        let result: CompletionResult;
+        try {
+          result = await provider(request, context);
+        } catch (err) {
+          if (ledger) {
+            await recorded(() =>
+              ledger.modelCall({
+                ...receipt,
+                model: modelId,
+                outcome: context.signal.aborted ? "cancelled" : "failed",
+              }),
+            );
+          }
+          throw err;
+        }
+        if (ledger) {
+          await recorded(() =>
+            ledger.modelCall({
+              ...receipt,
+              model: result.model,
+              outcome: "completed",
+              usage: result.usage,
+            }),
+          );
+        }
+        return result;
       },
       onToolRequest: async (request, context) => {
+        const startedAt = Date.now();
+        // The engine asks by the model-facing alias; the ledger attributes the
+        // call to the capability the run spec authorized. An alias absent from
+        // the map is already canonical (the belt's meta-tools).
+        const canonical = input.toolNameMap?.[request.name] ?? request.name;
+        const alias = canonical === request.name ? undefined : request.name;
+        // Write-ahead. The intention is durable BEFORE the tool runs, so a
+        // side effect that commits can never be missing from the record: if
+        // this append fails, `recorded` aborts the turn and the tool is never
+        // invoked at all. Recording only afterwards meant a transient ledger
+        // failure could commit a mutation and then seal the run failed with
+        // no receipt, leaving evidence that asserted it never happened.
+        if (ledger) {
+          await recorded(() =>
+            ledger.toolCallStarted({
+              seq: request.seq,
+              requestId: request.request_id,
+              toolName: canonical,
+              ...(alias ? { toolAlias: alias } : {}),
+              input: request.input,
+            }),
+          );
+        }
         const execution = await executeToolRequest(
           tools,
           request.name,
@@ -491,20 +708,42 @@ export async function runGovernedTurn(
           execution.failed,
           execution.error,
         );
+        if (ledger) {
+          await recorded(() =>
+            ledger.toolCall({
+              seq: request.seq,
+              requestId: request.request_id,
+              toolName: canonical,
+              ...(alias ? { toolAlias: alias } : {}),
+              outcome: toolOutcome(execution),
+              input: request.input,
+              // The receipt digests what the engine is answered with (the
+              // rendered wire output), which is plain JSON for every tool.
+              ...(execution.failed
+                ? { error: errorMessage(execution.error ?? "tool failed") }
+                : { output: execution.output }),
+              durationMs: Date.now() - startedAt,
+            }),
+          );
+        }
         return execution.output;
       },
       onEvent: (event) => emit(mapper.map(event)),
     },
   })
-    .then((result) => {
+    .then(async (result) => {
       resolveTurnId(result.turnId);
-      settle(result.outcome);
+      await settle(result.outcome);
     })
-    .catch((err: unknown) => {
+    .catch(async (err: unknown) => {
       const error = isEngineUnavailable(err)
         ? new EngineUnavailableError(errorMessage(err), err)
         : err;
       input.onError?.({ error });
+      await sealLedger({
+        status: "failed",
+        error: errorMessage(error),
+      }).catch(() => undefined);
       // The failure reaches the surface as a part, the way the old loop's
       // stream errors did, and the promises reject for a caller awaiting them.
       parts.push({ type: "error", error });
@@ -546,6 +785,19 @@ async function assertEngineReady(client: StellaEngineClient): Promise<void> {
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** How a tool execution reads on the ledger: a refusal is `denied`, a cancel is `cancelled`. */
+function toolOutcome(execution: {
+  failed: boolean;
+  output: ToolOutput;
+}): TurnLedgerToolCall["outcome"] {
+  if (!execution.failed) return "completed";
+  const errorClass =
+    "error" in execution.output ? execution.output.error.class : undefined;
+  if (errorClass === "refused_by_policy" || errorClass === "permission_denied")
+    return "denied";
+  return "failed";
 }
 
 export {

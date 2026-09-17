@@ -25,6 +25,7 @@ List in-app notifications for the calling user. Supports filtering to unread-onl
 | `notifications[].id` | `string` | Opaque notification ID. |
 | `notifications[].publicId` | `string` | Public prefixed ID (`ntf_`). |
 | `notifications[].kind` | `"system" \| "approval" \| "run" \| "member" \| "security"` | Notification category. |
+| `notifications[].event` | `"approval.requested" \| "approval.resolved" \| "budget.breached" \| null` | The MC spec §7.7 event that produced the row: an approval opened for a person who may resolve it, an approval resolved for the person whose message parked it, a spend ceiling reached. Null for rows no event produced (MCP re-auth alerts, budget warnings below 100%). |
 | `notifications[].title` | `string` | Short notification title. |
 | `notifications[].body` | `string \| null` | Optional longer body text. |
 | `notifications[].deepLink` | `string \| null` | URL to the relevant resource (e.g. `/org/ws/settings/integrations`). |

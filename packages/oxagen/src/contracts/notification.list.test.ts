@@ -24,6 +24,8 @@ describe("notifications.list contract", () => {
           id: "uuid-1",
           publicId: "ntf_abc",
           kind: "security",
+          // A kind with no §7.7 event carries null.
+          event: null,
           title: "Reconnect GitHub",
           body: null,
           deepLink: "/reauth/x",
@@ -36,5 +38,31 @@ describe("notifications.list contract", () => {
     });
     expect(parsed.notifications).toHaveLength(1);
     expect(parsed.unreadCount).toBe(1);
+  });
+
+  it("output schema refuses an event outside the §7.7 names with a producer (negative)", () => {
+    const row = {
+      id: "uuid-1",
+      publicId: "ntf_abc",
+      kind: "approval",
+      title: "Approval requested: set_budget",
+      body: null,
+      deepLink: null,
+      unread: true,
+      archived: false,
+      createdAt: new Date().toISOString(),
+    };
+    expect(
+      notificationsList.output.safeParse({
+        notifications: [{ ...row, event: "approval.requested" }],
+        unreadCount: 1,
+      }).success,
+    ).toBe(true);
+    expect(
+      notificationsList.output.safeParse({
+        notifications: [{ ...row, event: "run.proven" }],
+        unreadCount: 1,
+      }).success,
+    ).toBe(false);
   });
 });

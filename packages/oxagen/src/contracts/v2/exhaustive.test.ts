@@ -132,6 +132,63 @@ function allKeys(
   return acc;
 }
 
+/**
+ * What to do about one absorbed name, given what the source file turned out to
+ * hold. Extracted so the decision is testable without building fixture
+ * modules: every branch below is reachable from a plain object.
+ *
+ * The branch that matters is `offender`. An absorbed name that resolves to
+ * nothing is either a stale descriptor or a contract that moved without its
+ * references following, and both are defects. This used to `continue`
+ * silently whenever the file happened to register the tool's own name, which
+ * meant the check went quiet at exactly the moment it was built for — the
+ * moment a contract had just been renamed. A `set_preferences` input that went
+ * from nine fields to three rode straight through it.
+ */
+export function resolveAbsorbed(args: {
+  tool: string;
+  source: string;
+  file: string;
+  /** The absorbed v1 name still registers in that file. */
+  sourceResolves: boolean;
+  /** That file now registers the v2 tool's own name. */
+  fileDeclaresToolName: boolean;
+  /** The descriptor declares this absorption carried in place. */
+  declaredInPlace: boolean;
+}):
+  | { kind: "compare" }
+  | { kind: "carried_in_place" }
+  | { kind: "offender"; message: string } {
+  if (args.sourceResolves) {
+    // A declaration for a name that is still there would silence a live
+    // comparison — the same failure in a new coat.
+    return args.declaredInPlace
+      ? {
+          kind: "offender",
+          message: `${args.tool}: declares "${args.source}" carried in place, but ${args.source} still registers in ${args.file} — remove the declaration so the carry is compared`,
+        }
+      : { kind: "compare" };
+  }
+  if (!args.declaredInPlace) {
+    return {
+      kind: "offender",
+      message:
+        `${args.tool}: absorbed "${args.source}" resolves to nothing — ${args.file} no longer registers it, so no field was compared and this tool's carry is unproven. ` +
+        `Either point \`absorbs\` at the live contract's name (right when the descriptor builds its own input, as \`set_preferences\` does), ` +
+        `or declare it in \`carriedInPlace\` with a reason (right when the descriptor composes \`input: live.input\`, where a comparison would diff a schema against itself).`,
+    };
+  }
+  // The claim is "rewritten in place under this tool's name". If the file does
+  // not register that name either, the declaration does not describe reality.
+  if (!args.fileDeclaresToolName) {
+    return {
+      kind: "offender",
+      message: `${args.tool}: declares "${args.source}" carried in place, but ${args.file} registers neither "${args.source}" nor "${args.tool}" — the declaration does not describe what is in the file`,
+    };
+  }
+  return { kind: "carried_in_place" };
+}
+
 describe("v2 carry is exhaustive", () => {
   it("no absorbed input field disappears without being declared in drops", async () => {
     const offenders: string[] = [];
@@ -149,6 +206,14 @@ describe("v2 carry is exhaustive", () => {
       if (!tool) {
         unreadable.push(`${row.name}: no ToolV2 export`);
         continue;
+      }
+
+      for (const c of tool.carriedInPlace ?? []) {
+        if (!tool.absorbs.includes(c.name)) {
+          offenders.push(
+            `${row.name}: declares "${c.name}" carried in place, but does not absorb it`,
+          );
+        }
       }
 
       const carried = allKeys(tool.input);
@@ -181,12 +246,21 @@ describe("v2 carry is exhaustive", () => {
               (v as { name?: unknown }).name === name,
           );
         const src = declNamed(sourceName);
-        // A source file that no longer registers the absorbed name but does
-        // register this tool's own name has carried the absorption in place:
-        // the v1 contract was rewritten under its Appendix E name (apps/app
-        // rev1, phase D) and the v2 descriptor composes from it. There is no
-        // v1 input left to diff against.
-        if (!src && sourceName !== row.name && declNamed(row.name)) continue;
+        const verdict = resolveAbsorbed({
+          tool: row.name,
+          source: sourceName,
+          file,
+          sourceResolves: src !== undefined,
+          fileDeclaresToolName: declNamed(row.name) !== undefined,
+          declaredInPlace: (tool.carriedInPlace ?? []).some(
+            (c) => c.name === sourceName,
+          ),
+        });
+        if (verdict.kind === "offender") {
+          offenders.push(verdict.message);
+          continue;
+        }
+        if (verdict.kind === "carried_in_place") continue;
         if (!src) {
           unreadable.push(
             `${row.name}: could not find "${sourceName}" in ${file}`,
@@ -235,4 +309,76 @@ describe("v2 carry is exhaustive", () => {
     // finding. A timeout that fires on machine speed reports a carry defect
     // that is not there, and trains the reader to re-run rather than read.
   }, 60_000);
+});
+
+/**
+ * The test for the test. `resolveAbsorbed` is the branch that decides whether a
+ * carry is proved, excused or reported, so its own behaviour needs to be
+ * pinned: the silent skip it replaces passed for months while hiding three
+ * comparisons and one real field shrink. Driving the pure function directly
+ * costs nothing — no fixture modules, no contracts invented for the test.
+ */
+describe("resolveAbsorbed", () => {
+  const base = {
+    tool: "set_preferences",
+    source: "update_user_preferences",
+    file: "user.preferences.set.ts",
+    sourceResolves: false,
+    fileDeclaresToolName: true,
+    declaredInPlace: false,
+  };
+
+  it("compares when the absorbed name still resolves", () => {
+    expect(resolveAbsorbed({ ...base, sourceResolves: true })).toEqual({
+      kind: "compare",
+    });
+  });
+
+  // The defect this replaces: the file registering the tool's own name used to
+  // be enough to skip, silently, whatever had happened to the fields.
+  it("reports an unresolvable absorbed name instead of skipping it", () => {
+    const verdict = resolveAbsorbed(base);
+    expect(verdict.kind).toBe("offender");
+    const message = (verdict as { message: string }).message;
+    expect(message).toContain("set_preferences");
+    expect(message).toContain("update_user_preferences");
+    expect(message).toContain("user.preferences.set.ts");
+    // Both remedies, so the failure says what to do and not only what is wrong.
+    expect(message).toContain("absorbs");
+    expect(message).toContain("carriedInPlace");
+  });
+
+  it("excuses it once the descriptor declares the in-place carry", () => {
+    expect(resolveAbsorbed({ ...base, declaredInPlace: true })).toEqual({
+      kind: "carried_in_place",
+    });
+  });
+
+  // Otherwise declaring becomes the new way to silence a live comparison —
+  // the same failure in a new coat.
+  it("refuses a declaration for a name that still resolves (negative)", () => {
+    const verdict = resolveAbsorbed({
+      ...base,
+      sourceResolves: true,
+      declaredInPlace: true,
+    });
+    expect(verdict.kind).toBe("offender");
+    expect((verdict as { message: string }).message).toContain(
+      "still registers",
+    );
+  });
+
+  // The declaration claims the contract was rewritten in place under this
+  // tool's name. A file holding neither name does not support that claim.
+  it("refuses a declaration the file does not bear out (negative)", () => {
+    const verdict = resolveAbsorbed({
+      ...base,
+      declaredInPlace: true,
+      fileDeclaresToolName: false,
+    });
+    expect(verdict.kind).toBe("offender");
+    expect((verdict as { message: string }).message).toContain(
+      "does not describe what is in the file",
+    );
+  });
 });

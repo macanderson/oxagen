@@ -26,6 +26,31 @@ export interface ToolV2<
   absorbs: readonly string[];
 
   /**
+   * Absorbed v1 names whose contract was rewritten IN PLACE under this tool's
+   * own Appendix E name, so the v1 name no longer registers anywhere and there
+   * is no v1 input left to diff against.
+   *
+   * This exists because `exhaustive.test.ts` used to infer the situation and
+   * skip the field comparison silently. A silent skip is worse than an absent
+   * test: it reads as coverage, and it goes quiet at exactly the moment the
+   * check matters, which is when a contract has just moved. Three descriptors
+   * were relying on that inference, and a nine-field-to-three shrink on
+   * `set_preferences` rode through it unnoticed.
+   *
+   * Declaring it makes the skip a claim the test can check: the name must
+   * genuinely no longer resolve, and the file it used to live in must now
+   * register this tool's name. An entry for a name that still resolves is a
+   * stale declaration and fails, so this cannot become a way to silence a live
+   * comparison.
+   *
+   * Use it only when the descriptor composes its input FROM the live contract
+   * (`input: live.input`), where a comparison would diff a schema against
+   * itself. When the descriptor builds its own input, point `absorbs` at the
+   * live contract's name instead and let the comparison do its work.
+   */
+  carriedInPlace?: readonly { name: string; why: string }[];
+
+  /**
    * Fields this tool carries under a different name, so a reader can tell a
    * rename from a loss.
    *

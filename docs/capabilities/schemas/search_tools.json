@@ -1,0 +1,99 @@
+{
+  "name": "search_tools",
+  "domain": "tools",
+  "description": "Rank-search the capabilities the in-app agent may call and the workspace's runs, agents and pending approvals from one index; at most eight rows with ids the caller navigates from.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "maxLength": 500,
+        "default": ""
+      },
+      "kinds": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "tool",
+            "run",
+            "agent",
+            "approval"
+          ]
+        }
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "rows": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "tool",
+                "run",
+                "agent",
+                "approval"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "label": {
+              "type": "string",
+              "minLength": 1
+            },
+            "contextLine": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "id",
+            "label",
+            "contextLine"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "rows"
+    ],
+    "additionalProperties": false
+  }
+}

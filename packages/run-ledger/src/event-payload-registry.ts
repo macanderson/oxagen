@@ -309,6 +309,75 @@ const toolCallCompletedSchema = z
   })
   .strict();
 
+/**
+ * A completion the host answered for the in-app agent's engine (ADR-053 §1;
+ * MC spec §4.4). The engine emits the `provider_request` frame with a `seq`,
+ * the host answers it through the `@oxagen/ai` chokepoint, and this event is
+ * the receipt: which frame, which role, which model, what it cost in tokens.
+ * The kernel's own audit row is the authorization record for the turn's user;
+ * the engine's tool gate holds no authority (§4.4), so there is no decision
+ * reference to carry here.
+ */
+const modelEngineCallCompletedSchema = z
+  .object({
+    /** The engine frame's `seq`, what a replay asks the engine for. */
+    engine_seq: countSchema,
+    model_call_id: shortLabelSchema,
+    role: shortLabelSchema,
+    provider: shortLabelSchema,
+    model: shortLabelSchema,
+    outcome: modelOutcomeSchema,
+    input_tokens: countSchema.optional(),
+    output_tokens: countSchema.optional(),
+    cached_input_tokens: countSchema.optional(),
+  })
+  .strict();
+
+/**
+ * A tool call the host answered for the in-app agent's engine (`tool_request`
+ * frame with a `seq`): the tool's model-facing name, how it ended and the
+ * digests of what went in and came out. `search_tools` and `load_tools`, the
+ * two belt meta-tools of MC spec §6.6, are recorded through this same type,
+ * so the record shows what the model looked for and what it was shown.
+ */
+const toolEngineCallCompletedSchema = z
+  .object({
+    engine_seq: countSchema,
+    tool_call_id: shortLabelSchema,
+    tool_name: shortLabelSchema,
+    outcome: z.enum(["completed", "failed", "denied", "cancelled"]),
+    input_digest: sha256DigestSchema,
+    output_digest: sha256DigestSchema.optional(),
+    error_digest: sha256DigestSchema.optional(),
+    duration_ms: countSchema,
+  })
+  .strict();
+
+/**
+ * Write-ahead intention: the host is about to invoke a tool. Appended BEFORE
+ * the call, so a tool whose side effect commits and whose terminal receipt
+ * then fails to append still leaves proof the call was attempted, with the
+ * input that was about to run. Without it a transient ledger failure produced
+ * a sealed-failed run whose evidence asserted the mutation never happened —
+ * a record that is confidently wrong, which is worse than one with a gap.
+ *
+ * It carries NO `outcome`, deliberately: a started event with no matching
+ * `tool.engine_call_completed` is a dangling intention, and nothing can read
+ * it as a completed call because the field a reader would test does not
+ * exist and the event type differs.
+ */
+const toolEngineCallStartedSchema = z
+  .object({
+    engine_seq: countSchema,
+    tool_call_id: shortLabelSchema,
+    /** The canonical capability name — the identity the allowlist authorized. */
+    tool_name: shortLabelSchema,
+    /** The model-facing alias, when it differs. Debugging only, never identity. */
+    tool_alias: shortLabelSchema.optional(),
+    input_digest: sha256DigestSchema,
+  })
+  .strict();
+
 const toolApprovalRecordedSchema = z
   .object({
     tool_call_id: shortLabelSchema,
@@ -448,6 +517,21 @@ export const EVENT_TYPE_REGISTRY = {
     stage: "tool",
     contentClass: "tool_call",
     schema: toolCallCompletedSchema,
+  },
+  "model.engine_call_completed": {
+    stage: "model",
+    contentClass: "model_call",
+    schema: modelEngineCallCompletedSchema,
+  },
+  "tool.engine_call_completed": {
+    stage: "tool",
+    contentClass: "tool_call",
+    schema: toolEngineCallCompletedSchema,
+  },
+  "tool.engine_call_started": {
+    stage: "tool",
+    contentClass: "tool_call",
+    schema: toolEngineCallStartedSchema,
   },
   "tool.approval_recorded": {
     stage: "tool",

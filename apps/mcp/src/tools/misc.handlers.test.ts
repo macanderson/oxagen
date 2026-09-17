@@ -466,6 +466,7 @@ describe("user.preferences.read handler", () => {
       defaultTextModel: null,
       timezone: "UTC",
       language: "en",
+      theme: "system",
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
@@ -475,53 +476,6 @@ describe("user.preferences.read handler", () => {
     expect(mocks.invoke).toHaveBeenCalledWith(
       "get_user_preferences",
       {},
-      fakeCtx,
-      { surface: "mcp" },
-    );
-  });
-});
-
-// ── user.preferences.write ────────────────────────────────────────────────────
-
-import handler_userPreferencesWrite, {
-  schema as userPreferencesWriteSchema,
-  metadata as userPreferencesWriteMetadata,
-} from "./user.preferences.write";
-
-describe("user.preferences.write handler", () => {
-  it("exports schema and metadata", () => {
-    expect(userPreferencesWriteSchema).toBeDefined();
-    expect(userPreferencesWriteMetadata.name).toBe("update_user_preferences");
-  });
-
-  it("calls invoke with preference write args", async () => {
-    const fakeOutput = {
-      fontSize: "large" as const,
-      density: "comfortable" as const,
-      enterToSubmit: false,
-      pendingPromptBehavior: "queue" as const,
-      defaultTextTier: null,
-      defaultTextModel: null,
-      timezone: "America/New_York",
-      language: "en",
-    };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
-    const args = {
-      fontSize: "large" as const,
-      density: undefined,
-      enterToSubmit: false as boolean | undefined,
-      pendingPromptBehavior: undefined,
-      defaultTextTier: undefined,
-      defaultTextModel: undefined,
-      timezone: undefined,
-      language: undefined,
-    };
-    await handler_userPreferencesWrite(args);
-
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "update_user_preferences",
-      args,
       fakeCtx,
       { surface: "mcp" },
     );

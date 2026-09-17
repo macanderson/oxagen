@@ -544,6 +544,17 @@ describe("errorMiddleware billing errors", () => {
     expect(b.error.reason).toBe("free_no_payment_method");
   });
 
+  it("AssistantSpendCapError → 402 with its code, not 500", async () => {
+    const { AssistantSpendCapError } = await import("@oxagen/billing");
+    const { status, body } = await triggerError(
+      new AssistantSpendCapError(500, 500),
+    );
+    expect(status).toBe(402);
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "assistant_spend_cap",
+    );
+  });
+
   it("BILLING_ERROR_CODES lists gau_exhausted", async () => {
     const { BILLING_ERROR_CODES } = await import("../middleware/error");
     expect(BILLING_ERROR_CODES).toContain("gau_exhausted");
@@ -559,8 +570,10 @@ describe("errorMiddleware billing errors", () => {
       BillingSuspendedError,
       BudgetExceededError,
       GauExhaustedError,
+      AssistantSpendCapError,
     } = await import("@oxagen/billing");
     const thrown: Error[] = [
+      new AssistantSpendCapError(500, 500),
       new InsufficientCreditsError(),
       new BillingSuspendedError(null),
       new BudgetExceededError({
@@ -585,6 +598,33 @@ describe("errorMiddleware billing errors", () => {
         (err as unknown as { code: string }).code,
       );
     }
+  });
+});
+
+// ── ask_assistant turn failures (@oxagen/agent) ───────────────────────────────
+
+describe("errorMiddleware assistant turn failures", () => {
+  it.each([
+    ["engine_unavailable", 503],
+    ["assistant_run_not_recorded", 503],
+    ["engine_aborted", 409],
+  ] as const)(
+    "%s → %i with its code and message, never the 500 catch-all",
+    async (code, expected) => {
+      const err = Object.assign(new Error(`turn failed: ${code}`), { code });
+      const { status, body } = await triggerError(err);
+      expect(status).toBe(expected);
+      expect(body).toMatchObject({
+        error: { code, message: `turn failed: ${code}` },
+        requestId: expect.any(String),
+      });
+    },
+  );
+
+  it("an error whose code is not a turn failure still falls to 500 (negative)", async () => {
+    const err = Object.assign(new Error("boom"), { code: "ECONNRESET" });
+    const { status } = await triggerError(err);
+    expect(status).toBe(500);
   });
 });
 
