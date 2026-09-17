@@ -297,6 +297,34 @@ export const policyBundleSchema = z
       })
       .strict()
       .optional(),
+    /**
+     * Every tool the gateway mandate permits a connected app to call
+     * (ADR-078 §4). The local MCP gateway filters a `tools/list` down to this
+     * set before it counts it against `tool_ceiling` and serves it.
+     *
+     * It is a list here and a rule on the control plane, and it has to be
+     * both. The rule — an `mcp` capability that does not mutate and is not
+     * high-sensitivity — is evaluated by `gatewayMayInvoke` in `@oxagen/iam`,
+     * against the capability registry, and enforced in the kernel's IAM
+     * adapter at `invoke()` time. `@oxagen/tacho` is a leaf package with no
+     * `@oxagen/*` runtime dependency, so the host cannot evaluate that rule
+     * and must not try; it is handed the rule's answer, signed, with the rest
+     * of the mandate.
+     *
+     * Without it the gateway advertised the whole toolbelt and refused the
+     * forbidden part only when a tool was selected, so a connected app was
+     * shown tools that could only fail, and a `tool_ceiling` was counted
+     * against a list including tools the mandate forbids — refusing a toolbelt
+     * that would have fit.
+     *
+     * Optional, and absent means *no allowance this host has been told about*
+     * rather than *an empty allowance* — the same reading `tool_ceiling`
+     * carries. A bundle from a control plane older than this field declares
+     * none, and the gateway then serves what it is given rather than filtering
+     * everything away. An allowance that is present and empty is a mandate
+     * that permits nothing, and the gateway serves nothing.
+     */
+    gateway_tools: z.array(z.string().max(256)).max(4096).optional(),
     signature: z
       .object({
         key_id: z.string().min(1),

@@ -58,7 +58,7 @@ export const apiKeyCreateHandler: CapabilityHandler<
   if (requestsReservedTachoPurpose(input.scope)) {
     logger.warn(
       { orgId: ctx.orgId },
-      "api.key.create: rejected — reserved Tacho host purpose",
+      "api.key.create: rejected — reserved Tacho enrollment purpose",
     );
     throw new CapabilityError(
       "create_api_key",

@@ -12,6 +12,7 @@ import {
   tachoBundleModeSchema,
   tachoHostStatusSchema,
 } from "@oxagen/oxagen/tacho/schemas";
+import { gatewayMandateTools } from "@oxagen/iam/machine-key-scope";
 import { digestJcs, type JsonValue } from "@oxagen/tacho";
 import { schema } from "@oxagen/database";
 import { RETENTION_CONTENT_CLASSES } from "@oxagen/run-ledger";
@@ -171,6 +172,30 @@ export async function readWorkspaceRetention(
 }
 
 /** The unsigned bundle for a host at this moment (spec section 7.1). */
+/**
+ * The gateway mandate, materialised for the host that has to serve it
+ * (ADR-078 §4).
+ *
+ * `gatewayMayInvoke` is a rule over the capability registry, and only the
+ * control plane can evaluate it: `@oxagen/tacho` takes no `@oxagen/*` runtime
+ * dependency, so the local MCP gateway cannot read a capability's surfaces,
+ * mutation or sensitivity. Without the answer on the wire the gateway
+ * advertised the whole workspace toolbelt and left the mandate to refuse a
+ * tool only once it was selected — showing a connected app tools that could
+ * only fail, and counting forbidden tools against `tool_ceiling`.
+ *
+ * Omitted rather than emitted empty when the registry is empty. An empty list
+ * is a mandate that permits nothing, and the gateway serves nothing for it;
+ * that is the right answer when it is a decision and the wrong one when it is
+ * a runtime that has not imported its contracts. Absent means *not told*, and
+ * the host then serves what it is given, which is what a bundle from before
+ * this field means too.
+ */
+function gatewayTools(): { gateway_tools?: string[] } {
+  const tools = gatewayMandateTools();
+  return tools.length === 0 ? {} : { gateway_tools: tools };
+}
+
 export function unsignedBundle(
   host: TachoHostRow,
   denyGeneration: DenyGeneration,
@@ -195,6 +220,7 @@ export function unsignedBundle(
     context: { system: null },
     retention,
     mode,
+    ...gatewayTools(),
   };
   const etag = digestJcs(content as unknown as JsonValue).slice(
     "sha256:".length,

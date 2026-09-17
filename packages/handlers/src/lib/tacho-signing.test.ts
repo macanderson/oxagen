@@ -16,6 +16,8 @@ import {
   signTachoEnrollment,
 } from "./tacho-enrollment-signing";
 import {
+  TACHO_GATEWAY_SCOPE_PURPOSE,
+  TACHO_HOST_SCOPE_PURPOSE,
   requestsReservedTachoPurpose,
   tachoHostApiKeyScopeSchema,
 } from "./tacho-enrollment";
@@ -105,6 +107,30 @@ describe("enrollment signing", () => {
       }),
     ).toBe(false);
     expect(requestsReservedTachoPurpose(null)).toBe(false);
+  });
+
+  it("reserves the gateway purpose as well as the host purpose", () => {
+    // Both keys an enrolment mints are enrolment-owned, and the generic
+    // key capabilities have to refuse both. Rotating the gateway key revokes
+    // the old one and hands the replacement to the operator, who has nowhere
+    // to put it — only an enrolment writes host.json — so the connected app
+    // authenticates with a credential the control plane has soft-deleted.
+    // Revoking it leaves the host row `active` and its host key reporting
+    // events while every connected app's tool call fails auth.
+    expect(
+      requestsReservedTachoPurpose({ purpose: TACHO_HOST_SCOPE_PURPOSE }),
+    ).toBe(true);
+    expect(
+      requestsReservedTachoPurpose({
+        purpose: TACHO_GATEWAY_SCOPE_PURPOSE,
+        host_enrollment_id: CLAIMS.host_enrollment_id,
+      }),
+    ).toBe(true);
+    expect(requestsReservedTachoPurpose({ purpose: "cli_session_v1" })).toBe(
+      false,
+    );
+    expect(requestsReservedTachoPurpose({ purpose: 7 })).toBe(false);
+    expect(requestsReservedTachoPurpose("tacho_gateway_v1")).toBe(false);
   });
 });
 

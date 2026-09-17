@@ -17,11 +17,14 @@ vi.mock("@oxagen/database", () => ({
 }));
 
 const getCapability = vi.fn();
+const listCapabilities = vi.fn(() => [] as unknown[]);
 vi.mock("@oxagen/oxagen", () => ({
   getCapability: (name: string) => getCapability(name) as unknown,
+  listCapabilities: () => listCapabilities() as unknown,
 }));
 
 const {
+  gatewayMandateTools,
   gatewayMayInvoke,
   machineKeyDenial,
   MACHINE_KEY_CAPABILITIES,
@@ -39,6 +42,8 @@ function keyWithScope(scope: unknown): void {
 beforeEach(() => {
   findFirst.mockReset();
   getCapability.mockReset();
+  listCapabilities.mockReset();
+  listCapabilities.mockReturnValue([]);
 });
 
 describe("a person's credential is untouched", () => {
@@ -248,5 +253,58 @@ describe("fail closed", () => {
     // Its allowance is the rule in `gatewayMayInvoke`; an entry here would be
     // a second, quieter answer to the same question.
     expect(MACHINE_KEY_CAPABILITIES[TACHO_GATEWAY_PURPOSE]).toBeUndefined();
+  });
+});
+
+describe("the mandate, materialised for the host that serves it", () => {
+  /**
+   * `gatewayMayInvoke` is a rule over the registry, and the local MCP gateway
+   * cannot run it: `@oxagen/tacho` takes no `@oxagen/*` runtime dependency, so
+   * it cannot read a capability's surfaces, mutation or sensitivity. Before
+   * the answer was signed into the policy bundle, the gateway forwarded
+   * `tools/list` unchanged and advertised everything — the app was shown tools
+   * that enforcement could only refuse when one was selected, and a declared
+   * `tool_ceiling` counted forbidden tools toward the limit.
+   */
+  const capability = (
+    name: string,
+    over: Record<string, unknown> = {},
+  ): Record<string, unknown> => ({
+    name,
+    surfaces: ["api", "mcp"],
+    mutates: false,
+    sensitivity: "low",
+    ...over,
+  });
+
+  function registry(...caps: Array<Record<string, unknown>>): void {
+    listCapabilities.mockReturnValue(caps);
+    getCapability.mockImplementation((name: string) =>
+      caps.find((c) => c["name"] === name),
+    );
+  }
+
+  it("lists exactly what the rule permits, and nothing else", () => {
+    registry(
+      capability("query_ontology"),
+      capability("delete_workspace", { mutates: true }),
+      capability("reveal_secret", { sensitivity: "high" }),
+      capability("internal_thing", { surfaces: ["api"] }),
+      capability("get_run"),
+    );
+    expect(gatewayMandateTools()).toEqual(["get_run", "query_ontology"]);
+  });
+
+  it("sorts, so an etag does not move with import order", () => {
+    // The bundle's etag is a digest of its content. Registration order
+    // follows import order, and an etag that moved on every restart would
+    // make every host refetch a mandate that had not changed.
+    registry(capability("z_tool"), capability("a_tool"), capability("m_tool"));
+    expect(gatewayMandateTools()).toEqual(["a_tool", "m_tool", "z_tool"]);
+  });
+
+  it("answers nothing for an empty registry rather than guessing", () => {
+    registry();
+    expect(gatewayMandateTools()).toEqual([]);
   });
 });

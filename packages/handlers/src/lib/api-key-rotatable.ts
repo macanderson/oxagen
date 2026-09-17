@@ -104,8 +104,9 @@ interface ReservedPurpose {
 const RESERVED_PURPOSES: readonly ReservedPurpose[] = [
   {
     matches: requestsReservedTachoPurpose,
-    log: "api.key.rotate: rejected — reserved Tacho host purpose",
-    denial: "Forbidden: enrolled Tacho host keys require operator rotation",
+    log: "api.key.rotate: rejected — reserved Tacho enrollment purpose",
+    denial:
+      "Forbidden: an enrolled Tacho host's credentials — its host key and its gateway key — are replaced by re-enrolling the machine, because only an enrolment writes them to host.json",
   },
   {
     matches: requestsReservedAgentCredentialPurpose,

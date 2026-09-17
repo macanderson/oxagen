@@ -40,7 +40,7 @@
  * exactly as before.
  */
 import { schema, withSystemDb } from "@oxagen/database";
-import { getCapability } from "@oxagen/oxagen";
+import { getCapability, listCapabilities } from "@oxagen/oxagen";
 import { and, eq, isNull } from "drizzle-orm";
 
 /** The scope purpose Tacho enrollment mints the host's control-plane key with. */
@@ -99,6 +99,30 @@ export function gatewayMayInvoke(capabilityName: string): boolean {
   if (!surfaces.includes("mcp")) return false;
   if (capability.mutates !== false) return false;
   return capability.sensitivity !== "high";
+}
+
+/**
+ * Every capability the gateway mandate permits, as the local MCP gateway needs
+ * it: a list, sorted, of what `gatewayMayInvoke` answers yes to.
+ *
+ * The rule stays here and is evaluated here. The host cannot run it —
+ * `@oxagen/tacho` takes no `@oxagen/*` runtime dependency (ADR-078 §4), so it
+ * has no way to read a capability's surfaces, mutation or sensitivity, and a
+ * second copy of the rule living in the collector is precisely the drift that
+ * constraint exists to prevent. The control plane signs the answer into the
+ * policy bundle's `gateway_tools`, and the gateway filters its `tools/list`
+ * against it. `machineKeyDenial` remains the enforcement; this is what stops
+ * the app being shown tools that enforcement can only refuse.
+ *
+ * Sorted so the bundle's etag is stable across processes: registration order
+ * depends on import order, and an etag that moved on every restart would make
+ * every host refetch a mandate that had not changed.
+ */
+export function gatewayMandateTools(): string[] {
+  return listCapabilities()
+    .map((capability) => capability.name)
+    .filter((name) => gatewayMayInvoke(name))
+    .sort();
 }
 
 /** What the gate was asked about. */
