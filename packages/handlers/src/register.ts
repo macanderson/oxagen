@@ -1137,6 +1137,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .userPreferencesSetHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "update_profile",
+    async () =>
+      (await import("./user.profile.update"))
+        .userProfileUpdateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_run_cost",
     async () =>
       (await import("./run.cost")).runCostHandler as CapabilityHandlerFn,
