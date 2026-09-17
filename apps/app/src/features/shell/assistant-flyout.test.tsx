@@ -152,6 +152,31 @@ describe("AssistantFlyout", () => {
     );
   });
 
+  // list_runs and list_recent_runs exclude the chat/api-chat surfaces
+  // (packages/handlers/src/run.list.ts), so this link is the only path an
+  // operator has to the evidence the sentence beside it claims exists.
+  it("links the run to its evidence page, the only way in when the run is not listed", async () => {
+    const { user } = await openFlyout();
+    await ask(user, "what is live?");
+    const link = await screen.findByTestId("assistant-run-link");
+    expect(link).toHaveAttribute("href", "/acme/core-platform/runs/arun_01k9");
+    expect(link).toHaveTextContent("arun_01k9");
+  });
+
+  it("keeps each run link on the workspace its turn was asked in, not the page now showing", async () => {
+    const { user, renavigate } = await openFlyout();
+    await ask(user, "what is live?");
+    await screen.findByTestId("assistant-run-link");
+
+    // An organization page keeps the transcript and owns no workspace of its
+    // own; the link must still open the run under core-platform.
+    renavigate("/acme/billing");
+    expect(screen.getByTestId("assistant-run-link")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/arun_01k9",
+    );
+  });
+
   it("surfaces every parked write rather than dropping the ones it cannot show", async () => {
     askAssistant.mockResolvedValue(
       turn({
@@ -294,6 +319,53 @@ describe("AssistantFlyout", () => {
       </IntlProvider>,
     );
     expect(screen.getByTestId("assistant-flyout")).toHaveAttribute("inert");
+  });
+
+  it("gives focus back to the launcher it was opened from, on Escape and on the close button", async () => {
+    for (const close of ["escape", "button"] as const) {
+      const user = userEvent.setup();
+      render(tree());
+      const launcher = screen.getByRole("button", { name: "open assistant" });
+      await user.click(launcher);
+      const flyout = screen.getByTestId("assistant-flyout");
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: "Close the assistant" }),
+      );
+
+      if (close === "escape") await user.keyboard("{Escape}");
+      else
+        await user.click(
+          screen.getByRole("button", { name: "Close the assistant" }),
+        );
+
+      expect(flyout).toHaveAttribute("inert");
+      // Not left on a control inside an inert panel, and not dropped to <body>.
+      expect(document.activeElement).toBe(launcher);
+      cleanup();
+    }
+  });
+
+  it("drops focus rather than leaving it inside the inert panel when the control that opened it is gone (negative)", async () => {
+    const user = userEvent.setup();
+    render(tree());
+    // Stand in for the phone drawer's launcher, which unmounts with the
+    // drawer behind the flyout. Outside React, so cleanup is not fighting it.
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    // A programmatic click does not move focus, so the flyout opens with the
+    // opener still focused — what a tap on the drawer's launcher leaves.
+    act(() => {
+      screen.getByRole("button", { name: "open assistant" }).click();
+    });
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Close the assistant" }),
+    );
+    opener.remove();
+
+    await user.keyboard("{Escape}");
+    expect(screen.getByTestId("assistant-flyout")).toHaveAttribute("inert");
+    expect(document.activeElement).toBe(document.body);
   });
 
   it("has no axe violations", async () => {

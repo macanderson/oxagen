@@ -329,6 +329,31 @@ describe("the other dialogs on a phone", () => {
     expect(flyout).not.toHaveAttribute("inert");
     expect(within(flyout).getByTestId("assistant-composer")).toBeTruthy();
   });
+
+  // On a phone the control that opened the assistant is gone by the time the
+  // assistant is open — the drawer unmounted it on the way out — so there is
+  // nothing to hand focus back to. What must not happen is focus stranded on
+  // a control inside a panel that has just gone `inert`: the next Tab then
+  // resumes from nowhere. Focus resets to the document instead.
+  it("does not strand focus inside the inert panel when the assistant closes on a phone", async () => {
+    const user = userEvent.setup();
+    renderPhone(shellData());
+    await user.click(screen.getByRole("button", { name: "Open navigation" }));
+    const drawer = await screen.findByTestId("nav-drawer");
+    await user.click(within(drawer).getByTestId("assistant-launcher"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("nav-drawer")).toBeNull();
+    });
+    const flyout = screen.getByTestId("assistant-flyout");
+    expect(flyout.contains(document.activeElement)).toBe(true);
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(flyout).toHaveAttribute("inert");
+    });
+    expect(flyout.contains(document.activeElement)).toBe(false);
+    expect(document.activeElement).toBe(document.body);
+  });
 });
 
 describe("card tables", () => {

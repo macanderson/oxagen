@@ -24,6 +24,20 @@
 // a reply that lands after the switch is dropped rather than shown under the
 // workspace it does not belong to. Standing on an organization page is not a
 // switch: it has no workspace of its own, so the transcript waits.
+//
+// Each answer names the run it was recorded as, as a link to that run's page.
+// `list_runs` excludes the `chat` and `api-chat` surfaces — the assistant is
+// Oxagen's, and its turns are recorded but never listed as the customer's own
+// runs (`packages/handlers/src/run.list.ts`) — so this link is the only way
+// an operator reaches the evidence the sentence claims exists. That handler's
+// own comment says as much: `ledgerIdentityQuery` keeps the surfaces "because
+// the flyout's per-turn run link opens the run through `get_run`".
+//
+// Closing returns focus where it came from. The host is always mounted and
+// goes `inert` when it closes, so focus left on a control inside it would land
+// on an unavailable element or fall to the body; every close path — Escape,
+// the close button, the launcher toggling it shut — goes through the one
+// effect below.
 import { CircleAlert, Send, Sparkles } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -32,6 +46,9 @@ import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
 import { parseShellPath } from "./nav";
 import { useShellState } from "./shell-state";
+import { routes, type SafePath } from "@/shared/safe-path";
+import { linkText, mono } from "@/ui/control-styles";
+import { SafeLink } from "@/ui/navigation";
 
 type Entry =
   | { kind: "asked"; id: string; text: string }
@@ -40,6 +57,12 @@ type Entry =
       id: string;
       text: string;
       runId: string;
+      /**
+       * The run's page, built from the workspace the turn was asked in rather
+       * than from the current URL: the transcript outlives a step onto an
+       * organization page, where there is no workspace to build it from.
+       */
+      runHref: SafePath;
       parked: readonly ParkedCard[];
     }
   | { kind: "refused"; id: string; code: Refusal };
@@ -83,6 +106,7 @@ export function AssistantFlyout() {
   const { assistantOpen, setAssistantOpen } = useShellState();
   const pathname = usePathname();
   const { org, ws, rest } = parseShellPath(pathname);
+  const panelRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   // A monotonic key per entry: two turns in the same millisecond would collide
@@ -114,8 +138,35 @@ export function AssistantFlyout() {
     if (scope !== null) scopeRef.current = scope;
   }, [scope]);
 
+  // Where focus came from, so closing can give it back. Captured at the open,
+  // which is the launcher that was tapped — the rail's on a desktop, or, on a
+  // phone, whatever the drawer handed focus to as it closed itself.
+  const openedFromRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    if (assistantOpen) closeRef.current?.focus();
+    if (assistantOpen) {
+      const active = document.activeElement;
+      openedFromRef.current = active instanceof HTMLElement ? active : null;
+      closeRef.current?.focus();
+      return;
+    }
+    const openedFrom = openedFromRef.current;
+    openedFromRef.current = null;
+    // On a phone this is `document.body`: the drawer had already unmounted the
+    // launcher that was tapped by the time the open ran, so there is no control
+    // to go back to and focusing the body is the drop, not a restore.
+    if (openedFrom !== null && openedFrom.isConnected) {
+      openedFrom.focus();
+      return;
+    }
+    // Nothing to give it back to — the control that opened this is gone, which
+    // is the phone case: the drawer's launcher unmounted with the drawer. Take
+    // focus off the panel that has just gone `inert` anyway, so the next Tab
+    // starts from the top of the document instead of from a control no one can
+    // reach. A browser blurs an inert subtree by itself; doing it here is what
+    // makes that true in a test too.
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && panelRef.current?.contains(active))
+      active.blur();
   }, [assistantOpen]);
 
   // Keep the newest turn in view. Guarded because scrollTo is a browser
@@ -158,6 +209,7 @@ export function AssistantFlyout() {
             id: `${id}-a`,
             text: result.value.reply,
             runId: result.value.runId,
+            runHref: routes.run(org, ws, result.value.runId),
             parked: result.value.parkedCards,
           },
         ]);
@@ -180,6 +232,7 @@ export function AssistantFlyout() {
 
   return (
     <aside
+      ref={panelRef}
       id={ASSISTANT_PANEL_ID}
       aria-labelledby={`${ASSISTANT_PANEL_ID}-title`}
       inert={!assistantOpen}
@@ -236,8 +289,19 @@ export function AssistantFlyout() {
                 ) : entry.kind === "answered" ? (
                   <div data-testid="assistant-answer">
                     <p className="whitespace-pre-wrap text-sm">{entry.text}</p>
-                    <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-                      {t("recordedAs", { run: entry.runId })}
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {t.rich("recordedAs", {
+                        id: entry.runId,
+                        run: (chunks) => (
+                          <SafeLink
+                            to={entry.runHref}
+                            data-testid="assistant-run-link"
+                            className={`${linkText} ${mono}`}
+                          >
+                            {chunks}
+                          </SafeLink>
+                        ),
+                      })}
                     </p>
                     {entry.parked.length === 0 ? null : (
                       <p
