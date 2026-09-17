@@ -137,7 +137,9 @@ describe("tenant policy manifest", () => {
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
     //
-    // 110 as of mcp.credential_grants (ADR-072, #2958), which lands on top of
+    // 111 as of billing.gau_reversals (ADR-085), the record of a refunded or
+    // disputed GAU block purchase, which lands on top of the 110 below.
+    // Was 110 as of mcp.credential_grants (ADR-072, #2958), which landed on
     // the 109 this branch merged. Those 109 were evidence.witnesses,
     // evidence.verdicts and evidence.disclosure_policies (ADR-064, #2955)
     // alongside tools.mandates and tools.mandate_ledger (ADR-059, G2957), both
@@ -158,7 +160,7 @@ describe("tenant policy manifest", () => {
     // said 91, so it had already drifted from the number it was describing — a
     // count nobody can check against its own comment is a pin with no ratchet
     // behind it.
-    expect(POLICY_MANIFEST.length).toBe(110);
+    expect(POLICY_MANIFEST.length).toBe(111);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {
