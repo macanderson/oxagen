@@ -826,6 +826,11 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     // with is sealed, or is a different chain wearing the same uuid. Their
     // events are not that session's evidence and must not be acknowledged.
     const refusedSessions = new Set<string>();
+    // …and the subset of those refusals that are TRANSIENT: the row moved under
+    // the read this batch was folded against. Unlike a sealed row or a
+    // different genesis, that one succeeds on a re-read, so the batch must come
+    // back rather than be acknowledged and dropped.
+    const staleSessions = new Set<string>();
     // The first root session this batch opened: the run the onboarding gate
     // records when this is the organization's first frame (#2967).
     let firstOpenedRunId: string | null = null;
@@ -1363,6 +1368,11 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       // batch was not recorded instead of wondering where it went.
       if (!accepted) {
         refusedSessions.add(sessionUuid);
+        // Which kind of refusal. The existing-session path loses only to the
+        // optimistic guard, which is a stale read and nothing worse; the insert
+        // path's conflict is a sealed row or a different chain, which no retry
+        // can turn into an acceptance.
+        if (existing) staleSessions.add(sessionUuid);
         chainBreaks.push({
           session_uuid: sessionUuid,
           at_seq: first.seq,
@@ -1485,6 +1495,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     return {
       chainBreaks,
       refusedSessions,
+      staleSessions,
       verified,
       recordedHeads,
       control,
@@ -1521,6 +1532,34 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   // to a colleague's row. The session's person is `initiatingPrincipalId` /
   // `initiatingUserId`, which this deployment issues rather than the harness
   // reports (#3072).
+  // A stale-read refusal is RETRIED, not acknowledged.
+  //
+  // The two refusals are not the same. A sealed row or a different genesis is
+  // permanent: no re-send turns it into an acceptance, so the batch is
+  // acknowledged, reported as a chain break, and not written. A lost optimistic
+  // guard is neither — the row simply moved between this request's read and its
+  // write, and the same batch succeeds against a fresh read.
+  //
+  // Acknowledging that one loses it. The shipper marks the whole submitted
+  // batch shipped on any success (`spool.ts`, `markShipped(batch)`), while this
+  // handler excluded the session from Postgres and ClickHouse — so a terminal
+  // batch would be deleted from the WAL without ever being recorded, leaving
+  // the session unsealed and its frames gone.
+  //
+  // `conflict` maps to 409, which is neither `ControlUnreachable` nor the
+  // 400/422 the shipper quarantines on: it takes the "keep the batch, back off"
+  // branch, and the next attempt reads the row as it now is. Thrown before the
+  // ClickHouse write so the attempt leaves nothing half-written; the Postgres
+  // work of the accepted sessions is committed and idempotent under a re-send,
+  // because `fresh` is filtered by the head those writes advanced.
+  if (result.staleSessions.size > 0) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "session_moved_under_read",
+      message: `${result.staleSessions.size} session(s) in this batch changed between the read and the write; re-send it`,
+    });
+  }
+
   // Only the events whose session accepted them reach ClickHouse.
   //
   // `tacho_events` is a ReplacingMergeTree keyed by session and seq, so a

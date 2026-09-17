@@ -1837,10 +1837,14 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     db.promoteTierOnRead = "gateway";
     wire(db);
 
-    await tachoEventsIngestHandler(
-      batch(events, [bodyFor(events[1] as TachoEvent)]),
-      CONTEXT,
-    );
+    // Refused AND retried: a stale read is transient, so the batch has to come
+    // back rather than be acknowledged and dropped from the daemon's WAL.
+    await expect(
+      tachoEventsIngestHandler(
+        batch(events, [bodyFor(events[1] as TachoEvent)]),
+        CONTEXT,
+      ),
+    ).rejects.toMatchObject({ code: "conflict" });
 
     const row = db.sessions.get(SESSION);
     expect(row?.["enforcementTier"]).toBe("gateway");
@@ -1848,6 +1852,8 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     // from `observe`.
     expect(row?.["replayGrade"]).toBeUndefined();
     expect(row?.["sealedAt"] ?? null).toBeNull();
+    // …and nothing reached ClickHouse, so the retry is not a partial re-run.
+    expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
   });
 
   it("writes none of a refused batch's events, and acknowledges them anyway", async () => {
@@ -2121,21 +2127,27 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     db.advanceSeqCountOnRead = events.length;
     wire(db);
 
-    const output = await tachoEventsIngestHandler(
-      {
-        schema: "tacho.batch.v1",
-        host_enrollment_id: HOST_PUBLIC,
-        events: events.slice(3),
-      },
-      CONTEXT,
-    );
+    // Refused AND retried. A stale read is transient — the same batch succeeds
+    // against a fresh one — so acknowledging it would let the shipper delete
+    // frames that were never recorded. `conflict` maps to 409, which is
+    // neither `ControlUnreachable` nor the 400/422 the shipper quarantines on,
+    // so it takes the "keep the batch, back off" branch.
+    await expect(
+      tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events: events.slice(3),
+        },
+        CONTEXT,
+      ),
+    ).rejects.toMatchObject({ code: "conflict" });
 
     // The winner's head stands, unwritten by the loser.
     expect(db.sessions.get(SESSION)?.["seqCount"]).toBe(events.length);
     // The loser's frames are not written — folding them again would count the
-    // winner's own increments a second time — and the refusal is reported.
-    expect(mocks.insertTachoEvents).toHaveBeenCalledWith([]);
-    expect(output.chain_breaks.map((b) => b.session_uuid)).toContain(SESSION);
+    // winner's own increments a second time.
+    expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
   });
 
   it("does not re-seal a row another request sealed first", async () => {
