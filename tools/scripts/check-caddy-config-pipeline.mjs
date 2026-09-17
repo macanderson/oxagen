@@ -309,6 +309,13 @@ export function inspect({ alb, edge, installer, registry, bootstrap }) {
     `aws s3 cp [^\\n]*s3://[^\\s]*/${CANONICAL_KEY}(?:\\s|"|$)`,
   );
   const installerCode = joinContinuations(withoutComments(installer));
+  // The Caddy block below is serialised with `flock`; a node without it would
+  // fail that line and read as "no other install is running".
+  if (!/for tool in [^\n]*\bflock\b/.test(installerCode)) {
+    problems.push(
+      `${INSTALLER}: \`flock\` is missing from the remote script's dependency check. The Caddy block depends on it to serialise concurrent installs, and a node without it would fail at the lock rather than at a named missing dependency.`,
+    );
+  }
   const publishAt = lineIndexOf(installerCode, writesCanonical);
   const successGateAt = lineIndexOf(installerCode, /\$st\s*!=\s*Success/);
 
@@ -449,6 +456,35 @@ export function inspect({ alb, edge, installer, registry, bootstrap }) {
     if (!/rm -f \/opt\/oxagen\/caddy\/Caddyfile\b/.test(blockCode)) {
       problems.push(
         `${INSTALLER}: the remote Caddy block never removes the candidate on a FIRST install whose reload failed. There is no accepted config to restore there, so leaving it is the same defect by another route.`,
+      );
+    }
+
+    // ── The block runs alone on the node ────────────────────────────────────
+    //
+    // `/tmp/Caddyfile.incoming` is a fixed path and the live config, its
+    // `.prev` and the running Caddy process ARE the node — none of them can be
+    // given a per-run copy. Two invocations therefore have to be serialised or
+    // one validates bytes the other downloaded and its caller promotes a
+    // candidate no node ever checked. The behavioural proof is the test that
+    // runs this block twice concurrently; these hold the shape still.
+    const lockAt = lineIndexOf(blockCode, /flock\s+(-\S+\s+)*-x|flock\s+-x/);
+    const fetchAt = lineIndexOf(blockCode, /aws s3 cp .*Caddyfile\.incoming/);
+    if (lockAt === -1) {
+      problems.push(
+        `${INSTALLER}: the remote Caddy block takes no exclusive \`flock\`, so two installs on one node share /tmp/Caddyfile.incoming and the live config. One run can then validate and reload the OTHER run's bytes, exit 0, and have its caller promote the candidate it downloaded — publishing a render nothing validated and the node is not running.`,
+      );
+    } else if (fetchAt !== -1 && lockAt > fetchAt) {
+      problems.push(
+        `${INSTALLER}: the remote Caddy block fetches the candidate before it takes the lock, so the staging file is already shared by the time the lock is held. The lock has to cover fetch, validate, swap and reload together or it covers nothing.`,
+      );
+    }
+    // The release must be process exit and nothing sooner. bash runs EXIT traps
+    // BEFORE the process exits, so `caddy_restore_if_unaccepted` runs inside the
+    // critical section; an early release moves the rollback path into the race
+    // instead of the swap, which is the worse of the two failures.
+    if (/flock\s+-u|exec\s+\d+>&-/.test(blockCode)) {
+      problems.push(
+        `${INSTALLER}: the remote Caddy block releases its lock explicitly. It must be released by process exit alone, so the \`trap ... EXIT\` restore still holds it — otherwise a rollback can overwrite a file another run is midway through staging, which is worse than the interleaving the lock was added for.`,
       );
     }
   }

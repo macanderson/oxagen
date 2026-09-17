@@ -10,7 +10,7 @@
  * wrong answer is a well-formed IP address.
  */
 import { describe, expect, it } from "vitest";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -57,12 +57,15 @@ function healthy() {
     ].join("\n"),
     edge: "app.oxagen.sh {\n\treverse_proxy 127.0.0.1:3000\n}\n",
     installer: [
+      "for tool in jq python3 curl docker aws flock; do",
       `sed "s|${ALB_SUBNETS_PLACEHOLDER}|$cidrs|" "$src" > "$out"`,
       "aws elbv2 describe-load-balancers --names oxagen-app",
       'echo "refusing to upload" >&2',
       'aws s3 cp "$RENDERED" "s3://$BUCKET/$CANDIDATE_KEY" --region "$REGION"',
       "read -r -d '' REMOTE_TEMPLATE <<'REMOTE_EOF' || true",
       "# >>> caddy-install",
+      "exec 200>/opt/oxagen/caddy-install.lock",
+      "flock -x -w 60 200 || exit 1",
       "aws s3 cp s3://__BUCKET__/__CANDIDATE_KEY__ /tmp/Caddyfile.incoming --region __REGION__",
       "docker run --rm caddy:2 caddy validate --config /etc/caddy/Caddyfile",
       "trap caddy_restore_if_unaccepted EXIT",
@@ -352,6 +355,71 @@ describe("publish ordering", () => {
   });
 });
 
+describe("one install at a time on a node", () => {
+  // The staging path has no run id and the live config, its `.prev` and the
+  // running Caddy process cannot have one. So concurrency is bounded by
+  // excluding the RUN, and these hold that shape; the executed pair at the
+  // bottom of this file is what proves the behaviour.
+
+  it("rejects a Caddy block that takes no exclusive lock", () => {
+    const repo = healthy();
+    repo.installer = repo.installer
+      .split("\n")
+      .filter((l) => !l.startsWith("flock ") && !l.startsWith("exec 200>"))
+      .join("\n");
+    expect(inspect(repo).join("\n")).toContain("takes no exclusive `flock`");
+  });
+
+  it("rejects taking the lock after the fetch, which is after the sharing", () => {
+    const repo = healthy();
+    const lines = repo.installer.split("\n");
+    const lock = lines.findIndex((l) => l.startsWith("flock "));
+    const fetch = lines.findIndex((l) =>
+      l.includes("Caddyfile.incoming --region"),
+    );
+    // Same commands, only the order changed — the defect is the order.
+    [lines[lock], lines[fetch]] = [
+      lines[fetch] as string,
+      lines[lock] as string,
+    ];
+    repo.installer = lines.join("\n");
+    expect(inspect(repo).join("\n")).toContain(
+      "fetches the candidate before it takes the lock",
+    );
+  });
+
+  it("rejects releasing the lock before the process exits", () => {
+    // The trap restore runs on the way out. A lock released before it turns the
+    // rollback into the racing step, which is worse than the swap racing.
+    const repo = healthy();
+    repo.installer = repo.installer.replace(
+      "docker exec oxagen-caddy caddy reload --config /etc/caddy/Caddyfile",
+      "docker exec oxagen-caddy caddy reload --config /etc/caddy/Caddyfile\nflock -u 200",
+    );
+    expect(inspect(repo).join("\n")).toContain("releases its lock explicitly");
+  });
+
+  it("rejects closing the lock fd, which is the same early release spelled differently", () => {
+    const repo = healthy();
+    repo.installer = repo.installer.replace(
+      "docker exec oxagen-caddy caddy reload --config /etc/caddy/Caddyfile",
+      "docker exec oxagen-caddy caddy reload --config /etc/caddy/Caddyfile\nexec 200>&-",
+    );
+    expect(inspect(repo).join("\n")).toContain("releases its lock explicitly");
+  });
+
+  it("rejects dropping flock from the dependency check", () => {
+    const repo = healthy();
+    repo.installer = repo.installer.replace(
+      "for tool in jq python3 curl docker aws flock; do",
+      "for tool in jq python3 curl docker aws; do",
+    );
+    expect(inspect(repo).join("\n")).toContain(
+      "`flock` is missing from the remote script's dependency check",
+    );
+  });
+});
+
 describe("the bootstrap, which is the other end of the same defect", () => {
   it("rejects downloading straight over the live config", () => {
     // This is what made the publish-ordering bug reach production: an invalid
@@ -618,5 +686,225 @@ describe("the remote Caddy block, executed", () => {
     expect(second.code).toBe(0);
     expect(second.stdout).toContain("caddy config unchanged");
     expect(second.stdout).not.toContain("caddy reloaded");
+  });
+});
+
+/**
+ * Two installs racing on one node, EXECUTED.
+ *
+ * The block above is the same defect's single-run half. This is the concurrent
+ * half, and no reading of one run's source decides it either: `/tmp/
+ * Caddyfile.incoming` is a fixed path with no run id, so a second invocation
+ * can replace the staging file between the first one's fetch and its validate.
+ * The first run then validates and installs bytes it never downloaded, exits 0,
+ * and its caller promotes the candidate it DID download — publishing a render
+ * nothing validated and the node is not running.
+ *
+ * The assertion is therefore not "the second run was refused". A lock that
+ * refused every second run and still let the first validate foreign bytes would
+ * pass that. What is asserted is the guarantee itself: **the bytes a run
+ * validates are the bytes it installs**, which is the sentence the
+ * validate-before-publish ordering rests on and the one the race breaks.
+ *
+ * The stubs record the bytes at each step rather than counting calls, so the
+ * assertion reads the same thing an operator would check on the node.
+ */
+describe("two installs racing on one node, executed", () => {
+  const RENDER_A = "# render A\n:80 {\n}\n";
+  const RENDER_B = "# render B\n:8080 {\n}\n";
+
+  /**
+   * Run the caddy-install block with `aws` and `docker` stubbed, as above, but
+   * asynchronously and with each run's bytes recorded.
+   *
+   * Run A's fetch stub parks after writing, until run B's fetch has landed or a
+   * short bound elapses. Without a lock B's fetch lands in milliseconds and A
+   * wakes immediately into the race — a fast, deterministic red. With the lock B
+   * never reaches its fetch, so A waits out the bound and proceeds alone; the
+   * green path costs that bound once and cannot flake on scheduling.
+   */
+  function startRun({
+    root,
+    runId,
+    render,
+    parkForOther,
+  }: {
+    root: string;
+    runId: string;
+    render: string;
+    parkForOther: boolean;
+  }): Promise<{ code: number; stdout: string; stderr: string }> {
+    const block = caddyInstallBlock(
+      readFileSync(join(repoRoot, INSTALLER), "utf8"),
+    );
+    expect(block).not.toBeNull();
+
+    const bin = join(root, `bin-${runId}`);
+    mkdirSync(bin, { recursive: true });
+    const renderFile = join(root, `render-${runId}`);
+    writeFileSync(renderFile, render);
+
+    const incoming = join(root, "tmp/Caddyfile.incoming");
+    const live = join(root, "opt/oxagen/caddy/Caddyfile");
+
+    // `aws s3 cp <key> <dest>` — $4 is the destination, as in the harness above.
+    writeFileSync(
+      join(bin, "aws"),
+      `#!/bin/sh\n` +
+        `cp "${renderFile}" "$4"\n` +
+        `touch "${join(root, "fetched")}.${runId}"\n` +
+        (parkForOther
+          ? `i=0\n` +
+            `while [ ! -f "${join(root, "fetched")}.B" ] && [ $i -lt 40 ]; do\n` +
+            `  sleep 0.05; i=$((i+1))\n` +
+            `done\n`
+          : "") +
+        `exit 0\n`,
+      { mode: 0o755 },
+    );
+    // `docker run` is the validate; `docker exec` is the reload. Each records
+    // the bytes it actually saw, which is what the assertions compare.
+    writeFileSync(
+      join(bin, "docker"),
+      `#!/bin/sh\n` +
+        `case "$1" in\n` +
+        `  run) cp "${incoming}" "${join(root, "validated")}.${runId}" ;;\n` +
+        `  exec) cp "${live}" "${join(root, "reloaded")}.${runId}" ;;\n` +
+        `esac\n` +
+        `exit 0\n`,
+      { mode: 0o755 },
+    );
+
+    const script =
+      "set -euo pipefail\n" +
+      block!
+        .replaceAll("/opt/oxagen", join(root, "opt/oxagen"))
+        .replaceAll("/tmp/Caddyfile", join(root, "tmp/Caddyfile"))
+        .replaceAll("__BUCKET__", "bucket")
+        .replaceAll("__REGION__", "us-east-1")
+        .replaceAll("__CANDIDATE_KEY__", `candidate-${runId}`);
+
+    return new Promise((resolve) => {
+      const child = spawn("bash", ["-c", script], {
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}` },
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (d) => (stdout += String(d)));
+      child.stderr.on("data", (d) => (stderr += String(d)));
+      child.on("close", (code) =>
+        resolve({ code: code ?? -1, stdout, stderr }),
+      );
+    });
+  }
+
+  async function waitForFile(path: string, ms: number): Promise<void> {
+    const deadline = Date.now() + ms;
+    while (Date.now() < deadline) {
+      if (existsSync(path)) return;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+  }
+
+  it("never installs bytes a run did not validate", async () => {
+    const root = mkdtempSync(join(tmpdir(), "caddy-race-"));
+    mkdirSync(join(root, "opt/oxagen/caddy"), { recursive: true });
+    mkdirSync(join(root, "tmp"), { recursive: true });
+
+    // A starts, fetches, and parks inside the window the race needs.
+    const a = startRun({
+      root,
+      runId: "A",
+      render: RENDER_A,
+      parkForOther: true,
+    });
+    await waitForFile(join(root, "fetched.A"), 5_000);
+
+    // B arrives while A is still between its fetch and its validate.
+    const b = startRun({
+      root,
+      runId: "B",
+      render: RENDER_B,
+      parkForOther: false,
+    });
+    const [resA, resB] = await Promise.all([a, b]);
+
+    // The guarantee, and it has to REQUIRE the evidence rather than check it
+    // where it happens to exist. Two earlier drafts of this case passed against
+    // the unlocked installer, each for its own vacuity, and both are worth
+    // naming because they are the failure mode this whole file is about:
+    //
+    //   - gating the comparison on `code === 0` excused run A in exactly the
+    //     interleaving it exists to catch;
+    //   - gating it on the recording FILE existing excused A again, because
+    //     unlocked A never reaches its validate at all: B removes the shared
+    //     `/tmp/Caddyfile.incoming` on its way out, so A's validate has nothing
+    //     to read, and an absent record read as "nothing to check".
+    //
+    // A run that fetched must go on to validate and install its OWN bytes.
+    // Nothing weaker distinguishes the fix, because every weaker form is
+    // satisfied by a run that was destroyed mid-flight — which is not the
+    // guarantee holding, it is the race with a louder symptom. Both runs get
+    // through here by construction: A holds the lock for the parking bound and
+    // B's bounded wait is far longer, so neither is ever refused in this case.
+    for (const [runId, render] of [
+      ["A", RENDER_A],
+      ["B", RENDER_B],
+    ] as const) {
+      const validatedPath = join(root, `validated.${runId}`);
+      expect(
+        existsSync(validatedPath),
+        `run ${runId} never validated anything`,
+      ).toBe(true);
+      expect(readFileSync(validatedPath, "utf8")).toBe(render);
+
+      const reloadedPath = join(root, `reloaded.${runId}`);
+      expect(
+        existsSync(reloadedPath),
+        `run ${runId} never reloaded anything`,
+      ).toBe(true);
+      expect(readFileSync(reloadedPath, "utf8")).toBe(render);
+    }
+
+    // The node ends on a render some run both validated and reloaded — never a
+    // mixture, and never the untouched starting state.
+    const final = readFileSync(
+      join(root, "opt/oxagen/caddy/Caddyfile"),
+      "utf8",
+    );
+    expect([RENDER_A, RENDER_B]).toContain(final);
+  });
+
+  it("serialises the second install instead of interleaving with it", async () => {
+    // The mechanism, as distinct from the guarantee above. The guarantee case
+    // tolerates a refused run; this one asserts that a run held at the lock for
+    // less than its bounded wait goes on to complete on its own render, so a
+    // "lock" that simply failed every concurrent second run cannot pass both.
+    const root = mkdtempSync(join(tmpdir(), "caddy-race-refuse-"));
+    mkdirSync(join(root, "opt/oxagen/caddy"), { recursive: true });
+    mkdirSync(join(root, "tmp"), { recursive: true });
+
+    const a = startRun({
+      root,
+      runId: "A",
+      render: RENDER_A,
+      parkForOther: true,
+    });
+    await waitForFile(join(root, "fetched.A"), 5_000);
+    const b = startRun({
+      root,
+      runId: "B",
+      render: RENDER_B,
+      parkForOther: false,
+    });
+    const [resA, resB] = await Promise.all([a, b]);
+
+    expect(resA.code).toBe(0);
+    // B waited on the lock for longer than A held it, so B is not refused here;
+    // what must be true is that it did not run INSIDE A. Its fetch cannot have
+    // landed before A finished validating.
+    expect(resB.code).toBe(0);
+    expect(readFileSync(join(root, "validated.A"), "utf8")).toBe(RENDER_A);
+    expect(readFileSync(join(root, "validated.B"), "utf8")).toBe(RENDER_B);
   });
 });

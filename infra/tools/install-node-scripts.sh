@@ -182,12 +182,14 @@ CANDIDATE_UPLOADED=1
 read -r -d '' REMOTE_TEMPLATE <<'REMOTE_EOF' || true
 set -euxo pipefail
 mkdir -p /opt/oxagen/bin /opt/oxagen/services
-aws s3 sync s3://__BUCKET__/_bin/ /opt/oxagen/bin/ --region __REGION__ --delete
-chmod 0755 /opt/oxagen/bin/*.sh
 # Fail the install rather than the first deploy if a dependency is missing.
-for tool in jq python3 curl docker aws; do
+# `flock` is on this list because the Caddy block below is serialised with it,
+# and a missing flock would otherwise read as "no other install is running".
+for tool in jq python3 curl docker aws flock; do
   command -v "$tool" >/dev/null || { echo "missing dependency: $tool"; exit 1; }
 done
+aws s3 sync s3://__BUCKET__/_bin/ /opt/oxagen/bin/ --region __REGION__ --delete
+chmod 0755 /opt/oxagen/bin/*.sh
 bash -n /opt/oxagen/bin/deploy-service.sh
 ls -l /opt/oxagen/bin
 
@@ -202,6 +204,57 @@ ls -l /opt/oxagen/bin
 # promotes — which is what keeps a bad render out of the object a future node
 # boots from.
 # >>> caddy-install
+# One install at a time on this node, across fetch, validate, swap and reload.
+#
+# Everything from here to the end of this block is shared, mutable node state:
+# the staging file `/tmp/Caddyfile.incoming` is a fixed path with no run id in
+# it, and `/opt/oxagen/caddy/Caddyfile`, its `.prev`, and the running Caddy
+# process are the node itself and cannot be given a per-run copy. Two invocations
+# — an operator retrying while the first SSM command is still in flight, which
+# is exactly what a node replacement invites — interleave like this:
+#
+#   A fetches its candidate      -> incoming = bytesA
+#   B fetches its candidate      -> incoming = bytesB   (same path, overwritten)
+#   A validates                  -> validates bytesB
+#   A swaps and reloads          -> the node runs bytesB
+#   A exits 0, SSM reports Success, and A's caller promotes CANDIDATE A
+#
+# The canonical object is then bytesA: a render no node validated, and not the
+# one this node is running. That is the validate-before-publish guarantee
+# inverted — the publish happens, and what it publishes is the thing that was
+# never checked. B tearing the staging file out from under A is the same race
+# with a louder symptom, not a milder one.
+#
+# Isolating the staging file per run does NOT fix this, which is why there is
+# one mechanism here and not two. The swap window is the same defect without the
+# staging file: B copies the live config to `.prev` while A has already written
+# its unaccepted candidate there, so B's rollback target is a config nothing
+# accepted, and either trap can then restore it over the other run's work. Those
+# paths are the node's state, so the only thing that can be made exclusive is
+# the RUN.
+#
+# The lock is released by process exit and by nothing else. That ordering is
+# load-bearing: bash runs EXIT traps before the process exits, so
+# `caddy_restore_if_unaccepted` below runs while this run still holds the lock
+# and cannot restore a file another run is midway through staging. Never add
+# `flock -u` or `exec 200>&-` — an early release puts back the worse half of the
+# bug this closes, with the rollback path inside the race instead of the swap.
+#
+# A bounded wait rather than an indefinite one: a near-simultaneous double-send
+# is absorbed, a genuine overlap is refused with a reason inside the caller's
+# poll window, and the refusal fails the run — so SSM reports Failed and the
+# caller does not promote. Queueing is safe when it happens, because a waiter
+# cannot finish before the run it waited on, so the later promotion carries the
+# later render.
+mkdir -p /opt/oxagen/caddy
+exec 200>/opt/oxagen/caddy-install.lock
+if ! flock -x -w 60 200; then
+  echo "CADDY: another install holds /opt/oxagen/caddy-install.lock — not proceeding." >&2
+  echo "      Wait for the in-flight run to finish, then retry. Nothing was changed" >&2
+  echo "      on this node and no candidate was promoted." >&2
+  exit 1
+fi
+
 aws s3 cp s3://__BUCKET__/__CANDIDATE_KEY__ /tmp/Caddyfile.incoming --region __REGION__
 docker run --rm -v /tmp/Caddyfile.incoming:/etc/caddy/Caddyfile:ro caddy:2 \
   caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
