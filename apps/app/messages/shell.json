@@ -82,7 +82,8 @@
       "emailHint": "Your email is how you sign in and cannot be changed here.",
       "invalid": "That display name or avatar was refused. A name is 1 to 120 characters; an avatar is an https URL.",
       "denied": "You do not have permission to change this profile.",
-      "failed": "That could not be saved. Try again."
+      "failed": "That could not be saved. Try again.",
+      "avatarPlaceholder": "https://"
     }
   }
 }

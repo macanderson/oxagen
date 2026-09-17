@@ -114,8 +114,7 @@ describe("AccountDialog", () => {
     });
     await user.click(screen.getByRole("button", { name: "Save" }));
 
-    const field = await screen.findByTestId("account-avatar-url");
-    expect((field as HTMLInputElement).value).toBe(
+    expect(await screen.findByTestId("account-avatar-url")).toHaveValue(
       "https://cdn.example/stored.png",
     );
   });
@@ -162,14 +161,12 @@ describe("AccountDialog", () => {
 
   it("keeps email out of reach: it is shown, disabled, and never sent", async () => {
     const { user } = await openDialog();
-    const email = screen.getByLabelText("Email") as HTMLInputElement;
-    expect(email.disabled).toBe(true);
-    expect(email.readOnly).toBe(true);
+    const email = screen.getByLabelText("Email");
+    expect(email).toBeDisabled();
+    expect(email).toHaveAttribute("readonly");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(Object.keys(updateProfile.mock.calls[0]?.[1] ?? {})).toEqual([
-      "displayName",
-      "avatarUrl",
-    ]);
+    const draft: unknown = updateProfile.mock.calls[0]?.[1];
+    expect(Object.keys(draft ?? {})).toEqual(["displayName", "avatarUrl"]);
   });
 
   it("names a person with no recorded name by their email", async () => {

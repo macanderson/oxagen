@@ -82,7 +82,7 @@ describe("updateProfile", () => {
     invoke.mockResolvedValue({
       displayName: "Marcus B",
       avatarUrl: null,
-    } as never);
+    });
     const result = await updateProfile("acme", {
       displayName: "Marcus B",
       avatarUrl: "",
@@ -97,7 +97,7 @@ describe("updateProfile", () => {
     invoke.mockResolvedValue({
       displayName: "Marcus B",
       avatarUrl: null,
-    } as never);
+    });
     await updateProfile("acme", { displayName: "Marcus B", avatarUrl: "" });
     expect(invoke).toHaveBeenCalledWith(
       "update_profile",
@@ -110,7 +110,7 @@ describe("updateProfile", () => {
     invoke.mockResolvedValue({
       displayName: "Marcus B",
       avatarUrl: "https://cdn.example/a.png",
-    } as never);
+    });
     await updateProfile("acme", {
       displayName: "Marcus B",
       avatarUrl: "https://cdn.example/a.png",
@@ -126,9 +126,12 @@ describe("updateProfile", () => {
     invoke.mockResolvedValue({
       displayName: "Marcus B",
       avatarUrl: null,
-    } as never);
+    });
     await updateProfile("acme", { displayName: "Marcus B", avatarUrl: "" });
-    const input = invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(Object.keys(input).sort()).toEqual(["avatarUrl", "displayName"]);
+    const input = invoke.mock.calls[0]?.[1];
+    expect(Object.keys(input ?? {}).sort()).toEqual([
+      "avatarUrl",
+      "displayName",
+    ]);
   });
 });

@@ -97,9 +97,10 @@ function AccountForm({ data }: { data: ShellData }) {
 
       <div className="mb-5 flex items-center gap-3.5">
         {avatarUrl.startsWith("https://") ? (
-          // eslint-disable-next-line @next/next/no-img-element -- an arbitrary
-          // remote avatar cannot be in next.config's image allowlist, and this
-          // is a 52px chrome ornament, not page content worth optimising.
+          /* An arbitrary remote avatar cannot be in next.config's image
+             allowlist, and this is a 52px chrome ornament, not page content
+             worth optimising. */
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={avatarUrl}
             alt=""
@@ -146,7 +147,7 @@ function AccountForm({ data }: { data: ShellData }) {
             data-testid="account-avatar-url"
             className={inputBase}
             value={avatarUrl}
-            placeholder="https://"
+            placeholder={t("avatarPlaceholder")}
             onChange={(e) => {
               setAvatarUrl(e.target.value);
             }}
