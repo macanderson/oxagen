@@ -3344,7 +3344,7 @@
       "writes": []
     }
   ],
-  "contentHash": "df9c7478412a3608783aee9d6e22275d5fada534a867b9227426bdb4ca7be38e",
+  "contentHash": "7e5818ec4f852b781d33b258ce47ec344f014fa7e47bf83350033d6091571fa8",
   "domains": [
     {
       "name": "agent",
@@ -18946,12 +18946,6 @@
         },
         {
           "name": "anthropic_user_id_hash",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "anthropic_user_email",
           "nullable": true,
           "primaryKey": false,
           "type": "text"

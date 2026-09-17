@@ -31,6 +31,13 @@ One session's flight-recorder index (`docs/specs/tacho/data-model.md` section 3)
 | `incidents` | object[] | |
 | `checkpointCount` | integer | |
 
+The session projection does not name the person by address, and carries nothing
+derived from one. It carries the principals this deployment issued —
+`agentPrincipalId`, `initiatingPrincipalId`, `initiatingUserId` — which a
+producer cannot choose. An earlier design returned a keyed digest of the
+address here; because a host key may ingest events and an org Member may read
+this output, that made the pair into a dictionary oracle (ADR-084).
+
 ## Honesty
 
 Records from a Tacho host are `client_attested` evidence (ADR-040 section 4): Oxagen can prove what was reported and detect tampering and gaps, and hook-based denial is enforcement at the harness, not at a gateway. Every session carries its `enforcementTier`; nothing here claims prevention where it has observation.

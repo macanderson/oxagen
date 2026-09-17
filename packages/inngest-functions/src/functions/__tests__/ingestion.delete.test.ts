@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SQL } from "drizzle-orm";
 
 // ── Hoisted mocks ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
@@ -445,6 +447,144 @@ describe("ingestion.delete-connection Inngest function", () => {
         );
         expect(stepNames[0]).toBe("mark-deleting");
       }
+    });
+  });
+
+  // ── Graph-progress counters (production defect, 2026-09-17) ────────────────
+  //
+  // Neo4j's `count()` arrives as the driver's Integer ({low, high}), and
+  // `Integer + Integer` coerces through Symbol.toPrimitive to a **BigInt**.
+  // Inngest memoizes each step's output as JSON, which cannot represent a
+  // BigInt, so the summed `deleted` key was dropped from the memoized output
+  // and the handler read `undefined` on replay. drizzle's `sql` tag emits an
+  // EMPTY CHUNK for `undefined` — no placeholder, no parameter — so the
+  // finalize UPDATE went out as the literal text
+  //   SET deleted_entities = , alias_promotions = $1
+  // and Postgres rejected it with a syntax error at character 187, every
+  // ~65 seconds, leaving five deletion_jobs rows stuck in 'running' (the
+  // oldest for a week) because each Inngest retry failed the same way.
+  //
+  // These tests drive the real shapes through the real memoization, and assert
+  // on the RENDERED SQL — the text Postgres would actually parse — because an
+  // assertion over drizzle's string chunks alone cannot see a missing param.
+  describe("graph progress counters survive memoization as numbers", () => {
+    /**
+     * Stand-in for neo4j-driver's Integer. Only the two properties that caused
+     * the outage are modelled, both verified against neo4j-driver 5.28.3:
+     * `toNumber()` returns a JS number, and arithmetic coerces to a BigInt.
+     */
+    function neoInt(n: number): object {
+      return {
+        low: n,
+        high: 0,
+        toNumber: () => n,
+        [Symbol.toPrimitive]: (hint: string) =>
+          hint === "string" ? String(n) : BigInt(n),
+      };
+    }
+
+    /**
+     * A step runner that memoizes like Inngest: the callback's return value
+     * makes a JSON round-trip, and anything JSON cannot represent is dropped
+     * rather than thrown. `makeStep` above hands the value back untouched, so
+     * only this one reproduces the replay path the defect lived on.
+     */
+    function makeMemoizingStep(): HandlerCtx["step"] {
+      return {
+        run: vi.fn(async (_name: string, fn: () => unknown) => {
+          const out = await fn();
+          return JSON.parse(
+            JSON.stringify(out, (_k, v) =>
+              typeof v === "bigint" ? undefined : v,
+            ) ?? "null",
+          );
+        }),
+      };
+    }
+
+    /** The SQL Postgres would parse, plus its bound parameters. */
+    function rendered(arg: unknown): { sql: string; params: unknown[] } {
+      const q = new PgDialect().sqlToQuery(arg as SQL);
+      return { sql: q.sql, params: q.params };
+    }
+
+    function finalizeQuery(
+      mockExecute: ReturnType<typeof vi.fn>,
+    ): { sql: string; params: unknown[] } | undefined {
+      return mockExecute.mock.calls
+        .map(([arg]) => rendered(arg))
+        .find((q) => q.sql.includes("deleted_entities"));
+    }
+
+    beforeEach(() => {
+      mocks.scopedSession.mockReturnValue({
+        run: mocks.scopedSessionRun,
+        close: mocks.scopedSessionClose,
+      });
+    });
+
+    it("binds both counters as parameters when Neo4j returns driver Integers", async () => {
+      mocks.scopedSessionRun.mockResolvedValue({
+        records: [{ get: (_k: string) => neoInt(3190) }],
+      });
+      const mockExecute = vi.fn().mockResolvedValue([]);
+      setupTenantDb(mockExecute);
+
+      await capturedHandler!({
+        event: { data: { ...BASE_EVENT, mode: "full" } },
+        step: makeMemoizingStep(),
+      });
+
+      const q = finalizeQuery(mockExecute);
+      expect(q).toBeDefined();
+      // The defect rendered `deleted_entities = ,` — a parameter that vanished.
+      expect(q!.sql).not.toMatch(/deleted_entities\s*=\s*,/);
+      expect(q!.sql).toMatch(/deleted_entities\s*=\s*\$\d/);
+      expect(q!.sql).toMatch(/alias_promotions\s*=\s*\$\d/);
+    });
+
+    it("writes plain numbers, never the driver's {low, high} object", async () => {
+      mocks.scopedSessionRun.mockResolvedValue({
+        records: [{ get: (_k: string) => neoInt(7) }],
+      });
+      const mockExecute = vi.fn().mockResolvedValue([]);
+      setupTenantDb(mockExecute);
+
+      await capturedHandler!({
+        event: { data: { ...BASE_EVENT, mode: "full" } },
+        step: makeMemoizingStep(),
+      });
+
+      const q = finalizeQuery(mockExecute)!;
+      // Pass 2 (7) + Pass 3 (7) deleted; Pass 1 promoted 7.
+      expect(q.params).toContain(14);
+      expect(q.params).toContain(7);
+      for (const p of q.params) expect(typeof p).not.toBe("object");
+    });
+
+    it("falls back to zero when the memoized step output lost a counter", async () => {
+      mocks.scopedSessionRun.mockResolvedValue({
+        records: [{ get: (_k: string) => neoInt(5) }],
+      });
+      const mockExecute = vi.fn().mockResolvedValue([]);
+      setupTenantDb(mockExecute);
+      // A step that replays output missing `deleted` entirely — the exact
+      // shape production read back. The finalizer must still emit valid SQL.
+      const step: HandlerCtx["step"] = {
+        run: vi.fn(async (name: string, fn: () => unknown) => {
+          const out = await fn();
+          return name === "delete-neo4j-data" ? { promoted: 5 } : out;
+        }),
+      };
+
+      await capturedHandler!({
+        event: { data: { ...BASE_EVENT, mode: "full" } },
+        step,
+      });
+
+      const q = finalizeQuery(mockExecute)!;
+      expect(q.sql).not.toMatch(/deleted_entities\s*=\s*,/);
+      expect(q.params).toContain(0);
     });
   });
 });

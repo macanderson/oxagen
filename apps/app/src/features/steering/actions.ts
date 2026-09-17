@@ -22,7 +22,9 @@ export async function openContextPr(
 > {
   const ctx = await requireViewer(org, ws);
   const result = await kernelWrite(ctx, contextPrOpen, { proposalId });
-  return result.ok ? { ok: true, value: { status: result.value.status } } : result;
+  return result.ok
+    ? { ok: true, value: { status: result.value.status } }
+    : result;
 }
 
 /** Merges the pull request once every check passed; merge publishes the record. */
@@ -50,5 +52,7 @@ export async function dismissProposal(
     proposalId,
     reason: reason.trim(),
   });
-  return result.ok ? { ok: true, value: { status: result.value.status } } : result;
+  return result.ok
+    ? { ok: true, value: { status: result.value.status } }
+    : result;
 }
