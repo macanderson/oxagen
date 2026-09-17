@@ -26,7 +26,8 @@ const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...real, withTenantDb: mocks.withTenantDb };
+  const __dbMock = { ...real, withTenantDb: mocks.withTenantDb };
+  return { ...__dbMock, withOrgDb: __dbMock.withTenantDb };
 });
 
 import {
