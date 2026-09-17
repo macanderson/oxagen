@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyInstaller,
+  countPublishedObjects,
+  decidePublication,
   formatSize,
   type PageEntry,
+  type PublicationProbe,
   renderIndexHtml,
+  reservationArgs,
   sha256SumsText,
   sortInstallers,
 } from "./downloads";
@@ -115,5 +119,134 @@ describe("page helpers", () => {
     });
     expect(hostile).not.toContain("<script>");
     expect(hostile).toContain("2&quot;&lt;b&gt;");
+  });
+});
+
+const OK: PublicationProbe = {
+  status: 0,
+  signal: null,
+  spawnFailed: false,
+  stdout: "",
+};
+const OPTS = {
+  version: V,
+  prefix: `s3://bucket/desktop/${V}`,
+  allowOverwrite: false,
+};
+const decide = (probe: Partial<PublicationProbe>, allowOverwrite = false) =>
+  decidePublication({ ...OK, ...probe }, { ...OPTS, allowOverwrite });
+
+describe("countPublishedObjects", () => {
+  it("reads no output as a prefix that holds nothing", () => {
+    expect(countPublishedObjects("")).toBe(0);
+    expect(countPublishedObjects("  \n ")).toBe(0);
+  });
+
+  it("reads a listing with no Contents as a prefix that holds nothing", () => {
+    expect(countPublishedObjects('{"RequestCharged": null}')).toBe(0);
+    expect(countPublishedObjects('{"Contents": null}')).toBe(0);
+  });
+
+  it("counts the keys a listing reports", () => {
+    expect(
+      countPublishedObjects(
+        JSON.stringify({ Contents: [{ Key: `desktop/${V}/SHA256SUMS.txt` }] }),
+      ),
+    ).toBe(1);
+  });
+
+  it("refuses to round an unreadable answer down to zero", () => {
+    expect(countPublishedObjects("not json")).toBeNull();
+    expect(countPublishedObjects("null")).toBeNull();
+    expect(countPublishedObjects('"a string"')).toBeNull();
+    expect(countPublishedObjects('{"Contents": 3}')).toBeNull();
+  });
+});
+
+describe("decidePublication", () => {
+  it("publishes a version whose prefix holds nothing", () => {
+    expect(decide({ stdout: "" })).toEqual({ action: "publish" });
+  });
+
+  it("stops on a version that is already published", () => {
+    const got = decide({
+      stdout: JSON.stringify({ Contents: [{ Key: "k" }] }),
+    });
+    expect(got.action).toBe("stop");
+    expect(got).toMatchObject({ code: 1 });
+    if (got.action !== "stop") throw new Error("unreachable");
+    expect(got.message).toContain("already published");
+    expect(got.message).toContain("--allow-overwrite");
+  });
+
+  it("overwrites an already published version only when told to", () => {
+    const got = decide(
+      { stdout: JSON.stringify({ Contents: [{ Key: "k" }] }) },
+      true,
+    );
+    expect(got.action).toBe("overwrite");
+    if (got.action !== "overwrite") throw new Error("unreachable");
+    expect(got.message).toContain("overwriting the published");
+  });
+
+  it("stops on every nonzero exit status, whatever --allow-overwrite says", () => {
+    // 1 is the status `aws s3 ls` overloads for "empty prefix"; 253/254/255
+    // are the aws-cli configuration/client/general failures. None of them is
+    // an answer from `s3api list-objects-v2`, so none may be read as one.
+    for (const status of [1, 2, 130, 252, 253, 254, 255]) {
+      for (const allowOverwrite of [false, true]) {
+        const got = decide({ status }, allowOverwrite);
+        expect(got.action).toBe("stop");
+        if (got.action !== "stop") throw new Error("unreachable");
+        expect(got.message).toContain(`exited ${status}`);
+        expect(got.message).toContain("unknown");
+      }
+    }
+  });
+
+  it("stops when aws never ran", () => {
+    const got = decide({ status: null, spawnFailed: true });
+    expect(got.action).toBe("stop");
+    if (got.action !== "stop") throw new Error("unreachable");
+    expect(got.message).toContain("could not be run");
+  });
+
+  it("stops when aws was killed by a signal", () => {
+    const got = decide({ status: null, signal: "SIGKILL" });
+    expect(got.action).toBe("stop");
+    if (got.action !== "stop") throw new Error("unreachable");
+    expect(got.message).toContain("SIGKILL");
+  });
+
+  it("stops when the listing cannot be read", () => {
+    const got = decide({ stdout: "<html>proxy error</html>" });
+    expect(got.action).toBe("stop");
+    if (got.action !== "stop") throw new Error("unreachable");
+    expect(got.message).toContain("not JSON");
+  });
+});
+
+describe("reservationArgs", () => {
+  const base = {
+    bucket: "oxagen-downloads",
+    key: `desktop/${V}/SHA256SUMS.txt`,
+    body: "/tmp/SHA256SUMS.txt",
+    cacheControl: "public, max-age=31536000, immutable",
+  };
+
+  it("claims the version with a conditional write", () => {
+    const args = reservationArgs({ ...base, allowOverwrite: false });
+    expect(args.slice(0, 2)).toEqual(["s3api", "put-object"]);
+    expect(args).toContain("--if-none-match");
+    expect(args[args.indexOf("--if-none-match") + 1]).toBe("*");
+    expect(args[args.indexOf("--key") + 1]).toBe(base.key);
+    expect(args[args.indexOf("--body") + 1]).toBe(base.body);
+    expect(args[args.indexOf("--cache-control") + 1]).toBe(base.cacheControl);
+  });
+
+  it("drops the condition only for --allow-overwrite", () => {
+    const args = reservationArgs({ ...base, allowOverwrite: true });
+    expect(args).not.toContain("--if-none-match");
+    expect(args).not.toContain("*");
   });
 });

@@ -207,3 +207,140 @@ ${section("Linux", "x86_64. Install the package for your distribution; the AppIm
 </html>
 `;
 }
+
+/**
+ * What `aws` reported when asked whether a version is already published.
+ *
+ * `status` is `null` when the process never ran or was killed, which is why
+ * it is kept separate from `spawnFailed` and `signal` rather than coerced to
+ * a number: an exit code the CLI never produced must not be mistaken for one
+ * it did.
+ */
+export interface PublicationProbe {
+  status: number | null;
+  signal: string | null;
+  spawnFailed: boolean;
+  /** Captured stdout — the `list-objects-v2` JSON, or "" for no keys. */
+  stdout: string;
+}
+
+export type PublicationDecision =
+  | { action: "publish" }
+  | { action: "overwrite"; message: string }
+  | { action: "stop"; code: number; message: string };
+
+/**
+ * How many objects the probe found, or `null` when its output cannot be read.
+ *
+ * `aws s3api list-objects-v2` prints nothing when a prefix holds no keys and
+ * a JSON object with a `Contents` array when it holds some, so an empty
+ * capture is a real answer. Anything else — output that is not JSON, or a
+ * `Contents` that is not an array — is no answer at all and must not be
+ * rounded down to zero.
+ */
+export function countPublishedObjects(stdout: string): number | null {
+  const text = stdout.trim();
+  if (text === "") return 0;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (parsed === null || typeof parsed !== "object") return null;
+  const contents = (parsed as { Contents?: unknown }).Contents;
+  if (contents === undefined || contents === null) return 0;
+  if (!Array.isArray(contents)) return null;
+  return contents.length;
+}
+
+/**
+ * Whether to publish, overwrite or stop, given what the probe reported.
+ *
+ * Versioned download URLs are served `immutable, max-age=31536000`, a promise
+ * to every cache downstream of CloudFront and not only to the edge, so a
+ * republished version can stay wrong in a browser or a corporate proxy for
+ * the rest of the year no matter what is invalidated. The only safe answers
+ * are "this version is new" and "stop": every way of *not knowing* — the CLI
+ * failing, being killed, or answering something unreadable — stops, because
+ * reading a failed probe as "not published yet" would turn the one check
+ * standing between a republish and a split fleet into a no-op exactly when it
+ * is least safe to skip.
+ */
+export function decidePublication(
+  probe: PublicationProbe,
+  options: { version: string; prefix: string; allowOverwrite: boolean },
+): PublicationDecision {
+  const unknown = (why: string): PublicationDecision => ({
+    action: "stop",
+    code: 1,
+    message:
+      `✖ ${why}, so whether ${options.version} is already published is\n` +
+      "  unknown; refusing rather than risk overwriting it.",
+  });
+  if (probe.spawnFailed) return unknown("aws could not be run");
+  if (probe.signal !== null && probe.signal !== undefined)
+    return unknown(`aws was killed by ${probe.signal}`);
+  if (probe.status !== 0)
+    return unknown(`aws s3api list-objects-v2 exited ${probe.status}`);
+  const objects = countPublishedObjects(probe.stdout);
+  if (objects === null)
+    return unknown("aws printed a listing that is not JSON");
+  if (objects === 0) return { action: "publish" };
+  if (!options.allowOverwrite)
+    return {
+      action: "stop",
+      code: 1,
+      message:
+        `✖ ${options.version} is already published at ${options.prefix}/.\n` +
+        "  Those URLs were served as immutable, so caches downstream of\n" +
+        "  CloudFront may hold the old installers for up to a year and no\n" +
+        "  invalidation can reach them. Ship the fix as a new version.\n" +
+        "  If nobody was ever given these URLs, re-run with --allow-overwrite.",
+    };
+  return {
+    action: "overwrite",
+    message:
+      `! overwriting the published ${options.version}; only caches that never\n` +
+      "  fetched these URLs will see the new installers",
+  };
+}
+
+/**
+ * The `aws s3api put-object` argv that reserves a version by writing its
+ * checksum file.
+ *
+ * `--if-none-match "*"` is the whole point: S3 resolves the conditional write
+ * atomically, so of two publishes of the same new version exactly one gets a
+ * 2xx and the other a 412 — before either has uploaded an installer. Without
+ * it, two invocations that both saw an empty prefix interleave their uploads
+ * and can leave immutable installer URLs from one publish under a
+ * SHA256SUMS.txt from the other. --allow-overwrite drops the condition,
+ * because overwriting what is already there is exactly what that flag asks
+ * for.
+ */
+export function reservationArgs(input: {
+  bucket: string;
+  key: string;
+  body: string;
+  cacheControl: string;
+  allowOverwrite: boolean;
+}): string[] {
+  const args = [
+    "s3api",
+    "put-object",
+    "--bucket",
+    input.bucket,
+    "--key",
+    input.key,
+    "--body",
+    input.body,
+    "--content-type",
+    "text/plain; charset=utf-8",
+    "--cache-control",
+    input.cacheControl,
+    "--no-cli-pager",
+  ];
+  if (!input.allowOverwrite) args.push("--if-none-match", "*");
+  return args;
+}

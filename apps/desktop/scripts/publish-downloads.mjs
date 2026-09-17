@@ -8,13 +8,15 @@
  * With --run it fetches every artifact of a `.github/workflows/desktop.yml`
  * run; with --dir it takes installers already on disk. Either way it keeps
  * only the files that are installers for --version (default: this package's
- * version), hashes them, and uploads to s3://<bucket>/desktop/<version>/
- * with the right content types, then writes SHA256SUMS.txt there and the
- * listing page at the bucket root, and invalidates the page on CloudFront.
+ * version), hashes them, writes SHA256SUMS.txt to
+ * s3://<bucket>/desktop/<version>/ as a conditional write that reserves the
+ * version, uploads the installers there with the right content types, then
+ * writes the listing page at the bucket root and invalidates it on CloudFront.
  *
  * Versioned URLs are served immutable, so a version that is already published
- * is refused: a fix ships as a new version. --allow-overwrite is the escape
- * hatch for a publish nobody was given the URLs to.
+ * is refused, and a version two invocations race for is won by one of them:
+ * a fix ships as a new version. --allow-overwrite is the escape hatch for a
+ * publish nobody was given the URLs to.
  *
  * Artifacts are streamed to disk with curl rather than `gh run download`,
  * which holds each zip in memory and is killed on a loaded machine (the
@@ -40,7 +42,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   classifyInstaller,
+  decidePublication,
   renderIndexHtml,
+  reservationArgs,
   sha256SumsText,
   sortInstallers,
 } from "../src/downloads.ts";
@@ -90,12 +94,22 @@ function sh(command, args, { capture = false, allowFailure = false } = {}) {
     env: NO_COLOUR_ENV,
     stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit",
   });
-  if (result.status !== 0 && !allowFailure) {
+  // `status` is null when the process never ran (spawn failed) or was killed
+  // by a signal. Coercing that to a number would let "aws was not on PATH" or
+  // "aws was OOM-killed" arrive at a caller as an exit code the CLI never
+  // produced, so the raw outcome is handed over intact and every caller that
+  // tolerates failure decides for itself.
+  if (allowFailure)
+    return {
+      status: result.status,
+      signal: result.signal ?? null,
+      spawnFailed: result.error !== undefined,
+      stdout: result.stdout ?? "",
+    };
+  if (result.status !== 0) {
     console.error(`✖ ${command} ${args.join(" ")} exited ${result.status}`);
     process.exit(result.status ?? 1);
   }
-  if (allowFailure)
-    return { status: result.status ?? 1, stdout: result.stdout ?? "" };
   return capture ? result.stdout : "";
 }
 
@@ -117,6 +131,7 @@ function sha256(path) {
 }
 
 const prefix = `s3://${bucket}/desktop/${version}`;
+const keyPrefix = `desktop/${version}/`;
 
 // `immutable, max-age=31536000` is a promise to every cache that fetched the
 // URL, not just to CloudFront. Overwriting the object cannot take that promise
@@ -128,42 +143,44 @@ const prefix = `s3://${bucket}/desktop/${version}`;
 // checksum. --allow-overwrite is for the publish that failed before anyone was
 // given the URL, where nothing downstream can hold a stale copy.
 //
-// The probe runs before anything is fetched, so a refusal costs one
-// ListObjects rather than ~500 MB of downloaded artifacts and a pass of
-// SHA-256 over them — and leaves no temp directory behind, since it precedes
-// the mkdtemp below.
-const published = sh("aws", ["s3", "ls", `${prefix}/`], {
-  capture: true,
-  allowFailure: true,
-});
-// `aws s3 ls` exits 1 on a prefix that holds no objects, which is the answer
-// this wants. Anything above that is the CLI itself failing — bad credentials,
-// no such bucket — and reading that as "not published yet" would turn the one
-// check standing between a republish and a split fleet into a no-op exactly
-// when it is least safe to skip.
-if (published.status > 1) {
-  console.error(
-    `✖ aws s3 ls ${prefix}/ exited ${published.status}, so whether ${version} is\n` +
-      "  already published is unknown; refusing rather than risk overwriting it.",
-  );
-  process.exit(published.status);
+// The probe is `s3api list-objects-v2`, not `aws s3 ls`, because this guard
+// must be able to tell "nothing is there" from "I could not find out", and
+// `s3 ls` cannot say it: given a key it runs `_check_no_objects()` and exits 1
+// for a prefix that holds nothing, so 1 means both "empty" and, per the
+// documented return codes, "the S3 command failed". A guard that reads a
+// failure as "empty" fails open exactly when it matters — an expired session,
+// a transient S3 error, or a principal holding PutObject without ListBucket
+// would all wave a republish through. `list-objects-v2` exits 0 only when the
+// listing succeeded, so here every nonzero status, every signal, and every
+// unreadable answer stops the publish.
+//
+// It runs before anything is fetched, so a refusal costs one ListObjects
+// rather than ~500 MB of downloaded artifacts and a pass of SHA-256 over
+// them — and leaves no temp directory behind, since it precedes the mkdtemp
+// below.
+const probe = sh(
+  "aws",
+  [
+    "s3api",
+    "list-objects-v2",
+    "--bucket",
+    bucket,
+    "--prefix",
+    keyPrefix,
+    "--max-items",
+    "1",
+    "--output",
+    "json",
+    "--no-cli-pager",
+  ],
+  { capture: true, allowFailure: true },
+);
+const decision = decidePublication(probe, { version, prefix, allowOverwrite });
+if (decision.action === "stop") {
+  console.error(decision.message);
+  process.exit(decision.code);
 }
-if (published.status === 0 && published.stdout.trim() !== "") {
-  if (!allowOverwrite) {
-    console.error(
-      `✖ ${version} is already published at ${prefix}/.\n` +
-        "  Those URLs were served as immutable, so caches downstream of\n" +
-        "  CloudFront may hold the old installers for up to a year and no\n" +
-        "  invalidation can reach them. Ship the fix as a new version.\n" +
-        "  If nobody was ever given these URLs, re-run with --allow-overwrite.",
-    );
-    process.exit(1);
-  }
-  console.warn(
-    `! overwriting the published ${version}; only caches that never fetched\n` +
-      "  these URLs will see the new installers",
-  );
-}
+if (decision.action === "overwrite") console.warn(decision.message);
 
 // 1. Collect the build outputs.
 const work = mkdtempSync(join(tmpdir(), "oxagen-downloads-"));
@@ -250,9 +267,9 @@ writeFileSync(
   }),
 );
 
-// 4. Upload. Versioned paths are immutable (a fix ships as a new version,
-// enforced above), so they cache for a year; the page is short-lived because
-// it moves with every release.
+// 4. Reserve the version, then upload. Versioned paths are immutable (a fix
+// ships as a new version, enforced above), so they cache for a year; the page
+// is short-lived because it moves with every release.
 const upload = (path, key, contentType, cacheControl) => {
   const args = [
     "s3",
@@ -269,15 +286,55 @@ const upload = (path, key, contentType, cacheControl) => {
   else sh("aws", args);
 };
 const immutable = "public, max-age=31536000, immutable";
+
+// The listing above is a check, and a check cannot stop two publishes of the
+// same new version from both seeing an empty prefix before either has written
+// anything — after which their uploads interleave and the fleet can end up
+// with one invocation's installers under URLs a second invocation's
+// SHA256SUMS.txt claims to describe. So the version is *reserved* rather than
+// merely checked: SHA256SUMS.txt goes up first with `--if-none-match "*"`, an
+// S3 conditional write that the storage layer resolves atomically, and the
+// loser of the race is refused with 412 before it uploads a single installer.
+// The checksum file doubles as the claim ticket because it exists anyway and
+// is the one object that must describe exactly this invocation's build; a
+// window where it is public and the installers are not is a 404 on a link
+// nothing published yet, whereas the reverse is a checksum mismatch.
+// --allow-overwrite drops the condition, since that flag exists precisely to
+// overwrite what is already there.
+const sumsKey = `${keyPrefix}SHA256SUMS.txt`;
+const reserveArgs = reservationArgs({
+  bucket,
+  key: sumsKey,
+  body: sums,
+  cacheControl: immutable,
+  allowOverwrite,
+});
+if (dryRun) {
+  console.log(`[dry-run] aws ${reserveArgs.join(" ")}`);
+} else {
+  const reserved = sh("aws", reserveArgs, {
+    capture: true,
+    allowFailure: true,
+  });
+  if (
+    reserved.spawnFailed ||
+    reserved.signal !== null ||
+    reserved.status !== 0
+  ) {
+    console.error(
+      `✖ could not reserve ${version} by writing s3://${bucket}/${sumsKey}.\n` +
+        "  If aws reported PreconditionFailed, another publish of this version\n" +
+        "  claimed it first and this one must stop: ship the fix as a new\n" +
+        "  version. Otherwise the upload itself failed — nothing was written,\n" +
+        "  so re-running is safe. (--if-none-match needs aws-cli >= 2.17.)",
+    );
+    process.exit(1);
+  }
+}
+
 for (const entry of entries) {
   upload(entry.path, `${prefix}/${entry.file}`, entry.contentType, immutable);
 }
-upload(
-  sums,
-  `${prefix}/SHA256SUMS.txt`,
-  "text/plain; charset=utf-8",
-  immutable,
-);
 upload(
   page,
   `s3://${bucket}/index.html`,
