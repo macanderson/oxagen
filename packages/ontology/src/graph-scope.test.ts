@@ -8,6 +8,8 @@ import {
   clampLimits,
   clampVarLengthHops,
   GraphScopeError,
+  keepFilteringPositions,
+  keepPredicatePositions,
   SCOPE_LABELS_PARAM,
   SCOPE_REL_TYPES_PARAM,
   stripLiteralsAndComments,
@@ -321,15 +323,20 @@ describe("assertScopeMarkers", () => {
     });
   }
 
-  it("still accepts a MERGE map when the MERGE is the first graph clause", () => {
-    // Every variable in the pattern is new and the map constrains all of them,
-    // so there is nothing the allow-list has failed to narrow.
+  it("rejects a MERGE map even when the MERGE is the first graph clause", () => {
+    // ROUND EIGHT inverts what round 7 asserted here. Round 7's reasoning was
+    // about the TENANCY guard's question — every variable in a first-clause
+    // MERGE pattern is new, so `{orgId: $orgId}` does anchor all of them. It
+    // does not carry over to a MEMBERSHIP TEST, whose whole contribution is the
+    // boolean it evaluates to: as a map VALUE that boolean is stored in a
+    // property and refuses nothing, so the node is created with its
+    // out-of-mandate label either way. See the round-eight block below.
     expect(() =>
       assertScopeMarkers(
         `MERGE (n:GraphNode {orgId: $orgId, ok: n.label IN $${SCOPE_LABELS_PARAM}}) RETURN n`,
         withMarkers(true, false),
       ),
-    ).not.toThrow();
+    ).toThrow(GraphScopeError);
   });
 
   it("treats a prefix-collision marker as absent (word boundary)", () => {
@@ -339,6 +346,199 @@ describe("assertScopeMarkers", () => {
         withMarkers(true, false),
       ),
     ).toThrow(GraphScopeError);
+  });
+});
+
+// ── Round eight: an inert predicate is not enforcement ───────────────────────
+//
+// Rounds 1-7 each closed one SPELLING of "the marker is present but narrows
+// nothing". The rule underneath all of them: a membership test contributes
+// exactly one thing, the BOOLEAN it evaluates to, so it counts only in a
+// position where a FALSE can refuse a row. A WHERE clause is such a position.
+// A pattern property VALUE is not — the boolean is stored in a property, the
+// pattern still matches or still creates, and the row still comes back.
+describe("assertScopeMarkers — a membership test as a pattern-property value", () => {
+  const scoped = (labels: boolean): GraphScope =>
+    labels ? { labels: ["Doc"] } : { relationshipTypes: ["REFERS_TO"] };
+
+  it("rejects the reported query verbatim", () => {
+    // The reviewer's exact text. A guard that rejects a paraphrase but accepts
+    // this has not been fixed, so it is pinned here character for character.
+    const reported =
+      "WITH 'Forbidden' AS label MERGE (n:Forbidden {orgId: $orgId, allowed: label IN $__scopeLabels}) RETURN n";
+    expect(() => assertScopeMarkers(reported, scoped(true))).toThrow(
+      GraphScopeError,
+    );
+    expect(() => assertScopeMarkers(reported, scoped(true))).toThrow(
+      /\$__scopeLabels/,
+    );
+  });
+
+  const inertValuePositions: Array<
+    [name: string, cypher: string, labels: boolean]
+  > = [
+    [
+      "first-clause MERGE, no prior graph binding (round 7's exception)",
+      `MERGE (n:Forbidden {orgId: $orgId, ok: n.label IN $${SCOPE_LABELS_PARAM}}) RETURN n`,
+      true,
+    ],
+    [
+      "MATCH map — the value constrains n.allowed, not n's labels",
+      `MATCH (n {allowed: n.label IN $${SCOPE_LABELS_PARAM}}) RETURN n`,
+      true,
+    ],
+    [
+      "OPTIONAL MATCH map",
+      `OPTIONAL MATCH (n {allowed: n.label IN $${SCOPE_LABELS_PARAM}}) RETURN n`,
+      true,
+    ],
+    [
+      "CREATE map",
+      `CREATE (n:Forbidden {ok: n.label IN $${SCOPE_LABELS_PARAM}}) RETURN n`,
+      true,
+    ],
+    [
+      "relationship-pattern map on a first-clause MERGE",
+      `MERGE (a)-[q:AUDIT {ok: type(q) IN $${SCOPE_REL_TYPES_PARAM}}]->(b) RETURN q`,
+      false,
+    ],
+    [
+      "WITH launders the binding, then a first-clause MERGE (the reported shape)",
+      `WITH 1 AS x MERGE (n:Forbidden {ok: n.label IN $${SCOPE_LABELS_PARAM}}) RETURN n`,
+      true,
+    ],
+    [
+      "UNWIND launders the binding the same way",
+      `UNWIND [1] AS x MERGE (n:Forbidden {ok: n.label IN $${SCOPE_LABELS_PARAM}}) RETURN n`,
+      true,
+    ],
+  ];
+
+  for (const [name, cypher, labels] of inertValuePositions) {
+    it(`treats the marker as absent: ${name}`, () => {
+      expect(() => assertScopeMarkers(cypher, scoped(labels))).toThrow(
+        GraphScopeError,
+      );
+    });
+  }
+
+  it("leaves the tenancy projection alone — round 7 is not undone", () => {
+    // The stricter rule belongs to the SCOPE guard's question (a boolean that
+    // gates a row), not the TENANCY guard's (a property name bound to the
+    // seam's own parameter). Dropping MERGE maps from the tenancy projection
+    // rejects 5 of the 63 production queries the corpus test collects, so the
+    // two projections stay separate.
+    const merge = "MERGE (n:GraphNode {orgId: $orgId}) RETURN n";
+    expect(keepFilteringPositions(merge)).toContain("orgId: $orgId");
+    expect(keepPredicatePositions(merge)).not.toContain("orgId: $orgId");
+  });
+});
+
+// The corpus cost of the stricter rule, measured rather than assumed. These are
+// the only four sites in the tree that emit a scope marker — graph.search.ts,
+// ontology.neighbors.ts and ontology.query.ts (twice) — each reproduced with
+// the WHERE clause it is appended into. The stricter policy rejects 0 of 4.
+describe("assertScopeMarkers — every production marker shape still passes", () => {
+  const production: Array<[name: string, cypher: string, scope: GraphScope]> = [
+    [
+      "graph.search.ts — post-ANN label predicate after a CALL/YIELD",
+      `CALL db.index.vector.queryNodes('graph_node_embedding_index', $k, $queryVector)
+       YIELD node AS n, score
+       WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
+         AND n.is_system = false
+         AND n.label IN $${SCOPE_LABELS_PARAM}
+       RETURN n.publicId AS nodeId ORDER BY score DESC LIMIT 50`,
+      { labels: ["Doc"] },
+    ],
+    [
+      "ontology.neighbors.ts — any(l IN labels(m) WHERE l IN …)",
+      `MATCH (n:GraphNode)-[r]-(m:GraphNode)
+       WHERE n.orgId = $orgId
+         AND any(l IN labels(m) WHERE l IN $${SCOPE_LABELS_PARAM})
+       RETURN m LIMIT 50`,
+      { labels: ["Doc"] },
+    ],
+    [
+      "ontology.neighbors.ts — type(r) IN …",
+      `MATCH (n:GraphNode)-[r]-(m:GraphNode)
+       WHERE n.orgId = $orgId AND type(r) IN $${SCOPE_REL_TYPES_PARAM}
+       RETURN m LIMIT 50`,
+      { relationshipTypes: ["REFERS_TO"] },
+    ],
+    [
+      "ontology.query.ts — ALL(n IN nodes(path) WHERE any(…))",
+      `MATCH path = (a:GraphNode)-[*1..2]-(b:GraphNode)
+       WHERE a.orgId = $orgId
+         AND ALL(n IN nodes(path) WHERE any(l IN labels(n) WHERE l IN $${SCOPE_LABELS_PARAM}))
+         AND ALL(rel IN relationships(path) WHERE type(rel) IN $${SCOPE_REL_TYPES_PARAM})
+       RETURN path LIMIT 50`,
+      { labels: ["Doc"], relationshipTypes: ["REFERS_TO"] },
+    ],
+  ];
+
+  for (const [name, cypher, scope] of production) {
+    it(`accepts ${name}`, () => {
+      expect(() => assertScopeMarkers(cypher, scope)).not.toThrow();
+    });
+  }
+});
+
+// The residual classes, enumerated on assertScopeMarkers. Each puts the marker
+// in a real WHERE clause and still enforces nothing; each is ACCEPTED today.
+// Asserting the acceptance keeps the gap a recorded property of the seam — and
+// means anyone who calls this guard the mandate has to delete a passing test.
+describe("assertScopeMarkers — KNOWN-ACCEPTED queries that enforce nothing", () => {
+  const labelScope: GraphScope = { labels: ["Doc"] };
+  const known: Array<[name: string, cypher: string]> = [
+    [
+      "1. negated — selects exactly the labels the mandate excludes",
+      `MATCH (n) WHERE NOT (n.label IN $${SCOPE_LABELS_PARAM}) RETURN n`,
+    ],
+    [
+      "2. disjoined — a row passes without the membership holding",
+      `MATCH (n) WHERE n.x = 1 OR n.label IN $${SCOPE_LABELS_PARAM} RETURN n`,
+    ],
+    [
+      "3. compared — the boolean is an operand, not the gate",
+      `MATCH (n) WHERE n.allowed = (n.label IN $${SCOPE_LABELS_PARAM}) RETURN n`,
+    ],
+    [
+      "4. argument — coalesce discards a false",
+      `MATCH (n) WHERE coalesce(n.label IN $${SCOPE_LABELS_PARAM}, true) RETURN n`,
+    ],
+    [
+      "5. binder, not membership — the same IN token, a different operator",
+      `MATCH (n) WHERE size([x IN $${SCOPE_LABELS_PARAM} | x]) >= 0 RETURN n`,
+    ],
+    [
+      "6. wrong variable — a real gate, on rows the query does not return",
+      `MATCH (a) MATCH (b) WHERE any(l IN labels(a) WHERE l IN $${SCOPE_LABELS_PARAM}) RETURN b`,
+    ],
+    [
+      "7. wrong branch — the predicate guards one UNION branch only",
+      `MATCH (a) WHERE any(l IN labels(a) WHERE l IN $${SCOPE_LABELS_PARAM}) RETURN a
+       UNION MATCH (b) RETURN b`,
+    ],
+  ];
+
+  for (const [name, cypher] of known) {
+    it(`accepts, and should not be read as enforcement: ${name}`, () => {
+      expect(() => assertScopeMarkers(cypher, labelScope)).not.toThrow();
+    });
+  }
+
+  it("does not bound writes: extend mode may still create an out-of-scope label", () => {
+    // The allow-list is a READ filter. Nothing in this seam reads the label
+    // literals a write pattern applies, so a marker in a real WHERE buys a
+    // MERGE of any label at all. Decidable, but a different control.
+    expect(() =>
+      applyGraphScope(
+        `MATCH (a) WHERE any(l IN labels(a) WHERE l IN $${SCOPE_LABELS_PARAM})
+         MERGE (n:Forbidden {orgId: $orgId}) RETURN n LIMIT 1`,
+        {},
+        { labels: ["Doc"], mode: "extend" },
+      ),
+    ).not.toThrow();
   });
 });
 

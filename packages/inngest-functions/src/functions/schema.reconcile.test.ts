@@ -1,9 +1,13 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   buildPrunedProperties,
   buildRelationshipWriteBackProps,
   NON_SYSTEM_RELATIONSHIP_FILTER,
   parseNodeProps,
+  PLATFORM_REL_TYPE_PARAMS,
+  PLATFORM_REL_TYPES_PARAM,
+  PLATFORM_RELATIONSHIP_TYPES,
   RELATIONSHIP_WRITE_BACK_CYPHER,
   RESERVED_RELATIONSHIP_PROPERTY_KEYS,
 } from "./schema.reconcile";
@@ -409,5 +413,180 @@ describe("schema reconciliation excludes platform-owned relationships", () => {
     expect(NON_SYSTEM_RELATIONSHIP_FILTER).toContain(
       "coalesce(r.is_system, false) = false",
     );
+  });
+});
+
+// ── Unmarked platform edges already in the graph ─────────────────────────────
+
+interface CandidateRow {
+  type: string;
+  r: Record<string, unknown>;
+  a: Record<string, unknown>;
+  b: Record<string, unknown>;
+}
+
+/**
+ * Evaluate the SHIPPED filter text against one candidate row, the way Neo4j
+ * would. Asserting on the string ("does it contain this clause") tests the
+ * spelling; this tests the decision, which is what a customer's `matchReason`
+ * depends on.
+ *
+ * An unrecognised conjunct THROWS rather than being skipped: a future edit that
+ * adds a clause this evaluator cannot read fails loudly instead of silently
+ * making every assertion below vacuous.
+ */
+function filterAccepts(row: CandidateRow): boolean {
+  const params: Record<string, readonly string[]> = {
+    [PLATFORM_REL_TYPES_PARAM]: PLATFORM_RELATIONSHIP_TYPES,
+  };
+  const endpoints: Record<string, Record<string, unknown>> = {
+    r: row.r,
+    a: row.a,
+    b: row.b,
+  };
+  return NON_SYSTEM_RELATIONSHIP_FILTER.split(/\bAND\b/)
+    .map((c) => c.trim().replace(/\s+/g, " "))
+    .every((conjunct) => {
+      const typeExclusion = /^NOT type\(r\) IN \$(\w+)$/.exec(conjunct);
+      if (typeExclusion) {
+        return !(params[typeExclusion[1]!] ?? []).includes(row.type);
+      }
+      const flag = /^coalesce\((r|a|b)\.is_system, false\) = false$/.exec(
+        conjunct,
+      );
+      if (flag) return (endpoints[flag[1]!]!.is_system ?? false) === false;
+      throw new Error(
+        `filterAccepts cannot evaluate the conjunct "${conjunct}" — teach it ` +
+          `the new clause rather than letting these assertions go vacuous.`,
+      );
+    });
+}
+
+describe("schema reconciliation excludes platform edges written before the marker", () => {
+  /**
+   * What `ingestion.delete`'s alias-promotion reroute wrote before this change:
+   * the MERGE copied confidence / matchReason / tentative / createdAt and
+   * nothing else, so the new edge carries no `is_system`. Both endpoints are
+   * ingested `EntityNode`s, which carry `is_system = false`.
+   */
+  const preMarkerReroutedAlias: CandidateRow = {
+    type: "ALIAS_OF",
+    r: {
+      confidence: 0.94,
+      matchReason: "embedding:0.94",
+      tentative: false,
+      createdAt: "2026-01-01T00:00:00Z",
+    },
+    a: { is_system: false },
+    b: { is_system: false },
+  };
+
+  it("skips an ALIAS_OF edge that carries no is_system marker", () => {
+    // Every flag predicate reads false-or-absent here, so the marker-based
+    // halves of the filter accept this edge. Only the type excludes it.
+    expect(preMarkerReroutedAlias.r.is_system).toBeUndefined();
+    expect(filterAccepts(preMarkerReroutedAlias)).toBe(false);
+  });
+
+  it("is what stops prune=true deleting the dedup ledger's operational fields", () => {
+    // The damage the exclusion prevents, stated rather than implied: with an
+    // `ALIAS_OF` schema pinned that declares only `confidence`, these are the
+    // keys the null-valued write-back would remove — permanently.
+    const { removedKeys } = buildPrunedProperties(
+      preMarkerReroutedAlias.r,
+      ["confidence"],
+      RESERVED_RELATIONSHIP_PROPERTY_KEYS,
+    );
+    expect(removedKeys).toEqual(["matchReason", "tentative"]);
+    expect(filterAccepts(preMarkerReroutedAlias)).toBe(false);
+  });
+
+  for (const type of PLATFORM_RELATIONSHIP_TYPES) {
+    it(`skips an unmarked ${type} edge between two customer nodes`, () => {
+      expect(
+        filterAccepts({ type, r: {}, a: { is_system: false }, b: {} }),
+      ).toBe(false);
+    });
+  }
+
+  it("still reconciles a customer's own relationship type", () => {
+    // The exclusion must not swallow the work reconciliation exists to do.
+    expect(
+      filterAccepts({
+        type: "MENTIONS",
+        r: { confidence: 0.4 },
+        a: { is_system: false },
+        b: { is_system: false },
+      }),
+    ).toBe(true);
+  });
+
+  it("still honours the marker for a platform type the list has not learned", () => {
+    // The three parts are layered, not alternatives: a future platform writer
+    // that sets is_system is covered before anyone adds its type here.
+    expect(
+      filterAccepts({
+        type: "NOT_YET_ENUMERATED",
+        r: { is_system: true },
+        a: {},
+        b: {},
+      }),
+    ).toBe(false);
+  });
+
+  it("still honours a system endpoint", () => {
+    // The backstop half: a customer-named type hanging off a platform node is
+    // still not reconciled.
+    expect(
+      filterAccepts({ type: "MENTIONS", r: {}, a: { is_system: true }, b: {} }),
+    ).toBe(false);
+  });
+});
+
+describe("the platform relationship-type list cannot drift from its rationale", () => {
+  const source = readFileSync(
+    new URL("./schema.reconcile.ts", import.meta.url),
+    "utf8",
+  );
+
+  it("matches the writer enumeration in the doc comment", () => {
+    // The doc comment argues the set is closed and names each writer. If a
+    // fifth platform writer is documented and not listed, the filter would let
+    // its edges through; if listed and not documented, the argument for
+    // excluding them is gone. Neither may happen quietly.
+    const documented = [...source.matchAll(/^\s*\*\s+-\s+`([A-Z_]+)`/gm)].map(
+      (m) => m[1]!,
+    );
+    expect([...new Set(documented)].sort()).toEqual(
+      [...PLATFORM_RELATIONSHIP_TYPES].sort(),
+    );
+  });
+
+  it("supplies the parameter everywhere the filter is embedded", () => {
+    // The filter references $platformRelTypes. A query that embeds it without
+    // passing the list fails at the driver, which is the wrong place to find
+    // out — so every embedding site is checked here instead.
+    const calls = source.split("session.run(").slice(1);
+    const embedding = calls.filter((chunk) =>
+      /NON_SYSTEM_RELATIONSHIP_FILTER|RELATIONSHIP_WRITE_BACK_CYPHER/.test(
+        chunk.slice(0, 1200),
+      ),
+    );
+    expect(embedding.length).toBe(3);
+    for (const chunk of embedding) {
+      expect(chunk.slice(0, 1600)).toContain("...PLATFORM_REL_TYPE_PARAMS");
+    }
+  });
+
+  it("carries the list as a parameter, never as interpolated query text", () => {
+    expect(PLATFORM_REL_TYPE_PARAMS).toEqual({
+      [PLATFORM_REL_TYPES_PARAM]: PLATFORM_RELATIONSHIP_TYPES,
+    });
+    expect(NON_SYSTEM_RELATIONSHIP_FILTER).toContain(
+      `NOT type(r) IN $${PLATFORM_REL_TYPES_PARAM}`,
+    );
+    for (const type of PLATFORM_RELATIONSHIP_TYPES) {
+      expect(RELATIONSHIP_WRITE_BACK_CYPHER).not.toContain(type);
+    }
   });
 });

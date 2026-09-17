@@ -80,6 +80,38 @@ export const RESERVED_RELATIONSHIP_PROPERTY_KEYS: ReadonlySet<string> = new Set(
 );
 
 /**
+ * The relationship types this platform writes between two `:GraphNode`s, made
+ * executable rather than left in prose.
+ *
+ * This is the enumeration argued for below, not a sample of it: thirteen Cypher
+ * sites in this repository create a relationship, only four can produce one
+ * between two `:GraphNode`s, and relationship types cannot be parameterized in
+ * Cypher, so the set of type NAMES a platform writer can emit is fixed at
+ * compile time. Adding a fifth platform writer means adding its type here; the
+ * test beside this constant pins the list against the doc comment so the two
+ * cannot drift silently.
+ */
+export const PLATFORM_RELATIONSHIP_TYPES: readonly string[] = [
+  "ABOUT",
+  "ALIAS_OF",
+  "INVOKED",
+  "REMEMBERS",
+];
+
+/** Parameter carrying {@link PLATFORM_RELATIONSHIP_TYPES} into the filter. */
+export const PLATFORM_REL_TYPES_PARAM = "platformRelTypes";
+
+/**
+ * Spread into the params of EVERY query that embeds
+ * {@link NON_SYSTEM_RELATIONSHIP_FILTER}. A list parameter rather than
+ * interpolated Cypher text, which keeps {@link RELATIONSHIP_WRITE_BACK_CYPHER}
+ * the constant its own doc comment claims it is.
+ */
+export const PLATFORM_REL_TYPE_PARAMS: Readonly<Record<string, unknown>> = {
+  [PLATFORM_REL_TYPES_PARAM]: PLATFORM_RELATIONSHIP_TYPES,
+};
+
+/**
  * The predicate that keeps schema reconciliation off PLATFORM-OWNED edges.
  *
  * Reconciliation exists to make an organisation's own graph conform to the
@@ -107,7 +139,9 @@ export const RESERVED_RELATIONSHIP_PROPERTY_KEYS: ReadonlySet<string> = new Set(
  * (The rest — `PROMOTED`, `DEMOTED`, `BASED_ON`, `CITED`, `OF`, `SUPPORTS`,
  * `REFUTES` — hang off `:Promotion` / `:Demotion` / `:Citation` / `:Evidence`
  * nodes, which never receive the `:GraphNode` anchor label, so the reconcile
- * MATCH cannot bind them.) All four set `is_system = true` on the relationship.
+ * MATCH cannot bind them.) All four set `is_system = true` on the relationship
+ * as of this change — which is a statement about what they write from here on,
+ * not about what a customer's graph already holds; see THE TYPE EXCLUSION below.
  *
  * The enumeration is the whole set, not a sample: relationship types cannot be
  * parameterized in Cypher, and `sanitizeRelationshipType` — the one coercion
@@ -119,13 +153,42 @@ export const RESERVED_RELATIONSHIP_PROPERTY_KEYS: ReadonlySet<string> = new Set(
  * the case schema reconciliation exists for, and exactly the case where
  * mistaking a platform edge for user data destroys something.
  *
- * Both halves of the predicate are load-bearing. The relationship flag is the
- * direct marker, and the endpoint flags are the backstop for an edge writer
- * that forgets it — `ingestion.delete`'s alias-promotion reroute did forget,
- * and is fixed in the same change as this. `coalesce(…, false)` because an edge
- * or node predating a writer that sets the flag has it absent, not false.
+ * Three parts, each load-bearing, in order of what they can reach.
+ *
+ * THE TYPE EXCLUSION reaches edges ALREADY IN THE GRAPH. Marking the writers is
+ * a write-path fix: it settles what future edges look like and says nothing
+ * about the ones a customer's graph is holding right now. `ingestion.delete`'s
+ * alias-promotion reroute wrote `ALIAS_OF` edges WITHOUT `is_system` — it is
+ * fixed in this same change, but every edge that query already created carries
+ * no marker, and both `EntityNode` endpoints carry `is_system = false`, so the
+ * flag predicates read those edges as customer data. An organisation that pins
+ * an `ALIAS_OF` schema and reconciles with `prune=true` would then have
+ * `matchReason` and `tentative` deleted, permanently, by the null-valued
+ * write-back. The type is the only property of such an edge that does not
+ * depend on when it was written, so the type is what excludes it.
+ *
+ * A backfill was the alternative and is strictly weaker HERE. It could only
+ * identify the unmarked edges by the same enumeration this list carries, so it
+ * buys no discrimination the exclusion does not already have; it is a mutation
+ * across customer data that a maintainer has to run before the guarantee holds;
+ * and BYO Neo4j is a design constraint, not an add-on, so a platform-run
+ * migration cannot reach the endpoints most at risk. The exclusion needs
+ * nothing run and protects every graph the moment it ships.
+ *
+ * It is deliberately over-broad in the safe direction. A customer who writes
+ * their own `:GraphNode`-to-`:GraphNode` edge NAMED `ALIAS_OF` has it skipped
+ * by reconciliation — the schema is not applied to it, which is recoverable and
+ * visible. The failure it replaces is the permanent deletion of platform
+ * metadata, which is neither.
+ *
+ * THE RELATIONSHIP FLAG is the direct marker on edges written by a writer that
+ * sets it, and it still covers a platform edge type this list has not yet
+ * learned about. THE ENDPOINT FLAGS are the backstop for an edge writer that
+ * forgets both. `coalesce(…, false)` because an edge or node predating a writer
+ * that sets the flag has it absent, not false.
  */
-export const NON_SYSTEM_RELATIONSHIP_FILTER = `coalesce(r.is_system, false) = false
+export const NON_SYSTEM_RELATIONSHIP_FILTER = `NOT type(r) IN $${PLATFORM_REL_TYPES_PARAM}
+               AND coalesce(r.is_system, false) = false
                AND coalesce(a.is_system, false) = false
                AND coalesce(b.is_system, false) = false`;
 
@@ -603,7 +666,12 @@ export const [schemaReconcile] = createFunction(
                AND type(r) IN $relTypes
                AND ${NON_SYSTEM_RELATIONSHIP_FILTER}
              RETURN count(r) AS total`,
-            { orgId, workspaceId, relTypes: schemaDefinition.relTypeNames },
+            {
+              orgId,
+              workspaceId,
+              relTypes: schemaDefinition.relTypeNames,
+              ...PLATFORM_REL_TYPE_PARAMS,
+            },
           );
           totalRelationships =
             typeof (
@@ -826,6 +894,7 @@ Return only the derived property key-value pairs in the derivedProps field.`,
                 relTypes: schemaDefinition.relTypeNames,
                 skip,
                 batchSize: BATCH_SIZE,
+                ...PLATFORM_REL_TYPE_PARAMS,
               },
             );
 
@@ -931,6 +1000,7 @@ Return only the derived property key-value pairs in the derivedProps field.`,
                     newProps,
                     removedRelKeys,
                   ),
+                  ...PLATFORM_REL_TYPE_PARAMS,
                 });
                 updatedRelationships++;
               }

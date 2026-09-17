@@ -96,9 +96,12 @@ const SCOPE_GUARD = /\borgId\s*[:=]\s*\$orgId\b/;
  * run() additionally, ON TOP of the tenancy guarantees above:
  *  3. Requires the query to FILTER on the reserved scope markers
  *     (`… IN $__scopeLabels` / `… IN $__scopeRelTypes`) for each constrained
- *     dimension — same bypass-guard style as tenancy, same sanitize-then-
- *     require-a-filtering-position rule — and injects those allow-lists as
- *     parameters the query builder consumes in its WHERE clauses.
+ *     dimension — same bypass-guard style as tenancy, but a STRICTER position
+ *     rule: a membership test earns its standing from the boolean it produces,
+ *     so it counts only in a WHERE clause, never as a pattern-property value
+ *     (`MERGE (n {allowed: l IN $__scopeLabels})` stores the answer and refuses
+ *     nothing) — and injects those allow-lists as parameters the query builder
+ *     consumes in its WHERE clauses.
  *  4. Clamps the traversal budget server-side: literal `LIMIT`s down to
  *     `maxNodes` (adds one when absent), variable-length hop bounds to
  *     `maxHops`, and a per-query transaction timeout for `maxTraversalMs`.

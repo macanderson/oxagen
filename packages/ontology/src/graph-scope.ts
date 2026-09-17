@@ -76,13 +76,16 @@ export const RESERVED_SCOPE_PARAMS = [
 //    `l IN $__scopeLabels`, `type(r) IN $__scopeRelTypes` — which is what all
 //    five production call sites in packages/handlers write. `\b` after the name
 //    prevents a prefix collision ($__scopeLabelsExtra).
-// 2) In a FILTERING position, checked by running the regex over
-//    `keepFilteringPositions` output rather than the whole query. Condition 1
+// 2) In a PREDICATE position, checked by running the regex over
+//    `keepPredicatePositions` output rather than the whole query. Condition 1
 //    alone does not survive contact: `RETURN n, n.label IN $__scopeLabels AS
 //    allowed` contains a membership test, satisfies the regex, and returns
 //    every node including the labels the agent may not see, because an aliased
 //    predicate in a projection filters nothing. The relationship marker has the
-//    identical hole with `type(r) IN $__scopeRelTypes AS allowed`.
+//    identical hole with `type(r) IN $__scopeRelTypes AS allowed`, and a third
+//    with `MERGE (n {allowed: n.label IN $__scopeLabels})`, where the boolean is
+//    a stored property value. A membership test earns its standing from the
+//    boolean it produces, so it counts only where a FALSE can refuse a row.
 const LABELS_MARKER = new RegExp(`\\bIN\\s*\\$${SCOPE_LABELS_PARAM}\\b`, "i");
 const REL_TYPES_MARKER = new RegExp(
   `\\bIN\\s*\\$${SCOPE_REL_TYPES_PARAM}\\b`,
@@ -278,6 +281,53 @@ function opensPattern(src: string, openIdx: number): boolean {
   return false;
 }
 
+// ── Position policy ──────────────────────────────────────────────────────────
+//
+// Two guards consume these projections, and they ask DIFFERENT questions. That
+// distinction is the round-eight correction; rounds 1–7 ran both guards off one
+// projection and tightened it seven times without it.
+//
+// The TENANCY guard (tenant.ts) looks for `orgId : $orgId` / `orgId = $orgId` —
+// a BINDING of a property NAME to the seam's own parameter. An inline pattern
+// property map is one of the two ways Cypher spells that binding
+// (`MATCH (n {orgId: $orgId})`), so a pattern map is a filtering position for
+// it, and the round-6/7 rules about WHICH clause the map sits in are exactly
+// the right question there.
+//
+// The SCOPE guard (assertScopeMarkers, below) looks for `<expr> IN
+// $__scopeLabels` — a MEMBERSHIP TEST, whose entire contribution is the BOOLEAN
+// it evaluates to. A boolean narrows rows only where a FALSE value can stop
+// something, and in a pattern property map it cannot:
+//
+//   WITH 'Forbidden' AS label
+//   MERGE (n:Forbidden {orgId: $orgId, allowed: label IN $__scopeLabels})
+//   RETURN n
+//
+// The membership test is the VALUE of `n.allowed`. Whatever it evaluates to the
+// node is created, the out-of-mandate label is applied, and the row comes back:
+// the expression is RECORDED, not enforced. The same holds under MATCH —
+// `MATCH (n {allowed: l IN $__scopeLabels})` constrains the arbitrary property
+// `n.allowed` and says nothing about `n`'s labels. So the rule is not which
+// clause the map sits in: a membership expression in pattern-property-VALUE
+// position is inert in EVERY clause, and the scope guard stops counting it
+// anywhere.
+//
+// Round 7 is not undone. `mergeMapFilters` still governs whether a MERGE map
+// counts for the tenancy guard, where it is load-bearing — dropping MERGE maps
+// there rejects 5 of the 63 production queries the corpus test collects. It
+// simply no longer has anything to say about the scope markers. The cost of the
+// stricter policy was measured the same way: all four production sites that
+// emit a marker append it into a WHERE clause (`AND n.label IN $__scopeLabels`,
+// `AND type(r) IN $__scopeRelTypes`, `AND any(l IN labels(m) WHERE l IN
+// $__scopeLabels)`, `AND ALL(n IN nodes(path) WHERE any(l IN labels(n) WHERE l
+// IN $__scopeLabels))`), so the stricter policy rejects 0 of 4. `graph-scope.
+// test.ts` pins all four shapes as accepted.
+type PositionPolicy =
+  /** A WHERE clause, or an inline pattern property map. Tenancy's question. */
+  | "filtering"
+  /** A WHERE clause only — a boolean that gates the row. Scope's question. */
+  | "predicate";
+
 /**
  * Blank every character of `cypher` that is not in a position capable of
  * CONSTRAINING WHICH ROWS THE QUERY TOUCHES, and return the result. Offsets are
@@ -307,13 +357,17 @@ function opensPattern(src: string, openIdx: number): boolean {
  *  - **map literals outside a pattern.** `SET n += {orgId: $orgId}` is an
  *    assignment that happens to be spelled with braces.
  *
+ * Under the `"predicate"` policy the pattern-map position is dropped too, so
+ * only WHERE survives — see the policy note above for why a membership test
+ * written as a pattern-property VALUE enforces nothing.
+ *
  * This does not make the seam a query analyser and does not prove isolation: a
  * query can bind the tenant in a WHERE and still read across tenants elsewhere
  * (an unanchored second MATCH, a CALL subquery). It establishes that the token
  * participates in filtering somewhere, which is the bar a lexical seam can hold
  * and enforce on every query in the platform.
  */
-export function keepFilteringPositions(cypher: string): string {
+function keepPositions(cypher: string, policy: PositionPolicy): string {
   const src = stripLiteralsAndComments(cypher);
   const out = new Array<string>(src.length).fill(" ");
 
@@ -354,7 +408,8 @@ export function keepFilteringPositions(cypher: string): string {
   // reason `MATCH (a {orgId: $orgId}) MATCH (b) RETURN b` does. See ADR-087.
   const keeping = () =>
     clause === "WHERE" ||
-    (inPatternMap() &&
+    (policy === "filtering" &&
+      inPatternMap() &&
       (ROW_SELECTING_CLAUSES.has(clause) ||
         (clause === "MERGE" && mergeMapFilters)));
 
@@ -405,6 +460,27 @@ export function keepFilteringPositions(cypher: string): string {
 }
 
 /**
+ * Positions where a NAME-TO-PARAMETER BINDING can narrow the row set: a WHERE
+ * clause, or an inline pattern property map in a clause that selects rows. The
+ * tenancy guard's projection — `MATCH (n {orgId: $orgId})` is a real anchor and
+ * has to keep counting as one.
+ */
+export function keepFilteringPositions(cypher: string): string {
+  return keepPositions(cypher, "filtering");
+}
+
+/**
+ * Positions where a BOOLEAN can gate the row: a WHERE clause, and nothing else.
+ *
+ * Stricter than {@link keepFilteringPositions} by exactly the pattern property
+ * map, because a boolean written as a map VALUE is stored, not enforced (see
+ * the policy note above). This is the projection the scope-marker guard uses.
+ */
+export function keepPredicatePositions(cypher: string): string {
+  return keepPositions(cypher, "predicate");
+}
+
+/**
  * Throw if `cypher` contains a write clause. Called only when the scope's mode
  * is `read`.
  */
@@ -425,13 +501,51 @@ export function assertReadOnly(cypher: string): void {
  * session that constrains labels/rel-types but forgets to reference the filter
  * cannot silently return out-of-scope data.
  *
- * The marker is looked for only in the query's FILTERING positions (see
- * `keepFilteringPositions`), so a marker in a comment, a string, a `RETURN`
- * projection or an alias does not satisfy the guard — it has to be a membership
- * test that actually narrows the rows. Error messages quote the original text.
+ * The marker is looked for only in the query's PREDICATE positions (see
+ * `keepPredicatePositions`), so a marker in a comment, a string, a `RETURN`
+ * projection, an alias, or a pattern property map does not satisfy the guard —
+ * it has to be a membership test whose boolean can refuse a row. Error messages
+ * quote the original text.
+ *
+ * WHAT THIS STILL DOES NOT DECIDE. A membership test is inert wherever its
+ * boolean cannot gate a row, and POSITION is only one of the ways that happens.
+ * Every class below puts the marker in a real WHERE clause, passes this guard,
+ * and enforces nothing. `graph-scope.test.ts` asserts each one as a KNOWN-
+ * ACCEPTED query, so the gap is a recorded property of the seam rather than the
+ * next reviewer's discovery:
+ *
+ *  1. NEGATED — `WHERE NOT (l IN $__scopeLabels)` selects precisely the labels
+ *     the mandate excludes.
+ *  2. DISJOINED — `WHERE n.x = 1 OR l IN $__scopeLabels` admits a row without
+ *     the membership holding.
+ *  3. COMPARED — `WHERE n.allowed = (l IN $__scopeLabels)` is the pattern-map
+ *     case moved inside a WHERE: the boolean is an operand, not the gate.
+ *  4. ARGUMENT — `WHERE coalesce(l IN $__scopeLabels, true)` discards it.
+ *  5. BINDER, NOT MEMBERSHIP — `WHERE any(x IN $__scopeLabels WHERE true)`.
+ *     Cypher writes a comprehension's iteration source with the same `IN` token
+ *     as the membership operator, and the marker regex cannot tell them apart.
+ *  6. WRONG VARIABLE — `MATCH (a) MATCH (b) WHERE any(l IN labels(a) WHERE l IN
+ *     $__scopeLabels) RETURN b`. A real gate, on rows the query does not return.
+ *  7. WRONG BRANCH — the predicate on one UNION branch only, or attached to an
+ *     `OPTIONAL MATCH` whose failure leaves the row in place with a null.
+ *
+ * 1–5 are expression-SHAPE questions that a boolean-tree analysis could decide.
+ * 6–7 are REACHABILITY, which is the class ADR-082 records as undecidable for
+ * the tenancy guard by the same argument: a full Cypher parse reports
+ * structure, and in each of these the structure is correct. The durable answer
+ * for both guards is to CONSTRUCT the scoping rather than validate it (ADR-082,
+ * #3199). This seam is a lint. It is not the mandate.
+ *
+ * Nor does it bound WRITES. Under `mode: "extend"`, a marker in a real WHERE
+ * still lets a query MERGE or CREATE a node carrying a label outside
+ * `scope.labels`: the allow-list is a read filter, and nothing here reads the
+ * label literals a write pattern applies. That IS decidable — a label literal
+ * in a write pattern is a syntactic fact — but it is a different control, and
+ * whether `labels` is meant to bound the write path at all is a mandate
+ * question, not a guard question.
  */
 export function assertScopeMarkers(cypher: string, scope: GraphScope): void {
-  const sanitized = keepFilteringPositions(cypher);
+  const sanitized = keepPredicatePositions(cypher);
   if (scope.labels !== undefined && !LABELS_MARKER.test(sanitized)) {
     throw new GraphScopeError(
       `Agent-scoped Cypher constrains labels but does not filter on $${SCOPE_LABELS_PARAM}: ${cypher.slice(0, 80)}`,
