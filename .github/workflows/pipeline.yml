@@ -351,7 +351,17 @@ jobs:
       - name: Coverage thresholds
         run: |
           set -f
-          pnpm turbo run test:coverage --concurrency=3 $TURBO_FILTER
+          # --continue: turbo otherwise halts at the first failing package, so
+          # the job reports one failure and leaves the remaining packages
+          # unrun. The run that surfaced the contract-layer failures reported
+          # 24 successful of 30 tasks with one failure, which left five
+          # coverage tasks never executed and their state on this branch
+          # unknown — one CI cycle per failing package to find out. --continue
+          # runs them all and names every failure in a single cycle. It
+          # changes nothing about which failures are fatal: the job still
+          # fails if any package fails. CLAUDE.md documents this form under
+          # Gotchas ("Turbo halts on first failing coverage package").
+          pnpm turbo run test:coverage --concurrency=3 --continue $TURBO_FILTER
 
   e2e:
     if: github.event_name != 'workflow_dispatch'

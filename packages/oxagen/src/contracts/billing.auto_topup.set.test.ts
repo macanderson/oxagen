@@ -28,8 +28,10 @@ describe("set_auto_topup contract", () => {
     });
   });
 
-  it("carries no app layer until WL-50 binds the control", () => {
-    expect(billingAutoTopupSet.layers).not.toContain("app");
+  it("carries the app layer WL-50 bound, and still no e2e layer", () => {
+    // Bound to /[org]/billing (features/billing/auto-topup.test.tsx is the proof).
+    expect(billingAutoTopupSet.layers).toContain("app");
+    // e2e stays off every contract: the suite is three specs, not a per-capability layer.
     expect(billingAutoTopupSet.layers).not.toContain("e2e");
     expect(getSurfaces(billingAutoTopupSet)).toEqual(["api", "mcp"]);
   });

@@ -44,8 +44,9 @@ describe("billing.gau_bucket.purchase capability", () => {
     });
   });
 
-  it("declares no app layer until WL-50 binds the page", () => {
-    expect(billingGauBucketPurchase.layers).not.toContain("app");
+  it("declares the app layer WL-50 bound to the Billing page", () => {
+    // /[org]/billing, proven by features/billing/purchase-form.test.tsx.
+    expect(billingGauBucketPurchase.layers).toContain("app");
   });
 
   it("carries no money field on either side: the total is the rate block's, and Stripe shows the figure", () => {

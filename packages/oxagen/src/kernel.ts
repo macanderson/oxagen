@@ -154,7 +154,7 @@ export function clearUsageRecorder(): void {
  * dispatched from inside another handler. This store is entered on every
  * invocation, scoped or not, so nesting is exact.
  */
-const _governedActionScope = new AsyncLocalStorage<true>();
+const _governedActionScope = new AsyncLocalStorage<true | undefined>();
 
 /**
  * Run `fn` with no enclosing invocation, so every `invoke()` it starts is a
@@ -163,9 +163,22 @@ const _governedActionScope = new AsyncLocalStorage<true>();
  * (`noBillingGate`), and each tool call it answers is one (ADR-053 §1), on
  * the API, MCP and SSE adapters alike. The tenant scope and the trace span
  * are separate stores and stay as they are.
+ *
+ * `run(undefined, fn)` rather than `exit(fn)`, and the difference is money.
+ * `fn` is async — it awaits a tool call and then awaits the next one — and
+ * `exit()` on the async_hooks-backed AsyncLocalStorage is disable / call /
+ * re-enable in a `finally`. The `finally` fires when `fn` returns its promise,
+ * which is at its FIRST `await`, so the store comes back for everything after
+ * it: the second tool call in a turn reads an enclosing frame, counts as
+ * nested, and is never billed. Node 24 defaults to AsyncContextFrame, where
+ * `exit` does hold across awaits, so on this repo's supported Node the old
+ * form was correct — but the correctness of a billing frame should not rest on
+ * a default that changed between two supported majors. `run()` carries its
+ * store through awaits on both, and a store of `undefined` is exactly the
+ * "no enclosing frame" signal `isTopLevelAction` tests for.
  */
 export function runOutsideGovernedAction<T>(fn: () => T): T {
-  return _governedActionScope.exit(fn);
+  return _governedActionScope.run(undefined, fn);
 }
 
 /**

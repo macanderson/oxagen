@@ -28,9 +28,11 @@ describe("export_audit_events contract", () => {
     });
   });
 
-  it("is on the API and MCP, with no app layer until the cutover binds it (WL-50)", () => {
+  it("is on the API and MCP, and carries the app layer the cutover bound (WL-50)", () => {
     expect(auditEventsExport.surfaces).toEqual(["api", "mcp"]);
-    expect(auditEventsExport.layers).not.toContain("app");
+    // WL-50 bound it to /[org]/audit/export; apps/app/capability-ui-map.json
+    // carries the binding and check:ui-parity --strict holds it.
+    expect(auditEventsExport.layers).toContain("app");
   });
 
   it("defaults to CSV and takes the query_audit_log filters", () => {

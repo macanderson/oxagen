@@ -23,7 +23,8 @@ describe("auth.cli.authorize capability", () => {
     expect(authCliAuthorize.surfaces).toEqual([]);
     // An explicit empty list is what keeps the kernel's default pair off it.
     expect(getSurfaces(authCliAuthorize)).toEqual([]);
-    expect(authCliAuthorize.layers).toEqual(["schema", "unit", "docs"]);
+    // WL-50 added "app": /cli/authorize is a real page a person lands on.
+    expect(authCliAuthorize.layers).toEqual(["schema", "unit", "docs", "app"]);
     expect(authCliAuthorize.sensitivity).toBe("high");
     expect(authCliAuthorize.defaultEffect).toBe("deny");
     expect(authCliAuthorize.defaultRoles).toEqual({
