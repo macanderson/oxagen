@@ -133,17 +133,57 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
             // Find principal nodes (from this connection) that have incoming
             // ALIAS_OF edges from OTHER connections. Promote the highest-
             // confidence alias to become the new principal before deletion.
+            //
+            // WHAT THE WORKSPACE ANCHORS BELOW COST, stated rather than left to
+            // be discovered. The dedup resolver's candidate search
+            // (packages/ingestion/src/dedup/resolve.ts, `WHERE n.orgId =
+            // $orgId AND n.entityType = $entityType`) is org-scoped and not
+            // workspace-scoped, so an ALIAS_OF edge CAN today join two
+            // workspaces of one org. Such an alias is no longer promoted here.
+            // That is the deliberate direction: refusing to promote leaves a
+            // node in a workspace this job has no business writing to exactly
+            // as it found it, whereas promoting it overwrites that node's
+            // naturalKey, displayName and properties with another workspace's.
+            // A retained node is visible and recoverable; an overwritten one is
+            // neither. The cross-workspace edge itself is still removed, by the
+            // DETACH DELETE in Pass 2/3 -- an edge cannot outlive the node it
+            // is attached to -- and the foreign node survives untouched.
+            //
+            // Passes 2-4 deliberately stay keyed on {connectionId, orgId} and
+            // are NOT narrowed by workspace. They DELETE rather than write, and
+            // a connection belongs to exactly one workspace, so the workspace
+            // predicate would be a no-op on correctly stamped data and, on
+            // mis-stamped data, would silently RETAIN a deleted connection's
+            // nodes. For a delete, over-scoping is the harmful direction.
             const aliasResult = await session.run(
               `
             MATCH (alias:EntityNode)-[r:ALIAS_OF]->(principal:EntityNode)
             WHERE principal.connectionId = $connectionId
               AND principal.orgId = $orgId
+              // The principal is the anchor every other row here is selected
+              // through, so it carries the full tenant, not half of it. An org
+              // check passes for every workspace in that org, and an id alone
+              // says WHICH node, never WHOSE.
+              AND principal.workspaceId = $workspaceId
               // The alias is PROMOTED below -- its identity fields are
               // overwritten -- so it has to be at least as scoped as the
               // principal it is replacing. Anchoring one endpoint of a
               // two-endpoint match leaves the other free, and a legacy or BYO
               // graph can hold an ALIAS_OF from another organisation's node.
+              //
+              // BOTH halves are load-bearing and neither implies the other: a
+              // workspace id is not unique across organisations, so the org
+              // predicate is the only thing refusing a same-workspace-id row
+              // from another org; and the org predicate passes for every
+              // workspace inside it, so the workspace predicate is the only
+              // thing refusing a sibling workspace. This is the boundary the
+              // read surface already enforces -- graph.node.list, graph.stats,
+              // graph.search, ontology.neighbors, ontology.query and
+              // reference.search all filter :GraphNode on orgId AND
+              // workspaceId -- so a node another workspace cannot even READ
+              // must not be one this job silently OVERWRITES.
               AND alias.orgId = $orgId
+              AND alias.workspaceId = $workspaceId
               AND alias.connectionId <> $connectionId
             WITH principal, alias, r
             ORDER BY r.confidence DESC
@@ -161,8 +201,10 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
             WHERE other <> promoted
               // Same reason: this branch MERGEs a new edge off other and
               // DELETEs its existing one, so other is written to and must
-              // carry the same tenant as the principal being dissolved.
+              // carry the same tenant as the principal being dissolved -- the
+              // WHOLE tenant, for the reasons given on the alias anchor above.
               AND other.orgId = $orgId
+              AND other.workspaceId = $workspaceId
             MERGE (other)-[newEdge:ALIAS_OF]->(promoted)
               // Rerouting an existing edge, so every property is COPIED rather
               // than re-stamped: a reroute is not a new observation, and a
@@ -197,7 +239,10 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
             DELETE old
             RETURN count(promoted) AS promoted
             `,
-              { connectionId, orgId },
+              // orgId/workspaceId are injected (and overwritten) by the scoped
+              // session seam; passed here so the anchor and its value read
+              // together at the call site rather than only in tenant.ts.
+              { connectionId, orgId, workspaceId },
             );
 
             const promotedCount = countOf(

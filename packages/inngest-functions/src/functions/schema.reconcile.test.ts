@@ -11,6 +11,7 @@ import {
   PLATFORM_REL_TYPES_PARAM,
   PLATFORM_RELATIONSHIP_TYPES,
   RELATIONSHIP_WRITE_BACK_CYPHER,
+  REIDENTIFIABLE_ENDPOINTS_FILTER,
   RESERVED_RELATIONSHIP_PROPERTY_KEYS,
   stripReservedRelationshipKeys,
 } from "./schema.reconcile";
@@ -990,5 +991,182 @@ describe("the batch reads have a defined page boundary", () => {
     expect(lines[paginated[1]!.i - 1]?.trim()).toBe(
       "ORDER BY startId, endId, relType, relElemId",
     );
+  });
+});
+
+// ── publicId can be ABSENT, and the write-back cannot re-identify without it ──
+
+describe("an edge the write-back could never re-identify is not selected", () => {
+  const source = readFileSync(
+    new URL("./schema.reconcile.ts", import.meta.url),
+    "utf8",
+  );
+
+  /** An endpoint as the batch read sees it: tenant, plus the id it re-identifies by. */
+  interface ReadEndpoint {
+    orgId: string;
+    workspaceId: string;
+    publicId: string | null;
+  }
+
+  /**
+   * Evaluate the batch read's SHIPPED predicate against one candidate row.
+   *
+   * The conjuncts are lifted out of the query text in schema.reconcile.ts, with
+   * the shared constants substituted for their template holes, so this
+   * evaluates what actually runs rather than a copy that can drift. Anything it
+   * cannot parse THROWS, so a later edit cannot make these assertions vacuous.
+   */
+  function batchReadAccepts(a: ReadEndpoint, b: ReadEndpoint): boolean {
+    const start = source.indexOf(
+      "RETURN elementId(r) AS relElemId, type(r) AS relType",
+    );
+    expect(start, "the relationship batch read moved").toBeGreaterThan(-1);
+    const whereAt = source.lastIndexOf(
+      "WHERE a.orgId = $orgId AND a.workspaceId = $workspaceId",
+      start,
+    );
+    expect(whereAt, "the relationship batch read has no WHERE").toBeGreaterThan(
+      -1,
+    );
+
+    const endpoints: Record<string, ReadEndpoint> = { a, b };
+    const params: Record<string, string> = { orgId: ORG, workspaceId: WS };
+
+    return source
+      .slice(whereAt, start)
+      .replace("${FAR_ENDPOINT_TENANT_FILTER}", FAR_ENDPOINT_TENANT_FILTER)
+      .replace(
+        "${REIDENTIFIABLE_ENDPOINTS_FILTER}",
+        REIDENTIFIABLE_ENDPOINTS_FILTER,
+      )
+      .replace(/^\s*WHERE\b/, "")
+      .split("\n")
+      .map((line) => line.trim())
+      .join(" ")
+      .split(/\bAND\b/)
+      .map((c) => c.trim().replace(/\s+/g, " "))
+      .filter((c) => c.length > 0)
+      .every((conjunct) => {
+        const tenant =
+          /^(a|b)\.(orgId|workspaceId) = \$(orgId|workspaceId)$/.exec(conjunct);
+        if (tenant) {
+          return (
+            endpoints[tenant[1]!]![tenant[2]! as "orgId" | "workspaceId"] ===
+            params[tenant[3]!]
+          );
+        }
+        const notNull = /^(a|b)\.publicId IS NOT NULL$/.exec(conjunct);
+        if (notNull) return endpoints[notNull[1]!]!.publicId !== null;
+        // The type and is_system conjuncts are not this test's subject; they
+        // are pinned by their own describes above and are held constant here.
+        if (
+          conjunct.startsWith("type(r) IN $relTypes") ||
+          conjunct.includes("NON_SYSTEM_RELATIONSHIP_FILTER")
+        ) {
+          return true;
+        }
+        throw new Error(
+          `batchReadAccepts cannot evaluate "${conjunct}" — teach it the new ` +
+            `clause rather than letting these assertions go vacuous.`,
+        );
+      });
+  }
+
+  const identified: ReadEndpoint = {
+    orgId: ORG,
+    workspaceId: WS,
+    publicId: "node-a",
+  };
+
+  it("selects an edge whose endpoints both carry a publicId", () => {
+    expect(
+      batchReadAccepts(identified, { ...identified, publicId: "node-b" }),
+    ).toBe(true);
+  });
+
+  it("refuses an edge whose START endpoint carries no publicId", () => {
+    // `graph_node_public_id` is REQUIRE n.publicId IS UNIQUE — a UNIQUENESS
+    // constraint, which Neo4j simply does not apply to a node missing the
+    // property. It is not an existence constraint (Enterprise-only), so the
+    // legacy / imported / BYO graph this file already anchors both endpoints
+    // against is exactly the graph that can hold one.
+    expect(
+      batchReadAccepts({ ...identified, publicId: null }, identified),
+    ).toBe(false);
+  });
+
+  it("refuses an edge whose END endpoint carries no publicId", () => {
+    expect(
+      batchReadAccepts(identified, { ...identified, publicId: null }),
+    ).toBe(false);
+  });
+
+  it("still refuses an out-of-tenant endpoint that DOES carry a publicId", () => {
+    // The new predicate must not be able to stand in for the tenant anchors:
+    // an identified endpoint in another org or another workspace is still out.
+    expect(
+      batchReadAccepts(identified, { ...identified, orgId: "org-other" }),
+    ).toBe(false);
+    expect(
+      batchReadAccepts(identified, { ...identified, workspaceId: "ws-other" }),
+    ).toBe(false);
+  });
+
+  it("is why selecting such an edge would be a silent no-op, not an error", () => {
+    // The harm, made executable. The write-back re-identifies with
+    // `a.publicId = $startId`. Cypher's three-valued logic makes a comparison
+    // against a null parameter NULL — not true, and not an error — so the write
+    // matches nothing, `written` is 0, and the loop logs a warning and moves
+    // on while STILL advancing processedRelationships. The job then finalises
+    // with processed == total, reporting a reconcile it never performed.
+    expect(RELATIONSHIP_WRITE_BACK_CYPHER).toContain(
+      "a.publicId = $startId AND b.publicId = $endId",
+    );
+    const cypherEquals = (left: string | null, right: string | null) =>
+      left === null || right === null ? null : left === right;
+    expect(cypherEquals(null, "node-a")).toBeNull();
+    expect(cypherEquals(null, null)).toBeNull();
+    expect(Boolean(cypherEquals(null, null))).toBe(false);
+  });
+});
+
+describe("the excluded edges are counted rather than disappearing", () => {
+  const source = codeOnly(
+    readFileSync(new URL("./schema.reconcile.ts", import.meta.url), "utf8"),
+  );
+
+  it("narrows the READ but not the COUNT, and subtracts instead", () => {
+    // If the count were narrowed the same way, `totalRelationships` would match
+    // `processedRelationships` and the excluded rows would be invisible —
+    // indistinguishable from a graph that simply had nothing to reconcile.
+    // Counting them and subtracting reports both numbers honestly.
+    const reads =
+      source.split("AND ${REIDENTIFIABLE_ENDPOINTS_FILTER}").length - 1;
+    expect(reads, "the filter belongs on the batch read only").toBe(1);
+
+    const counts =
+      source.split("${UNRECONCILABLE_RELATIONSHIP_COUNT} AS unreconcilable")
+        .length - 1;
+    expect(counts, "the count query must project the exclusion").toBe(1);
+
+    expect(source).toContain("totalRelationships = matched - unreconcilable");
+  });
+
+  it("counts exactly the rows the read filter removes", () => {
+    // `count(CASE WHEN … END)` counts non-null results only, so the projection
+    // is the complement of the read filter over the same matched set — which is
+    // what makes `matched - unreconcilable` the number the run will attempt.
+    const rows: Array<[string | null, string | null]> = [
+      ["a", "b"],
+      [null, "b"],
+      ["a", null],
+      [null, null],
+    ];
+    const excluded = rows.filter(([a, b]) => a === null || b === null).length;
+    const selected = rows.filter(([a, b]) => a !== null && b !== null).length;
+    expect(excluded).toBe(3);
+    expect(selected).toBe(1);
+    expect(selected + excluded).toBe(rows.length);
   });
 });

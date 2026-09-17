@@ -200,9 +200,20 @@ function makeNodeRecord(nodeId: string, label: string, propertiesJson: string) {
   };
 }
 
-function makeCountRecord(count: number) {
+/**
+ * A count record.
+ *
+ * `unreconcilable` is projected ALONGSIDE `total` by the relationship count
+ * query, and the handler subtracts it, so this fixture answers per key rather
+ * than returning one number for every key. Answering `total` to
+ * `get("unreconcilable")` would make every relationship count fixture read as
+ * "all of these rows are unreconcilable" and silently zero `totalRelationships`
+ * in tests that never assert on it.
+ */
+function makeCountRecord(count: number, unreconcilable = 0) {
   return {
-    get: (_key: string): unknown => count,
+    get: (key: string): unknown =>
+      key === "unreconcilable" ? unreconcilable : count,
   };
 }
 
@@ -803,5 +814,96 @@ describe("schemaReconcile Inngest handler", () => {
     expect(r.totalNodes).toBe(0);
     expect(r.totalRelationships).toBe(0);
     expect(r.status).toBe("completed");
+  });
+
+  it("subtracts the edges no publicId puts out of reach, and says so", async () => {
+    // The count query matches every in-tenant, in-schema edge and projects, as
+    // a second column, how many of them an endpoint without a publicId makes
+    // impossible for the write-back to re-identify. Those rows are excluded
+    // from the batch READ, so if the total did not subtract them the job would
+    // finish with processedRelationships < totalRelationships forever, and if
+    // the count were narrowed instead they would vanish entirely — a graph with
+    // three unreachable edges would be indistinguishable from an empty one.
+    const { tx, m } = makeTx();
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
+
+    m.schemaVersionsFindFirst.mockResolvedValue({
+      id: "ver-1",
+      versionNumber: 1,
+    });
+    m.schemasFindMany.mockResolvedValue([{ id: "s-1", name: "mySchema" }]);
+    m.schemaActivationsFindMany.mockResolvedValue([]);
+    m.nodeLabelsFindMany.mockResolvedValue([]);
+    m.relTypesFindMany.mockResolvedValue([{ id: "rt-1", name: "RELATES_TO" }]);
+    m.propertiesFindMany.mockResolvedValue([
+      {
+        id: "p-1",
+        nodeLabelId: null,
+        relationshipTypeId: "rt-1",
+        key: "weight",
+        dataType: "number",
+        required: false,
+        description: null,
+      },
+    ]);
+
+    // 4 edges matched, 3 of them with an endpoint carrying no publicId.
+    mocks.sessionRun.mockImplementation(
+      makeSessionRunSequence([
+        { records: [makeCountRecord(4, 3)] }, // count rels: total 4, unreconcilable 3
+        { records: [] }, // batch 1 — the read excludes the 3
+      ]),
+    );
+
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT_DATA },
+      step: makeStep(),
+    });
+
+    const r = result as Record<string, unknown>;
+    expect(r.totalRelationships).toBe(1);
+    expect(r.status).toBe("completed");
+    expect(mocks.logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ unreconcilable: 3, matched: 4 }),
+      expect.stringContaining("an endpoint carries no publicId"),
+    );
+  });
+
+  it("says nothing when every matched edge can be re-identified", async () => {
+    // The warning is a report of an exception, not a per-run line.
+    const { tx, m } = makeTx();
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
+
+    m.schemaVersionsFindFirst.mockResolvedValue({
+      id: "ver-1",
+      versionNumber: 1,
+    });
+    m.schemasFindMany.mockResolvedValue([{ id: "s-1", name: "mySchema" }]);
+    m.schemaActivationsFindMany.mockResolvedValue([]);
+    m.nodeLabelsFindMany.mockResolvedValue([]);
+    m.relTypesFindMany.mockResolvedValue([{ id: "rt-1", name: "RELATES_TO" }]);
+    m.propertiesFindMany.mockResolvedValue([]);
+
+    mocks.sessionRun.mockImplementation(
+      makeSessionRunSequence([
+        { records: [makeCountRecord(2, 0)] },
+        { records: [] },
+      ]),
+    );
+
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT_DATA },
+      step: makeStep(),
+    });
+
+    expect((result as Record<string, unknown>).totalRelationships).toBe(2);
+    expect(mocks.logger.warn).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining("an endpoint carries no publicId"),
+    );
   });
 });

@@ -173,6 +173,56 @@ export const PLATFORM_REL_TYPE_PARAMS: Readonly<Record<string, unknown>> = {
 export const FAR_ENDPOINT_TENANT_FILTER = `b.orgId = $orgId AND b.workspaceId = $workspaceId`;
 
 /**
+ * The predicate that keeps reconciliation off edges it could never write back.
+ *
+ * {@link RELATIONSHIP_WRITE_BACK_CYPHER} re-identifies its target by
+ * `a.publicId = $startId AND b.publicId = $endId`, because an element id is not
+ * an identity across the transaction gap between the batch read and the write.
+ * That re-identification needs the endpoints to HAVE a publicId, and nothing
+ * guarantees they do: `graph_node_public_id` is
+ * `FOR (n:GraphNode) REQUIRE n.publicId IS UNIQUE`
+ * (packages/ontology/src/schema.cypher), and a Neo4j uniqueness constraint
+ * simply ignores a node that lacks the property — it is not an existence
+ * constraint, which is Enterprise-only. Every writer IN THIS REPOSITORY sets
+ * `publicId`, but the legacy / imported / BYO graph this file already anchors
+ * both endpoints against is exactly the graph that can hold one that does not.
+ *
+ * WITHOUT THIS FILTER the failure is silent and expensive, in that order:
+ * `startId` comes back null, `a.publicId = $startId` compares against a null
+ * parameter, Cypher's three-valued logic makes that NULL rather than true, the
+ * write matches zero rows — and the loop logs a warning, counts nothing as
+ * updated, and STILL advances `processedRelationships`. The job then finalises
+ * with `processedRelationships == totalRelationships`: a reconcile that reports
+ * completion having applied nothing to those rows. It also pays for them, since
+ * the AI derivation for missing required properties runs BEFORE the write-back
+ * that is going to refuse it.
+ *
+ * Excluding at SELECTION rather than loosening the write-back is deliberate.
+ * A null-tolerant re-identification (`($startId IS NULL AND a.publicId IS NULL)
+ * OR a.publicId = $startId`) would make the write land, but it would land on
+ * the strength of "this endpoint has no id either" — which re-identifies
+ * nothing, and re-opens the element-id-reuse hole the whole re-identification
+ * exists to close. An edge that cannot be safely re-identified is out of scope
+ * for reconciliation, and saying so is better than half-doing it.
+ *
+ * It is applied to the COUNT as well as the read, so `totalRelationships`
+ * describes the work that will actually be attempted, and the excluded rows are
+ * counted separately and logged rather than disappearing. See
+ * {@link UNRECONCILABLE_RELATIONSHIP_COUNT} for the projection that reports them.
+ */
+export const REIDENTIFIABLE_ENDPOINTS_FILTER = `a.publicId IS NOT NULL AND b.publicId IS NOT NULL`;
+
+/**
+ * The count projection that makes the exclusion above visible.
+ *
+ * `count(CASE WHEN … END)` counts only non-null results, so this yields the
+ * number of in-tenant, in-schema edges that {@link REIDENTIFIABLE_ENDPOINTS_FILTER}
+ * removes from the run. Reported so an operator can tell "there was nothing to
+ * reconcile" from "there were rows this job refused to touch".
+ */
+export const UNRECONCILABLE_RELATIONSHIP_COUNT = `count(CASE WHEN a.publicId IS NULL OR b.publicId IS NULL THEN 1 END)`;
+
+/**
  * The predicate that keeps schema reconciliation off PLATFORM-OWNED edges.
  *
  * Reconciliation exists to make an organisation's own graph conform to the
@@ -817,7 +867,8 @@ export const [schemaReconcile] = createFunction(
                AND ${FAR_ENDPOINT_TENANT_FILTER}
                AND type(r) IN $relTypes
                AND ${NON_SYSTEM_RELATIONSHIP_FILTER}
-             RETURN count(r) AS total`,
+             RETURN count(r) AS total,
+                    ${UNRECONCILABLE_RELATIONSHIP_COUNT} AS unreconcilable`,
             {
               orgId,
               workspaceId,
@@ -825,7 +876,20 @@ export const [schemaReconcile] = createFunction(
               ...PLATFORM_REL_TYPE_PARAMS,
             },
           );
-          totalRelationships = countOf(relResult.records[0]?.get("total"));
+          // The COUNT is deliberately unfiltered by REIDENTIFIABLE_ENDPOINTS_FILTER
+          // and subtracts instead, so the rows the run will not attempt are a
+          // number an operator can see rather than an absence they cannot.
+          const matched = countOf(relResult.records[0]?.get("total"));
+          const unreconcilable = countOf(
+            relResult.records[0]?.get("unreconcilable"),
+          );
+          totalRelationships = matched - unreconcilable;
+          if (unreconcilable > 0) {
+            logger.warn(
+              { orgId, workspaceId, executionId, unreconcilable, matched },
+              "schema.reconcile: relationships excluded — an endpoint carries no publicId, so the write-back could not re-identify them",
+            );
+          }
         }
 
         return { totalNodes, totalRelationships };
@@ -1053,6 +1117,7 @@ Return only the derived property key-value pairs in the derivedProps field.`,
               `MATCH (a:GraphNode)-[r]->(b:GraphNode)
              WHERE a.orgId = $orgId AND a.workspaceId = $workspaceId
                AND ${FAR_ENDPOINT_TENANT_FILTER}
+               AND ${REIDENTIFIABLE_ENDPOINTS_FILTER}
                AND type(r) IN $relTypes
                AND ${NON_SYSTEM_RELATIONSHIP_FILTER}
              RETURN elementId(r) AS relElemId, type(r) AS relType, properties(r) AS props,

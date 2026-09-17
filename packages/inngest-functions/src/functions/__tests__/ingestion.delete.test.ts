@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 
@@ -654,6 +655,256 @@ describe("ingestion.delete-connection Inngest function", () => {
       const q = finalizeQuery(mockExecute)!;
       expect(q.sql).not.toMatch(/deleted_entities\s*=\s*,/);
       expect(q.params).toContain(0);
+    });
+  });
+});
+
+// ── Alias promotion writes, so it must be anchored to the whole tenant ───────
+//
+// Pass 1 of `delete-neo4j-data` OVERWRITES the promoted alias's identity fields
+// (naturalKey, displayName, properties) and MERGEs/DELETEs edges off `other`.
+// Anchoring one endpoint of a two-endpoint match leaves the others free, and
+// the read surface treats the workspace as an isolation boundary for
+// :GraphNode — graph.node.list, graph.stats, graph.search, ontology.neighbors,
+// ontology.query and reference.search all filter on orgId AND workspaceId — so
+// a node a sibling workspace cannot READ must not be one this job OVERWRITES.
+//
+// These tests EVALUATE the shipped predicate against constructed node bags
+// rather than asserting that the query text contains a substring. A
+// string-contains assertion cannot tell a same-org-different-workspace row from
+// a different-org one, which is precisely the distinction that has to hold:
+// the org predicate passes for every workspace inside that org, and a
+// workspace id is not unique across organisations, so neither predicate implies
+// the other and each must be shown to refuse a row the other accepts.
+
+const ALIAS_PROMOTION_SOURCE = readFileSync(
+  new URL("../ingestion.delete.ts", import.meta.url),
+  "utf8",
+);
+
+/** A constructed Neo4j node, as the promotion query would see it. */
+interface GraphNodeBag {
+  readonly name: string;
+  readonly orgId: string;
+  readonly workspaceId: string;
+  readonly connectionId?: string;
+}
+
+const P_ORG = "org-del";
+const P_WS = "ws-del";
+const P_CONN = "conn-delete-1";
+
+/**
+ * Lift one predicate block out of the SHIPPED query text.
+ *
+ * Reading the source is what makes these assertions evaluate what actually
+ * runs: a constant redeclared in the test would keep passing after the query
+ * lost its anchor. `//` line comments are stripped first — the query carries
+ * several, and they contain the word AND.
+ */
+function shippedConjuncts(startMarker: string, endMarker: string): string[] {
+  const from = ALIAS_PROMOTION_SOURCE.indexOf(startMarker);
+  if (from === -1) throw new Error(`query start not found: ${startMarker}`);
+  const to = ALIAS_PROMOTION_SOURCE.indexOf(endMarker, from);
+  if (to === -1) throw new Error(`query end not found: ${endMarker}`);
+  return ALIAS_PROMOTION_SOURCE.slice(from + startMarker.length, to)
+    .split("\n")
+    .map((line) => line.replace(/\/\/.*$/, "").trim())
+    .join(" ")
+    .replace(/^\s*WHERE\b/, "")
+    .split(/\bAND\b/)
+    .map((c) => c.trim().replace(/\s+/g, " "))
+    .filter((c) => c.length > 0);
+}
+
+/**
+ * Evaluate those conjuncts the way Neo4j would, against constructed bags.
+ *
+ * An unrecognised conjunct THROWS rather than being skipped, so a later edit
+ * cannot quietly make these assertions vacuous.
+ */
+function predicateAccepts(
+  conjuncts: string[],
+  bindings: Record<string, GraphNodeBag>,
+): boolean {
+  const params: Record<string, string> = {
+    orgId: P_ORG,
+    workspaceId: P_WS,
+    connectionId: P_CONN,
+  };
+  return conjuncts.every((conjunct) => {
+    const prop =
+      /^(\w+)\.(orgId|workspaceId|connectionId) (=|<>) \$(orgId|workspaceId|connectionId)$/.exec(
+        conjunct,
+      );
+    if (prop) {
+      const bag = bindings[prop[1]!];
+      if (!bag) throw new Error(`no bag bound for "${prop[1]}"`);
+      const actual = bag[prop[2]! as "orgId" | "workspaceId" | "connectionId"];
+      const expected = params[prop[4]!];
+      return prop[3] === "=" ? actual === expected : actual !== expected;
+    }
+    // Node identity, not a property: `WHERE other <> promoted`.
+    const identity = /^(\w+) (=|<>) (\w+)$/.exec(conjunct);
+    if (identity) {
+      const left = bindings[identity[1]!];
+      const right = bindings[identity[3]!];
+      if (!left || !right) throw new Error(`unbound node in "${conjunct}"`);
+      const same = left.name === right.name;
+      return identity[2] === "=" ? same : !same;
+    }
+    throw new Error(
+      `predicateAccepts cannot evaluate "${conjunct}" — teach it the new ` +
+        `clause rather than letting these assertions go vacuous.`,
+    );
+  });
+}
+
+describe("alias promotion only reaches nodes inside the whole tenant", () => {
+  const selection = () =>
+    shippedConjuncts(
+      "MATCH (alias:EntityNode)-[r:ALIAS_OF]->(principal:EntityNode)",
+      "WITH principal, alias, r",
+    );
+
+  const principal: GraphNodeBag = {
+    name: "principal",
+    orgId: P_ORG,
+    workspaceId: P_WS,
+    connectionId: P_CONN,
+  };
+  const alias: GraphNodeBag = {
+    name: "alias",
+    orgId: P_ORG,
+    workspaceId: P_WS,
+    connectionId: "conn-other",
+  };
+
+  it("promotes an alias wholly inside the tenant", () => {
+    expect(predicateAccepts(selection(), { principal, alias })).toBe(true);
+  });
+
+  it("refuses an alias belonging to another ORGANISATION", () => {
+    expect(
+      predicateAccepts(selection(), {
+        principal,
+        alias: { ...alias, orgId: "org-intruder" },
+      }),
+    ).toBe(false);
+  });
+
+  it("refuses an alias in a sibling WORKSPACE of the same org", () => {
+    // The row the org predicate cannot refuse. Promotion overwrites this
+    // node's naturalKey, displayName and properties, so accepting it is a
+    // write into a workspace this job was not invoked for.
+    expect(
+      predicateAccepts(selection(), {
+        principal,
+        alias: { ...alias, workspaceId: "ws-sibling" },
+      }),
+    ).toBe(false);
+  });
+
+  it("refuses an alias sharing a workspace id across organisations", () => {
+    // And the mirror: a workspace id is not unique across orgs, so only the
+    // org predicate refuses this one. Neither predicate covers for the other.
+    expect(
+      predicateAccepts(selection(), {
+        principal,
+        alias: { ...alias, orgId: "org-intruder", workspaceId: P_WS },
+      }),
+    ).toBe(false);
+  });
+
+  it("refuses a principal in a sibling workspace", () => {
+    // The principal is the anchor every other row is selected through, so it
+    // carries the full tenant too.
+    expect(
+      predicateAccepts(selection(), {
+        principal: { ...principal, workspaceId: "ws-sibling" },
+        alias,
+      }),
+    ).toBe(false);
+  });
+
+  it("still refuses an alias from the connection being deleted", () => {
+    // The pre-existing guard, pinned so a tenancy edit cannot drop it.
+    expect(
+      predicateAccepts(selection(), {
+        principal,
+        alias: { ...alias, connectionId: P_CONN },
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("the ALIAS_OF reroute only reaches nodes inside the whole tenant", () => {
+  const reroute = () =>
+    shippedConjuncts(
+      "MATCH (other:EntityNode)-[old:ALIAS_OF]->(principal)",
+      "MERGE (other)-[newEdge:ALIAS_OF]->(promoted)",
+    );
+
+  const promoted: GraphNodeBag = {
+    name: "promoted",
+    orgId: P_ORG,
+    workspaceId: P_WS,
+  };
+  const other: GraphNodeBag = {
+    name: "other",
+    orgId: P_ORG,
+    workspaceId: P_WS,
+  };
+
+  it("reroutes an edge off a node inside the tenant", () => {
+    expect(predicateAccepts(reroute(), { other, promoted })).toBe(true);
+  });
+
+  it("refuses to reroute an edge off another ORGANISATION's node", () => {
+    expect(
+      predicateAccepts(reroute(), {
+        other: { ...other, orgId: "org-intruder" },
+        promoted,
+      }),
+    ).toBe(false);
+  });
+
+  it("refuses to reroute an edge off a sibling WORKSPACE's node", () => {
+    // This branch MERGEs a new edge off `other` and DELETEs its existing one.
+    // Both are writes, and the org predicate alone lets this row through.
+    expect(
+      predicateAccepts(reroute(), {
+        other: { ...other, workspaceId: "ws-sibling" },
+        promoted,
+      }),
+    ).toBe(false);
+  });
+
+  it("still refuses to reroute the promoted node onto itself", () => {
+    expect(predicateAccepts(reroute(), { other: promoted, promoted })).toBe(
+      false,
+    );
+  });
+});
+
+describe("the promotion query is handed the workspace it anchors on", () => {
+  it("passes workspaceId alongside connectionId and orgId", async () => {
+    // The seam overwrites $orgId/$workspaceId on every run, so this is about
+    // the call site reading honestly — but it also proves the handler has the
+    // workspace in scope at the point the query claims to use it.
+    await capturedHandler!({
+      event: { data: { ...BASE_EVENT, mode: "data_only" } },
+      step: makeStep(),
+    });
+
+    const promotionCall = mocks.scopedSessionRun.mock.calls.find(
+      ([cypher]) => typeof cypher === "string" && cypher.includes("ALIAS_OF"),
+    );
+    expect(promotionCall).toBeDefined();
+    expect(promotionCall![1]).toMatchObject({
+      connectionId: BASE_EVENT.connectionId,
+      orgId: BASE_EVENT.orgId,
+      workspaceId: BASE_EVENT.workspaceId,
     });
   });
 });
