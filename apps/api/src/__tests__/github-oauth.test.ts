@@ -12,8 +12,9 @@
  * - GET /oauth/github/callback
  *   - missing code or state → 400
  *   - missing env vars → 503
- *   - state with bad base64url → 400
+ *   - state with bad base64url → 400 (via the signature check; see the test)
  *   - state HMAC mismatch → 400
+ *   - correctly-signed state that is not JSON → 400
  *   - expired state → 400
  *   - GitHub token exchange failure (non-200) → 502
  *   - GitHub token exchange error field → 400
@@ -604,12 +605,40 @@ describe("GET /oauth/github/callback", () => {
     expect(body.error).toContain("Invalid state format");
   });
 
-  it("returns 400 when state base64url decoding fails", async () => {
+  // Named for what it exercises, not for what it looks like it exercises: the
+  // non-base64url characters are simply dropped by `Buffer.from(x,
+  // "base64url")`, which never throws, so the decode succeeds and the request
+  // is refused one step later on the HMAC. That makes `verifyInstallState`'s
+  // `invalid_encoding` branch unreachable in Node; it is retained because
+  // removing it would change behaviour on a runtime whose base64url decoder
+  // does throw, and it was equally unreachable before the refactor that moved
+  // the check into @oxagen/github (behaviour-preserving port).
+  it("returns 400 for a state whose body is not base64url (refused on the signature)", async () => {
     const res = await makeCallbackReq({
       code: "code",
       state: "!!!invalid_base64!!!.abc123",
     });
     expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("Invalid state signature");
+  });
+
+  it("returns 400 when a correctly-signed state decodes to something that is not JSON", async () => {
+    // The `invalid_json` branch is reachable only with a VALID HMAC over a
+    // non-JSON body — a state minted against a different payload shape, or a
+    // stored secret reused across an encoding change. Same HMAC construction
+    // as buildValidState(), over a body JSON.parse cannot read.
+    const notJson = "this-is-not-json";
+    const hmac = createHmac("sha256", STATE_SECRET)
+      .update(notJson)
+      .digest("hex");
+    const state = `${Buffer.from(notJson).toString("base64url")}.${hmac}`;
+
+    const res = await makeCallbackReq({ code: "code", state });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("Invalid state JSON");
   });
 
   it("returns 400 when state HMAC does not match", async () => {
