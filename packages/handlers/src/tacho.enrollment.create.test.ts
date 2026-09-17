@@ -69,6 +69,10 @@ function happyDb(clash = false): void {
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
+        // The host insert asks `information_schema` whether the gateway column
+        // exists before naming it in RETURNING. "Applied" is the state these
+        // cases are about.
+        execute: async () => [{ "?column?": 1 }],
         query: {
           apiKeys: { findFirst: async () => keyRow },
           organizations: { findFirst: async () => ({ namespace: "acme" }) },

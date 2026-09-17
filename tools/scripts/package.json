@@ -10,6 +10,7 @@
     "@oxagen/database": "workspace:*",
     "@oxagen/engram": "workspace:*",
     "@oxagen/handlers": "workspace:*",
+    "@oxagen/iam": "workspace:*",
     "@oxagen/ontology": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",

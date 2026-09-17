@@ -308,6 +308,13 @@ describe("api.key.revoke handler — key not found", () => {
 describe("api.key.revoke handler — reserved server-owned purposes", () => {
   const RESERVED: [string, RegExp][] = [
     ["tacho_host_v1", /revoke_tacho_enrollment/],
+    // The gateway key (ADR-078). Refusable only as of this change: the path a
+    // refusal names has to ACHIEVE what the refused operation was for, and
+    // `retireEnrollmentKeys` began selecting
+    // `purpose IN (tacho_host_v1, tacho_gateway_v1)` here. Before that,
+    // revoke_tacho_enrollment left this key live, and naming it would have
+    // been an instruction to do nothing.
+    ["tacho_gateway_v1", /revoke_tacho_enrollment/],
     ["agent_credential_v1", /rotate_agent_credential|retire_agent/],
   ];
 
@@ -419,6 +426,42 @@ describe("api.key.revoke handler — reserved server-owned purposes", () => {
     });
     const result = await apiKeyRevokeHandler(BASE_INPUT, TEST_CTX);
     expect(result.revoked).toBe(true);
+  });
+
+  /**
+   * The case that catches an OVER-BROAD predicate.
+   *
+   * `create_api_key` takes `scope` as free-form `z.record(z.unknown())` and a
+   * host's enrollment id is public, so an Owner can put `host_enrollment_id`
+   * on an ordinary key — by intent or by coincidence. A guard that keyed off
+   * the enrollment id, or matched any scope that merely mentions Tacho, would
+   * refuse this key and leave its holder with no way to revoke their own
+   * credential. `purpose` is the half the server owns, and it is the only half
+   * either Tacho predicate reads.
+   */
+  it("REVOKES an ordinary key whose scope merely mentions an enrollment id", async () => {
+    vi.clearAllMocks();
+    const tx = makeSoftDeleteTx({
+      id: "key-uuid-1",
+      publicId: "aky_test123",
+      scope: {
+        host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+        environments: ["prod"],
+      },
+    });
+    let callCount = 0;
+    mocks.withTenantDb.mockImplementation(
+      (fn: (t: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1)
+          return fn(makeRoleResolutionTx("principal-uuid-1", "Owner"));
+        return fn(tx);
+      },
+    );
+
+    const result = await apiKeyRevokeHandler(BASE_INPUT, TEST_CTX);
+    expect(result.revoked).toBe(true);
+    expect(tx.update).toHaveBeenCalled();
   });
 
   // A key minted before the scope column carried anything. The guards read

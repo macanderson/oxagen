@@ -1,8 +1,17 @@
 "use client";
 // The user menu behind the avatar (mockup `userMenu()`): who is signed in and
 // the theme switch.
+//
+// The trigger draws `viewer.avatarUrl` through the app's one avatar renderer
+// (src/ui/avatar.tsx), which falls back to initials when the person has set no
+// avatar or the stored value is malformed. It read the name and the email and
+// nothing else before, so the Account dialog's avatar field was write-only
+// from the chrome's point of view: no branch here could ever draw one, and a
+// full reload did not help — the value came back from the session and was
+// thrown away at the last step.
 import { Menu } from "@base-ui/react/menu";
 import { useTranslations } from "next-intl";
+import { Avatar } from "@/ui/avatar";
 import { initials } from "./format";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
@@ -13,7 +22,7 @@ const itemClass =
 
 export function UserMenu({ data }: { data: ShellData }) {
   const t = useTranslations("shell");
-  const { theme, setTheme } = useShellState();
+  const { theme, setTheme, setAccountOpen } = useShellState();
   const { viewer } = data;
   const displayName = viewer.name ?? viewer.email;
   return (
@@ -21,9 +30,14 @@ export function UserMenu({ data }: { data: ShellData }) {
       <Menu.Trigger
         data-testid="user-menu-trigger"
         aria-label={t("topbar.userMenu", { name: displayName })}
-        className="grid size-8 place-items-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        className="flex rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
-        <span aria-hidden="true">{initials(displayName)}</span>
+        <Avatar
+          value={viewer.avatarUrl}
+          initials={initials(displayName)}
+          size="trigger"
+          testId="user-menu-avatar"
+        />
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Positioner sideOffset={8} align="end" className="z-50">
@@ -32,6 +46,15 @@ export function UserMenu({ data }: { data: ShellData }) {
               <p className="text-sm font-semibold">{displayName}</p>
               <p className="text-xs text-muted-foreground">{viewer.email}</p>
             </div>
+            <Menu.Item
+              className={itemClass}
+              data-testid="open-account"
+              onClick={() => {
+                setAccountOpen(true);
+              }}
+            >
+              <span className="flex-1">{t("userMenu.account")}</span>
+            </Menu.Item>
             <Menu.Item
               className={itemClass}
               closeOnClick={false}

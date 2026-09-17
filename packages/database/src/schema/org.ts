@@ -71,8 +71,11 @@ export const organizations = orgSchema.table(
       "organizations_type_check",
       sql`${t.type} IN ('personal','business')`,
     ),
-    // Mirrors billing.plans.included_actions_annual's own bound: a negative
-    // commitment is not a smaller one, it is a corrupt row.
+    // Mirrors billing.plans.included_gau_per_month's own bound: a negative
+    // commitment is not a smaller one, it is a corrupt row. (This named
+    // `included_actions_annual` until migration 20260915120000 dropped that
+    // column; the plan-side figure is monthly now and the annual one is twelve
+    // of it — see resolveOrgActionEntitlement.)
     negotiatedActionsAnnualCheck: check(
       "organizations_negotiated_actions_annual_check",
       sql`${t.negotiatedActionsAnnual} IS NULL OR ${t.negotiatedActionsAnnual} >= 0`,

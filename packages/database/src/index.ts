@@ -9,6 +9,7 @@ export {
   withTenantDb,
   withOrgDb,
   withSystemDb,
+  withOrgPlaneSystemDb,
   setTransactionWorkspaceScope,
   assertRlsConnectionSafe,
   assertRlsEnforcedInProduction,
@@ -47,3 +48,13 @@ export {
   NAMESPACE_MIN_LENGTH,
   NAMESPACE_MAX_LENGTH,
 } from "./namespace";
+export {
+  hasColumn,
+  planeKeyFor,
+  ambientPlaneKey,
+  resetColumnProbesForTests,
+  NEGATIVE_PROBE_TTL_MS,
+  type ColumnRef,
+  type ProbeTx,
+} from "./column-probe";
+export { HOST_GATEWAY_COLUMN, SESSION_GATEWAY_COLUMN } from "./schema/tacho";
