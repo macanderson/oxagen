@@ -15,6 +15,15 @@
 // the shell mounts at organization scope, so the composer is offered only
 // inside a workspace. On an organization page it says so rather than posting a
 // question that the kernel would refuse for want of a scope.
+//
+// The conversation belongs to the workspace it was opened in: the turn handler
+// matches the conversation on `(id, orgId, workspaceId)` and raises
+// ConversationNotFoundError otherwise. The chrome lives in the organization
+// layout and survives a workspace switch, so the transcript and the
+// conversation id are keyed to the workspace here — a switch clears them, and
+// a reply that lands after the switch is dropped rather than shown under the
+// workspace it does not belong to. Standing on an organization page is not a
+// switch: it has no workspace of its own, so the transcript waits.
 import { CircleAlert, Send, Sparkles } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -84,6 +93,27 @@ export function AssistantFlyout() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  // The workspace the transcript belongs to, "org/ws". Null on an
+  // organization page, which owns no conversation and so changes nothing.
+  const scope = org === null || ws === null ? null : `${org}/${ws}`;
+  const [scopeShown, setScopeShown] = useState(scope);
+  // The latest workspace the flyout has been in, read by a turn that is still
+  // in flight when the person moves. A ref, because the reply resolves outside
+  // the render that started it and must compare against now, not against then.
+  const scopeRef = useRef(scope);
+  if (scope !== null && scope !== scopeShown) {
+    // Adjusting state during render rather than in an effect: the stale
+    // transcript never paints under the new workspace.
+    setScopeShown(scope);
+    setEntries([]);
+    setConversationId(null);
+    setDraft("");
+    setPending(false);
+  }
+  useEffect(() => {
+    if (scope !== null) scopeRef.current = scope;
+  }, [scope]);
+
   useEffect(() => {
     if (assistantOpen) closeRef.current?.focus();
   }, [assistantOpen]);
@@ -97,7 +127,7 @@ export function AssistantFlyout() {
     log.scrollTo({ top: log.scrollHeight });
   }, [entries]);
 
-  const inWorkspace = org !== null && ws !== null;
+  const inWorkspace = scope !== null;
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -108,6 +138,9 @@ export function AssistantFlyout() {
     setEntries((prior) => [...prior, { kind: "asked", id, text: content }]);
     setDraft("");
     setPending(true);
+    const asked = `${org}/${ws}`;
+    /** The person is still in the workspace this turn was asked from. */
+    const stillThere = () => scopeRef.current === asked;
     try {
       const result = await askAssistant(org, ws, {
         conversationId,
@@ -115,6 +148,7 @@ export function AssistantFlyout() {
         route: rest[0] ?? "fleet",
         entityId: rest[1] ?? null,
       });
+      if (!stillThere()) return;
       if (result.ok) {
         setConversationId(result.value.conversationId);
         setEntries((prior) => [
@@ -134,12 +168,13 @@ export function AssistantFlyout() {
         ]);
       }
     } catch {
+      if (!stillThere()) return;
       setEntries((prior) => [
         ...prior,
         { kind: "refused", id: `${id}-a`, code: "unavailable" },
       ]);
     } finally {
-      setPending(false);
+      if (stillThere()) setPending(false);
     }
   }
 
@@ -183,7 +218,10 @@ export function AssistantFlyout() {
 
       <div ref={logRef} className="min-h-0 flex-1 overflow-y-auto p-4">
         {entries.length === 0 ? (
-          <div className="flex flex-col gap-2 py-6" data-testid="assistant-intro">
+          <div
+            className="flex flex-col gap-2 py-6"
+            data-testid="assistant-intro"
+          >
             <h3 className="text-sm font-semibold">{t("intro.title")}</h3>
             <p className="text-sm text-muted-foreground">{t("intro.body")}</p>
           </div>

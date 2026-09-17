@@ -1,5 +1,13 @@
 "use client";
 // The launcher at the foot of the sidebar: the point the assistant flies out of.
+// It is rendered twice — once in the desktop rail, once at the foot of the
+// phone drawer — because the rail is `hidden md:flex` and the drawer is the
+// phone's only path to the sidebar's foot. Without the second one a phone had
+// no control that could set `assistantOpen` at all, so `ask_assistant` was
+// unreachable below `md` (ADR-026 mobile parity). The drawer passes
+// `onNavigate` to close itself, the way it does for every sidebar link: the
+// flyout and the drawer share a stacking level, so a drawer left open would
+// cover the panel the tap just opened.
 //
 // The launcher WL-06 deleted reported engine health beside its label, read
 // through a `shell.assistantEngine` port. `get_assistant_engine` is
@@ -12,7 +20,12 @@ import { useShellState } from "./shell-state";
 
 export const ASSISTANT_PANEL_ID = "shell-assistant";
 
-export function AssistantLauncher() {
+export function AssistantLauncher({
+  onNavigate,
+}: {
+  /** Called after the tap is handled, so the phone drawer can close itself. */
+  onNavigate?: () => void;
+} = {}) {
   const t = useTranslations("shell.assistant");
   const { assistantOpen, setAssistantOpen } = useShellState();
   return (
@@ -20,9 +33,11 @@ export function AssistantLauncher() {
       type="button"
       onClick={() => {
         setAssistantOpen(!assistantOpen);
+        onNavigate?.();
       }}
       aria-controls={ASSISTANT_PANEL_ID}
       aria-expanded={assistantOpen}
+      data-touch-target=""
       data-testid="assistant-launcher"
       className={`mb-2 flex w-full items-center gap-2.5 rounded-lg border bg-app-panel-bg px-2.5 py-2 text-left text-app-panel-fg transition-colors hover:border-input focus-visible:outline-2 focus-visible:outline-ring ${
         assistantOpen ? "border-primary" : "border-sidebar-border"
