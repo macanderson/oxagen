@@ -13,7 +13,7 @@
  * group. This catches the next cause, whatever it turns out to be: an Actions
  * outage, a push that raised no event, a workflow that failed to start.
  *
- * ## Three states, not two
+ * ## Three run states, not two
  *
  * A run that is still going is not an answer either, and counting one as an
  * answer is how a stuck window reports "every commit is verified" over commits
@@ -25,6 +25,33 @@
  *
  * `pending` exits 0 and closes nothing. A recovery is claimed off an answer,
  * never off the absence of one.
+ *
+ * ## Supersession — why a commit can stop being the finding
+ *
+ * A run is never created for a commit retroactively. So a commit that missed
+ * its run stays missing it forever, and a guard that reports every such commit
+ * reports the same one on every push and every scheduled tick until it falls
+ * out of the window. That happened: #3125 re-posted `d3e5ebef` seven times
+ * across two days while four later commits on `main` concluded `success`. An
+ * alert that is permanently true is the shape that teaches people to scroll
+ * past it, which costs exactly the signal #2730 exists to raise.
+ *
+ * The question this guard asks is whether `main` is flying blind — not whether
+ * every commit in history has its own receipt. Once a *later* commit on `main`
+ * concludes a run, the pipeline demonstrably ran and deployed past that point,
+ * and the blindness ended. The earlier gap is then history that nothing can
+ * answer, so it becomes:
+ *
+ *   superseded  no run of its own, but a strictly later `main` commit concluded
+ *
+ * `superseded` is still printed on every invocation — the gap is real and
+ * hiding it entirely would be its own blindness — but it does not drive the
+ * verdict and does not file or comment.
+ *
+ * HEAD can never be superseded: nothing is later than it. That is deliberate,
+ * and it is what keeps the live case detectable. During the #2730 window HEAD
+ * itself had no concluded run on every tick, so the guard still fires while the
+ * incident is happening, which is when firing is worth anything.
  *
  * ## It fails open, always
  *
@@ -69,7 +96,33 @@ export function classifyRuns(runs) {
   return "none";
 }
 
-/** Fold per-commit states into the overall verdict. */
+/**
+ * Rewrite `none` to `superseded` for any commit a later `main` commit answered.
+ *
+ * `states` arrives newest-first, the order the commits API returns. "Later"
+ * therefore means a LOWER index, and index 0 — HEAD — can never be superseded,
+ * because nothing is later than it. Pure, and it does not mutate its argument.
+ *
+ * Only a `concluded` run supersedes. An `in_flight` one is not an answer yet
+ * (the same reason `pending` closes nothing), and a `superseded` one never
+ * carried an answer of its own to pass down.
+ */
+export function applySupersession(states) {
+  let answered = false;
+  return states.map((s) => {
+    const next =
+      answered && s.state === "none" ? { ...s, state: "superseded" } : s;
+    if (s.state === "concluded") answered = true;
+    return next;
+  });
+}
+
+/**
+ * Fold per-commit states into the overall verdict.
+ *
+ * `superseded` is deliberately inert here: it is a gap nothing can ever fill,
+ * so letting it reach `unverified` would pin the verdict open forever.
+ */
 export function verdictOf(states) {
   if (states.some((s) => s.state === "none")) return "unverified";
   if (states.some((s) => s.state === "in_flight")) return "pending";
@@ -98,17 +151,27 @@ async function main() {
     });
   }
 
-  const verdict = verdictOf(states);
-  const unverified = states.filter((s) => s.state === "none").map((s) => s.sha);
-  const inFlight = states
+  const judged = applySupersession(states);
+  const verdict = verdictOf(judged);
+  const unverified = judged.filter((s) => s.state === "none").map((s) => s.sha);
+  const inFlight = judged
     .filter((s) => s.state === "in_flight")
     .map((s) => s.sha);
+  const superseded = judged
+    .filter((s) => s.state === "superseded")
+    .map((s) => s.sha);
 
-  console.log(`[main-verified] window=${states.length} verdict=${verdict}`);
+  console.log(`[main-verified] window=${judged.length} verdict=${verdict}`);
   if (inFlight.length > 0)
     console.log(`  still running: ${inFlight.join(", ")}`);
   if (unverified.length > 0)
     console.log(`  NO run at all: ${unverified.join(", ")}`);
+  // Printed every time, never announced. The gap is real and permanent; what
+  // changed is that a later commit answered the question it was asked about.
+  if (superseded.length > 0)
+    console.log(
+      `  no run, answered by a later commit: ${superseded.join(", ")}`,
+    );
 
   if (!announce) return;
 
