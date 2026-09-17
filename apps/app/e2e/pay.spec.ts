@@ -46,7 +46,5 @@ test("the Billing page opens a Stripe Checkout session for a GAU purchase", asyn
 
   // Stripe is showing the session rather than an error page.
   expect(new URL(page.url()).hostname).toBe("checkout.stripe.com");
-  await expect(page.locator("body")).not.toContainText(
-    "Something went wrong",
-  );
+  await expect(page.locator("body")).not.toContainText("Something went wrong");
 });

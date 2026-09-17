@@ -26,7 +26,11 @@ const { router, openContextPr, mergeContextPr, dismissProposal } = vi.hoisted(
   }),
 );
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
-vi.mock("./actions", () => ({ openContextPr, mergeContextPr, dismissProposal }));
+vi.mock("./actions", () => ({
+  openContextPr,
+  mergeContextPr,
+  dismissProposal,
+}));
 
 const { MergeContextPr, ProposalWrites } = await import("./write-controls");
 const { useActionFailure } = await import("./action-failure");
@@ -71,7 +75,9 @@ describe("Open a Context PR", () => {
       value: { status: "checks_passed" },
     });
     openDialog();
-    fireEvent.click(screen.getByRole("button", { name: "Open the pull request" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open the pull request" }),
+    );
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(PRS);
     });
@@ -93,8 +99,12 @@ describe("Open a Context PR", () => {
       code: "lineage_pr_open",
     });
     openDialog();
-    fireEvent.click(screen.getByRole("button", { name: "Open the pull request" }));
-    expect(await screen.findByTestId("open-context-pr-failure")).toHaveTextContent(
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open the pull request" }),
+    );
+    expect(
+      await screen.findByTestId("open-context-pr-failure"),
+    ).toHaveTextContent(
       "Another pull request is already open for this lineage. One concern, one pull request.",
     );
     expect(router.replace).not.toHaveBeenCalled();
@@ -103,18 +113,27 @@ describe("Open a Context PR", () => {
   it("names a write that threw before it answered (negative)", async () => {
     openContextPr.mockRejectedValue(new Error("network"));
     openDialog();
-    fireEvent.click(screen.getByRole("button", { name: "Open the pull request" }));
-    expect(await screen.findByTestId("open-context-pr-failure")).toHaveTextContent(
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open the pull request" }),
+    );
+    expect(
+      await screen.findByTestId("open-context-pr-failure"),
+    ).toHaveTextContent(
       "The change could not be made: action_failed. Nothing was changed.",
     );
   });
 
   it("offers to run the checks again once the pull request exists", async () => {
-    openContextPr.mockResolvedValue({ ok: true, value: { status: "checks_failed" } });
+    openContextPr.mockResolvedValue({
+      ok: true,
+      value: { status: "checks_failed" },
+    });
     render(<ProposalWrites {...TARGET} status="checks_failed" />, {
       wrapper: intl,
     });
-    fireEvent.click(screen.getByRole("button", { name: "Run the checks again" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Run the checks again" }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Run the checks" }));
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(PRS);
@@ -122,11 +141,16 @@ describe("Open a Context PR", () => {
   });
 
   it("still offers the re-run once the checks have passed, because the head can move under them", async () => {
-    openContextPr.mockResolvedValue({ ok: true, value: { status: "checks_running" } });
+    openContextPr.mockResolvedValue({
+      ok: true,
+      value: { status: "checks_running" },
+    });
     render(<ProposalWrites {...TARGET} status="checks_passed" />, {
       wrapper: intl,
     });
-    fireEvent.click(screen.getByRole("button", { name: "Run the checks again" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Run the checks again" }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Run the checks" }));
     await waitFor(() => {
       expect(openContextPr).toHaveBeenCalledWith(
@@ -155,11 +179,16 @@ describe("Dismiss", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Reason" }), {
       target: { value: reason },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss the proposal" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Dismiss the proposal" }),
+    );
   }
 
   it("dismisses this proposal with the reason written and reloads Proposals", async () => {
-    dismissProposal.mockResolvedValue({ ok: true, value: { status: "rejected" } });
+    dismissProposal.mockResolvedValue({
+      ok: true,
+      value: { status: "rejected" },
+    });
     submitReason("Duplicate of ctx.release.notes-format");
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(
@@ -205,7 +234,10 @@ describe("Merge pull request", () => {
   });
 
   it("merges this proposal's pull request and reloads its Context PR", async () => {
-    mergeContextPr.mockResolvedValue({ ok: true, value: { commit: "4d5e6f7" } });
+    mergeContextPr.mockResolvedValue({
+      ok: true,
+      value: { commit: "4d5e6f7" },
+    });
     render(<MergeContextPr {...TARGET} blocked={false} />, { wrapper: intl });
     fireEvent.click(screen.getByRole("button", { name: "Merge pull request" }));
     await waitFor(() => {
@@ -237,20 +269,62 @@ describe("Merge pull request", () => {
 
 describe("the sentence for each refusal", () => {
   it.each([
-    [{ reason: "denied", code: "no_principal" }, "This change needs a signed-in person. Nothing was changed."],
-    [{ reason: "not_found", code: "proposal_not_found" }, "This proposal is not in this workspace."],
-    [{ reason: "conflict", code: "governance_unreadable" }, "could not be read, so nothing was opened or merged."],
-    [{ reason: "not_found", code: "workspace_repository_missing" }, "This workspace has no connected GitHub repository"],
-    [{ reason: "conflict", code: "checks_not_passed" }, "Merge is blocked until every check passes."],
-    [{ reason: "conflict", code: "head_moved" }, "The pull request changed after the checks ran. Run the checks again."],
-    [{ reason: "conflict", code: "base_moved" }, "no longer targets the production branch"],
-    [{ reason: "conflict", code: "github_refused" }, "GitHub refused the change. Nothing was published."],
-    [{ reason: "conflict", code: "already_merged" }, "This proposal changed after the page loaded."],
-    [{ reason: "conflict", code: "proposal_checks_running" }, "This proposal changed after the page loaded."],
-    [{ reason: "conflict", code: "record_file_missing" }, "The change was refused: record_file_missing. Nothing was changed."],
-    [{ reason: "invalid", code: "invalid_input", field: "reason" }, "Write a reason before you dismiss the proposal."],
-    [{ reason: "pending_approval", accessRequestId: "acr_1" }, "The change is waiting for approval: acr_1."],
-    [{ reason: "unavailable", code: "kernel_failure" }, "The change could not be made: kernel_failure."],
+    [
+      { reason: "denied", code: "no_principal" },
+      "This change needs a signed-in person. Nothing was changed.",
+    ],
+    [
+      { reason: "not_found", code: "proposal_not_found" },
+      "This proposal is not in this workspace.",
+    ],
+    [
+      { reason: "conflict", code: "governance_unreadable" },
+      "could not be read, so nothing was opened or merged.",
+    ],
+    [
+      { reason: "not_found", code: "workspace_repository_missing" },
+      "This workspace has no connected GitHub repository",
+    ],
+    [
+      { reason: "conflict", code: "checks_not_passed" },
+      "Merge is blocked until every check passes.",
+    ],
+    [
+      { reason: "conflict", code: "head_moved" },
+      "The pull request changed after the checks ran. Run the checks again.",
+    ],
+    [
+      { reason: "conflict", code: "base_moved" },
+      "no longer targets the production branch",
+    ],
+    [
+      { reason: "conflict", code: "github_refused" },
+      "GitHub refused the change. Nothing was published.",
+    ],
+    [
+      { reason: "conflict", code: "already_merged" },
+      "This proposal changed after the page loaded.",
+    ],
+    [
+      { reason: "conflict", code: "proposal_checks_running" },
+      "This proposal changed after the page loaded.",
+    ],
+    [
+      { reason: "conflict", code: "record_file_missing" },
+      "The change was refused: record_file_missing. Nothing was changed.",
+    ],
+    [
+      { reason: "invalid", code: "invalid_input", field: "reason" },
+      "Write a reason before you dismiss the proposal.",
+    ],
+    [
+      { reason: "pending_approval", accessRequestId: "acr_1" },
+      "The change is waiting for approval: acr_1.",
+    ],
+    [
+      { reason: "unavailable", code: "kernel_failure" },
+      "The change could not be made: kernel_failure.",
+    ],
   ] as const)("%j", (failure, text) => {
     const { result } = renderHook(() => useActionFailure(), { wrapper: intl });
     expect(result.current({ ok: false, ...failure })).toContain(text);

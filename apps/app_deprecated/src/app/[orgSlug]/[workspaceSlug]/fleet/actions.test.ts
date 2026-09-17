@@ -98,12 +98,19 @@ beforeEach(() => {
 describe("listFleetAction", () => {
   it("asserts workspace membership, with the workspace id and the session user", async () => {
     await listFleetAction({ orgSlug: "acme", workspaceSlug: "core" });
-    expect(mockAssertWorkspaceMember).toHaveBeenCalledWith(WS.id, SESSION.user.id);
+    expect(mockAssertWorkspaceMember).toHaveBeenCalledWith(
+      WS.id,
+      SESSION.user.id,
+    );
   });
 
   it("asserts membership before it invokes anything", async () => {
     await listFleetAction({ orgSlug: "acme", workspaceSlug: "core" });
-    expect(calls).toEqual(["assertOrgMember", "assertWorkspaceMember", "invoke"]);
+    expect(calls).toEqual([
+      "assertOrgMember",
+      "assertWorkspaceMember",
+      "invoke",
+    ]);
   });
 
   it("lets a membership miss propagate instead of catching it into an error string", async () => {
