@@ -16,6 +16,34 @@
  * the real schema, and the two SQL expressions a WHERE carries —
  * `gauRemainingSql()` and `gauUninvoicedSql()` — are evaluated by their
  * documented meaning (the uninvoiced one unfloored, as the SQL is).
+ *
+ * ── Before you add a test against this seam, read this ──────────────────────
+ *
+ * A fake that does not refuse what the real thing refuses is not a test
+ * double. It is a second implementation with different rules, and every gap
+ * between the two is a test that passes for the wrong reason.
+ *
+ * That is not hypothetical here. Three gaps have been found in this file, each
+ * of which had been letting a wrong implementation pass:
+ *
+ *   1. It did not enforce the tables' CHECK constraints. An implementation
+ *      that skipped the reversal clamp stored `purchased_gau = -5000` and went
+ *      green; Postgres refuses it outright with
+ *      `gau_buckets_counts_non_negative` and would have failed the webhook on
+ *      every redelivery. `assertChecks` now mirrors the constraints.
+ *   2. A bare `await tx.insert(...).values(...)` did nothing. Drizzle executes
+ *      it; the fake returned a builder object, so a row the code really writes
+ *      never appeared in the store — which reads as "the code did not write
+ *      it" in a test that checks, and as a pass in every test that does not.
+ *   3. `select().from().where()` resolved only on `.limit()`. Drizzle runs the
+ *      query at every stage, so an unlimited read awaited the chain object and
+ *      the caller got something that was not an array.
+ *
+ * The pattern is one-directional: each gap made the fake *more permissive*
+ * than Postgres, never less. So when you add a statement shape here, ask what
+ * the database would reject that this would accept — and prefer throwing on
+ * anything unmodelled (as `evalSet` and the arbiter checks already do) over
+ * guessing, because a guess is indistinguishable from a pass.
  */
 
 import { getTableColumns, is, Param, StringChunk, type SQL } from "drizzle-orm";
@@ -31,24 +59,33 @@ import type { Cond } from "./gau-conditions";
 type Row = Record<string, unknown>;
 
 export interface StatementLog {
-  op: "select" | "insert" | "upsert" | "update";
+  op: "select" | "insert" | "upsert" | "update" | "lock";
   table: string;
   values?: Row;
   set?: Row;
+  /** For `op: "lock"`, the advisory-lock key the statement named. */
+  lockKey?: string;
 }
 
 export interface FakeGauStore {
   buckets: Row[];
   settlements: Row[];
+  reversals: Row[];
   paymentMethods: Row[];
   log: StatementLog[];
 }
 
 export function makeFakeGauStore(): FakeGauStore {
-  return { buckets: [], settlements: [], paymentMethods: [], log: [] };
+  return {
+    buckets: [],
+    settlements: [],
+    reversals: [],
+    paymentMethods: [],
+    log: [],
+  };
 }
 
-type TableName = "buckets" | "settlements" | "paymentMethods";
+type TableName = "buckets" | "settlements" | "reversals" | "paymentMethods";
 
 function columnKeys(table: Parameters<typeof getTableColumns>[0]) {
   return new Map<unknown, string>(
@@ -57,6 +94,7 @@ function columnKeys(table: Parameters<typeof getTableColumns>[0]) {
 }
 const bucketKeys = columnKeys(schema.gauBuckets);
 const settlementKeys = columnKeys(schema.gauSettlements);
+const reversalKeys = columnKeys(schema.gauReversals);
 const paymentMethodKeys = columnKeys(schema.paymentMethods);
 /** `used_gau` → `usedGau`, for the `excluded.<column>` reference a SET carries. */
 const bucketKeyByName = new Map<string, string>(
@@ -69,6 +107,7 @@ const bucketKeyByName = new Map<string, string>(
 function tableName(table: unknown): TableName {
   if (table === schema.gauBuckets) return "buckets";
   if (table === schema.gauSettlements) return "settlements";
+  if (table === schema.gauReversals) return "reversals";
   if (table === schema.paymentMethods) return "paymentMethods";
   throw new Error("fake tx: unexpected table");
 }
@@ -116,6 +155,60 @@ function matches(row: Row, cond: Cond, keys: Map<unknown, string>): boolean {
       return cmp(valueOf(row, cond.col, keys), cond.val) > 0;
     case "gte":
       return cmp(valueOf(row, cond.col, keys), cond.val) >= 0;
+  }
+}
+
+/**
+ * The table CHECK constraints a write has to satisfy, enforced here because a
+ * fake that accepts what Postgres refuses proves nothing. `gau_buckets`
+ * forbids a negative count, which is what makes the reversal's clamp
+ * load-bearing rather than cosmetic; `gau_reversals` requires its three
+ * quantities to add up.
+ */
+function assertChecks(t: TableName, row: Row): void {
+  if (t === "buckets") {
+    for (const k of [
+      "includedGau",
+      "purchasedGau",
+      "carriedGau",
+      "usedGau",
+      "overageInvoicedGau",
+      "interimSeq",
+      "topupSeq",
+    ] as const) {
+      const v = row[k];
+      if (typeof v === "number" && v < 0) {
+        throw new Error(
+          `fake tx: violates gau_buckets_counts_non_negative (${k} = ${v})`,
+        );
+      }
+    }
+    return;
+  }
+  if (t === "reversals") {
+    const requested = row.requestedGau as number;
+    const reversed = row.reversedGau as number;
+    const unrecovered = row.unrecoveredGau as number;
+    const amount = row.amountCents as number;
+    if (
+      requested < 0 ||
+      reversed < 0 ||
+      unrecovered < 0 ||
+      amount < 0 ||
+      reversed + unrecovered !== requested
+    ) {
+      throw new Error("fake tx: violates gau_reversals_quantities_check");
+    }
+    if (row.kind !== "refund" && row.kind !== "dispute") {
+      throw new Error("fake tx: violates gau_reversals_kind_check");
+    }
+    // Pending or settled, never half of each.
+    if ((row.settlementId === null) !== (row.bucketId === null)) {
+      throw new Error(
+        "fake tx: violates gau_reversals_pending_consistency_check",
+      );
+    }
+    return;
   }
 }
 
@@ -214,6 +307,7 @@ export function fakeGauExecutor(store: FakeGauStore) {
   const tables: Record<TableName, Row[]> = {
     buckets: store.buckets,
     settlements: store.settlements,
+    reversals: store.reversals,
     paymentMethods: store.paymentMethods,
   };
   const keysFor = (t: TableName) =>
@@ -221,7 +315,9 @@ export function fakeGauExecutor(store: FakeGauStore) {
       ? bucketKeys
       : t === "settlements"
         ? settlementKeys
-        : paymentMethodKeys;
+        : t === "reversals"
+          ? reversalKeys
+          : paymentMethodKeys;
 
   return {
     query: {
@@ -230,6 +326,24 @@ export function fakeGauExecutor(store: FakeGauStore) {
           store.log.push({ op: "select", table: "paymentMethods" });
           const hit = store.paymentMethods.find((r) =>
             matches(r, args.where, paymentMethodKeys),
+          );
+          return Promise.resolve(hit ? { ...hit } : undefined);
+        },
+      },
+      gauSettlements: {
+        findFirst: (args: { where: Cond }) => {
+          store.log.push({ op: "select", table: "settlements" });
+          const hit = store.settlements.find((r) =>
+            matches(r, args.where, settlementKeys),
+          );
+          return Promise.resolve(hit ? { ...hit } : undefined);
+        },
+      },
+      gauReversals: {
+        findFirst: (args: { where: Cond }) => {
+          store.log.push({ op: "select", table: "reversals" });
+          const hit = store.reversals.find((r) =>
+            matches(r, args.where, reversalKeys),
           );
           return Promise.resolve(hit ? { ...hit } : undefined);
         },
@@ -260,6 +374,17 @@ export function fakeGauExecutor(store: FakeGauStore) {
             store.log.push({ op: "select", table: t });
             return Promise.resolve(rows.slice(0, n));
           },
+          // A select is thenable at every stage in drizzle — `await
+          // tx.select().from(x).where(y)` with no limit runs the query. The
+          // fake used to resolve only on `.limit()`, so an unlimited read
+          // awaited the chain object itself and the caller got something that
+          // was not an array.
+          then: <R>(onFulfilled: (v: Row[]) => R) => {
+            store.log.push({ op: "select", table: t });
+            return Promise.resolve(rows.map((r) => ({ ...r }))).then(
+              onFulfilled,
+            );
+          },
         };
         return chain;
       },
@@ -278,17 +403,42 @@ export function fakeGauExecutor(store: FakeGauStore) {
               ? {
                   stripeCheckoutSessionId: null,
                   stripeInvoiceId: null,
+                  stripePaymentIntentId: null,
+                  chargedCents: null,
                   settledAt: null,
                 }
               : {}),
+            ...(t === "reversals"
+              ? { settlementId: null, bucketId: null }
+              : {}),
             ...v,
           };
+          assertChecks(t, row);
+          if (
+            t === "reversals" &&
+            store.reversals.some(
+              (r) =>
+                r.stripePaymentIntentId === row.stripePaymentIntentId &&
+                r.providerEventId === row.providerEventId,
+            )
+          ) {
+            // gau_reversals_payment_intent_event_idx: the idempotency key.
+            throw new Error(
+              "fake tx: duplicate key value violates gau_reversals_payment_intent_event_idx",
+            );
+          }
           tables[t].push(row);
           store.log.push({ op: "insert", table: t, values: v });
           return row;
         };
         return {
           returning: () => Promise.resolve([insertRow()]),
+          // A bare `await tx.insert(...).values(...)` executes in drizzle, so
+          // it has to execute here: an insert the fake silently skipped would
+          // read as "the row was never written" in every test that checks for
+          // it, and as a pass in every test that does not.
+          then: <R>(onFulfilled: (v: Row[]) => R) =>
+            Promise.resolve([insertRow()]).then(onFulfilled),
           onConflictDoNothing: (conflict: { target: unknown; where?: SQL }) =>
             thenable(() => {
               if (t !== "settlements") {
@@ -389,6 +539,7 @@ export function fakeGauExecutor(store: FakeGauStore) {
                 for (const [k, val] of Object.entries(conflict.set)) {
                   next[k] = evalSet(existing, val, bucketKeys, v);
                 }
+                assertChecks("buckets", { ...existing, ...next });
                 Object.assign(existing, next);
                 return [{ ...existing }];
               }
@@ -410,6 +561,36 @@ export function fakeGauExecutor(store: FakeGauStore) {
       },
     }),
 
+    /**
+     * `tx.execute(sql\`…\`)`. Only the advisory lock is modelled, and only as
+     * a RECORD that it was taken — a single-threaded in-memory store cannot
+     * exhibit what the lock exists to prevent, so a test here can prove the
+     * statement is issued and nothing about whether it serialises anything.
+     * The serialisation itself is proved against real Postgres on two
+     * connections in `gau-reversals.concurrency.integration.test.ts`; treating
+     * this log entry as proof of correctness would be the mock-fidelity trap
+     * this file's header warns about. Anything else throws rather than
+     * silently succeeding.
+     */
+    execute: (stmt: unknown) => {
+      let text = "";
+      let key: string | undefined;
+      if (isSql(stmt)) {
+        for (const chunk of stmt.queryChunks) {
+          if (is(chunk, StringChunk)) text += chunk.value.join("");
+          else {
+            const bound = is(chunk, Param) ? chunk.value : chunk;
+            if (typeof bound === "string") key = bound;
+          }
+        }
+      }
+      if (!/pg_advisory_xact_lock/.test(text)) {
+        throw new Error(`fake tx: unmodelled execute(): ${text.trim()}`);
+      }
+      store.log.push({ op: "lock", table: "-", lockKey: key });
+      return Promise.resolve([]);
+    },
+
     update: (table: unknown) => ({
       set: (patch: Row) => ({
         where: (cond: Cond) => {
@@ -423,6 +604,7 @@ export function fakeGauExecutor(store: FakeGauStore) {
               for (const [k, val] of Object.entries(patch)) {
                 next[k] = evalSet(row, val, keys, null);
               }
+              assertChecks(t, { ...row, ...next });
               Object.assign(row, next);
             }
             return hit.map((row) => {

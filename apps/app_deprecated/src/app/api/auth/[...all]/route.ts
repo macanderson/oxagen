@@ -2,6 +2,7 @@
 // Node.js built-ins. Keep it out of Edge; do NOT add `export const runtime`.
 import { toNextJsHandler } from "better-auth/next-js";
 import { auth } from "@/lib/auth";
+import { requestClientIp } from "@/lib/client-ip";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import type { NextRequest } from "next/server";
 
@@ -41,10 +42,12 @@ async function POST(request: NextRequest): Promise<Response> {
     isSignInPath(pathname) &&
     (status === 401 || status === 403 || status === 429)
   ) {
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      request.headers.get("x-real-ip") ??
-      null;
+    // The address on a security event is a claim about who tried to sign in,
+    // so it comes from the one shared derivation rather than the leftmost
+    // x-forwarded-for entry. Behind the ALB that entry is caller-written: an
+    // attacker could have stamped every failed sign-in in the audit trail with
+    // someone else's address.
+    const ip = requestClientIp(request);
     const userAgent = request.headers.get("user-agent") ?? null;
 
     emitSecurityEvent({

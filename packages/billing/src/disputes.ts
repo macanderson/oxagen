@@ -4,10 +4,17 @@
 // billing is org_only, no workspace_id).
 import { withSystemDb, schema } from "@oxagen/database";
 import type { Tx } from "@oxagen/database";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { deterministicUuid } from "./internal/deterministic-uuid";
 import { consumeCredits } from "./credits";
 import { CREDIT_REASONS } from "./constants";
+import {
+  orgIdOfChargeMetadata,
+  readChargeMetadata,
+  reverseGauPurchaseForDispute,
+  reverseGauPurchaseForRefund,
+  type GauReversalResult,
+} from "./gau-reversals";
 import { logger } from "./logger";
 import type { BillingDispute, BillingRefundedCharge } from "./provider";
 
@@ -40,9 +47,14 @@ async function resolveOrgFromDispute(
     if (existingDispute?.orgId) return existingDispute.orgId;
   }
 
-  // When Stripe embeds org_id in charge metadata (our standard), dispute.orgId
-  // is already set at path 1. Both paths above are exhausted here, so leave a
-  // breadcrumb for ops to correlate manually.
+  // Both paths above are exhausted. Neither has ever resolved anything on its
+  // own (#3189): path 1 reads the DISPUTE's own metadata, which Stripe does
+  // not copy from the charge and nothing here sets, and path 2 looks the
+  // dispute up by its own id, so it can only return what path 1 already
+  // stored. The caller now resolves the organisation from the CHARGE before
+  // this function runs, which is the path that actually works; these two
+  // remain as a fallback for a dispute whose charge cannot be read, and this
+  // breadcrumb is for the case where nothing does.
 
   if (dispute.paymentIntentId) {
     logger.warn(
@@ -116,10 +128,31 @@ async function resolveOrgFromCharge(
 export async function onDisputeCreated(dispute: BillingDispute): Promise<void> {
   const start = Date.now();
 
+  // A disputed GAU block purchase gave the org units, not usage credits, so
+  // its clawback is a withdrawal from the org's GAU bucket (ADR-085). Run
+  // before the transaction below: the reversal opens its own, and the org it
+  // resolves off the settlement is the only org a dispute can be attributed
+  // to — a Stripe Dispute carries its own metadata, not the charge's, so
+  // resolveOrgFromDispute cannot find one. Null means this dispute is not
+  // against a GAU purchase and the usage-credit clawback is the right one.
+  //
+  // One read of the charge serves both: what it bought (so an unmatched
+  // dispute can be parked rather than dropped) and which organisation paid
+  // (which nothing else on a dispute can tell us — see #3189). Outside the
+  // transaction, so no provider I/O is held across a database lock.
+  const chargeMetadata = await readChargeMetadata(dispute.chargeId);
+  const gauReversal = await reverseGauPurchaseForDispute(
+    dispute,
+    chargeMetadata,
+  );
+
   await withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (dispute webhook, org resolved from Stripe
     // charge metadata or billing_disputes fallback, no tenant scope).
-    const orgId = await resolveOrgFromDispute(tx, dispute);
+    const orgId =
+      gauReversal?.orgId ??
+      orgIdOfChargeMetadata(chargeMetadata) ??
+      (await resolveOrgFromDispute(tx, dispute));
     if (!orgId) {
       logger.fatal(
         {
@@ -170,6 +203,18 @@ export async function onDisputeCreated(dispute: BillingDispute): Promise<void> {
         },
         "billing: dispute.created — clawback already applied, skipping",
       );
+      return;
+    }
+
+    if (gauReversal) {
+      // The units are already withdrawn. `clawed_back_cents` stays 0 because
+      // no credits were taken: debiting the usage-credit ledger for a purchase
+      // that never credited it would take money from an unrelated balance.
+      await tx
+        .update(schema.billingDisputes)
+        .set({ status: dispute.status, updatedAt: now })
+        .where(eq(schema.billingDisputes.stripeDisputeId, dispute.id));
+      logGauDispute(start, dispute, gauReversal);
       return;
     }
 
@@ -244,6 +289,27 @@ export async function onDisputeCreated(dispute: BillingDispute): Promise<void> {
   });
 }
 
+function logGauDispute(
+  start: number,
+  dispute: BillingDispute,
+  reversal: GauReversalResult,
+): void {
+  logger.warn(
+    {
+      orgId: reversal.orgId,
+      disputeId: dispute.id,
+      amountCents: dispute.amountCents,
+      settlementId: reversal.settlementId,
+      reversedGau: reversal.reversedGau,
+      unrecoveredGau: reversal.unrecoveredGau,
+      reason: dispute.reason,
+      status: dispute.status,
+      durationMs: Date.now() - start,
+    },
+    "billing: dispute created against a gau purchase — units withdrawn, credits untouched",
+  );
+}
+
 /**
  * Called when a dispute.closed event fires.
  * Updates status and sets resolvedAt.
@@ -295,6 +361,49 @@ export async function onChargeRefunded(
 ): Promise<void> {
   const start = Date.now();
 
+  // A refunded GAU block purchase gave the org units, not usage credits
+  // (ADR-085). Run before the transaction below: the reversal opens its own.
+  const gauReversal = await reverseGauPurchaseForRefund(charge);
+  if (gauReversal) {
+    logger.warn(
+      {
+        orgId: gauReversal.orgId,
+        chargeId: charge.id,
+        paymentIntentId: charge.paymentIntentId,
+        amountRefundedCents: charge.amountRefundedCents,
+        settlementId: gauReversal.settlementId,
+        reversedGau: gauReversal.reversedGau,
+        unrecoveredGau: gauReversal.unrecoveredGau,
+        pending: gauReversal.pending,
+        durationMs: Date.now() - start,
+      },
+      gauReversal.pending
+        ? "billing: charge.refunded arrived before its gau purchase — reversal parked for the grant to settle, credits untouched"
+        : "billing: charge.refunded against a gau purchase — units withdrawn, credits untouched",
+    );
+    return;
+  }
+
+  if (charge.metadata.oxagen_kind === "gau_purchase") {
+    // The charge says it bought units and no settlement claims its
+    // PaymentIntent — and it could not be parked either, which leaves only one
+    // case: the charge carries no `org_id`, so there is nothing to attribute a
+    // pending reversal to. Retrying will not conjure the metadata, so this is
+    // genuinely manual. The usage-credit clawback below would debit a balance
+    // this charge never credited, so stop rather than take the wrong money.
+    logger.fatal(
+      {
+        alert: "gau_reversal_unmatched",
+        stripeChargeId: charge.id,
+        paymentIntentId: charge.paymentIntentId,
+        amountRefundedCents: charge.amountRefundedCents,
+        orgId: charge.orgId,
+      },
+      "billing: charge.refunded — CRITICAL: refunded gau purchase carries no org and matches no settlement; units NOT withdrawn — manual intervention required",
+    );
+    return;
+  }
+
   await withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (charge.refunded webhook, org resolved from
     // Stripe charge metadata or billing_disputes fallback, no tenant scope).
@@ -310,6 +419,45 @@ export async function onChargeRefunded(
         "billing: charge.refunded — CRITICAL: cannot resolve orgId; clawback NOT applied — manual intervention required",
       );
       return;
+    }
+
+    // A GAU purchase recorded before this change carries no
+    // stripe_payment_intent_id, and the createGauCheckout that paid for it put
+    // no metadata on the PaymentIntent either — so the reversal above matched
+    // nothing, and the `oxagen_kind` guard did not fire, because this charge
+    // says nothing about what it bought. The ADR-085 migration backfills that
+    // column from the retained checkout.session.completed payload, so this is
+    // normally an empty set and this probe never stops anything.
+    //
+    // While one remains, a refund whose charge does not name what it bought
+    // cannot be PROVED to be a credit purchase, and clawing back usage credits
+    // for a block purchase takes money from a balance it never credited. The
+    // safe direction is to take nothing and say so: the units are not withdrawn
+    // either way, and that is what the alert is for. A charge that does name
+    // what it bought is unambiguous and never reaches here.
+    if (!charge.metadata.oxagen_kind) {
+      const unidentifiedGauPurchase = await tx.query.gauSettlements.findFirst({
+        where: and(
+          eq(schema.gauSettlements.orgId, orgId),
+          eq(schema.gauSettlements.kind, "checkout"),
+          isNull(schema.gauSettlements.stripePaymentIntentId),
+        ),
+        columns: { id: true },
+      });
+      if (unidentifiedGauPurchase) {
+        logger.fatal(
+          {
+            alert: "gau_reversal_unmatched",
+            stripeChargeId: charge.id,
+            paymentIntentId: charge.paymentIntentId,
+            amountRefundedCents: charge.amountRefundedCents,
+            orgId,
+            unidentifiedSettlementId: unidentifiedGauPurchase.id,
+          },
+          "billing: charge.refunded — CRITICAL: this organisation still has a gau purchase with no payment identity, so a refund carrying no oxagen_kind cannot be told apart from it; clawback NOT applied and units NOT withdrawn — manual intervention required",
+        );
+        return;
+      }
     }
 
     if (charge.amountRefundedCents <= 0) {

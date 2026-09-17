@@ -300,6 +300,13 @@ export interface BillingRefundedCharge {
   currency: string;
   /** Org id from charge metadata, if Stripe carried it. */
   orgId: string | null;
+  /**
+   * The charge's own metadata, which a Checkout Session copies onto its
+   * PaymentIntent only when it was created with `payment_intent_data.metadata`.
+   * `oxagen_kind` says what was sold, so the refund handler debits the ledger
+   * the sale credited rather than whichever one it reaches first (ADR-085).
+   */
+  metadata: Record<string, string>;
 }
 
 // ── Dispute domain type ───────────────────────────────────────────────────────
@@ -573,6 +580,19 @@ export interface BillingCheckoutSession {
    * was created with `invoice_creation` enabled (the GAU block purchase).
    */
   invoiceId: string | null;
+  /**
+   * The PaymentIntent a payment-mode session charged. Recorded on the GAU
+   * settlement at grant time: a later refund or dispute names the
+   * PaymentIntent, and nothing else links either back to the purchase
+   * (ADR-085).
+   */
+  paymentIntentId: string | null;
+  /**
+   * What the session charged, tax included, in cents. The GAU settlement
+   * records it: a refund's amount includes refunded tax, so this is the
+   * denominator a partial reversal must prorate against (ADR-085).
+   */
+  amountTotalCents: number | null;
 }
 
 // ── BillingProvider interface ────────────────────────────────────────────────
@@ -736,6 +756,31 @@ export interface BillingProvider {
   getCheckoutPaymentMethod(
     sessionId: string,
   ): Promise<BillingCheckoutPaymentMethod | null>;
+  /**
+   * The metadata on a charge, fetched by id.
+   *
+   * A Stripe Dispute carries its own metadata, which Stripe never populates
+   * from the charge and nothing here sets, so a dispute reaches us with no
+   * organisation and no indication of what was bought. The charge has both.
+   * This is the only way to resolve either for a dispute (ADR-085 §8, #3189).
+   *
+   * **An empty object means the charge definitively carries no metadata, or
+   * definitively does not exist. It does not mean the read failed.** A
+   * transient or correctable fault — a timeout, a rate limit, a revoked or
+   * mis-scoped key — MUST reject, so the webhook retries.
+   *
+   * The distinction is load-bearing rather than stylistic, because callers
+   * treat `{}` as an answer. `onDisputeCreated` reads it as "this charge
+   * cannot say what it bought", completes, and `processStripeEvent` marks the
+   * event processed for ever; a GAU dispute that arrived before its grant is
+   * then never parked and the later grant hands out units the money has left.
+   * An implementation that converts every fault to `{}` therefore loses
+   * reversals during an outage, silently, with no failed webhook to show for
+   * it. ADR-085 §9 classifies which Stripe errors are definitive and which
+   * are not; a new provider owes the same classification rather than the
+   * blanket catch.
+   */
+  getChargeMetadata(chargeId: string): Promise<Record<string, string>>;
 
   // ── Webhook ─────────────────────────────────────────────────────────────────
 

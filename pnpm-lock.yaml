@@ -727,6 +727,9 @@ importers:
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../../packages/billing
+      '@oxagen/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@oxagen/database':
         specifier: workspace:*
         version: link:../../packages/database

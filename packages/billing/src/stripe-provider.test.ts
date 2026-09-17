@@ -57,6 +57,9 @@ const stripeMethods = {
   paymentIntents: {
     create: vi.fn(),
   },
+  charges: {
+    retrieve: vi.fn(),
+  },
   checkout: {
     sessions: {
       create: vi.fn(),
@@ -1229,7 +1232,7 @@ describe("StripeProvider", () => {
         metadata,
         invoice_creation: { enabled: true, invoice_data: { metadata } },
         payment_method_types: ["card"],
-        payment_intent_data: { setup_future_usage: "off_session" },
+        payment_intent_data: { setup_future_usage: "off_session", metadata },
         success_url: "https://app.example.com/acme/billing?checkout=success",
         cancel_url: "https://app.example.com/acme/billing?checkout=cancel",
         automatic_tax: { enabled: false },
@@ -1255,6 +1258,88 @@ describe("StripeProvider", () => {
       await expect(provider.createGauCheckout(input)).rejects.toThrow(
         "checkout URL",
       );
+    });
+
+    /** The webhook envelope Stripe delivers, as parseWebhookEvent sees it. */
+    function gauEvent(type: string, data: unknown): unknown {
+      return {
+        id: "evt_gau_001",
+        api_version: "2025-02-24.acacia",
+        type,
+        data: { object: data },
+      };
+    }
+
+    // The half of ADR-085 that makes the other half reachable: a refund reads
+    // the CHARGE and nothing else, so unless the session puts the purchase
+    // identity on payment_intent_data, `charge.refunded` cannot name the
+    // organisation that was paid. These two tests walk the real path —
+    // session params → the charge Stripe builds from them → parseWebhookEvent
+    // — rather than asserting that a metadata key is present.
+    it("puts the purchase identity where a charge can carry it: a charge built from the session's payment_intent_data resolves to the org", async () => {
+      stripeMethods.checkout.sessions.create.mockResolvedValue(
+        makeStripeCheckoutSession(),
+      );
+      await provider.createGauCheckout(input);
+      const params = stripeMethods.checkout.sessions.create.mock
+        .calls[0]![0] as {
+        metadata: Record<string, string>;
+        payment_intent_data: { metadata?: Record<string, string> };
+      };
+
+      // Stripe copies a PaymentIntent's metadata onto the Charge it creates;
+      // the session's own metadata never reaches the charge. So the charge a
+      // later refund reads is built from payment_intent_data alone.
+      stripeMethods.webhooks.constructEvent.mockReturnValue(
+        gauEvent("charge.refunded", {
+          id: "ch_gau_001",
+          payment_intent: "pi_gau_001",
+          amount_refunded: 5_000,
+          currency: "usd",
+          metadata: params.payment_intent_data.metadata,
+        }),
+      );
+      const event = provider.parseWebhookEvent("raw_body", "sig_gau_refund");
+
+      expect(event.refundedCharge?.orgId).toBe("org-1");
+      expect(event.refundedCharge?.metadata.oxagen_kind).toBe("gau_purchase");
+      expect(event.refundedCharge?.paymentIntentId).toBe("pi_gau_001");
+    });
+
+    it("session metadata alone does not reach the charge — the same charge built without payment_intent_data resolves to no org", () => {
+      // The pre-ADR-085 shape, kept as the control: if this ever starts
+      // resolving, the test above has stopped proving anything.
+      stripeMethods.webhooks.constructEvent.mockReturnValue(
+        gauEvent("charge.refunded", {
+          id: "ch_gau_001",
+          payment_intent: "pi_gau_001",
+          amount_refunded: 5_000,
+          currency: "usd",
+          metadata: {},
+        }),
+      );
+      const event = provider.parseWebhookEvent("raw_body", "sig_gau_refund_2");
+
+      expect(event.refundedCharge?.orgId).toBeNull();
+      expect(event.refundedCharge?.metadata).toEqual({});
+    });
+
+    it("exposes the session's PaymentIntent, which is what the grant records for a dispute to find", () => {
+      stripeMethods.webhooks.constructEvent.mockReturnValue(
+        gauEvent("checkout.session.completed", {
+          id: "cs_gau_001",
+          mode: "payment",
+          payment_status: "paid",
+          customer: "cus_test_001",
+          metadata,
+          subscription: null,
+          invoice: "in_gau_001",
+          payment_intent: "pi_gau_001",
+        }),
+      );
+      const event = provider.parseWebhookEvent("raw_body", "sig_gau_session");
+
+      expect(event.checkoutSession?.paymentIntentId).toBe("pi_gau_001");
     });
   });
 
@@ -1625,5 +1710,124 @@ describe("StripeProvider", () => {
       const packs = await provider.getCheckoutSessionCreditPacks("cs_test_002");
       expect(packs).toEqual([{ creditsPerUnit: 1000, quantity: 1 }]);
     });
+  });
+});
+
+describe("getChargeMetadata — an outage is not an answer (ADR-085 §9)", () => {
+  let provider: InstanceType<typeof StripeProvider>;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    provider = new StripeProvider();
+  });
+
+  /** Stripe's SDK tags its errors with `type`; that is what classifies them. */
+  function stripeError(type: string, message = "boom", code?: string): Error {
+    return Object.assign(new Error(message), code ? { type, code } : { type });
+  }
+
+  it("returns the charge's metadata on a successful read", async () => {
+    stripeMethods.charges.retrieve.mockResolvedValue({
+      id: "ch_1",
+      metadata: { oxagen_kind: "gau_purchase", org_id: "org-1" },
+    });
+
+    await expect(provider.getChargeMetadata("ch_1")).resolves.toEqual({
+      oxagen_kind: "gau_purchase",
+      org_id: "org-1",
+    });
+  });
+
+  it("returns {} when Stripe says the charge does not exist — retrying cannot change that", async () => {
+    // `resource_missing` is the one code that means "Stripe looked, and there
+    // is no such charge". It is the sole definitive answer this classifier
+    // recognises.
+    stripeMethods.charges.retrieve.mockRejectedValue(
+      stripeError(
+        "StripeInvalidRequestError",
+        "No such charge",
+        "resource_missing",
+      ),
+    );
+
+    await expect(provider.getChargeMetadata("ch_gone")).resolves.toEqual({});
+  });
+
+  // The sibling of the permission finding. An invalid request that is NOT
+  // `resource_missing` — a bad expand, an API version we no longer send, a
+  // malformed id — is OUR defect, not a fact about the charge. It is
+  // correctable by a deploy, and until it is corrected it would otherwise
+  // finalise every dispute that reached it: each one reads as "this charge
+  // bought nothing", drops, and is marked processed for ever. Systematically
+  // losing every disputed unit is far worse than a redelivery, so this
+  // propagates too.
+  it.each([
+    ["a parameter we sent wrongly", "parameter_unknown"],
+    ["an invalid request carrying no code at all", undefined],
+  ])(
+    "throws on an invalid request that is not resource_missing (%s)",
+    async (_label, code) => {
+      stripeMethods.charges.retrieve.mockRejectedValue(
+        stripeError("StripeInvalidRequestError", "bad expand", code),
+      );
+
+      await expect(provider.getChargeMetadata("ch_1")).rejects.toThrow(
+        "bad expand",
+      );
+    },
+  );
+
+  // The test is not "did Stripe answer" but "can this answer change on its
+  // own?". A key that lacks charge-read permission can be granted it by an
+  // operator minutes later, and the identical call then returns real metadata.
+  // That is an operator-correctable condition, not a fact about the charge, so
+  // it belongs on the retry path with the outages.
+  it.each([
+    ["StripeConnectionError"],
+    ["StripeAPIError"],
+    ["StripeRateLimitError"],
+    ["StripeAuthenticationError"],
+    ["StripePermissionError"],
+    // Not a type this codebase knows. Unknown must fall to the safe side.
+    ["StripeSomeFutureError"],
+  ])("throws on %s so the webhook is retried", async (type) => {
+    stripeMethods.charges.retrieve.mockRejectedValue(stripeError(type));
+
+    await expect(provider.getChargeMetadata("ch_1")).rejects.toThrow();
+  });
+
+  // The classifier has two gates: the disposition table, then the
+  // `resource_missing` narrowing. Every other test here clears BOTH, so none of
+  // them can see the table entry alone change: flip `StripePermissionError` to
+  // "definitive" and the narrowing still catches it, because a permission error
+  // carries no `resource_missing` code. The suite stays green while the table —
+  // the surface the SDK-upgrade `satisfies` check exists to force an answer on
+  // — says the wrong thing.
+  //
+  // This isolates the first gate. A permission error is retried BECAUSE it is a
+  // permission error, not because it happens to lack a code, so one carrying
+  // the definitive code must still propagate.
+  it("throws on a permission error even when it carries the definitive code", async () => {
+    stripeMethods.charges.retrieve.mockRejectedValue(
+      stripeError(
+        "StripePermissionError",
+        "key lacks charges:read",
+        "resource_missing",
+      ),
+    );
+
+    await expect(provider.getChargeMetadata("ch_1")).rejects.toThrow(
+      "key lacks charges:read",
+    );
+  });
+
+  it("throws on an error carrying no Stripe type at all", async () => {
+    // A timeout from the transport layer, a DNS failure, an assertion — none
+    // of them are Stripe answering. Unknown defaults to transient, because the
+    // cost of an extra retry is far below the cost of a dropped dispute.
+    stripeMethods.charges.retrieve.mockRejectedValue(new Error("ETIMEDOUT"));
+
+    await expect(provider.getChargeMetadata("ch_1")).rejects.toThrow(
+      "ETIMEDOUT",
+    );
   });
 });
