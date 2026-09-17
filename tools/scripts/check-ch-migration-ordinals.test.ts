@@ -20,6 +20,7 @@ import {
   MIGRATE_TS,
   MIGRATIONS_DIR,
   PRE_LEDGER_BASELINE_CUTOVER,
+  SHIPPED_MIGRATIONS,
   baselineBackfills,
   baselineOrdinalFloor,
   cutoverDrift,
@@ -31,8 +32,8 @@ import {
   staleExemptions,
   malformed,
   overlooked,
+  shippedRenames,
   sortOrderConflicts,
-  vacatedBaselineOrdinals,
 } from "./check-ch-migration-ordinals.mjs";
 
 /** What is actually on disk right now. */
@@ -392,17 +393,24 @@ describe("an ordinal at or below the pre-ledger baseline cutover", () => {
 
   it("accepts the tree as it stands", () => {
     expect(baselineBackfills(REAL)).toEqual([]);
-    expect(vacatedBaselineOrdinals(REAL)).toEqual([]);
+    expect(shippedRenames(REAL)).toEqual([]);
   });
 
-  it("reports a recorded baseline ordinal whose file has gone", () => {
-    // The mirror of the backfill rule. The roster is a claim about which
-    // ordinals the baseline covers; if a migration under one of them is
-    // deleted, the claim stops being true and the ordinal silently becomes a
-    // hole that the backfill rule would then be guarding for no reason. Same
-    // hazard as a grandfathered name that outlives its file.
-    const without = REAL.filter((f) => f !== "0019_usage_events.sql");
-    expect(vacatedBaselineOrdinals(without)).toEqual(["0019"]);
+  it("is not double-reported when it is really a rename", () => {
+    // A renamed 0021 is a file at or below the cutover that the roster does
+    // not name, so the backfill rule would fire on it too. It is reported
+    // once, as a rename, because that is the report that names the actual
+    // consequence — the ledger replaying a DROP — and names both filenames.
+    const renamed = REAL.filter(
+      (f) => f !== "0021_schema_conformance_events_idempotency.sql",
+    ).concat("0021_conformance_idempotency.sql");
+    expect(baselineBackfills(renamed)).toEqual([]);
+    expect(shippedRenames(renamed)).toEqual([
+      {
+        was: "0021_schema_conformance_events_idempotency.sql",
+        now: "0021_conformance_idempotency.sql",
+      },
+    ]);
   });
 });
 
@@ -436,5 +444,129 @@ describe("the cutover this guard is written against", () => {
   it("names a file that is on disk and sits at the floor", () => {
     expect(REAL).toContain(PRE_LEDGER_BASELINE_CUTOVER);
     expect(baselineOrdinalFloor()).toBe(ordinalOf(PRE_LEDGER_BASELINE_CUTOVER));
+  });
+});
+
+describe("a shipped migration filename is frozen", () => {
+  // Codex, #3192 r4036898062, P1. The round before this one recorded the
+  // baseline as ORDINALS, on the reasoning that a filename roster would have
+  // to be edited whenever a shipped migration is renamed — which GRANDFATHERED
+  // spends forty lines explaining nobody may do. That is the argument FOR
+  // freezing the names, not against it: an invariant nobody may violate is
+  // exactly the one worth enforcing mechanically, because "nobody may" is a
+  // comment, and this whole PR exists because a comment was doing a check's
+  // job one layer up.
+  //
+  // The hole it left: rename a unique migration and keep its ordinal.
+  // `0021_schema_conformance_events_idempotency.sql` ->
+  // `0021_anything_else.sql` collides with nothing, vacates no ordinal, and
+  // leaves no stale exemption. `_migrations.filename` is the ledger's only
+  // key, so every deployment that recorded the old name reads the new one as
+  // unapplied and replays it — and 0021 is the DROP+RECREATE of
+  // schema_conformance_events, so the replay destroys retained data.
+
+  it("is the whole directory, not only the baselined half", () => {
+    // The ledger keys on filename for EVERY migration, not just the ones the
+    // pre-ledger baseline sweeps. Freezing only the files at or below the
+    // cutover would leave 0027 renameable with the same consequence.
+    expect([...SHIPPED_MIGRATIONS].sort()).toEqual(REAL);
+    expect(
+      SHIPPED_MIGRATIONS.filter((f) => f > PRE_LEDGER_BASELINE_CUTOVER),
+    ).toEqual(["0027_tacho_events.sql"]);
+  });
+
+  it("covers every grandfathered name", () => {
+    // An exemption for a file that never shipped would be incoherent, and a
+    // grandfathered file that were NOT frozen would be renameable — the one
+    // operation its own exemption note says must never happen.
+    for (const g of GRANDFATHERED) expect(SHIPPED_MIGRATIONS).toContain(g);
+  });
+
+  it("catches a rename that keeps the ordinal, and names both filenames", () => {
+    const renamed = REAL.filter(
+      (f) => f !== "0021_schema_conformance_events_idempotency.sql",
+    ).concat("0021_anything_else.sql");
+    expect(shippedRenames(renamed)).toEqual([
+      {
+        was: "0021_schema_conformance_events_idempotency.sql",
+        now: "0021_anything_else.sql",
+      },
+    ]);
+  });
+
+  it("catches a rename of a GRANDFATHERED file, and the exemption goes stale too", () => {
+    // Renaming a grandfathered file is two separate wrongs and is reported as
+    // both: the ledger will replay the file under its new name, and the
+    // exemption now names something nobody can find. The GRANDFATHERED list
+    // exempts an ordinal COLLISION; it has never exempted a name.
+    const renamed = REAL.filter(
+      (f) => f !== "0020_eval_item_results.sql",
+    ).concat("0020_eval_items.sql");
+    expect(shippedRenames(renamed)).toEqual([
+      { was: "0020_eval_item_results.sql", now: "0020_eval_items.sql" },
+    ]);
+    expect(staleExemptions(renamed)).toEqual(["0020_eval_item_results.sql"]);
+  });
+
+  it("catches a rename that also moves the ordinal", () => {
+    // No file takes the vacated ordinal, so there is no new name to point at.
+    // Reported as gone rather than renamed — same consequence for the ledger,
+    // and the guard does not invent a correspondence it cannot see.
+    const moved = REAL.filter((f) => f !== "0025_router_outcomes.sql").concat(
+      "0029_router_outcomes.sql",
+    );
+    expect(shippedRenames(moved)).toEqual([
+      { was: "0025_router_outcomes.sql", now: null },
+    ]);
+  });
+
+  it("catches a deletion", () => {
+    const deleted = REAL.filter((f) => f !== "0016_memory_changes.sql");
+    expect(shippedRenames(deleted)).toEqual([
+      { was: "0016_memory_changes.sql", now: null },
+    ]);
+  });
+
+  it("catches a rename of EVERY shipped migration, not just the reported one", () => {
+    // The space, not the example — the shape that made the ordinal-floor rule
+    // worth trusting. Rename each of the 27 shipped files in turn, keeping its
+    // ordinal (the case that slips past every other check), and collect any
+    // that escape so the failure names the escapee rather than a count.
+    const escaped: string[] = [];
+    for (const shipped of SHIPPED_MIGRATIONS) {
+      const ordinal = ordinalOf(shipped);
+      const renamed = REAL.filter((f) => f !== shipped).concat(
+        `${ordinal}_renamed_in_place.sql`,
+      );
+      const caught = shippedRenames(renamed).some((r) => r.was === shipped);
+      if (!caught) escaped.push(shipped);
+    }
+    expect(escaped).toEqual([]);
+  });
+
+  it("accepts a brand-new migration above the tip, with no constant edited", () => {
+    // The mirror. The roster is a snapshot of what has shipped and does not
+    // grow: an ordinary migration PR adds 0028 and touches nothing here.
+    const withNew = [...REAL, "0028_brand_new.sql"].sort();
+    expect(shippedRenames(withNew)).toEqual([]);
+    expect(baselineBackfills(withNew)).toEqual([]);
+    expect(malformed(withNew)).toEqual([]);
+    expect(sortOrderConflicts(withNew)).toEqual([]);
+    expect(
+      offendingDuplicates(withNew).filter((g) => g.unexempt.length > 0),
+    ).toEqual([]);
+  });
+
+  it("does not freeze what has not shipped: a new file may be renamed freely", () => {
+    // The residual, asserted rather than left to be discovered. A migration
+    // added after this roster was taken is absent from it, so renaming it is
+    // invisible here — and the ledger keys on its filename just the same.
+    // Closing that needs the roster to grow with every migration, which is the
+    // friction the "touches no constant" property buys. Written down in the
+    // guard and in the PR body; not silently absent.
+    const added = [...REAL, "0028_first_name.sql"].sort();
+    const thenRenamed = [...REAL, "0028_second_name.sql"].sort();
+    expect(shippedRenames(added)).toEqual([]);
+    expect(shippedRenames(thenRenamed)).toEqual([]);
   });
 });

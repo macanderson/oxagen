@@ -89,7 +89,8 @@ export const GRANDFATHERED = Object.freeze([
 
 /**
  * The pre-ledger baseline cutover, copied from `PRE_LEDGER_BASELINE_CUTOVER`
- * in packages/telemetry/src/migrate.ts, and the ordinals the baseline covers.
+ * in packages/telemetry/src/migrate.ts, and the complete filename of every
+ * migration that has shipped as of this guard.
  *
  * WHAT THE BASELINE DOES
  *   On a pre-ledger deployment's first ledger-aware run, `migrateOnce()` takes
@@ -115,52 +116,73 @@ export const GRANDFATHERED = Object.freeze([
  *   diff against the merge base could, where the merge base is fetched — and
  *   silently degrades to no check at all in a shallow clone, a tag build, or a
  *   local run on a detached HEAD, which is the worst property a guard can have.
- *   So newness is recorded instead of inferred: these are the ordinals the
- *   baseline covers, and a file claiming one that is not listed is by
- *   definition a file the cutover's author never saw.
+ *   So newness is recorded instead of inferred.
  *
- * WHY ORDINALS AND NOT FILENAMES
- *   A filename roster would have to be edited whenever a shipped migration is
- *   renamed, which GRANDFATHERED above explains at length is the one operation
- *   nobody may perform. Ordinals are the thing that is actually frozen. The
- *   list never grows either: nothing may be added at or below the cutover, so
- *   a new migration takes 0028, 0029, … and never touches this constant.
+ * WHY WHOLE FILENAMES AND NOT ORDINALS
+ *   The first version of this roster recorded ORDINALS, reasoning that a
+ *   filename roster would need editing whenever a shipped migration is renamed
+ *   — which GRANDFATHERED above spends forty lines explaining nobody may do.
+ *   That is the argument FOR freezing the names. An invariant nobody may
+ *   violate is precisely the one to enforce mechanically, because "nobody may"
+ *   is a comment, and this entire PR exists because a comment was doing a
+ *   check's job one layer up.
  *
- * THE FLOOR IS THE CUTOVER, NOT THE HIGHEST FILE ON DISK
- *   0027 is on disk and sits above the cutover, so it is not in this list and
- *   is not treated as swallowable — because it is not. A second file at 0027
- *   is refused by `offendingDuplicates` for a different reason. Between the two
- *   checks, every ordinal at or below the cutover is unreachable to a new
- *   migration: free ones by this rule, taken ones by the duplicate rule. The
- *   test asserts that exhaustively rather than by example.
+ *   The hole it left, caught by Codex on #3192 (r4036898062): rename a unique
+ *   migration and keep its ordinal.
+ *   `0021_schema_conformance_events_idempotency.sql` ->
+ *   `0021_anything_else.sql` collides with nothing, vacates no ordinal, and
+ *   leaves no stale exemption, so an ordinal roster sees nothing at all.
+ *   `_migrations.filename` is the ledger's ONLY key, so every deployment that
+ *   recorded the old name reads the new one as unapplied and runs it — and
+ *   0021 is the DROP+RECREATE of schema_conformance_events, so that replay
+ *   destroys retained data on exactly the deployments that have some.
+ *
+ * WHY THE WHOLE DIRECTORY AND NOT ONLY THE BASELINED HALF
+ *   The ledger keys on filename for EVERY migration, not only the ones the
+ *   baseline sweeps, so the rename hazard does not stop at the cutover.
+ *   0027_tacho_events.sql is above the cutover and is frozen here for the same
+ *   reason as the other 26.
+ *
+ * WHAT THIS DOES NOT FREEZE, AND WHY THAT IS THE TRADE
+ *   The roster is a snapshot of what has shipped, and it does not grow. A
+ *   migration added after this line was written is absent from it, so renaming
+ *   THAT file is invisible here — while the ledger keys on its name just the
+ *   same. Closing the residual means appending to this constant in every
+ *   migration PR, which is the friction the "an ordinary migration touches no
+ *   constant" property buys. The trade is recorded rather than hidden: a test
+ *   asserts the residual exists, so nobody reads this roster as covering more
+ *   than it does. #3201 carries the decision.
  */
 export const PRE_LEDGER_BASELINE_CUTOVER = "0026_stella_operational_events.sql";
 
-export const BASELINE_ORDINALS = Object.freeze([
-  "0002",
-  "0003",
-  "0004",
-  "0005",
-  "0006",
-  "0007",
-  "0008",
-  "0009",
-  "0010",
-  "0011",
-  "0012",
-  "0013",
-  "0014",
-  "0015",
-  "0016",
-  "0017",
-  "0019",
-  "0020",
-  "0021",
-  "0022",
-  "0023",
-  "0024",
-  "0025",
-  "0026",
+export const SHIPPED_MIGRATIONS = Object.freeze([
+  "0002_observability.sql",
+  "0003_iam_audit.sql",
+  "0004_execution_logs_step_nullable.sql",
+  "0005_session_telemetry.sql",
+  "0006_claude_telemetry.sql",
+  "0007_claude_sessions.sql",
+  "0008_skill_loads.sql",
+  "0009_perf_optimizations.sql",
+  "0010_drop_dead_tables.sql",
+  "0011_codecs_lowcardinality.sql",
+  "0012_token_usage_execution_step_id_nil_uuid.sql",
+  "0013_graph_observed_labels.sql",
+  "0014_schema_conformance_events.sql",
+  "0015_otel_trace_ids.sql",
+  "0016_memory_changes.sql",
+  "0017_memory_changes_enforcement.sql",
+  "0019_usage_events.sql",
+  "0020_error_events.sql",
+  "0020_eval_item_results.sql",
+  "0021_schema_conformance_events_idempotency.sql",
+  "0022_error_events_execution_id.sql",
+  "0023_principal_attribution.sql",
+  "0024_sandbox_log_events.sql",
+  "0025_router_outcomes.sql",
+  "0026_cache_write_tokens.sql",
+  "0026_stella_operational_events.sql",
+  "0027_tacho_events.sql",
 ]);
 
 /** packages/telemetry/src/migrate.ts — the file the cutover above is copied from. */
@@ -182,56 +204,76 @@ export function baselineOrdinalFloor(cutover = PRE_LEDGER_BASELINE_CUTOVER) {
 }
 
 /**
- * Files claiming an ordinal at or below the floor that the recorded roster
- * does not cover — i.e. files the pre-ledger baseline would record without
+ * Shipped migrations no longer on disk under the name the ledger recorded
+ * them by, as `{ was, now }`.
+ *
+ * `now` is the file that has taken the vacated ordinal, when there is exactly
+ * one candidate and it is not itself frozen — the ordinary rename-in-place,
+ * which is the shape no other check in this file can see. Otherwise `now` is
+ * null: the file was deleted, or renamed onto a different ordinal, and the
+ * guard declines to invent a correspondence it cannot observe. Every case
+ * carries the same consequence for `_migrations`, so every case is reported;
+ * naming the new file when it is knowable is what makes the message
+ * actionable rather than merely alarming.
+ *
+ * @param {readonly string[]} filenames
+ * @param {readonly string[]} [frozen]
+ * @returns {{ was: string, now: string | null }[]}
+ */
+export function shippedRenames(filenames, frozen = SHIPPED_MIGRATIONS) {
+  const onDisk = new Set(filenames);
+  const frozenSet = new Set(frozen);
+  return frozen
+    .filter((f) => !onDisk.has(f))
+    .map((was) => {
+      const ordinal = ordinalOf(was);
+      const candidates = filenames.filter(
+        (f) => ordinalOf(f) === ordinal && !frozenSet.has(f),
+      );
+      return { was, now: candidates.length === 1 ? candidates[0] : null };
+    });
+}
+
+/**
+ * Files claiming an ordinal at or below the floor that the shipped roster does
+ * not name — i.e. files the pre-ledger baseline would record without
  * executing, having never been part of what it was pinned against.
+ *
+ * A file that is really a RENAME of a frozen migration is excluded here: it
+ * fits this description too, but `shippedRenames` reports it with both names
+ * and with the consequence that actually applies to it, and one act should
+ * produce one report.
  *
  * Returned as `{ file, ordinal }` so the report can name both: the ordinal is
  * what makes it wrong and the filename is what has to change.
  *
  * @param {readonly string[]} filenames
- * @param {readonly string[]} [recorded]
+ * @param {readonly string[]} [frozen]
  * @param {string} [cutover]
  * @returns {{ file: string, ordinal: string }[]}
  */
 export function baselineBackfills(
   filenames,
-  recorded = BASELINE_ORDINALS,
+  frozen = SHIPPED_MIGRATIONS,
   cutover = PRE_LEDGER_BASELINE_CUTOVER,
 ) {
   const floor = Number(baselineOrdinalFloor(cutover));
-  const covered = new Set(recorded);
+  const shipped = new Set(frozen);
+  const renamedTo = new Set(
+    shippedRenames(filenames, frozen)
+      .map((r) => r.now)
+      .filter((n) => n !== null),
+  );
   return filenames
     .map((file) => ({ file, ordinal: ordinalOf(file) }))
     .filter(
-      ({ ordinal }) =>
-        ordinal !== null && Number(ordinal) <= floor && !covered.has(ordinal),
+      ({ file, ordinal }) =>
+        ordinal !== null &&
+        Number(ordinal) <= floor &&
+        !shipped.has(file) &&
+        !renamedTo.has(file),
     )
     .sort((a, b) => a.file.localeCompare(b.file));
-}
-
-/**
- * Recorded baseline ordinals with no file on disk.
- *
- * The roster is a claim about which ordinals the baseline covers. Delete a
- * migration under one of them and the claim stops being true: the ordinal
- * becomes a hole, and `baselineBackfills` goes on guarding it as though it
- * were occupied, which reads as protection and is really a stale note about a
- * file nobody can find. Same failure mode as `staleExemptions`, and it is
- * reported the same way rather than fixed silently.
- *
- * @param {readonly string[]} filenames
- * @param {readonly string[]} [recorded]
- * @returns {string[]}
- */
-export function vacatedBaselineOrdinals(
-  filenames,
-  recorded = BASELINE_ORDINALS,
-) {
-  const onDisk = new Set(
-    filenames.map((f) => ordinalOf(f)).filter((o) => o !== null),
-  );
-  return recorded.filter((o) => !onDisk.has(o));
 }
 
 /** The `PRE_LEDGER_BASELINE_CUTOVER` literal in migrate.ts source, or null. */
@@ -464,12 +506,24 @@ if (isEntrypoint) {
     );
   }
 
-  for (const ordinal of vacatedBaselineOrdinals(files)) {
+  for (const { was, now } of shippedRenames(files)) {
     problems.push(
-      `  ordinal ${ordinal} is recorded in BASELINE_ORDINALS but no file on disk\n` +
-        "    claims it. The roster describes what the pre-ledger baseline covers, so\n" +
-        "    a deleted migration has to come out of the roster in the same change —\n" +
-        "    otherwise the ordinal is a hole this guard still treats as occupied.",
+      now === null
+        ? `  ${was} has shipped but is no longer on disk under that name, and\n` +
+            "    nothing has taken its ordinal — it was deleted, or renamed onto a\n" +
+            "    different ordinal.\n" +
+            "    `_migrations.filename` is the ledger's only key. Every deployment that\n" +
+            "    recorded this name keeps the row for a file that no longer exists, and\n" +
+            "    anything standing in for it runs again from its first statement.\n" +
+            "    Restore the name. If the file is genuinely retired, remove it from\n" +
+            "    SHIPPED_MIGRATIONS in the same change and say why."
+        : `  ${was}\n` +
+            `    has been renamed to ${now}.\n` +
+            "    `_migrations.filename` is the ledger's only key, so every deployment\n" +
+            "    that recorded the old name reads the new one as UNAPPLIED and runs it\n" +
+            "    again — on 0021 that is DROP TABLE schema_conformance_events, against\n" +
+            "    the deployments that hold data. Renaming a shipped migration is never\n" +
+            "    safe; restore the original filename.",
     );
   }
 
@@ -482,7 +536,7 @@ if (isEntrypoint) {
         "    The cutover is a one-time marker for the pre-ledger backlog, not a\n" +
         "    pointer at the latest migration, and moving it widens what the baseline\n" +
         "    records without executing. If the move is deliberate, update\n" +
-        "    PRE_LEDGER_BASELINE_CUTOVER and BASELINE_ORDINALS here together.",
+        "    PRE_LEDGER_BASELINE_CUTOVER and SHIPPED_MIGRATIONS here together.",
     );
   }
 
@@ -512,6 +566,7 @@ if (isEntrypoint) {
   console.log(
     `check-ch-migration-ordinals: ${files.length} migration(s), ordinals unique ` +
       `(${GRANDFATHERED.length} grandfathered), none at or below the pre-ledger ` +
-      `baseline cutover ${PRE_LEDGER_BASELINE_CUTOVER}.`,
+      `baseline cutover ${PRE_LEDGER_BASELINE_CUTOVER}, all ` +
+      `${SHIPPED_MIGRATIONS.length} shipped filenames unchanged.`,
   );
 }
