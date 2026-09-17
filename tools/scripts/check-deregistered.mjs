@@ -105,6 +105,38 @@ export const ARTIFACT_KINDS = [
   { layer: "cli", dirs: ["apps/cli/src/commands"] },
 ];
 
+/** Characters that can terminate a module specifier. */
+const SPECIFIER_END = new Set(['"', "'", "`"]);
+
+/**
+ * Whether `src` imports the contract module for `stem` — the WHOLE specifier,
+ * not a prefix of one.
+ *
+ * A bare `src.includes("contracts/" + stem)` is an unbounded substring test, and
+ * capability stems nest: `contracts/plugin.org.install` is a prefix of
+ * `contracts/plugin.org.install_bulk`. So deleting BOTH the API route and the
+ * MCP tool for `plugin.org.install` still satisfied the guard, because the
+ * `_bulk` sibling's own import kept matching. Reproduced by moving both files
+ * aside: the guard exited 0 and reported every artifact present.
+ *
+ * That is the failure this guard exists to catch, so it is worth naming the
+ * shape: the scan validated the FORM of a reference — a file containing a
+ * string with the right prefix — and was read as validating the SUBSTANCE, that
+ * the artifact is still there.
+ *
+ * A specifier ends at its closing quote, so requiring one is an exact match. The
+ * sibling arm below is `"${name}"`, quoted at both ends and therefore already
+ * exact; only this arm was open-ended.
+ */
+export function referencesContractModule(src, stem) {
+  const needle = `contracts/${stem}`;
+  for (let i = src.indexOf(needle); i !== -1; i = src.indexOf(needle, i + 1)) {
+    const next = src[i + needle.length];
+    if (next !== undefined && SPECIFIER_END.has(next)) return true;
+  }
+  return false;
+}
+
 /** Every `.ts` file directly under `dir`, or [] when it is not there. */
 function filesIn(repoRoot, dir) {
   const abs = join(repoRoot, dir);
@@ -156,7 +188,7 @@ export function derivedMissingFor(repoRoot, contractPath, source) {
         if (f.includes(".test.")) return false;
         const src = readFileSync(join(repoRoot, dir, f), "utf8");
         return (
-          src.includes(`contracts/${stem}`) ||
+          referencesContractModule(src, stem) ||
           (name !== null && src.includes(`"${name}"`))
         );
       });

@@ -195,6 +195,8 @@ export function unprovisionableReason(status: string): string | undefined {
  *   - `principal_role_assignments.workspace_id IS NULL` — a workspace-scoped
  *     assignment grants Owner inside that workspace only, so a workspace-only
  *     Owner does not stop the ORGANISATION locking itself out.
+ *   - `roles.scope_kind = 'org'` — two system roles are named "Owner", and only
+ *     the org-scoped one is a super-user under resolver rule 7.5.
  *
  * Mirrors the predicates `packages/iam/src/fetch-authz.ts` applies to the same
  * table, which is the resolver this preflight is predicting the behaviour of.
@@ -210,6 +212,18 @@ export function orgWideSystemOwnerWhere(orgId: string, now: Date): SQL {
     isNull(schema.principalRoleAssignments.workspaceId),
     isNull(schema.principalRoleAssignments.deletedAt),
     eq(schema.roles.orgId, orgId),
+    // The ORG-scoped Owner. `iam-provision.ts` seeds two system roles named
+    // "Owner" for every organisation — one `scope_kind = 'org'` from ORG_ROLES
+    // and one `scope_kind = 'workspace'` from WORKSPACE_ROLES — both with
+    // `is_system_default = true`. The resolver's rule 7.5 grants org-owner
+    // super-user only for `scopeKind === "org"`, so without this clause an
+    // org-wide assignment to the WORKSPACE Owner satisfied a preflight that the
+    // resolver it predicts would refuse, and the tier switch left the
+    // organisation under default-deny with nobody able to act.
+    //
+    // A separate axis from the assignment's scope above: that one asks where
+    // the grant applies, this one asks which role was granted.
+    eq(schema.roles.scopeKind, "org"),
     eq(schema.roles.name, "Owner"),
     // The system-seeded Owner, not a custom role somebody named Owner.
     eq(schema.roles.isSystemDefault, true),

@@ -8,6 +8,7 @@ import {
   derivedMissingFor,
   missingPaths,
   preservedPaths,
+  referencesContractModule,
 } from "./check-deregistered.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -113,9 +114,9 @@ describe("artifacts a preserved contract declares", () => {
   // promises to preserve them (#3135, discussion_r4031534891). Listing them by
   // hand would go stale the same way, so they are derived from layers[].
   it("reads the layers a contract declares", () => {
-    expect(
-      declaredLayers('layers: ["schema", "api", "mcp", "unit"],'),
-    ).toEqual(["schema", "api", "mcp", "unit"]);
+    expect(declaredLayers('layers: ["schema", "api", "mcp", "unit"],')).toEqual(
+      ["schema", "api", "mcp", "unit"],
+    );
     expect(declaredLayers("no layers here")).toEqual([]);
   });
 
@@ -155,7 +156,70 @@ describe("artifacts a preserved contract declares", () => {
   it("finds every artifact of a live contract in this repo", () => {
     const path = "packages/oxagen/src/contracts/plugin.catalog.browse.ts";
     expect(
-      derivedMissingFor(repoRoot, path, readFileSync(join(repoRoot, path), "utf8")),
+      derivedMissingFor(
+        repoRoot,
+        path,
+        readFileSync(join(repoRoot, path), "utf8"),
+      ),
     ).toEqual([]);
+  });
+});
+
+describe("referencesContractModule", () => {
+  // Capability stems nest, and the scan used a bare substring test. So deleting
+  // BOTH the API route and the MCP tool for `plugin.org.install` satisfied the
+  // guard, because the `_bulk` sibling's own import still contained the prefix.
+  // Verified by moving both files aside: the old guard exited 0 and reported
+  // every artifact present.
+  const bulkImport =
+    'import { pluginOrgInstallBulk } from "@oxagen/oxagen/contracts/plugin.org.install_bulk";';
+  const plainImport =
+    'import { pluginOrgInstall } from "@oxagen/oxagen/contracts/plugin.org.install";';
+
+  it("does NOT match a sibling whose stem extends the one asked about", () => {
+    // The discriminating case. Two unrelated names would pass against the
+    // broken version too, so a test using them proves nothing.
+    expect(referencesContractModule(bulkImport, "plugin.org.install")).toBe(
+      false,
+    );
+  });
+
+  it("matches the specifier it is actually asked about", () => {
+    expect(referencesContractModule(plainImport, "plugin.org.install")).toBe(
+      true,
+    );
+    expect(
+      referencesContractModule(bulkImport, "plugin.org.install_bulk"),
+    ).toBe(true);
+  });
+
+  it("accepts any quote a specifier can be written with", () => {
+    for (const q of ['"', "'", "`"]) {
+      expect(
+        referencesContractModule(
+          `from ${q}x/contracts/environment.get${q}`,
+          "environment.get",
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("does not match a prefix that runs into more path", () => {
+    expect(
+      referencesContractModule(
+        'from "x/contracts/environment.get.extra"',
+        "environment.get",
+      ),
+    ).toBe(false);
+  });
+
+  it("finds the specifier when an earlier near-miss precedes it", () => {
+    // Scanning must not stop at the first prefix hit that fails the boundary.
+    expect(
+      referencesContractModule(
+        `${bulkImport}\n${plainImport}`,
+        "plugin.org.install",
+      ),
+    ).toBe(true);
   });
 });

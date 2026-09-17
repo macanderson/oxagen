@@ -246,6 +246,18 @@ describe("orgWideSystemOwnerWhere", () => {
     expect(params).toContain("11111111-1111-4111-8111-111111111111");
   });
 
+  it("requires the ORG-scoped Owner, not the workspace one", () => {
+    // iam-provision.ts seeds two system roles named "Owner" per organisation:
+    // scope_kind 'org' from ORG_ROLES and scope_kind 'workspace' from
+    // WORKSPACE_ROLES, both is_system_default. Resolver rule 7.5 grants
+    // org-owner super-user only for scopeKind === "org", so an org-wide
+    // assignment to the workspace Owner would pass a preflight the resolver
+    // refuses (#3178, discussion on the ready review).
+    const { sql, params } = compiled();
+    expect(sql).toMatch(/"scope_kind" = \$/);
+    expect(params).toContain("org");
+  });
+
   it("keeps the clauses that were already right", () => {
     const { sql, params } = compiled();
     expect(sql).toMatch(/"kind" = \$/);
