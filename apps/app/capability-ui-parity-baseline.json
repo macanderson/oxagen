@@ -1,0 +1,4 @@
+{
+  "$comment": "UI-parity ratchet baseline. check_ui_parity.mjs --strict fails on any FORWARD gap whose capability is NOT listed in `grandfathered`. The rebuilt app starts with none: WL-50 bound all 70 app-layer capabilities to a page with a proof, and retired the layer on the 50 with no rev1 surface (ADR-081), so there is no pre-existing debt to grandfather. The list only ever shrinks — an entry added here is a promise broken on purpose, and needs the same justification a new `app` layer without a page would.",
+  "grandfathered": []
+}
