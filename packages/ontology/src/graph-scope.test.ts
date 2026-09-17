@@ -743,6 +743,40 @@ describe("a map literal in a filtering position is not a tenant anchor", () => {
     });
   }
 
+  // The blanking is scoped to the BRACES, not to the clause. An implementation
+  // that refused a WHERE containing any map literal would be simpler and would
+  // break every query that carries both — so both orders are pinned.
+  it("a map literal does not blank the rest of its own WHERE clause", () => {
+    expect(
+      keepFilteringPositions(
+        "MATCH (n) WHERE {a: 1} IS NOT NULL AND n.orgId = $orgId RETURN n",
+      ),
+    ).toContain("$orgId");
+    expect(
+      keepFilteringPositions(
+        "MATCH (n) WHERE n.orgId = $orgId AND {a: 1} IS NOT NULL RETURN n",
+      ),
+    ).toContain("$orgId");
+  });
+
+  it("a GQL quantified path pattern's {n,m} does not swallow the query", () => {
+    // `((a)-[:R]->(b)){1,5}` puts a brace where neither a pattern map nor a
+    // subquery can appear. It classifies as a map literal, which is harmless —
+    // the assertion is that the clause state and the map depth both come back
+    // balanced, so the anchor after it still counts.
+    expect(
+      keepFilteringPositions(
+        "MATCH ((a)-[:R]->(b)){1,5} WHERE a.orgId = $orgId RETURN b",
+      ),
+    ).toContain("$orgId");
+  });
+
+  it("an unbalanced closing brace does not desync the scan", () => {
+    expect(
+      keepFilteringPositions("MATCH (n) WHERE n.orgId = $orgId RETURN n }"),
+    ).toContain("$orgId");
+  });
+
   it("a COUNT subquery is a subquery brace, not a map", () => {
     // Discriminates the "subquery" classification from "map": if COUNT were
     // read as a map literal its whole body would be blanked, including a real
