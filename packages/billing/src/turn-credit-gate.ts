@@ -22,10 +22,10 @@
  *         AFTER any auto-reload attempt (assertCanStartTurn calls maybeAutoReload
  *         first, so an org that would top up is NOT blocked).
  *       · BillingSuspendedError — thrown only when dunningState === 'suspended'.
- *     Both are affirmative "this org must not spend" states. An org created by
- *     the deprecated onboarding action holds a non-expiring $5 signup grant
- *     (grantFreeCredits); one created through `create_org` starts at zero
- *     (ADR-055 §3.9 item 14). Either way a zero effective balance means
+ *     Both are affirmative "this org must not spend" states. Every new org
+ *     holds a non-expiring $5 signup grant: `create_org` writes it on the org
+ *     transaction (grantSignupCredits) and the deprecated onboarding action
+ *     through grantFreeCredits (ADR-055 §13). A zero effective balance means
  *     *nothing left to spend*, never *billing-absent*.
  *   - It is byte-consistent with the invoke() gate that already governs the same
  *     route: it can never refuse a turn the tool-call gate would have admitted,

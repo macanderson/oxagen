@@ -28,6 +28,12 @@ export const fetchCommands = defineTool({
   noBillingGate: live.noBillingGate,
 
   absorbs: ["fetch_tacho_commands"],
+  carriedInPlace: [
+    {
+      name: "fetch_tacho_commands",
+      why: "#2953 registered this tool in place, in ../tacho.command.fetch.ts, under its Appendix E name; the v1 name no longer registers anywhere. This descriptor takes `input: live.input` from that same contract, so there is no v1 shape to diff against — a comparison would diff a schema against itself and pass whatever happened to it.",
+    },
+  ],
   renames: [
     {
       from: "outcome",

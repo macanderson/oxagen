@@ -37,6 +37,12 @@ export const dispatchCommand = defineTool({
   noBillingGate: live.noBillingGate,
 
   absorbs: ["dispatch_tacho_command"],
+  carriedInPlace: [
+    {
+      name: "dispatch_tacho_command",
+      why: "the contract was rewritten in place in ../tacho.command.dispatch.ts under its Appendix E name; the v1 name no longer registers anywhere. This descriptor takes `input: live.input` from that same contract, so there is no v1 shape to diff against.",
+    },
+  ],
   renames: [
     {
       from: "sessionUuid",

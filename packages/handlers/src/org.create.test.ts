@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   withSystemDbFn: vi.fn(),
   bootstrapOrgIAM: vi.fn(),
   bootstrapWorkspace: vi.fn(),
+  grantSignupCredits: vi.fn(),
   openOnboardingGate: vi.fn(),
 }));
 
@@ -75,12 +76,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-// create_org writes nothing billing-shaped, so the handler has no reason to
-// load the billing package. A factory that throws turns an import into a
-// failing test rather than a silent dependency.
-vi.mock("@oxagen/billing", () => {
-  throw new Error("create_org must not load @oxagen/billing");
-});
+// The signup grant is written on the org transaction (grants.test.ts covers
+// the ledger, lot and balance rows it writes). The mock exposes only
+// grantSignupCredits, so any other billing call fails the test.
+mocks.grantSignupCredits.mockResolvedValue(true);
+vi.mock("@oxagen/billing", () => ({
+  grantSignupCredits: mocks.grantSignupCredits,
+}));
 
 // IAM provisioning is tested in iam-provision.test.ts and the workspace
 // bootstrap in workspace-bootstrap.test.ts; here we verify both are called on
@@ -118,11 +120,13 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     mocks.txInsertOrgUsers.mockClear();
     mocks.bootstrapOrgIAM.mockClear();
     mocks.bootstrapWorkspace.mockClear();
+    mocks.grantSignupCredits.mockReset();
     // Restore defaults
     mocks.orgFindFirst.mockResolvedValue(null);
     mocks.txInsertOrgReturning.mockResolvedValue([ORG_ROW]);
     mocks.bootstrapOrgIAM.mockResolvedValue(undefined);
     mocks.bootstrapWorkspace.mockResolvedValue(WORKSPACE_ROW);
+    mocks.grantSignupCredits.mockResolvedValue(true);
     mocks.withSystemDbFn.mockReset();
     passthrough();
   });
@@ -266,6 +270,25 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
         name: "Core",
         slug: "core",
       }),
+    );
+  });
+
+  it("writes the $5 signup grant for the new org on the org transaction", async () => {
+    await organizationCreateHandler(INPUT, CTX);
+
+    const iamTx = mocks.bootstrapOrgIAM.mock.calls[0]?.[0]?.tx;
+    expect(mocks.grantSignupCredits).toHaveBeenCalledTimes(1);
+    expect(mocks.grantSignupCredits).toHaveBeenCalledWith(
+      iamTx,
+      "internal_org_id",
+    );
+  });
+
+  it("surfaces a signup grant failure so the org transaction cannot commit without it", async () => {
+    mocks.grantSignupCredits.mockRejectedValueOnce(new Error("ledger down"));
+
+    await expect(organizationCreateHandler(INPUT, CTX)).rejects.toThrow(
+      "ledger down",
     );
   });
 

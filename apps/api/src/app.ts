@@ -34,6 +34,13 @@ import { billingEvidenceRetentionRoute } from "./routes/v1/billing.evidence_rete
 import { chatMessageSendRoute } from "./routes/v1/chat.message.send";
 import { chatMessageExecutionRoute } from "./routes/v1/chat.message.execution";
 import { chatStreamRoute } from "./routes/v1/chat.stream";
+import { assistantAskRoute } from "./routes/v1/assistant.ask";
+import { assistantEngineGetRoute } from "./routes/v1/assistant.engine.get";
+import { toolsSearchRoute } from "./routes/v1/tools.search";
+import { toolsLoadRoute } from "./routes/v1/tools.load";
+import { shellNavCountsGetRoute } from "./routes/v1/shell.nav_counts.get";
+import { runRecentListRoute } from "./routes/v1/run.recent.list";
+import { userPreferencesSetRoute } from "./routes/v1/user.preferences.set";
 import { agentToolListRoute } from "./routes/v1/agent.tool.list";
 import { agentMcpRegisterRoute } from "./routes/v1/agent.mcp.register";
 import { agentMcpListRoute } from "./routes/v1/agent.mcp.list";
@@ -79,7 +86,6 @@ import { orgMemberInviteDeclineRoute } from "./routes/v1/org.member_invite.decli
 import { orgMemberRemoveRoute } from "./routes/v1/org.member.remove";
 import { orgMemberRoleChangeRoute } from "./routes/v1/org.member_role.change";
 import { userPreferencesReadRoute } from "./routes/v1/user.preferences.read";
-import { userPreferencesWriteRoute } from "./routes/v1/user.preferences.write";
 import { budgetPolicyReadRoute } from "./routes/v1/budget.policy.read";
 import { budgetPolicyWriteRoute } from "./routes/v1/budget.policy.write";
 import { workspaceBudgetPolicyReadRoute } from "./routes/v1/workspace.budget_policy.read";
@@ -404,7 +410,7 @@ userScoped.route("/auth/whoami", authWhoamiRoute);
 userScoped.route("/user/organizations", orgListRoute);
 userScoped.route("/user/workspaces", workspaceListRoute);
 userScoped.route("/user/preferences/read", userPreferencesReadRoute);
-userScoped.route("/user/preferences/write", userPreferencesWriteRoute);
+userScoped.route("/user/preferences", userPreferencesSetRoute);
 // Per-turn dollar budget (user-scoped default).
 userScoped.route("/user/budget/read", budgetPolicyReadRoute);
 userScoped.route("/user/budget/write", budgetPolicyWriteRoute);
@@ -549,6 +555,14 @@ orgScoped.route("/billing/evidence/retention", billingEvidenceRetentionRoute);
 orgScoped.route("/chat/messages", chatMessageSendRoute);
 orgScoped.route("/chat/messages/execution", chatMessageExecutionRoute);
 orgScoped.route("/chat/stream", chatStreamRoute);
+// The shell (#2968): the in-app agent's turn and engine probe, the command
+// menu's search, belt definitions and recent runs, the sidebar counts.
+orgScoped.route("/assistant/ask", assistantAskRoute);
+orgScoped.route("/assistant/engine", assistantEngineGetRoute);
+orgScoped.route("/tools/search", toolsSearchRoute);
+orgScoped.route("/tools/load", toolsLoadRoute);
+orgScoped.route("/shell/nav-counts", shellNavCountsGetRoute);
+orgScoped.route("/runs/recent", runRecentListRoute);
 orgScoped.route("/conversations", conversationListRoute);
 // GET /conversations/:conversationId/files — registered at the same prefix as the
 // list route; Hono dispatches by method+full path so it does not clash with the

@@ -169,8 +169,37 @@ export interface MaterializeOptions {
    * until the consent TTL expires.
    */
   onConsentRequired?: (event: ConsentRequiredEvent) => void;
+  /**
+   * What a tool does after it has created its approval request. `wait`
+   * blocks inside `execute` until the person decides or the TTL passes,
+   * which is what the chat surfaces have always done. `park` refuses the
+   * call at once with `ApprovalPendingError`, naming the request: the in-app
+   * agent on `stella-serve` runs this way (MC spec §4.4; the engine has no
+   * approval gate of its own), so the turn completes with the write parked
+   * as a card and the person's decision starts the next turn.
+   */
+  approvalMode?: "wait" | "park";
   /** Seam for tests; defaults to the Postgres-backed gate. */
   killSwitchGate?: KillSwitchGate;
+}
+
+/**
+ * A governed write the turn opened that is waiting on a person. Thrown out of
+ * a tool's `execute` under `approvalMode: "park"`; the engine reads it as a
+ * refusal by policy and the surface reads the fields as the parked card.
+ */
+export class ApprovalPendingError extends Error {
+  override readonly name = "ApprovalPendingError";
+  readonly code = "pending_approval" as const;
+  constructor(
+    readonly capability: string,
+    readonly approvalId: string,
+    readonly expiresAt: string,
+  ) {
+    super(
+      `refused: ${capability} is waiting for approval ${approvalId} until ${expiresAt}`,
+    );
+  }
 }
 
 // Result of materializeTools: the Vercel AI SDK tool map keyed by *model-safe*
@@ -515,6 +544,9 @@ export async function materializeTools(
                 riskLevel,
                 expiresAt,
               });
+              if (opts.approvalMode === "park") {
+                throw new ApprovalPendingError(cap.name, approvalId, expiresAt);
+              }
               const resolution = await waitForApproval(approvalId);
               if (resolution.resolution !== "approved") {
                 throw new Error(

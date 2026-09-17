@@ -546,7 +546,7 @@ export const flows: Flow[] = [
     ],
     refs: [
       "apps/api/src/routes/v1/chat.stream.ts#chatStreamRoute",
-      "apps/api/src/routes/v1/chat-memory.ts#recallWorkspaceMemoryMessage",
+      "packages/agent/src/runtime/assistant-recall.ts#recallWorkspaceMemoryMessage",
       "apps/api/src/routes/v1/chat-stream-translator.ts#createApiStreamTranslator",
       "packages/ai/src/funding-source.ts#resolveModelFundingSource",
       "packages/billing/src/turn-credit-gate.ts#evaluateTurnCreditGate",

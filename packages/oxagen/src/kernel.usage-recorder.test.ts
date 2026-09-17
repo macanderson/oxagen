@@ -25,6 +25,7 @@ import {
   governedActionUnits,
   invoke,
   registerHandler,
+  runOutsideGovernedAction,
   setUsageRecorder,
   type GovernedActionRecord,
 } from "./kernel";
@@ -149,6 +150,30 @@ describe("kernel governed-action usage recorder", () => {
     // a customer cannot see it to check a bill against it.
     expect(recorder).toHaveBeenCalledTimes(1);
     expect(recorded[0]?.capability).toBe("accrual_outer");
+  });
+
+  it("bills each invoke started outside the governed-action frame as a top-level action", async () => {
+    // The in-app agent's turn (`ask_assistant`) is not a governed action; each
+    // tool call it answers is one (ADR-053 §1), whichever adapter invoked it.
+    defineCap({ name: "accrual_turn", noBillingGate: true });
+    defineCap({ name: "accrual_tool" });
+    registerHandler("accrual_tool", async () => async () => ({ tool: true }));
+    registerHandler("accrual_turn", async () => async () => {
+      await runOutsideGovernedAction(async () => {
+        await invoke("accrual_tool", {}, ctx, { surface: "api" });
+        await invoke("accrual_tool", {}, ctx, { surface: "api" });
+      });
+      // Back inside the turn's frame: nested, so not billed (negative).
+      await invoke("accrual_tool", {}, ctx, { surface: "api" });
+      return { turn: true };
+    });
+
+    await invoke("accrual_turn", {}, ctx, { surface: "api" });
+
+    expect(recorded.map((r) => r.capability)).toEqual([
+      "accrual_tool",
+      "accrual_tool",
+    ]);
   });
 
   it("bills two sequential top-level calls twice — nesting is per call tree, not per process", async () => {

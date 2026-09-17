@@ -147,9 +147,16 @@ export class StellaEngineClient {
    * `GET /readyz`. Unauthenticated. A 503 is not an error here: it is the
    * server saying `starting` or `draining`, and a readiness gate wants that
    * word rather than an exception.
+   *
+   * Takes a signal because the caller that gives up on this request is the one
+   * that has to end it. A probe with its own timer and no signal leaves the
+   * request in flight against a server that is already struggling, and every
+   * retry adds another.
    */
-  async ready(): Promise<ReadinessView> {
-    const res = await this.fetchImpl(`${this.baseUrl}/readyz`);
+  async ready(options: { signal?: AbortSignal } = {}): Promise<ReadinessView> {
+    const res = await this.fetchImpl(`${this.baseUrl}/readyz`, {
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
     if (res.status === 200 || res.status === 503) {
       const body = (await res.json()) as { state?: unknown };
       const state = typeof body.state === "string" ? body.state : "unknown";
