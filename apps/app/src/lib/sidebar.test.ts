@@ -89,8 +89,11 @@ describe("resolveSidebarMode", () => {
 // 2. getSidebarConfig — item counts per mode
 //
 // Spec:
-//   workspace: 8 items (Overview, Sessions, Knowledge | Agents, Tools,
+//   workspace: 9 items (Overview, Sessions, Fleet, Knowledge | Agents, Tools,
 //       Environments | Marketplace, Settings)
+//     — Fleet (ADR-078) is the machines reporting to the workspace and the
+//       enforcement tier of each app on them; it is a primary destination
+//       rather than an Agents child because a host is not an agent.
 //     — the "Agents" group (group: "tools") holds the three fleet destinations
 //       (Agents, Tools, Environments) as first-class items — there is
 //       deliberately NO secondary nav. Marketplace + Settings are pinned to the
@@ -102,12 +105,15 @@ describe("resolveSidebarMode", () => {
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
-  it("workspace config has exactly 8 items", () => {
+  it("workspace config has exactly 9 items", () => {
     const config = getSidebarConfig("workspace");
     expect(config.mode).toBe("workspace");
     // ADR-043 excised the runtime surfaces (Sandboxes, Repos, Evals,
-    // Automations) — what remains is the governance observatory.
-    expect(config.items).toHaveLength(8);
+    // Automations) — what remains is the governance observatory. ADR-078 added
+    // Fleet: the machines reporting in, and the enforcement tier of each app
+    // on them. A host is not an agent, so it sits in the primary group rather
+    // than under Agents.
+    expect(config.items).toHaveLength(9);
   });
 
   it("org config has 8 items by default (access filtered for non-enterprise)", () => {
@@ -163,6 +169,7 @@ describe("getSidebarConfig item counts", () => {
     expect(ids).toEqual([
       "overview",
       "sessions",
+      "fleet",
       "knowledge",
       "agents",
       "tools",
