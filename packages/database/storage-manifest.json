@@ -2521,7 +2521,7 @@
       "writes": []
     }
   ],
-  "contentHash": "a630b9537304133aac9c00d3a5f0fd0edea58dab2011cd4e762f67fed5f4bae9",
+  "contentHash": "19a04dd4343c2a8d6cd0c952b962624e14638cb0dd0faa89c7ef01511b96c85e",
   "domains": [
     {
       "name": "agent",
@@ -8880,6 +8880,18 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "stripe_price_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "unit_amount_cents",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
         },
         {
           "name": "status",
