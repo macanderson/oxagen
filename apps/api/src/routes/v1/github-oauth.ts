@@ -31,7 +31,6 @@ import {
   buildManageInstallationUrl,
   parseReturnTo,
   verifyInstallState,
-  type GithubConnectReturnTo,
   type GithubInstallState,
   type GithubInstallStateError,
 } from "@oxagen/github";
