@@ -35,7 +35,7 @@ import {
   type GithubInstallStateError,
 } from "@oxagen/github";
 import { encrypt, decrypt, createIngestionCryptoAdapter } from "@oxagen/crypto";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, notInArray } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { AppEnv } from "../../app";
 import { requireEnv } from "@oxagen/config/env";
@@ -794,6 +794,13 @@ async function attachWorkspaceGithubInstallation(args: {
           eq(schema.sourceConnections.workspaceId, workspaceId),
           eq(schema.sourceConnections.connectorId, GITHUB_CONNECTOR_ID),
           isNull(schema.sourceConnections.deletedAt),
+          // Same exclusion the resolver makes: `delete_connection` sets
+          // `deleting` and leaves `deleted_at` to the purge job, so a row mid
+          // delete is not a row to attach to. Skipping it here means a fresh
+          // install after a delete inserts a fresh connection rather than
+          // reviving the dying one — and, because this predicate and the
+          // resolver's are the same, the row written stays the row read.
+          notInArray(schema.sourceConnections.status, ["deleting", "deleted"]),
         ),
       )
       .orderBy(desc(schema.sourceConnections.createdAt))

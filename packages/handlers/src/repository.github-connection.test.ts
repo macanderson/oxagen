@@ -5,7 +5,8 @@
 // ingestion.source_connections) refuses a row from another org or workspace
 // whatever the query asks for, so `org_id` and `workspace_id` are belt and
 // braces. `connector_id = 'github'` and `deleted_at IS NULL` are backstopped by
-// nothing at all — drop either predicate and a revoked (soft-deleted)
+// nothing at all, and nor is the `status` exclusion — drop any of them and a
+// revoked (soft-deleted, or mid-delete)
 // connection, or some other connector whose `deliveryConfig` happens to carry
 // an `installationId`, flows straight into `getInstallationToken`. "Revoking
 // the connection stops the token minting" is a security property of this one
@@ -123,11 +124,23 @@ describe("resolveWorkspaceGithubInstallation names every predicate in SQL", () =
     expect(query.sql).toMatch(/"deleted_at" is null/i);
   });
 
-  it("conjoins all four predicates — none is an alternative to another", async () => {
+  // `deleted_at IS NULL` is not enough on its own: `delete_connection` sets
+  // `status = 'deleting'` and leaves `deleted_at` to the purge job that runs
+  // later. A connection the person has already deleted would otherwise still
+  // be reported as connected and still mint installation tokens, for however
+  // long the purge takes.
+  it("excludes a connection mid-delete — 'deleting' is not live", async () => {
+    const query = await emittedSql();
+    expect(query.sql).toMatch(/"status" not in/i);
+    expect(query.params).toContain("deleting");
+    expect(query.params).toContain("deleted");
+  });
+
+  it("conjoins all five predicates — none is an alternative to another", async () => {
     const query = await emittedSql();
     // One `and` group, no `or`: a row must satisfy every predicate at once.
     expect(query.sql).not.toMatch(/\bor\b/i);
-    expect(query.sql).toMatch(/\band\b.*\band\b.*\band\b/is);
+    expect(query.sql).toMatch(/\band\b.*\band\b.*\band\b.*\band\b/is);
   });
 
   it("binds a different scope's ids for a different scope (negative)", async () => {

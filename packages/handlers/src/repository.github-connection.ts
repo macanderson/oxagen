@@ -10,10 +10,24 @@
 // installation, so it is always taken from the connection the HMAC-verified
 // install callback attached (apps/api/src/routes/v1/github-oauth.ts).
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, notInArray } from "drizzle-orm";
 
 /** The connector id the GitHub install callback writes. */
 export const GITHUB_PROVIDER = "github";
+
+/**
+ * Statuses that mean the connection is on its way out and must not mint
+ * anything, even though its `deleted_at` is still null.
+ *
+ * `delete_connection` sets `status = 'deleting'` and leaves `deleted_at` for
+ * the purge job that runs later, so `deleted_at IS NULL` alone does not mean
+ * live. Without this, a person who deleted their GitHub connection would still
+ * see it reported as connected, and `list_installation_repositories` and
+ * `bind_main_repository` would go on minting installation tokens through it —
+ * "revoking the connection stops the token minting" has to hold from the
+ * moment of the revoke, not from whenever the purge catches up.
+ */
+const RETIRED_STATUSES = ["deleting", "deleted"] as const;
 
 /** A workspace GitHub connection that carries an installation id. */
 export interface WorkspaceGithubInstallation {
@@ -74,6 +88,7 @@ export async function resolveWorkspaceGithubInstallation(scope: {
           eq(schema.sourceConnections.workspaceId, scope.workspaceId),
           eq(schema.sourceConnections.connectorId, GITHUB_PROVIDER),
           isNull(schema.sourceConnections.deletedAt),
+          notInArray(schema.sourceConnections.status, [...RETIRED_STATUSES]),
         ),
       );
     for (const row of rows) {
