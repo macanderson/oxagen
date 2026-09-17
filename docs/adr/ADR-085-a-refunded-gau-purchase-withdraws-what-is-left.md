@@ -451,6 +451,49 @@ sits, and a future edit could move it outside the lock while leaving the write
 looking identical. The column-ownership assertion is what survives that edit; it
 fails when the `.set()` is widened.
 
+### 13. The enumeration stays a dated snapshot, and is not made into a gate
+
+§12 lists eight writers. The obvious next move is a check that greps for writers
+outside an allowlist, turning the snapshot into something a ninth trips. That
+was considered and rejected on evidence, and the reasoning is recorded because
+the *absence* of a gate here should read as a decision rather than an oversight.
+
+**It would be blind to this package's own write idiom.** `spend-counter.ts` and
+`price-book.ts` write tables with ``tx.execute(sql`INSERT INTO ${schema.x} …`)``.
+Raw-SQL writes are established practice here, not hypothetical, and a grep for
+the Drizzle builder cannot see them. A gate that reports clean on a class of
+thing it cannot see is worse than no gate, because its green is read as evidence.
+
+**It could not fire on the likeliest ninth writer.** Six of the eight live in
+`gau-settlements.ts`. A file-level allowlist — the only stable form — allowlists
+that file, so a ninth added there does not trip it, and that is much the most
+probable place for one.
+
+**A line-level allowlist would churn into uselessness.** These line numbers moved
+repeatedly while this record was being written. An allowlist needing an update on
+nearly every edit becomes something regenerated without reading, which is how a
+gate stops being one.
+
+**What holds without maintenance is already in place.**
+`gau_buckets_counts_non_negative` and `gau_buckets_overage_invoiced_within_used`
+are CHECK constraints. Postgres enforces them against every writer — Drizzle
+builder, raw SQL, a future trigger, a hand-run `psql` — with no allowlist and no
+way to be out of date. They are the assertion form of the part that matters.
+
+So the honest shape of this record's guarantees, which is worth keeping straight
+because the two read alike:
+
+| claim | kind | defended by |
+|---|---|---|
+| the reversal's write names three columns | property of code | a unit assertion that fails when widened |
+| its read is inside the row lock | property of code | statement-order tests + the two-connection race |
+| counts never go negative; overage ≤ used | property of the database | CHECK constraints, against every writer |
+| **"nothing else writes these columns"** | **snapshot of the tree** | **nothing — true when written, dated** |
+
+An enumeration is evidence about the tree at a moment; an assertion is a property
+the tree cannot leave. Every "we checked, nothing else does X" is the first kind
+while reading like the second.
+
 ## Consequences
 
 - A purchase made before this change has no `stripe_payment_intent_id` and no
