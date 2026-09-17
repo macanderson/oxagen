@@ -252,7 +252,9 @@ import { Button } from "@oxagen/ui/components/button";
 
 **Exceptions:** The re-export files themselves (`src/components/ui/*.tsx`) legitimately import from `@oxagen/ui/components/*`. Importing `@oxagen/ui` (barrel), `@oxagen/ui/styles/*`, and `@oxagen/ui/lib/*` is allowed everywhere.
 
-**Enforcement:** `no-restricted-imports` in `eslint.next.mjs` — errors on any `@oxagen/ui/components/*` import outside the `src/components/ui/` layer. Its first line names its scope: `apps/app_deprecated` and `apps/docs`. `apps/app` is linted by its own config.
+**Enforcement:** `no-restricted-imports` in `eslint.next.mjs` — errors on any `@oxagen/ui/components/*` import outside the `src/components/ui/` layer. Its first line names its scope: `apps/app_deprecated` and `apps/docs`.
+
+**`apps/app` is not enforced.** Its standalone `apps/app/eslint.config.mjs` restricts the tenancy seams, the `next/navigation` names INV-13 routes, and cross-lane `@/features/*/*` imports — and nothing else. There is no `@oxagen/ui/components/*` pattern in it, so a direct shared-component import there lints clean. The rule holds in `apps/app` because the app has its own components and imports that path zero times, not because anything refuses it. Treat it as a convention there until a rule and its `src/test/arch/probes/lint` probe exist.
 
 ### UI Component Test Placement
 

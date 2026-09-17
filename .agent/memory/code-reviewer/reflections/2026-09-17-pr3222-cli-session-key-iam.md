@@ -12,7 +12,12 @@ principal (`packages/auth/src/resolvers/api-key.ts`, `packages/iam/src/fetch-aut
 dependent authorization divergence (MCP drops `resolution.userId`), one stale
 docblock/test comment pair, one dependency-direction nit, two pre-existing
 adjacent defects (`rotate_api_key` has no reserved-purpose guard and reassigns
-`created_by_id`). Confirmed the new test genuinely pins the guard by mutation
+`created_by_id`) — **the first of those two is retracted: it was wrong when
+written.** `rotationRefusalFor` runs at `api.key.rotate.ts:118` and again at
+`:217`, and `RESERVED_PURPOSES` already covered Tacho-host, agent-credential,
+Stella-telemetry and CLI-session at the WL-52 cutover; the scope copy is
+unreachable for every purpose named. I read the insert without reading upward
+to its guards. Confirmed the new test genuinely pins the guard by mutation
 reasoning. No suites run (no vitest in flight; avoided an install).
 
 ### Quality of my decisions

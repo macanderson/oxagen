@@ -366,8 +366,8 @@ Never import `generateText` / `streamText` / `generateObject` directly from `ai`
 
 | App | Import UI from | Enforced by |
 |---|---|---|
-| `apps/app` | `@/ui/<name>` | its own ESLint 10 config |
-| `apps/docs`, `apps/app_deprecated` | `@/components/ui/<name>` | `eslint.next.mjs` |
+| `apps/app` | `@/ui/<name>` | nothing — convention only (see below) |
+| `apps/docs`, `apps/app_deprecated` | `@/components/ui/<name>` | `no-restricted-imports` in `eslint.next.mjs` |
 
 ```ts
 // ✅ import { Button } from "@/ui/button"           // apps/app
@@ -375,7 +375,9 @@ Never import `generateText` / `streamText` / `generateObject` directly from `ai`
 // ❌ import { Button } from "@oxagen/ui/components/button"
 ```
 
-Enforcement: `no-restricted-imports` in `eslint.next.mjs`. Exceptions: the re-export files themselves, plus `@oxagen/ui` barrel, `@oxagen/ui/styles/*`, `@oxagen/ui/lib/*`.
+**`apps/app` is not covered by that rule, and nothing else covers it either.** `eslint.next.mjs` names `apps/app_deprecated` and `apps/docs` on its first line; `apps/app/eslint.config.mjs` is standalone and its `no-restricted-imports` carries only the tenancy seams, the `next/navigation` names INV-13 routes, and the `@/features/*/*` lane isolation — no `@oxagen/ui/components/*` pattern. A direct shared-component import in `apps/app` therefore lints clean. It holds today because `apps/app` has 35 original components under `src/ui/` and imports that path zero times, not because a rule refuses it.
+
+Exceptions to the rule where it *is* enforced: the re-export files themselves, plus the `@oxagen/ui` barrel, `@oxagen/ui/styles/*` and `@oxagen/ui/lib/*`.
 
 ## Citing nodes & edges in the UI
 
