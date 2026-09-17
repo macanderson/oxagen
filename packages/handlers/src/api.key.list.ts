@@ -10,7 +10,8 @@
 //      workspaceId (the tenant scope the kernel entered).
 //   2. Role gate — the actor must hold Owner or Admin in the org.
 //   3. Select the metadata columns for every key in scope, revoked ones
-//      included, newest first.
+//      included, newest first, and the workspace row beside them — `rotatable`
+//      is not answerable without knowing whether the workspace is archived.
 //
 // The select names its columns: key_hash is never read, so a later change to
 // the row shape cannot leak it through a `select()` with no projection.
@@ -24,8 +25,14 @@
 // handler is the authority and checks again against its own clock. A revoked
 // key is not rotatable either — this read returns revoked rows so the roster
 // can show them, and rotate_api_key answers not-found for one — so revocation
-// is the third reason the shared predicate weighs. Revoking is unaffected by
-// all of it: a key is revocable whatever its purpose and whatever its expiry.
+// is the third reason the shared predicate weighs. The fourth is not about the
+// key at all: rotate_api_key refuses an archived workspace whatever the key, so
+// this read takes the workspace row too and every key in an archived workspace
+// reports rotatable: false. Without it this field said true for a key the
+// handler refuses unconditionally, and only the app was unaffected — because
+// key-row.tsx has its own `archived` prop. API and MCP callers have this field
+// and nothing else. Revoking is unaffected by all of it: a key is revocable
+// whatever its purpose, its expiry, and its workspace.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
