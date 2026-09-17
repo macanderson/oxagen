@@ -29,7 +29,11 @@ export type { GraphScope };
 // 2) FILTERING position. `keepFilteringPositions` blanks everything that is not
 //    a `WHERE` clause or an inline pattern property map, so a `SET` target
 //    (`MATCH (n) SET n.orgId = $orgId`, which reassigns every tenant's nodes to
-//    the caller) and a `RETURN`/`WITH` projection do not count.
+//    the caller) and a `RETURN`/`WITH` projection do not count. The map must
+//    also sit in a clause that SELECTS rows: `CREATE`'s map stamps a node being
+//    made, and `MERGE`'s constrains only what it merges, so a `MERGE` map
+//    counts only when no earlier clause has bound a graph variable — the case
+//    where there is nothing else for it to have failed to narrow.
 // 3) A binding SHAPE: `orgId` against `:` or `=`.
 // 4) THE SEAM'S PARAMETER on the other side of it. Conditions 1–3 check the
 //    GRAMMAR of a tenancy anchor and never check what it binds to, which is a
