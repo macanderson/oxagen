@@ -14,7 +14,7 @@ import { inArray } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
 import {
   resolveOrg,
-  assertOrgMember,
+  assertSecurityManager,
   getOrgRole,
   SECURITY_MANAGER_ROLES,
 } from "@/lib/resolve-org";
@@ -67,7 +67,23 @@ export default async function SecurityAuditPage({
     getSessionOrRedirect(),
     resolveOrg(orgSlug),
   ]);
-  await assertOrgMember(tenant.id, session.user.id);
+  // Owner/Admin, not membership. This page and the signed export at
+  // ./export/route.ts read through the SAME path (@/lib/audit-query), which is
+  // the point of that module — what you see is what you export. The export has
+  // gated on SECURITY_MANAGER_ROLES since it was written; the viewer gated on
+  // membership and was kept narrow by Postgres instead, because
+  // security.security_events is `workspace_nullable` and the read ran under the
+  // org-only workspace sentinel, so RLS returned only the org-wide rows.
+  //
+  // That narrowing was hiding rows the viewer had no business showing as much
+  // as it was hiding rows the export needed. Fixing the read without fixing the
+  // gate would have handed every org member every workspace's actor identities,
+  // IP addresses, user agents, request ids and capability outcomes. The
+  // governed capability is the specification here: query_audit_log answers
+  // organization-wide only for an org Owner or Admin
+  // (packages/handlers/src/audit.log.query.ts, ORG_AUDIT_ROLES), and this
+  // surface now matches it.
+  await assertSecurityManager(tenant.id, session.user.id);
 
   const [access, role, filter] = await Promise.all([
     getEnterpriseAccess(tenant.id),

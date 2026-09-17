@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { ExternalLink, KeySquare } from "lucide-react";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -49,10 +49,6 @@ interface PageProps {
   // Re-authenticate action.
   searchParams: Promise<{ reauth?: string }>;
 }
-
-// Sentinel workspaceId for org-only reads (API keys are org-scoped) — mirrors
-// developer/mcp/page.tsx's ORG_ONLY_WS.
-const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 /** Shiki is an optional enhancement — fall back to plain text on failure. */
 async function highlight(code: string, lang: string): Promise<string> {
@@ -153,38 +149,14 @@ export default async function AgentToolsMcpPage({
     rows.map((row) => [row.id, row.title ?? row.name]),
   );
 
-  // (c) Read the org's first active API key to inject into external-client snippets.
-  let firstKey: string | null = null;
-  try {
-    const keys = await runInTenantScope(
-      { orgId: org.id, workspaceId: ORG_ONLY_WS },
-      () =>
-        withTenantDb((tx) =>
-          tx
-            .select({
-              keyPrefix: schema.apiKeys.keyPrefix,
-              expiresAt: schema.apiKeys.expiresAt,
-            })
-            .from(schema.apiKeys)
-            .where(eq(schema.apiKeys.orgId, org.id))
-            .orderBy(desc(schema.apiKeys.createdAt))
-            .limit(10),
-        ),
-    );
-    const active = keys.filter((k) => !k.expiresAt || k.expiresAt > new Date());
-    if (active[0]) {
-      firstKey = `${active[0].keyPrefix}${"•".repeat(32)}`;
-    }
-  } catch (err) {
-    // Degrade gracefully — snippets fall back to $OXAGEN_API_KEY — but never silently.
-    logger.error(
-      { err, orgSlug },
-      "tools/mcp: API-key lookup for install snippets failed — using the $OXAGEN_API_KEY placeholder",
-    );
-  }
-
-  const apiKeyDisplay = firstKey ?? "$OXAGEN_API_KEY";
-  const snippetDefs = buildSnippets(apiKeyDisplay);
+  // (c) NO KEY IS READ HERE, DELIBERATELY. `auth.api_keys` keeps only
+  // `key_prefix` and `key_hash`, so the most this page could inject is a masked
+  // prefix, and buildSnippets embeds whatever it is given as the bearer
+  // credential — a copied client config would be guaranteed to fail
+  // authentication. The raw key is shown once at creation and cannot be read
+  // back, so `$OXAGEN_API_KEY` is the only thing here that can be right. Same
+  // reasoning as the org-level page at ../../../developer/mcp/page.tsx.
+  const snippetDefs = buildSnippets();
   const entries: McpTabEntry[] = await Promise.all(
     snippetDefs.map(async (s) => ({
       ...s,
@@ -302,38 +274,25 @@ export default async function AgentToolsMcpPage({
             </span>
           </div>
 
-          {firstKey ? (
-            <div className="flex items-start gap-2 rounded-xl border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-              <KeySquare
-                className="mt-0.5 h-4 w-4 shrink-0"
-                aria-hidden="true"
-              />
-              <span>
-                The snippets below use your org&apos;s first active API token
-                (prefix shown). Replace with the full token value you saved when
-                the key was created.
-              </span>
-            </div>
-          ) : (
-            <div className="flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/12 px-4 py-3 text-sm text-warning">
-              <KeySquare
-                className="mt-0.5 h-4 w-4 shrink-0"
-                aria-hidden="true"
-              />
-              <span>
-                No active API token found. Create one on the{" "}
-                <a
-                  href={`/${orgSlug}/developer/tokens`}
-                  className="font-medium underline underline-offset-2 hover:no-underline"
-                >
-                  Tokens
-                </a>{" "}
-                tab, then replace{" "}
-                <code className="font-mono text-xs">$OXAGEN_API_KEY</code> in
-                the snippets below with your key value.
-              </span>
-            </div>
-          )}
+          <div className="flex items-start gap-2 rounded-xl border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+            <KeySquare className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>
+              The Claude Code command names{" "}
+              <code className="font-mono text-xs">$OXAGEN_API_KEY</code>, which
+              your shell expands. The JSON configs cannot expand anything, so
+              replace{" "}
+              <code className="font-mono text-xs">&lt;your-api-key&gt;</code> in
+              them with the key value you saved when the key was created — it is
+              shown once and cannot be read back. Create one on the{" "}
+              <a
+                href={`/${orgSlug}/developer/tokens`}
+                className="font-medium underline underline-offset-2 hover:no-underline"
+              >
+                Tokens
+              </a>{" "}
+              tab.
+            </span>
+          </div>
 
           <McpInstallTabs entries={entries} />
         </div>

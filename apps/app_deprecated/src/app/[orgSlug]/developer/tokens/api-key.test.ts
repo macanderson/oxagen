@@ -1,6 +1,7 @@
 /**
  * api-key.test.ts — unit tests for createApiKeyAction.
  */
+import { readFileSync } from "node:fs";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -21,6 +22,46 @@ vi.mock("@oxagen/oxagen", () => ({
 }));
 
 vi.mock("@oxagen/handlers/register", () => ({}));
+
+// The three actions each resolve a real workspace before invoking, so the
+// database seam has to answer here. `withSystemDb` is the only seam mocked:
+// this module reads `auth.api_keys` (policy class `standard`) and
+// `workspace.workspaces` at the organization level, where there is no workspace
+// scope to read them under.
+const { dbState } = vi.hoisted(() => ({
+  dbState: { rows: [] as Array<Record<string, unknown>> },
+}));
+vi.mock("@oxagen/database", () => {
+  const chain = () => {
+    const self: Record<string, unknown> = {};
+    for (const m of ["from", "innerJoin", "where", "orderBy"]) {
+      self[m] = () => self;
+    }
+    self.limit = () => Promise.resolve(dbState.rows);
+    return self;
+  };
+  return {
+    withSystemDb: vi.fn((fn: (tx: unknown) => unknown) =>
+      fn({ select: () => chain() }),
+    ),
+    schema: {
+      apiKeys: {
+        orgId: "orgId",
+        publicId: "publicId",
+        workspaceId: "workspaceId",
+        deletedAt: "deletedAt",
+      },
+      workspaces: { id: "id", orgId: "orgId", createdAt: "createdAt" },
+      workspaceUsers: { workspaceId: "workspaceId", userId: "userId" },
+    },
+  };
+});
+vi.mock("drizzle-orm", () => ({
+  and: (...a: unknown[]) => a,
+  asc: (a: unknown) => a,
+  eq: (a: unknown, b: unknown) => [a, b],
+  isNull: (a: unknown) => a,
+}));
 
 // revalidatePath touches Next's static-generation store, which only exists
 // during a request. In a unit test it throws "Invariant: static generation
@@ -65,6 +106,7 @@ describe("createApiKeyAction", () => {
     vi.mocked(resolveOrg).mockResolvedValue(mockOrg as never);
     vi.mocked(assertOrgAdmin).mockResolvedValue(undefined);
     vi.mocked(invoke).mockResolvedValue(mockApiKey);
+    dbState.rows = [{ id: "ws-1" }];
   });
 
   it("invokes api.key.create capability", async () => {
@@ -91,10 +133,38 @@ describe("createApiKeyAction", () => {
     );
   });
 
-  it("uses org-only sentinel workspace id in ctx", async () => {
+  // This used to assert the opposite, and the assertion was the bug written
+  // down. `create_api_key` persists ctx.workspaceId, and the nil sentinel
+  // satisfies the `standard` policy's WITH CHECK because the row carries the
+  // same value the GUC holds — so the insert succeeded and the secret shown
+  // once named a workspace no row answers to. Such a key authenticates into
+  // nothing (ADR-073, #3116).
+  it("mints into a real workspace, never the org-only sentinel", async () => {
     await createApiKeyAction({ orgSlug: "acme", name: "Key" });
     const [, , ctx] = vi.mocked(invoke).mock.calls[0]!;
-    expect(ctx.workspaceId).toBe("00000000-0000-0000-0000-000000000000");
+    expect(ctx.workspaceId).toBe("ws-1");
+    expect(ctx.workspaceId).not.toBe("00000000-0000-0000-0000-000000000000");
+  });
+
+  it("asks only for unarchived workspaces when choosing where to mint", async () => {
+    // Archiving keeps the workspace row and its membership rows, so without the
+    // isNull(archivedAt) predicate the oldest workspace an admin belongs to can
+    // be a hidden one, and the secret shown once would carry a scope they
+    // cannot see. The query is asserted through the column the predicate names.
+    await createApiKeyAction({ orgSlug: "acme", name: "Key" });
+    const source = readFileSync(
+      new URL("./api-key.ts", import.meta.url),
+      "utf8",
+    );
+    expect(source).toMatch(/isNull\(schema\.workspaces\.archivedAt\)/);
+  });
+
+  it("refuses to mint when the actor belongs to no workspace in this org", async () => {
+    dbState.rows = [];
+    await expect(
+      createApiKeyAction({ orgSlug: "acme", name: "Key" }),
+    ).rejects.toThrow(/No workspace to mint this key into/);
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it("wires orgId and userId into ctx", async () => {
