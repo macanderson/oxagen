@@ -172,14 +172,33 @@ psql "$DATABASE_URL" -c \
 # End-to-end: every price in the catalogue must open a Checkout session. This is
 # the check that catches a price archived out from under billing.plans, which a
 # row-level SELECT cannot see.
-for lk in build_v2_month scale_v2_month enterprise_v2_month; do
-  pid=$(curl -sS "https://api.stripe.com/v1/prices?lookup_keys[]=$lk&active=true&limit=1" \
+#
+# All NINE prices, not the three monthly ones: an annual price and a credit-pack
+# price are separate Stripe objects and can be archived on their own, so a probe
+# that covers only the monthly keys certifies a catalogue whose yearly upgrades
+# and credit purchases fail at Checkout. Credit packs are `mode=payment`; a
+# one-time price rejected under `mode=subscription` would read as a catalogue
+# failure that is really a wrong probe.
+probe() {  # $1 = lookup_key, $2 = subscription|payment
+  pid=$(curl -sS "https://api.stripe.com/v1/prices?lookup_keys[]=$1&active=true&limit=1" \
     -u "$STRIPE_SECRET_KEY:" | jq -r '.data[0].id')
+  if [ -z "$pid" ] || [ "$pid" = "null" ]; then
+    echo "$1 -> NO ACTIVE PRICE"   # archived out from under billing.plans
+    return 1
+  fi
   curl -sS https://api.stripe.com/v1/checkout/sessions -u "$STRIPE_SECRET_KEY:" \
-    -d mode=subscription -d "line_items[0][price]=$pid" -d "line_items[0][quantity]=1" \
+    -d "mode=$2" -d "line_items[0][price]=$pid" -d "line_items[0][quantity]=1" \
     --data-urlencode 'success_url=https://app.oxagen.sh/billing' \
     --data-urlencode 'cancel_url=https://app.oxagen.sh/billing' \
-    | jq -r '"'"'"\(.id) livemode=\(.livemode) amount=\(.amount_total)"'"'"'
+    | jq -r --arg lk "$1" '"\($lk) -> \(.id) livemode=\(.livemode) amount=\(.amount_total)"'
+}
+
+for lk in build_v2_month build_v2_year scale_v2_month scale_v2_year \
+          enterprise_v2_month enterprise_v2_year; do
+  probe "$lk" subscription
+done
+for lk in credits_starter_v2_onetime credits_power_v2_onetime credits_scale_v2_onetime; do
+  probe "$lk" payment
 done
 ```
 

@@ -134,7 +134,11 @@ done   # poll: aws ssm get-command-invocation --command-id … --instance-id "$I
   export DATABASE_URL=$(aws ssm get-parameter --region us-east-1 \
     --name /oxagen/production/DATABASE_URL --with-decryption \
     --query Parameter.Value --output text | sed -E 's#@[^/:]+:[0-9]+/#@localhost:15432/#')
-  echo "TARGET: ${DATABASE_URL%%@*}@…"   # echo the host first, per CLAUDE.md
+  # Host and database only. `${DATABASE_URL%%@*}` would print everything BEFORE
+  # the `@` — scheme, user and the decrypted production password — into the
+  # terminal and any captured session log. CLAUDE.md asks which database you are
+  # about to mutate, and that is the part after the `@`.
+  echo "TARGET: …@${DATABASE_URL#*@}"
   pnpm billing:stripe-sync --apply
   ```
 
