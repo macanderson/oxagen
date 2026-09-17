@@ -59,10 +59,12 @@ import type { Cond } from "./gau-conditions";
 type Row = Record<string, unknown>;
 
 export interface StatementLog {
-  op: "select" | "insert" | "upsert" | "update";
+  op: "select" | "insert" | "upsert" | "update" | "lock";
   table: string;
   values?: Row;
   set?: Row;
+  /** For `op: "lock"`, the advisory-lock key the statement named. */
+  lockKey?: string;
 }
 
 export interface FakeGauStore {
@@ -558,6 +560,36 @@ export function fakeGauExecutor(store: FakeGauStore) {
         };
       },
     }),
+
+    /**
+     * `tx.execute(sql\`…\`)`. Only the advisory lock is modelled, and only as
+     * a RECORD that it was taken — a single-threaded in-memory store cannot
+     * exhibit what the lock exists to prevent, so a test here can prove the
+     * statement is issued and nothing about whether it serialises anything.
+     * The serialisation itself is proved against real Postgres on two
+     * connections in `gau-reversals.concurrency.integration.test.ts`; treating
+     * this log entry as proof of correctness would be the mock-fidelity trap
+     * this file's header warns about. Anything else throws rather than
+     * silently succeeding.
+     */
+    execute: (stmt: unknown) => {
+      let text = "";
+      let key: string | undefined;
+      if (isSql(stmt)) {
+        for (const chunk of stmt.queryChunks) {
+          if (is(chunk, StringChunk)) text += chunk.value.join("");
+          else {
+            const bound = is(chunk, Param) ? chunk.value : chunk;
+            if (typeof bound === "string") key = bound;
+          }
+        }
+      }
+      if (!/pg_advisory_xact_lock/.test(text)) {
+        throw new Error(`fake tx: unmodelled execute(): ${text.trim()}`);
+      }
+      store.log.push({ op: "lock", table: "-", lockKey: key });
+      return Promise.resolve([]);
+    },
 
     update: (table: unknown) => ({
       set: (patch: Row) => ({

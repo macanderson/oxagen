@@ -9,6 +9,7 @@
 
 import Stripe from "stripe";
 import { requireEnv } from "@oxagen/config/env";
+import { logger } from "./logger";
 import type {
   BillingCreditPackLineItem,
   BillingCheckoutDynamicCreditInput,
@@ -928,6 +929,22 @@ export class StripeProvider implements BillingProvider {
     });
     if (!session.url) throw new Error("Stripe did not return a checkout URL");
     return { sessionId: session.id, url: session.url };
+  }
+
+  async getChargeMetadata(chargeId: string): Promise<Record<string, string>> {
+    try {
+      const charge = await this.client().charges.retrieve(chargeId);
+      return (charge.metadata as Record<string, string>) ?? {};
+    } catch (err) {
+      // A charge we cannot read is indistinguishable from one with no
+      // metadata for every caller's purpose, and a dispute webhook that throws
+      // here would be retried for a fault that retrying cannot fix.
+      logger.warn(
+        { chargeId, err: err instanceof Error ? err.message : String(err) },
+        "billing: could not read charge metadata",
+      );
+      return {};
+    }
   }
 
   async getCheckoutPaymentMethod(

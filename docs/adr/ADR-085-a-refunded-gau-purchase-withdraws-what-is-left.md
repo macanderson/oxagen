@@ -220,6 +220,77 @@ The settlement therefore records `charged_cents` from the Checkout Session's
 column existed falls back to the subtotal, which is exact for an untaxed
 purchase and is the best figure available for a taxed one.
 
+### 7. The grant and the reversal serialise on the PaymentIntent
+
+Parking and reconciling is not enough on its own, because the two halves race.
+
+`processStripeEvent` dispatches deliveries concurrently by design. Under READ
+COMMITTED, with no shared lock, a grant and a refund for one PaymentIntent
+interleave like this:
+
+```
+refund tx                          grant tx
+─────────                          ────────
+                                   INSERT settlement      (uncommitted)
+SELECT settlement  → none          │
+INSERT pending reversal            │
+│                                  SELECT pending → none  (uncommitted)
+COMMIT                             COMMIT
+```
+
+Both commit. The purchase stays spendable and the reversal stays pending for
+ever, because a checkout redelivery stops at the settlement that now exists and
+never reaches reconciliation again. Neither transaction did anything wrong in
+isolation — this is a write skew, and the bucket's row lock does not prevent it
+because the two transactions write different tables.
+
+The invariant in §5 — *no transaction can commit having added spendable units
+without having consulted the parked rows* — holds only under serialisation.
+Two concurrent transactions each consult the parked rows, each see nothing, and
+each commit. An invariant has to be one that two concurrent transactions cannot
+**both** satisfy, which means a lock they both take before deciding.
+
+Both paths take `pg_advisory_xact_lock` over `gau_purchase:<payment_intent_id>`
+before reading anything: the same idiom as `bind_main_repository`
+(`repository.main.bind.ts`), xact-scoped so it is released on commit or
+rollback with no unlock path to forget. Whichever transaction goes second sees
+the first's committed work and takes the correct branch — the refund finds the
+settlement and withdraws directly, or the grant finds the parked row and settles
+it.
+
+This cannot be proved against the in-memory executor, which is single-threaded:
+a fake that cannot model two connections cannot exhibit a skew between two
+transactions, and a sequential test passes against the unlocked code because
+sequential is the ordering that already worked.
+`packages/database/integration/gau-reversal-concurrency.test.ts` drives one
+forced interleaving on two real connections with the lock as the only variable,
+and asserts the unlocked case still reproduces the hazard so the locked case
+cannot quietly stop testing anything.
+
+### 8. A dispute resolves its organisation from the charge
+
+The parking in §5 keyed on the PaymentIntent because it is the one identifier a
+refund, a dispute and a Checkout Session all carry — and then the dispute path
+did not use it, so a dispute arriving before its grant was still dropped: it
+supplied no organisation, `applyGauReversal` returned null, and
+`onDisputeCreated` logged the unresolved fatal and returned, marking the webhook
+processed for ever.
+
+It could not supply one. A Stripe Dispute carries its own metadata, which Stripe
+never populates from the charge and nothing here sets, so a dispute arrives with
+neither the organisation nor any indication of what was bought. That is also why
+`resolveOrgFromDispute` has never resolved anything (#3189): its first path
+reads that empty metadata, and its second looks the dispute up in
+`billing_disputes` by the dispute's own id, so it can only return what the first
+path already stored.
+
+The charge has both. `getChargeMetadata` reads it once per dispute, outside any
+transaction, and the result serves both purposes: `oxagen_kind` says whether to
+park, and `org_id` is the organisation — for a usage-credit dispute as much as a
+GAU one, which is what closes #3189's root cause. A charge that cannot be read
+degrades to `{}` rather than throwing, because a webhook retried for a fault
+that retrying cannot fix is worse than a logged fatal.
+
 ## Consequences
 
 - A purchase made before this change has no `stripe_payment_intent_id` and no

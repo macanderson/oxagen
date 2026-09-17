@@ -32,9 +32,15 @@ vi.mock("./credits", () => ({
 // usage-credit clawback still runs for a charge that bought credits.
 const reverseGauForRefundMock = vi.fn().mockResolvedValue(null);
 const reverseGauForDisputeMock = vi.fn().mockResolvedValue(null);
+// The charge read that a dispute resolves its organisation from (#3189).
+// Default: an ordinary charge with no metadata, so the pre-existing tests
+// exercise the fallback paths they were written for.
+const readChargeMetadataMock = vi.fn().mockResolvedValue({});
 vi.mock("./gau-reversals", () => ({
   reverseGauPurchaseForRefund: reverseGauForRefundMock,
   reverseGauPurchaseForDispute: reverseGauForDisputeMock,
+  readChargeMetadata: readChargeMetadataMock,
+  orgIdOfChargeMetadata: (m: Record<string, string>) => m.org_id ?? null,
 }));
 
 /** What applyGauReversal returns when the event was against a GAU purchase. */
@@ -158,6 +164,7 @@ describe("onDisputeCreated", () => {
     vi.clearAllMocks();
     reverseGauForRefundMock.mockResolvedValue(null);
     reverseGauForDisputeMock.mockResolvedValue(null);
+    readChargeMetadataMock.mockResolvedValue({});
     consumeCreditsMock.mockResolvedValue({
       chargedCents: 500n,
       shortfallCents: 0n,
@@ -303,6 +310,7 @@ describe("onChargeRefunded", () => {
     vi.clearAllMocks();
     reverseGauForRefundMock.mockResolvedValue(null);
     reverseGauForDisputeMock.mockResolvedValue(null);
+    readChargeMetadataMock.mockResolvedValue({});
     consumeCreditsMock.mockResolvedValue({
       chargedCents: 2000n,
       shortfallCents: 0n,
@@ -419,6 +427,7 @@ describe("a refund or dispute against a GAU block purchase", () => {
     vi.clearAllMocks();
     reverseGauForRefundMock.mockResolvedValue(null);
     reverseGauForDisputeMock.mockResolvedValue(null);
+    readChargeMetadataMock.mockResolvedValue({});
     consumeCreditsMock.mockResolvedValue({
       chargedCents: 2000n,
       shortfallCents: 0n,
@@ -504,5 +513,83 @@ describe("a refund or dispute against a GAU block purchase", () => {
 
     expect(reverseGauForDisputeMock).toHaveBeenCalledOnce();
     expect(consumeCreditsMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe("a dispute resolves its organisation from the charge (#3189, ADR-085 §7)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    reverseGauForRefundMock.mockResolvedValue(null);
+    reverseGauForDisputeMock.mockResolvedValue(null);
+    readChargeMetadataMock.mockResolvedValue({});
+    consumeCreditsMock.mockResolvedValue({
+      chargedCents: 2000n,
+      shortfallCents: 0n,
+      balanceCents: 0n,
+    });
+  });
+
+  it("claws back credits for a dispute whose org only the charge knows", async () => {
+    // The case that has never worked: the dispute carries no org of its own,
+    // and neither resolveOrgFromDispute path can produce one — path 1 reads the
+    // dispute's own metadata, path 2 looks the dispute up by its own id and can
+    // only return what path 1 stored. Before the charge read, this dispute
+    // logged a fatal and clawed back nothing.
+    const state = makeState();
+    dbHolder.instance = makeDb(state);
+    readChargeMetadataMock.mockResolvedValue({
+      oxagen_kind: "usage_credits",
+      org_id: "org-from-charge",
+    });
+
+    await onDisputeCreated(makeDispute({ orgId: null }));
+
+    expect(readChargeMetadataMock).toHaveBeenCalledWith("ch_test_001");
+    expect(state.insertCalled).toBe(true);
+    expect(consumeCreditsMock).toHaveBeenCalledOnce();
+    expect(
+      (consumeCreditsMock.mock.calls[0]![0] as { orgId: string }).orgId,
+    ).toBe("org-from-charge");
+  });
+
+  it("reads the charge once and passes it to the gau reversal rather than fetching twice", async () => {
+    const state = makeState();
+    dbHolder.instance = makeDb(state);
+    const metadata = { oxagen_kind: "gau_purchase", org_id: "org-gau" };
+    readChargeMetadataMock.mockResolvedValue(metadata);
+    reverseGauForDisputeMock.mockResolvedValue(gauReversed());
+
+    await onDisputeCreated(makeDispute({ orgId: null }));
+
+    expect(readChargeMetadataMock).toHaveBeenCalledOnce();
+    expect(reverseGauForDisputeMock).toHaveBeenCalledWith(
+      expect.anything(),
+      metadata,
+    );
+  });
+
+  it("still logs the fatal when the charge cannot be read either", async () => {
+    // A provider fault degrades to {} rather than throwing, and with no org
+    // from any path the dispute is genuinely manual.
+    const state = makeState();
+    const db = makeDb(state);
+    vi.spyOn(db.query.billingDisputes, "findFirst").mockResolvedValue(null);
+    dbHolder.instance = db as ReturnType<typeof makeDb>;
+    readChargeMetadataMock.mockResolvedValue({});
+
+    await expect(
+      onDisputeCreated(makeDispute({ orgId: null })),
+    ).resolves.toBeUndefined();
+
+    expect(consumeCreditsMock).not.toHaveBeenCalled();
+  });
+
+  it("a dispute with no charge id does not attempt a charge read", async () => {
+    const state = makeState();
+    dbHolder.instance = makeDb(state);
+
+    await onDisputeCreated(makeDispute({ chargeId: null, orgId: "org-abc" }));
+
+    expect(readChargeMetadataMock).toHaveBeenCalledWith(null);
   });
 });

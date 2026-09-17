@@ -5,6 +5,7 @@
 // billing is org_only, no workspace_id.
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { schema, type Tx, withSystemDb } from "@oxagen/database";
+import { billingProvider } from "./client";
 import { readGauEntitlement } from "./contract-terms";
 import {
   ensureCurrentBucket,
@@ -16,6 +17,39 @@ import type { BillingDispute, BillingRefundedCharge } from "./provider";
 
 /** Micro-dollars in one cent, as `blockPriceCents` uses them. */
 const MICROS_PER_CENT = 10_000n;
+
+/**
+ * Serialise everything that decides about one purchase's money, keyed on the
+ * PaymentIntent, for the life of the caller's transaction.
+ *
+ * Without it the grant and a refund race, and the race is a *write skew* that
+ * no amount of care inside either transaction can see: under READ COMMITTED
+ * the refund looks for a settlement and misses the grant's uncommitted INSERT,
+ * so it parks a pending row; the grant looks for pending rows and misses the
+ * refund's uncommitted INSERT, so it reconciles nothing. Both commit. The
+ * purchase stays spendable and the reversal stays pending for ever, because a
+ * checkout redelivery stops at the settlement that now exists and never
+ * reaches reconciliation again.
+ *
+ * The bucket's row lock does not help: it orders a grant against another
+ * grant, and these two transactions write different tables. The invariant has
+ * to be one that two concurrent transactions cannot both satisfy, which means
+ * a lock they both take before deciding. `processStripeEvent` dispatches
+ * deliveries concurrently by design, so this is reachable in normal operation
+ * rather than under load.
+ *
+ * Same idiom as `bind_main_repository` in repository.main.bind.ts: an
+ * xact-scoped advisory lock over a namespaced string, released on commit or
+ * rollback with no unlock path to forget.
+ */
+async function lockPurchaseByPaymentIntent(
+  tx: Tx,
+  paymentIntentId: string,
+): Promise<void> {
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${`gau_purchase:${paymentIntentId}`}::text, 0))`,
+  );
+}
 
 type GauSettlementRow = typeof schema.gauSettlements.$inferSelect;
 
@@ -161,6 +195,9 @@ export async function applyGauReversal(
 
   const result = await withSystemDb(async (tx) => {
     if (!args.paymentIntentId) return null;
+    // Before anything is read or decided. A concurrent grant for this same
+    // PaymentIntent waits here and then sees the row this transaction parks.
+    await lockPurchaseByPaymentIntent(tx, args.paymentIntentId);
 
     // Idempotency: Stripe redelivers. Keyed on (PaymentIntent, provider event)
     // by `gau_reversals_payment_intent_event_idx` — the PaymentIntent rather
@@ -375,14 +412,54 @@ export async function reverseGauPurchaseForRefund(
  */
 export async function reverseGauPurchaseForDispute(
   dispute: BillingDispute,
+  chargeMetadata?: Record<string, string>,
 ): Promise<GauReversalResult | null> {
+  const metadata =
+    chargeMetadata ?? (await readChargeMetadata(dispute.chargeId));
   return applyGauReversal({
     kind: "dispute",
     providerEventId: dispute.id,
     paymentIntentId: dispute.paymentIntentId,
     amountCents: dispute.amountCents,
     currency: dispute.currency,
+    // A dispute carries neither the organisation nor what was bought — Stripe
+    // does not copy charge metadata onto a Dispute — so both come from the
+    // charge, and without them an unmatched dispute could not be parked and
+    // was dropped exactly as an unmatched refund used to be (ADR-085 §7).
+    gauPurchaseOrgId:
+      metadata.oxagen_kind === "gau_purchase"
+        ? orgIdOfChargeMetadata(metadata)
+        : null,
   });
+}
+
+/**
+ * A charge's metadata, or `{}` when there is no charge to read.
+ *
+ * One provider read per dispute. Disputes are rare and the alternative is
+ * dropping them, so the call is worth its latency; it is made outside any
+ * transaction because `onDisputeCreated` resolves before opening one.
+ */
+/**
+ * The organisation a charge's metadata names, or null.
+ *
+ * Written as a function rather than inline because `Record<string, string>`
+ * indexes to `string` without `noUncheckedIndexedAccess`, so `m.org_id ?? null`
+ * reads to the compiler as dead code and to a human as a null check. The
+ * annotated local is what makes the absent case real to both.
+ */
+export function orgIdOfChargeMetadata(
+  metadata: Record<string, string>,
+): string | null {
+  const orgId: string | undefined = metadata.org_id;
+  return orgId ?? null;
+}
+
+export async function readChargeMetadata(
+  chargeId: string | null,
+): Promise<Record<string, string>> {
+  if (!chargeId) return {};
+  return billingProvider().getChargeMetadata(chargeId);
 }
 
 /**
@@ -413,6 +490,10 @@ export async function reconcilePendingGauReversals(
   },
 ): Promise<GauReversalResult[]> {
   if (!args.paymentIntentId) return [];
+  // The other half of the pair. A concurrent refund for this PaymentIntent
+  // waits here and then sees the settlement this transaction inserted, so it
+  // takes the matched path instead of parking a row nobody will reconcile.
+  await lockPurchaseByPaymentIntent(tx, args.paymentIntentId);
   const pending = await tx
     .select()
     .from(schema.gauReversals)

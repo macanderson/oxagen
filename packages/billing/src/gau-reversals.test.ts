@@ -24,6 +24,7 @@ import type { BillingDispute, BillingRefundedCharge } from "./provider";
 const mocks = vi.hoisted(() => ({
   withSystemDb: vi.fn(),
   readGauEntitlement: vi.fn(),
+  getChargeMetadata: vi.fn(),
 }));
 
 vi.mock("drizzle-orm", async (importOriginal) => {
@@ -36,6 +37,15 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return { ...real, withSystemDb: mocks.withSystemDb };
 });
+
+vi.mock(
+  "./client",
+  () =>
+    ({
+      billingProvider: () =>
+        ({ getChargeMetadata: mocks.getChargeMetadata }) as never,
+    }) as never,
+);
 
 vi.mock(
   "./contract-terms",
@@ -153,6 +163,10 @@ beforeEach(() => {
   mocks.readGauEntitlement.mockResolvedValue({
     terms: TERMS,
     subscription: null,
+  });
+  mocks.getChargeMetadata.mockResolvedValue({
+    oxagen_kind: "gau_purchase",
+    org_id: ORG,
   });
 });
 
@@ -715,5 +729,108 @@ describe("a refund that arrives before its purchase (ADR-085 §5)", () => {
     expect(settled).toHaveLength(0);
     expect(store.buckets[0]).toMatchObject({ purchasedGau: 10_000 });
     expect(store.reversals[0]).toMatchObject({ settlementId: null });
+  });
+});
+
+describe("a dispute that arrives before its purchase (ADR-085 §7)", () => {
+  // The same defect the refund path had, which survived the first fix because
+  // the dispute path supplied no organisation to park with. A dispute carries
+  // neither the org nor what was bought — Stripe does not copy charge metadata
+  // onto a Dispute — so both come from the charge.
+
+  it("parks the reversal instead of dropping it", async () => {
+    const result = await reverseGauPurchaseForDispute(dispute());
+
+    expect(result).toMatchObject({ pending: true, applied: true, orgId: ORG });
+    expect(store.reversals).toHaveLength(1);
+    expect(store.reversals[0]).toMatchObject({
+      orgId: ORG,
+      settlementId: null,
+      bucketId: null,
+      stripePaymentIntentId: "pi_gau_001",
+      kind: "dispute",
+      providerEventId: "dp_gau_001",
+      amountCents: 5_500,
+    });
+  });
+
+  it("the grant then settles it and leaves no spendable units", async () => {
+    await reverseGauPurchaseForDispute(dispute());
+    const bucket = seedBucket({ purchasedGau: 0 });
+    const settlement = seedCheckoutSettlement();
+    const tx = makeFakeGauTx(store);
+
+    await reconcilePendingGauReversals(tx, {
+      settlement,
+      paymentIntentId: "pi_gau_001",
+      bucket: { ...bucket, purchasedGau: 10_000 },
+    });
+
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 0 });
+    expect(store.reversals[0]).toMatchObject({
+      settlementId: settlement.id,
+      reversedGau: 10_000,
+    });
+  });
+
+  it("does not park a dispute against a charge that bought credits", async () => {
+    mocks.getChargeMetadata.mockResolvedValue({
+      oxagen_kind: "usage_credits",
+      org_id: ORG,
+    });
+
+    const result = await reverseGauPurchaseForDispute(dispute());
+
+    expect(result).toBeNull();
+    expect(store.reversals).toHaveLength(0);
+  });
+
+  it("uses charge metadata the caller already read rather than reading again", async () => {
+    const result = await reverseGauPurchaseForDispute(dispute(), {
+      oxagen_kind: "gau_purchase",
+      org_id: ORG,
+    });
+
+    expect(result).toMatchObject({ pending: true });
+    expect(mocks.getChargeMetadata).not.toHaveBeenCalled();
+  });
+});
+
+describe("both money paths take the PaymentIntent lock before deciding", () => {
+  // A unit test can only prove the statement is ISSUED. That it serialises
+  // anything is proved on two real connections in
+  // gau-reversals.concurrency.integration.test.ts — a single-threaded store
+  // cannot exhibit a write skew between two transactions.
+
+  it("the reversal locks on the PaymentIntent before reading anything", async () => {
+    seedBucket({ purchasedGau: 10_000 });
+    seedCheckoutSettlement();
+
+    await reverseGauPurchaseForRefund(refundedCharge());
+
+    const first = store.log[0];
+    expect(first).toMatchObject({
+      op: "lock",
+      lockKey: "gau_purchase:pi_gau_001",
+    });
+  });
+
+  it("the reconciliation locks on the same key", async () => {
+    await reverseGauPurchaseForRefund(refundedCharge());
+    const bucket = seedBucket({ purchasedGau: 10_000 });
+    const settlement = seedCheckoutSettlement();
+    store.log.length = 0;
+    const tx = makeFakeGauTx(store);
+
+    await reconcilePendingGauReversals(tx, {
+      settlement,
+      paymentIntentId: "pi_gau_001",
+      bucket,
+    });
+
+    expect(store.log[0]).toMatchObject({
+      op: "lock",
+      lockKey: "gau_purchase:pi_gau_001",
+    });
   });
 });

@@ -789,6 +789,18 @@ export async function grantGauPurchaseForCheckout(
   const now = new Date();
 
   const granted = await withSystemDb(async (tx) => {
+    // Before anything is read. A concurrent charge.refunded for this same
+    // PaymentIntent waits here, so the two transactions cannot each miss the
+    // other's uncommitted row and both commit — the write skew that leaves a
+    // purchase spendable and its reversal pending for ever (ADR-085 §5).
+    // reconcilePendingGauReversals takes the same lock, which is re-entrant
+    // within a transaction; holding it from the top removes the need to reason
+    // about the window between the settlement INSERT and that call.
+    if (session.paymentIntentId) {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`gau_purchase:${session.paymentIntentId}`}::text, 0))`,
+      );
+    }
     const { terms, subscription } = await readGauEntitlement(
       tx,
       purchase.orgId,

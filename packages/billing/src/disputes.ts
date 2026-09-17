@@ -9,6 +9,8 @@ import { deterministicUuid } from "./internal/deterministic-uuid";
 import { consumeCredits } from "./credits";
 import { CREDIT_REASONS } from "./constants";
 import {
+  orgIdOfChargeMetadata,
+  readChargeMetadata,
   reverseGauPurchaseForDispute,
   reverseGauPurchaseForRefund,
   type GauReversalResult,
@@ -45,13 +47,14 @@ async function resolveOrgFromDispute(
     if (existingDispute?.orgId) return existingDispute.orgId;
   }
 
-  // Path 1 reads the DISPUTE's own metadata, which Stripe does not copy from
-  // the charge and nothing in this codebase sets, so it resolves only a
-  // dispute an operator has annotated by hand. A GAU block purchase is
-  // resolved before this function runs, off the settlement its PaymentIntent
-  // names (ADR-085); a usage-credit dispute has no such record and reaches
-  // here. Both paths above are exhausted, so leave a breadcrumb for ops to
-  // correlate manually.
+  // Both paths above are exhausted. Neither has ever resolved anything on its
+  // own (#3189): path 1 reads the DISPUTE's own metadata, which Stripe does
+  // not copy from the charge and nothing here sets, and path 2 looks the
+  // dispute up by its own id, so it can only return what path 1 already
+  // stored. The caller now resolves the organisation from the CHARGE before
+  // this function runs, which is the path that actually works; these two
+  // remain as a fallback for a dispute whose charge cannot be read, and this
+  // breadcrumb is for the case where nothing does.
 
   if (dispute.paymentIntentId) {
     logger.warn(
@@ -132,13 +135,24 @@ export async function onDisputeCreated(dispute: BillingDispute): Promise<void> {
   // to — a Stripe Dispute carries its own metadata, not the charge's, so
   // resolveOrgFromDispute cannot find one. Null means this dispute is not
   // against a GAU purchase and the usage-credit clawback is the right one.
-  const gauReversal = await reverseGauPurchaseForDispute(dispute);
+  //
+  // One read of the charge serves both: what it bought (so an unmatched
+  // dispute can be parked rather than dropped) and which organisation paid
+  // (which nothing else on a dispute can tell us — see #3189). Outside the
+  // transaction, so no provider I/O is held across a database lock.
+  const chargeMetadata = await readChargeMetadata(dispute.chargeId);
+  const gauReversal = await reverseGauPurchaseForDispute(
+    dispute,
+    chargeMetadata,
+  );
 
   await withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (dispute webhook, org resolved from Stripe
     // charge metadata or billing_disputes fallback, no tenant scope).
     const orgId =
-      gauReversal?.orgId ?? (await resolveOrgFromDispute(tx, dispute));
+      gauReversal?.orgId ??
+      orgIdOfChargeMetadata(chargeMetadata) ??
+      (await resolveOrgFromDispute(tx, dispute));
     if (!orgId) {
       logger.fatal(
         {
