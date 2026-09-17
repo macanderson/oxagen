@@ -281,7 +281,6 @@ export const tachoSessions = tachoSchema.table(
     spawnToolUseId: text("spawn_tool_use_id"),
     // Anthropic-side observations (never used for scoping)
     anthropicUserIdHash: text("anthropic_user_id_hash"),
-    anthropicUserEmail: text("anthropic_user_email"),
     anthropicAccountUuid: text("anthropic_account_uuid"),
     anthropicAccountId: text("anthropic_account_id"),
     anthropicOrgUuid: text("anthropic_org_uuid"),

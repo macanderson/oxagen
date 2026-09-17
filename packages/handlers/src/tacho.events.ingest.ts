@@ -414,7 +414,6 @@ function genesisRow(
     spawnDepth: subagent?.spawn_depth ?? 0,
     spawnToolUseId: subagent?.spawn_tool_use_id ?? null,
     anthropicUserIdHash: anthropic.user_id_hash ?? null,
-    anthropicUserEmail: anthropic.user_email ?? null,
     anthropicAccountUuid: anthropic.account_uuid ?? null,
     anthropicAccountId: anthropic.account_id ?? null,
     anthropicOrgUuid: anthropic.org_uuid ?? null,
@@ -1046,6 +1045,12 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     result.recordedHeads,
     bytesRefs,
   );
+  // Nothing derived from `event.anthropic` is stored. The producer chooses that
+  // block, so any stable value computed from it and readable back would be an
+  // oracle: submit the hash of a guessed address, read the result, compare it
+  // to a colleague's row. The session's person is `initiatingPrincipalId` /
+  // `initiatingUserId`, which this deployment issues rather than the harness
+  // reports (#3072).
   const inserts: TachoEventInsert[] = input.events.map((event) => {
     const bytesRef =
       bytesRefs.get(event.event_id_idem) ?? storedRefs.get(event.event_id_idem);

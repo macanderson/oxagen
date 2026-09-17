@@ -25,7 +25,6 @@ export const ENVELOPE_COLUMNS = [
   "fleet_id",
   // anthropic observations (2.2)
   "anthropic_user_id_hash",
-  "anthropic_user_email",
   "anthropic_account_uuid",
   "anthropic_account_id",
   "anthropic_org_uuid",
@@ -169,7 +168,6 @@ export function flattenEvent(event: TachoEvent): TachoEventRow {
     fleet_id: event.agent.fleet_id,
 
     anthropic_user_id_hash: event.anthropic?.user_id_hash,
-    anthropic_user_email: event.anthropic?.user_email,
     anthropic_account_uuid: event.anthropic?.account_uuid,
     anthropic_account_id: event.anthropic?.account_id,
     anthropic_org_uuid: event.anthropic?.org_uuid,

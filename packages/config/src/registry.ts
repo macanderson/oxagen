@@ -302,19 +302,25 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     placeholder: "60",
   },
 
-  TRUSTED_PROXY_HOP_COUNT: {
+  TRUSTED_PROXY_CIDRS: {
     group: "Rate limiting",
     description:
-      "How many proxies sit in front of apps/api and append to x-forwarded-for. " +
-      "The client IP the IAM ip_ranges allowlist checks is the Nth entry from the " +
-      "right; entries left of it are caller-supplied. Optional — defaults to 1 " +
-      "(one ALB) in packages/config/src/env.ts. 0 disables the header entirely.",
+      "Comma-separated CIDRs or addresses of the proxies in front of apps/api. " +
+      "This is the ONLY way a client address is attributed: the walk goes right " +
+      "through x-forwarded-for while each entry is a named proxy and stops at " +
+      "the first that is not, so a caller padding the header cannot move the " +
+      "result. Unset, no client address is derived at all, and the two things " +
+      "that read one both fail safe — the IAM ip_ranges / ip_allow conditions " +
+      "deny, and the pre-authentication IP ceilings on the Tacho and Stella " +
+      "machine routes skip rather than pooling every caller into one bucket. " +
+      "Set it to the range the proxies sit in, not to the clients. Empty by " +
+      "default, which means those IP controls are OFF and say so in the log.",
     secret: false,
     clientExposed: false,
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
-    placeholder: "1",
+    placeholder: "10.0.0.0/8",
   },
 
   // ── Error alerting (vendor-neutral outbound webhook) ────────────────────────

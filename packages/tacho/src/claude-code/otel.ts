@@ -196,6 +196,40 @@ function stringify(attrs: Attrs): Record<string, string> {
   return out;
 }
 
+/**
+ * OTel attribute keys that carry the person's address in plaintext.
+ *
+ * Anything computed from an attribute map has to be computed from the redacted
+ * one, because a digest over a map containing the address is a commitment to
+ * the address. An email carries little enough entropy that a commitment is a
+ * confirmation oracle: the reader guesses `someone@a-company-they-know.com`,
+ * recomputes, and compares. That is why `raw_source_digest` is taken over
+ * `redactedForDigest(attrs)` rather than `attrs` (#3072, ADR-084).
+ */
+const ADDRESS_BEARING_ATTRS = new Set(["user.email"]);
+
+/**
+ * The attribute map as it may be committed to: address-bearing keys removed
+ * outright rather than replaced with a marker.
+ *
+ * A marker would keep the digest sensitive to WHETHER the harness reported an
+ * address, which is not itself a personal identifier — but it leaves one more
+ * thing to reason about, and the fidelity it buys is notional because nothing
+ * reads `raw_source_digest` back against an original payload. Removing the key
+ * gives the guarantee that is worth stating and testing: the persisted record
+ * does not depend on the reported address in any way, including whether there
+ * was one.
+ */
+export function redactedForDigest(attrs: Attrs): Attrs {
+  let out: Attrs | undefined;
+  for (const key of Object.keys(attrs)) {
+    if (!ADDRESS_BEARING_ATTRS.has(key)) continue;
+    out ??= { ...attrs };
+    delete out[key];
+  }
+  return out ?? attrs;
+}
+
 /** Standard attributes every Claude Code record carries (data-model 2.2, 2.5). */
 export interface OtelStandard {
   session_id?: string;
@@ -203,7 +237,6 @@ export interface OtelStandard {
   harness_event_sequence?: number;
   anthropic: {
     user_id_hash?: string;
-    user_email?: string;
     account_uuid?: string;
     account_id?: string;
     org_uuid?: string;
@@ -243,7 +276,6 @@ function standard(attrs: Attrs, resource: Attrs): OtelStandard {
   std.prompt_id = s(attrs, "prompt.id");
   std.harness_event_sequence = n(attrs, "event.sequence");
   setIf(std.anthropic, "user_id_hash", s(attrs, "user.id"));
-  setIf(std.anthropic, "user_email", s(attrs, "user.email"));
   setIf(std.anthropic, "account_uuid", s(attrs, "user.account_uuid"));
   setIf(std.anthropic, "account_id", s(attrs, "user.account_id"));
   setIf(std.anthropic, "org_uuid", s(attrs, "organization.id"));
@@ -291,6 +323,9 @@ const LOG_PROMOTED = new Set([
   "event.name",
   "event.timestamp",
   "user.id",
+  // Stays promoted although nothing reads it as a column any more: promoted
+  // keys are the ones held OUT of the leftover `attrs` map, so dropping it
+  // here would put the raw address straight back into a stored column (#3072).
   "user.email",
   "user.account_uuid",
   "user.account_id",
@@ -423,7 +458,7 @@ function logDraft(
   const std = standard(attrs, resource);
   const raw = digestJcs({
     body: record.body ?? null,
-    attributes: attrs as JsonValue,
+    attributes: redactedForDigest(attrs) as JsonValue,
   } as JsonValue);
   const base = (
     kind: TachoKind,
@@ -771,7 +806,7 @@ function spanDraft(span: OtlpSpan, resource: Attrs): OtelDraft | undefined {
   };
   const raw = digestJcs({
     name: span.name,
-    attributes: attrs as JsonValue,
+    attributes: redactedForDigest(attrs) as JsonValue,
   } as JsonValue);
   const base = (
     kind: TachoKind,

@@ -12,6 +12,7 @@ import {
   ControlError,
   ControlUnreachable,
   type ControlClient,
+  type RateLimitHint,
 } from "../host/control-client";
 import { ensureDir, writeSensitiveFileAtomic } from "../host/fs";
 import type { Wal } from "../host/wal";
@@ -34,6 +35,14 @@ export interface ShipperOptions {
   now: () => number;
   minBackoffMs?: number;
   maxBackoffMs?: number;
+  /**
+   * This host's current enrollment id. Events recorded under a PREVIOUS
+   * enrollment can never be accepted — the control plane rejects a whole batch
+   * with 403 "event names another host" if any event in it names a different
+   * one — so they are quarantined here rather than shipped. Optional so an
+   * existing caller that does not set it keeps the old behaviour.
+   */
+  hostEnrollmentId?: string;
 }
 
 export interface ShipResult {
@@ -42,11 +51,31 @@ export interface ShipResult {
   reachable: boolean;
 }
 
+/**
+ * The wait a 429 asked for, in milliseconds, or undefined when the server gave
+ * no usable hint. `Retry-After` wins; `X-RateLimit-Reset` is the fallback,
+ * since a fixed-window limiter is spent until the window turns over. Capped so
+ * a malformed or hostile header cannot park the daemon indefinitely, and
+ * floored at a second so a reset already in the past does not spin.
+ */
+const MAX_SERVER_REQUESTED_WAIT_MS = 5 * 60_000;
+function serverRequestedWaitMs(error: ControlError): number | undefined {
+  if (error.status !== 429) return undefined;
+  const hint = error.rateLimit;
+  if (!hint) return undefined;
+  const wait =
+    hint.retryAfterMs ??
+    (hint.resetAtMs === undefined ? undefined : hint.resetAtMs - Date.now());
+  if (wait === undefined || !Number.isFinite(wait)) return undefined;
+  return Math.min(Math.max(wait, 1_000), MAX_SERVER_REQUESTED_WAIT_MS);
+}
+
 export class Shipper {
   private readonly options: ShipperOptions;
   private backoffMs: number;
   private nextAttemptAt = 0;
   private consecutiveFailures = 0;
+  private lastRateLimit: RateLimitHint | undefined;
   lastSuccessAt: number | undefined;
   lastError: string | undefined;
 
@@ -76,11 +105,35 @@ export class Shipper {
   private fail(error: unknown): void {
     this.consecutiveFailures += 1;
     this.lastError = error instanceof Error ? error.message : String(error);
+    // When the server said how long to wait, wait exactly that long. Blind
+    // exponential backoff against a fixed-window limiter is strictly worse in
+    // both directions: it can idle 60s through a window that resets in five,
+    // and — because the API caches an exhausted bucket for the rest of the
+    // window — every batch of a backlog drain is refused, so the doubling runs
+    // to its cap on the first drain and stays there. `Retry-After` is the
+    // server telling us the one number that ends the wait.
+    const told =
+      error instanceof ControlError ? serverRequestedWaitMs(error) : undefined;
+    if (told !== undefined) {
+      this.nextAttemptAt = this.options.now() + told;
+      // Do NOT escalate backoffMs here. A 429 answered on time is the limiter
+      // working as designed, not a degrading control plane, and letting it
+      // ratchet the blind backoff would punish a host for obeying the ceiling.
+      return;
+    }
     this.nextAttemptAt = this.options.now() + this.backoffMs;
     this.backoffMs = Math.min(
       this.backoffMs * 2,
       this.options.maxBackoffMs ?? 60_000,
     );
+  }
+
+  /**
+   * Record what the control plane last said about our budget. Called for every
+   * response that carried the headers, success or failure.
+   */
+  noteRateLimit(hint: RateLimitHint): void {
+    this.lastRateLimit = hint;
   }
 
   private quarantine(event: TachoEvent, reason: string): void {
@@ -112,6 +165,51 @@ export class Shipper {
       this.options.wal.markShipped(session, seq);
   }
 
+  /**
+   * Quarantine events belonging to a previous enrollment, and return the rest.
+   *
+   * Re-enrolling a host mints a new `host_enrollment_id` and leaves whatever is
+   * still spooled stamped with the old one. The control plane rejects a batch
+   * with 403 if ANY event in it names a different host, and the Shipper treats
+   * 403 as retryable — correctly, since a revoked key is also a 403 — so a
+   * single orphaned event at the head of the WAL wedges the queue permanently
+   * and every valid event behind it stops too. Observed on a real host: five
+   * enrollment ids in one WAL, 30,206 of 45,135 events unshippable, nothing
+   * drained since the first re-enrollment.
+   *
+   * Quarantine, not silent discard: these are real recorded events and belong
+   * on disk where someone can inspect them, exactly like a batch the control
+   * plane refuses as malformed.
+   */
+  private setAsideForeignEvents(batch: TachoEvent[]): {
+    own: TachoEvent[];
+    quarantined: number;
+  } {
+    const mine = this.options.hostEnrollmentId;
+    if (mine === undefined) return { own: batch, quarantined: 0 };
+    const own: TachoEvent[] = [];
+    const foreign: TachoEvent[] = [];
+    for (const event of batch) {
+      const stamped = event.agent?.host_enrollment_id;
+      if (stamped === undefined || stamped === mine) own.push(event);
+      else foreign.push(event);
+    }
+    if (foreign.length === 0) return { own, quarantined: 0 };
+    for (const event of foreign) {
+      this.quarantine(
+        event,
+        `recorded under enrollment ${event.agent?.host_enrollment_id}; this host is now ${mine}`,
+      );
+    }
+    // Advance the WAL past them, or the next read returns the same events and
+    // the queue is wedged exactly as it was before this existed.
+    this.markShipped(foreign);
+    this.options.log(
+      `quarantined ${foreign.length} event(s) from a previous enrollment`,
+    );
+    return { own, quarantined: foreign.length };
+  }
+
   /** Ship one batch. Returns what moved; the caller loops. */
   async shipOnce(): Promise<ShipResult> {
     if (!this.ready())
@@ -119,7 +217,11 @@ export class Shipper {
     const batch = this.options.wal.unshipped(TACHO_MAX_BATCH);
     if (batch.length === 0)
       return { shipped: 0, quarantined: 0, reachable: this.reachable };
-    return this.shipBatch(batch);
+    const { own, quarantined } = this.setAsideForeignEvents(batch);
+    if (own.length === 0)
+      return { shipped: 0, quarantined, reachable: this.reachable };
+    const result = await this.shipBatch(own);
+    return { ...result, quarantined: result.quarantined + quarantined };
   }
 
   private async shipBatch(batch: TachoEvent[]): Promise<ShipResult> {
@@ -170,7 +272,29 @@ export class Shipper {
     }
   }
 
-  /** Ship until the WAL is drained or a failure stops the loop. */
+  /**
+   * Stop draining when the control plane has said this window is spent.
+   *
+   * `drain()` loops until the WAL is empty, which is right for a few queued
+   * events and wrong for a backlog: 45,000 spooled events are 226 batches, and
+   * firing them back to back spends a per-minute ceiling in seconds and earns
+   * a 429 for every batch after it. The server already reports what is left on
+   * every counted response, so pace against that number rather than
+   * rediscovering the ceiling by being refused. Nothing here hardcodes the
+   * ceiling: a server that sends no headers drains exactly as before.
+   */
+  private windowSpent(): boolean {
+    const hint = this.lastRateLimit;
+    if (!hint || hint.remaining === undefined || hint.remaining > 0)
+      return false;
+    if (hint.resetAtMs !== undefined) {
+      // Hold off until the window turns over, then let the loop resume.
+      this.nextAttemptAt = Math.max(this.nextAttemptAt, hint.resetAtMs);
+    }
+    return true;
+  }
+
+  /** Ship until the WAL is drained, the window is spent, or a failure stops the loop. */
   async drain(): Promise<ShipResult> {
     const total: ShipResult = {
       shipped: 0,
@@ -183,6 +307,7 @@ export class Shipper {
       total.quarantined += result.quarantined;
       total.reachable = result.reachable;
       if (result.shipped + result.quarantined === 0) return total;
+      if (this.windowSpent()) return total;
     }
   }
 }
