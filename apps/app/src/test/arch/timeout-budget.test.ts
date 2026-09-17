@@ -689,10 +689,19 @@ function judge(
  * enforcement test is a trade for the maintainer to make, in a change whose
  * whole subject is tests that run too close to their budget.
  */
+/**
+ * A suite this rule polices. The extension rule is the same one `probeFiles`
+ * already used: a `.test.tsx` arch suite walks the tree exactly as a `.test.ts`
+ * one does, and judging only `.ts` meant a whole file was never opened. The
+ * suite holds no `.tsx` today, so this widens the set by nothing and closes the
+ * extension as a way out of it.
+ */
+function isJudgedSuite(file: string): boolean {
+  return /\.test\.tsx?$/.test(file) && !file.startsWith(`${PROBES}/`);
+}
+
 function judgedTestFiles(): string[] {
-  return listFiles(ARCH_DIR).filter(
-    (file) => file.endsWith(".test.ts") && !file.startsWith(`${PROBES}/`),
-  );
+  return listFiles(ARCH_DIR).filter(isJudgedSuite);
 }
 
 function probeFiles(): string[] {
@@ -900,6 +909,32 @@ describe("whole-tree timeout budget", () => {
     ]);
   });
 
+  it("SITE AUDIT: a method body is flagged, at the object rather than the it", () => {
+    // Raised in review as method bodies not being deferred. They are not, and
+    // the direction matters: the walk is reported as collection-scope at the
+    // method, so the file FAILS. That errs strict — a real one would be fixed
+    // by adding the budget the report asks for — but it names the object
+    // literal rather than the `it` that actually runs it.
+    //
+    // Adding ts.isMethodDeclaration to isFunctionLike does NOT change this:
+    // measured, the output is identical with and without it, because the
+    // deferral decision is not taken there. Shipping that edit would have been
+    // a change that reads like the fix and does nothing, which is the failure
+    // this whole file is about. Asserted as it behaves instead.
+    expect(probe("method-walker.test.ts")).toEqual([
+      `${RULE} ${PROBES}/method-walker.test.ts:8 collection-scope`,
+    ]);
+  });
+
+  it("the judged set takes .test.tsx, and never a probe", () => {
+    // probeFiles already accepted .tsx; the judged set did not, so an arch
+    // suite could avoid this rule by being a .tsx file.
+    expect(isJudgedSuite(`${ARCH_DIR}/a.test.tsx`)).toBe(true);
+    expect(isJudgedSuite(`${ARCH_DIR}/a.test.ts`)).toBe(true);
+    expect(isJudgedSuite(`${ARCH_DIR}/a.ts`)).toBe(false);
+    expect(isJudgedSuite(`${PROBES}/a.test.tsx`)).toBe(false);
+  });
+
   it('listFiles("src") counts, and a named subtree does not', () => {
     expect(probe("list-src.test.ts")).toEqual([
       `${RULE} ${PROBES}/list-src.test.ts:5 it none`,
@@ -944,6 +979,7 @@ describe("whole-tree timeout budget", () => {
       "imported-walker.ts",
       "list-src.test.ts",
       "magic-number.test.ts",
+      "method-walker.test.ts",
       "missing.test.ts",
       "module-init-source.ts",
       "module-init.test.ts",
