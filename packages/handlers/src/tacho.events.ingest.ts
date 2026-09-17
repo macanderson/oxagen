@@ -195,6 +195,37 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
   }
 }
 
+/**
+ * The enforcement tier a batch of events was produced under.
+ *
+ * `agent.enforcement_tier` is the envelope's own field and wins when a recorder
+ * sets it. The gateway's recorder does not: `recordGatewayCall` puts
+ * `oxagen.enforcement_tier: "gateway"` in the event `attrs` instead, and the
+ * daemon's host recorder carries no identity tier at all — so a connected app's
+ * calls were labelled with the HOST's observe/harness mode, which is the wrong
+ * enforcement semantics for the one kind of call Oxagen saw directly (#3161,
+ * discussion_r4033641270).
+ *
+ * Reading the attr closes that without changing what any recorder signs, and it
+ * stays conservative: every event in the batch must agree, so a mixed chain
+ * falls through to the host's mode rather than being relabelled by one call.
+ */
+export function enforcementTierOf(
+  events: TachoEvent[],
+  hostMode: string,
+): string {
+  const declared = events[0]?.agent.enforcement_tier;
+  if (declared) return declared;
+  const attrTiers = new Set(
+    events.map((event) => event.attrs?.["oxagen.enforcement_tier"]),
+  );
+  if (attrTiers.size === 1) {
+    const only = [...attrTiers][0];
+    if (only === "gateway") return only;
+  }
+  return hostMode === "enforce" ? "harness" : "observe";
+}
+
 /** The insert values for a session row seen for the first time. */
 function genesisRow(
   host: TachoHostRow,
@@ -268,9 +299,7 @@ function genesisRow(
     hooksRegistered: body["hooks_registered"] ?? null,
     envSnapshot: body["env_snapshot"] ?? null,
     memoryPaths: body["memory_paths"] ?? null,
-    enforcementTier:
-      first.agent.enforcement_tier ??
-      (host.mode === "enforce" ? "harness" : "observe"),
+    enforcementTier: enforcementTierOf(events, host.mode),
     bundleMode: host.mode,
     genesisHash: first.seq === 0 ? first.hash : null,
     createdAt: now,

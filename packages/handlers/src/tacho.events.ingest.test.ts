@@ -30,7 +30,11 @@ vi.mock("./logger", () => ({
   logger: { error: mocks.loggerError, warn: vi.fn(), info: vi.fn() },
 }));
 
-import { foldDelta, tachoEventsIngestHandler } from "./tacho.events.ingest";
+import {
+  enforcementTierOf,
+  foldDelta,
+  tachoEventsIngestHandler,
+} from "./tacho.events.ingest";
 
 const HOST_PUBLIC = "tch_0123456789abcdefghjkmn";
 const HOST_ID = "11111111-1111-4111-8111-111111111111";
@@ -607,5 +611,56 @@ describe("ingest_tacho_events", () => {
       telemetryGapCount: 1,
       numModelSwitches: 1,
     });
+  });
+});
+
+describe("enforcementTierOf", () => {
+  const event = (
+    over: Record<string, unknown> = {},
+  ): Parameters<typeof enforcementTierOf>[0][number] =>
+    ({
+      agent: {},
+      attrs: {},
+      ...over,
+    }) as never;
+
+  it("takes the tier the envelope declares", () => {
+    expect(
+      enforcementTierOf(
+        [event({ agent: { enforcement_tier: "harness" } })],
+        "observe",
+      ),
+    ).toBe("harness");
+  });
+
+  it("recognises a gateway batch the recorder did not label", () => {
+    // recordGatewayCall puts the tier in attrs, and the daemon's host recorder
+    // sets no identity tier, so these calls used to be filed under the HOST's
+    // mode -- the wrong enforcement semantics for the one kind of call Oxagen
+    // saw directly (#3161, discussion_r4033641270).
+    expect(
+      enforcementTierOf(
+        [
+          event({ attrs: { "oxagen.enforcement_tier": "gateway" } }),
+          event({ attrs: { "oxagen.enforcement_tier": "gateway" } }),
+        ],
+        "observe",
+      ),
+    ).toBe("gateway");
+  });
+
+  it("falls back to the host mode for a mixed batch", () => {
+    // One gateway call does not relabel a chain that also carries hook events.
+    expect(
+      enforcementTierOf(
+        [event({ attrs: { "oxagen.enforcement_tier": "gateway" } }), event()],
+        "enforce",
+      ),
+    ).toBe("harness");
+  });
+
+  it("falls back to the host mode when nothing says otherwise", () => {
+    expect(enforcementTierOf([event()], "observe")).toBe("observe");
+    expect(enforcementTierOf([event()], "enforce")).toBe("harness");
   });
 });
