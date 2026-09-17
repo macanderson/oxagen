@@ -36,46 +36,38 @@ function canAdministerOrg(ctx: WsCtx): boolean {
 }
 
 /**
- * `import_tools` allows an org Owner or Admin *or this workspace's Owner*
- * (packages/oxagen/src/contracts/tool.import.ts `defaultRoles`, which
- * packages/handlers/src/tool.import.ts asserts verbatim), so the gate reads
- * both of the roles the viewer carries. Until `WsFields` carried `wsRole`
- * (#3145) the third case could not be written at all, and a workspace Owner
- * holding org `member` was offered no control the kernel would have accepted
- * (#3143).
+ * The same org roles, for the import control — and the contradiction behind
+ * that, because a gate that merely looked exact here would hide it.
  *
- * Neither role here is the gate. The gate is `assertOrgRole` in
- * `packages/handlers/src/tool.import.ts`, which runs on every org tier — the
- * kernel's IAM check fast-paths a non-enterprise org to an unconditional allow
- * for a human principal (`packages/iam/src/check-iam.ts`), so the handler's own
- * assertion is what refuses, and INV-29 (`packages/handlers/src/
- * role-check.test.ts`) pins that it stays there. This gate decides which
- * control a person is shown, never whether the write lands.
+ * `import_tools` declares `workspace: { Owner: "allow" }` and its handler
+ * asserts `workspace: ["Owner"]` (packages/handlers/src/tool.import.ts:141),
+ * so on paper this workspace's Owner may import whatever their org role. No
+ * person can satisfy that clause. `assertOrgRole` resolves a workspace role
+ * from `iam.principal_role_assignments`, and nothing in the tree writes one
+ * for a human: `workspace-bootstrap.ts` records the creator in
+ * `workspace.workspace_users` and assigns no IAM role,
+ * `iam-provision.ts` creates the workspace-scoped roles and hands them to
+ * nobody, and the one insert setting a non-null `workspace_id`
+ * (`agent.role.assign.ts`) refuses human system roles. The org half has no
+ * such gap — every path writing `org_users.role` writes the matching IAM
+ * assignment in the same transaction — which is why `ctx.orgRole` is a
+ * faithful proxy for what the handler will find and `ctx.wsRole` is not.
  *
- * The two halves of it are not equally trustworthy. `orgRole` and `wsRole` come
- * from the membership tables (`org_users.role`,
- * `workspace.workspace_users.role`); `assertOrgRole` reads
- * `iam.principal_role_assignments` for a principal of kind `human`. The org
- * side agrees by construction — every path that writes `org_users.role` writes
- * the matching IAM assignment in the same transaction (`org.create.ts`,
- * `org.member_invite.accept.ts`, `org.member_role.change.ts`). The workspace
- * side does not: `workspace.workspace_users` is written only by
- * `workspace-bootstrap.ts`, which records the creator as `owner` and assigns no
- * IAM role, and nothing in the tree gives a human principal a workspace-scoped
- * one. So `import_tools`' workspace clause matches nobody today, and this gate
- * offers a workspace Owner holding org `member` a control the kernel will
- * refuse with `org_role_required`.
+ * So this reads only the role that is enforceable. Widening it to
+ * `ctx.wsRole === "owner"` would promise authority nothing can grant, and
+ * would promise it to a viewer who cannot reach the control anyway:
+ * `list_tool_versions` asserts the same empty workspace clause, so an org
+ * `member` is denied the registry read and `Registry` answers `ReadFailure`
+ * before `ImportControls` is reached.
  *
- * The gate still reads the contract rather than that gap, because the contract
- * is the statement of authority and a gate hard-coded to the current absence of
- * an assignment path would be right by accident and have to be rediscovered
- * when the path lands. What the gap costs is one refused click, named where the
- * person acted: `action-failure.ts` gives the import path its own sentence,
- * which says the workspace Owner is admitted too rather than contradicting the
- * control they were just offered.
+ * The gate is not the decision. Whether workspace membership should confer
+ * IAM authority at all — for this capability and the 215 others declaring a
+ * `workspace:` clause — is #3198, and it wants an ADR. When that lands, this
+ * reads `ctx.wsRole` again and `tools.test.tsx` derives from the full
+ * `defaultRoles` rather than the org clause alone.
  */
 function canImportTools(ctx: WsCtx): boolean {
-  return canAdministerOrg(ctx) || ctx.wsRole === "owner";
+  return canAdministerOrg(ctx);
 }
 
 async function TabBody({

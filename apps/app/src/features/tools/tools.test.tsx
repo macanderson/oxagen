@@ -46,10 +46,9 @@ const { credentialGrantPage, killSwitchBoard, toolsSource, toolVersionPage } =
 const { TOOLS_TABS } = await import("./view");
 
 /**
- * A viewer of this workspace. The two roles are independent — the org role and
- * the workspace role are separate memberships — and `import_tools` is the
- * capability that reads the second one, so the suites that do not care about
- * it take the default and the gate suite passes both (#3143).
+ * A viewer of this workspace. The two roles are independent memberships, and
+ * the gate suite varies both to prove the page reads only the one the handler
+ * can honour; the other suites take the default (#3143).
  */
 function viewer(orgRole: OrgRole, wsRole: WsRole = "member") {
   return unsafeMint(WsCtx, {
@@ -560,34 +559,35 @@ type ToolsWrite = (typeof TOOLS_WRITES)[number][0];
 type ToolsWriteContract = (typeof TOOLS_WRITES)[number][1];
 
 /**
- * Whether this capability admits this viewer, read off the capability's own
- * `defaultRoles` — the object each handler asserts verbatim with
- * `assertOrgRole({ org: [...], workspace: [...] })`. Reading it rather than
+ * Whether this capability admits this viewer **in practice**, read off the
+ * capability's own `defaultRoles.org` — the object each handler asserts
+ * verbatim with `assertOrgRole({ org: [...], … })`. Reading it rather than
  * restating it is the point: a gate compared against a second copy of the
  * answer written in the test agrees with whatever the test author believed,
  * while this comparison fails the moment the gate and the capability part
  * company in either direction.
  *
- * It answers what the contract grants, not what the kernel would answer on a
- * real call. Those differ today for the workspace half: `assertOrgRole`
- * resolves workspace roles from `iam.principal_role_assignments`, and nothing
- * assigns a human principal a workspace-scoped one (see the comment on
- * `canImportTools`). The gate under test is written against the contract, so
- * the contract is what it is checked against.
+ * `defaultRoles.workspace` is deliberately NOT read, and that is the whole
+ * finding behind #3143. `assertOrgRole` resolves a workspace role from
+ * `iam.principal_role_assignments`, and nothing in the tree writes one for a
+ * human principal, so a contract's workspace clause admits nobody and is not
+ * part of what the gate can honour (see the comment on `canImportTools`, and
+ * #3198 for the decision). Folding it in here would assert the declared
+ * mandate rather than the enforced one, and would have this suite demand a
+ * gate that offers a control the handler refuses.
  *
  * The contract names roles in TitleCase (`Owner`) and the viewer carries them
  * lowercased, which `systemLookups` settles once; the casing is folded here
  * for the same reason.
  */
-function contractGrants(contract: ToolsWriteContract, ctx: WsCtxType): boolean {
-  const allowed = (grants: Partial<Record<string, string>>): string[] =>
-    Object.entries(grants)
-      .filter(([, effect]) => effect === "allow")
-      .map(([role]) => role.toLowerCase());
-  return (
-    allowed(contract.defaultRoles.org).includes(ctx.orgRole) ||
-    allowed(contract.defaultRoles.workspace).includes(ctx.wsRole)
-  );
+function enforceablyGrants(
+  contract: ToolsWriteContract,
+  ctx: WsCtxType,
+): boolean {
+  return Object.entries(contract.defaultRoles.org)
+    .filter(([, effect]) => effect === "allow")
+    .map(([role]) => role.toLowerCase())
+    .includes(ctx.orgRole);
 }
 
 /**
@@ -627,21 +627,23 @@ async function offered(ctx: WsCtxType): Promise<Record<ToolsWrite, boolean>> {
 }
 
 describe("Tools › write gates", () => {
-  // The paired assertions #3143 asks for. Each names all three writes rather
-  // than the one it is about, because a gate that showed every control to
-  // everyone would satisfy the positive half on its own.
-  it("offers this workspace's Owner the import their capability grants them, and neither write that grants no workspace role", async () => {
+  // The pair #3143 asks for, answered the way the platform actually answers it.
+  // The issue expected a workspace Owner holding org `member` to be offered the
+  // import control, on the reading that `import_tools`' `workspace: ["Owner"]`
+  // clause admits them. It does not admit anybody: no human principal can hold
+  // a workspace-scoped IAM assignment, so the handler refuses them and this
+  // page declines to promise otherwise (#3198). Each test names all three
+  // writes rather than the one it is about, because a gate that showed every
+  // control to everyone — or hid every control from everyone — would satisfy
+  // half of this on its own.
+  it("offers a workspace Owner holding org member none of the three, because no role the handlers can resolve admits them", async () => {
     expect(await offered(viewer("member", "owner"))).toEqual({
-      import_tools: true,
+      import_tools: false,
       set_tool_classification: false,
       set_kill_switch: false,
     });
   });
 
-  // "No workspace role" in the sense the page can reach: a member of the
-  // workspace holding no role that any of the three grants. Someone holding no
-  // workspace membership at all never gets here — `requireViewer` answers
-  // `notFound()` before the page renders (viewer-resolution.ts).
   it("offers an org member who is no workspace Owner none of the three", async () => {
     expect(await offered(viewer("member", "member"))).toEqual({
       import_tools: false,
@@ -650,18 +652,26 @@ describe("Tools › write gates", () => {
     });
   });
 
+  // The other half of the pair, and the reason the two above prove anything: a
+  // gate stuck at `false` would pass both of them and fail here.
+  it("offers an org Admin holding no workspace role all three", async () => {
+    expect(await offered(viewer("admin", "member"))).toEqual({
+      import_tools: true,
+      set_tool_classification: true,
+      set_kill_switch: true,
+    });
+  });
+
   // What the tests above do NOT show, and must not be read as showing. They
   // force `versions: readOk(...)` in order to ask what the gate does given a
-  // successful read. For the one viewer the import branch was widened for —
-  // org `member`, workspace `owner` — the real system never produces that
-  // state: `list_tool_versions` asserts
-  // `{ org: ["Owner","Admin"], workspace: ["Owner","Member","Viewer"] }` and
-  // resolves the workspace half from `iam.principal_role_assignments`, which
-  // holds nothing for a human principal (see the note on `canImportTools`), so
-  // the read is denied and `Registry` answers `ReadFailure` before
-  // `ImportControls` is reached. A suite that only ever hands this viewer an
-  // `ok` read passes on a world where `assertOrgRole` does not exist.
-  it("answers this viewer the denied read, not the import control, because the registry read refuses them first", async () => {
+  // successful read. The org `member` never gets one: `list_tool_versions`
+  // asserts `{ org: ["Owner","Admin"], workspace: ["Owner","Member","Viewer"] }`
+  // and resolves the workspace half from `iam.principal_role_assignments`,
+  // which holds nothing for a human principal, so the read is denied and
+  // `Registry` answers `ReadFailure` before any control is reached. A suite
+  // that only ever hands this viewer an `ok` read passes on a world where
+  // `assertOrgRole` does not exist.
+  it("answers a workspace Owner holding org member the denied read, not a control, because the registry read refuses them first", async () => {
     await renderTools(
       {
         versions: { ok: false, reason: "denied", permission: "tools.read" },
@@ -675,8 +685,8 @@ describe("Tools › write gates", () => {
   });
 
   // And the same question asked of the contracts rather than of this file, so
-  // that widening a gate past its capability, or narrowing one back below it,
-  // fails here instead of in production.
+  // that a gate drifting from the roles its capability names — in either
+  // direction — fails here instead of in production.
   it.each([
     ["member", "owner"],
     ["member", "member"],
@@ -684,14 +694,14 @@ describe("Tools › write gates", () => {
     ["admin", "owner"],
     ["billing", "viewer"],
   ] as const)(
-    "gates each write on exactly what its contract grants, for an org %s holding %s in the workspace",
+    "gates each write on exactly the org roles its contract grants, for an org %s holding %s in the workspace",
     async (orgRole, wsRole) => {
       const ctx = viewer(orgRole, wsRole);
       expect(await offered(ctx)).toEqual(
         Object.fromEntries(
           TOOLS_WRITES.map(([name, contract]) => [
             name,
-            contractGrants(contract, ctx),
+            enforceablyGrants(contract, ctx),
           ]),
         ),
       );
