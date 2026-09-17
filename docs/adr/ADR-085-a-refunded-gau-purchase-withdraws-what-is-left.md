@@ -676,12 +676,23 @@ refuses another customer's refund.
   deploy time, and until they are resolved `onChargeRefunded` refuses the
   usage-credit clawback for that one organisation when the charge does not say
   what it bought, rather than debiting a balance the purchase never credited.
-- A usage-credit **dispute** still cannot resolve an organisation, for the
-  reason in Context: the dispute object carries its own metadata. That is a
-  pre-existing defect with a different fix (a provider lookup of the charge,
-  which means provider I/O in the dispute path) and is not fixed here. The
-  misleading comment in `resolveOrgFromDispute` that claimed the path worked has
-  been corrected.
+- A usage-credit **dispute** now resolves its organisation, which it never did
+  before. The fix is §8's single charge read: `onDisputeCreated` reads the
+  charge once, outside any transaction, and `orgIdOfChargeMetadata` supplies the
+  organisation for a usage-credit dispute as much as for a GAU one. That closes
+  #3189's root cause — `resolveOrgFromDispute` reads metadata Stripe never
+  populates on a Dispute, then looks the dispute up by its own id in
+  `billing_disputes`, so it could only ever return what the first path had
+  already stored. It survives as the last fallback rather than as the mechanism.
+  The misleading comment that claimed the path worked has been corrected.
+- What a dispute still cannot resolve is narrow and named. A charge whose
+  metadata carries no `org_id` gives nothing to attribute to, and the
+  unresolved-org fatal still fires and still applies no clawback. In practice
+  that is not the legacy population: `createDynamicCreditCheckout` has always
+  set `org_id` on `payment_intent_data`, and a legacy GAU dispute resolves off
+  the settlement the §15 backfill gave a PaymentIntent. A charge that cannot be
+  *read* is a different case and degrades to `{}` only for failures where
+  retrying cannot change the answer; §9 settles which those are.
 - A dispute the organisation later wins is a manual re-grant. `dispute.closed`
   records the outcome and reverses nothing, which is what it already did for
   credits.
