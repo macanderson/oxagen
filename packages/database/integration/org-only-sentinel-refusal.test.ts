@@ -601,6 +601,22 @@ describe("withOrgDb — the organisation-wide read seam", () => {
       expect(count).toBe(1);
     });
 
+    // The other live writer's table. `org.org_users` is `org_only`, so it never
+    // had a workspace half to widen and the narrowing cannot have touched it —
+    // asserted rather than argued, because `org.member_role.change` updates it
+    // inside a withOrgDb transaction and its unit suite mocks the seam away.
+    // `workspace.workspaces` stands in for it here: same class, and this suite
+    // already owns two rows on it.
+    it("still writes an org_only table across the organisation's workspaces", async () => {
+      const count = await inScopeRolledBack(orgWide, async (tx) => {
+        const res = await tx`
+          UPDATE workspace.workspaces SET name = 'renamed' WHERE org_id = ${ORG}
+        `;
+        return res.count;
+      });
+      expect(count).toBe(2);
+    });
+
     // A workspace scope is untouched by any of this: `tenant_isolation` is the
     // only policy that matches, exactly as before ADR-086.
     it("leaves a workspace scope able to delete its own row", async () => {
