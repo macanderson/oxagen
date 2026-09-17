@@ -42,18 +42,35 @@ export function requestsReservedTachoPurpose(scope: unknown): boolean {
  * module comment is explicit that being server-owned is NOT that test and that
  * reasoning about "the set of server-owned purposes" is how two wrong refusals
  * got in. Widening `requestsReservedTachoPurpose` would silently change what
- * those two refuse. So this predicate exists for the one caller whose answer is
- * unambiguous — MINTING.
+ * those callers refuse, on exactly that rejected reasoning and without anyone
+ * reading the line that changed. Two predicates, each answerable to its own
+ * callers, is the point.
  *
  * Nothing legitimately self-asserts this purpose: enrollment inserts the
  * gateway key directly (`lib/tacho-host-enroll.ts`), never through
  * `create_api_key`, so refusing it removes no capability from anyone.
  *
- * It matters because `retireEnrollmentKeys` now selects on the purpose to keep
- * a host revocation from reaching keys the enrollment did not mint
- * (discussion_r4036214055). A purpose a caller could write themselves is not a
- * server-owned selector, and the host purpose was already guarded here while
- * this one was not.
+ * ## Its three callers, and why each one's answer is now unambiguous
+ *
+ * `create_api_key` — MINTING. Nothing to weigh: the purpose is the server's
+ * and a caller asserting it is asserting something untrue.
+ *
+ * `revoke_api_key` — names `revoke_tacho_enrollment`, which retires the
+ * gateway key *because of this change*: `retireEnrollmentKeys` selects
+ * `purpose IN (tacho_host_v1, tacho_gateway_v1)` (discussion_r4036214055), so
+ * the named path now does the job. It did not before, and a refusal pointing
+ * at it then would have been an instruction to do nothing.
+ *
+ * `rotate_api_key` — names the same path plus re-enrollment. Rotating a
+ * gateway key here hands the operator a credential with nowhere to put it: the
+ * daemon reads it from its enrollment record, so the local gateway serves
+ * nothing afterwards. What the operator wanted is a fresh credential on a
+ * working host, and that is revoke-enrollment then re-enroll — also only clean
+ * as of this change.
+ *
+ * Each refusal landed in the PR that made its named path true, rather than
+ * being correct by merge order. Correctness that depends on which branch
+ * merges first is not correctness.
  */
 export function requestsReservedTachoGatewayPurpose(scope: unknown): boolean {
   return (

@@ -39,7 +39,10 @@
 import { requestsReservedCliSessionPurpose } from "@oxagen/auth/cli-auth";
 import { requestsReservedAgentCredentialPurpose } from "@oxagen/oxagen/agent-credential";
 import { requestsReservedStellaTelemetryPurpose } from "./stella-telemetry-enrollment";
-import { requestsReservedTachoPurpose } from "./tacho-enrollment";
+import {
+  requestsReservedTachoGatewayPurpose,
+  requestsReservedTachoPurpose,
+} from "./tacho-enrollment";
 
 /** The fields of an api_keys row that decide whether it may be rotated. */
 export interface RotationCandidate {
@@ -106,6 +109,27 @@ const RESERVED_PURPOSES: readonly ReservedPurpose[] = [
     matches: requestsReservedTachoPurpose,
     log: "api.key.rotate: rejected — reserved Tacho host purpose",
     denial: "Forbidden: enrolled Tacho host keys require operator rotation",
+  },
+  {
+    // The gateway key (ADR-078), refused here and not before this PR.
+    //
+    // Rotating it through this capability hands the operator a fresh secret
+    // with nowhere to put it: the daemon reads the gateway credential from its
+    // enrollment record, so a key rotated out from under it leaves the local
+    // gateway serving nothing and the operator holding a string. What someone
+    // reaching for this actually wants — a fresh gateway credential on a
+    // working host — is revoke_tacho_enrollment followed by re-enrolling, and
+    // that path only became whole in this change: retireEnrollmentKeys now
+    // selects `purpose IN (tacho_host_v1, tacho_gateway_v1)`, so revoking the
+    // enrollment retires this key rather than stranding it live.
+    //
+    // A separate predicate, deliberately: widening requestsReservedTachoPurpose
+    // would change what every caller of it refuses, on reasoning
+    // api.key.revoke's header rejects.
+    matches: requestsReservedTachoGatewayPurpose,
+    log: "api.key.rotate: rejected — reserved Tacho gateway purpose",
+    denial:
+      "Forbidden: the local MCP gateway key belongs to a Tacho enrollment; a fresh one comes from revoke_tacho_enrollment and re-enrolling the host, which is also what re-points the daemon at it",
   },
   {
     matches: requestsReservedAgentCredentialPurpose,
