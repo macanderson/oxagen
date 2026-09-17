@@ -59,6 +59,7 @@ vi.mock("../../middleware/logger", () => ({
 }));
 
 import { app } from "../../app";
+import { __resetTrustedProxyHopsForTests } from "../../lib/context";
 
 const counts = new Map<string, number>();
 
@@ -97,6 +98,10 @@ function atMinute(n: number): void {
 }
 
 beforeEach(() => {
+  // extractClientIp memoizes its proxy config on first use, and that memo
+  // outlives a single case — drop it so a test that names proxies cannot
+  // change how the next one attributes an address.
+  __resetTrustedProxyHopsForTests();
   vi.clearAllMocks();
   counts.clear();
   vi.spyOn(Math, "random").mockReturnValue(0.5);
@@ -170,23 +175,24 @@ describe("POST /v1/tacho/enroll rate limits", () => {
   });
 
   it("caps one client address across tokens", async () => {
-    // The per-address ceiling is enforced only where the deployment declares
-    // its proxy depth; undeclared, it skips rather than pooling every caller
-    // into one bucket that any of them could exhaust for the rest.
-    vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "1");
+    // The per-address ceiling is enforced only where the deployment NAMES its
+    // proxies; undeclared, it skips rather than pooling every caller into one
+    // bucket that any of them could exhaust for the rest.
+    vi.stubEnv("TRUSTED_PROXY_CIDRS", "10.0.0.0/8");
+    __resetTrustedProxyHopsForTests();
     atMinute(5);
     // The address has used its 120 presentations this minute.
     counts.set("tacho-enroll-ip:ip:198.51.100.9", 120);
     const refused = await request(
       "/v1/tacho/enroll",
       enrollBody("oxe_1time_cccccccccccccccccccccccccc"),
-      { "x-forwarded-for": "198.51.100.9" },
+      { "x-forwarded-for": "198.51.100.9, 10.0.0.5" },
     );
     expect(refused.status).toBe(429);
     const elsewhere = await request(
       "/v1/tacho/enroll",
       enrollBody("oxe_1time_cccccccccccccccccccccccccc"),
-      { "x-forwarded-for": "198.51.100.10" },
+      { "x-forwarded-for": "198.51.100.10, 10.0.0.5" },
     );
     expect(elsewhere.status).toBe(201);
   });

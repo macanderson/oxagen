@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { withSystemDb } from "@oxagen/database";
 import { requireEnv } from "@oxagen/config/env";
 import { logger } from "./logger";
-import { extractClientIp } from "../lib/context";
+import { extractClientIp, trustedProxyCidrs } from "../lib/context";
 import type { AppEnv } from "../app";
 
 /**
@@ -163,13 +163,15 @@ export function enrolledMachineBucketKey(c: Context<AppEnv>): string {
  * because it converts one abuser into an outage for every other caller. The
  * per-credential ceiling mounted beside this one is unaffected either way.
  *
- * The ceiling is therefore enforced ONLY where the deployment has declared its
- * proxy depth, by setting TRUSTED_PROXY_HOP_COUNT explicitly. The schema
- * default of 1 is a guess, and a guessed depth here is not a smaller version of
- * the right answer — it is the same failure one step down: it resolves to a
- * proxy's own address and puts every caller behind that node in one bucket,
- * which on a fail-closed pre-auth mount any one of them can exhaust for all the
- * others. An undeclared depth is an unattributable request, so it skips.
+ * The ceiling is therefore enforced ONLY where the deployment has named its
+ * proxies, by setting TRUSTED_PROXY_CIDRS. A hop count is not enough here: it
+ * trusts the COUNT to be right, and a count that is too high lets a caller pad
+ * x-forwarded-for until the arithmetic lands on a value the caller chose, which
+ * on this ceiling means a fresh bucket per request and no ceiling at all.
+ * Nothing in the request separates that from a correct deeper chain. Naming the
+ * proxies does separate it: the walk stops on what an entry IS, so padding only
+ * lengthens a prefix it never reaches. Undeclared proxies are an
+ * unattributable request, so it skips.
  *
  * Production needs a change OUTSIDE this file before any depth is correct.
  * Caddy's `reverse_proxy` does not append to an inbound X-Forwarded-For unless
@@ -183,11 +185,9 @@ export function enrolledMachineBucketKey(c: Context<AppEnv>): string {
  *
  * That leaves an unconfigured deployment exactly where it is today — this
  * counter has never once incremented — rather than switching on a ceiling
- * nobody has told us how to attribute. Declaring the depth turns it on, and
- * `.env.example` ships the value. Sequencing the Caddy deploy and the declared
- * depth is tracked on #3167; nothing here enforces until both are done, and
- * declaring the depth early is merely coarse rather than unsafe, because what
- * Caddy hands over is its own peer rather than anything a caller chose.
+ * nobody has told us how to attribute. Naming the proxies turns it on.
+ * Sequencing the Caddy deploy and that value is tracked on #3167; nothing here
+ * enforces until both are done.
  */
 export function trustedClientIpBucketKey(c: Context<AppEnv>): string | null {
   // Vercel replaces `x-vercel-forwarded-for` at its own trusted network
@@ -199,10 +199,15 @@ export function trustedClientIpBucketKey(c: Context<AppEnv>): string | null {
       ?.trim();
     return trustedForwardedFor ? `ip:${trustedForwardedFor}` : null;
   }
-  // Deliberately the raw env rather than the validated one: the question here
-  // is whether an operator DECLARED the depth, and the schema's `.default(1)`
-  // erases exactly that distinction.
-  if (!process.env.TRUSTED_PROXY_HOP_COUNT) return null;
+  // These mounts require the SAFE form of the declaration: the proxies named by
+  // identity, not counted. A hop count trusts itself to be right, and one that
+  // is too high lets a caller pad x-forwarded-for until the arithmetic lands on
+  // a value the caller chose — which on this ceiling means minting a fresh
+  // bucket per request and evading it entirely. Nothing in the request
+  // distinguishes an over-declared count from a correct deeper chain, so a
+  // count cannot defend itself here. Undeclared proxies are an unattributable
+  // request, and unattributable skips.
+  if (trustedProxyCidrs().length === 0) return null;
   const clientAddress = extractClientIp(c);
   return clientAddress ? `ip:${clientAddress}` : null;
 }
@@ -317,7 +322,8 @@ function warnUnattributable(keyPrefix: string, windowMs: number): void {
   logger.warn(
     { keyPrefix },
     "distributed rate limiter has no attributable bucket for this request — " +
-      "skipping (check TRUSTED_PROXY_HOP_COUNT for this deployment)",
+      "skipping (set TRUSTED_PROXY_CIDRS to the proxies in front of this " +
+      "deployment)",
   );
 }
 

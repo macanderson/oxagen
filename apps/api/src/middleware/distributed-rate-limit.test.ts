@@ -99,8 +99,10 @@ describe("pre-authentication bucket keys", () => {
   // where no client can be identified the limiter must skip rather than pool.
   it("gives two off-Vercel callers two different buckets", () => {
     vi.stubEnv("VERCEL", "");
-    vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "1");
-    mocks.requireEnv.mockReturnValue({ TRUSTED_PROXY_HOP_COUNT: 1 });
+    mocks.requireEnv.mockReturnValue({
+      TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
+      TRUSTED_PROXY_HOP_COUNT: 1,
+    });
 
     const first = trustedClientIpBucketKey(
       fakeContext({ headers: { "x-forwarded-for": "198.51.100.1" } }),
@@ -114,31 +116,36 @@ describe("pre-authentication bucket keys", () => {
     expect(first).not.toBe(second);
   });
 
-  it("walks the forwarded-for chain from the right, so a prepended hop cannot move it", () => {
+  it("stops at the first entry that is not a trusted proxy, whatever the caller prepends", () => {
     vi.stubEnv("VERCEL", "");
-    vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "2");
-    mocks.requireEnv.mockReturnValue({ TRUSTED_PROXY_HOP_COUNT: 2 });
+    mocks.requireEnv.mockReturnValue({
+      TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
+      TRUSTED_PROXY_HOP_COUNT: 2,
+    });
 
     expect(
       trustedClientIpBucketKey(
         fakeContext({
           headers: {
-            // A caller prepending "evil" only lengthens the untrusted left.
-            "x-forwarded-for": "evil, 198.51.100.7, 10.0.0.5",
+            // A caller prepending entries only lengthens a prefix the walk
+            // never reaches: it stops on what an entry IS, not on how many.
+            "x-forwarded-for": "evil, 10.9.9.9, 198.51.100.7, 10.0.0.5",
           },
         }),
       ),
     ).toBe("ip:198.51.100.7");
   });
 
-  it("refuses to enforce a ceiling the deployment has not declared a depth for", () => {
-    // The schema default of 1 is a guess. Guessing here resolves to the load
-    // balancer's own address and puts every caller behind one proxy node in a
-    // single bucket — which, on a fail-closed pre-auth mount, one of them can
-    // exhaust for all the others. An undeclared depth is unattributable.
+  it("refuses to enforce a ceiling whose proxies the deployment has not named", () => {
+    // A hop count is not enough on this mount: one that is too high lets a
+    // caller pad x-forwarded-for until the arithmetic lands on a value the
+    // caller chose, which means a fresh bucket per request and no ceiling at
+    // all. Undeclared proxies are an unattributable request.
     vi.stubEnv("VERCEL", "");
-    vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "");
-    mocks.requireEnv.mockReturnValue({ TRUSTED_PROXY_HOP_COUNT: 1 });
+    mocks.requireEnv.mockReturnValue({
+      TRUSTED_PROXY_CIDRS: "",
+      TRUSTED_PROXY_HOP_COUNT: 1,
+    });
 
     expect(
       trustedClientIpBucketKey(
@@ -149,8 +156,10 @@ describe("pre-authentication bucket keys", () => {
 
   it("returns null when no trusted proxy chain can be read", () => {
     vi.stubEnv("VERCEL", "");
-    vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "0");
-    mocks.requireEnv.mockReturnValue({ TRUSTED_PROXY_HOP_COUNT: 0 });
+    mocks.requireEnv.mockReturnValue({
+      TRUSTED_PROXY_CIDRS: "",
+      TRUSTED_PROXY_HOP_COUNT: 0,
+    });
 
     expect(
       trustedClientIpBucketKey(
@@ -596,6 +605,6 @@ describe("unattributable bucket", () => {
     expect(c.json).not.toHaveBeenCalled();
     // The operator can see the deployment is not enforcing it.
     expect(warn).toHaveBeenCalledOnce();
-    expect(warn.mock.calls[0]?.[1]).toContain("TRUSTED_PROXY_HOP_COUNT");
+    expect(warn.mock.calls[0]?.[1]).toContain("TRUSTED_PROXY_CIDRS");
   });
 });

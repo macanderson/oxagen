@@ -302,6 +302,26 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     placeholder: "60",
   },
 
+  TRUSTED_PROXY_CIDRS: {
+    group: "Rate limiting",
+    description:
+      "Comma-separated CIDRs or addresses of the proxies in front of apps/api, " +
+      "and the safe way to attribute a client address. Prefer it over " +
+      "TRUSTED_PROXY_HOP_COUNT: a hop count trusts the COUNT to be right, and " +
+      "one that is too high selects an entry the caller wrote, because a caller " +
+      "can pad x-forwarded-for until the arithmetic lands on its own value. " +
+      "Naming the proxies removes that: the walk goes right while each entry is " +
+      "a trusted proxy and stops at the first that is not. The pre-authentication " +
+      "IP ceilings on the Tacho and Stella machine routes enforce ONLY when this " +
+      "is set; unset, they skip rather than trust a count. Empty by default.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "10.0.0.0/8",
+  },
+
   TRUSTED_PROXY_HOP_COUNT: {
     group: "Rate limiting",
     description:

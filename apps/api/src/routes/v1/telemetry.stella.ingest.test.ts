@@ -55,6 +55,7 @@ vi.mock("../../middleware/logger", () => ({
 }));
 
 import { app } from "../../app";
+import { __resetTrustedProxyHopsForTests } from "../../lib/context";
 
 const PATH = "/v1/telemetry/stella/operational";
 const KEY_ORG_ID = "11111111-1111-4111-8111-111111111111";
@@ -107,6 +108,10 @@ async function post(
 }
 
 beforeEach(() => {
+  // extractClientIp memoizes its proxy config on first use, and that memo
+  // outlives a single case — drop it so a test that names proxies cannot
+  // change how the next one attributes an address.
+  __resetTrustedProxyHopsForTests();
   vi.clearAllMocks();
   vi.spyOn(Math, "random").mockReturnValue(0.5);
   mocks.parseSessionCookie.mockReturnValue(null);
@@ -425,12 +430,15 @@ describe("POST /v1/telemetry/stella/operational", () => {
       };
     });
 
-    // The IP ceiling is enforced only where the deployment declares its proxy
-    // depth; without that it skips rather than pooling callers (see below).
-    vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "1");
+    // The IP ceiling is enforced only where the deployment NAMES its proxies;
+    // without that it skips rather than pooling callers (see below).
+    vi.stubEnv("TRUSTED_PROXY_CIDRS", "10.0.0.0/8");
+    __resetTrustedProxyHopsForTests();
     const response = await post(VALID_BATCH, {
       authorization: "Bearer middleware_order_key",
-      "x-forwarded-for": "198.51.100.70",
+      // The trailing entry is the trusted proxy; the walk stops on the first
+      // entry that is not one.
+      "x-forwarded-for": "198.51.100.70, 10.0.0.5",
     });
 
     expect(response.status).toBe(200);
@@ -457,9 +465,10 @@ describe("POST /v1/telemetry/stella/operational", () => {
         }),
     );
 
-    vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "1");
-    await post(VALID_BATCH, { "x-forwarded-for": "198.51.100.1" });
-    await post(VALID_BATCH, { "x-forwarded-for": "198.51.100.2" });
+    vi.stubEnv("TRUSTED_PROXY_CIDRS", "10.0.0.0/8");
+    __resetTrustedProxyHopsForTests();
+    await post(VALID_BATCH, { "x-forwarded-for": "198.51.100.1, 10.0.0.5" });
+    await post(VALID_BATCH, { "x-forwarded-for": "198.51.100.2, 10.0.0.5" });
 
     expect(keys).toEqual([
       "stella-preauth-ip:ip:198.51.100.1",

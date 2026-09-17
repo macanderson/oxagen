@@ -74,6 +74,17 @@ export const baseEnvSchema = z.object({
   // 0 means nothing rewrites the header and no entry in it is usable.
   TRUSTED_PROXY_HOP_COUNT: z.coerce.number().int().nonnegative().default(1),
 
+  // The proxies themselves, as a comma-separated CIDR/address list, and the
+  // form that is actually safe. Counting hops trusts the COUNT to be right; a
+  // count that is too high selects an entry the caller wrote, because a caller
+  // can pad x-forwarded-for until the arithmetic lands on its own value. Naming
+  // the proxies instead means attribution never depends on the length of a
+  // list the caller can grow: walk from the right while each entry is a trusted
+  // proxy, and the first entry that is not one is the client.
+  // Empty (the default) means no proxy identity is declared — see
+  // extractClientIp in apps/api/src/lib/context.ts.
+  TRUSTED_PROXY_CIDRS: z.string().default(""),
+
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
 

@@ -447,7 +447,10 @@ function parseCidr(
  *
  * @returns false when clientIp is null, unparseable, or in no matching CIDR.
  */
-function ipInRanges(clientIp: string | null, cidrs: string[]): boolean {
+export function ipInRanges(
+  clientIp: string | null,
+  cidrs: string[],
+): boolean {
   if (clientIp === null || cidrs.length === 0) return false;
 
   const ipStr = clientIp.trim();

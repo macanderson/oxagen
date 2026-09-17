@@ -133,7 +133,15 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
     __resetTrustedProxyHopsForTests();
   }
 
+  function setTrustedProxyCidrs(cidrs: string): void {
+    process.env.TRUSTED_PROXY_CIDRS = cidrs;
+    __resetTrustedProxyHopsForTests();
+  }
+
   beforeEach(() => {
+    // Empty is the default, and a case that names proxies must not change how
+    // the next one attributes an address.
+    setTrustedProxyCidrs("");
     setTrustedProxyHops("1");
   });
 
@@ -239,6 +247,46 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
 
   it("returns null when x-real-ip is empty and x-forwarded-for is absent", async () => {
     expect(await clientIpFor({ "x-real-ip": "" })).toBeNull();
+  });
+
+  // ── attribution by proxy identity ─────────────────────────────────────────
+  // A hop count trusts the COUNT. One that is too high lets a caller pad
+  // x-forwarded-for until the arithmetic lands on a value the caller chose, and
+  // nothing in the request separates that from a correct deeper chain. Naming
+  // the proxies removes the arithmetic: the walk stops on what an entry IS.
+
+  it("stops at the first entry that is not a trusted proxy", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(
+      await clientIpFor({ "x-forwarded-for": "203.0.113.7, 10.0.0.5" }),
+    ).toBe("203.0.113.7");
+  });
+
+  it("is unmoved by a caller padding the header", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
+    // The caller prepends an allowlisted-looking address and an extra hop.
+    // Under a hop count that is the bypass; here the walk never reaches it.
+    expect(
+      await clientIpFor({
+        "x-forwarded-for": "198.51.100.1, 10.1.1.1, 203.0.113.7, 10.0.0.5",
+      }),
+    ).toBe("203.0.113.7");
+  });
+
+  it("refuses when every entry is a trusted proxy", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(
+      await clientIpFor({ "x-forwarded-for": "10.0.0.4, 10.0.0.5" }),
+    ).toBeNull();
+  });
+
+  it("takes precedence over the hop count when both are set", async () => {
+    // The count alone would pick the rightmost entry, i.e. the proxy itself.
+    setTrustedProxyHops("1");
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(
+      await clientIpFor({ "x-forwarded-for": "203.0.113.7, 10.0.0.5" }),
+    ).toBe("203.0.113.7");
   });
 
   it("refuses x-real-ip when no proxy is trusted", async () => {

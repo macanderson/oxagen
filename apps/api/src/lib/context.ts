@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { type CapabilityContext, ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import { requireEnv } from "@oxagen/config/env";
+import { ipInRanges } from "@oxagen/oxagen/iam";
 import type { AppEnv } from "../app";
 
 /**
@@ -16,6 +17,20 @@ function trustedProxyHops(): number {
   const env = requireEnv(["TRUSTED_PROXY_HOP_COUNT"] as const);
   cachedTrustedProxyHops = env.TRUSTED_PROXY_HOP_COUNT;
   return cachedTrustedProxyHops;
+}
+
+/**
+ * The proxies this deployment trusts, by identity rather than by count.
+ * Memoized on the same terms as the hop count above.
+ */
+let cachedTrustedProxyCidrs: string[] | null = null;
+export function trustedProxyCidrs(): string[] {
+  if (cachedTrustedProxyCidrs !== null) return cachedTrustedProxyCidrs;
+  const env = requireEnv(["TRUSTED_PROXY_CIDRS"] as const);
+  cachedTrustedProxyCidrs = env.TRUSTED_PROXY_CIDRS.split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  return cachedTrustedProxyCidrs;
 }
 
 /**
@@ -45,8 +60,39 @@ function trustedProxyHops(): number {
  * `deriveBucketKey` is in middleware/distributed-rate-limit.ts.
  */
 export function extractClientIp(c: Context<AppEnv>): string | null {
+  const cidrs = trustedProxyCidrs();
   const hops = trustedProxyHops();
   const xff = c.req.header("x-forwarded-for");
+
+  // Preferred: attribute by proxy IDENTITY. Walk from the right while each
+  // entry is one of the proxies this deployment names; the first entry that is
+  // not one is the furthest thing a trusted proxy vouched for, which is the
+  // client. A caller can pad the left of this header all it likes — padding
+  // only lengthens the untrusted prefix and can never move where the walk
+  // stops, because stopping is decided by what an entry IS rather than by how
+  // many entries there are.
+  //
+  // That is the difference from the hop count below, and it is the whole point:
+  // a count trusts ITSELF to be right, and one that is too high lets a caller
+  // pad until the arithmetic lands on a value the caller chose — enough to
+  // satisfy an `ip_ranges` / `ip_allow` condition, or to mint a fresh
+  // rate-limit bucket per request. No property of the request distinguishes
+  // that from a correct deeper chain, so the count cannot defend itself and
+  // only naming the proxies can.
+  if (cidrs.length > 0 && xff) {
+    const chain = xff
+      .split(",")
+      .map((hop) => hop.trim())
+      .filter((hop) => hop.length > 0);
+    for (let i = chain.length - 1; i >= 0; i--) {
+      const entry = chain[i] as string;
+      if (!ipInRanges(entry, cidrs)) return entry;
+    }
+    // Every entry is a trusted proxy, so none of them is a client. Nothing to
+    // attribute — better than returning a proxy and calling it a caller.
+    return null;
+  }
+
   if (xff && hops > 0) {
     const chain = xff
       .split(",")
@@ -88,6 +134,7 @@ export function extractClientIp(c: Context<AppEnv>): string | null {
 /** Test seam: drop the memoized hop count so a case can set a different env. */
 export function __resetTrustedProxyHopsForTests(): void {
   cachedTrustedProxyHops = null;
+  cachedTrustedProxyCidrs = null;
 }
 
 /**
