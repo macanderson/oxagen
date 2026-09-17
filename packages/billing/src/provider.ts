@@ -634,10 +634,23 @@ export interface BillingProvider {
    * A Stripe Dispute carries its own metadata, which Stripe never populates
    * from the charge and nothing here sets, so a dispute reaches us with no
    * organisation and no indication of what was bought. The charge has both.
-   * This is the only way to resolve either for a dispute (ADR-085 §7, #3189).
+   * This is the only way to resolve either for a dispute (ADR-085 §8, #3189).
    *
-   * Returns an empty object when the charge cannot be read, so a provider
-   * fault degrades to "unknown" rather than throwing out of a webhook.
+   * **An empty object means the charge definitively carries no metadata, or
+   * definitively does not exist. It does not mean the read failed.** A
+   * transient or correctable fault — a timeout, a rate limit, a revoked or
+   * mis-scoped key — MUST reject, so the webhook retries.
+   *
+   * The distinction is load-bearing rather than stylistic, because callers
+   * treat `{}` as an answer. `onDisputeCreated` reads it as "this charge
+   * cannot say what it bought", completes, and `processStripeEvent` marks the
+   * event processed for ever; a GAU dispute that arrived before its grant is
+   * then never parked and the later grant hands out units the money has left.
+   * An implementation that converts every fault to `{}` therefore loses
+   * reversals during an outage, silently, with no failed webhook to show for
+   * it. ADR-085 §9 classifies which Stripe errors are definitive and which
+   * are not; a new provider owes the same classification rather than the
+   * blanket catch.
    */
   getChargeMetadata(chargeId: string): Promise<Record<string, string>>;
 
