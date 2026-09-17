@@ -44,6 +44,7 @@ const ctx = unsafeMint(WsCtx, {
   workspaceId: "7b000000-0000-4000-8000-000000000001",
   wsSlug: "core-platform",
   wsName: "Core platform",
+  wsRole: "member",
 });
 
 const DENIED = {

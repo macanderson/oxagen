@@ -114,6 +114,16 @@ function Tabs({ selected, org, ws, agent }: { selected: Tab } & Place) {
   );
 }
 
+/**
+ * The agent's record and the instant it was read. The credential and host
+ * clocks start when the read returned, so a section is pure of `Date.now()`
+ * and a state cannot disagree with the dates in the row beside it.
+ */
+async function readAgent(ctx: WsCtx, source: DataSource, agent: string) {
+  const read = await source.agents.get(ctx, agent);
+  return { read, now: Date.now() };
+}
+
 export async function Agent({
   ctx,
   source,
@@ -131,7 +141,7 @@ export async function Agent({
   cursor: string | null;
 }) {
   const selected = TABS.find((name) => name === tab) ?? "identity";
-  const read = await source.agents.get(ctx, agent);
+  const { read, now } = await readAgent(ctx, source, agent);
   if (!read.ok) {
     if (read.reason === "error" && read.status === 404) notFound();
     return (
@@ -146,7 +156,7 @@ export async function Agent({
   let body: ReactNode;
   switch (selected) {
     case "identity":
-      body = <IdentitySection detail={detail} />;
+      body = <IdentitySection detail={detail} now={now} />;
       break;
     case "toolbelt":
       body = (
@@ -156,7 +166,7 @@ export async function Agent({
       );
       break;
     case "enrollment":
-      body = <EnrollmentSection hosts={detail.hosts} />;
+      body = <EnrollmentSection hosts={detail.hosts} now={now} />;
       break;
     case "incidents":
       body = (

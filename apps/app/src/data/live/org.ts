@@ -5,6 +5,12 @@
 // holds (list_api_keys), each a noBillingGate read made with the organization
 // viewer's context, and each refused by its handler for a viewer below the role
 // it names.
+//
+// `apiKeys` is the exception to "made with the organization viewer's context":
+// it takes a WsCtx, because an API key names a workspace (ADR-073).
+// `auth.api_keys` is policy class `standard`, so under the org-only sentinel
+// the list matches no key that exists and a mint writes one into a workspace
+// that does not. The page picks a workspace and resolves into it first.
 import "server-only";
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";

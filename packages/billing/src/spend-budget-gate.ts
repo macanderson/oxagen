@@ -285,7 +285,7 @@ export async function assertWithinSpendBudget(
 async function deliverBudgetThresholdNotification(
   notice: BudgetThresholdNotice,
 ): Promise<void> {
-  const { budget, threshold, verdict } = notice;
+  const { budget } = notice;
   const admins = await withTenantDb((tx) =>
     tx
       .select({ userId: schema.orgUsers.userId })
@@ -299,6 +299,26 @@ async function deliverBudgetThresholdNotification(
   );
   if (admins.length === 0) return;
 
+  await withTenantDb((tx) =>
+    tx.insert(schema.notifications).values(
+      budgetThresholdNotificationRows(
+        notice,
+        admins.map((a) => a.userId),
+      ),
+    ),
+  );
+}
+
+/**
+ * The feed rows for one threshold crossing, one per admin. A crossing at 100%
+ * or more is the MC spec §7.7 `budget.breached` event; a warning below the
+ * ceiling reports no event.
+ */
+export function budgetThresholdNotificationRows(
+  notice: BudgetThresholdNotice,
+  adminUserIds: readonly string[],
+): Array<typeof schema.notifications.$inferInsert> {
+  const { budget, threshold, verdict } = notice;
   const scopeLabel = budget.scope === "org" ? "organization" : "workspace";
   const isHardStop = threshold >= 100;
   const pct = Math.round(verdict.ratio * 100);
@@ -309,20 +329,16 @@ async function deliverBudgetThresholdNotification(
     ? `The ${budget.period} spend ceiling has been reached (${pct}% of the limit). ` +
       `New metered agent runs are being denied until the budget is raised or the period resets.`
     : `The ${budget.period} spend has reached ${pct}% of the ceiling. Review usage in Billing → Budgets.`;
-
-  await withTenantDb((tx) =>
-    tx.insert(schema.notifications).values(
-      admins.map((a) => ({
-        orgId: budget.orgId,
-        workspaceId: budget.workspaceId,
-        userId: a.userId,
-        kind: "security" as const,
-        title,
-        body,
-        deepLink: "/settings/billing/budgets",
-      })),
-    ),
-  );
+  return adminUserIds.map((userId) => ({
+    orgId: budget.orgId,
+    workspaceId: budget.workspaceId,
+    userId,
+    kind: "security" as const,
+    event: isHardStop ? ("budget.breached" as const) : null,
+    title,
+    body,
+    deepLink: "/settings/billing/budgets",
+  }));
 }
 
 // ── Panel status (burn + projection) ──────────────────────────────────────────

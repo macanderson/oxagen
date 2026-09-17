@@ -59,10 +59,27 @@ export type OrgFields = {
   readonly orgRole: OrgRole;
 };
 
+/**
+ * A workspace membership's role. `workspace.workspace_users.role` carries the
+ * same six-value CHECK as `org_users.role`
+ * (packages/database/src/schema/workspace.ts:148), so the union is the same
+ * one; the separate name says which membership a value came from.
+ */
+export type WsRole = OrgRole;
+
 export type WsFields = OrgFields & {
   readonly workspaceId: string;
   readonly wsSlug: string;
   readonly wsName: string;
+  /**
+   * The viewer's role in THIS workspace, lowercased. Several capabilities grant
+   * a workspace role beside the org one — `import_tools` admits an org Owner or
+   * Admin *or* the workspace's Owner — and without this field a page can only
+   * check `orgRole` and so gates narrower than the kernel it guards (#3143).
+   * The column is written in both casings; `systemLookups.workspaceMember` is
+   * the single point that settles it, so read this field as it comes.
+   */
+  readonly wsRole: WsRole;
 };
 
 export type PretenantFields = { readonly userId: string };
@@ -109,6 +126,7 @@ export class WsCtx extends OrgCtx {
   declare readonly workspaceId: string;
   declare readonly wsSlug: string;
   declare readonly wsName: string;
+  declare readonly wsRole: WsRole;
 
   private constructor(token: typeof MINT, f: WsFields) {
     super(token, f);

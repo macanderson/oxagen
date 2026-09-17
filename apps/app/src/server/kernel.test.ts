@@ -59,6 +59,7 @@ const wsCtx = unsafeMint(WsCtx, {
   workspaceId: WS_ID,
   wsSlug: "core",
   wsName: "Core platform",
+  wsRole: "member",
 });
 const pretenantCtx = unsafeMint(PretenantCtx, { userId: USER_ID });
 const inviteeCtx = unsafeMint(InviteeCtx, {
@@ -586,6 +587,7 @@ describe("handler registries (INV-23)", () => {
       workspaceId: WS_ID,
       wsSlug: "core",
       wsName: "Core platform",
+      wsRole: "member",
     });
     const read = await freshRead(ctx, {
       contract: agentMcpList,

@@ -71,7 +71,9 @@ describe("CreateRole", () => {
       "workspace",
     );
     await userEvent.click(within(dialog).getByLabelText(/run\.read/));
-    await userEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Create" }),
+    );
     expect(createRole).toHaveBeenCalledWith("acme", {
       name: "agent.release",
       description: "",
@@ -93,7 +95,10 @@ describe("CreateRole", () => {
       </IntlProvider>,
     );
     const dialog = await open("Create role", "create-role");
-    await userEvent.type(within(dialog).getByLabelText("Name"), "agent.release");
+    await userEvent.type(
+      within(dialog).getByLabelText("Name"),
+      "agent.release",
+    );
     await userEvent.click(within(dialog).getByLabelText(/run\.read/));
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Create" }),
@@ -143,9 +148,7 @@ describe("EditRole", () => {
     const dialog = await open("Edit", "edit-role-rol_7k2m9q4x8r1t5v3w6y0z2a");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     expect(
-      await screen.findByTestId(
-        "edit-role-rol_7k2m9q4x8r1t5v3w6y0z2a-failure",
-      ),
+      await screen.findByTestId("edit-role-rol_7k2m9q4x8r1t5v3w6y0z2a-failure"),
     ).toHaveTextContent("A role cannot grant more than you hold.");
     expect(router.replace).not.toHaveBeenCalled();
   });

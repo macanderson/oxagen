@@ -71,10 +71,7 @@ function Enforcement({
 }) {
   const t = useTranslations("organization.roleCatalog.enforcement");
   return (
-    <p
-      data-enforced={enforcement.enforced ? "true" : "false"}
-      className={lead}
-    >
+    <p data-enforced={enforcement.enforced ? "true" : "false"} className={lead}>
       {enforcement.enforced
         ? t("enforced")
         : t("recorded", { tier: enforcement.tier })}
@@ -160,11 +157,7 @@ function RoleTable({
                 <td className={cell}>
                   {role.builtIn ? null : (
                     <div className="flex flex-wrap gap-2">
-                      <EditRole
-                        org={org}
-                        role={role}
-                        catalog={value.catalog}
-                      />
+                      <EditRole org={org} role={role} catalog={value.catalog} />
                       <DeleteRole org={org} role={role} />
                     </div>
                   )}

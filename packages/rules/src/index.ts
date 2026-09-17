@@ -52,3 +52,9 @@ export {
   clearDecisionRulesCache,
   loadWorkspaceRuleSet,
 } from "./bootstrap";
+// The `approval.requested` fan-out — shared by every writer of an approval
+// row — is deliberately NOT re-exported here. It ships on its own subpath,
+// `@oxagen/rules/approval-notify`, so a consumer takes the module without the
+// mandate ledger behind this barrel, and so there is exactly one specifier
+// for it. Two paths to one module is how a test that stubs the barrel ends up
+// stubbing a control it meant to exercise.

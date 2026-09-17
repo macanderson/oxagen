@@ -26,6 +26,7 @@ import {
   emitMcpRuleAudit,
 } from "./mcp-rbac";
 import { mcpServerToolKey } from "@oxagen/oxagen/iam";
+import { isAdmissibleToolIdentity } from "@oxagen/run-ledger";
 import {
   getPluginTypeContributors,
   type ContributedRawTool,
@@ -169,8 +170,37 @@ export interface MaterializeOptions {
    * until the consent TTL expires.
    */
   onConsentRequired?: (event: ConsentRequiredEvent) => void;
+  /**
+   * What a tool does after it has created its approval request. `wait`
+   * blocks inside `execute` until the person decides or the TTL passes,
+   * which is what the chat surfaces have always done. `park` refuses the
+   * call at once with `ApprovalPendingError`, naming the request: the in-app
+   * agent on `stella-serve` runs this way (MC spec §4.4; the engine has no
+   * approval gate of its own), so the turn completes with the write parked
+   * as a card and the person's decision starts the next turn.
+   */
+  approvalMode?: "wait" | "park";
   /** Seam for tests; defaults to the Postgres-backed gate. */
   killSwitchGate?: KillSwitchGate;
+}
+
+/**
+ * A governed write the turn opened that is waiting on a person. Thrown out of
+ * a tool's `execute` under `approvalMode: "park"`; the engine reads it as a
+ * refusal by policy and the surface reads the fields as the parked card.
+ */
+export class ApprovalPendingError extends Error {
+  override readonly name = "ApprovalPendingError";
+  readonly code = "pending_approval" as const;
+  constructor(
+    readonly capability: string,
+    readonly approvalId: string,
+    readonly expiresAt: string,
+  ) {
+    super(
+      `refused: ${capability} is waiting for approval ${approvalId} until ${expiresAt}`,
+    );
+  }
 }
 
 // Result of materializeTools: the Vercel AI SDK tool map keyed by *model-safe*
@@ -509,6 +539,9 @@ export async function materializeTools(
                 riskLevel,
                 expiresAt,
               });
+              if (opts.approvalMode === "park") {
+                throw new ApprovalPendingError(cap.name, approvalId, expiresAt);
+              }
               const resolution = await waitForApproval(approvalId);
               if (resolution.resolution !== "approved") {
                 throw new Error(
@@ -666,6 +699,32 @@ export async function materializeTools(
       // Fail closed (mirrors the capability loop above): an agentRun without
       // its resolution must never expose external tools either.
       if (agentRunFailClosed) continue;
+      // An identity a run spec cannot carry is dropped here rather than
+      // taken into the turn. `openAssistantRun` pins EVERY materialized tool
+      // into `tool_policy.allowlist`, so a single inadmissible identity does
+      // not fail that tool — it fails spec admission, and with it every
+      // assistant turn in the workspace, including the ones that would never
+      // have called it. The contributors' names are third parties' (an MCP
+      // server's `tools/list`, a `.oxagen/settings.json` server name), and a
+      // registry may still hold rows from before the import guard bounded
+      // them, so this is the point where the turn stops trusting the length.
+      //
+      // Dropped, not truncated: a truncated identity is a DIFFERENT tool as
+      // far as governance is concerned, and two long names could truncate to
+      // one. Losing a tool from the belt is recoverable and loud; two tools
+      // sharing a governed identity is not.
+      if (!isAdmissibleToolIdentity(capturedKey)) {
+        logger.error(
+          {
+            capability: capturedKey,
+            length: capturedKey.length,
+            pluginType: contributor.type,
+            serverTool: mcpServerToolKey(capturedServerName, capturedToolName),
+          },
+          "external tool left out of the turn: its governed identity is not one a run spec can carry",
+        );
+        continue;
+      }
       // DENY tools are never registered — the model cannot see or call them.
       // The same decision `get_agent_toolbelt` prints (toolbelt.ts): a deny
       // rule, or an ask rule the agent principal's standing consent has

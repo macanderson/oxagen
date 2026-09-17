@@ -48,6 +48,7 @@ const ctx = unsafeMint(WsCtx, {
   workspaceId: "7b000000-0000-4000-8000-000000000001",
   wsSlug: "core-platform",
   wsName: "Core platform",
+  wsRole: "member",
 });
 
 const BASE = "/acme/core-platform/steering";
@@ -140,7 +141,9 @@ describe("Records", () => {
     expect(card.querySelector('[data-fact="path"] dd')).toHaveTextContent(
       ".oxagen/rules/ctx.release.no-reread-changelog.toml",
     );
-    expect(card.querySelector('[data-fact="published"] dd')).not.toBeEmptyDOMElement();
+    expect(
+      card.querySelector('[data-fact="published"] dd'),
+    ).not.toBeEmptyDOMElement();
   });
 
   it("prints unclassified and the title for a record no Context PR wrote, with no fact it lacks", async () => {
@@ -214,7 +217,9 @@ describe("Records", () => {
     expect(empty).toHaveTextContent(
       "Published records live in .oxagen/rules/ on the workspace repository.",
     );
-    expect(screen.queryByRole("navigation", { name: "Filter records by kind" })).toBeNull();
+    expect(
+      screen.queryByRole("navigation", { name: "Filter records by kind" }),
+    ).toBeNull();
   });
 
   it("pages by fifty with the range, keeping the kind", async () => {
@@ -256,15 +261,18 @@ describe("Records", () => {
       DOWN,
       "Published records could not be loaded: record_index_unavailable. Nothing was changed.",
     ],
-  ] as const)("renders a %s read in place of the records", async (reason, read, text) => {
-    await renderSteering({}, { records: read });
-    const records = section("Published records");
-    expect(records.querySelector("[data-reason]")).toHaveAttribute(
-      "data-reason",
-      reason,
-    );
-    expect(records).toHaveTextContent(text);
-  });
+  ] as const)(
+    "renders a %s read in place of the records",
+    async (reason, read, text) => {
+      await renderSteering({}, { records: read });
+      const records = section("Published records");
+      expect(records.querySelector("[data-reason]")).toHaveAttribute(
+        "data-reason",
+        reason,
+      );
+      expect(records).toHaveTextContent(text);
+    },
+  );
 });
 
 describe("Proposals", () => {
@@ -305,25 +313,22 @@ describe("Proposals", () => {
     ["checks_passed", ["Run the checks again", "Dismiss"]],
     ["merged", []],
     ["rejected", []],
-  ])(
-    "offers a %s proposal exactly its writes",
-    async (status, writes) => {
-      await renderSteering(
-        { tab: "proposals" },
-        {
-          proposals: readOk({
-            proposals: [proposal({ status, pr: null, checks: null })],
-            total: 1,
-          }),
-        },
-      );
-      expect(
-        within(screen.getByRole("article"))
-          .queryAllByRole("button")
-          .map((button) => button.textContent),
-      ).toEqual(writes);
-    },
-  );
+  ])("offers a %s proposal exactly its writes", async (status, writes) => {
+    await renderSteering(
+      { tab: "proposals" },
+      {
+        proposals: readOk({
+          proposals: [proposal({ status, pr: null, checks: null })],
+          total: 1,
+        }),
+      },
+    );
+    expect(
+      within(screen.getByRole("article"))
+        .queryAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(writes);
+  });
 
   it("says a workspace has no proposals, and how one is raised", async () => {
     await renderSteering(
@@ -369,7 +374,9 @@ describe("Context PRs", () => {
         name: "#519 on acme/core-platform",
       }),
     ).toHaveAttribute("href", `${BASE}?tab=prs&proposal=${PROPOSAL_ID}`);
-    expect(screen.queryByRole("region", { name: /^Context PR for/ })).toBeNull();
+    expect(
+      screen.queryByRole("region", { name: /^Context PR for/ }),
+    ).toBeNull();
   });
 
   it("reads the Context PR of the proposal the URL selects, marks its row and renders its panel", async () => {

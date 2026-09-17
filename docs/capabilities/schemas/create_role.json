@@ -1,7 +1,7 @@
 {
   "name": "create_role",
   "domain": "iam",
-  "description": "Create a custom IAM role from the permission catalogue. Writes one allow grant per capability the chosen permissions name; refused above the granter's own permissions, for a tier the kernel does not enforce roles on, and for a name another role of the org already uses.",
+  "description": "Create a custom IAM role from the permission catalogue. Writes one allow grant per capability the chosen permissions name; refused above the granter's own permissions and for a name another role of the org already uses.",
   "mode": "sync",
   "surfaces": [
     "api",

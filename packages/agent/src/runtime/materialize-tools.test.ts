@@ -313,6 +313,10 @@ import {
 import { connectMcp, listMcpToolDescriptors } from "../dispatch/mcp-client";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
+import {
+  EXTERNAL_TOOL_SEGMENT_MAX,
+  isAdmissibleToolIdentity,
+} from "@oxagen/run-ledger";
 // Note: the @oxagen/database `db` is driven via `dbMocks.db` (hoisted above) —
 // we do not import the banned raw `db` symbol directly into the test.
 
@@ -435,6 +439,47 @@ describe("materializeTools", () => {
     ).execute({ y: 1 });
     expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
     expect(mocks.waitForApproval).toHaveBeenCalledTimes(1);
+  });
+
+  it("parks the call under approvalMode park: the request is created, the event fires, nothing waits and the handler never runs", async () => {
+    mocks.createApprovalRequest.mockClear();
+    mocks.waitForApproval.mockClear();
+    vi.mocked(invoke).mockClear();
+    const fixtureGated = [
+      {
+        ...FIXTURE[2],
+        agent: { riskLevel: "high" as const, requiresApproval: true },
+      },
+    ];
+    vi.doMock("@oxagen/oxagen", () => ({
+      listCapabilities: () => fixtureGated,
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
+    }));
+    vi.resetModules();
+    const { materializeTools: mt, ApprovalPendingError } = await import(
+      "./materialize-tools"
+    );
+    const events: unknown[] = [];
+    const { tools } = await mt(
+      { ...CTX, messageId: "msg_42" },
+      { approvalMode: "park", onApprovalRequired: (e) => events.push(e) },
+    );
+    await expect(
+      (
+        tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }
+      ).execute({ y: 1 }),
+    ).rejects.toSatisfy(
+      (e) =>
+        e instanceof ApprovalPendingError &&
+        e.code === "pending_approval" &&
+        e.capability === FIXTURE[2]!.name,
+    );
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.waitForApproval).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+    expect(events).toHaveLength(1);
   });
 
   it("denied approval throws and the handler never runs", async () => {
@@ -815,6 +860,59 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
       killSwitches: expect.objectContaining({ check: expect.any(Function) }),
     });
   });
+
+  it("drops an external tool whose governed identity a run spec cannot carry, and keeps its siblings", async () => {
+    // A contributor's names are a third party's: an MCP server's `tools/list`
+    // or a `.oxagen/settings.json` server key. `openAssistantRun` pins EVERY
+    // materialized tool into `tool_policy.allowlist`, so one identity the
+    // spec refuses does not fail that tool — it fails admission, and with it
+    // every assistant turn in the workspace, including turns that would never
+    // have called it. One tool missing from the belt is the cheap failure.
+    const serverId = "0192d4a8-7c1e-7a00-8000-0000000000aa";
+    const ok = `mcp.${serverId}.list_pull_requests`;
+    const overLong = `mcp.${serverId}.${"z".repeat(EXTERNAL_TOOL_SEGMENT_MAX + 1)}`;
+    // The premise, not assumed: the short one is carryable and the long one
+    // is not. Without this the test would pass on both being dropped.
+    expect(isAdmissibleToolIdentity(ok)).toBe(true);
+    expect(isAdmissibleToolIdentity(overLong)).toBe(false);
+
+    const raw = (realName: string, toolName: string) => ({
+      realName,
+      description: "d",
+      execute: async () => "ok",
+      externalServerId: serverId,
+      externalServerName: "GitHub",
+      externalToolName: toolName,
+    });
+    vi.doMock("./plugin-type", async (importOriginal) => {
+      const real = await importOriginal<typeof import("./plugin-type")>();
+      return {
+        ...real,
+        getPluginTypeContributors: vi.fn(() => [
+          {
+            type: "mcp_server" as const,
+            contributeTools: vi.fn(async () => [
+              raw(ok, "list_pull_requests"),
+              raw(overLong, "z".repeat(EXTERNAL_TOOL_SEGMENT_MAX + 1)),
+            ]),
+          },
+        ]),
+      };
+    });
+    vi.resetModules();
+    const { materializeTools: mt } = await import("./materialize-tools");
+
+    const { nameMap } = await mt(CTX, {});
+    const canonical = Object.values(nameMap);
+
+    expect(canonical).toContain(ok);
+    expect(canonical).not.toContain(overLong);
+    // Dropped, never truncated: a truncated identity is a different tool as
+    // far as governance is concerned, and two long names could collide on one.
+    expect(canonical.some((c) => c.startsWith(`mcp.${serverId}.z`))).toBe(
+      false,
+    );
+  });
 });
 
 // ── First-use consent gate ─────────────────────────────────────────
@@ -1018,9 +1116,7 @@ describe("materializeTools — kill switches (spec §6.11)", () => {
     const failed = mocks.insertToolInvocation.mock.calls.map(
       (c) => (c as unknown as [Record<string, unknown>])[0],
     );
-    expect(failed.map((r) => r.error_class)).toEqual([
-      "KillSwitchDeniedError",
-    ]);
+    expect(failed.map((r) => r.error_class)).toEqual(["KillSwitchDeniedError"]);
   });
 });
 

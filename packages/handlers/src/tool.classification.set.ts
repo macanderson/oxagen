@@ -96,7 +96,10 @@ export function createToolClassificationSetHandler(
 ): CapabilityHandler<typeof toolClassificationSet> {
   return async (input, ctx) => {
     const actingUserId = await resolveActingUserId(ctx);
-    await assertOrgRole({ ...ctx, userId: actingUserId }, { org: ["Owner", "Admin"] });
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner", "Admin"] },
+    );
 
     const version = await deps.findVersion({
       orgId: ctx.orgId,

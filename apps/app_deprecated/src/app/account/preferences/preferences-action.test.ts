@@ -104,7 +104,7 @@ describe("updatePreferencesAction", () => {
 
     expect(mockInvoke).toHaveBeenCalledOnce();
     expect(mockInvoke).toHaveBeenCalledWith(
-      "update_user_preferences",
+      "set_preferences",
       expect.objectContaining({
         fontSize: "medium",
         density: "comfortable",
@@ -112,6 +112,10 @@ describe("updatePreferencesAction", () => {
         pendingPromptBehavior: "queue",
         defaultTextTier: "balanced",
         defaultTextModel: "claude-3-sonnet",
+        timezone: "America/New_York",
+        // The form's `language` is the contract's `locale`; the row column is
+        // `language` either way.
+        locale: "en",
       }),
       expect.objectContaining({
         userId: "user-abc",
@@ -119,8 +123,45 @@ describe("updatePreferencesAction", () => {
         orgId: "",
         workspaceId: "",
       }),
-      { surface: "agent" },
     );
+    // No surface override: "app" is not on the contract's allowlist and naming
+    // one that is would file the write under traffic that never happened.
+    expect(mockInvoke.mock.calls[0]).toHaveLength(3);
+  });
+
+  // The mock above means this file never touches the real contract, which is
+  // how `update_user_preferences` came to be deleted while this action still
+  // invoked it by string for a whole release. Parse the exact payload the
+  // action builds against the live schema: a renamed, shrunk or retyped
+  // contract fails here instead of in production.
+  it("builds a payload the live set_preferences contract accepts", async () => {
+    const { userPreferencesSet } = await import(
+      "@oxagen/oxagen/contracts/user.preferences.set"
+    );
+    await updatePreferencesAction(validInput);
+    const [name, payload] = mockInvoke.mock.calls[0] as [string, unknown];
+    expect(name).toBe(userPreferencesSet.name);
+    expect(() => userPreferencesSet.input.parse(payload)).not.toThrow();
+  });
+
+  // Every field the action sends must survive the round trip, or the page
+  // silently stops saving one of its controls.
+  it("sends every control on the form, and the contract keeps them all", async () => {
+    const { userPreferencesSet } = await import(
+      "@oxagen/oxagen/contracts/user.preferences.set"
+    );
+    await updatePreferencesAction(validInput);
+    const [, payload] = mockInvoke.mock.calls[0] as [string, unknown];
+    expect(userPreferencesSet.input.parse(payload)).toEqual({
+      fontSize: "medium",
+      density: "comfortable",
+      enterToSubmit: true,
+      pendingPromptBehavior: "queue",
+      defaultTextTier: "balanced",
+      defaultTextModel: "claude-3-sonnet",
+      timezone: "America/New_York",
+      locale: "en",
+    });
   });
 
   it("sets pref-font-size and pref-density cookies after success", async () => {

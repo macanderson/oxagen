@@ -157,6 +157,7 @@ type Messages = {
         never: string;
         noExpiry: string;
         active: string;
+        expired: string;
         revoked: string;
       };
       toolbelt: {
@@ -239,6 +240,7 @@ type Messages = {
         bundleVersion: string;
         never: string;
         revoked: string;
+        expired: string;
         empty: {
           title: string;
           body: string;
@@ -1266,11 +1268,66 @@ type Messages = {
         lastUsed: string;
         expires: string;
         status: string;
+        actions: string;
+      };
+      actions: {
+        create: {
+          open: string;
+          title: string;
+          body: string;
+          name: string;
+          expires: string;
+          expiresUtc: string;
+          expiresAt: string;
+          confirm: string;
+          pending: string;
+        };
+        rotate: {
+          open: string;
+          title: string;
+          body: string;
+          confirm: string;
+          pending: string;
+        };
+        revoke: {
+          open: string;
+          title: string;
+          body: string;
+          confirm: string;
+          pending: string;
+        };
+        secret: {
+          title: string;
+          body: string;
+          named: string;
+        };
+        failure: {
+          denied: string;
+          keyNotFound: string;
+          keyExpired: string;
+          nameRequired: string;
+          expiryNotADay: string;
+          expiryInThePast: string;
+          refused: string;
+          invalid: string;
+          pendingApproval: string;
+          unavailable: string;
+          workspaceArchived: string;
+        };
       };
       status: {
         live: string;
         expired: string;
         revoked: string;
+      };
+      workspace: {
+        label: string;
+        archived: string;
+        archivedNote: string;
+      };
+      noWorkspace: {
+        title: string;
+        body: string;
       };
       never: string;
       neverUsed: string;
