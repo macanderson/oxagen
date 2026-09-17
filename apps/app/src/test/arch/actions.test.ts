@@ -262,6 +262,14 @@ describe("server actions", () => {
   it('every "use server" module under src/ keeps the action contract', () => {
     const modules = productionFiles()
       .map(readSource)
+      // Cheap pre-filter before the expensive one. `directiveOf` needs a full
+      // `ts.createSourceFile` with parent pointers, and a module whose text
+      // never mentions the directive cannot carry it — so parsing all 293
+      // production files to read 11 leading statements was the whole cost of
+      // this test, and it is what put it over the 5s default timeout in CI
+      // under load (run 35210969739). 293 parses become 12. Verified to select
+      // exactly the same modules as parsing every file.
+      .filter((source) => source.text.includes("use server"))
       .filter((source) => directiveOf(parse(source)) === "use server");
     expect(modules.length).toBeGreaterThan(0);
     expect(modules.flatMap(actionViolations)).toEqual([]);
