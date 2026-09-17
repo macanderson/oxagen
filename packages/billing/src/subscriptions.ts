@@ -771,21 +771,55 @@ export async function changeOrgPlan(
     await resolveActiveProviderState(activeSubRow.stripeSubscriptionId);
 
   if (activePriceId && activePriceId === newPriceId) {
-    // The provider has moved and our row has not: the first attempt's sync is
-    // the write that was lost. This no longer needs a "was the price
-    // confirmed" flag — the price is always the provider's now, so a
-    // disagreement with the row is always a real one. Repair it before
-    // anything reads the row again,
-    // so the stale price, plan and period do not outlive this call.
-    if (activeSubRow.stripePriceId !== newPriceId) {
+    // ── Is this request resuming a mutation, or did nothing happen? ─────────
+    //
+    // ONE predicate, computed once here, gating BOTH the audit event and the
+    // grant recovery below. They answer the same question, and two conditions
+    // that have to agree is how the previous round of this went wrong.
+    //
+    // It is computed BEFORE the resync, deliberately: the evidence is the
+    // state as this call found it, and the repair below is about to erase it.
+    const recordedPriceId = activeSubRow.stripePriceId;
+
+    // An intent is written before a swap and retired only once its grant has
+    // settled, so a standing one is unfinished work from a real attempt.
+    const hasStandingIntent = activeSubRow.pendingUpgradeFromPlanId !== null;
+
+    // A recorded price that disagrees with the provider is a swap we never
+    // wrote down. NULL is NOT that. `stripe_price_id` was added nullable with
+    // no backfill (`20260917121000_subscription_billed_price.sql`), whose own
+    // comment settles the reading: "rows written before this migration have
+    // not been synced yet. The read path treats NULL as 'ask the provider',
+    // never as zero." Treating it as a disagreement made this test a constant
+    // for every subscription predating that column — the entire legacy
+    // population — and reopened the false audit event for all of them
+    // (#3157, PR #3171 review).
+    //
+    // It cannot be backfilled in SQL either, and must not be faked from the
+    // catalogue: `billing.plans` holds today's price, while a grandfathered
+    // subscriber sits on an older immutable one. Deriving the identity from
+    // the plan row would write the wrong price id and reintroduce the exact
+    // inversion this PR exists to remove. The column fills itself as
+    // `syncSubscriptionFromStripe` runs — including from the repair below.
+    const recordedPriceDisagrees =
+      recordedPriceId !== null && recordedPriceId !== newPriceId;
+
+    const resumesRealMutation = hasStandingIntent || recordedPriceDisagrees;
+
+    // Repair the row whenever it does not match the provider — including the
+    // NULL a pre-migration row carries, which is how that row stops being
+    // legacy. Repairing is not evidence of anything; it is just repair.
+    if (recordedPriceId !== newPriceId) {
       logger.warn(
         {
           orgId,
           stripeSubId: activeSubRow.stripeSubscriptionId,
-          recordedPriceId: activeSubRow.stripePriceId,
+          recordedPriceId,
           activePriceId,
         },
-        "billing: the provider has already applied this plan change but the local subscription row still holds the previous price — resyncing",
+        recordedPriceId === null
+          ? "billing: this subscription has never recorded which price it is on and the provider is already on the target — backfilling the row"
+          : "billing: the provider has already applied this plan change but the local subscription row still holds the previous price — resyncing",
       );
       try {
         await syncSubscriptionFromStripe(activeSubRow.stripeSubscriptionId);
@@ -816,21 +850,20 @@ export async function changeOrgPlan(
     // disproved before anyone can trust the rest of the trail (#3157, PR #3171
     // review).
     //
-    // The two are told apart by state already on the row, not by anything new:
+    // The two are told apart by `resumesRealMutation`, computed at the top of
+    // this branch from state already on the row. Steady state has neither
+    // piece of evidence: the row agrees with the provider and nothing is in
+    // flight.
     //
-    //  - a standing `pendingUpgradeFromPlanId` is an intent written before a
-    //    swap and retired only once its grant settled, so it is unfinished
-    //    work from a real attempt; and
-    //  - a `stripePriceId` that disagrees with the price the provider is on is
-    //    itself a swap we never recorded — which catches a retry whose intent
-    //    predates that column.
-    //
-    // Steady state has neither: the row agrees with the provider and nothing
-    // is in flight.
-    const resumesRealMutation =
-      activeSubRow.pendingUpgradeFromPlanId !== null ||
-      activeSubRow.stripePriceId !== newPriceId;
-
+    // KNOWN GAP, carried rather than half-fixed. This infers "no audit event
+    // was written" from grant and sync state, which does not entail it: a
+    // first attempt whose swap and emission both succeeded and whose GRANT
+    // then failed leaves the intent standing, so the retry emits a second
+    // event for one mutation. Answering that honestly means recording the
+    // emission durably — a column on the intent, and a migration — which is
+    // the same row #3244 already has to add for the resumed grant's proration
+    // point. Inventing a half-durable version here would be a fourth stand-in
+    // for a fact nobody recorded, which is the argument this PR is built on.
     if (resumesRealMutation) {
       emitSecurityEvent({
         eventType: "billing.plan_changed",
@@ -843,11 +876,6 @@ export async function changeOrgPlan(
         userAgent: null,
         requestId: null,
       });
-    } else {
-      logger.info(
-        { orgId, targetPlanSlug, interval, newPriceId },
-        "billing: changeOrgPlan — already on this plan and nothing in flight; no mutation, so no audit event",
-      );
     }
 
     // The swap is a no-op on a retry; the prorated credit grant is not. If the
@@ -862,6 +890,25 @@ export async function changeOrgPlan(
     // it was written before the swap for exactly this moment, and the sync
     // does not touch it. With it, the retry finishes the job instead of
     // reporting a job it did not finish.
+    //
+    // Gated on the SAME `resumesRealMutation` the audit event is, because the
+    // question is the same one. Asking the ledger whether an upgrade grant
+    // landed, for an upgrade that never happened, finds nothing and takes the
+    // `else` below — an error telling an operator to repair credits by hand.
+    // `hasPlanUpgradeGrant` matches only `GRANT_PLAN_UPGRADE`, which
+    // `grantProratedPlanUpgradeCredits` alone ever writes; a subscription
+    // created through Checkout is credited under `GRANT_PLAN_RENEWAL` by
+    // `grantPlanCreditsForInvoicePaid`. So every subscription never upgraded
+    // in place raised that alarm on every same-plan submission (#3157,
+    // PR #3171 review).
+    if (!resumesRealMutation) {
+      logger.info(
+        { orgId, targetPlanSlug, interval, newPriceId },
+        "billing: changeOrgPlan — already on this plan and nothing in flight; no mutation, so no audit event and no grant to recover",
+      );
+      return null;
+    }
+
     try {
       const granted = await hasPlanUpgradeGrant(
         orgId,

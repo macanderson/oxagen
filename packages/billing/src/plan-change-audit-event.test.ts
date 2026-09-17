@@ -93,6 +93,16 @@ const { StripeProvider } = await import("./stripe-provider");
 const { setBillingProvider, resetBillingProvider } = await import("./client");
 const { changeOrgPlan } = await import("./subscriptions");
 const { emitSecurityEvent } = await import("@oxagen/database/security");
+const { logger } = await import("./logger");
+
+/** Did this call raise the "grant needs manual repair" alarm? */
+function raisedMissingGrantAlarm(): boolean {
+  return vi
+    .mocked(logger.error)
+    .mock.calls.some((c) =>
+      String(c[1]).includes("prorated credit grant is missing"),
+    );
+}
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -168,7 +178,7 @@ function stubPreview(): void {
 
 /** The local row, as the last successful sync left it. */
 function stubRow(over: {
-  stripePriceId: string;
+  stripePriceId: string | null;
   pendingUpgradeFromPlanId: string | null;
 }): void {
   dbQueryMocks.subscriptions.findFirst.mockResolvedValue({
@@ -260,6 +270,142 @@ describe("the billing.plan_changed audit event (#3157, PR #3171 review)", () => 
 
     expect(stripeMethods.subscriptions.update).toHaveBeenCalledTimes(1);
     expect(planChangedEvents()).toBe(1);
+  });
+});
+
+describe("a subscription whose price column predates the migration (#3157, PR #3171 review)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setBillingProvider(new StripeProvider());
+    providerPriceId = "price_build_m";
+    hasPlanUpgradeGrantMock.mockResolvedValue(true);
+    stubProvider();
+    stubPreview();
+    dbQueryMocks.plans.findFirst.mockReset();
+    dbQueryMocks.plans.findFirst.mockResolvedValue(BUILD_PLAN);
+    stripeMethods.customers.retrieve.mockResolvedValue({
+      id: "cus_001",
+      deleted: false,
+      invoice_settings: { default_payment_method: null },
+    });
+    stripeMethods.subscriptions.update.mockResolvedValue(undefined);
+  });
+
+  it("does not treat an unrecorded price as a disagreement", async () => {
+    // `20260917121000_subscription_billed_price.sql` adds stripe_price_id
+    // nullable with no backfill, and says so: "The read path treats NULL as
+    // 'ask the provider', never as zero." Every subscription predating it
+    // carries NULL, so `NULL !== newPriceId` is true for the whole legacy
+    // population and the evidence test degenerates to a constant. A legacy
+    // subscriber submitting the plan they are already on is a no-op, and a
+    // NULL is a fact nobody recorded — not a fact that disagrees.
+    stubRow({ stripePriceId: null, pendingUpgradeFromPlanId: null });
+
+    await changeOrgPlan("org-abc", "build-v2", "month");
+
+    expect(stripeMethods.subscriptions.update).not.toHaveBeenCalled();
+    expect(planChangedEvents()).toBe(0);
+  });
+
+  it("still records a resumed mutation when the price column is unrecorded", async () => {
+    // The discriminating negative: NULL must not become a blanket silencer
+    // either. A standing intent is evidence in its own right, whatever the
+    // price column does or does not say.
+    hasPlanUpgradeGrantMock.mockResolvedValue(false);
+    stubRow({
+      stripePriceId: null,
+      pendingUpgradeFromPlanId: "plan-scale-id",
+    });
+
+    await changeOrgPlan("org-abc", "build-v2", "month");
+
+    expect(planChangedEvents()).toBe(1);
+  });
+});
+
+describe("grant recovery on the already-applied branch (#3157, PR #3171 review)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setBillingProvider(new StripeProvider());
+    providerPriceId = "price_build_m";
+    // No GRANT_PLAN_UPGRADE row — the ordinary state for a subscription
+    // created through Checkout, whose credits are granted under
+    // GRANT_PLAN_RENEWAL by grantPlanCreditsForInvoicePaid. Only
+    // grantProratedPlanUpgradeCredits ever writes GRANT_PLAN_UPGRADE, so
+    // hasPlanUpgradeGrant is false for every subscription that has never been
+    // upgraded in place.
+    hasPlanUpgradeGrantMock.mockResolvedValue(false);
+    stubProvider();
+    stubPreview();
+    dbQueryMocks.plans.findFirst.mockReset();
+    dbQueryMocks.plans.findFirst.mockResolvedValue(BUILD_PLAN);
+    stripeMethods.customers.retrieve.mockResolvedValue({
+      id: "cus_001",
+      deleted: false,
+      invoice_settings: { default_payment_method: null },
+    });
+    stripeMethods.subscriptions.update.mockResolvedValue(undefined);
+  });
+
+  it("does not hunt for a missing grant when nothing was upgraded", async () => {
+    // Steady state. Asking the ledger whether an upgrade grant landed, for an
+    // upgrade that never happened, finds nothing and raises an alarm telling
+    // an operator to repair credits by hand — on every same-plan submission,
+    // for every subscription that has never been upgraded in place.
+    stubRow({ stripePriceId: "price_build_m", pendingUpgradeFromPlanId: null });
+
+    await changeOrgPlan("org-abc", "build-v2", "month");
+
+    expect(hasPlanUpgradeGrantMock).not.toHaveBeenCalled();
+    expect(raisedMissingGrantAlarm()).toBe(false);
+  });
+
+  it("does not hunt for a missing grant on a legacy row either", async () => {
+    stubRow({ stripePriceId: null, pendingUpgradeFromPlanId: null });
+
+    await changeOrgPlan("org-abc", "build-v2", "month");
+
+    expect(hasPlanUpgradeGrantMock).not.toHaveBeenCalled();
+    expect(raisedMissingGrantAlarm()).toBe(false);
+  });
+
+  it("still resumes the grant when an intent is standing", async () => {
+    // The discriminating negative. Gating this block must not stop the retry
+    // it exists for: the customer is upgraded and uncredited, and this is the
+    // only path that repairs it.
+    stubRow({
+      stripePriceId: "price_build_m",
+      pendingUpgradeFromPlanId: "plan-scale-id",
+    });
+
+    await changeOrgPlan("org-abc", "build-v2", "month");
+
+    expect(hasPlanUpgradeGrantMock).toHaveBeenCalled();
+  });
+
+  it("gates the grant and the audit event on the same evidence", async () => {
+    // Two conditions that must agree is how the previous round went wrong.
+    // Whatever silences one silences the other, on the same request.
+    stubRow({ stripePriceId: "price_build_m", pendingUpgradeFromPlanId: null });
+    await changeOrgPlan("org-abc", "build-v2", "month");
+    const quietEvents = planChangedEvents();
+    const quietGrant = hasPlanUpgradeGrantMock.mock.calls.length;
+
+    vi.clearAllMocks();
+    hasPlanUpgradeGrantMock.mockResolvedValue(false);
+    stubProvider();
+    stubPreview();
+    dbQueryMocks.plans.findFirst.mockResolvedValue(BUILD_PLAN);
+    stubRow({
+      stripePriceId: "price_build_m",
+      pendingUpgradeFromPlanId: "plan-scale-id",
+    });
+    await changeOrgPlan("org-abc", "build-v2", "month");
+
+    expect(quietEvents).toBe(0);
+    expect(quietGrant).toBe(0);
+    expect(planChangedEvents()).toBe(1);
+    expect(hasPlanUpgradeGrantMock.mock.calls.length).toBeGreaterThan(0);
   });
 });
 

@@ -614,13 +614,25 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
     // The discriminating case is the credit ledger, not "a function was
     // skipped": the operation looks complete from the outside, so the only
     // evidence that the first attempt died mid-way is the absent grant.
+    //
+    // The fixture used to put the row ON the target price with no intent —
+    // which is not a retry at all, it is somebody submitting the plan they are
+    // already on. Grant recovery no longer runs there, and asserting that it
+    // did was asserting the defect: a steady-state request telling an operator
+    // to repair credits by hand (#3157, PR #3171 review). The `else` branch
+    // under test is reached by a real swap that predates the intent column, so
+    // the row is STALE and the provider has moved — which is what that branch
+    // means by "no origin plan was recorded".
     hasPlanUpgradeGrantMock.mockResolvedValue(false);
-    previewingProration(0);
     stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
-    onPrice("price_scale_m", {
-      planId: "plan-scale-id",
-      stripePriceId: "price_scale_m",
-    });
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({
+        planId: "plan-scale-id",
+        stripePriceId: "price_build_m", // stale: a swap we never wrote down
+        pendingUpgradeFromPlanId: null, // ...and one predating the intent
+      }),
+    );
+    providerActivePriceId = "price_scale_m";
 
     await changeOrgPlan("org-abc", "scale-v2", "month");
 
@@ -786,12 +798,16 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
   });
 
   it("a grant check that itself fails is reported, not swallowed", async () => {
+    // A standing intent is what makes this a resumed mutation rather than a
+    // no-op; without one the ledger is never asked, because there is no
+    // upgrade whose grant could be missing.
     hasPlanUpgradeGrantMock.mockRejectedValue(new Error("db unavailable"));
     previewingProration(0);
     stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
     onPrice("price_scale_m", {
       planId: "plan-scale-id",
       stripePriceId: "price_scale_m",
+      pendingUpgradeFromPlanId: "plan-build-id",
     });
 
     // The retry still succeeds — the swap really is done — but not knowing
