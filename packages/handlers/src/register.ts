@@ -577,6 +577,38 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./mandate.limits.update"))
         .mandateLimitsUpdateHandler as CapabilityHandlerFn,
   );
+  // Auto-approval rules (ADR-070): the second clause of the workspace rule
+  // set, and the recorded evaluation behind every approval card.
+  registerHandler(
+    "list_approval_rules",
+    async () =>
+      (await import("./approval_rule.list"))
+        .approvalRuleListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_approval_rules",
+    async () =>
+      (await import("./approval_rule.set"))
+        .approvalRuleSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "delete_approval_rule",
+    async () =>
+      (await import("./approval_rule.delete"))
+        .approvalRuleDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_approval_rule_enabled",
+    async () =>
+      (await import("./approval_rule.enabled.set"))
+        .approvalRuleEnabledSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_auto_eligibility",
+    async () =>
+      (await import("./approval.auto_eligibility.get"))
+        .approvalAutoEligibilityGetHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "publish_tool_declaration",
     async () =>

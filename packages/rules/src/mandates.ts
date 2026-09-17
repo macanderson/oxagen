@@ -17,7 +17,7 @@
  * consequence tags and measures, finds the covering mandate, reserves, and
  * either lets the call proceed, parks it for a person, or refuses it.
  */
-import { randomUUID, createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 // The subpath, not the package root: the root barrel side-effect-imports
 // every contract, and this module sits on the import graph of every
@@ -32,17 +32,23 @@ import {
   mandateLimitsSchema,
   mandateStatusSchema,
   mandateTargetsSchema,
-  measureDeclarationsSchema,
   type MandateApproval,
   type MandateAuthority,
   type MandateLimits,
   type MandateStatus,
   type MandateTargets,
-  type MeasureDeclarations,
 } from "@oxagen/oxagen/mandates/schemas";
 import { and, asc, eq, gt, isNull, lte, sql, type SQL } from "drizzle-orm";
+import { evaluateAutoApproval } from "./auto-approval";
+import {
+  buildAutoApprovalSubject,
+  inputDigest,
+  loadDeclaredTool,
+  type DeclaredTool,
+} from "./call-facts";
 import { logger } from "./logger";
 import { notifyApprovalRequested } from "./approval-notify";
+import { loadRuleSetIn } from "./rule-store";
 import {
   exceeds,
   isCallsMeasure,
@@ -402,55 +408,6 @@ export async function expireApproval(
 
 // ── The decision-time check ───────────────────────────────────────────────
 
-/** The declared tool the capability resolves to, with its active version. */
-interface DeclaredTool {
-  slug: string;
-  version: number;
-  riskGrade: string;
-  consequenceTags: string[];
-  measures: MeasureDeclarations;
-  effectIdPath: string | null;
-}
-
-async function loadDeclaredTool(
-  tx: Tx,
-  workspaceId: string,
-  capability: string,
-): Promise<DeclaredTool | null> {
-  const [row] = await tx
-    .select({
-      slug: schema.tools.slug,
-      version: schema.toolVersions.versionNumber,
-      riskGrade: schema.toolVersions.riskGrade,
-      consequenceTags: schema.toolVersions.consequenceTags,
-      measures: schema.toolVersions.measures,
-      effectIdPath: schema.toolVersions.effectIdPath,
-    })
-    .from(schema.tools)
-    .innerJoin(
-      schema.toolVersions,
-      eq(schema.toolVersions.id, schema.tools.activeVersionId),
-    )
-    .where(
-      and(
-        eq(schema.tools.workspaceId, workspaceId),
-        eq(schema.tools.slug, capability),
-        eq(schema.tools.enabled, true),
-        isNull(schema.tools.deletedAt),
-      ),
-    )
-    .limit(1);
-  if (!row) return null;
-  return {
-    slug: row.slug,
-    version: row.version,
-    riskGrade: row.riskGrade,
-    consequenceTags: row.consequenceTags,
-    measures: measureDeclarationsSchema.parse(row.measures),
-    effectIdPath: row.effectIdPath,
-  };
-}
-
 /** The oldest active mandate of the agent covering every tag and matching the tool. */
 async function findCoveringMandate(
   tx: Tx,
@@ -483,23 +440,6 @@ async function findCoveringMandate(
     }
   }
   return null;
-}
-
-/** sha256 over the call's input with keys sorted, the retry's identity. */
-export function inputDigest(input: unknown): string {
-  const sort = (v: unknown): unknown =>
-    Array.isArray(v)
-      ? v.map(sort)
-      : v !== null && typeof v === "object"
-        ? Object.fromEntries(
-            Object.keys(v as object)
-              .sort()
-              .map((k) => [k, sort((v as Record<string, unknown>)[k])]),
-          )
-        : v;
-  return createHash("sha256")
-    .update(JSON.stringify(sort(input)) ?? "")
-    .digest("hex");
 }
 
 interface MandateCheckArgs {
@@ -744,6 +684,20 @@ export async function decideMandate(
       }
     }
     if (ruleIds.length > 0) {
+      // The auto-approval clause is evaluated for the RECORD, not for the
+      // decision: a mandate's own approval rule outranks any workspace rule
+      // (§6.9 part 3), so the call waits for a person whatever the evaluation
+      // says. What it buys is the eligibility line every approval card
+      // renders — which rule was read, whether it would have qualified, and
+      // every reason it would not (ADR-070).
+      const eligibility = await evaluateParkedCall(tx, {
+        capability: args.capability,
+        input: args.input,
+        workspaceId: args.workspaceId,
+        tool,
+        digest,
+        at,
+      });
       const [row] = await tx
         .insert(schema.approvalRequests)
         .values({
@@ -756,6 +710,8 @@ export async function decideMandate(
           mandateId: mandate.id,
           ruleIds,
           inputDigest: digest,
+          autoRuleId: eligibility?.ruleId ?? null,
+          resolvedReasons: eligibility?.reasons ?? [],
           expiresAt: new Date(at.getTime() + MANDATE_APPROVAL_TTL_MS),
           createdByUserId: args.userId ?? undefined,
         })
@@ -784,6 +740,38 @@ export async function decideMandate(
       effectIdPath: tool.effectIdPath,
     };
   });
+}
+
+/**
+ * The workspace's auto-approval clause read against a call a mandate is about
+ * to park. Returns the evaluation to record, or null when the workspace has
+ * no rule covering the call. Never decides anything: the mandate has already
+ * decided that a person must look.
+ */
+async function evaluateParkedCall(
+  tx: Tx,
+  args: {
+    capability: string;
+    input: unknown;
+    workspaceId: string;
+    tool: DeclaredTool;
+    digest: string;
+    at: Date;
+  },
+) {
+  const ruleSet = await loadRuleSetIn(tx, args.workspaceId);
+  const rules = ruleSet?.autoApproval ?? [];
+  if (rules.length === 0) return null;
+  const subject = await buildAutoApprovalSubject(tx, {
+    capability: args.capability,
+    input: args.input,
+    workspaceId: args.workspaceId,
+    tool: args.tool,
+    digest: args.digest,
+    rules,
+    now: args.at,
+  });
+  return evaluateAutoApproval(rules, subject);
 }
 
 /**

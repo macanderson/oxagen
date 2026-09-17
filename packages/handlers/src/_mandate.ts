@@ -8,6 +8,7 @@
 
 import { schema, type Tx } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
+import { unionConsequenceTags } from "@oxagen/oxagen/contracts/tool.classification";
 import { HandlerError, type CheckedContext } from "@oxagen/oxagen";
 import {
   CALLS_MEASURE,
@@ -111,6 +112,7 @@ export async function assertToolsDeclareMeasures(
       version: schema.toolVersions.versionNumber,
       measures: schema.toolVersions.measures,
       consequenceTags: schema.toolVersions.consequenceTags,
+      classification: schema.toolVersions.classification,
     })
     .from(schema.tools)
     .innerJoin(
@@ -129,9 +131,16 @@ export async function assertToolsDeclareMeasures(
   );
   const targetMeasures = Object.keys(args.targets);
   for (const pattern of args.tools) {
+    // "Tagged" means EFFECTIVELY tagged — the declared column unioned with the
+    // classified jsonb, through the one function every reader of this fact
+    // uses. `decideMandate` governs a call by the same union, so reading only
+    // the column here made the two disagree about which tools a mandate can
+    // name: a tool with no declared tag that an administrator classified
+    // `moves_money` is governed at call time and was refused at grant time as
+    // `no_tool_matches`.
     const matched = declared.filter(
       (t) =>
-        t.consequenceTags.length > 0 &&
+        unionConsequenceTags(t).length > 0 &&
         toolMatches([pattern], t.slug, t.version),
     );
     if (matched.length === 0) {

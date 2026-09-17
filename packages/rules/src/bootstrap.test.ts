@@ -75,7 +75,11 @@ describe("loadWorkspaceRuleSet", () => {
     const { loadWorkspaceRuleSet } = await freshModule();
     findFirst.mockResolvedValue({ settings: { decisionRules: RULES } });
 
-    await expect(loadWorkspaceRuleSet(WS)).resolves.toEqual(RULES);
+    // The parse fills the auto-approval clause a v1 document does not carry.
+    await expect(loadWorkspaceRuleSet(WS)).resolves.toEqual({
+      ...RULES,
+      autoApproval: [],
+    });
   });
 
   test("a second read inside the TTL is served from cache", async () => {

@@ -31,6 +31,11 @@ import { mandateList } from "./mandate.list";
 import { mandateGet } from "./mandate.get";
 import { mandateRevoke } from "./mandate.revoke";
 import { mandateLimitsUpdate } from "./mandate.limits.update";
+import { approvalRuleList } from "./approval_rule.list";
+import { approvalRuleSet } from "./approval_rule.set";
+import { approvalRuleDelete } from "./approval_rule.delete";
+import { approvalRuleEnabledSet } from "./approval_rule.enabled.set";
+import { approvalAutoEligibilityGet } from "./approval.auto_eligibility.get";
 import { agentDefinitionCreate } from "./agent.definition.create";
 import { agentDefinitionDelete } from "./agent.definition.delete";
 import { agentDefinitionSuggest } from "./agent.definition.suggest";
@@ -532,6 +537,11 @@ export {
   mandateGet,
   mandateRevoke,
   mandateLimitsUpdate,
+  approvalRuleList,
+  approvalRuleSet,
+  approvalRuleDelete,
+  approvalRuleEnabledSet,
+  approvalAutoEligibilityGet,
   agentDefinitionCreate,
   agentDefinitionDelete,
   agentDefinitionSuggest,
@@ -856,6 +866,11 @@ export const contracts: readonly CapabilityDeclaration[] = [
   mandateGet,
   mandateRevoke,
   mandateLimitsUpdate,
+  approvalRuleList,
+  approvalRuleSet,
+  approvalRuleDelete,
+  approvalRuleEnabledSet,
+  approvalAutoEligibilityGet,
   agentDefinitionCreate,
   agentDefinitionDelete,
   agentDefinitionSuggest,

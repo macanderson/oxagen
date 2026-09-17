@@ -298,7 +298,11 @@ vi.mock("@oxagen/iam", async () => {
   };
 });
 
-import { materializeTools, type MaterializeOptions } from "./materialize-tools";
+import {
+  materializeTools,
+  digestInputFor,
+  type MaterializeOptions,
+} from "./materialize-tools";
 import { decideCapabilityForBelt } from "./toolbelt";
 import type { ActiveEmergencyDeny } from "@oxagen/iam";
 import type { RegistryCapability } from "../registry-loader";
@@ -439,6 +443,48 @@ describe("materializeTools", () => {
     ).execute({ y: 1 });
     expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
     expect(mocks.waitForApproval).toHaveBeenCalledTimes(1);
+  });
+
+  it("digests the validated input, not the raw tool arguments, so the standing window can match the invocation", async () => {
+    // capB's schema is widened here with a default and a coercion. The tool is
+    // called without the defaulted key and with the coerced one as a string,
+    // which is what an AI SDK tool call looks like. invoke() digests
+    // cap.input.safeParse(raw).data, so the approval row has to store that same
+    // parsed value or the window keys on something the invocation never asks
+    // for.
+    mocks.createApprovalRequest.mockClear();
+    mocks.waitForApproval.mockClear();
+    const fixtureGated = [
+      {
+        ...FIXTURE[2],
+        agent: { riskLevel: "high" as const, requiresApproval: true },
+        input: z.object({
+          y: z.coerce.number(),
+          mode: z.string().default("safe"),
+        }),
+      },
+    ];
+    vi.doMock("@oxagen/oxagen", () => ({
+      listCapabilities: () => fixtureGated,
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
+    }));
+    vi.resetModules();
+    const { materializeTools: mt } = await import("./materialize-tools");
+    const { tools } = await mt({ ...CTX, messageId: "msg_43" });
+    await (
+      tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }
+    ).execute({ y: "1" });
+
+    const call = mocks.createApprovalRequest.mock.calls.at(0)?.at(0) as
+      | { digestInput: unknown; inputPreview: unknown }
+      | undefined;
+    expect(call).toBeDefined();
+    expect(call?.digestInput).toEqual({ y: 1, mode: "safe" });
+    // The preview stays raw on purpose: it is what the person is shown, and
+    // showing them a value the model did not send would misreport the request.
+    expect(call?.inputPreview).toEqual({ y: "1" });
   });
 
   it("parks the call under approvalMode park: the request is created, the event fires, nothing waits and the handler never runs", async () => {
@@ -2184,5 +2230,54 @@ describe("materializeTools — agent RBAC MCP rules (Phase 4a, spec §3.7)", () 
     expect(fakeExecute).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ data: "result" });
     expect(iamMocks.emitAudit).not.toHaveBeenCalled();
+  });
+});
+
+describe("digestInputFor", () => {
+  // The approval row and the ensuing invocation must key on the SAME value.
+  // invoke() digests cap.input.safeParse(raw).data, so an approval digested
+  // from the raw tool arguments keys on a different value whenever the schema
+  // changes the input at all -- and standingWindowMs then matches nothing, so
+  // a second person is asked to approve a call that was just approved.
+  //
+  // Each case below is a way a Zod schema changes its input. They are listed
+  // one per kind rather than as "schemas that transform", because the first
+  // version of this reasoning said "the same object is handed to invoke()"
+  // and that is true and beside the point: the kernel parses in between, so
+  // object identity at the call site says nothing about value identity at
+  // the gate.
+  const cap = (input: unknown) => ({ input }) as never;
+
+  it("applies a default the raw arguments omit", () => {
+    const schema = z.object({ a: z.string(), n: z.number().default(7) });
+    expect(digestInputFor(cap(schema), { a: "x" })).toEqual({ a: "x", n: 7 });
+  });
+
+  it("applies a coercion", () => {
+    const schema = z.object({ n: z.coerce.number() });
+    expect(digestInputFor(cap(schema), { n: "42" })).toEqual({ n: 42 });
+  });
+
+  it("applies a transform", () => {
+    const schema = z.object({ s: z.string().transform((v) => v.trim()) });
+    expect(digestInputFor(cap(schema), { s: "  hi  " })).toEqual({ s: "hi" });
+  });
+
+  it("strips a key the schema does not declare", () => {
+    const schema = z.object({ a: z.string() });
+    expect(digestInputFor(cap(schema), { a: "x", extra: 1 })).toEqual({
+      a: "x",
+    });
+  });
+
+  it("passes an already-canonical input through unchanged", () => {
+    const schema = z.object({ a: z.string() });
+    expect(digestInputFor(cap(schema), { a: "x" })).toEqual({ a: "x" });
+  });
+
+  it("falls back to the raw value when the input does not parse", () => {
+    // invoke() refuses this input, so no window is ever read for its digest.
+    const schema = z.object({ a: z.string() });
+    expect(digestInputFor(cap(schema), { a: 1 })).toEqual({ a: 1 });
   });
 });

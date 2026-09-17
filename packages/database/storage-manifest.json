@@ -391,6 +391,17 @@
       "writes": []
     },
     {
+      "domain": "approval_rule",
+      "name": "delete_approval_rule",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "connection",
       "name": "delete_connection",
       "reads": [],
@@ -784,6 +795,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "approval_rule",
+      "name": "get_auto_eligibility",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -1549,6 +1570,16 @@
     {
       "domain": "api_key",
       "name": "list_api_keys",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "approval_rule",
+      "name": "list_approval_rules",
       "reads": [],
       "surfaces": [
         "api",
@@ -2675,6 +2706,28 @@
       "writes": []
     },
     {
+      "domain": "approval_rule",
+      "name": "set_approval_rule_enabled",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "approval_rule",
+      "name": "set_approval_rules",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "plugin",
       "name": "set_auth_alerts",
       "reads": [],
@@ -3290,7 +3343,7 @@
       "writes": []
     }
   ],
-  "contentHash": "de84e0ffd22a3e70a70becf5759cb8a13a931a196b6912a409940a8fb375debf",
+  "contentHash": "29c884149507b7c79ae8f997aa188c051254986eed6b6948fd0cc9489ac5cf52",
   "domains": [
     {
       "name": "agent",
@@ -7297,6 +7350,18 @@
           "type": "timestamp with time zone"
         },
         {
+          "name": "auto_rule_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "resolved_reasons",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text[]"
+        },
+        {
           "name": "resolution",
           "nullable": true,
           "primaryKey": false,
@@ -7313,6 +7378,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "resolved_by_policy",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "note",

@@ -1115,6 +1115,94 @@
       }
     },
     {
+      "name": "get_auto_eligibility",
+      "file": "approval.auto_eligibility.get.ts",
+      "domain": "approval_rule",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "delete_approval_rule",
+      "file": "approval_rule.delete.ts",
+      "domain": "approval_rule",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "set_approval_rule_enabled",
+      "file": "approval_rule.enabled.set.ts",
+      "domain": "approval_rule",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_approval_rules",
+      "file": "approval_rule.list.ts",
+      "domain": "approval_rule",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "set_approval_rules",
+      "file": "approval_rule.set.ts",
+      "domain": "approval_rule",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "upload_asset",
       "file": "asset.upload.ts",
       "domain": "asset",

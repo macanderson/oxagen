@@ -125,6 +125,11 @@ import { mandateGet } from "@oxagen/oxagen/contracts/mandate.get";
 import { mandateGrant } from "@oxagen/oxagen/contracts/mandate.grant";
 import { mandateLimitsUpdate } from "@oxagen/oxagen/contracts/mandate.limits.update";
 import { mandateList } from "@oxagen/oxagen/contracts/mandate.list";
+import { approvalRuleList } from "@oxagen/oxagen/contracts/approval_rule.list";
+import { approvalRuleSet } from "@oxagen/oxagen/contracts/approval_rule.set";
+import { approvalRuleDelete } from "@oxagen/oxagen/contracts/approval_rule.delete";
+import { approvalRuleEnabledSet } from "@oxagen/oxagen/contracts/approval_rule.enabled.set";
+import { approvalAutoEligibilityGet } from "@oxagen/oxagen/contracts/approval.auto_eligibility.get";
 import { mandateRequest } from "@oxagen/oxagen/contracts/mandate.request";
 import { mandateRevoke } from "@oxagen/oxagen/contracts/mandate.revoke";
 import { runGet } from "@oxagen/oxagen/contracts/run.get";
@@ -238,6 +243,11 @@ import { mandateGetRoute } from "./mandate.get";
 import { mandateGrantRoute } from "./mandate.grant";
 import { mandateLimitsUpdateRoute } from "./mandate.limits.update";
 import { mandateListRoute } from "./mandate.list";
+import { approvalRuleListRoute } from "./approval_rule.list";
+import { approvalRuleSetRoute } from "./approval_rule.set";
+import { approvalRuleDeleteRoute } from "./approval_rule.delete";
+import { approvalRuleEnabledSetRoute } from "./approval_rule.enabled.set";
+import { approvalAutoEligibilityGetRoute } from "./approval.auto_eligibility.get";
 import { mandateRequestRoute } from "./mandate.request";
 import { mandateRevokeRoute } from "./mandate.revoke";
 import { runGetRoute } from "./run.get";
@@ -1480,6 +1490,77 @@ const ROUTES: ThinRoute[] = [
     expectedInput: { limit: 50 },
     // "paused" is not one of draft/active/expired/revoked.
     invalidBody: { status: "paused" },
+    status: 200,
+  },
+  {
+    file: "approval_rule.list",
+    route: approvalRuleListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: approvalRuleList.name,
+    body: {},
+    // The read takes no argument at all.
+    invalidBody: { limit: 10 },
+    status: 200,
+  },
+  {
+    file: "approval_rule.set",
+    route: approvalRuleSetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: approvalRuleSet.name,
+    body: {
+      rules: [
+        {
+          id: "small-vendor-payments",
+          name: "Small vendor payments",
+          tools: ["stripe__create_payment@*"],
+        },
+      ],
+    },
+    expectedInput: {
+      rules: [
+        {
+          id: "small-vendor-payments",
+          name: "Small vendor payments",
+          tools: ["stripe__create_payment@*"],
+          enabled: true,
+          maxMeasures: {},
+          allowTargets: {},
+          standingWindowMs: null,
+          businessHours: null,
+        },
+      ],
+    },
+    // A rule id is a slug; "Small Vendor" is not one.
+    invalidBody: {
+      rules: [{ id: "Small Vendor", name: "x", tools: ["stripe__*"] }],
+    },
+    status: 200,
+  },
+  {
+    file: "approval_rule.delete",
+    route: approvalRuleDeleteRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: approvalRuleDelete.name,
+    body: { ruleId: "small-vendor-payments" },
+    invalidBody: {},
+    status: 200,
+  },
+  {
+    file: "approval_rule.enabled.set",
+    route: approvalRuleEnabledSetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: approvalRuleEnabledSet.name,
+    body: { ruleId: "small-vendor-payments", enabled: false },
+    invalidBody: { ruleId: "small-vendor-payments" },
+    status: 200,
+  },
+  {
+    file: "approval.auto_eligibility.get",
+    route: approvalAutoEligibilityGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: approvalAutoEligibilityGet.name,
+    body: { approvalId: "apr_0123456789abcdefghjkmn" },
+    invalidBody: { approvalId: "nope" },
     status: 200,
   },
   {

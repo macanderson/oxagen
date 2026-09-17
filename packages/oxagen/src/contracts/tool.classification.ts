@@ -112,3 +112,110 @@ export const toolClassificationSchema = z
 
 export type ToolClassification = z.output<typeof toolClassificationSchema>;
 export type ToolRiskGrade = z.output<typeof toolRiskGradeSchema>;
+
+// ── The effective classification ────────────────────────────────────────────
+//
+// A tool version states its consequences in two places, written by two
+// capabilities behind two different gates: `consequence_tags` (text[]) is the
+// declared half, written by `publish_tool_declaration` and `import_tools`
+// behind `assertConsequenceRole`; `classification->'consequenceTags'` is the
+// classified half, written by `set_tool_classification` behind Owner/Admin.
+// Both draw on one vocabulary (`consequenceTagSchema`).
+//
+// EVERY reader that decides authority or a floor must come through the
+// functions below, and the reason is the whole history of this file: the
+// kill-switch gate once read only the jsonb and left every declared-tag tool
+// running while `list_kill_switches` reported the switch on (#2958); the
+// auto-approval floor once read only the column and ignored a `destroys_data`
+// an administrator had set; and the rule-authoring gate once read only the
+// column while the floor read the union, so an Admin could author a rule over
+// a tool classified `moves_money` that they were not accountable for and the
+// floor would then enforce the tag the gate never saw. Three instances of one
+// fact in two places with a reader on one of them. One function, so a fourth
+// cannot be written by accident.
+
+/** The shape every reader passes in: the two halves as the row carries them. */
+export interface ClassificationHalves {
+  consequenceTags: readonly string[] | null;
+  classification: unknown;
+}
+
+/** The classified half, read defensively — a malformed jsonb contributes nothing. */
+function classifiedPart(raw: unknown): {
+  sideEffect: string | null;
+  consequenceTags: string[];
+} {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    return { sideEffect: null, consequenceTags: [] };
+  }
+  const c = raw as Record<string, unknown>;
+  const tags = Array.isArray(c.consequenceTags)
+    ? c.consequenceTags.filter(
+        (t): t is string => typeof t === "string" && t.length > 0,
+      )
+    : [];
+  return {
+    sideEffect: typeof c.sideEffect === "string" ? c.sideEffect : null,
+    consequenceTags: tags,
+  };
+}
+
+/**
+ * The consequence tags a version carries, from BOTH halves, deduped.
+ *
+ * A union, never a replacement, and the asymmetry is the argument. Union is
+ * monotonic for a floor — it only ever adds reasons a call needs a person:
+ *
+ *   declared {}, classified {destroys_data} → {destroys_data}: an administrator
+ *     RAISED the floor.
+ *   declared {destroys_data}, classified {} → {destroys_data}: an administrator
+ *     CANNOT lower what the manifest declared.
+ *
+ * Replacement would allow the second, which is why the two halves are unioned
+ * rather than one preferred over the other.
+ *
+ * SORTED, and that is part of the contract rather than tidiness. Unsorted, the
+ * order depended on which half contributed a tag first, which is exactly the
+ * kind of unspecified representation that turns load-bearing the moment
+ * anything compares, stores or digests the result — and a rule's
+ * `authoredConsequences` stamp does compare a stored set against a later one.
+ * Sorting once, here, gives all five readers the same answer and gives that
+ * comparison a stable basis.
+ */
+export function unionConsequenceTags(row: ClassificationHalves): string[] {
+  const tags = new Set<string>();
+  for (const t of row.consequenceTags ?? []) {
+    if (typeof t === "string" && t.length > 0) tags.add(t);
+  }
+  for (const t of classifiedPart(row.classification).consequenceTags) {
+    tags.add(t);
+  }
+  return [...tags].sort();
+}
+
+/** Side-effect classes from least to most severe (`toolSideEffectClassSchema`). */
+const SIDE_EFFECT_SEVERITY: readonly string[] = [
+  "read",
+  "write",
+  "irreversible",
+];
+
+/**
+ * The effective side-effect class: the more severe of the declared and the
+ * classified value, with an unknown or absent value contributing nothing.
+ *
+ * A max for the same reason the tags are a union. There is no declared
+ * side-effect COLUMN today — the class lives only inside `classification` — so
+ * this currently reduces to the classified value. It is written as a max
+ * anyway, so the day a declared column lands, a reclassification still cannot
+ * lower what the manifest declared.
+ */
+export function effectiveSideEffect(
+  row: ClassificationHalves & { sideEffect?: string | null },
+): string | null {
+  const rank = (v: string | null) =>
+    v === null ? -1 : SIDE_EFFECT_SEVERITY.indexOf(v);
+  const declared = row.sideEffect ?? null;
+  const classified = classifiedPart(row.classification).sideEffect;
+  return rank(declared) >= rank(classified) ? declared : classified;
+}

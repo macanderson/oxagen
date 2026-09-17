@@ -185,10 +185,23 @@ export const approvalRequests = agentSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+    // The auto-approval clause of the workspace's rule set, evaluated when the
+    // call was parked (MC spec §6.9 part 2, ADR-070): the rule that was read,
+    // and every reason the call did not qualify (empty when it did). Null /
+    // empty when no rule covered the call.
+    autoRuleId: text("auto_rule_id"),
+    resolvedReasons: text("resolved_reasons")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     // resolution null until resolved.
     resolution: text("resolution"),
     resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "date" }),
     resolvedByUserId: uuid("resolved_by_user_id"),
+    // `policy:<rule id>` when an auto-approval rule resolved the request and
+    // no person looked. Exclusive with resolved_by_user_id, so a receipt can
+    // never read a policy decision as somebody's.
+    resolvedByPolicy: text("resolved_by_policy"),
     note: text("note"),
     expiresAt: timestamp("expires_at", {
       withTimezone: true,
@@ -214,6 +227,36 @@ export const approvalRequests = agentSchema.table(
     riskLevelCheck: check(
       "approval_requests_risk_level_check",
       sql`${t.riskLevel} IN ('low', 'medium', 'high', 'critical')`,
+    ),
+    // The rule-hit counters list_approval_rules reports over a 30-day window.
+    autoRuleIdx: index("approval_requests_auto_rule_idx")
+      .on(t.workspaceId, t.autoRuleId, t.createdAt)
+      .where(sql`auto_rule_id IS NOT NULL`),
+    // The standing-approval lookup an auto-approval rule's window reads
+    // (ADR-070, lastHumanApprovalOf): the newest approval of this exact call
+    // that a PERSON resolved. mandate_digest_idx above cannot serve it — that
+    // one is partial on mandate_id IS NOT NULL and keys on mandate_id, and
+    // this lookup has no mandate and keys on capability_name. Partial on the
+    // same predicate as the query, so it stays small: only resolved rows a
+    // person approved.
+    humanApprovalDigestIdx: index("approval_requests_human_digest_idx")
+      .on(
+        t.workspaceId,
+        t.capabilityName,
+        t.inputDigest,
+        sql`${t.resolvedAt} DESC`,
+      )
+      .where(
+        sql`resolution = 'approved' AND resolved_by_user_id IS NOT NULL AND resolved_at IS NOT NULL`,
+      ),
+    resolvedByPolicyFormCheck: check(
+      "approval_requests_resolved_by_policy_form_check",
+      sql`${t.resolvedByPolicy} IS NULL OR ${t.resolvedByPolicy} ~ '^policy:[a-z0-9][a-z0-9._-]*$'`,
+    ),
+    // One approver, never two: an auto-approval is not somebody's decision.
+    oneApproverCheck: check(
+      "approval_requests_one_approver_check",
+      sql`NOT (${t.resolvedByPolicy} IS NOT NULL AND ${t.resolvedByUserId} IS NOT NULL)`,
     ),
   }),
 );

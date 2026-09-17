@@ -1,5 +1,5 @@
 {
-  "generatedCount": 309,
+  "generatedCount": 314,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -419,6 +419,18 @@
     {
       "name": "delete_agent_def",
       "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "delete_approval_rule",
+      "domain": "approval_rule",
       "surfaces": [
         "api",
         "mcp",
@@ -860,6 +872,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_auto_eligibility",
+      "domain": "approval_rule",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1700,6 +1723,17 @@
     {
       "name": "list_api_keys",
       "domain": "api_key",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_approval_rules",
+      "domain": "approval_rule",
       "surfaces": [
         "api",
         "mcp"
@@ -2934,6 +2968,30 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_approval_rule_enabled",
+      "domain": "approval_rule",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_approval_rules",
+      "domain": "approval_rule",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],

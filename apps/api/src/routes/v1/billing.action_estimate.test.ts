@@ -56,11 +56,12 @@ beforeEach(() => {
 });
 
 async function get(qs: string): Promise<Response> {
-  return billingActionEstimateRoute.fetch(new Request(`http://localhost/?${qs}`));
+  return billingActionEstimateRoute.fetch(
+    new Request(`http://localhost/?${qs}`),
+  );
 }
 
-const inputOf = () =>
-  mocks.invoke.mock.calls[0]![1] as Record<string, unknown>;
+const inputOf = () => mocks.invoke.mock.calls[0]![1] as Record<string, unknown>;
 
 describe("GET billing/actions/estimate", () => {
   it("converts runs_per_year from a string to a number", async () => {

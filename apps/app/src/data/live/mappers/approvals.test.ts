@@ -19,6 +19,9 @@ const parked: Item = {
   // Parked by the approval rule, not by a mandate: `list_approvals` carries
   // the mandate that parked the call, and null is the common case.
   mandateId: null,
+  // No auto-approval rule covered the call, so nothing was recorded for the
+  // eligibility line (ADR-070).
+  autoEligibility: null,
   chain: { agentKey: "acme.core.release-bot", rule: "rule_release" },
 };
 

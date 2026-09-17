@@ -271,6 +271,24 @@ export function toModelToolName(capabilityName: string): string {
  * different questions, and 219 of 271 agent-surface capabilities were reaching
  * dispatch marked concurrent-safe on the strength of it (#2600).
  */
+/**
+ * The value the decision path will digest for this call.
+ *
+ * invoke() validates with `cap.input.safeParse` and hands `inputResult.data`
+ * to the rules gate, which digests THAT and looks the standing approval
+ * window up by it. An approval row digested from the raw tool arguments
+ * therefore keys on a different value for any schema that supplies a
+ * default, coerces a type, or transforms a field — and the window silently
+ * never matches.
+ *
+ * A parse failure returns the raw value: invoke() refuses that input, so
+ * nothing ever looks up a window for the digest it produces.
+ */
+export function digestInputFor(cap: AnyCapability, input: unknown): unknown {
+  const parsed = (cap.input as ZodTypeAny).safeParse(input);
+  return parsed.success ? parsed.data : input;
+}
+
 export function isMutatingCapability(cap: AnyCapability): boolean {
   return capabilityMutates(cap);
 }
@@ -525,6 +543,24 @@ export async function materializeTools(
                     messageId: ctx.messageId!,
                     capabilityName: cap.name,
                     inputPreview: input,
+                    // Digest the VALIDATED input, because that is what the
+                    // decision path digests. invoke() runs cap.input.safeParse
+                    // and hands inputResult.data to the rules gate
+                    // (packages/oxagen/src/kernel.ts), which digests it and
+                    // looks the standing window up by that value. Handing the
+                    // raw AI SDK arguments here was a mismatch for every
+                    // capability whose schema supplies a default, coerces, or
+                    // transforms: the approval row stored one digest, the
+                    // ensuing invocation looked up another, standingWindowMs
+                    // matched nothing, and a second person was asked to approve
+                    // a call that had just been approved. Passing the same
+                    // object to both is not the same as passing the same value,
+                    // because the kernel parses in between.
+                    //
+                    // A parse failure falls back to the raw value: invoke()
+                    // below refuses that input anyway, so no window is ever
+                    // read for this digest.
+                    digestInput: digestInputFor(cap, input),
                     riskLevel,
                   }),
               );

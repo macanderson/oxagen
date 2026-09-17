@@ -70,6 +70,13 @@ export interface ActiveClassification {
   consequenceTags: readonly string[];
   measures: unknown;
   effectIdPath: string | null;
+  /**
+   * The classified half of the same fact, as the row carries it. Carried so
+   * the consequence-role gate can read the EFFECTIVE tags: a tool declared
+   * with none that `set_tool_classification` marked `moves_money` would
+   * otherwise present an empty tag set and let the gate return early.
+   */
+  classification: unknown;
 }
 
 interface PublishedTool {
@@ -209,6 +216,7 @@ export async function publishTool(
           consequenceTags: schema.toolVersions.consequenceTags,
           measures: schema.toolVersions.measures,
           effectIdPath: schema.toolVersions.effectIdPath,
+          classification: schema.toolVersions.classification,
         })
         .from(schema.toolVersions)
         .where(
@@ -241,6 +249,7 @@ export async function publishTool(
             consequenceTags: latest.consequenceTags ?? [],
             measures: latest.measures,
             effectIdPath: latest.effectIdPath,
+            classification: latest.classification,
           }
         : null,
     );
