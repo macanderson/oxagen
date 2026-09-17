@@ -1667,6 +1667,31 @@ describe("getChargeMetadata — an outage is not an answer (ADR-085 §9)", () =>
     await expect(provider.getChargeMetadata("ch_1")).rejects.toThrow();
   });
 
+  // The classifier has two gates: the disposition table, then the
+  // `resource_missing` narrowing. Every other test here clears BOTH, so none of
+  // them can see the table entry alone change: flip `StripePermissionError` to
+  // "definitive" and the narrowing still catches it, because a permission error
+  // carries no `resource_missing` code. The suite stays green while the table —
+  // the surface the SDK-upgrade `satisfies` check exists to force an answer on
+  // — says the wrong thing.
+  //
+  // This isolates the first gate. A permission error is retried BECAUSE it is a
+  // permission error, not because it happens to lack a code, so one carrying
+  // the definitive code must still propagate.
+  it("throws on a permission error even when it carries the definitive code", async () => {
+    stripeMethods.charges.retrieve.mockRejectedValue(
+      stripeError(
+        "StripePermissionError",
+        "key lacks charges:read",
+        "resource_missing",
+      ),
+    );
+
+    await expect(provider.getChargeMetadata("ch_1")).rejects.toThrow(
+      "key lacks charges:read",
+    );
+  });
+
   it("throws on an error carrying no Stripe type at all", async () => {
     // A timeout from the transport layer, a DNS failure, an assertion — none
     // of them are Stripe answering. Unknown defaults to transient, because the
