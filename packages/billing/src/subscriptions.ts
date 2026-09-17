@@ -800,19 +800,55 @@ export async function changeOrgPlan(
       }
     }
 
-    // The swap is done; the rest of the operation may not be. The audit row is
-    // reconstructible, so it is emitted rather than lost to the retry.
-    emitSecurityEvent({
-      eventType: "billing.plan_changed",
-      actorUserId: null,
-      orgId,
-      workspaceId: null,
-      capability: null,
-      outcome: "success",
-      ip: null,
-      userAgent: null,
-      requestId: null,
-    });
+    // The audit row belongs to a mutation that HAPPENED — on this call or on a
+    // previous attempt of it — and this branch is reached by two callers that
+    // look identical from here.
+    //
+    // One is the retry the branch exists for: the first attempt's swap reached
+    // Stripe and its response was lost. That request really did perform a
+    // privileged billing mutation, and because the first attempt never got to
+    // say so, this event is the only record of it. It must be emitted.
+    //
+    // The other is somebody submitting the plan and interval they are already
+    // on. Nothing is mutated, and `billing.plan_changed` would assert a
+    // privileged mutation that never occurred. False SOC 2 evidence is worse
+    // than absent evidence: absent evidence is a gap, false evidence has to be
+    // disproved before anyone can trust the rest of the trail (#3157, PR #3171
+    // review).
+    //
+    // The two are told apart by state already on the row, not by anything new:
+    //
+    //  - a standing `pendingUpgradeFromPlanId` is an intent written before a
+    //    swap and retired only once its grant settled, so it is unfinished
+    //    work from a real attempt; and
+    //  - a `stripePriceId` that disagrees with the price the provider is on is
+    //    itself a swap we never recorded — which catches a retry whose intent
+    //    predates that column.
+    //
+    // Steady state has neither: the row agrees with the provider and nothing
+    // is in flight.
+    const resumesRealMutation =
+      activeSubRow.pendingUpgradeFromPlanId !== null ||
+      activeSubRow.stripePriceId !== newPriceId;
+
+    if (resumesRealMutation) {
+      emitSecurityEvent({
+        eventType: "billing.plan_changed",
+        actorUserId: null,
+        orgId,
+        workspaceId: null,
+        capability: null,
+        outcome: "success",
+        ip: null,
+        userAgent: null,
+        requestId: null,
+      });
+    } else {
+      logger.info(
+        { orgId, targetPlanSlug, interval, newPriceId },
+        "billing: changeOrgPlan — already on this plan and nothing in flight; no mutation, so no audit event",
+      );
+    }
 
     // The swap is a no-op on a retry; the prorated credit grant is not. If the
     // first attempt died between the two, the customer is on the new plan
