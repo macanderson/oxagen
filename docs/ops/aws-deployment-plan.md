@@ -204,10 +204,16 @@ on ECS is possible but adds a stateful component. **Recommendation:** keep
 Inngest Cloud through the migration; revisit self-hosting separately.
 
 ### 4.6 Distributed rate limiting — **required before scaling out**
-`RATE_LIMIT_CHAT_PER_MIN` / `RATE_LIMIT_AGENT_EXEC_PER_MIN` and the circuit
-breaker (`CIRCUIT_BREAKER_*`) are per-process today. With N Fargate tasks the
-effective limit becomes N×. Back them with ElastiCache Valkey before the
-first service scales past one task. Same for Better Auth's `rateLimits`
+`RATE_LIMIT_CHAT_PER_MIN` and the circuit breaker (`CIRCUIT_BREAKER_*`) are
+per-process today. With N Fargate tasks the effective limit becomes N×. Back
+them with ElastiCache Valkey before the first service scales past one task.
+(`RATE_LIMIT_AGENT_EXEC_PER_MIN` was retired with the agent runtime in ADR-043;
+the ceilings that replaced it are constants at their mount points, because a
+drain rate is a property of the ingress rather than a per-deployment knob.)
+The distributed limiter's counters are already shared — they live in Postgres,
+not in process — but note ADR-082: when that store is unreachable those mounts
+degrade to a per-instance ceiling, so the N× problem returns for the duration
+of a counter-store outage and not before. Same for Better Auth's `rateLimits`
 table usage — note the plural-table gotcha when validating against a
 prod-equivalent env.
 

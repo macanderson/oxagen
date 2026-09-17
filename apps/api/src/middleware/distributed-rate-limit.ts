@@ -403,6 +403,14 @@ export function distributedRateLimiter(
       c.header("X-RateLimit-Remaining", String(Math.max(0, max - local.count)));
       c.header("X-RateLimit-Reset", String(Math.ceil(local.resetAt / 1000)));
       if (local.count > max) {
+        // Cache the denial, exactly as the healthy path does. Without this,
+        // every further request from an exhausted bucket re-enters the `try`
+        // above, waits for `withSystemDb` to fail AGAIN, and only then rejects
+        // — a failing database round-trip per request, under the flood this
+        // limiter exists for, against a store that is already unwell.
+        // `degrade-to-local` exists to take load OFF the store; a denial path
+        // that puts it back on is the mode defeating its own purpose.
+        cacheLocalDeny(key, local.resetAt, now);
         c.header(
           "Retry-After",
           String(Math.max(1, Math.ceil((local.resetAt - now) / 1000))),

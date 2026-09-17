@@ -10,7 +10,7 @@ The token is the credential: the call carries no session and no API key, so the 
 
 ## Surface
 
-- API: `POST /v1/tacho/enroll` → 201, public (mounted before the auth-gated `/v1` groups; the token in the body is the boundary). Its own pre-auth ceilings answer 429: 5 presentations of one token and 120 from one client address (the trusted proxy hop, `TRUSTED_PROXY_HOP_COUNT`) a minute. It does not share the `/v1/tacho/*` credential bucket that calls with no `Authorization` header fall into.
+- API: `POST /v1/tacho/enroll` → 201, public (mounted before the auth-gated `/v1` groups; the token in the body is the boundary). Its own pre-auth ceilings answer 429: 5 presentations of one token and 120 from one client address a minute. That address is the one the deployment's own edge wrote — `X-Oxagen-Client-Ip` from Caddy on AWS, `x-vercel-forwarded-for` on Vercel — falling back to the `TRUSTED_PROXY_HOP_COUNT`th `X-Forwarded-For` entry from the RIGHT when the edge header is absent, and never to a caller-supplied leftmost entry or to `x-real-ip` (ADR-083). It does not share the `/v1/tacho/*` credential bucket that calls with no `Authorization` header fall into.
 - CLI: `oxagen agent enroll --token <token> [--harness …]`
 - No MCP tool and no agent surface
 - Capability name: `enroll_host`

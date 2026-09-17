@@ -426,6 +426,37 @@ describe("distributedRateLimiter", () => {
     expect(fourth?.status).toBe(429);
   });
 
+  // A test that only asserts the second 429 passes against the unfixed code.
+  // The discriminating assertion is that the store was not consulted again:
+  // `degrade-to-local` exists to take load off a struggling database, and a
+  // denial path that re-enters `withSystemDb` per request puts it back on.
+  it("stops calling the store once a degraded bucket is exhausted", async () => {
+    mocks.withSystemDb.mockRejectedValue(new Error("db unavailable"));
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 1,
+      bucketKey: trustedClientIpBucketKey,
+      storeErrorPolicy: "degrade-to-local",
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const headers = { "x-oxagen-client-ip": "198.51.100.50" };
+
+    await mw(fakeContext({ headers }), next); // allowed, local count 1
+    const denied = (await mw(fakeContext({ headers }), next)) as
+      | { status: number }
+      | undefined;
+    expect(denied?.status).toBe(429);
+
+    const callsAfterFirstDenial = mocks.withSystemDb.mock.calls.length;
+    const repeat = (await mw(fakeContext({ headers }), next)) as
+      | { status: number }
+      | undefined;
+
+    expect(repeat?.status).toBe(429);
+    expect(mocks.withSystemDb.mock.calls.length).toBe(callsAfterFirstDenial);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps the flapping ceiling per bucket", async () => {
     let storeUp = true;
     mocks.withSystemDb.mockImplementation(
