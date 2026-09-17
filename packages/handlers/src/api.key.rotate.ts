@@ -187,7 +187,7 @@ export const apiKeyRotateHandler: CapabilityHandler<
       });
     }
     const archived = archivalRefusalFor(workspace);
-    if (archived && archived.kind !== "denied") {
+    if (archived) {
       logger.warn(
         { orgId: ctx.orgId, keyPublicId: oldKey.publicId },
         archived.log,

@@ -71,14 +71,29 @@ export interface RotationWorkspace {
  * Why a rotation is refused. `denied` is an authorization answer — this key is
  * not yours to rotate; `conflict` is a state answer — this key is finished.
  */
-export type RotationRefusal =
-  | { readonly kind: "denied"; readonly log: string; readonly denial: string }
-  | {
-      readonly kind: "conflict" | "not_found";
-      readonly log: string;
-      readonly reason: string;
-      readonly message: string;
-    };
+export type RotationRefusal = AuthzRefusal | StateRefusal;
+
+/** "This key is not yours to rotate." */
+export interface AuthzRefusal {
+  readonly kind: "denied";
+  readonly log: string;
+  readonly denial: string;
+}
+
+/**
+ * "This key, or the workspace holding it, is finished."
+ *
+ * Named separately so a producer that can only ever give a state answer — such
+ * as `archivalRefusalFor` — says so in its return type. The alternative is a
+ * caller writing `if (refusal.kind !== "denied")` to narrow, which reads as a
+ * guard but behaves as a silent fall-through the day that assumption breaks.
+ */
+export interface StateRefusal {
+  readonly kind: "conflict" | "not_found";
+  readonly log: string;
+  readonly reason: string;
+  readonly message: string;
+}
 
 interface ReservedPurpose {
   readonly matches: (scope: unknown) => boolean;
@@ -163,7 +178,7 @@ export function rotationRefusalFor(
  */
 export function archivalRefusalFor(
   workspace: RotationWorkspace,
-): RotationRefusal | null {
+): StateRefusal | null {
   if (workspace.archivedAt === null) return null;
   return {
     kind: "conflict",
