@@ -164,13 +164,14 @@ export function derivedMissingFor(repoRoot, contractPath, source) {
       // Some handlers carry a `.handler` suffix on the same stem
       // (`plugin.catalog.sync.handler.ts`), which is a naming choice rather
       // than a different artifact.
-      if (
-        filesIn(repoRoot, dir).some(
-          (f) => f.startsWith(`${stem}.`) && !f.includes(".test."),
-        )
-      ) {
-        return true;
-      }
+      //
+      // Two exact spellings rather than an open `startsWith(stem + ".")`. The
+      // prefix form is the same shape as the substring bug above: it would
+      // accept any longer name that happens to extend this one, so a handler
+      // could go missing while an unrelated `<stem>.<something>.ts` kept the
+      // check green. Nothing in the tree exploits that today — the only match
+      // is the intended one — which is exactly when it is cheap to close.
+      if (existsSync(join(repoRoot, `${dir}/${stem}.handler.ts`))) return true;
       // The combined and renamed cases: a file that imports the contract
       // module, names the capability, or lazy-registers it under its own name.
       // A handler is always a file named after its capability's stem, so the
