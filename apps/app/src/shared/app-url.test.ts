@@ -61,4 +61,12 @@ describe("getMetadataBase", () => {
     process.env.NEXT_PUBLIC_APP_URL = "app.oxagen.sh";
     expect(getMetadataBase().href).toBe("https://app.oxagen.sh/");
   });
+
+  it("falls back to the dev server when a malformed override is set in development", () => {
+    // A typo in a developer's .env.local must not make their machine advertise
+    // the production origin.
+    vi.stubEnv("NODE_ENV", "development");
+    process.env.NEXT_PUBLIC_APP_URL = "http://:::";
+    expect(getMetadataBase().href).toBe("http://localhost:3000/");
+  });
 });
