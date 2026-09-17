@@ -1,7 +1,7 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import { inputDigest } from "@oxagen/rules";
 import { notifyApprovalRequested } from "@oxagen/rules/approval-notify";
-import { eq, and, gt, isNull, or, sql } from "drizzle-orm";
+import { eq, and, gt, isNull, sql } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
 import postgres from "postgres";
 import pino from "pino";
