@@ -458,11 +458,13 @@ describe("POST /v1/telemetry/stella/operational", () => {
   });
 
   it("invokes the API capability with tenant scope exclusively from the API key", async () => {
-    // Two hops with one trusted proxy: 203.0.113.9 is whatever the caller put
-    // in the header, 10.0.0.1 is what the proxy appended. clientIp is the
-    // latter — see extractClientIp in src/lib/context.ts.
+    // The deployed shape (ADR-080): Caddy writes x-oxagen-client-ip with
+    // `header_up`, which replaces any copy the caller sent, and rewrites
+    // x-forwarded-for to the same single value. The caller-supplied entry here
+    // is what the old leftmost-entry read would have picked.
     const response = await post(VALID_BATCH, {
       authorization: "Bearer ox_test_key",
+      "x-oxagen-client-ip": "10.0.0.1",
       "x-forwarded-for": "203.0.113.9, 10.0.0.1",
     });
 

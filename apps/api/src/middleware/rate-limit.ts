@@ -18,6 +18,52 @@ interface Bucket {
 /** Above this many tracked keys, opportunistically sweep expired buckets on the next request. */
 const SWEEP_THRESHOLD = 10_000;
 
+/** One counted hit: the running count for the key and when its window resets. */
+export interface FixedWindowHit {
+  count: number;
+  resetAt: number;
+}
+
+/**
+ * An in-process fixed-window counter, shared by this file's middleware and by
+ * `distributedRateLimiter`'s degraded path so both count the same key into the
+ * same window.
+ *
+ * The window is anchored to the epoch (`floor(now / windowMs) * windowMs`),
+ * NOT to the key's first hit. That matters because the degraded path has to
+ * agree with the Postgres counter, which anchors its `window_start` the same
+ * way: a window that started whenever this process first saw the key would let
+ * a caller's local and distributed allowances straddle each other. It also
+ * makes this file's doc comment true — it has said "fixed-window" since it was
+ * written while the code rolled the window forward from each first hit.
+ */
+export function createFixedWindowCounter(windowMs: number): {
+  hit: (key: string) => FixedWindowHit;
+} {
+  const buckets = new Map<string, Bucket>();
+
+  return {
+    hit(key: string): FixedWindowHit {
+      const now = Date.now();
+      const resetAt = (Math.floor(now / windowMs) + 1) * windowMs;
+
+      if (buckets.size > SWEEP_THRESHOLD) {
+        for (const [k, b] of buckets) {
+          if (now >= b.resetAt) buckets.delete(k);
+        }
+      }
+
+      const bucket = buckets.get(key);
+      if (!bucket || now >= bucket.resetAt) {
+        buckets.set(key, { count: 1, resetAt });
+        return { count: 1, resetAt };
+      }
+      bucket.count += 1;
+      return { count: bucket.count, resetAt: bucket.resetAt };
+    },
+  };
+}
+
 /** Best-effort client IP: the standard proxy header chain, falling back to "unknown". */
 function defaultKeyFn(c: Context<AppEnv>): string {
   const forwarded = c.req.header("x-forwarded-for");
@@ -45,32 +91,16 @@ function defaultKeyFn(c: Context<AppEnv>): string {
  *    of a trustworthy one) on any route where that matters.
  */
 export function rateLimiter(opts: RateLimitOptions): MiddlewareHandler<AppEnv> {
-  const buckets = new Map<string, Bucket>();
+  const counter = createFixedWindowCounter(opts.windowMs);
   const keyFn = opts.keyFn ?? defaultKeyFn;
 
-  function sweepExpired(now: number): void {
-    for (const [k, b] of buckets) {
-      if (now >= b.resetAt) buckets.delete(k);
-    }
-  }
-
   return async (c, next) => {
-    const key = keyFn(c);
-    const now = Date.now();
+    const { count, resetAt } = counter.hit(keyFn(c));
 
-    if (buckets.size > SWEEP_THRESHOLD) sweepExpired(now);
-
-    const bucket = buckets.get(key);
-    if (!bucket || now >= bucket.resetAt) {
-      buckets.set(key, { count: 1, resetAt: now + opts.windowMs });
-      await next();
-      return;
-    }
-
-    if (bucket.count >= opts.max) {
+    if (count > opts.max) {
       const retryAfterSec = Math.max(
         1,
-        Math.ceil((bucket.resetAt - now) / 1000),
+        Math.ceil((resetAt - Date.now()) / 1000),
       );
       c.header("Retry-After", String(retryAfterSec));
       return c.json(
@@ -79,7 +109,6 @@ export function rateLimiter(opts: RateLimitOptions): MiddlewareHandler<AppEnv> {
       );
     }
 
-    bucket.count += 1;
     await next();
   };
 }

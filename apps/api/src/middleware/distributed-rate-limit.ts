@@ -4,7 +4,8 @@ import { sql } from "drizzle-orm";
 import { withSystemDb } from "@oxagen/database";
 import { requireEnv } from "@oxagen/config/env";
 import { logger } from "./logger";
-import { rateLimiter } from "./rate-limit";
+import { extractTrustedClientIp } from "@oxagen/oxagen/client-ip";
+import { createFixedWindowCounter } from "./rate-limit";
 import type { AppEnv } from "../app";
 
 /**
@@ -96,11 +97,24 @@ const CLEANUP_SAMPLE_RATE = 0.01;
 /** Bound exhausted-bucket memory per limiter instance. */
 const LOCAL_DENY_CACHE_MAX = 10_000;
 
-/** Best-effort client IP — the same proxy header chain as the in-memory limiter. */
+/**
+ * Client IP for the last-resort bucket, through the shared derivation so this
+ * file has no second opinion about who a caller is. It read the leftmost
+ * `x-forwarded-for` entry and then `x-real-ip`, both caller-written, which let
+ * one client mint an unbounded number of buckets by varying a header.
+ *
+ * `trustedProxyHops: 0` for the same reason as `trustedClientIpBucketKey`: a
+ * bucket is a partition rather than a permission, so when the edge has not
+ * named the caller, sharing one ceiling is the safe answer and guessing from a
+ * chain this file cannot verify is not.
+ */
 function clientIp(c: Context<AppEnv>): string {
-  const forwarded = c.req.header("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0]!.trim();
-  return c.req.header("x-real-ip") ?? "unknown";
+  return (
+    extractTrustedClientIp((name) => c.req.header(name), {
+      trustedProxyHops: 0,
+      onVercel: process.env.VERCEL === "1",
+    }) ?? "unknown"
+  );
 }
 
 /**
@@ -144,78 +158,37 @@ export function enrolledMachineBucketKey(c: Context<AppEnv>): string {
 }
 
 /**
- * Header the AWS edge sets from its own view of the connection. Caddy writes it
- * with `header_up`, which SETS the field — any copy a caller sent is replaced
- * before the request reaches this process — and fills it from Caddy's
- * `{client_ip}`, resolved under `trusted_proxies static private_ranges` plus
- * `trusted_proxies_strict` so it walks X-Forwarded-For from the right and lands
- * on the address the ALB observed rather than on anything the caller wrote.
- * See `infra/tools/caddy/Caddyfile.alb`, and
- * `verifications/<session>/caddy-client-ip-header.txt` for that config answering
- * the four spoof shapes.
- */
-const EDGE_CLIENT_IP_HEADER = "x-oxagen-client-ip";
-
-/**
- * Longest address literal we accept. 45 characters is an IPv4-mapped IPv6
- * address (`0000:...:ffff:255.255.255.255`), the longest textual form there is.
- */
-const MAX_CLIENT_IP_LENGTH = 45;
-
-/** Characters that appear in an IPv4 or IPv6 literal, and nothing else. */
-const IP_LITERAL_PATTERN = /^[0-9a-fA-F.:]+$/;
-
-/**
- * Bound what a header can put into a bucket key. A trusted proxy should never
- * send anything but an address, so this is a guard against the proxy being
- * misconfigured rather than against the caller: an unbounded or structured
- * value would otherwise become an unbounded set of Postgres rows.
- */
-function sanitizedIp(raw: string | undefined): string | null {
-  const value = raw?.trim();
-  if (!value || value.length > MAX_CLIENT_IP_LENGTH) return null;
-  return IP_LITERAL_PATTERN.test(value) ? value : null;
-}
-
-/**
- * Per-client bucket for the pre-authentication ceilings, from whichever header
- * the deployment's own edge writes.
+ * Per-client bucket for the pre-authentication ceilings.
  *
- * Exactly one header is trusted per deployment shape, and in both cases the
- * edge SETS it rather than appending to it, so a caller-supplied copy cannot
- * survive: `x-vercel-forwarded-for` on Vercel, `x-oxagen-client-ip` from Caddy
- * on AWS. A value that is not an address literal, or that arrives on the wrong
- * deployment shape, falls back to the single `ip:unverified` bucket.
+ * The address itself comes from `extractTrustedClientIp`
+ * (`@oxagen/oxagen/client-ip`), which is the one derivation every surface in
+ * the repo reads a client address through, and which documents why each header
+ * is or is not believed. A limiter bucket and an IAM `ip_ranges` decision want
+ * the same answer to the same question, and the two diverging is how the
+ * leftmost `x-forwarded-for` entry ended up deciding a mandate while this file
+ * had already stopped trusting it.
  *
- * Rejected, and why:
+ * `trustedProxyHops: 0` is deliberate and is the one place this differs from a
+ * mandate decision. A bucket key is a partition, not a permission: if the edge
+ * header is missing, every caller collapsing into one `ip:unverified` bucket is
+ * a smaller ceiling for everyone, while the same fallback in an authorization
+ * check would be a bypass. Walking the forwarded chain here would buy a nicer
+ * partition in a deployment shape this limiter cannot verify it is in, so it
+ * asks for the header it knows the edge writes and takes the shared bucket when
+ * that is absent.
  *
- * - **`x-forwarded-for`, leftmost entry.** Caller-controlled. Neither the ALB
- *   nor Caddy strips an inbound copy — both append — so the leftmost entry is
- *   whatever the client wrote. A caller could rotate it to get a fresh bucket
- *   per request, or set a victim's address to spend someone else's ceiling.
- * - **`x-forwarded-for`, counted from the right.** Correct today: the ALB
- *   appends the address it saw (the client) and Caddy appends the address it
- *   saw (the ALB), so the client is second from the right. The hop count is the
- *   entire guarantee, though, and it is not visible from this file — add or
- *   remove a proxy and the chosen entry silently becomes attacker-controlled,
- *   with nothing here that could detect the change.
- * - **`x-real-ip`.** Neither the ALB nor Caddy sets it. Anything arriving under
- *   that name came from the caller.
- * - **Keeping the single `ip:unverified` bucket off Vercel.** What this
- *   replaces. It gave every caller on the internet one shared ceiling, made one
- *   Postgres row the write-contention point for the whole ingress, and — while
- *   these mounts were fail-closed — let that row's failure take Tacho and
- *   Stella intake offline (#3167).
+ * The shared bucket is what this replaced, and why it had to go: it was every
+ * caller on the internet on one ceiling, one Postgres row as the write
+ * contention point for the whole ingress, and — while these mounts were
+ * fail-closed — that row's failure taking Tacho and Stella intake offline
+ * (#3167). It remains the fallback, not the normal case.
  */
 export function trustedClientIpBucketKey(c: Context<AppEnv>): string {
-  if (process.env.VERCEL === "1") {
-    const vercelClientIp = sanitizedIp(
-      c.req.header("x-vercel-forwarded-for")?.split(",", 1)[0],
-    );
-    return `ip:${vercelClientIp ?? "unverified"}`;
-  }
-  const edgeClientIp = sanitizedIp(c.req.header(EDGE_CLIENT_IP_HEADER));
-  return `ip:${edgeClientIp ?? "unverified"}`;
+  const ip = extractTrustedClientIp((name) => c.req.header(name), {
+    trustedProxyHops: 0,
+    onVercel: process.env.VERCEL === "1",
+  });
+  return `ip:${ip ?? "unverified"}`;
 }
 
 /** Domain separator — see authorizationFingerprintBucketKey. */
@@ -328,16 +301,26 @@ export function distributedRateLimiter(
       : deriveBucketKey(c, opts.keyPrefix);
 
   /**
-   * The degraded ceiling, built on the first store failure and kept for the
-   * life of this limiter so its buckets survive across failed requests. It
-   * counts the same keys in the same window as the Postgres counter; only the
-   * scope narrows, from global to this process.
+   * The degraded ceiling. It counts the same keys into the same epoch-anchored
+   * window as the Postgres counter; only the scope narrows, from global to this
+   * process.
+   *
+   * Every ALLOWED request is counted here, including the ones the Postgres
+   * upsert handled. That looks redundant while the store is healthy and is the
+   * whole point when it is not: a store that flaps sends some requests down the
+   * success path and some down the failure path, and if only the failures were
+   * counted locally a caller could spend `max` through Postgres and another
+   * `max` through this counter inside one window — `2 × max` exactly when the
+   * store is least reliable, which is not the bound ADR-079 states. Counting
+   * both paths into one counter makes the degraded ceiling `max` in total,
+   * however the window's requests happened to be split between them.
+   *
+   * The cost is one map entry per bucket key per window while the store is
+   * healthy, swept by `createFixedWindowCounter` above its threshold. Only the
+   * `degrade-to-local` mounts pay it; a fail-open limiter has no fallback to
+   * seed and never touches this.
    */
-  let localFallback: MiddlewareHandler<AppEnv> | null = null;
-  function localFallbackLimiter(max: number): MiddlewareHandler<AppEnv> {
-    localFallback ??= rateLimiter({ windowMs, max, keyFn: bucketKeyOf });
-    return localFallback;
-  }
+  const localCounter = createFixedWindowCounter(windowMs);
 
   function cacheLocalDeny(key: string, denyUntil: number, now: number): void {
     if (localDenyUntilByKey.size >= LOCAL_DENY_CACHE_MAX) {
@@ -406,8 +389,18 @@ export function distributedRateLimiter(
       });
     } catch (err) {
       warnStoreError(opts.keyPrefix, windowMs, err, storeErrorPolicy);
-      if (storeErrorPolicy === "degrade-to-local") {
-        return localFallbackLimiter(max)(c, next);
+      if (storeErrorPolicy !== "degrade-to-local") return next();
+
+      const local = localCounter.hit(key);
+      c.header("X-RateLimit-Limit", String(max));
+      c.header("X-RateLimit-Remaining", String(Math.max(0, max - local.count)));
+      c.header("X-RateLimit-Reset", String(Math.ceil(local.resetAt / 1000)));
+      if (local.count > max) {
+        c.header(
+          "Retry-After",
+          String(Math.max(1, Math.ceil((local.resetAt - now) / 1000))),
+        );
+        return c.json({ error: "rate_limited" }, 429);
       }
       return next();
     }
@@ -427,6 +420,11 @@ export function distributedRateLimiter(
       c.header("Retry-After", String(retryAfter));
       return c.json({ error: "rate_limited" }, 429);
     }
+
+    // Mirror the allowed request into the degraded counter so a store that
+    // flaps mid-window cannot hand this caller a second full allowance — see
+    // `localCounter` above.
+    if (storeErrorPolicy === "degrade-to-local") localCounter.hit(key);
 
     return next();
   };

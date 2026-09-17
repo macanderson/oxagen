@@ -81,6 +81,13 @@ able to reason about at 3am.
   fronts one app node, so the degraded ceiling equals the global one; that stops
   being true the moment a second node is attached, and it is not a reason to
   hold the change, only a reason to write it down.
+- `max` per warm instance is the bound in a flapping window too, not only in a
+  clean outage. Every ALLOWED request is counted into the local counter,
+  including the ones the Postgres upsert handled, so a store that alternates
+  between working and failing cannot give a caller one allowance through each.
+  Counting only the failures would have made the real bound `2 × max` precisely
+  when the store is least reliable — a gap this ADR would have stated wrongly
+  rather than a behaviour anyone chose.
 - The degraded limiter's buckets live for the life of the process and are built
   on the first store failure, so a store outage that flaps does not reset the
   count each time.

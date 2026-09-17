@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
+import { requestClientIp } from "@/lib/client-ip";
 import {
   resolveOrg,
   resolveWorkspace,
@@ -579,15 +580,12 @@ export async function POST(request: NextRequest): Promise<Response> {
   // Wall-clock anchor for the per-message receipt's duration (chat_ux_v2).
   const turnStartedAtMs = Date.now();
 
-  // Extract client IP for IAM ip_ranges condition evaluation. x-forwarded-for
-  // is set by Vercel/Next.js edge; take the first hop (leftmost = original
-  // client), fall back to x-real-ip, then null.
-  // SECURITY: used only for IAM condition evaluation, never authentication.
-  const xffRaw = request.headers.get("x-forwarded-for");
-  const clientIp: string | null =
-    (xffRaw ? xffRaw.split(",")[0]?.trim() || null : null) ??
-    request.headers.get("x-real-ip")?.trim() ??
-    null;
+  // Client IP for IAM ip_ranges condition evaluation, through the one shared
+  // derivation (@oxagen/oxagen/client-ip). This used to take the LEFTMOST
+  // x-forwarded-for entry, which behind the ALB is whatever the caller typed
+  // into the header — so prefixing an allowlisted address satisfied an
+  // IP-scoped mandate. SECURITY: authorization signal, never authentication.
+  const clientIp = requestClientIp(request);
 
   const encoder = new TextEncoder();
 

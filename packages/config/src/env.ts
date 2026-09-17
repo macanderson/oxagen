@@ -67,12 +67,28 @@ export const baseEnvSchema = z.object({
   //  - RATE_LIMIT_CHAT_PER_MIN:       chat send / stream (/v1/**/chat/*).
   RATE_LIMIT_CHAT_PER_MIN: z.coerce.number().int().positive().default(60),
 
-  // How many proxies sit between a client and apps/api. Each one appends to
-  // x-forwarded-for, so this is how many right-hand entries were written by
-  // something we trust — see extractClientIp in apps/api/src/lib/context.ts.
-  // Default 1: a single ALB in front of the app, which is the deployed shape.
-  // 0 means nothing rewrites the header and no entry in it is usable.
-  TRUSTED_PROXY_HOP_COUNT: z.coerce.number().int().nonnegative().default(1),
+  // How many proxies sit between a client and our processes. Each one APPENDS
+  // to x-forwarded-for, so this is how many right-hand entries were written by
+  // something we trust — see extractTrustedClientIp in
+  // packages/oxagen/src/client-ip.ts, the one reader of this value.
+  //
+  // Default 2, because the deployed shape has two appending proxies and not
+  // one: the ALB appends the address it saw (the client) and Caddy appends the
+  // address it saw (the ALB). Measured, not assumed — a request carrying
+  // `X-Forwarded-For: 203.0.113.9, 198.51.100.7` arrives at the upstream as
+  // `203.0.113.9, 198.51.100.7, <caddy peer>`. At 1 this picks Caddy's peer,
+  // which is a load balancer's private address: an IP allowlist of real client
+  // CIDRs then matches nothing and every IP-scoped mandate silently denies.
+  //
+  // Caddy now rewrites x-forwarded-for to a single trusted entry, so with the
+  // config deployed the count no longer decides anything — `Math.max(0, …)`
+  // clamps a one-entry chain to that entry either way. It decides everything
+  // in the window where the code has shipped and the Caddy config has not,
+  // which is a real window: they deploy through different pipelines.
+  //
+  // 0 means nothing in front of the process rewrites the header, so no entry
+  // in it is usable and only x-oxagen-client-ip is believed.
+  TRUSTED_PROXY_HOP_COUNT: z.coerce.number().int().nonnegative().default(2),
 
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),

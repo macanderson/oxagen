@@ -35,6 +35,8 @@
  * `await buildContext(headers())`. It throws `McpUnauthorizedError` on any auth
  * failure so the tool invocation fails closed (xmcp surfaces it as an error).
  */
+import { requireEnv } from "@oxagen/config/env";
+import { extractTrustedClientIp } from "@oxagen/oxagen/client-ip";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { resolveApiKey } from "@oxagen/auth";
 import { emitSecurityEvent } from "@oxagen/database/security";
@@ -84,21 +86,43 @@ export type McpContextResolution =
   | { ok: false; reason: McpAuthFailure };
 
 /**
- * Extract the real client IP from proxy headers.
- * x-forwarded-for may carry a comma-separated list — take the first hop
- * (leftmost = original client). Falls back to x-real-ip, then null.
+ * How many proxies sit between the client and this process, resolved from the
+ * validated env once and memoized. Read at first request rather than module
+ * load, mirroring `trustedProxyHops()` in apps/api/src/lib/context.ts.
+ */
+let cachedTrustedProxyHops: number | null = null;
+function trustedProxyHops(): number {
+  if (cachedTrustedProxyHops !== null) return cachedTrustedProxyHops;
+  cachedTrustedProxyHops = requireEnv([
+    "TRUSTED_PROXY_HOP_COUNT",
+  ] as const).TRUSTED_PROXY_HOP_COUNT;
+  return cachedTrustedProxyHops;
+}
+
+/** Test seam: drop the memoized hop count so a case can set a different env. */
+export function __resetTrustedProxyHopsForTests(): void {
+  cachedTrustedProxyHops = null;
+}
+
+/**
+ * The client address this surface is willing to authorize on, through the one
+ * shared derivation (`@oxagen/oxagen/client-ip`, which carries the reasoning
+ * about which headers are believed in which deployment shape).
  *
- * SECURITY: these headers can be spoofed. Used only for IAM ip_ranges
- * condition evaluation, never for authentication.
+ * This took the LEFTMOST x-forwarded-for entry and then fell back to
+ * x-real-ip. Behind the ALB the leftmost entry is whatever the caller typed
+ * into the header, and nothing in front of this process sets x-real-ip at all
+ * — so an MCP client could prefix an allowlisted address and satisfy an
+ * IP-scoped mandate. The old comment called the headers spoofable and used
+ * them anyway, which is the shape of the bug rather than a mitigation of it.
+ *
+ * SECURITY: authorization signal for IAM ip_ranges, never authentication.
  */
 function extractClientIp(hdrs: HttpHeaders): string | null {
-  const xff = firstHeader(hdrs["x-forwarded-for"]);
-  if (xff) {
-    const first = xff.split(",")[0]?.trim();
-    if (first && first.length > 0) return first;
-  }
-  const realIp = firstHeader(hdrs["x-real-ip"]);
-  return realIp?.trim() || null;
+  return extractTrustedClientIp((name) => firstHeader(hdrs[name]), {
+    trustedProxyHops: trustedProxyHops(),
+    onVercel: process.env.VERCEL === "1",
+  });
 }
 
 /**

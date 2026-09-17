@@ -305,16 +305,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   TRUSTED_PROXY_HOP_COUNT: {
     group: "Rate limiting",
     description:
-      "How many proxies sit in front of apps/api and append to x-forwarded-for. " +
-      "The client IP the IAM ip_ranges allowlist checks is the Nth entry from the " +
-      "right; entries left of it are caller-supplied. Optional — defaults to 1 " +
-      "(one ALB) in packages/config/src/env.ts. 0 disables the header entirely.",
+      "How many proxies sit in front of the app, api and mcp services and append " +
+      "to x-forwarded-for. The client IP the IAM ip_ranges allowlist checks is the " +
+      "Nth entry from the right; entries left of it are caller-supplied. Optional " +
+      "— defaults to 2 (the ALB, then Caddy) in packages/config/src/env.ts. " +
+      "0 trusts only x-oxagen-client-ip.",
     secret: false,
     clientExposed: false,
-    services: ["api"],
+    services: ["app", "api", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
-    placeholder: "1",
+    placeholder: "2",
   },
 
   // ── Error alerting (vendor-neutral outbound webhook) ────────────────────────

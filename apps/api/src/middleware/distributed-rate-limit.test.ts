@@ -199,20 +199,28 @@ describe("deriveBucketKey", () => {
     expect(deriveBucketKey(c, "chat")).toBe("chat:org:org_1");
   });
 
-  it("falls back to the client IP when neither workspace nor org is set", () => {
+  it("falls back to the edge-reported client IP when neither workspace nor org is set", () => {
     const c = fakeContext({
-      headers: { "x-forwarded-for": "203.0.113.7, 10.0.0.1" },
+      headers: { "x-oxagen-client-ip": "203.0.113.7" },
     });
     expect(deriveBucketKey(c, "chat")).toBe("chat:ip:203.0.113.7");
   });
 
-  it('uses x-real-ip, then "unknown", when x-forwarded-for is absent', () => {
+  // #3183 P1, one layer down from the pre-auth buckets: this fallback read the
+  // leftmost x-forwarded-for entry and then x-real-ip, so a caller could mint
+  // an unbounded number of buckets by varying a header it writes itself.
+  it("ignores the caller-writable headers and collapses to one bucket instead", () => {
     expect(
       deriveBucketKey(
-        fakeContext({ headers: { "x-real-ip": "198.51.100.9" } }),
+        fakeContext({
+          headers: {
+            "x-forwarded-for": "203.0.113.7, 10.0.0.1",
+            "x-real-ip": "198.51.100.9",
+          },
+        }),
         "stella-telemetry",
       ),
-    ).toBe("stella-telemetry:ip:198.51.100.9");
+    ).toBe("stella-telemetry:ip:unknown");
     expect(deriveBucketKey(fakeContext(), "stella-telemetry")).toBe(
       "stella-telemetry:ip:unknown",
     );
@@ -247,7 +255,7 @@ describe("distributedRateLimiter", () => {
     const next = vi.fn().mockResolvedValue(undefined);
 
     const result = await mw(
-      fakeContext({ headers: { "x-forwarded-for": "198.51.100.30" } }),
+      fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.30" } }),
       next,
     );
 
@@ -260,10 +268,11 @@ describe("distributedRateLimiter", () => {
     const mw = distributedRateLimiter({
       keyPrefix: "preauth",
       max: 2,
+      bucketKey: trustedClientIpBucketKey,
       storeErrorPolicy: "degrade-to-local",
     });
     const next = vi.fn().mockResolvedValue(undefined);
-    const headers = { "x-forwarded-for": "198.51.100.31" };
+    const headers = { "x-oxagen-client-ip": "198.51.100.31" };
 
     await mw(fakeContext({ headers }), next);
     await mw(fakeContext({ headers }), next);
@@ -281,16 +290,17 @@ describe("distributedRateLimiter", () => {
     const mw = distributedRateLimiter({
       keyPrefix: "preauth",
       max: 1,
+      bucketKey: trustedClientIpBucketKey,
       storeErrorPolicy: "degrade-to-local",
     });
     const next = vi.fn().mockResolvedValue(undefined);
 
     await mw(
-      fakeContext({ headers: { "x-forwarded-for": "198.51.100.32" } }),
+      fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.32" } }),
       next,
     );
     const otherCaller = await mw(
-      fakeContext({ headers: { "x-forwarded-for": "198.51.100.33" } }),
+      fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.33" } }),
       next,
     );
 
@@ -298,11 +308,111 @@ describe("distributedRateLimiter", () => {
     expect(next).toHaveBeenCalledTimes(2);
   });
 
+  // #3183 P2. A store that flaps sends some requests down the success path and
+  // some down the failure path. While only the failures were counted locally, a
+  // caller could spend `max` through Postgres and another `max` through the
+  // degraded counter inside one window — 2 x max exactly when the store is
+  // least reliable, which is not the bound ADR-079 states.
+  it("does not hand a second full allowance out when the store flaps mid-window", async () => {
+    let storeUp = true;
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        if (!storeUp) throw new Error("db unavailable");
+        return fn({
+          execute: vi.fn().mockResolvedValue([{ count: served + 1 }]),
+        });
+      },
+    );
+    let served = 0;
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 2,
+      bucketKey: trustedClientIpBucketKey,
+      storeErrorPolicy: "degrade-to-local",
+    });
+    const next = vi.fn().mockImplementation(async () => {
+      served += 1;
+    });
+    const headers = { "x-oxagen-client-ip": "198.51.100.40" };
+
+    // Two requests spend the whole ceiling against a healthy store.
+    await mw(fakeContext({ headers }), next);
+    await mw(fakeContext({ headers }), next);
+    expect(next).toHaveBeenCalledTimes(2);
+
+    // The store drops. The ceiling is already spent, so the degraded path must
+    // refuse rather than start a fresh count.
+    storeUp = false;
+    const third = (await mw(fakeContext({ headers }), next)) as
+      | { body: unknown; status: number }
+      | undefined;
+    const fourth = (await mw(fakeContext({ headers }), next)) as
+      | { status: number }
+      | undefined;
+
+    expect(third?.status).toBe(429);
+    expect(third?.body).toMatchObject({ error: "rate_limited" });
+    expect(fourth?.status).toBe(429);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the flapping ceiling per bucket", async () => {
+    let storeUp = true;
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        if (!storeUp) throw new Error("db unavailable");
+        return fn({ execute: vi.fn().mockResolvedValue([{ count: 1 }]) });
+      },
+    );
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 1,
+      bucketKey: trustedClientIpBucketKey,
+      storeErrorPolicy: "degrade-to-local",
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await mw(
+      fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.41" } }),
+      next,
+    );
+    storeUp = false;
+    const otherCaller = await mw(
+      fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.42" } }),
+      next,
+    );
+
+    expect(otherCaller).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not accrue a local count on a fail-open limiter", async () => {
+    // Only degrade-to-local mounts pay the per-request map entry; a fail-open
+    // limiter has no fallback to seed.
+    let storeUp = true;
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        if (!storeUp) throw new Error("db unavailable");
+        return fn({ execute: vi.fn().mockResolvedValue([{ count: 1 }]) });
+      },
+    );
+    const mw = distributedRateLimiter({ keyPrefix: "chat", max: 1 });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const headers = { "x-oxagen-client-ip": "198.51.100.43" };
+
+    await mw(fakeContext({ headers }), next);
+    storeUp = false;
+    const afterOutage = await mw(fakeContext({ headers }), next);
+
+    expect(afterOutage).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
   it("passes the request through uncounted when the store fails under the default policy", async () => {
     mocks.withSystemDb.mockRejectedValue(new Error("db unavailable"));
     const mw = distributedRateLimiter({ keyPrefix: "chat", max: 1 });
     const next = vi.fn().mockResolvedValue(undefined);
-    const headers = { "x-forwarded-for": "198.51.100.34" };
+    const headers = { "x-oxagen-client-ip": "198.51.100.34" };
 
     await mw(fakeContext({ headers }), next);
     const second = await mw(fakeContext({ headers }), next);

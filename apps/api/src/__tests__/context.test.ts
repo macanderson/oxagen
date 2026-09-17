@@ -215,16 +215,33 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
     ).toBe("10.0.0.2");
   });
 
-  it("falls back to x-real-ip when x-forwarded-for is absent", async () => {
-    expect(await clientIpFor({ "x-real-ip": "1.2.3.4" })).toBe("1.2.3.4");
+  // ADR-080. Nothing in either deployment shape sets x-real-ip — not the ALB,
+  // not Caddy, not Vercel — so a value under that name came from the caller,
+  // and the only moment this reached for it was when no trusted proxy had
+  // written a chain: precisely the moment nothing had vouched for the request.
+  // Caddy now deletes the header at the edge as well.
+  it("never falls back to x-real-ip", async () => {
+    expect(await clientIpFor({ "x-real-ip": "1.2.3.4" })).toBeNull();
+    expect(
+      await clientIpFor({ "x-forwarded-for": "", "x-real-ip": "1.2.3.4" }),
+    ).toBeNull();
   });
 
-  it("returns null when both headers are absent", async () => {
+  it("prefers the address the edge wrote over any chain", async () => {
+    // Caddy sets this with `header_up`, which REPLACES the field, so a copy the
+    // caller sent under the same name never arrives — see ADR-080 and
+    // infra/tools/caddy/Caddyfile.alb.
+    expect(
+      await clientIpFor({
+        "x-oxagen-client-ip": "198.51.100.1",
+        "x-forwarded-for": "203.0.113.9, 192.0.2.5",
+        "x-real-ip": "203.0.113.8",
+      }),
+    ).toBe("198.51.100.1");
+  });
+
+  it("returns null when no header names the caller", async () => {
     expect(await clientIpFor({})).toBeNull();
-  });
-
-  it("returns null when x-real-ip is empty and x-forwarded-for is absent", async () => {
-    expect(await clientIpFor({ "x-real-ip": "" })).toBeNull();
   });
 });
 

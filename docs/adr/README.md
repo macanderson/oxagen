@@ -87,3 +87,4 @@ first. Move a row into its epic when one fits.
 - [ADR-068](./ADR-068-stella-is-wrapped-through-its-hooks-until-it-speaks-the-tacho-contract-natively.md) — Stella is wrapped through its hooks until it speaks the Tacho contract natively
 - [ADR-078](./ADR-078-wrapped-and-connected-are-two-enforcement-tiers-neither-dominates.md) — wrapped (`harness`) and connected (`gateway`) are two enforcement tiers and neither dominates: wrapped is broader and client-attested, connected is narrower and server-enforced; the local gateway is a proxy, not a second materialiser
 - [ADR-079](./ADR-079-a-rate-limiter-that-cannot-reach-its-counters-degrades-rather-than-denies.md) — A rate limiter that cannot reach its counters degrades to the per-instance ceiling rather than denying every request
+- [ADR-080](./ADR-080-one-client-ip-derivation-and-the-edge-rewrites-the-header.md) — One client-IP derivation, and the edge rewrites the `X-Forwarded-For` it is not allowed to trust

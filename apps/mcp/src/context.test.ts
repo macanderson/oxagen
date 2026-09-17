@@ -12,7 +12,7 @@
 // resolveApiKey is vi.mock()'d so no network / DB hits occur. Session tokens
 // are rejected at the MCP edge before any session resolver would be invoked.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock the auth resolver before importing context.ts.
 vi.mock("@oxagen/auth", () => ({
@@ -33,6 +33,7 @@ vi.mock("@oxagen/database/security", () => ({
 import { resolveApiKey } from "@oxagen/auth";
 import {
   McpUnauthorizedError,
+  __resetTrustedProxyHopsForTests,
   extractBearerToken,
   resolveMcpContext,
   buildContext,
@@ -371,6 +372,8 @@ describe("firstHeader (via buildContext header extraction)", () => {
 describe("extractClientIp (via buildContext clientIp extraction)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __resetTrustedProxyHopsForTests();
+    vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "2");
     vi.mocked(resolveApiKey).mockResolvedValue({
       ok: true,
       orgId: "org-1",
@@ -379,41 +382,50 @@ describe("extractClientIp (via buildContext clientIp extraction)", () => {
     });
   });
 
-  it("extracts the first IP from a comma-separated x-forwarded-for", async () => {
-    const ctx = await buildContext({
-      authorization: "Bearer ox_valid",
-      "x-forwarded-for": "1.2.3.4, 5.6.7.8",
-    });
-    expect(ctx.clientIp).toBe("1.2.3.4");
+  afterEach(() => {
+    __resetTrustedProxyHopsForTests();
+    vi.unstubAllEnvs();
   });
 
-  it("trims whitespace from the extracted x-forwarded-for IP", async () => {
+  it("prefers the address the edge wrote", async () => {
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
-      "x-forwarded-for": " 1.2.3.4 , 5.6.7.8",
+      "x-oxagen-client-ip": "198.51.100.1",
+      "x-forwarded-for": "203.0.113.9, 192.0.2.5",
     });
-    expect(ctx.clientIp).toBe("1.2.3.4");
+    expect(ctx.clientIp).toBe("198.51.100.1");
   });
 
-  it("falls back to x-real-ip when x-forwarded-for is absent", async () => {
+  // #3183 P1. ctx.clientIp feeds the IAM ip_ranges condition, which ALLOWS on a
+  // CIDR match. This took the leftmost x-forwarded-for entry, so an MCP client
+  // could prefix an allowlisted address and satisfy an IP-scoped mandate.
+  it("ignores a caller-supplied x-forwarded-for prefix", async () => {
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
-      "x-real-ip": "9.9.9.9",
+      "x-forwarded-for": "203.0.113.9, 198.51.100.1, 172.31.0.4",
     });
-    expect(ctx.clientIp).toBe("9.9.9.9");
+    expect(ctx.clientIp).toBe("198.51.100.1");
   });
 
-  it("returns null when neither x-forwarded-for nor x-real-ip is present", async () => {
+  it("never believes x-real-ip, which nothing in front of this process sets", async () => {
+    const ctx = await buildContext({
+      authorization: "Bearer ox_valid",
+      "x-real-ip": "198.51.100.1",
+    });
+    expect(ctx.clientIp).toBeNull();
+  });
+
+  it("returns null when no trusted proxy named the caller", async () => {
     const ctx = await buildContext({ authorization: "Bearer ox_valid" });
     expect(ctx.clientIp).toBeNull();
   });
 
-  it("handles x-forwarded-for as an array — uses first element", async () => {
+  it("handles x-forwarded-for as an array — uses the first element's chain", async () => {
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
-      "x-forwarded-for": ["1.2.3.4, 5.6.7.8", "irrelevant"],
+      "x-forwarded-for": ["198.51.100.1, 172.31.0.4", "irrelevant"],
     });
-    expect(ctx.clientIp).toBe("1.2.3.4");
+    expect(ctx.clientIp).toBe("198.51.100.1");
   });
 });
 

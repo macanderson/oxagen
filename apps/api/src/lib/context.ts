@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { requireEnv } from "@oxagen/config/env";
+import { extractTrustedClientIp } from "@oxagen/oxagen/client-ip";
 import type { AppEnv } from "../app";
 
 /**
@@ -19,49 +20,27 @@ function trustedProxyHops(): number {
 }
 
 /**
- * The client IP as reported by the last proxy this deployment trusts.
+ * The client IP this deployment is willing to authorize on, or null.
  *
- * Each proxy APPENDS the address it received the request from, so
- * x-forwarded-for reads oldest-first and the entries a client sent itself sit
- * on the LEFT. Behind an ALB, `xff.split(",")[0]` is therefore whatever the
- * caller typed into the header — and this value feeds the IAM `ip_ranges` /
- * `ip_allow` conditions (packages/oxagen/src/iam/conditions.ts), which allow on
- * a CIDR match. One spoofed header entry satisfied an IP allowlist.
+ * The derivation itself is `extractTrustedClientIp` in
+ * `@oxagen/oxagen/client-ip`, shared with apps/app, apps/mcp and the rate
+ * limiter so a mandate decision cannot disagree with a bucket key about who the
+ * caller is. That file carries the reasoning: which headers are believed in
+ * which deployment shape, why the forwarded chain is walked from the right, and
+ * why `x-real-ip` is not consulted at all.
  *
- * With N trusted proxies the client's real address is the Nth entry from the
- * right, because those are the N entries the trusted proxies wrote themselves.
- * A client that prepends extra hops only lengthens the untrusted left-hand side
- * and cannot move the entry this picks.
+ * This value feeds the IAM `ip_ranges` / `ip_allow` conditions
+ * (packages/oxagen/src/iam/conditions.ts), which ALLOW on a CIDR match. It is
+ * an authorization signal and never an authentication one.
  *
- * TRUSTED_PROXY_HOP_COUNT = 0 means nothing in front of this process rewrote
- * the header, so every entry is caller-supplied and none of it is usable.
- *
- * NOT an authentication signal, and — with the count set correctly — the
- * authorization signal the IP allowlist needs. A too-low count is what makes
- * that allowlist bypassable; too high yields a proxy's own address and fails
- * closed against a CIDR of real clients.
- *
- * Exported so the hop arithmetic can be unit-tested directly, the way
+ * Exported so the derivation stays unit-testable at this seam the way
  * `deriveBucketKey` is in middleware/distributed-rate-limit.ts.
  */
 export function extractClientIp(c: Context<AppEnv>): string | null {
-  const hops = trustedProxyHops();
-  const xff = c.req.header("x-forwarded-for");
-  if (xff && hops > 0) {
-    const chain = xff
-      .split(",")
-      .map((hop) => hop.trim())
-      .filter((hop) => hop.length > 0);
-    // A chain shorter than the trusted-proxy count means a proxy did not append
-    // what this deployment says it does; the leftmost entry is then the oldest
-    // thing any trusted proxy could have written.
-    const candidate = chain[Math.max(0, chain.length - hops)];
-    if (candidate) return candidate;
-  }
-  // x-real-ip is set by a single reverse proxy and carries no chain to walk.
-  // It is exactly as trustworthy as that proxy, and no more.
-  const realIp = c.req.header("x-real-ip");
-  return realIp?.trim() || null;
+  return extractTrustedClientIp((name) => c.req.header(name), {
+    trustedProxyHops: trustedProxyHops(),
+    onVercel: process.env.VERCEL === "1",
+  });
 }
 
 /** Test seam: drop the memoized hop count so a case can set a different env. */

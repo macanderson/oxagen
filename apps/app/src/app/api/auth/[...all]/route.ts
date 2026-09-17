@@ -1,5 +1,6 @@
 // Node runtime — this route uses @oxagen/database (pg driver) which requires
 // Node.js built-ins. Keep it out of Edge; do NOT add `export const runtime`.
+import { requestClientIp } from "@/lib/client-ip";
 import { toNextJsHandler } from "better-auth/next-js";
 import { auth } from "@/lib/auth";
 import { emitSecurityEvent } from "@oxagen/database/security";
@@ -41,10 +42,10 @@ async function POST(request: NextRequest): Promise<Response> {
     isSignInPath(pathname) &&
     (status === 401 || status === 403 || status === 429)
   ) {
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      request.headers.get("x-real-ip") ??
-      null;
+    // The one shared derivation, not the leftmost x-forwarded-for entry: a
+    // sign-in audit record that names an address the caller chose is worse
+    // than one that names none.
+    const ip = requestClientIp(request);
     const userAgent = request.headers.get("user-agent") ?? null;
 
     emitSecurityEvent({
