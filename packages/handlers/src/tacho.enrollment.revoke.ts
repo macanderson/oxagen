@@ -10,7 +10,11 @@ import {
   resolveActorOrgRole as resolveActorRole,
   resolveOperatorUserId,
 } from "./lib/api-key-authz";
-import { revokeHostEnrollment } from "./lib/tacho-host-revoke";
+import {
+  retireEnrollmentKeys,
+  revokeHostEnrollment,
+} from "./lib/tacho-host-revoke";
+import { hostReadColumns } from "./lib/tacho-gateway-columns";
 import { logger } from "./logger";
 
 function denied(message: string): CapabilityError {
@@ -48,12 +52,28 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
         eq(schema.tachoHosts.publicId, input.hostEnrollmentId),
         eq(schema.tachoHosts.orgId, ctx.orgId),
       ),
+      // Revoking a host has nothing to do with the gateway tier, and must not
+      // start failing because the column it never reads is not there yet.
+      columns: await hostReadColumns(tx),
     });
     if (!host) {
       throw denied("Forbidden: unknown Tacho host");
     }
     if (host.status === "revoked" && host.revokedAt) {
-      return { revokedAt: host.revokedAt, already: true };
+      // Still sweep the keys. A host revoked BEFORE the sweep existed had only
+      // its `api_key_id` deleted, so its gateway key is live until it expires —
+      // and that is exactly the population the sweep was written for. Returning
+      // early here skipped precisely them.
+      //
+      // Nothing else about this path repeats: no host update, no queued
+      // command, and the answer carries the ORIGINAL revocation instant,
+      // because the host was revoked when it was revoked.
+      const retiredCount = await retireEnrollmentKeys(tx, host, {
+        orgId: ctx.orgId,
+        userId: operatorUserId,
+        now,
+      });
+      return { revokedAt: host.revokedAt, already: true, retiredCount };
     }
     await revokeHostEnrollment(tx, host, {
       orgId: ctx.orgId,
@@ -62,10 +82,13 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
       reason: input.reason ?? null,
       now,
     });
-    return { revokedAt: now, already: false };
+    return { revokedAt: now, already: false, retiredCount: null };
   });
 
-  if (!result.already) {
+  // A first revocation is always worth an audit event. A repeat is worth one
+  // only when it actually took a credential away — which by definition the
+  // first revocation did not, so it is a new fact rather than a duplicate.
+  if (!result.already || (result.retiredCount ?? 0) > 0) {
     emitSecurityEvent({
       eventType: "api_key.revoked",
       actorUserId: operatorUserId,
@@ -78,8 +101,15 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
       requestId: ctx.requestId ?? null,
     });
     logger.info(
-      { orgId: ctx.orgId, hostEnrollmentId: input.hostEnrollmentId },
-      "tacho.enrollment.revoke: host revoked",
+      {
+        orgId: ctx.orgId,
+        hostEnrollmentId: input.hostEnrollmentId,
+        already: result.already,
+        retiredCount: result.retiredCount,
+      },
+      result.already
+        ? "tacho.enrollment.revoke: retired keys an earlier revocation left live"
+        : "tacho.enrollment.revoke: host revoked",
     );
   }
   return {
