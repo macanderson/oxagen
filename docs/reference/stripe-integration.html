@@ -207,9 +207,18 @@ matches the provider within one round-trip.</p>
       billing-cycle anchor at the provider, which invoices the new period <em>immediately</em>, prorations disabled
       or not. An annual subscriber moving to a monthly plan previews a NEGATIVE proration (credit for the unused
       year) and would otherwise take the <code>none</code> branch — quoting $0 while a full month was charged.
-      So when the interval moves, the change is billed under <code>always_invoice</code> and quoted from the
-      invoice <strong>total</strong> rather than the proration lines: the anchor-reset charge is a non-proration
-      line, which <code>amountCents</code> cannot see.</li>
+      So when the interval moves, the change is billed under <code>always_invoice</code> and quoted from the whole
+      invoice rather than the proration lines: the anchor-reset charge is a non-proration line, which
+      <code>amountCents</code> cannot see. The figure quoted is <code>amount_due</code>, not <code>total</code> —
+      see <em>What the customer is asked for</em> below.</li>
+  <li><strong>The quote is what will be collected, not what the invoice comes to.</strong>
+      <code>total</code> is the invoice; <code>amount_due</code> is what the provider will actually take, after it
+      applies whatever credit sits on the customer's account from a refund, an overpayment or a credit note. The
+      two agree for a customer carrying no balance and part company for one who does, and the interval-change
+      figure is presented to a person as what happens to their card <em>now</em> — so quoting the total overstated
+      the charge by the whole balance. The preview exposes both (<code>totalCents</code>,
+      <code>amountDueCents</code>), the quote reads the second, and the swap logs both so a quote can be
+      reconciled. This is the same distinction the adapter already drew for issued invoices.</li>
   <li><strong>No preview, no quote.</strong> The two paths diverge deliberately when the provider cannot answer.
       <code>changeOrgPlan</code> settles an unknown direction as <code>always_invoice</code>, because the provider
       bills the true difference either way. <code>previewPlanChange</code> raises
@@ -257,8 +266,9 @@ matches the provider within one round-trip.</p>
       Three cases are distinguished on purpose: no proration lines at all is a true zero; lines carrying the anchor
       are summed (and may legitimately net to zero); lines present with none carrying the anchor cannot be
       attributed and raise <code>ProrationAttributionError</code> rather than a fabricated zero — the
-      <code>?? 0</code> lesson one layer down. The invoice <code>total</code> used for interval changes is
-      deliberately unfiltered: the invoice the anchor reset raises really does collect everything on it.</li>
+      <code>?? 0</code> lesson one layer down. The invoice-level figures used for interval changes are
+      deliberately unfiltered: the invoice the anchor reset raises really does collect everything on it. Of those,
+      <code>amountDueCents</code> is the one quoted, for the reason given above.</li>
   <li><strong>The credit grant is decided by the allowance delta, never by the invoice.</strong> Whether the customer
       owes money and whether their included allowance went up are different questions.
       <code>grantProratedPlanUpgradeCredits</code> is delta-guarded on
@@ -272,6 +282,17 @@ matches the provider within one round-trip.</p>
       reached Stripe whose response was lost. The active price is read from the provider; the local column is the
       fallback only when the provider will not answer (in which case the swap could not be issued either), and when
       the two disagree the stale row is resynced rather than left wrong.</li>
+  <li><strong>The interval is read from the provider for the same reason, and by the same call.</strong>
+      <code>subscriptions.billing_interval</code> is written by that same post-mutation sync and is stale in the
+      same failure — and what it decides is worse to get wrong, because it is what says whether this change resets
+      the billing-cycle anchor. After a monthly→annual swap whose sync was lost, the column still reads
+      <code>month</code>, so a move back to monthly looks same-interval: its negative proration reads as a
+      downgrade, <code>none</code> is selected, and the quote is $0 while the provider resets the anchor and
+      invoices the new month regardless. <code>resolveActiveProviderState</code> returns the price and the interval
+      from the one subscription read, and both the swap path and the quote path take the interval from it, so the
+      confirmation screen and the charge are decided by the same subscription. The local column remains the
+      fallback, and the swap logs both so a row drifting from the provider is visible before its consequences
+      are.</li>
   <li>The entitlement tier ordering (<code>TIER_ORDER</code> / <code>meetsMinimumTier</code>) answers a different
       question — <em>does this plan include that feature</em> — and is never read as a price direction. The two
       disagree in the live catalogue: Enterprise outranks Scale on features and costs half as much, so deciding
