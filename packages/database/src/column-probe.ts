@@ -28,7 +28,7 @@
  * third time becomes the defect.
  */
 
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import {
   assertDataPlaneUsable,
   getScope,
@@ -36,8 +36,19 @@ import {
 } from "@oxagen/tenancy";
 import type { Tx } from "./tenant";
 
-/** The least a caller must hand over: something that can run a statement. */
-export type ProbeTx = Pick<Tx, "execute">;
+/**
+ * The least a caller must hand over: something that can run a statement.
+ *
+ * Declared structurally rather than as `Pick<Tx, "execute">`, because the
+ * probe needs exactly one capability — issue this statement, hand back rows —
+ * and pinning Drizzle's return type would exclude every caller that holds a
+ * deliberately narrowed transaction type, `tacho-host.ts`'s `TachoTx` among
+ * them. A method rather than a property so the parameter stays bivariant and
+ * those narrower shapes remain assignable.
+ */
+export interface ProbeTx {
+  execute(query: SQL): unknown;
+}
 
 /** A column identified the way `information_schema` identifies one. */
 export interface ColumnRef {
@@ -104,8 +115,11 @@ export async function planeKeyFor(orgId: string): Promise<string> {
  * from rather than under a guess.
  */
 export async function ambientPlaneKey(): Promise<string> {
+  // Nullish rather than `=== undefined`: `getScope()` answers `null` outside a
+  // scope, and a strict identity check would have treated that as a scope and
+  // read `orgId` off it.
   const scope = getScope();
-  return scope === undefined ? "shared" : planeKeyFor(scope.orgId);
+  return scope == null ? "shared" : planeKeyFor(scope.orgId);
 }
 
 const keyOf = (planeKey: string, ref: ColumnRef): string =>

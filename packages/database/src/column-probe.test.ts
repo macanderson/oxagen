@@ -47,7 +47,10 @@ function fakeTx(present: string[]): ProbeTx & { probes: number } {
       return asked === undefined ? [] : [{ "?column?": 1 }];
     },
   };
-  return tx as ProbeTx & { probes: number };
+  // Through `unknown`: the fixture answers with plain rows, while `execute`
+  // is declared to return Drizzle's `PgRaw`. Nothing here touches the parts
+  // that differ — the probe reads the result as an iterable and nothing else.
+  return tx as unknown as ProbeTx & { probes: number };
 }
 
 describe("hasColumn", () => {

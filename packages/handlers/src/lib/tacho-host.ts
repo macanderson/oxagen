@@ -51,6 +51,11 @@ interface TachoTx {
       where: (condition: unknown) => Promise<unknown>;
     };
   };
+  // Needed by the gateway-column probe, which asks `information_schema`
+  // whether migration 20260917140000 has been applied before this reads a
+  // column that may not exist yet. It runs on THIS transaction on purpose: an
+  // answer from another connection would be an answer about another database.
+  execute(query: never): unknown;
 }
 
 export function tachoDenied(
