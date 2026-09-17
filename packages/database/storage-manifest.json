@@ -3344,7 +3344,7 @@
       "writes": []
     }
   ],
-  "contentHash": "8a7457b62936800ced038a64fbfe1622cd51a5ab04c1bae91f9f804cc1163bce",
+  "contentHash": "e3eeae373fa9dafc62fbb9a28489ad42fb9c5350dd679c58b09ae0a65a398715",
   "domains": [
     {
       "name": "agent",
@@ -10725,6 +10725,13 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "pending_upgrade_from_plan_id",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:billing.plans",
+          "type": "uuid"
         },
         {
           "name": "status",

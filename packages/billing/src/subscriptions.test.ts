@@ -61,12 +61,26 @@ vi.mock("./logger", () => ({ logger: loggerMock }));
 // DB mock
 // ---------------------------------------------------------------------------
 
+/**
+ * Every `set(...)` payload written to billing.subscriptions, in order. The
+ * plan-upgrade intent (`pendingUpgradeFromPlanId`) is recorded as a write
+ * before the provider swap, so a mock without `update` makes `changeOrgPlan`
+ * throw rather than exercise the path under test.
+ */
+const subscriptionUpdates: Array<Record<string, unknown>> = [];
+
 const dbMocks = {
   query: {
     plans: { findFirst: vi.fn() },
     subscriptions: { findFirst: vi.fn() },
   },
   insert: vi.fn(),
+  update: vi.fn(() => ({
+    set: (values: Record<string, unknown>) => {
+      subscriptionUpdates.push(values);
+      return { where: vi.fn().mockResolvedValue(undefined) };
+    },
+  })),
 };
 
 vi.mock("@oxagen/database", async (importOriginal) => {

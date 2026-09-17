@@ -234,7 +234,18 @@ matches the provider within one round-trip.</p>
       already happened and the call returns without touching the provider. Re-deciding would compare the
       subscription against its own current price, read no movement, and send <code>none</code> where the first
       attempt sent <code>always_invoice</code> — under the same idempotency key
-      (<code>subscription + target price + optional requestId</code>), which Stripe rejects rather than replaying.</li>
+      (<code>subscription + target price + optional requestId</code>), which Stripe rejects rather than replaying.
+      The <em>swap</em> is a no-op on a retry; the rest of the operation is not. The retry re-emits the audit event
+      and finishes the prorated credit grant if the first attempt died before reaching it.</li>
+  <li><strong>The plan being left is written down before the swap.</strong> The prorated upgrade grant is sized from
+      the allowance of the plan moved <em>from</em>, and the swap destroys that: <code>upgradeSubscription</code>
+      syncs the subscription synchronously and the sync repoints <code>plan_id</code> at the target. A call that died
+      between the two therefore left a customer upgraded and uncredited, with nothing left to recompute the grant
+      from. <code>billing.subscriptions.pending_upgrade_from_plan_id</code> is that record: written before the
+      provider is asked to do anything, read by the retry, and cleared only once the grant has settled — so a grant
+      that fails leaves it standing for the next attempt. It is deliberately absent from
+      <code>syncSubscriptionFromStripe</code>'s conflict <code>SET</code>, so a provider sync cannot erase an intent
+      whose work is unfinished. It is an identity, not an amount: the rule above still holds.</li>
   <li>The entitlement tier ordering (<code>TIER_ORDER</code> / <code>meetsMinimumTier</code>) answers a different
       question — <em>does this plan include that feature</em> — and is never read as a price direction. The two
       disagree in the live catalogue: Enterprise outranks Scale on features and costs half as much, so deciding
