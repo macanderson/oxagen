@@ -1,5 +1,5 @@
 /**
- * The one client-IP derivation in the repo.
+ * The one client-IP derivation in the repo (ADR-083).
  *
  * Every surface that hands a client address to an authorization decision reads
  * it through here. That is not tidiness: the address feeds the IAM `ip_ranges`

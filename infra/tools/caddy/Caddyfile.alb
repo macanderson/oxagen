@@ -27,7 +27,7 @@
 # placeholder returns the load balancer's own private address and every caller
 # looks like the same one.
 #
-# ## Client address
+# ## Client address (ADR-083)
 #
 # Every application upstream below is handed the same client address twice, as
 # `X-Oxagen-Client-Ip` and as `X-Forwarded-For`, and both are SET with
