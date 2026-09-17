@@ -91,7 +91,7 @@
       "launcherHint": "over this workspace",
       "close": "Close the assistant",
       "thinking": "Working…",
-      "recordedAs": "recorded as <run>{id}</run>",
+      "recordedAs": "recorded as {run}",
       "parked": "{count, plural, one {# write is waiting on a person} other {# writes are waiting on a person}}. Approve or deny them on Fleet.",
       "needsWorkspace": "The assistant answers over one workspace. Open a workspace to ask it something.",
       "intro": {

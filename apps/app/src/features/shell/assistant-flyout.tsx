@@ -33,13 +33,23 @@
 // a turn compares the generation it was asked on, so its reply, its run and
 // its conversation id reach only the transcript that asked for them.
 //
-// Each answer names the run it was recorded as, as a link to that run's page.
-// `list_runs` excludes the `chat` and `api-chat` surfaces — the assistant is
-// Oxagen's, and its turns are recorded but never listed as the customer's own
-// runs (`packages/handlers/src/run.list.ts`) — so this link is the only way
-// an operator reaches the evidence the sentence claims exists. That handler's
-// own comment says as much: `ledgerIdentityQuery` keeps the surfaces "because
-// the flyout's per-turn run link opens the run through `get_run`".
+// Each answer names the run it was recorded as, and names it as text, not as a
+// link. `list_runs` excludes the `chat` and `api-chat` surfaces — the
+// assistant is Oxagen's, and its turns are recorded but never listed as the
+// customer's own runs (`packages/handlers/src/run.list.ts`) — so a link here
+// would be the only claimed way to the evidence, and there is nothing at the
+// other end of it yet: `app/[org]/[ws]/runs/[run]/page.tsx` renders a title
+// and reads nothing until WL-35 builds the Run page, and `get_run` declares
+// `layers: [schema, api, mcp, unit, docs]` with no `app`, so the contract
+// itself makes no app promise to bind. A link to a page that shows a title is
+// the same dead end with an anchor on it, and this is the one surface where
+// the link would be the whole claim rather than a convenience beside a row
+// that is already on screen.
+//
+// The id stays, in mono, because it is true and it is the handle: `get_run` is
+// implemented on the API, MCP and CLI surfaces, so an operator can inspect the
+// run today with the id this prints. The link belongs in the change that gives
+// it somewhere to go.
 //
 // Closing returns focus where it came from. The host is always mounted and
 // goes `inert` when it closes, so focus left on a control inside it would land
@@ -54,9 +64,7 @@ import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
 import { parseShellPath } from "./nav";
 import { useShellState } from "./shell-state";
-import { routes, type SafePath } from "@/shared/safe-path";
-import { linkText, mono } from "@/ui/control-styles";
-import { SafeLink, useNavigate } from "@/ui/navigation";
+import { useNavigate } from "@/ui/navigation";
 
 type Entry =
   | { kind: "asked"; id: string; text: string }
@@ -65,12 +73,6 @@ type Entry =
       id: string;
       text: string;
       runId: string;
-      /**
-       * The run's page, built from the workspace the turn was asked in rather
-       * than from the current URL: the transcript outlives a step onto an
-       * organization page, where there is no workspace to build it from.
-       */
-      runHref: SafePath;
       parked: readonly ParkedCard[];
     }
   | { kind: "refused"; id: string; code: Refusal };
@@ -235,7 +237,6 @@ export function AssistantFlyout() {
             id: `${id}-a`,
             text: result.value.reply,
             runId: result.value.runId,
-            runHref: routes.run(org, ws, result.value.runId),
             parked: result.value.parkedCards,
           },
         ]);
@@ -325,19 +326,11 @@ export function AssistantFlyout() {
                 ) : entry.kind === "answered" ? (
                   <div data-testid="assistant-answer">
                     <p className="whitespace-pre-wrap text-sm">{entry.text}</p>
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      {t.rich("recordedAs", {
-                        id: entry.runId,
-                        run: (chunks) => (
-                          <SafeLink
-                            to={entry.runHref}
-                            data-testid="assistant-run-link"
-                            className={`${linkText} ${mono}`}
-                          >
-                            {chunks}
-                          </SafeLink>
-                        ),
-                      })}
+                    <p
+                      data-testid="assistant-recorded-as"
+                      className="mt-1 font-mono text-[11px] text-muted-foreground"
+                    >
+                      {t("recordedAs", { run: entry.runId })}
                     </p>
                     {entry.parked.length === 0 ? null : (
                       <p

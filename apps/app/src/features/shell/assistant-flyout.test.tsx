@@ -157,29 +157,20 @@ describe("AssistantFlyout", () => {
     );
   });
 
-  // list_runs and list_recent_runs exclude the chat/api-chat surfaces
-  // (packages/handlers/src/run.list.ts), so this link is the only path an
-  // operator has to the evidence the sentence beside it claims exists.
-  it("links the run to its evidence page, the only way in when the run is not listed", async () => {
+  // The Run page reads nothing until WL-35 builds it, and `get_run` declares
+  // no `app` layer, so a link here would advertise evidence that does not
+  // exist — and this is the one surface where the link would be the whole
+  // claim, because the run is excluded from every list. The id is the handle
+  // that reaches `get_run` on the API, MCP and CLI surfaces, which are built.
+  it("does not link the run while the Run page reads nothing (negative)", async () => {
     const { user } = await openFlyout();
     await ask(user, "what is live?");
-    const link = await screen.findByTestId("assistant-run-link");
-    expect(link).toHaveAttribute("href", "/acme/core-platform/runs/arun_01k9");
-    expect(link).toHaveTextContent("arun_01k9");
-  });
-
-  it("keeps each run link on the workspace its turn was asked in, not the page now showing", async () => {
-    const { user, renavigate } = await openFlyout();
-    await ask(user, "what is live?");
-    await screen.findByTestId("assistant-run-link");
-
-    // An organization page keeps the transcript and owns no workspace of its
-    // own; the link must still open the run under core-platform.
-    renavigate("/acme/billing");
-    expect(screen.getByTestId("assistant-run-link")).toHaveAttribute(
-      "href",
-      "/acme/core-platform/runs/arun_01k9",
-    );
+    const line = await screen.findByTestId("assistant-recorded-as");
+    expect(line).toHaveTextContent("arun_01k9");
+    expect(line.querySelector("a")).toBeNull();
+    expect(
+      screen.getByTestId("assistant-answer").querySelector("a"),
+    ).toBeNull();
   });
 
   it("surfaces every parked write rather than dropping the ones it cannot show", async () => {
