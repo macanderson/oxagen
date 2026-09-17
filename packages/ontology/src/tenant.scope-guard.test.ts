@@ -17,8 +17,7 @@
 //     guard still accepts all of them. It fails when someone adds a query that
 //     does not anchor the tenant — at authoring time, not in production.
 
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import ts from "typescript";
@@ -185,16 +184,34 @@ interface CorpusEntry {
  * are then listed explicitly below with the reason each is safe.
  */
 function collectCorpus(root: string): CorpusEntry[] {
-  const listed = execFileSync(
-    "git",
-    ["-C", root, "ls-files", "*.ts", "*.tsx"],
-    {
-      encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
-    },
-  )
-    .split("\n")
-    .filter(Boolean);
+  // Walked rather than listed with `git ls-files`: the CI containers run tests
+  // as a different user than the checkout owner, where git refuses the repo as
+  // "dubious ownership" and the corpus would silently collapse to nothing.
+  const SKIP = new Set([
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    ".git",
+    ".next",
+    ".turbo",
+    ".vercel",
+  ]);
+  const listed: string[] = [];
+  const walk = (dir: string) => {
+    for (const ent of readdirSync(resolve(root, dir), {
+      withFileTypes: true,
+    })) {
+      if (ent.name.startsWith(".") && ent.name !== ".github") continue;
+      const rel = dir === "" ? ent.name : `${dir}/${ent.name}`;
+      if (ent.isDirectory()) {
+        if (!SKIP.has(ent.name)) walk(rel);
+      } else if (/\.tsx?$/.test(ent.name)) {
+        listed.push(rel);
+      }
+    }
+  };
+  walk("");
 
   // Anything that looks like a query rather than an Inngest `step.run("name")`.
   const CYPHER =
