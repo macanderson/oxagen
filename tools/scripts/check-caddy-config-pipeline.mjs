@@ -157,6 +157,28 @@ export function remoteTemplate(installer) {
   return match ? match[1] : null;
 }
 
+export const CADDY_BLOCK_OPEN = "# >>> caddy-install";
+export const CADDY_BLOCK_CLOSE = "# <<< caddy-install";
+
+/**
+ * The Caddy install/reload block of the remote script, between its markers.
+ *
+ * The markers exist so this block can be EXECUTED on its own in a test, which
+ * matters more here than another regex would. The defect it was fixed for is a
+ * two-run chain — a reload fails, and the retry's `cmp` compares the render
+ * against the file that failure left behind — and no amount of reading one
+ * run's source decides a chain. The test runs this block twice against a
+ * stubbed `docker` and asserts on what the SECOND run does.
+ */
+export function caddyInstallBlock(installer) {
+  const remote = remoteTemplate(installer);
+  if (remote === null) return null;
+  const open = remote.indexOf(CADDY_BLOCK_OPEN);
+  const close = remote.indexOf(CADDY_BLOCK_CLOSE);
+  if (open === -1 || close === -1 || close < open) return null;
+  return remote.slice(open + CADDY_BLOCK_OPEN.length, close).trim();
+}
+
 /**
  * Drop comment lines before scanning for suppressed failures.
  *
@@ -381,6 +403,64 @@ export function inspect({ alb, edge, installer, registry, bootstrap }) {
     if (/caddy validate/.test(line) && /\|\|\s*true/.test(line)) {
       problems.push(
         `${BOOTSTRAP}: suppresses a \`caddy validate\` failure with \`|| true\`, which makes the validation decide nothing.`,
+      );
+    }
+  }
+
+  // ── 7. neither half may leave an unaccepted config on disk ──────────────
+  //
+  // /opt/oxagen/caddy/Caddyfile is what the installer's `cmp -s` compares
+  // against, so it has to mean "the config Caddy accepted". A config written
+  // there and not accepted makes the next run report "caddy config unchanged",
+  // skip the reload and promote the candidate as successful — while Caddy is
+  // still running the old config that forwards a caller-supplied
+  // x-oxagen-client-ip. Both halves write that file, so both are checked.
+  //
+  // These are shape assertions, not proofs: the behavioural proof is the test
+  // that runs the block twice with a failing reload. What they stop is the
+  // restore being deleted later by someone who reads it as belt-and-braces.
+  const block = caddyInstallBlock(installer);
+  if (block === null) {
+    problems.push(
+      `${INSTALLER}: the remote script's Caddy block is not delimited by \`${CADDY_BLOCK_OPEN}\` / \`${CADDY_BLOCK_CLOSE}\`. Those markers are what lets the retry-after-a-failed-reload case be executed as a test; without them that chain has no coverage at all.`,
+    );
+  } else {
+    // Comments stripped for the same reason rule 6 strips them: this block
+    // EXPLAINS the reload-ordering defect in prose, and a per-line scan over
+    // the prose finds "caddy reload" above the copy and reports the defect the
+    // comment is describing. The fix for that would be deleting the
+    // explanation, which is backwards.
+    const blockCode = joinContinuations(withoutComments(block));
+    if (!/trap\s+\S+\s+EXIT/.test(blockCode)) {
+      problems.push(
+        `${INSTALLER}: the remote Caddy block installs no \`trap ... EXIT\`, so a failed \`caddy reload\` leaves the candidate on disk. The next run's \`cmp -s\` then reports it unchanged, skips the reload, and the caller promotes it as successful.`,
+      );
+    }
+    const swapAt = lineIndexOf(
+      blockCode,
+      /cp .*Caddyfile\.incoming .*caddy\/Caddyfile/,
+    );
+    const reloadAt = lineIndexOf(blockCode, /caddy reload/);
+    if (swapAt !== -1 && reloadAt !== -1 && swapAt > reloadAt) {
+      problems.push(
+        `${INSTALLER}: the remote Caddy block reloads before it installs the candidate, so the reload is testing the previous config.`,
+      );
+    }
+    if (!/rm -f \/opt\/oxagen\/caddy\/Caddyfile\b/.test(blockCode)) {
+      problems.push(
+        `${INSTALLER}: the remote Caddy block never removes the candidate on a FIRST install whose reload failed. There is no accepted config to restore there, so leaving it is the same defect by another route.`,
+      );
+    }
+  }
+  if (/caddy reload/.test(bootCode)) {
+    const bootReloadAt = lineIndexOf(bootCode, /caddy reload/);
+    const bootRestoreAt = lineIndexOf(
+      bootCode,
+      /cp [^\n]*Caddyfile\.accepted \/opt\/oxagen\/caddy\/Caddyfile/,
+    );
+    if (bootRestoreAt === -1 || bootRestoreAt < bootReloadAt) {
+      problems.push(
+        `${BOOTSTRAP}: a validated config whose \`caddy reload\` fails is left on /opt/oxagen/caddy/Caddyfile while the running process keeps the old one. The installer reads that file as "what Caddy accepted", so the next install reports it unchanged and promotes without ever reloading. Restore the running config on the failure branch.`,
       );
     }
   }

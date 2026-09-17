@@ -10,12 +10,25 @@
  * wrong answer is a well-formed IP address.
  */
 import { describe, expect, it } from "vitest";
+import { spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   ALB_SUBNETS_PLACEHOLDER,
   BOOTSTRAP,
   CADDYFILE_ALB,
+  caddyInstallBlock,
   CANONICAL_KEY,
+  INSTALLER,
   joinContinuations,
   lineIndexOf,
   remoteTemplate,
@@ -27,6 +40,8 @@ import {
   run,
   trustedProxyDirectives,
 } from "./check-caddy-config-pipeline.mjs";
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 /** A repo state that passes, so each case can break exactly one thing. */
 function healthy() {
@@ -47,8 +62,14 @@ function healthy() {
       'echo "refusing to upload" >&2',
       'aws s3 cp "$RENDERED" "s3://$BUCKET/$CANDIDATE_KEY" --region "$REGION"',
       "read -r -d '' REMOTE_TEMPLATE <<'REMOTE_EOF' || true",
+      "# >>> caddy-install",
       "aws s3 cp s3://__BUCKET__/__CANDIDATE_KEY__ /tmp/Caddyfile.incoming --region __REGION__",
       "docker run --rm caddy:2 caddy validate --config /etc/caddy/Caddyfile",
+      "trap caddy_restore_if_unaccepted EXIT",
+      "rm -f /opt/oxagen/caddy/Caddyfile",
+      "cp /tmp/Caddyfile.incoming /opt/oxagen/caddy/Caddyfile",
+      "docker exec oxagen-caddy caddy reload --config /etc/caddy/Caddyfile",
+      "# <<< caddy-install",
       "REMOTE_EOF",
       "if [[ $st != Success ]]; then",
       "  exit 1",
@@ -65,10 +86,12 @@ function healthy() {
       "# it used to be: docker exec oxagen-caddy caddy reload ... || true",
       `if aws s3 cp "s3://\${deploy_bucket}/${CANONICAL_KEY}" /tmp/Caddyfile.incoming --region "$REGION"; then`,
       "  if docker run --rm caddy:2 caddy validate --config /etc/caddy/Caddyfile; then",
+      "    cp /opt/oxagen/caddy/Caddyfile /tmp/Caddyfile.accepted",
       "    cp /tmp/Caddyfile.incoming /opt/oxagen/caddy/Caddyfile",
       "    if docker exec oxagen-caddy caddy reload --config /etc/caddy/Caddyfile; then",
       '      echo "reloaded"',
       "    else",
+      "      cp /tmp/Caddyfile.accepted /opt/oxagen/caddy/Caddyfile",
       '      echo "RELOAD FAILED" >&2',
       "    fi",
       "  fi",
@@ -456,5 +479,144 @@ describe("the repository as it stands", () => {
     expect(BOOTSTRAP).toBe("infra/modules/app-node/user-data.sh.tftpl");
     expect(CANONICAL_KEY).toBe("_caddy/Caddyfile");
     expect(run()).toEqual([]);
+  });
+});
+
+/**
+ * The retry chain, EXECUTED rather than read.
+ *
+ * Everything above this point is a text assertion, and text assertions cannot
+ * decide this one: the defect needs two runs. Run one's `caddy reload` fails
+ * and the candidate is left on disk; run two's `cmp -s` compares the same
+ * render against that file, finds it identical, prints "caddy config
+ * unchanged", skips the reload and exits 0 — at which point the caller promotes
+ * the candidate to the canonical key and reports success, with Caddy still
+ * running the old config. An operator reading that success enables
+ * TRUST_EDGE_CLIENT_IP_HEADER over a Caddy that forwards a caller-supplied
+ * x-oxagen-client-ip, and the IAM `ip_ranges` bypass is open again.
+ *
+ * So the assertion that matters is about run TWO. A test that only checked "the
+ * restore happened" would pass against a version that restores the file and
+ * then still reports unchanged, which is the version that ships the bypass.
+ *
+ * The block is executed with /opt and /tmp rewritten into a temp root and with
+ * `aws` and `docker` stubbed on PATH. Control flow is what is under test; the
+ * paths are not.
+ */
+describe("the remote Caddy block, executed", () => {
+  const RENDER = "# rendered candidate\n:80 {\n}\n";
+  const RUNNING = "# the config caddy is running\n:80 {\n}\n";
+
+  function runBlock({
+    root,
+    reloadFails,
+  }: {
+    root: string;
+    reloadFails: boolean;
+  }): { code: number; stdout: string; stderr: string } {
+    const block = caddyInstallBlock(
+      readFileSync(join(repoRoot, INSTALLER), "utf8"),
+    );
+    expect(block).not.toBeNull();
+
+    const bin = join(root, "bin");
+    mkdirSync(bin, { recursive: true });
+    // `aws s3 cp <key> <dest>` — the only aws call in this block. It writes the
+    // render, standing in for the candidate object download.
+    writeFileSync(
+      join(bin, "aws"),
+      `#!/bin/sh\ncp "${join(root, "render")}" "$4"\n`,
+      { mode: 0o755 },
+    );
+    // `docker run ... caddy validate` always succeeds — the render is valid,
+    // which is the case that matters. `docker exec ... caddy reload` is the
+    // one the test drives.
+    writeFileSync(
+      join(bin, "docker"),
+      `#!/bin/sh\ncase "$1" in\n  run) exit 0 ;;\n  exec) exit ${reloadFails ? "1" : "0"} ;;\nesac\nexit 0\n`,
+      { mode: 0o755 },
+    );
+
+    const script =
+      "set -euo pipefail\n" +
+      block!
+        .replaceAll("/opt/oxagen", join(root, "opt/oxagen"))
+        .replaceAll("/tmp/Caddyfile", join(root, "tmp/Caddyfile"))
+        .replaceAll("__BUCKET__", "bucket")
+        .replaceAll("__REGION__", "us-east-1")
+        .replaceAll("__CANDIDATE_KEY__", "candidate");
+
+    const result = spawnSync("bash", ["-c", script], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}` },
+    });
+    return {
+      code: result.status ?? -1,
+      stdout: result.stdout ?? "",
+      stderr: result.stderr ?? "",
+    };
+  }
+
+  function makeRoot(withRunningConfig: boolean): string {
+    const root = mkdtempSync(join(tmpdir(), "caddy-block-"));
+    mkdirSync(join(root, "opt/oxagen/caddy"), { recursive: true });
+    mkdirSync(join(root, "tmp"), { recursive: true });
+    writeFileSync(join(root, "render"), RENDER);
+    if (withRunningConfig) {
+      writeFileSync(join(root, "opt/oxagen/caddy/Caddyfile"), RUNNING);
+    }
+    return root;
+  }
+
+  it("retries the reload after a failed one, instead of reporting unchanged", () => {
+    const root = makeRoot(true);
+    const configPath = join(root, "opt/oxagen/caddy/Caddyfile");
+
+    // Run 1: the reload fails transiently.
+    const first = runBlock({ root, reloadFails: true });
+    expect(first.code).not.toBe(0);
+    // The file on disk must still be what Caddy is running. This is the
+    // property the restore establishes, and on its own it is NOT the fix.
+    expect(readFileSync(configPath, "utf8")).toBe(RUNNING);
+
+    // Run 2: same render, reload now succeeds. THIS is the assertion that
+    // matters — it must take the reload branch, not the "unchanged" one.
+    const second = runBlock({ root, reloadFails: false });
+    expect(second.code).toBe(0);
+    expect(second.stdout).toContain("caddy reloaded");
+    expect(second.stdout).not.toContain("caddy config unchanged");
+    expect(readFileSync(configPath, "utf8")).toBe(RENDER);
+  });
+
+  it("removes the candidate when a FIRST install's reload fails", () => {
+    // No accepted config exists on a brand-new node, so there is nothing to
+    // restore. Leaving the candidate would make the next run's `cmp` report it
+    // unchanged — the same defect, reached where the restore cannot help.
+    const root = makeRoot(false);
+    const configPath = join(root, "opt/oxagen/caddy/Caddyfile");
+
+    const first = runBlock({ root, reloadFails: true });
+    expect(first.code).not.toBe(0);
+    expect(existsSync(configPath)).toBe(false);
+
+    const second = runBlock({ root, reloadFails: false });
+    expect(second.code).toBe(0);
+    expect(second.stdout).toContain("caddy reloaded");
+    expect(second.stdout).not.toContain("caddy config unchanged");
+  });
+
+  it("reports unchanged only when the config was genuinely accepted", () => {
+    // The other half of the contract. Without this, a fix that simply never
+    // took the unchanged branch would pass both cases above while reloading
+    // Caddy on every install for no reason.
+    const root = makeRoot(true);
+    const first = runBlock({ root, reloadFails: false });
+    expect(first.code).toBe(0);
+    expect(first.stdout).toContain("caddy reloaded");
+
+    const second = runBlock({ root, reloadFails: false });
+    expect(second.code).toBe(0);
+    expect(second.stdout).toContain("caddy config unchanged");
+    expect(second.stdout).not.toContain("caddy reloaded");
   });
 });

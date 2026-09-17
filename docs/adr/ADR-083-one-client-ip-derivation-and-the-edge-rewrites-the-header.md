@@ -194,6 +194,29 @@ logs keep the full chain for anything that later does.
   RFC1918, and strict mode then walks past it into the prefix the caller wrote.
 - An IP-scoped mandate now denies when the caller cannot be identified. That is
   a behaviour change and the intended one.
+- **The signal an operator reads before setting that flag has to be true, and it
+  was not.** The installer decided whether to reload Caddy with
+  `cmp -s <render> /opt/oxagen/caddy/Caddyfile`, which asks whether the render
+  differs from a file on disk when the question is whether it differs from what
+  Caddy is RUNNING. A transient `caddy reload` failure aborted the remote script
+  under `set -e` with the candidate already copied over that file and nothing to
+  restore it; the candidate was correctly not promoted, but it stayed on disk.
+  The retry then compared the same render against the file the failure had left,
+  found them identical, printed "caddy config unchanged", skipped the reload,
+  exited 0 — and the caller promoted the candidate and reported success. An
+  operator acting on that success sets `TRUST_EDGE_CLIENT_IP_HEADER=true` over a
+  Caddy still running the old config, which has no rule for
+  `x-oxagen-client-ip` and forwards a caller-supplied copy unchanged. The
+  `ip_ranges` bypass is open again, by a path that reports green at every step.
+  The file is now kept honest instead — a `trap ... EXIT` restores the last
+  accepted config, or removes the candidate where a first install has none to
+  restore — so the existing comparison is correct again. Reading the running
+  config instead (`caddy adapt` plus the admin API) is the stronger answer and
+  was not taken: it compares adapted JSON, needs canonicalisation to do so
+  safely, and changes meaning silently if a future Caddyfile disables the admin
+  endpoint. The node bootstrap had the same shape from the other side — a
+  validated config whose reload failed was left on the same file while the
+  container kept the old one — and restores too.
 - `TRUST_EDGE_CLIENT_IP_HEADER` is a flag the operator must set, and until it is
   set the edge header this ADR introduced does nothing. That is the cost of the
   mechanical version of the invariant, and it is cheaper than a header nobody

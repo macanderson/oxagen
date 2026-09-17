@@ -335,13 +335,29 @@ if aws s3 cp "s3://${deploy_bucket}/_caddy/Caddyfile" /tmp/Caddyfile.incoming \
      --region "$REGION" --only-show-errors; then
   if docker run --rm -v /tmp/Caddyfile.incoming:/etc/caddy/Caddyfile:ro caddy:2 \
        caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile; then
+    # Kept so the reload failure below can put back what Caddy is actually
+    # running. Validation proves the file PARSES; it does not prove the running
+    # process took it, and a validated config whose reload fails transiently was
+    # left on disk exactly like a broken one — the same window the comment above
+    # describes, reached through the other door.
+    #
+    # This file is read later by install-node-scripts.sh, whose `cmp -s` treats
+    # it as "the config Caddy accepted". One left here unaccepted makes that
+    # comparison report "unchanged", which skips the reload and promotes the
+    # candidate as successful — so a bootstrap that quietly leaves the wrong
+    # file reopens the TRUST_EDGE_CLIENT_IP_HEADER hazard from the installer
+    # side. The file has to mean what the installer reads it to mean.
+    cp /opt/oxagen/caddy/Caddyfile /tmp/Caddyfile.accepted
     cp /tmp/Caddyfile.incoming /opt/oxagen/caddy/Caddyfile
     if docker exec oxagen-caddy caddy reload \
          --config /etc/caddy/Caddyfile --adapter caddyfile; then
       echo "caddy: published config installed and reloaded"
     else
+      cp /tmp/Caddyfile.accepted /opt/oxagen/caddy/Caddyfile
       echo "CADDY BOOTSTRAP: config validated but reload FAILED — node is not serving" >&2
+      echo "CADDY BOOTSTRAP: restored the config Caddy is running, so a later install still reloads" >&2
     fi
+    rm -f /tmp/Caddyfile.accepted
   else
     echo "CADDY BOOTSTRAP: published s3://${deploy_bucket}/_caddy/Caddyfile FAILED validation" >&2
     echo "CADDY BOOTSTRAP: keeping the 503 placeholder; this node will stay unhealthy on purpose" >&2

@@ -201,19 +201,82 @@ ls -l /opt/oxagen/bin
 # validation failure ends this script, SSM reports Failed, and the caller never
 # promotes — which is what keeps a bad render out of the object a future node
 # boots from.
+# >>> caddy-install
 aws s3 cp s3://__BUCKET__/__CANDIDATE_KEY__ /tmp/Caddyfile.incoming --region __REGION__
 docker run --rm -v /tmp/Caddyfile.incoming:/etc/caddy/Caddyfile:ro caddy:2 \
   caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
+# `/opt/oxagen/caddy/Caddyfile` is what the `cmp` below compares against, so it
+# has to mean "the config Caddy ACCEPTED". Between the copy and a successful
+# reload it means something else — a candidate that has been written and not yet
+# accepted — and if the script ends in that window the file keeps that meaning
+# forever, because nothing reads it again to find out.
+#
+# That is the whole of the defect this guard closes, and it is a chain rather
+# than a line. A transient `caddy reload` failure aborted here under `set -e`;
+# the candidate stayed on disk; SSM reported Failed and the candidate was
+# correctly NOT promoted. Then the retry, with the same render, compared that
+# render against the file the FAILED attempt had left — found them identical —
+# printed "caddy config unchanged", skipped the reload, exited 0, and the caller
+# promoted the candidate to the canonical key and reported success. An operator
+# reading that success then enables TRUST_EDGE_CLIENT_IP_HEADER while Caddy is
+# still running the OLD config, which has no rule for x-oxagen-client-ip and
+# forwards a caller-supplied copy unchanged — and the IAM `ip_ranges` bypass
+# this whole branch exists to close is open again, by a route that reports
+# green at every step.
+#
+# `cmp -s` was asking the wrong question: whether the render differs from a file
+# on disk, when what it needs is whether the render differs from what Caddy is
+# running. The cheap fix is to keep the file honest rather than to find a second
+# source of truth. Reading the running config instead is stronger — `caddy adapt`
+# plus the admin API at :2019 — but it compares adapted JSON to adapted JSON,
+# needs canonicalisation to do that safely, and silently changes meaning if a
+# future Caddyfile disables the admin endpoint. Not cheap, so not taken.
+#
+# The restore is a trap and NOT the `set -e` unwind, because `set -e` restores
+# nothing: it is the mechanism that skipped the restore in the first place. The
+# trap is installed unconditionally, above the branch, so a future early return
+# anywhere below cannot step over it; `CADDY_SWAPPED` is what decides whether it
+# has anything to undo. It is the only `trap ... EXIT` in this remote script —
+# a second one would REPLACE it rather than add to it.
+caddy_restore_if_unaccepted() {
+  [ -n "${CADDY_SWAPPED:-}" ] || return 0
+  if [ -n "${CADDY_HAD_PREV:-}" ]; then
+    cp -f /opt/oxagen/caddy/Caddyfile.prev /opt/oxagen/caddy/Caddyfile
+    echo "CADDY: reload did not succeed — restored the last accepted config" >&2
+  else
+    # First install on this node: there is no accepted config to go back to, so
+    # the candidate is REMOVED. Leaving it would make the next run's `cmp`
+    # report unchanged against a file nothing ever accepted, which is the same
+    # defect reached by a different route.
+    rm -f /opt/oxagen/caddy/Caddyfile
+    echo "CADDY: reload did not succeed on first install — removed the unaccepted candidate" >&2
+  fi
+}
+trap caddy_restore_if_unaccepted EXIT
+
 if cmp -s /tmp/Caddyfile.incoming /opt/oxagen/caddy/Caddyfile; then
   echo "caddy config unchanged"
 else
-  cp /opt/oxagen/caddy/Caddyfile /opt/oxagen/caddy/Caddyfile.prev || true
+  if [ -f /opt/oxagen/caddy/Caddyfile ]; then
+    cp /opt/oxagen/caddy/Caddyfile /opt/oxagen/caddy/Caddyfile.prev
+    CADDY_HAD_PREV=1
+  else
+    # Stale .prev from an earlier node state would otherwise be restored over a
+    # first install as though it were this node's accepted config.
+    rm -f /opt/oxagen/caddy/Caddyfile.prev
+    CADDY_HAD_PREV=
+  fi
+  CADDY_SWAPPED=1
   cp /tmp/Caddyfile.incoming /opt/oxagen/caddy/Caddyfile
   docker exec oxagen-caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+  # Cleared only on the line AFTER the reload returned 0. Anything that ends the
+  # script before here leaves it set, and the trap puts the old config back.
+  CADDY_SWAPPED=
   echo "caddy reloaded"
 fi
 rm -f /tmp/Caddyfile.incoming
+# <<< caddy-install
 REMOTE_EOF
 
 # __BUCKET__/__REGION__ in the template are substituted here rather than
