@@ -8,6 +8,7 @@ import {
 import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/types";
 import { isProductionRuntime } from "@oxagen/config/env";
 import { db, type Database } from "./client";
+import { runOnPlane } from "./column-probe";
 import { dedicatedDb } from "./data-plane-pool";
 import { rlsEnforced } from "./tenant-flag";
 import { recordIfUnscoped } from "./unscoped-meter";
@@ -103,15 +104,24 @@ export function isOrgOnlyWorkspaceReadRefusal(err: unknown): boolean {
  * tenant explicitly moved its data out of — the precise failure ADR-042 exists
  * to make impossible.
  */
-async function tenantPlaneDb(orgId: string): Promise<Database> {
+async function tenantPlaneDb(
+  orgId: string,
+): Promise<{ database: Database; planeKey: string }> {
   const plane = await resolveDataPlane(orgId, "postgres");
   assertDataPlaneUsable(plane);
-  if (plane.mode === "shared") return db();
-  return dedicatedDb({
-    orgId,
-    config: plane.config as PostgresPlaneConfig,
-    configDigest: plane.configDigest,
-  });
+  if (plane.mode === "shared") return { database: db(), planeKey: "shared" };
+  return {
+    database: dedicatedDb({
+      orgId,
+      config: plane.config as PostgresPlaneConfig,
+      configDigest: plane.configDigest,
+    }),
+    // The key the deploy-before-migrate probes file their answers under. It
+    // comes from THIS resolution — the one that just chose the connection —
+    // rather than from a second one made later by the probe, which could
+    // disagree with it if the organisation were repointed in between (#3223).
+    planeKey: `dedicated:${plane.configDigest}`,
+  };
 }
 
 /**
@@ -132,17 +142,19 @@ export async function withTenantDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   // The SAME GUC/RLS setup runs on a dedicated plane as on the shared one — a
   // customer-controlled endpoint is a second place the policies are enforced,
   // never an excuse to skip them.
-  const database = await tenantPlaneDb(orgId);
-  return database.transaction(async (tx) => {
-    await tx.execute(sql`
+  const { database, planeKey } = await tenantPlaneDb(orgId);
+  return runOnPlane(planeKey, () =>
+    database.transaction(async (tx) => {
+      await tx.execute(sql`
       select
         set_config('app.current_org_id', ${orgId}, true),
         set_config('app.current_workspace_id', ${workspaceGuc(workspaceId)}, true),
         set_config('app.org_wide', 'off', true),
         set_config('app.rls_bypass', ${bypass}, true)
     `);
-    return fn(tx);
-  });
+      return fn(tx);
+    }),
+  );
 }
 
 /**
@@ -213,24 +225,26 @@ export async function withTenantDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
 export async function withOrgDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   const { orgId } = requireScope();
   const bypass = rlsEnforced() ? "off" : "on";
-  const database = await tenantPlaneDb(orgId);
-  return database.transaction(async (tx) => {
-    // The workspace GUC is set to the EMPTY STRING, not to
-    // ORG_ONLY_WORKSPACE_GUC. `nullif('', '')::uuid` is NULL, which casts
-    // cleanly; the org-only marker would raise at plan time on every policy
-    // that names the GUC, org-wide disjunct or not, because Postgres folds the
-    // cast while estimating selectivity. Setting it explicitly rather than
-    // leaving it inherited also means a `withOrgDb` nested inside an open
-    // transaction cannot pick up the caller's workspace.
-    await tx.execute(sql`
+  const { database, planeKey } = await tenantPlaneDb(orgId);
+  return runOnPlane(planeKey, () =>
+    database.transaction(async (tx) => {
+      // The workspace GUC is set to the EMPTY STRING, not to
+      // ORG_ONLY_WORKSPACE_GUC. `nullif('', '')::uuid` is NULL, which casts
+      // cleanly; the org-only marker would raise at plan time on every policy
+      // that names the GUC, org-wide disjunct or not, because Postgres folds the
+      // cast while estimating selectivity. Setting it explicitly rather than
+      // leaving it inherited also means a `withOrgDb` nested inside an open
+      // transaction cannot pick up the caller's workspace.
+      await tx.execute(sql`
       select
         set_config('app.current_org_id', ${orgId}, true),
         set_config('app.current_workspace_id', '', true),
         set_config('app.org_wide', 'on', true),
         set_config('app.rls_bypass', ${bypass}, true)
     `);
-    return fn(tx);
-  });
+      return fn(tx);
+    }),
+  );
 }
 
 /**
@@ -292,20 +306,22 @@ export async function withRepeatableReadTenantDb<T>(
 ): Promise<T> {
   const { orgId, workspaceId } = requireScope();
   const bypass = rlsEnforced() ? "off" : "on";
-  const database = await tenantPlaneDb(orgId);
-  return database.transaction(async (tx) => {
-    // Must be the first statement after BEGIN — Postgres rejects
-    // SET TRANSACTION ISOLATION LEVEL once the transaction has read anything.
-    await tx.execute(sql`set transaction isolation level repeatable read`);
-    await tx.execute(sql`
+  const { database, planeKey } = await tenantPlaneDb(orgId);
+  return runOnPlane(planeKey, () =>
+    database.transaction(async (tx) => {
+      // Must be the first statement after BEGIN — Postgres rejects
+      // SET TRANSACTION ISOLATION LEVEL once the transaction has read anything.
+      await tx.execute(sql`set transaction isolation level repeatable read`);
+      await tx.execute(sql`
       select
         set_config('app.current_org_id', ${orgId}, true),
         set_config('app.current_workspace_id', ${workspaceGuc(workspaceId)}, true),
         set_config('app.org_wide', 'off', true),
         set_config('app.rls_bypass', ${bypass}, true)
     `);
-    return fn(tx);
-  });
+      return fn(tx);
+    }),
+  );
 }
 
 /**
@@ -343,10 +359,15 @@ export async function withSystemDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   //   3. The data-plane resolver itself reads org.data_planes through this
   //      function. Making it plane-aware would be a cycle: to know which plane
   //      to read from, read the table that says which plane to read from.
-  return db().transaction(async (tx) => {
-    await tx.execute(sql`select set_config('app.rls_bypass', 'on', true)`);
-    return fn(tx);
-  });
+  // `shared` published for the column probes, which is not an extra claim —
+  // it is the same "ALWAYS the shared plane" the comment above states, said
+  // where the probe can read it rather than left to be inferred (#3223).
+  return runOnPlane("shared", () =>
+    db().transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.rls_bypass', 'on', true)`);
+      return fn(tx);
+    }),
+  );
 }
 
 /**
@@ -379,11 +400,13 @@ export async function withOrgPlaneSystemDb<T>(
   // Counted like `withSystemDb`: this is an audited RLS bypass, and leaving it
   // out of the meter would make the enforcement gate unreachable.
   recordIfUnscoped("withOrgPlaneSystemDb");
-  const database = await tenantPlaneDb(orgId);
-  return database.transaction(async (tx) => {
-    await tx.execute(sql`select set_config('app.rls_bypass', 'on', true)`);
-    return fn(tx);
-  });
+  const { database, planeKey } = await tenantPlaneDb(orgId);
+  return runOnPlane(planeKey, () =>
+    database.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.rls_bypass', 'on', true)`);
+      return fn(tx);
+    }),
+  );
 }
 
 /**

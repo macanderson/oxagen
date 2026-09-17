@@ -48,10 +48,10 @@
  * outright.
  */
 import {
+  ambientPlaneKey,
   GATEWAY_INVOCATION_COLUMN,
   hasColumn,
   HOST_GATEWAY_COLUMN,
-  planeKeyFor,
   schema,
   withOrgPlaneSystemDb,
   withSystemDb,
@@ -272,8 +272,14 @@ async function recordGatewayInvocation(
   // observation never arrives, and genuine connected-app sessions stay
   // classified `observe` for good (discussion_r4040617216). RLS is bypassed
   // because this runs at authorisation time, before any handler scope exists.
-  const planeKey = await planeKeyFor(orgId);
   await withOrgPlaneSystemDb(orgId, async (tx) => {
+    // The plane the transaction was actually opened on, published by
+    // `withOrgPlaneSystemDb` itself. This used to call `planeKeyFor(orgId)`
+    // just above — a SECOND resolution of the same question, which can
+    // disagree with the first if the organisation is repointed in between, and
+    // then files the answer under a database the statement did not run on
+    // (#3223).
+    const planeKey = await ambientPlaneKey();
     // Ask before writing. Production applies migrations by hand after the
     // deploy (#1275), so between the two these statements name a column — and
     // a whole TABLE — the database does not have; 42703 and 42P01 both abort

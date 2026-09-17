@@ -50,7 +50,6 @@ export {
 } from "./namespace";
 export {
   hasColumn,
-  planeKeyFor,
   ambientPlaneKey,
   resetColumnProbesForTests,
   NEGATIVE_PROBE_TTL_MS,

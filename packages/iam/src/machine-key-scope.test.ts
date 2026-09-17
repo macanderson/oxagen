@@ -67,7 +67,9 @@ vi.mock("@oxagen/database", () => ({
   // and a shared answer would describe a state no deployment is ever in.
   hasColumn: async (_tx: unknown, ref: { table: string }) =>
     ref.table === "hosts" ? gatewayColumnPresent : invocationTablePresent,
-  planeKeyFor: async (orgId: string) => `plane-of:${orgId}`,
+  // The plane `withOrgPlaneSystemDb` opened the transaction on, published by
+  // the seam rather than resolved a second time by the probe (#3223).
+  ambientPlaneKey: async () => `plane-of:${hostWritePlanes.at(-1) ?? ""}`,
   withSystemDb: (fn: (tx: unknown) => unknown) => fn(fakeTx()),
   // The seam the host write must use. `withSystemDb` always targets the SHARED
   // plane, and `tacho.hosts` is tenant data, so on a dedicated plane that write
