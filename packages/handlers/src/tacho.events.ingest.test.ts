@@ -521,6 +521,10 @@ function wire(db: FakeDb): void {
             // reads that to decide whether the rest of the batch's writes are
             // this session's to make.
             let accepted = true;
+            // Whether the statement INSERTED, as `xmax = 0` reports it. A
+            // conflict that took the update path did not, and must not count
+            // as a new session.
+            let inserted = false;
             const apply = (args?: {
               setWhere?: unknown;
               set?: Record<string, unknown>;
@@ -555,6 +559,7 @@ function wire(db: FakeDb): void {
                 }
               }
               if (name === "sessions") {
+                inserted = present === undefined;
                 if (present !== undefined) {
                   Object.assign(present, args?.set ?? {});
                 } else {
@@ -579,7 +584,8 @@ function wire(db: FakeDb): void {
               }) => {
                 apply(args);
                 return Object.assign(Promise.resolve([]), {
-                  returning: async () => (accepted ? [{ id: "new" }] : []),
+                  returning: async () =>
+                    accepted ? [{ id: "new", inserted }] : [],
                 });
               },
               onConflictDoNothing: async () => {
@@ -1711,6 +1717,63 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     expect(db.models).toEqual([]);
     expect(db.files).toEqual([]);
     expect(mocks.recordSpend).not.toHaveBeenCalled();
+  });
+
+  it("acknowledges none of a refused batch's events", async () => {
+    // `tacho_events` is a ReplacingMergeTree keyed by session and seq, so a
+    // refused batch's frames would REPLACE the winning chain's rows for the
+    // same sequences — the authoritative session rejected the batch and its raw
+    // evidence overwrote the accepted chain's anyway. Acknowledging them is the
+    // other half: the daemon's spool marks the whole batch shipped, so the
+    // events are gone from the host too.
+    const db = fakeDb();
+    const events = sessionWithContent("gateway");
+    servedChain(db, events);
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "gateway",
+      sealedAt: new Date("2026-09-08T09:40:00.000Z"),
+      genesisHash: (events[0] as TachoEvent).hash,
+    });
+    db.hideSessionFromRead = true;
+    wire(db);
+
+    const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
+
+    // Not written…
+    expect(mocks.insertTachoEvents).toHaveBeenCalledWith([]);
+    // …and not acknowledged, so the daemon keeps them and re-sends.
+    expect(output.accepted).toBe(0);
+    expect(output.event_ids).toEqual([]);
+  });
+
+  it("counts a new session only when the statement inserted one", async () => {
+    // `newSessions` was incremented from `existing === undefined` — the read
+    // that preceded the INSERT — so two concurrent genesis requests both
+    // counted and inflated `hosts.sessions_count`. The row this batch
+    // conflicts with already exists, so nothing was inserted.
+    const db = fakeDb();
+    const events = sessionWithContent("gateway");
+    servedChain(db, events);
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "observe",
+      sealedAt: null,
+      genesisHash: (events[0] as TachoEvent).hash,
+    });
+    db.hideSessionFromRead = true;
+    wire(db);
+
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+
+    const hostUpdate = db.updates.find(
+      (u) => u.table === "hosts" && "sessionsCount" in u.values,
+    );
+    expect(hostUpdate).toBeUndefined();
   });
 
   it("does not promote a row whose genesis is not the one it matched", async () => {

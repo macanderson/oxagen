@@ -821,6 +821,10 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     // The batch's fresh `proof.observed` frames, by the root session they belong to.
     const proofsByRoot = new Map<string, TachoEvent[]>();
     let newSessions = 0;
+    // The sessions whose writes the statement refused: the row they conflicted
+    // with is sealed, or is a different chain wearing the same uuid. Their
+    // events are not that session's evidence and must not be acknowledged.
+    const refusedSessions = new Set<string>();
     // The first root session this batch opened: the run the onboarding gate
     // records when this is the organization's first frame (#2967).
     let firstOpenedRunId: string | null = null;
@@ -1177,7 +1181,6 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           .set(common)
           .where(eq(schema.tachoSessions.id, existing.id));
       } else {
-        newSessions += 1;
         if (initiatingPrincipalId === undefined)
           initiatingPrincipalId = await enrollingPrincipalId(tx, ctx, host);
         const row = genesisRow(
@@ -1257,8 +1260,22 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           // Named rather than bare, like every other RETURNING in this file: a
           // bare one asks for every column the schema declares and fails on a
           // pending migration (`tacho-column-projection.test.ts`).
-          .returning({ id: schema.tachoSessions.id });
+          .returning({
+            id: schema.tachoSessions.id,
+            // Whether this statement INSERTED the row, as opposed to updating
+            // one that was already there. `xmax = 0` is true only of a tuple
+            // this transaction created; an `ON CONFLICT DO UPDATE` that took
+            // the update path returns the row with a non-zero `xmax`.
+            //
+            // `newSessions` used to be incremented from `existing === undefined`
+            // — the read that preceded the INSERT — so two concurrent genesis
+            // requests both counted, inflating `hosts.sessions_count`, and a
+            // refused batch could be mistaken for an organisation's first run
+            // by the onboarding gate.
+            inserted: sql<boolean>`xmax = 0`,
+          });
         accepted = written.length > 0;
+        if (written[0]?.inserted === true) newSessions += 1;
         // Counters on a fresh row start from the insert's zero defaults; apply
         // the delta — but only if the row is this batch's to touch.
         //
@@ -1272,6 +1289,8 @@ export const tachoEventsIngestHandler: CapabilityHandler<
             .update(schema.tachoSessions)
             .set(increments)
             .where(eq(schema.tachoSessions.sessionUuid, sessionUuid));
+        } else {
+          refusedSessions.add(sessionUuid);
         }
       }
 
@@ -1282,6 +1301,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       const sessionId = sessionRow?.id;
       if (
         sessionRow?.publicId &&
+        accepted &&
         !existing &&
         firstOpenedRunId === null &&
         first.parent_session_uuid == null
@@ -1385,6 +1405,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     const control = await controlEnvelope(tx as never, ctx, seen, now);
     return {
       chainBreaks,
+      refusedSessions,
       verified,
       recordedHeads,
       control,
@@ -1421,7 +1442,22 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   // to a colleague's row. The session's person is `initiatingPrincipalId` /
   // `initiatingUserId`, which this deployment issues rather than the harness
   // reports (#3072).
-  const inserts: TachoEventInsert[] = input.events.map((event) => {
+  // Only the events whose session accepted them.
+  //
+  // `tacho_events` is a ReplacingMergeTree keyed by session and seq, so a
+  // refused batch's frames would REPLACE the winning chain's rows for the same
+  // sequences — the authoritative session rejected the batch and its raw
+  // evidence overwrote the accepted chain's anyway. And acknowledging them
+  // makes the daemon's spool mark the whole batch shipped, so the events are
+  // gone from the host too.
+  //
+  // A refused session's events are simply not acknowledged: they are absent
+  // from the ClickHouse write and from `event_ids`, so the daemon keeps them
+  // and re-sends. That is the honest answer — the batch was not accepted.
+  const kept = input.events.filter(
+    (event) => !result.refusedSessions.has(event.session_uuid),
+  );
+  const inserts: TachoEventInsert[] = kept.map((event) => {
     const bytesRef =
       bytesRefs.get(event.event_id_idem) ?? storedRefs.get(event.event_id_idem);
     return {
@@ -1463,8 +1499,8 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   }
 
   return {
-    accepted: input.events.length,
-    event_ids: input.events.map((event) => event.event_id_idem),
+    accepted: kept.length,
+    event_ids: kept.map((event) => event.event_id_idem),
     chain_breaks: result.chainBreaks,
     body_rejections: bodyRejections,
     control: result.control,
