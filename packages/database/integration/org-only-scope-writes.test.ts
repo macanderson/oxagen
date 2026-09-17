@@ -21,22 +21,28 @@
  *
  * `standard` and `workspace_only` policies compare the row's `workspace_id`
  * against `app.current_workspace_id`, so under the sentinel every one of those
- * INSERTs is refused with SQLSTATE 42501. It is NOT 23505, so it escapes the
- * `isUniqueViolation` classifiers those handlers catch and surfaces as a 500.
+ * INSERTs was refused with SQLSTATE 42501. It is NOT 23505, so it escaped the
+ * `isUniqueViolation` classifiers those handlers catch and surfaced as a 500.
  *
- * `workspace_nullable` fails differently and more quietly: its predicate admits
- * a row when `workspace_id IS NULL` or it matches the GUC, so under the sentinel
- * a READ is simply answered the org-wide rows and nothing else. No error, a
- * number that is too small, and `delete_role` acting on it — the role and its
- * grants deleted out from under live assignments. The fix for a read like that
- * is not a scope to re-enter (there is no single workspace the question is
- * about) but `withSystemDb` with the `org_id` fence written out.
+ * `workspace_nullable` failed differently and more quietly: its predicate
+ * admits a row when `workspace_id IS NULL` or it matches the GUC, so under the
+ * sentinel a READ was simply answered the org-wide rows and nothing else. No
+ * error, a number that is too small, and `delete_role` acting on it — the role
+ * and its grants deleted out from under live assignments.
  *
- * This suite is the witness. The "refused" cases are what today's org-only
- * callers would hit; the "accepted" cases are the same statements after the fix
- * re-points the workspace scope onto the target workspace — which is what
+ * #3132 (ADR-086) ended the asymmetry. Under an org-only scope `withTenantDb`
+ * now sets the GUC to a value that is NOT a uuid, so the cast raises 22P02 and
+ * the READ refuses like the write always did. The write refusals below
+ * therefore changed SQLSTATE — 42501 to 22P02 — and the read that used to
+ * return a number too small now returns nothing at all. Both are still
+ * refusals; the point of the change is that there is no longer a third
+ * behaviour where the database quietly answers something else.
+ *
+ * This suite is the witness. The "refused" cases are what an org-only caller
+ * hits; the "accepted" cases are the same statements after the fix re-points
+ * the workspace scope onto the target workspace — which is what
  * `workspace.settings.write` (runInTenantScope) and `workspace-bootstrap`
- * (setTransactionWorkspaceScope) now do.
+ * (setTransactionWorkspaceScope) do.
  *
  * Superuser and RLS: a superuser bypasses RLS even under FORCE, so every
  * assertion runs as a purpose-built non-superuser role via SET LOCAL ROLE,
@@ -48,6 +54,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import postgres from "postgres";
+import { ORG_ONLY_WORKSPACE_GUC } from "../src/tenant";
 
 const sql = postgres(process.env["DATABASE_URL"]!, { max: 1, prepare: false });
 
@@ -66,6 +73,8 @@ const APP_ROLE = "org_only_scope_test_role";
 
 /** Postgres raises insufficient_privilege for a WITH CHECK a row fails. */
 const RLS_REFUSAL = "42501";
+/** invalid_text_representation — the workspace GUC's uuid cast refusing. */
+const INVALID_UUID = "22P02";
 
 beforeAll(async () => {
   await sql.unsafe(`
@@ -153,19 +162,32 @@ afterAll(async () => {
   await sql.end({ timeout: 5 });
 });
 
-/** One transaction, non-superuser, policies live, in the scope named. */
+/**
+ * One transaction, non-superuser, policies live, in the scope named — with the
+ * SAME workspace-GUC translation `withTenantDb` does (#3132, ADR-086). An
+ * org-only scope carries the nil uuid in the SCOPE and
+ * `ORG_ONLY_WORKSPACE_GUC` in the GUC, which is not a uuid, so a policy that
+ * casts it raises instead of narrowing. Restating the translation here rather
+ * than importing it would let this suite keep asserting the old behaviour after
+ * the seam stopped producing it, which is the failure this whole change is
+ * about.
+ */
 async function inScope<T>(
   orgId: string,
   workspaceId: string,
   fn: (tx: postgres.TransactionSql) => Promise<T>,
 ): Promise<T> {
+  const workspaceGuc =
+    workspaceId === ORG_ONLY_WORKSPACE_ID
+      ? ORG_ONLY_WORKSPACE_GUC
+      : workspaceId;
   return sql.begin(async (tx) => {
     await tx.unsafe(`SET LOCAL ROLE "${APP_ROLE}"`);
     await tx`
       SELECT
-        set_config('app.current_org_id',       ${orgId},      true),
-        set_config('app.current_workspace_id', ${workspaceId}, true),
-        set_config('app.rls_bypass',           'off',          true)
+        set_config('app.current_org_id',       ${orgId},       true),
+        set_config('app.current_workspace_id', ${workspaceGuc}, true),
+        set_config('app.rls_bypass',           'off',           true)
     `;
     return fn(tx);
   }) as Promise<T>;
@@ -215,14 +237,19 @@ describe("an org-only scope and the tables an org-only write reaches", () => {
 
   // #3029, the update_workspace_settings half. A name-only edit works, which is
   // why this went unnoticed; the re-slug the action promises does not.
-  it("refuses the slug-history INSERT with 42501: workspace_slug_history is standard, not org_only", async () => {
+  it("refuses the slug-history INSERT: workspace_slug_history is standard, not org_only", async () => {
     const { code, message } = await refusalOf(
       inScope(ORG, ORG_ONLY_WORKSPACE_ID, (tx) =>
         insertSlugHistory(tx, "oos-ws-renamed"),
       ),
     );
-    expect(code).toBe(RLS_REFUSAL);
-    expect(message).toMatch(/row-level security/i);
+    // It used to be 42501 — the WITH CHECK rejecting a row whose workspace_id
+    // did not match the nil uuid. Since #3132 the GUC is not a uuid at all, so
+    // the cast refuses first and the SQLSTATE is 22P02. Both are refusals; the
+    // second one names its own cause, and the same change makes the READ side
+    // refuse too, which 42501 never did.
+    expect(code).toBe(INVALID_UUID);
+    expect(message).toContain(ORG_ONLY_WORKSPACE_GUC);
     // Not a unique violation, so `isUniqueViolation` never sees it and the
     // handler's slug_taken catch cannot classify it — it reaches the caller raw.
     expect(code).not.toBe("23505");
@@ -230,14 +257,14 @@ describe("an org-only scope and the tables an org-only write reaches", () => {
 
   // #3029, the create_workspace half: the first row the bootstrap writes after
   // the workspace itself.
-  it("refuses the workspace-membership INSERT with 42501: workspace_users is workspace_only", async () => {
+  it("refuses the workspace-membership INSERT: workspace_users is workspace_only", async () => {
     const { code, message } = await refusalOf(
       inScope(ORG, ORG_ONLY_WORKSPACE_ID, (tx) =>
         insertMembership(tx, "wsu_denied"),
       ),
     );
-    expect(code).toBe(RLS_REFUSAL);
-    expect(message).toMatch(/row-level security/i);
+    expect(code).toBe(INVALID_UUID);
+    expect(message).toContain(ORG_ONLY_WORKSPACE_GUC);
   });
 
   // The fix, both halves: the same statements under the TARGET workspace's
@@ -273,17 +300,24 @@ describe("an org-only scope and the tables an org-only write reaches", () => {
   // then deleted the role and its grants out from under live assignments. The
   // fix reads the count through withSystemDb with an explicit org fence, the
   // way `list_iam_roles` already did.
-  describe("a workspace_nullable table hides rather than refuses", () => {
+  describe("a workspace_nullable table used to hide, and now refuses", () => {
     const countAssignments = (tx: postgres.TransactionSql) =>
       tx<{ n: string }[]>`
         SELECT count(*)::text AS n FROM iam.principal_role_assignments
         WHERE org_id = ${ORG} AND role_id = ${ROLE}
       `;
 
-    it("shows the org-wide assignment and hides the workspace-scoped one under the sentinel", async () => {
-      const [row] = await inScope(ORG, ORG_ONLY_WORKSPACE_ID, countAssignments);
-      // Two holders exist. One is visible. Nothing was refused.
-      expect(row?.n).toBe("1");
+    it("refuses the read outright under the sentinel", async () => {
+      const { code, message } = await refusalOf(
+        inScope(ORG, ORG_ONLY_WORKSPACE_ID, countAssignments),
+      );
+      // It used to answer "1" of two holders — a number too small, with
+      // nothing raised, which `delete_role` then acted on. Since #3132 the
+      // workspace GUC is not a uuid under an org-only scope, so the policy
+      // refuses rather than narrowing, and the check-then-act cannot run on a
+      // short answer because there is no answer.
+      expect(code).toBe(INVALID_UUID);
+      expect(message).toContain(ORG_ONLY_WORKSPACE_GUC);
     });
 
     it("hides the other workspace's assignment from a workspace scope too", async () => {

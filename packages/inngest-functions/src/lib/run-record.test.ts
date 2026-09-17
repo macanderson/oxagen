@@ -17,10 +17,16 @@ const mocks = vi.hoisted(() => ({
   selectTachoEvents: vi.fn(),
 }));
 
-vi.mock("@oxagen/database", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@oxagen/database")>()),
-  withTenantDb: mocks.withTenantDb,
-}));
+vi.mock("@oxagen/database", async (importOriginal) => {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    ...(await importOriginal<typeof import("@oxagen/database")>()),
+    withTenantDb: mocks.withTenantDb,
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: mocks.runInTenantScope,
 }));

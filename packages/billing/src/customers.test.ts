@@ -120,7 +120,15 @@ const tx = {
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...real, withTenantDb: seams.tenant, withSystemDb: seams.system };
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    ...real,
+    withTenantDb: seams.tenant,
+    withSystemDb: seams.system,
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 // Import after mocks.

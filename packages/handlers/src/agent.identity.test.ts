@@ -82,11 +82,15 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       throw new Error("a write reached the store");
     },
   });
-  return {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
     ...real,
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
       mocks.gate.enabled ? fn(gateTx()) : real.withTenantDb(fn as never),
   };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 import { agentRegisterHandler } from "./agent.register";

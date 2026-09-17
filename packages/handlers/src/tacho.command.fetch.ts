@@ -81,8 +81,8 @@ export const tachoCommandFetchHandler: CapabilityHandler<
         .returning({ id: schema.tachoControlCommands.id });
       acknowledged += updated.length;
     }
-    await touchHost(tx as never, host, input.daemon, now, false);
-    const control = await controlEnvelope(tx as never, ctx, host, now);
+    const seen = await touchHost(tx as never, host, input.daemon, now, false);
+    const control = await controlEnvelope(tx as never, ctx, seen, now);
     return { acknowledged, control };
   });
 };

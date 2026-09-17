@@ -71,7 +71,10 @@ mocks.txFn.mockImplementation(
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
     ...real,
     db: () => ({
       query: {
@@ -82,6 +85,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     withTenantDb: (fn: (tx: unknown) => Promise<unknown>): Promise<unknown> =>
       mocks.txFn(fn) as Promise<unknown>,
   };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 import { chatMessageSendHandler } from "./chat.message.send";

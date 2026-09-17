@@ -34,13 +34,17 @@ vi.mock("./unscoped-meter", () => ({
 }));
 
 import { runInTenantScope } from "@oxagen/tenancy";
+import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/types";
 import {
   withTenantDb,
+  withOrgDb,
   withRepeatableReadTenantDb,
   withSystemDb,
   setTransactionWorkspaceScope,
   assertRlsConnectionSafe,
   assertRlsEnforcedInProduction,
+  isOrgOnlyWorkspaceReadRefusal,
+  ORG_ONLY_WORKSPACE_GUC,
 } from "./tenant";
 
 const ORG = "00000000-0000-0000-0000-00000000a111";
@@ -93,6 +97,143 @@ describe("withTenantDb", () => {
     expect(arg).toContain("app.rls_bypass");
     expect(arg).toContain('"off"');
     expect(arg).not.toContain('"on"');
+  });
+});
+
+describe("the org-only workspace GUC (#3132, ADR-086)", () => {
+  // The seam is the one place the translation happens, and the whole refusal
+  // rests on the value NOT being a uuid. A test that only checked "the GUC is
+  // set" would pass on the nil uuid that caused the defect.
+  it("is not a uuid, so a policy that casts it raises", () => {
+    expect(ORG_ONLY_WORKSPACE_GUC).not.toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
+    expect(ORG_ONLY_WORKSPACE_GUC).not.toBe(ORG_ONLY_WORKSPACE_ID);
+  });
+
+  it("withTenantDb translates the org-only sentinel into the marker", async () => {
+    await runInTenantScope(
+      { orgId: ORG, workspaceId: ORG_ONLY_WORKSPACE_ID },
+      () => withTenantDb(async () => undefined),
+    );
+    const arg = sqlText((mocks.execute.mock.calls[0] as unknown[])[0]);
+    expect(arg).toContain(ORG_ONLY_WORKSPACE_GUC);
+    expect(arg).not.toContain(ORG_ONLY_WORKSPACE_ID);
+  });
+
+  it("withTenantDb passes a real workspace through untouched", async () => {
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+      withTenantDb(async () => undefined),
+    );
+    const arg = sqlText((mocks.execute.mock.calls[0] as unknown[])[0]);
+    expect(arg).toContain(WS);
+    expect(arg).not.toContain(ORG_ONLY_WORKSPACE_GUC);
+  });
+
+  it("withRepeatableReadTenantDb translates it the same way", async () => {
+    await runInTenantScope(
+      { orgId: ORG, workspaceId: ORG_ONLY_WORKSPACE_ID },
+      () => withRepeatableReadTenantDb(async () => undefined),
+    );
+    // [0] is SET TRANSACTION ISOLATION LEVEL; the GUCs are [1].
+    const arg = sqlText((mocks.execute.mock.calls[1] as unknown[])[0]);
+    expect(arg).toContain(ORG_ONLY_WORKSPACE_GUC);
+  });
+
+  it("withTenantDb pins app.org_wide off, so a tenant read can never widen", async () => {
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+      withTenantDb(async () => undefined),
+    );
+    const arg = sqlText((mocks.execute.mock.calls[0] as unknown[])[0]);
+    // A SQL literal, not a bound parameter: the value is never a caller's to
+    // choose, so it is spelled in the statement.
+    expect(arg).toContain("app.org_wide");
+    expect(arg).toContain("'off'");
+  });
+
+  describe("isOrgOnlyWorkspaceReadRefusal", () => {
+    it("matches 22P02 carrying the marker", () => {
+      expect(
+        isOrgOnlyWorkspaceReadRefusal({
+          code: "22P02",
+          message: `invalid input syntax for type uuid: "${ORG_ONLY_WORKSPACE_GUC}"`,
+        }),
+      ).toBe(true);
+    });
+
+    it("walks the drizzle cause chain", () => {
+      expect(
+        isOrgOnlyWorkspaceReadRefusal({
+          message: "Failed query",
+          cause: {
+            code: "22P02",
+            message: `invalid input syntax for type uuid: "${ORG_ONLY_WORKSPACE_GUC}"`,
+          },
+        }),
+      ).toBe(true);
+    });
+
+    // A caller passing a malformed uuid from a path param raises the same
+    // SQLSTATE. Calling that "an org-only read of a workspace-scoped table"
+    // would be a second wrong answer dressed as a diagnosis.
+    it("does not match a 22P02 from some other malformed uuid", () => {
+      expect(
+        isOrgOnlyWorkspaceReadRefusal({
+          code: "22P02",
+          message: 'invalid input syntax for type uuid: "not-a-uuid"',
+        }),
+      ).toBe(false);
+    });
+
+    it("does not match a non-Postgres error", () => {
+      expect(isOrgOnlyWorkspaceReadRefusal(new Error("boom"))).toBe(false);
+      expect(isOrgOnlyWorkspaceReadRefusal(null)).toBe(false);
+    });
+  });
+});
+
+describe("withOrgDb", () => {
+  it("requires an active scope (fail-closed, same as withTenantDb)", async () => {
+    await expect(withOrgDb(async () => 1)).rejects.toThrow(/tenant scope/);
+  });
+
+  // The three GUCs that make it an organisation-wide read: the org fence stays
+  // with the database, the workspace GUC is EMPTY (so the cast yields NULL
+  // rather than raising), and app.org_wide is what widens the USING clause.
+  it("sets the org GUC, empties the workspace GUC and turns app.org_wide on", async () => {
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+      withOrgDb(async () => undefined),
+    );
+    const arg = sqlText((mocks.execute.mock.calls[0] as unknown[])[0]);
+    expect(arg).toContain("app.current_org_id");
+    expect(arg).toContain(ORG);
+    expect(arg).toContain("app.org_wide");
+    expect(arg).toContain("'on'");
+    // Never the marker: it would raise at plan time on every policy that names
+    // the GUC, org-wide disjunct or not.
+    expect(arg).not.toContain(ORG_ONLY_WORKSPACE_GUC);
+    // And never the caller's workspace, so a nested call cannot inherit it.
+    expect(arg).not.toContain(WS);
+  });
+
+  it("ignores the workspace in scope, including the org-only sentinel", async () => {
+    await runInTenantScope(
+      { orgId: ORG, workspaceId: ORG_ONLY_WORKSPACE_ID },
+      () => withOrgDb(async () => undefined),
+    );
+    const arg = sqlText((mocks.execute.mock.calls[0] as unknown[])[0]);
+    expect(arg).not.toContain(ORG_ONLY_WORKSPACE_GUC);
+    expect(arg).toContain("'on'");
+  });
+
+  it("honours the enforcement flag like withTenantDb", async () => {
+    mocks.rlsEnforced.mockReturnValue(true);
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+      withOrgDb(async () => undefined),
+    );
+    const arg = sqlText((mocks.execute.mock.calls[0] as unknown[])[0]);
+    expect(arg).toContain("app.rls_bypass");
+    expect(arg).toContain('"off"');
   });
 });
 
