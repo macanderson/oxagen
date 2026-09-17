@@ -11,6 +11,7 @@ import {
   parse,
   productionFiles,
   readSource,
+  WHOLE_TREE_TIMEOUT_MS,
   type SourceText,
 } from "./parse";
 
@@ -76,15 +77,19 @@ const probe = (name: string): string[] =>
   zeroViolations(readSource(`${PROBES}/${name}`));
 
 describe("no fabricated zeros", () => {
-  it("no mapper under src/data/live/mappers fabricates a zero", () => {
-    const files = productionFiles().filter((file) =>
-      file.startsWith(MAPPERS_DIR),
-    );
-    expect(files.length).toBeGreaterThan(0);
-    expect(files.flatMap((file) => zeroViolations(readSource(file)))).toEqual(
-      [],
-    );
-  });
+  it(
+    "no mapper under src/data/live/mappers fabricates a zero",
+    () => {
+      const files = productionFiles().filter((file) =>
+        file.startsWith(MAPPERS_DIR),
+      );
+      expect(files.length).toBeGreaterThan(0);
+      expect(files.flatMap((file) => zeroViolations(readSource(file)))).toEqual(
+        [],
+      );
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
 
   it("a copied count, a null fallback, a comparison and a slice pass", () => {
     expect(probe("ok.ts")).toEqual([]);

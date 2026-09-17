@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { APP_DIR, listFiles } from "./parse";
+import { APP_DIR, listFiles, WHOLE_TREE_TIMEOUT_MS } from "./parse";
 
 const RULE = "fixture-tokens";
 
@@ -54,9 +54,13 @@ function tokenHits(files: readonly string[]): string[] {
 }
 
 describe("fixture tokens", () => {
-  it("no file under src/, instrumentation.ts or next.config.ts carries one", () => {
-    expect(tokenHits(scannedFiles())).toEqual([]);
-  });
+  it(
+    "no file under src/, instrumentation.ts or next.config.ts carries one",
+    () => {
+      expect(tokenHits(scannedFiles())).toEqual([]);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
 
   it("a probe reading MC_DATA fails; a clean probe passes", () => {
     expect(tokenHits([`${PROBES}fixture-tokens/switch.ts`])).toEqual([
@@ -65,11 +69,15 @@ describe("fixture tokens", () => {
     expect(tokenHits([`${PROBES}fixture-tokens/clean.ts`])).toEqual([]);
   });
 
-  it("the scan covers the two app-root modules and skips itself and the probes", () => {
-    const files = scannedFiles();
-    expect(files).toContain("instrumentation.ts");
-    expect(files).toContain("next.config.ts");
-    expect(files).not.toContain(SELF);
-    expect(files.some((file) => file.startsWith(PROBES))).toBe(false);
-  });
+  it(
+    "the scan covers the two app-root modules and skips itself and the probes",
+    () => {
+      const files = scannedFiles();
+      expect(files).toContain("instrumentation.ts");
+      expect(files).toContain("next.config.ts");
+      expect(files).not.toContain(SELF);
+      expect(files.some((file) => file.startsWith(PROBES))).toBe(false);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
 });

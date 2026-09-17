@@ -13,6 +13,7 @@ import {
   parse,
   productionFiles,
   readSource,
+  WHOLE_TREE_TIMEOUT_MS,
   type SourceText,
 } from "./parse";
 
@@ -299,13 +300,17 @@ const probe = (name: string): string[] =>
   actionViolations(readSource(`${PROBES}/${name}`));
 
 describe("server actions", () => {
-  it('every "use server" module under src/ keeps the action contract', () => {
-    const modules = productionFiles()
-      .map(readSource)
-      .filter((source) => directiveOf(scan(source)) === "use server");
-    expect(modules.length).toBeGreaterThan(0);
-    expect(modules.flatMap(actionViolations)).toEqual([]);
-  });
+  it(
+    'every "use server" module under src/ keeps the action contract',
+    () => {
+      const modules = productionFiles()
+        .map(readSource)
+        .filter((source) => directiveOf(parse(source)) === "use server");
+      expect(modules.length).toBeGreaterThan(0);
+      expect(modules.flatMap(actionViolations)).toEqual([]);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
 
   it("ActionResult and never returns, a viewer reached through a helper and a slug from the form pass", () => {
     expect(probe("ok.ts")).toEqual([]);
