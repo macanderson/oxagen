@@ -25,6 +25,35 @@ export class PlanChangePreviewUnavailableError extends Error {
   }
 }
 
+/**
+ * Raised when the provider cannot say what subscription we are changing.
+ *
+ * The local row is not a fallback for this. It is written by the sync that
+ * runs AFTER a provider mutation, so it is stale in exactly the failure the
+ * already-applied guard exists for — and the fallback that used to stand here
+ * was only ever safe in the case it was justified by. That justification was
+ * "if the provider cannot be reached, the swap cannot be issued either", which
+ * is true of an OUTAGE and false of a transient failure of this one read: then
+ * the preview and the update both succeed, and the operation proceeds on the
+ * stale row the guard exists to distrust (#3157, PR #3171 review).
+ *
+ * So the fallback had no case where it helped and one where it hurt. In an
+ * outage this merely fails earlier, with a error that names the cause instead
+ * of one from the swap; in the transient case it refuses to act on state
+ * nobody confirmed. This is the same rule
+ * {@link PlanChangePreviewUnavailableError} applies one function away: an
+ * unknown is not a nothing, and a stale answer is not a known one.
+ */
+export class SubscriptionStateUnavailableError extends Error {
+  readonly code = "SUBSCRIPTION_STATE_UNAVAILABLE" as const;
+  constructor(readonly stripeSubscriptionId: string) {
+    super(
+      "Could not read this subscription's current price and interval from the billing provider; the change was not attempted.",
+    );
+    this.name = "SubscriptionStateUnavailableError";
+  }
+}
+
 /** Which way the money moves across a plan change, and what the swap owes now. */
 export interface PlanChangeDirection {
   prorationBehavior: "always_invoice" | "none";
@@ -580,6 +609,21 @@ async function clearPlanUpgradeIntent(
  * The provider knows. Ask it. This is the same correction the rest of #3157
  * makes over and over: a local record of what happened is not what happened.
  *
+ * AND THERE IS NO FALLBACK TO THE LOCAL ROW.
+ *
+ * There used to be, justified as: if the provider cannot be reached the swap
+ * cannot be issued either, so refusing would trade a wrong answer for an
+ * outage. That holds for an outage and not for a transient failure of THIS ONE
+ * READ — the case where the preview and the update then succeed and the
+ * operation runs on the very row this function exists to distrust. The
+ * fallback therefore had no case in which it helped and one in which it
+ * silently did harm, so it is gone: this raises
+ * {@link SubscriptionStateUnavailableError} and the caller retries
+ * (#3157, PR #3171 review).
+ *
+ * It is raised BEFORE any provider mutation and before the durable upgrade
+ * intent is written, so a refusal leaves nothing half-done.
+ *
  * THE INTERVAL COMES BACK FOR THE SAME REASON THE PRICE DOES.
  *
  * `subscriptions.billing_interval` is written by the same post-mutation sync
@@ -591,44 +635,23 @@ async function clearPlanUpgradeIntent(
  * resets the anchor and invoices the new month anyway. This function was
  * already reading the provider subscription and discarding the one field that
  * settles it (#3157, PR #3171 review).
- *
- * The fallback is deliberate and does not reopen the hole it closes. If the
- * provider cannot be reached, the swap cannot be issued either, so refusing
- * here would only trade a wrong answer for an outage; falling back leaves the
- * behaviour exactly as it was before this check existed, and says so.
  */
 async function resolveActiveProviderState(
   stripeSubscriptionId: string,
-  localPriceId: string | null,
-  fallbackInterval: "month" | "year",
 ): Promise<{
   priceId: string | null;
   billingInterval: "month" | "year";
-  fromProvider: boolean;
 }> {
   try {
     const sub = await billingProvider().getSubscription(stripeSubscriptionId);
-    return {
-      priceId: sub.priceId,
-      billingInterval: sub.billingInterval,
-      fromProvider: true,
-    };
+    return { priceId: sub.priceId, billingInterval: sub.billingInterval };
   } catch (err) {
     logger.warn(
       { stripeSubId: stripeSubscriptionId, err },
-      "billing: could not read the provider's active price and interval for a plan change — falling back to the last synced values",
+      "billing: could not read the provider's active price and interval for a plan change — refusing to act on the last synced values",
     );
-    return {
-      priceId: localPriceId,
-      billingInterval: fallbackInterval,
-      fromProvider: false,
-    };
+    throw new SubscriptionStateUnavailableError(stripeSubscriptionId);
   }
-}
-
-/** The local column, narrowed. Only ever the fallback — see above. */
-function localInterval(value: string | null | undefined): "month" | "year" {
-  return value === "year" ? "year" : "month";
 }
 
 export async function changeOrgPlan(
@@ -744,21 +767,17 @@ export async function changeOrgPlan(
   // Asked of the PROVIDER, not of our record of the provider — see
   // resolveActiveProviderState for why the local column is blind to exactly the
   // failure this guard exists for.
-  const {
-    priceId: activePriceId,
-    billingInterval: currentInterval,
-    fromProvider: priceConfirmed,
-  } = await resolveActiveProviderState(
-    activeSubRow.stripeSubscriptionId,
-    activeSubRow.stripePriceId,
-    localInterval(activeSubRow.billingInterval),
-  );
+  const { priceId: activePriceId, billingInterval: currentInterval } =
+    await resolveActiveProviderState(activeSubRow.stripeSubscriptionId);
 
   if (activePriceId && activePriceId === newPriceId) {
     // The provider has moved and our row has not: the first attempt's sync is
-    // the write that was lost. Repair it before anything reads the row again,
+    // the write that was lost. This no longer needs a "was the price
+    // confirmed" flag — the price is always the provider's now, so a
+    // disagreement with the row is always a real one. Repair it before
+    // anything reads the row again,
     // so the stale price, plan and period do not outlive this call.
-    if (priceConfirmed && activeSubRow.stripePriceId !== newPriceId) {
+    if (activeSubRow.stripePriceId !== newPriceId) {
       logger.warn(
         {
           orgId,
@@ -1311,8 +1330,6 @@ export async function previewPlanChange(
   // something the change will not do.
   const { billingInterval: currentInterval } = await resolveActiveProviderState(
     activeSub.stripeSubscriptionId,
-    null,
-    localInterval(activeSub.billingInterval),
   );
   // One preview answers both questions: which way the money moves, and how
   // much of it moves now. Taken exactly as changeOrgPlan takes it, because a

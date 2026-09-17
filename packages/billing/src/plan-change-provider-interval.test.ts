@@ -323,6 +323,91 @@ describe("an interval-change quote against a customer carrying a balance (#3157,
   });
 });
 
+describe("a transient failure of the provider-state read (#3157, PR #3171 review)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setBillingProvider(new StripeProvider());
+    stubAnchorResetPreview();
+    stubStaleMonthlyRow();
+    stubPlanLookups();
+    stripeMethods.customers.retrieve.mockResolvedValue({
+      id: "cus_001",
+      deleted: false,
+      invoice_settings: { default_payment_method: null },
+    });
+    stripeMethods.subscriptions.update.mockResolvedValue(undefined);
+    // The provider is UP — only the authoritative state read fails.
+    //
+    // `getSubscription` is the call that passes `expand`; the adapter's own
+    // preview retrieves the subscription bare to find the item id. Failing
+    // only the expanded one models a transient failure of a single API call
+    // rather than an outage, and that distinction is the whole finding: in an
+    // outage the swap fails anyway, so the fallback costs nothing. Here
+    // everything downstream SUCCEEDS, and the fallback is what lets the
+    // operation proceed on the stale row.
+    stripeMethods.subscriptions.retrieve.mockImplementation(
+      async (_id: string, opts?: { expand?: string[] }) => {
+        if (opts?.expand) throw new Error("503 from Stripe");
+        return {
+          id: "sub_active_001",
+          customer: "cus_001",
+          metadata: { org_id: "org-abc" },
+          status: "active",
+          items: {
+            data: [
+              {
+                id: "si_001",
+                quantity: 1,
+                price: {
+                  id: "price_build_y",
+                  recurring: { interval: "year" },
+                  product: "prod_build",
+                },
+              },
+            ],
+          },
+          current_period_start: 1_756_684_800,
+          current_period_end: 1_788_220_800,
+          cancel_at_period_end: false,
+          canceled_at: null,
+          trial_end: null,
+        };
+      },
+    );
+  });
+
+  it("refuses to quote from a subscription it could not confirm", async () => {
+    // Falling back returned the stale row — month, on the monthly price —
+    // and the preview that followed succeeded, so the customer was quoted a
+    // same-interval change against a subscription that is on annual.
+    await expect(
+      previewPlanChange("org-abc", "build-v2", "month"),
+    ).rejects.toMatchObject({ code: "SUBSCRIPTION_STATE_UNAVAILABLE" });
+  });
+
+  it("does not mutate a subscription whose state it could not confirm", async () => {
+    await expect(
+      changeOrgPlan("org-abc", "build-v2", "month"),
+    ).rejects.toMatchObject({ code: "SUBSCRIPTION_STATE_UNAVAILABLE" });
+
+    // The whole point. The read failed, the update would have succeeded, and
+    // issuing it would have swapped a subscription on the strength of a row
+    // the guard exists to distrust.
+    expect(stripeMethods.subscriptions.update).not.toHaveBeenCalled();
+  });
+
+  it("fails before anything durable is written", async () => {
+    await expect(
+      changeOrgPlan("org-abc", "build-v2", "month"),
+    ).rejects.toMatchObject({ code: "SUBSCRIPTION_STATE_UNAVAILABLE" });
+
+    // The upgrade intent is written before the provider is touched, so a
+    // refusal that came after it would leave an intent for a swap that never
+    // happened.
+    expect(dbMocks.update).not.toHaveBeenCalled();
+  });
+});
+
 // Leave the singleton as this file found it.
 afterEach(() => {
   resetBillingProvider();
