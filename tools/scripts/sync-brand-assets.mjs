@@ -72,20 +72,44 @@ function raster(svgPath, size) {
 }
 
 /**
- * A maskable icon is the tile with its corners let out and the mark pulled in
- * to the 80% safe circle Android masks against — otherwise a circular mask
- * clips the `Ox`. 0.72 keeps the glyph inside that circle with room to spare.
+ * A maskable icon is the source square with its corners let out and the mark
+ * pulled in to the 80% safe circle a round mask keeps — otherwise the mask
+ * clips the glyph.
+ *
+ * Only the MARK moves. The ground — the background square and any wash over
+ * it — is left at full size, so it still bleeds into the corners the circle
+ * gives up. Shrinking the whole square and backing it with a flat fill looks
+ * right until the art carries a wash: the hive avatar's radial warm-up then
+ * stops at 80% and leaves a visible rounded seam. In every square the kit
+ * emits, the mark is the first `<g transform=` — the hive's placement group in
+ * an avatar, the glyph's in a tile. Rounded corners come off, because the
+ * system mask draws its own.
+ *
+ * `scale` is how much of the square the mark may occupy. The default 0.72 is
+ * what the `Ox` tile has always used; the hive sits wider in its own canvas
+ * and passes its own value.
  */
-function maskableSvg(tileSvgPath) {
-  const src = readFileSync(tileSvgPath, "utf8");
-  const inset = (96 * (1 - 0.72)) / 2;
-  return src
-    .replace(/(<rect width="96" height="96")\s+rx="20"/, "$1")
+function maskableSvg(sourceSvgPath, scale = 0.72) {
+  const src = readFileSync(sourceSvgPath, "utf8");
+  const size = Number(src.match(/<svg\b[^>]*?\bwidth="([\d.]+)"/)?.[1]);
+  if (!Number.isFinite(size) || size <= 0) {
+    throw new Error(`no usable width on the <svg> in ${sourceSvgPath}`);
+  }
+  const inset = (size * (1 - scale)) / 2;
+  const out = src
+    .replace(
+      new RegExp(`(<rect width="${size}" height="${size}")\\s+rx="[\\d.]+"`),
+      "$1",
+    )
     .replace(
       /<g transform=/,
-      `<g transform="translate(${inset} ${inset}) scale(0.72)"><g transform=`,
+      `<g transform="translate(${inset} ${inset}) scale(${scale})"><g transform=`,
     )
-    .replace(/<\/g><\/svg>$/, "</g></g></svg>");
+    .replace(/<\/g>(\s*)<\/svg>\s*$/, "</g></g>$1</svg>");
+  if (out === src) {
+    throw new Error(`no mark group to inset in ${sourceSvgPath}`);
+  }
+  return out;
 }
 
 /**
@@ -185,6 +209,18 @@ function nextSurface(publicDir, brand) {
     emit(
       `${publicDir}/brand/${b}-icon-tile-light.svg`,
       readFileSync(svg(`${b}-icon-tile-light.svg`)),
+    );
+    // The avatar — the hive full-bleed on its ground. This is the face the
+    // brand wears where the image IS the brand rather than a mark inside a
+    // page: social profiles, and the desktop app icon that
+    // apps/desktop/scripts/icons.mjs cuts from these.
+    emit(
+      `${publicDir}/brand/${b}-avatar-light.svg`,
+      readFileSync(join(BRAND, `social/${b}-avatar-light.svg`)),
+    );
+    emit(
+      `${publicDir}/brand/${b}-avatar-dark.svg`,
+      readFileSync(join(BRAND, `social/${b}-avatar-dark.svg`)),
     );
   }
 
