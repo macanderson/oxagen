@@ -10,7 +10,7 @@
 // installation, so it is always taken from the connection the HMAC-verified
 // install callback attached (apps/api/src/routes/v1/github-oauth.ts).
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, isNull, notInArray } from "drizzle-orm";
+import { and, desc, eq, isNull, notInArray } from "drizzle-orm";
 
 /** The connector id the GitHub install callback writes. */
 export const GITHUB_PROVIDER = "github";
@@ -65,9 +65,19 @@ export function installationIdOf(deliveryConfig: unknown): string | null {
  * `list_installation_repositories` refuse as `conflict: github_not_connected`.
  *
  * A workspace may hold several GitHub connections (the legacy sources wizard
- * creates one per connect attempt); the first that carries an installation is
- * the one every repository capability uses, so all three agree on which
- * installation the workspace acts through.
+ * creates one per connect attempt). Rows are read newest-first by `created_at`
+ * and the newest that carries an installation wins, so all three capabilities
+ * agree on which installation the workspace acts through.
+ *
+ * Newest-first is not a preference, it is the same rule the install callback
+ * applies when it attaches: `attachWorkspaceGithubInstallation`
+ * (apps/api/src/routes/v1/github-oauth.ts) selects with the identical predicate
+ * and `ORDER BY created_at DESC LIMIT 1`. With no ordering here, an unordered
+ * scan could answer an older legacy connection while the callback had just
+ * written the installation onto the newest one — writer and reader disagreeing
+ * about which connection is authoritative, and the three repository
+ * capabilities quietly acting through a stale installation. The predicate and
+ * the ordering must both match for the row written to be the row read.
  */
 export async function resolveWorkspaceGithubInstallation(scope: {
   orgId: string;
@@ -90,7 +100,9 @@ export async function resolveWorkspaceGithubInstallation(scope: {
           isNull(schema.sourceConnections.deletedAt),
           notInArray(schema.sourceConnections.status, [...RETIRED_STATUSES]),
         ),
-      );
+      )
+      // Same tie-break as the install callback's attach. See the doc comment.
+      .orderBy(desc(schema.sourceConnections.createdAt));
     for (const row of rows) {
       const installationId = installationIdOf(row.deliveryConfig);
       if (installationId !== null) {

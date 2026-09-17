@@ -58,7 +58,9 @@ function capturingTx(rows: readonly unknown[]) {
   const captured: CapturedSql[] = [];
   type Chain = (fields: unknown) => {
     from: (table: unknown) => {
-      where: (condition: unknown) => { toSQL: () => CapturedSql };
+      where: (condition: unknown) => {
+        orderBy: (order: unknown) => { toSQL: () => CapturedSql };
+      };
     };
   };
   // Bound: drizzle's `select` reads `this.session`, so it cannot be detached.
@@ -67,10 +69,21 @@ function capturingTx(rows: readonly unknown[]) {
   const tx = {
     select: (fields: unknown) => ({
       from: (table: unknown) => ({
-        where: (condition: unknown) => {
-          captured.push(select(fields).from(table).where(condition).toSQL());
-          return rows;
-        },
+        where: (condition: unknown) => ({
+          // The resolver's ORDER BY is part of what is asserted here, so the
+          // rebuilt query carries it too — a chain that swallowed it would let
+          // the ordering regress without a test noticing.
+          orderBy: (order: unknown) => {
+            captured.push(
+              select(fields)
+                .from(table)
+                .where(condition)
+                .orderBy(order)
+                .toSQL(),
+            );
+            return rows;
+          },
+        }),
       }),
     }),
   };
@@ -136,6 +149,27 @@ describe("resolveWorkspaceGithubInstallation names every predicate in SQL", () =
     expect(query.params).toContain("deleted");
   });
 
+  // The callback that WRITES the installation
+  // (`attachWorkspaceGithubInstallation`, apps/api/src/routes/v1/github-oauth.ts)
+  // selects with this same predicate and `ORDER BY created_at DESC LIMIT 1`.
+  // Unordered, this reader could answer an older legacy connection while the
+  // writer had just attached the installation to the newest one — the three
+  // repository capabilities would then act through a stale installation, with
+  // nothing anywhere reporting a disagreement. The predicate was deliberately
+  // made identical; the ordering has to be identical for the same reason.
+  it("orders newest-first by created_at — the same row the install callback writes", async () => {
+    const query = await emittedSql();
+    expect(query.sql).toMatch(
+      /order by "ingestion"\."source_connections"\."created_at" desc/i,
+    );
+  });
+
+  it("orders by created_at and nothing else — one tie-break, not two", async () => {
+    const query = await emittedSql();
+    expect(query.sql.match(/order by/gi) ?? []).toHaveLength(1);
+    expect(query.sql).not.toMatch(/order by[\s\S]*"updated_at"/i);
+  });
+
   it("conjoins all five predicates — none is an alternative to another", async () => {
     const query = await emittedSql();
     // One `and` group, no `or`: a row must satisfy every predicate at once.
@@ -159,6 +193,8 @@ describe("resolveWorkspaceGithubInstallation names every predicate in SQL", () =
     expect(query.params).not.toContain(SCOPE.workspaceId);
   });
 
+  // `rows` arrive newest-first from the query above, so "the first that carries
+  // an installation" is "the newest that carries one".
   it("answers the first row that carries an installation, and nothing about the rest", async () => {
     const { tx } = capturingTx([
       { id: "a", publicId: "con_A", status: "error", deliveryConfig: null },

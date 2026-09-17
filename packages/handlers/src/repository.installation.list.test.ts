@@ -44,7 +44,12 @@ function wireConnections(rows: unknown[]): void {
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
-        select: () => ({ from: () => ({ where: async () => rows }) }),
+        // `.orderBy(desc(created_at))` is part of the resolver's query — it
+        // and the install callback's attach must agree on which connection is
+        // authoritative, so the chain mocked here carries it too.
+        select: () => ({
+          from: () => ({ where: () => ({ orderBy: async () => rows }) }),
+        }),
       }),
   );
 }

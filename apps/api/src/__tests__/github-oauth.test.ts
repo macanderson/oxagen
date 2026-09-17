@@ -862,21 +862,9 @@ describe("GET /oauth/github/callback", () => {
   });
 
   it("settings connect (null connectionId): stores the org token and redirects to the workspace landing with the dialog params", async () => {
-    mocks.fetch
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          access_token: "ghs_settings",
-          token_type: "Bearer",
-          scope: "repo",
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ id: 7, login: "owner" }),
-      });
+    // 555 is in the authorizing user's /user/installations, so the attach
+    // stands and the redirect may say so.
+    queueVerifiedInstallFetches([555]);
 
     // No connection lookup up front (connectionId is null). withSystemDb order:
     // oauth upsert, the settings-level install attach, org slug, ws slug.
@@ -993,6 +981,54 @@ describe("GET /oauth/github/callback", () => {
   // reported `connected: false` when they came back, and the feature was a dead
   // loop.
 
+  /**
+   * The GitHub calls a VERIFIED settings install makes, in order: the token
+   * exchange, the `/user` lookup, and the `/user/installations` page the attach
+   * checks the redirect's `installation_id` against.
+   *
+   * `reachable` is the set of installation ids that user can actually reach.
+   * Every settings-level attach now depends on this list, because
+   * `installation_id` is a query parameter on a public endpoint and the state
+   * HMAC says nothing about it.
+   */
+  function queueVerifiedInstallFetches(reachable: readonly number[]) {
+    mocks.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: "ghs_settings",
+          token_type: "Bearer",
+          scope: "repo",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 7, login: "owner" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          total_count: reachable.length,
+          installations: reachable.map((id) => ({
+            id,
+            account: { login: "acme", type: "Organization", avatar_url: "" },
+            repository_selection: "all",
+            app_slug: APP_SLUG,
+          })),
+        }),
+      });
+  }
+
+  /** Queue the oauth_accounts upsert that a leg carrying a `code` runs first. */
+  function queueOauthUpsert(id = "uuid-oauth-settings") {
+    mocks.withSystemDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+      fn(makeTxChain([{ id }]) as TxLike),
+    );
+  }
+
   /** Queue the redirect's two slug lookups, which close every callback leg. */
   function queueSlugLookups() {
     mocks.withSystemDb
@@ -1004,9 +1040,14 @@ describe("GET /oauth/github/callback", () => {
       );
   }
 
-  /** Queue the withSystemDb sequence for a code-less settings install. */
+  /**
+   * Queue the withSystemDb sequence that FOLLOWS the oauth upsert on a settings
+   * install: the attach itself, then the two slug lookups. Callers that carry a
+   * `code` queue `queueOauthUpsert()` ahead of this — and every attaching leg
+   * now does, because without a user token there is nothing to verify the
+   * `installation_id` against and the attach refuses.
+   */
   function queueSettingsAttach(attachTx: TxLike) {
-    // No code → no oauth upsert. Order: the attach, then org slug, ws slug.
     mocks.withSystemDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
       fn(attachTx),
     );
@@ -1014,10 +1055,13 @@ describe("GET /oauth/github/callback", () => {
   }
 
   it("settings install: CREATES the workspace github connection carrying the installationId", async () => {
+    queueVerifiedInstallFetches([142003699]);
     const { tx, captured } = makeCapturingTx([]);
+    queueOauthUpsert();
     queueSettingsAttach(tx);
 
     const res = await makeCallbackReq({
+      code: "auth-code",
       state: buildValidState({ connectionId: null, returnTo: "settings" }),
       installation_id: "142003699",
       setup_action: "install",
@@ -1041,15 +1085,18 @@ describe("GET /oauth/github/callback", () => {
   });
 
   it("settings install: UPDATES an existing github connection, merging installationId and preserving other deliveryConfig keys", async () => {
+    queueVerifiedInstallFetches([555]);
     const { tx, captured } = makeCapturingTx([
       {
         id: "uuid-existing-gh",
         deliveryConfig: { syncDepthDays: 90, owner: "acme", repo: "widgets" },
       },
     ]);
+    queueOauthUpsert();
     queueSettingsAttach(tx);
 
     const res = await makeCallbackReq({
+      code: "auth-code",
       state: buildValidState({ connectionId: null, returnTo: "settings" }),
       installation_id: "555",
       setup_action: "install",
@@ -1069,27 +1116,11 @@ describe("GET /oauth/github/callback", () => {
   });
 
   it("settings install: links the oauth_account onto the connection when a code was exchanged", async () => {
-    mocks.fetch
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          access_token: "ghs_settings",
-          token_type: "Bearer",
-          scope: "repo",
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ id: 7, login: "owner" }),
-      });
+    queueVerifiedInstallFetches([777]);
 
     const { tx, captured } = makeCapturingTx([]);
     // With a code, the oauth upsert runs first.
-    mocks.withSystemDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
-      fn(makeTxChain([{ id: "uuid-oauth-settings" }]) as TxLike),
-    );
+    queueOauthUpsert();
     queueSettingsAttach(tx);
 
     const res = await makeCallbackReq({
@@ -1106,10 +1137,13 @@ describe("GET /oauth/github/callback", () => {
   });
 
   it("settings install: the connection lookup is scoped by BOTH the state's orgId and workspaceId", async () => {
+    queueVerifiedInstallFetches([142003699]);
     const { tx, captured } = makeCapturingTx([]);
+    queueOauthUpsert();
     queueSettingsAttach(tx);
 
     const res = await makeCallbackReq({
+      code: "auth-code",
       state: buildValidState({
         orgId: "org-mine",
         workspaceId: "ws-mine",
@@ -1143,8 +1177,11 @@ describe("GET /oauth/github/callback", () => {
     });
 
     expect(res.status).toBe(302);
+    // Refused, so the redirect says so. It used to say `github=connected` here
+    // — announcing an attach that never happened, to a dialog whose very next
+    // read answers `connected: false`.
     expect(res.headers.get("location") ?? "").toBe(
-      `${APP_URL}/my-org/my-ws?settings=repository&github=connected`,
+      `${APP_URL}/my-org/my-ws?settings=repository&github=failed`,
     );
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);
   });
@@ -1160,6 +1197,283 @@ describe("GET /oauth/github/callback", () => {
 
     expect(res.status).toBe(302);
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);
+    // Nothing was claimed and nothing was attached, so there is nothing to
+    // acknowledge — neither a success nor a failure.
+    const location = res.headers.get("location") ?? "";
+    expect(location).toBe(`${APP_URL}/my-org/my-ws?settings=repository`);
+    expect(location).not.toContain("github=");
+  });
+
+  // ── the installation_id is a claim, and the claim is checked ───────────────
+  //
+  // `installation_id` is a query parameter on a PUBLIC endpoint. The state HMAC
+  // proves which org+workspace started the flow and nothing whatever about the
+  // id, and `code` is optional on this leg — so an operator who legitimately
+  // administers their own workspace can mint a valid state for it, skip GitHub
+  // entirely, and call this callback with any numeric id they like, including
+  // one belonging to another tenant.
+  //
+  // That was survivable while every consumer called GitHub with the USER token
+  // (`GET /user/installations/:id/repositories`), because GitHub scoped the
+  // request to that user itself. It is not survivable now:
+  // `list_installation_repositories` and `bind_main_repository` mint a token
+  // with the platform App's PRIVATE KEY, which checks no caller entitlement at
+  // all. GitHub's own check is gone, so an unverified id is another tenant's
+  // repositories listed and bindable. These are the tests that keep the check.
+
+  it("settings install: an installation_id the authorizing user cannot reach is NEVER written", async () => {
+    // The forgery, exactly: a valid state for the attacker's OWN workspace, a
+    // real OAuth code, and a numeric installation id belonging to someone else.
+    // /user/installations is the authority, and it does not list 999999.
+    queueVerifiedInstallFetches([555]);
+    const { tx, captured } = makeCapturingTx([]);
+    queueOauthUpsert();
+    // No attach tx is queued on purpose: if the route writes anything, it
+    // consumes the slug lookup's chain and the location assertion below fails.
+    queueSlugLookups();
+
+    const res = await makeCallbackReq({
+      code: "auth-code",
+      state: buildValidState({ connectionId: null, returnTo: "settings" }),
+      installation_id: "999999",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    // Nothing written: no INSERT, no UPDATE, and no connection lookup at all.
+    expect(captured.insertValues).toBeUndefined();
+    expect(captured.updateSet).toBeUndefined();
+    expect(captured.selectWhere).toBeUndefined();
+    expect(tx.insert).not.toHaveBeenCalled();
+    expect(tx.update).not.toHaveBeenCalled();
+    // And the redirect does not claim a connection.
+    const location = res.headers.get("location") ?? "";
+    expect(location).toBe(
+      `${APP_URL}/my-org/my-ws?settings=repository&github=failed`,
+    );
+    expect(location).not.toContain("github=connected");
+  });
+
+  it("settings install: an installation_id the user CAN reach is written, and only then", async () => {
+    // The mirror of the test above, so the check is not merely proven to refuse
+    // everything: the same request, differing only in whether GitHub lists the
+    // id, attaches.
+    queueVerifiedInstallFetches([999999]);
+    const { tx, captured } = makeCapturingTx([]);
+    queueOauthUpsert();
+    queueSettingsAttach(tx);
+
+    const res = await makeCallbackReq({
+      code: "auth-code",
+      state: buildValidState({ connectionId: null, returnTo: "settings" }),
+      installation_id: "999999",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    expect(captured.insertValues).toMatchObject({
+      deliveryConfig: { installationId: "999999" },
+    });
+    expect(res.headers.get("location") ?? "").toBe(
+      `${APP_URL}/my-org/my-ws?settings=repository&github=connected`,
+    );
+  });
+
+  it("settings install: verification reads /user/installations with the just-exchanged user token", async () => {
+    queueVerifiedInstallFetches([555]);
+    const { tx } = makeCapturingTx([]);
+    queueOauthUpsert();
+    queueSettingsAttach(tx);
+
+    await makeCallbackReq({
+      code: "auth-code",
+      state: buildValidState({ connectionId: null, returnTo: "settings" }),
+      installation_id: "555",
+      setup_action: "install",
+    });
+
+    // Third call: token exchange, /user, then the verification.
+    const [url, init] = mocks.fetch.mock.calls[2] as [string, RequestInit];
+    expect(url).toContain("https://api.github.com/user/installations");
+    expect((init.headers as Record<string, string>)["Authorization"]).toBe(
+      "Bearer ghs_settings",
+    );
+  });
+
+  it("settings install: an installation_id with NO code to verify it against is refused", async () => {
+    // Without a `code` there is no user token, so nothing can testify that this
+    // person reaches this installation. An unverifiable claim is not a weaker
+    // claim — it is the exact shape the forgery takes, since `code` is optional
+    // on this leg and the attacker simply omits it.
+    queueSlugLookups();
+
+    const res = await makeCallbackReq({
+      state: buildValidState({ connectionId: null, returnTo: "settings" }),
+      installation_id: "555",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    // Only the two slug lookups — no attach.
+    expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);
+    // And no GitHub call was made either: there was no token to make one with.
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(res.headers.get("location") ?? "").toBe(
+      `${APP_URL}/my-org/my-ws?settings=repository&github=failed`,
+    );
+  });
+
+  it("settings install: a /user/installations that errors refuses rather than attaching", async () => {
+    // Fail closed. A verification that could not run is not a verification that
+    // passed — and a 500 here would be a worse answer still, since the operator
+    // would see a bare JSON error instead of the dialog.
+    mocks.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: "ghs_settings",
+          token_type: "Bearer",
+          scope: "repo",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 7, login: "owner" }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        json: async () => ({}),
+      });
+
+    const { tx, captured } = makeCapturingTx([]);
+    queueOauthUpsert();
+    queueSlugLookups();
+
+    const res = await makeCallbackReq({
+      code: "auth-code",
+      state: buildValidState({ connectionId: null, returnTo: "settings" }),
+      installation_id: "555",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    expect(captured.insertValues).toBeUndefined();
+    expect(tx.insert).not.toHaveBeenCalled();
+    expect(res.headers.get("location") ?? "").toBe(
+      `${APP_URL}/my-org/my-ws?settings=repository&github=failed`,
+    );
+  });
+
+  it("settings install: a /user/installations that throws refuses rather than 500ing the callback", async () => {
+    mocks.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: "ghs_settings",
+          token_type: "Bearer",
+          scope: "repo",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 7, login: "owner" }),
+      })
+      .mockRejectedValueOnce(new Error("TimeoutError"));
+
+    const { tx, captured } = makeCapturingTx([]);
+    queueOauthUpsert();
+    queueSlugLookups();
+
+    const res = await makeCallbackReq({
+      code: "auth-code",
+      state: buildValidState({ connectionId: null, returnTo: "settings" }),
+      installation_id: "555",
+      setup_action: "install",
+    });
+
+    // Not a 500 and not a JSON error page: the operator lands back on the
+    // dialog, which reports not-connected honestly.
+    expect(res.status).toBe(302);
+    expect(captured.insertValues).toBeUndefined();
+    expect(tx.insert).not.toHaveBeenCalled();
+    expect(res.headers.get("location") ?? "").toBe(
+      `${APP_URL}/my-org/my-ws?settings=repository&github=failed`,
+    );
+  });
+
+  it("legacy wizard path is unchanged: no /user/installations check, no refusal", async () => {
+    // The wizard's consumers call GitHub with the USER token
+    // (`GET /user/installations/:id/repositories`), which GitHub scopes to that
+    // user itself — so this leg needs no extra check and must not gain one.
+    // Exactly two fetches: the token exchange and /user.
+    mocks.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: "ghs_legacy",
+          token_type: "Bearer",
+          scope: "repo",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 11, login: "legacy" }),
+      });
+
+    let updateSetArg: Record<string, unknown> | undefined;
+    const updateChain = {
+      set: vi.fn((arg: Record<string, unknown>) => {
+        updateSetArg = arg;
+        return updateChain;
+      }),
+      where: vi.fn().mockResolvedValue(undefined),
+    };
+    const updateTx = {
+      ...makeTxChain([]),
+      update: vi.fn().mockReturnValue(updateChain),
+    };
+
+    // conn lookup, oauth upsert, UPDATE, org slug, ws slug.
+    mocks.withSystemDb
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(
+          makeTxChain([
+            { id: "uuid-conn-legacy", deliveryConfig: {} },
+          ]) as TxLike,
+        ),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([{ id: "oauth-legacy" }]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(updateTx as unknown as TxLike),
+      );
+    queueSlugLookups();
+
+    const res = await makeCallbackReq({
+      code: "auth-code",
+      // A connectionId in the state → the legacy in-wizard leg. The id here is
+      // one no /user/installations list would contain, and it is written anyway.
+      state: buildValidState({ connectionId: "con_ABC" }),
+      installation_id: "999999",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    expect(updateSetArg?.["deliveryConfig"]).toEqual({
+      installationId: "999999",
+    });
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+    for (const [url] of mocks.fetch.mock.calls as [string, unknown][]) {
+      expect(url).not.toContain("/user/installations");
+    }
   });
 });
 

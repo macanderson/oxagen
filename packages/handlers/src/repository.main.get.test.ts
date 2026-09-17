@@ -63,8 +63,13 @@ function wire(opts: {
     )
     .mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
+        // The resolver orders newest-first (`.orderBy(desc(created_at))`) so
+        // that it and the install callback's attach agree on which connection
+        // is authoritative; the chain mocked here carries that step.
         select: () => ({
-          from: () => ({ where: async () => opts.connections ?? [] }),
+          from: () => ({
+            where: () => ({ orderBy: async () => opts.connections ?? [] }),
+          }),
         }),
       }),
     );
@@ -85,9 +90,7 @@ beforeEach(() => {
 describe("get_main_repository", () => {
   it("refuses a caller who is not an org Owner or Admin, before reading anything", async () => {
     mocks.assertOrgRole.mockRejectedValueOnce(new Error("org_role_required"));
-    await expect(handler()({}, makeCTX())).rejects.toThrow(
-      "org_role_required",
-    );
+    await expect(handler()({}, makeCTX())).rejects.toThrow("org_role_required");
     expect(mocks.withTenantDb).not.toHaveBeenCalled();
   });
 
