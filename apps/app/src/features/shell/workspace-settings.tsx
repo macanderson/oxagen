@@ -280,7 +280,16 @@ function MainRepositoryPanel({
         {t("heading")}
       </h3>
       <p className={`mt-1.5 ${prose}`}>{t("about")}</p>
-      <Acknowledgement acknowledgement={acknowledgement} />
+      {/*
+        The acknowledgement describes the return leg from GitHub, so it is worth
+        saying exactly once. Any action taken in this panel supersedes it: after
+        an attach, "pick which account" is still on screen while the repository
+        picker it asked for is already drawn, which reads as an instruction the
+        person has not followed.
+      */}
+      <Acknowledgement
+        acknowledgement={reloads === 0 ? acknowledgement : null}
+      />
       <div className="mt-4">
         {settings.kind === "loading" ? (
           <p

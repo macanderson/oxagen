@@ -427,6 +427,28 @@ describe("choosing which installation the workspace acts through", () => {
     expect(nav.refresh).toHaveBeenCalled();
   });
 
+  // The acknowledgement describes the return leg, and the attach it asked for
+  // answers it. Leaving "pick which account" above the repository picker reads
+  // as an instruction the person has not followed.
+  it("drops the acknowledgement once the attach it asked for has happened", async () => {
+    nav.query = "settings=repository&github=choose";
+    Shell();
+    await screen.findByTestId("workspace-installation-picker");
+    expect(screen.getByTestId("workspace-github-choose")).toBeTruthy();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("radio", { name: /acme/ }));
+    readWorkspaceRepository.mockResolvedValue({ ok: true, value: connected });
+    await user.click(
+      screen.getByRole("button", { name: "Use this installation" }),
+    );
+
+    expect(
+      await screen.findByTestId("workspace-repository-picker"),
+    ).toBeTruthy();
+    expect(screen.queryByTestId("workspace-github-choose")).toBeNull();
+  });
+
   it("asks for a choice rather than attaching one nobody picked (negative)", async () => {
     const { user } = await openSettings();
     await screen.findByTestId("workspace-installation-picker");
