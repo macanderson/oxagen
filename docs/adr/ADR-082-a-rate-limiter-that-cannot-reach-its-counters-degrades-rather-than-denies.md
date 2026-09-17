@@ -109,7 +109,8 @@ able to reason about at 3am.
   place. It also cached the resulting denial against a reset time that had
   already passed, which is not a cached denial at all: the next request drops it
   and goes back to the store. `hit()` now takes the captured timestamp, and
-  `cacheLocalDeny` refuses a reset time in the past.
+  `cacheLocalDeny` refuses a reset time in the past — against the clock it reads
+  itself rather than the caller's captured one, for the reason two bullets down.
 - **The shadow hit is taken at admission, not after the store call returns.**
   `createFixedWindowCounter` retains exactly one previous window, deliberately,
   so per-key state is a constant rather than a history a pre-authentication
@@ -132,6 +133,32 @@ able to reason about at 3am.
   and the hit taken in the same synchronous run, so for a given key the hits
   arrive in clock order however the store behaves. The counter's out-of-order
   paths stay, because it is exported and `rateLimiter` uses it too.
+- **A completion may not write state a later window has already superseded.**
+  This is the shadow-hit rule from the other end, and the deny cache did not
+  hold it. `cacheLocalDeny` judged the reset time it was handed against the
+  caller's captured `now`, and every one of its three call sites is past the
+  store await — so a request admitted in one window and completing two windows
+  later offered a reset that had closed while it waited, found it still in the
+  future against its own stale clock, and wrote it over whatever the current
+  window had cached. That moves the cache's expiry BACKWARDS past the real
+  clock: the next request reads an entry that has already expired, drops it, and
+  goes back to the database. The cache is defeated for exactly as long as the
+  store is slow, which is when it is the only thing keeping load off a failing
+  store — the mode defeating its own purpose, one layer down from where that was
+  already fixed. `cacheLocalDeny` now reads `Date.now()` itself, which closes it
+  for all three call sites at once.
+
+  The review that found it also asked for the later of the two expiries to be
+  kept. That is unreachable once the clock is read here, and the argument is
+  short enough to keep: both values are the reset of the window containing some
+  captured `now`, and both captures precede the current clock; for the incoming
+  one to survive the guard the clock must be inside its window, and for the
+  cached one to still be live the clock must be inside that window too. One
+  clock is in one fixed window, so the two are equal. A strictly smaller live
+  incoming value needs the clock to step backwards, and a backwards step lands
+  on the guard rather than past it. An unreachable comparison is not a second
+  guard; it is a line no test can pin, and this file has already paid for one of
+  those.
 - **The rate-limit headers report the stricter of the two counts.** When the
   store recovers inside a window the shadow already owns, the shadow is the
   operative ceiling and the Postgres count is the smaller, irrelevant number. An

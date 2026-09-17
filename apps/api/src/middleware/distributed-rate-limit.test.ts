@@ -858,6 +858,84 @@ describe("distributedRateLimiter", () => {
     }
   });
 
+  // The case above leaves this key's counter EMPTY while the cohort is parked,
+  // so the first completion to arrive installs the cohort's own window and the
+  // rest land beside it. That is enough to kill a shadow hit moved back behind
+  // the await, but it kills it on the ORDER the ceiling is spent in rather than
+  // on the count, and an ordering assertion is the kind this branch has already
+  // had to rewrite once.
+  //
+  // This is the review's literal shape: "requests from two later windows finish
+  // first". Two single requests, one per later window, complete while the
+  // cohort is still parked, so by the time the cohort arrives the counter's
+  // retained pair is {W2, W1} and the cohort's W0 is off the end of it. The
+  // assertion is the count — the cohort may not exceed `max` between them —
+  // which is the invariant the finding names, and which holds whatever order
+  // the store returns them in.
+  it("bounds a cohort even when two later windows have already been counted", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-17T12:00:30.000Z"));
+
+      const gates: Array<() => void> = [];
+      let park = true;
+      mocks.withSystemDb.mockImplementation(
+        async (fn: (tx: unknown) => Promise<unknown>) => {
+          if (park) await new Promise<void>((resolve) => gates.push(resolve));
+          // Postgres counts each window from 1, so only the shadow can deny.
+          return fn({ execute: vi.fn().mockResolvedValue([{ count: 1 }]) });
+        },
+      );
+      const waitForGates = async (count: number): Promise<void> => {
+        for (let tick = 0; tick < 50 && gates.length < count; tick += 1) {
+          await Promise.resolve();
+        }
+        expect(gates.length).toBe(count);
+      };
+
+      const mw = distributedRateLimiter({
+        keyPrefix: "preauth",
+        max: 2,
+        bucketKey: trustedClientIpBucketKey,
+        storeErrorPolicy: "degrade-to-local",
+      });
+      const next = vi.fn().mockResolvedValue(undefined);
+      const headers = { "x-oxagen-client-ip": "198.51.100.63" };
+
+      // Four requests captured in the window ending 12:01:00, all parked.
+      const pending: Array<Promise<unknown>> = [];
+      for (let i = 0; i < 4; i += 1) {
+        pending.push(mw(fakeContext({ headers }), next));
+        await waitForGates(i + 1);
+      }
+
+      // One request per later window, each completing while the cohort waits.
+      // These are what install {12:01:00, 12:02:00} as the retained pair.
+      park = false;
+      vi.setSystemTime(new Date("2026-09-17T12:01:30.000Z"));
+      await mw(fakeContext({ headers }), next);
+      vi.setSystemTime(new Date("2026-09-17T12:02:30.000Z"));
+      await mw(fakeContext({ headers }), next);
+
+      const nextBeforeCohort = next.mock.calls.length;
+
+      // Now the cohort drains. Against a shadow hit taken after the await, each
+      // completion asks the counter about 12:00:00 — off the end of the
+      // retained pair — is told `count: 1`, and all four are served.
+      for (let i = gates.length - 1; i >= 0; i -= 1) gates[i]!();
+      const results = (await Promise.all(pending)) as Array<
+        { status: number } | undefined
+      >;
+
+      const served = results.filter((r) => r === undefined).length;
+      expect(served).toBe(2);
+      expect(results.filter((r) => r?.status === 429).length).toBe(2);
+      expect(next.mock.calls.length - nextBeforeCohort).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // The headers a client paces against. When the store comes back inside a
   // window the shadow already owns, the shadow is the operative ceiling and the
   // Postgres count is the smaller, irrelevant one. Reporting the smaller number
@@ -1050,6 +1128,86 @@ describe("distributedRateLimiter", () => {
     expect(second?.status).toBe(429);
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
     expect(next).not.toHaveBeenCalled();
+  });
+
+  // The deny cache is the one piece of state a request writes that outlives it,
+  // and a request that has been parked on the store carries a `now` from
+  // whenever it started. Writing that window's reset time over a live entry
+  // moves the cache's expiry BACKWARDS, past the current clock, so the next
+  // request drops the entry and goes back to the database — which is the
+  // round-trip `degrade-to-local` exists to stop making against a store that is
+  // already failing.
+  //
+  // Asserting the next request's 429 proves nothing: it is denied either way,
+  // by the cache when the cache holds and by the shadow counter when it does
+  // not. The discriminating assertion is that the store was not consulted,
+  // exactly as in "stops calling the store once a degraded bucket is
+  // exhausted" above.
+  it("does not let a late completion expire a deny the current window cached", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-17T12:00:30.000Z"));
+
+      const gates: Array<() => void> = [];
+      let park = true;
+      mocks.withSystemDb.mockImplementation(async () => {
+        if (park) await new Promise<void>((resolve) => gates.push(resolve));
+        throw new Error("db unavailable");
+      });
+      const waitForGates = async (count: number): Promise<void> => {
+        for (let tick = 0; tick < 50 && gates.length < count; tick += 1) {
+          await Promise.resolve();
+        }
+        expect(gates.length).toBe(count);
+      };
+
+      const mw = distributedRateLimiter({
+        keyPrefix: "preauth",
+        max: 1,
+        bucketKey: trustedClientIpBucketKey,
+        storeErrorPolicy: "degrade-to-local",
+      });
+      const next = vi.fn().mockResolvedValue(undefined);
+      const headers = { "x-oxagen-client-ip": "198.51.100.64" };
+
+      // Two requests in the window ending 12:01:00, both parked on the store.
+      // The second is already over `max` as far as the shadow counter is
+      // concerned; it just cannot say so until its store call comes back.
+      const early = [mw(fakeContext({ headers }), next)];
+      await waitForGates(1);
+      early.push(mw(fakeContext({ headers }), next));
+      await waitForGates(2);
+
+      // The window rolls. Two more requests, failing fast, exhaust the bucket
+      // in the window ending 12:02:00 and cache a denial until 12:02:00.
+      park = false;
+      vi.setSystemTime(new Date("2026-09-17T12:01:30.000Z"));
+      await mw(fakeContext({ headers }), next);
+      const currentWindowDenial = (await mw(fakeContext({ headers }), next)) as
+        | { status: number }
+        | undefined;
+      expect(currentWindowDenial?.status).toBe(429);
+
+      // The parked pair finally fails, a full window after it was admitted. The
+      // over-limit one wants to cache a denial that expired at 12:01:00.
+      vi.setSystemTime(new Date("2026-09-17T12:01:40.000Z"));
+      gates[0]!();
+      gates[1]!();
+      await Promise.all(early);
+
+      // The cached denial must still be the live one, so this is served from
+      // the cache and the failing store is left alone.
+      vi.setSystemTime(new Date("2026-09-17T12:01:45.000Z"));
+      const callsBefore = mocks.withSystemDb.mock.calls.length;
+      const afterLateCompletion = (await mw(fakeContext({ headers }), next)) as
+        | { status: number }
+        | undefined;
+
+      expect(afterLateCompletion?.status).toBe(429);
+      expect(mocks.withSystemDb.mock.calls.length).toBe(callsBefore);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("uses a custom bucket-key resolver without trusting the default client IP", async () => {

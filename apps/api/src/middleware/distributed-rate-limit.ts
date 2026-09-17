@@ -198,7 +198,6 @@ export function enrolledMachineBucketKey(c: Context<AppEnv>): string {
 }
 
 /**
-/**
  * Per-client bucket for the pre-authentication ceilings, or `null` when this
  * deployment cannot say who the caller is.
  *
@@ -420,13 +419,42 @@ export function distributedRateLimiter(
    */
   const localCounter = createFixedWindowCounter(windowMs);
 
-  function cacheLocalDeny(key: string, denyUntil: number, now: number): void {
-    // A deny that has already expired is not a deny. The gate at the top of the
-    // middleware would drop it on the very next request and go back to the
-    // store — the round-trip this cache exists to avoid. Callers pass the reset
-    // time of the window the request was counted in, derived from the same
-    // captured clock, so this should not fire; it is a guard against those two
-    // drifting apart again rather than a branch with a known caller.
+  /**
+   * Remember that `key` is exhausted until `denyUntil`, judged against the
+   * clock NOW rather than against the caller's captured one.
+   *
+   * Every call site is past an `await` on the store, so the caller's `now` is
+   * as old as its store call took, and this store's calls are bounded by
+   * nothing: the pool in `packages/database/src/client.ts` sets `max` and
+   * `prepare: false` and no statement timeout, against 60-second windows.
+   * A request admitted in one window and completing two windows later then
+   * offers the reset time of a window that closed while it waited. Against its
+   * own captured clock that reset is still in the future, so it wrote — over
+   * whatever the current window had cached, moving the cache's expiry
+   * BACKWARDS past the real clock. The next request reads an entry that has
+   * already expired, deletes it, and goes back to the database. That is the
+   * round-trip `degrade-to-local` exists to stop making, arriving exactly when
+   * the store is least able to serve it.
+   *
+   * Reading the clock here closes it in one place for all three call sites,
+   * and it is the whole of the rule: a completion may not write state a later
+   * window has already superseded. The counter in rate-limit.ts holds the same
+   * rule from the other end — a hit older than both retained windows leaves
+   * them untouched rather than borrowing from one.
+   *
+   * It also subsumes "keep the later of the two expiries", which was the other
+   * half of the review and which no reachable case can now exercise. Both
+   * values are the reset of the window that contained some captured `now`, and
+   * both captures precede the current clock. For the incoming one to survive
+   * the guard the current clock must lie inside its window; for the cached one
+   * to still be live the current clock must lie inside that window too. One
+   * clock is in one fixed window, so the two resets are equal — a strictly
+   * smaller live incoming value needs the clock to step backwards, and a
+   * backwards step lands on the guard rather than past it. An unreachable
+   * comparison is not a second guard, it is a line no test can pin.
+   */
+  function cacheLocalDeny(key: string, denyUntil: number): void {
+    const now = Date.now();
     if (denyUntil <= now) return;
     if (localDenyUntilByKey.size >= LOCAL_DENY_CACHE_MAX) {
       for (const [cachedKey, cachedUntil] of localDenyUntilByKey) {
@@ -455,9 +483,10 @@ export function distributedRateLimiter(
    *     windows.
    *  3. Store recovers inside a window the shadow already owns → the headers
    *     and the decision both use the stricter of the two counts.
-   *  4. A cached deny outliving its window → every `cacheLocalDeny` call passes
-   *     the reset time of the window the request was counted in, and the
-   *     function refuses a reset time that has already passed.
+   *  4. A cached deny outliving its window, or a late completion cutting a live
+   *     one short → `cacheLocalDeny` judges the reset time it is handed against
+   *     the clock NOW rather than the caller's captured one, so a completion
+   *     whose own window has closed writes nothing at all.
    *  5. Bucket key resolution awaits before `now` is captured, so the key and
    *     the window cannot disagree about which request this is.
    *
@@ -565,14 +594,15 @@ export function distributedRateLimiter(
       });
     } catch (err) {
       warnStoreError(opts.keyPrefix, windowMs, err, storeErrorPolicy);
-      if (storeErrorPolicy !== "degrade-to-local") return next();
+      // `shadow` is non-null exactly when the policy is `degrade-to-local`, so
+      // this is the same gate as testing the policy and it carries the
+      // narrowing with it. Reading it rather than the policy is what leaves no
+      // `localCounter.hit` on this side of the await at all: the previous form
+      // fell back to taking one here, which could not run but was the shape the
+      // hit was moved out of, one edit away from coming back.
+      if (!shadow) return next();
 
-      // The hit taken at admission, not a second one. `storeErrorPolicy` is
-      // `degrade-to-local` on this line — the check above returned otherwise —
-      // which is the same condition that took `shadow`, so it is non-null here.
-      // Re-counting would charge a failed request twice, and taking the hit
-      // here at all would put it back behind the await this moved it out of.
-      const local = shadow ?? localCounter.hit(key, now);
+      const local = shadow;
       c.header("X-RateLimit-Limit", String(max));
       c.header("X-RateLimit-Remaining", String(Math.max(0, max - local.count)));
       c.header("X-RateLimit-Reset", String(Math.ceil(local.resetAt / 1000)));
@@ -584,7 +614,7 @@ export function distributedRateLimiter(
         // limiter exists for, against a store that is already unwell.
         // `degrade-to-local` exists to take load OFF the store; a denial path
         // that puts it back on is the mode defeating its own purpose.
-        cacheLocalDeny(key, local.resetAt, now);
+        cacheLocalDeny(key, local.resetAt);
         c.header(
           "Retry-After",
           String(Math.max(1, Math.ceil((local.resetAt - now) / 1000))),
@@ -604,7 +634,7 @@ export function distributedRateLimiter(
 
     if (count > max) {
       c.header("X-RateLimit-Remaining", "0");
-      cacheLocalDeny(key, resetAtMs, now);
+      cacheLocalDeny(key, resetAtMs);
       const retryAfter = Math.max(1, resetSeconds - Math.ceil(now / 1000));
       c.header("Retry-After", String(retryAfter));
       return c.json({ error: "rate_limited" }, 429);
@@ -643,7 +673,7 @@ export function distributedRateLimiter(
     );
 
     if (effectiveCount > max) {
-      cacheLocalDeny(key, resetAtMs, now);
+      cacheLocalDeny(key, resetAtMs);
       c.header(
         "Retry-After",
         String(Math.max(1, resetSeconds - Math.ceil(now / 1000))),
