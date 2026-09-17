@@ -666,9 +666,16 @@ refuses another customer's refund.
 ## Consequences
 
 - A purchase made before this change has no `stripe_payment_intent_id` and no
-  charge metadata. Its refund still logs the unresolved-org fatal and still
-  needs manual intervention. There is no backfill without Stripe API calls
-  against real objects; on a pre-launch branch the set is empty.
+  charge metadata **on the day the column lands**, and §15's migration gives
+  almost all of them one from the retained `checkout.session.completed` payload
+  without calling Stripe. What is left over is the narrow residue that join
+  cannot reach: a `kind='checkout'` settlement whose creating event is missing
+  from `billing.stripe_events`, or whose payload carries no `payment_intent`
+  (a session Stripe settled without one). Only those still need resolving by
+  hand from the Stripe dashboard. The migration `RAISE WARNING`s their count at
+  deploy time, and until they are resolved `onChargeRefunded` refuses the
+  usage-credit clawback for that one organisation when the charge does not say
+  what it bought, rather than debiting a balance the purchase never credited.
 - A usage-credit **dispute** still cannot resolve an organisation, for the
   reason in Context: the dispute object carries its own metadata. That is a
   pre-existing defect with a different fix (a provider lookup of the charge,
