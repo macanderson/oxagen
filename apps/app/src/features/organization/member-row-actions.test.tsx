@@ -75,11 +75,7 @@ describe("change role", () => {
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Change it" }),
     );
-    expect(changeMemberRole).toHaveBeenCalledWith(
-      "acme",
-      member.id,
-      "admin",
-    );
+    expect(changeMemberRole).toHaveBeenCalledWith("acme", member.id, "admin");
     expect(router.replace).toHaveBeenCalledWith(HERE);
     expect(router.refresh).toHaveBeenCalledOnce();
   });
@@ -151,7 +147,12 @@ describe("a refused write", () => {
       "This person is no longer a member of this organization.",
     ],
     [
-      { ok: false, reason: "invalid", code: "invalid_input", field: "targetUserId" },
+      {
+        ok: false,
+        reason: "invalid",
+        code: "invalid_input",
+        field: "targetUserId",
+      },
       "The request was refused as invalid. Nothing was changed.",
     ],
     [
@@ -162,22 +163,30 @@ describe("a refused write", () => {
       { ok: false, reason: "unavailable", code: "kernel_failure" },
       "The change could not be made: kernel_failure. Nothing was changed.",
     ],
-  ])("is named in the dialog and reloads nothing (negative)", async (result, text) => {
-    removeOrgMember.mockResolvedValue(result);
-    renderActions();
-    const dialog = await openDialog("Remove", "remove-member");
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: "Remove" }),
-    );
-    expect(await screen.findByTestId("remove-member-failure")).toHaveTextContent(
-      text,
-    );
-    expect(router.replace).not.toHaveBeenCalled();
-  });
+  ])(
+    "is named in the dialog and reloads nothing (negative)",
+    async (result, text) => {
+      removeOrgMember.mockResolvedValue(result);
+      renderActions();
+      const dialog = await openDialog("Remove", "remove-member");
+      await userEvent.click(
+        within(dialog).getByRole("button", { name: "Remove" }),
+      );
+      expect(
+        await screen.findByTestId("remove-member-failure"),
+      ).toHaveTextContent(text);
+      expect(router.replace).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     [
-      { ok: false, reason: "invalid", code: "role_not_grantable", field: "role" },
+      {
+        ok: false,
+        reason: "invalid",
+        code: "role_not_grantable",
+        field: "role",
+      },
       "That role is not one this organization grants. Nothing was changed.",
     ],
     [

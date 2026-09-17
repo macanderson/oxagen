@@ -1,9 +1,6 @@
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
-import {
-  type CapabilityContext,
-  ORG_ONLY_WORKSPACE_ID,
-} from "@oxagen/oxagen";
+import { type CapabilityContext, ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import { requireEnv } from "@oxagen/config/env";
 import type { AppEnv } from "../app";
 

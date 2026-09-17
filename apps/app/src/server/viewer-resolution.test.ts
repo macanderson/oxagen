@@ -48,7 +48,9 @@ function lookups(overrides: Overrides = {}): SystemLookups {
     ),
     workspaceBySlugHistory: vi.fn(() => Promise.resolve(null)),
     orgRole: vi.fn(() => Promise.resolve("member")),
-    isWorkspaceMember: vi.fn(() => Promise.resolve(true)),
+    workspaceMember: vi.fn(() =>
+      Promise.resolve({ id: "wsu_1", role: "member" }),
+    ),
     mfaPolicy: vi.fn(() => Promise.resolve(null)),
     twoFactorEnabled: vi.fn(() => Promise.resolve(false)),
     invitationByToken: vi.fn(() => Promise.resolve(null)),
@@ -74,6 +76,7 @@ describe("resolveViewerWith: allowed", () => {
         workspaceId: ws.id,
         wsSlug: "core-platform",
         wsName: "Core platform",
+        wsRole: "member",
       },
     });
   });
@@ -87,7 +90,7 @@ describe("resolveViewerWith: allowed", () => {
       ws: null,
     });
     expect(l.workspaceBySlug).not.toHaveBeenCalled();
-    expect(l.isWorkspaceMember).not.toHaveBeenCalled();
+    expect(l.workspaceMember).not.toHaveBeenCalled();
   });
 
   // The stored set: packages/database/src/schema/org.ts:96 and :170.
@@ -101,6 +104,40 @@ describe("resolveViewerWith: allowed", () => {
       });
     },
   );
+
+  // The stored set: packages/database/src/schema/workspace.ts:148. The
+  // workspace role is the viewer's authority inside the workspace, and a page
+  // that gates on `orgRole` alone is narrower than a capability granting a
+  // workspace role (#3143) — so every stored value has to survive the
+  // resolution, not just the ones an org role would have admitted anyway.
+  it.each(["owner", "admin", "member", "billing", "compliance", "viewer"])(
+    "carries a workspace role of %s onto the workspace fields",
+    async (role) => {
+      const l = lookups({
+        orgRole: () => Promise.resolve("member"),
+        workspaceMember: () => Promise.resolve({ id: "wsu_1", role }),
+      });
+      await expect(resolve(l, "acme", "core-platform")).resolves.toMatchObject({
+        kind: "ok",
+        org: { orgRole: "member" },
+        ws: { wsRole: role },
+      });
+    },
+  );
+
+  it("carries an organization role and a workspace role that differ", async () => {
+    // The case the import gate turns on: an org `member` who owns the
+    // workspace. Neither field may be inferred from the other.
+    const l = lookups({
+      orgRole: () => Promise.resolve("member"),
+      workspaceMember: () => Promise.resolve({ id: "wsu_1", role: "owner" }),
+    });
+    await expect(resolve(l, "acme", "core-platform")).resolves.toMatchObject({
+      kind: "ok",
+      org: { orgRole: "member" },
+      ws: { wsRole: "owner" },
+    });
+  });
 });
 
 describe("resolveViewerWith: refused", () => {
@@ -179,20 +216,33 @@ describe("resolveViewerWith: refused", () => {
     // Resolution takes the session, the tenancy lookups and the clock, so a
     // failing shell context read has no way in; the decision is the membership row.
     const l = lookups({
-      isWorkspaceMember: vi.fn(() => Promise.resolve(false)),
+      workspaceMember: vi.fn(() => Promise.resolve(null)),
     });
     const deps: ResolveViewerDeps = { session, lookups: l, now };
     await expect(
       resolveViewerWith(deps, "acme", "core-platform"),
     ).resolves.toEqual({ kind: "not_found" });
     expect(l.workspaceBySlug).toHaveBeenCalledWith(org.id, "core-platform");
-    expect(l.isWorkspaceMember).toHaveBeenCalledWith(ws.id, "u1");
+    expect(l.workspaceMember).toHaveBeenCalledWith(ws.id, "u1");
     const failingShell = {
       context: () =>
         Promise.resolve(readError("control_plane_unavailable", 503)),
     };
     // @ts-expect-error -- a shell read port is not a dependency of viewer resolution
     void ((_: ResolveViewerDeps) => 0)({ ...deps, port: failingShell });
+  });
+
+  it("404s a workspace membership whose role is outside the stored set", async () => {
+    // Fails closed exactly as an unknown organization role does. The CHECK
+    // makes this unreachable through the app, so a value that got here came
+    // from somewhere that does not speak the canonical set, and the viewer is
+    // not minted with authority nobody can read.
+    const l = lookups({
+      workspaceMember: () => Promise.resolve({ id: "wsu_1", role: "auditor" }),
+    });
+    await expect(resolve(l, "acme", "core-platform")).resolves.toEqual({
+      kind: "not_found",
+    });
   });
 
   it("404s a workspace a lookup returned from another organization", async () => {
@@ -238,7 +288,7 @@ describe("resolveViewerWith: slug history", () => {
     const l = lookups({
       workspaceBySlug: () => Promise.resolve(null),
       workspaceBySlugHistory: () => Promise.resolve(ws),
-      isWorkspaceMember: () => Promise.resolve(false),
+      workspaceMember: () => Promise.resolve(null),
     });
     await expect(resolve(l, "acme", "platform")).resolves.toEqual({
       kind: "not_found",

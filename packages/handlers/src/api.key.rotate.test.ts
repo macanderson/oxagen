@@ -4,7 +4,7 @@
  * Coverage:
  *   - auth + scope guards (no principal / no org) → CapabilityError authz_denied
  *   - role gate (Member) → CapabilityError authz_denied
- *   - old key not found / already revoked → plain Error("Not found...")
+ *   - old key not found / already revoked → HandlerError(not_found)
  *   - happy path → returns new rawKey + revokedKeyPublicId + revokedAt
  *   - replacement inherits old name unless overridden; inherits expiry
  *   - emits api_key.created + api_key.revoked; single atomic withTenantDb txn
@@ -35,7 +35,7 @@ vi.mock("./logger", () => ({
 }));
 
 import { apiKeyRotateHandler } from "./api.key.rotate";
-import type { CapabilityContext } from "@oxagen/oxagen";
+import { type CapabilityContext, isHandlerError } from "@oxagen/oxagen";
 import { TEST_CTX, makeCTX } from "./test-utils/fixtures";
 
 const BASE_INPUT = { keyPublicId: "aky_old123" };
@@ -77,6 +77,9 @@ type OldRow = {
   name: string;
   scope: Record<string, unknown>;
   expiresAt: Date | null;
+  /** `deleted_at`. The handler's where filters it null, and it selects it so
+   * the rotatability predicate sees the whole row. */
+  revokedAt: Date | null;
   workspaceId: string;
 };
 type NewRow = {
@@ -88,19 +91,53 @@ type NewRow = {
   createdAt: Date;
 };
 
+/** The workspace the replacement would be minted into; null stands for one this org does not hold. */
+type WorkspaceRow = { name: string; archivedAt: Date | null } | null;
+
+const LIVE_WORKSPACE: WorkspaceRow = {
+  name: "Core platform",
+  archivedAt: null,
+};
+
 function makeRotateTx(
   oldRow: OldRow | null,
   newRow: NewRow,
   valuesSpy = vi.fn(),
   insertSpy = vi.fn(),
   updateSpy = vi.fn(),
+  workspace: WorkspaceRow = LIVE_WORKSPACE,
 ) {
+  // Two selects, in the order the handler makes them: the key being rotated,
+  // then the workspace its replacement would be minted into. BOTH take a row
+  // lock, and each records the mode it asked for, so a test can hold the guard
+  // to its mechanism and not only its answer.
+  //
+  // `keyLock` is what stops a concurrent revoke ending the key while this
+  // transaction queues on the workspace; `lock` is the workspace lock that
+  // stops a concurrent archive. They are separate spies because they close
+  // different races and a test that conflated them could not tell which one
+  // had been deleted.
+  const keyLock = vi
+    .fn()
+    .mockImplementation(() => Promise.resolve(oldRow ? [oldRow] : []));
+  const lock = vi
+    .fn()
+    .mockImplementation(() => Promise.resolve(workspace ? [workspace] : []));
+  let selects = 0;
   return {
-    select: () => ({
-      from: () => ({
-        where: () => ({ limit: () => Promise.resolve(oldRow ? [oldRow] : []) }),
-      }),
-    }),
+    keyLock,
+    lock,
+    select: () => {
+      selects++;
+      const first = selects === 1;
+      return {
+        from: () => ({
+          where: () => ({
+            limit: () => ({ for: first ? keyLock : lock }),
+          }),
+        }),
+      };
+    },
     insert: () => {
       insertSpy();
       return {
@@ -122,7 +159,10 @@ const OLD_ROW: OldRow = {
   publicId: "aky_old123",
   name: "CI deploy key",
   scope: { env: "prod" },
-  expiresAt: new Date("2027-01-01T00:00:00Z"),
+  // Well clear of any clock this suite runs on: the handler now refuses to
+  // rotate an expired key, so a near-future fixture would start failing.
+  expiresAt: new Date("2099-01-01T00:00:00Z"),
+  revokedAt: null,
   workspaceId: "wrk_1",
 };
 const NEW_ROW: NewRow = {
@@ -183,14 +223,14 @@ describe("api.key.rotate handler — guards", () => {
 });
 
 describe("api.key.rotate handler — not found", () => {
-  it("throws a plain Error when the old key does not exist / is revoked", async () => {
+  it("refuses an old key that does not exist or is revoked as not_found", async () => {
     vi.clearAllMocks();
     setupHappyPath("Owner", null);
     await expect(apiKeyRotateHandler(BASE_INPUT, TEST_CTX)).rejects.toSatisfy(
       (e: unknown) =>
-        e instanceof Error &&
-        !(e instanceof CapabilityError) &&
-        /Not found/.test(e.message),
+        isHandlerError(e) &&
+        e.code === "not_found" &&
+        e.reason === "api_key_not_found",
     );
   });
 });
@@ -223,6 +263,69 @@ describe("api.key.rotate handler — protected Stella telemetry scope", () => {
     expect(insertSpy).not.toHaveBeenCalled();
     expect(updateSpy).not.toHaveBeenCalled();
     expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("api.key.rotate handler — a key that has expired", () => {
+  it("refuses before generating, inserting or revoking, because the replacement would carry the expiry that ended it", async () => {
+    // deleted_at is null, so the not-found guard does not catch it. A page left
+    // open across the expiry keeps offering Rotate; this refusal is what makes
+    // clicking it harmless, and it is the same guarantee on api and mcp.
+    const insertSpy = vi.fn();
+    const updateSpy = vi.fn();
+    const expiredRow: OldRow = {
+      ...OLD_ROW,
+      expiresAt: new Date("2020-01-01T00:00:00Z"),
+    };
+    vi.clearAllMocks();
+    setupHappyPath("Owner", expiredRow, NEW_ROW, vi.fn(), insertSpy, updateSpy);
+
+    await expect(apiKeyRotateHandler(BASE_INPUT, TEST_CTX)).rejects.toSatisfy(
+      (e: unknown) =>
+        isHandlerError(e) &&
+        e.code === "conflict" &&
+        e.reason === "api_key_expired",
+    );
+    expect(mocks.generateApiKey).not.toHaveBeenCalled();
+    expect(insertSpy).not.toHaveBeenCalled();
+    expect(updateSpy).not.toHaveBeenCalled();
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("refuses a row that arrives already revoked, the third reason the predicate weighs", async () => {
+    // The where clause filters `deleted_at IS NULL`, so this cannot normally
+    // arrive — the predicate covers it so `list_api_keys`, which does return
+    // revoked rows, gets the same answer from the same function.
+    const insertSpy = vi.fn();
+    const updateSpy = vi.fn();
+    vi.clearAllMocks();
+    setupHappyPath(
+      "Owner",
+      { ...OLD_ROW, revokedAt: new Date("2026-09-10T08:00:00Z") },
+      NEW_ROW,
+      vi.fn(),
+      insertSpy,
+      updateSpy,
+    );
+    await expect(apiKeyRotateHandler(BASE_INPUT, TEST_CTX)).rejects.toSatisfy(
+      (e: unknown) =>
+        isHandlerError(e) &&
+        e.code === "not_found" &&
+        e.reason === "api_key_not_found",
+    );
+    expect(insertSpy).not.toHaveBeenCalled();
+    expect(updateSpy).not.toHaveBeenCalled();
+  });
+
+  it("rotates a key whose expiry is still ahead", async () => {
+    vi.clearAllMocks();
+    setupHappyPath("Owner", {
+      ...OLD_ROW,
+      expiresAt: new Date("2099-06-01T00:00:00Z"),
+    });
+    await expect(
+      apiKeyRotateHandler(BASE_INPUT, TEST_CTX),
+    ).resolves.toMatchObject({ publicId: "aky_new456" });
   });
 });
 
@@ -350,5 +453,203 @@ describe("api.key.rotate handler — happy path", () => {
     const machine = makeCTX({ userId: null, apiKeyId: "aky_machine" });
     const out = await apiKeyRotateHandler(BASE_INPUT, machine);
     expect(out.revokedKeyPublicId).toBe("aky_old123");
+  });
+});
+
+describe("api.key.rotate handler — archived workspace", () => {
+  // What archival should prevent is fresh secret material being issued for a
+  // workspace meant to be inert, and a rotation mints a new key with a new
+  // secret whatever its expiry. `create_api_key` refuses the same way; the two
+  // are uniform so the rule reads in one sentence.
+  //
+  // This does not close the access hole: the key being rotated still
+  // authenticates into the archived workspace (#3123). Revoke is the path that
+  // helps there, and it carries no archival check.
+  function setupArchived(
+    workspace: WorkspaceRow,
+    spies: {
+      valuesSpy: ReturnType<typeof vi.fn>;
+      insertSpy: ReturnType<typeof vi.fn>;
+      updateSpy: ReturnType<typeof vi.fn>;
+    },
+  ) {
+    let call = 0;
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => {
+        call++;
+        if (call === 1) return fn(makeRoleResolutionTx("principal-1", "Owner"));
+        return fn(
+          makeRotateTx(
+            OLD_ROW,
+            NEW_ROW,
+            spies.valuesSpy,
+            spies.insertSpy,
+            spies.updateSpy,
+            workspace,
+          ),
+        );
+      },
+    );
+  }
+
+  it("refuses to rotate a key in an archived workspace, minting and revoking nothing (negative)", async () => {
+    const spies = {
+      valuesSpy: vi.fn(),
+      insertSpy: vi.fn(),
+      updateSpy: vi.fn(),
+    };
+    setupArchived(
+      { name: "Sunset", archivedAt: new Date("2026-09-01T00:00:00.000Z") },
+      spies,
+    );
+    mocks.emitSecurityEvent.mockClear();
+
+    await expect(apiKeyRotateHandler(BASE_INPUT, makeCTX())).rejects.toSatisfy(
+      (e: unknown) =>
+        isHandlerError(e) &&
+        e.code === "conflict" &&
+        e.reason === "workspace_archived",
+    );
+    // The old key is untouched — refusing must not leave the caller with
+    // neither credential, which is the whole hazard of this capability.
+    expect(spies.insertSpy).not.toHaveBeenCalled();
+    expect(spies.updateSpy).not.toHaveBeenCalled();
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+    expect(mocks.generateApiKey).not.toHaveBeenCalled();
+  });
+
+  it("refuses a workspace this org does not hold, minting and revoking nothing (negative)", async () => {
+    const spies = {
+      valuesSpy: vi.fn(),
+      insertSpy: vi.fn(),
+      updateSpy: vi.fn(),
+    };
+    setupArchived(null, spies);
+
+    await expect(apiKeyRotateHandler(BASE_INPUT, makeCTX())).rejects.toSatisfy(
+      (e: unknown) =>
+        isHandlerError(e) &&
+        e.code === "not_found" &&
+        e.reason === "workspace_not_found",
+    );
+    expect(spies.insertSpy).not.toHaveBeenCalled();
+    expect(spies.updateSpy).not.toHaveBeenCalled();
+  });
+
+  it("takes a row lock on the workspace, which is what makes the check hold", async () => {
+    // The guard's correctness is not "the check is inside the transaction" —
+    // that only makes the statements atomic with respect to failure. Under
+    // READ COMMITTED an unlocked SELECT snapshots at statement start and
+    // `archive_workspace` can commit before the write, so the check would pass
+    // on precisely the interleaving its comment claims to prevent.
+    //
+    // The lock is the mechanism, so it is what the test pins: a future reader
+    // deleting `.for("update")` as redundant fails here rather than silently
+    // reopening the race.
+    const spies = {
+      valuesSpy: vi.fn(),
+      insertSpy: vi.fn(),
+      updateSpy: vi.fn(),
+    };
+    const tx = makeRotateTx(
+      OLD_ROW,
+      NEW_ROW,
+      spies.valuesSpy,
+      spies.insertSpy,
+      spies.updateSpy,
+      LIVE_WORKSPACE,
+    );
+    let call = 0;
+    mocks.withTenantDb.mockImplementation(
+      (fn: (t: unknown) => Promise<unknown>) => {
+        call++;
+        if (call === 1) return fn(makeRoleResolutionTx("principal-1", "Owner"));
+        return fn(tx);
+      },
+    );
+
+    await apiKeyRotateHandler(BASE_INPUT, makeCTX());
+    expect(tx.lock).toHaveBeenCalledWith("update");
+    // The key row is locked too, which is what keeps `scope` and `deleted_at`
+    // trustworthy across the wait for the workspace lock.
+    expect(tx.keyLock).toHaveBeenCalledWith("update");
+  });
+
+  it("refuses a key that expires WHILE the transaction waits for the workspace lock", async () => {
+    // The lock added above is a blocking lock, and that turned every check
+    // before it into a check-before-wait. This is the one that bites: the
+    // expiry check runs before the lock, so a key live when it ran can expire
+    // while this transaction queues behind a concurrent create, rotation or
+    // archival. Proceeding would revoke a working credential and hand back a
+    // replacement carrying an expiry already in the past — the operator loses a
+    // live key and gets a dead one.
+    //
+    // The wait is simulated where the real wait happens: the workspace lock is
+    // the thing that blocks, so the mock advances the clock past the key's
+    // expiry before it resolves. Nothing else about the handler is touched.
+    //
+    // A test that merely rotates an already-expired key would pass with or
+    // without the re-check, because the check before the lock already refuses
+    // that one. This one fails if the re-check is deleted.
+    vi.useFakeTimers();
+    try {
+      const base = new Date("2026-06-16T00:00:00.000Z");
+      vi.setSystemTime(base);
+
+      const expiringRow: OldRow = {
+        ...OLD_ROW,
+        // Live at the first check, 60s from now.
+        expiresAt: new Date(base.getTime() + 60_000),
+      };
+      const spies = {
+        valuesSpy: vi.fn(),
+        insertSpy: vi.fn(),
+        updateSpy: vi.fn(),
+      };
+      const tx = makeRotateTx(
+        expiringRow,
+        NEW_ROW,
+        spies.valuesSpy,
+        spies.insertSpy,
+        spies.updateSpy,
+        LIVE_WORKSPACE,
+      );
+      // Blocking for two minutes behind another writer: long enough that the
+      // key expires in the window.
+      tx.lock.mockImplementation(() => {
+        vi.setSystemTime(new Date(base.getTime() + 120_000));
+        return Promise.resolve([LIVE_WORKSPACE]);
+      });
+      let call = 0;
+      mocks.withTenantDb.mockImplementation(
+        (fn: (t: unknown) => Promise<unknown>) => {
+          call++;
+          if (call === 1)
+            return fn(makeRoleResolutionTx("principal-1", "Owner"));
+          return fn(tx);
+        },
+      );
+
+      await expect(
+        apiKeyRotateHandler(BASE_INPUT, makeCTX()),
+      ).rejects.toSatisfy(
+        (e: unknown) =>
+          isHandlerError(e) &&
+          e.code === "conflict" &&
+          e.reason === "api_key_expired",
+      );
+      // Nothing was minted and nothing was revoked on the way to the refusal:
+      // the operator keeps the key they had.
+      expect(spies.insertSpy).not.toHaveBeenCalled();
+      expect(spies.updateSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rotates in a workspace still in use, as before", async () => {
+    setupHappyPath("Owner");
+    const out = await apiKeyRotateHandler(BASE_INPUT, makeCTX());
+    expect(out.rawKey).toBe("ox_rotated_secret");
   });
 });

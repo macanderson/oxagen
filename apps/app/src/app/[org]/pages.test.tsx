@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 // Every route under /[org] renders between WL-08 and its page item
-// (ARCHITECTURE.md §8): the gap-lane pages still waiting on their lane render
-// their one UNRECORDED row under the title, and the other rev1 pages render the
-// title alone. Each page names itself once from its pages.* key (§1.2), resolves
+// (ARCHITECTURE.md §8): every page renders its title, and the one that still
+// waits on its lane would render its UNRECORDED row under it. Each page names itself once from its pages.* key (§1.2), resolves
 // its viewer first and renders nothing for a person requireViewer refuses.
 // Fleet hands its viewer, the data source and the runs cursor to the Fleet
 // feature (WL-34) and renders the cost rollup's two tiles under its title
@@ -10,7 +9,9 @@
 // cursor the URL names, to the Agents feature (#2956); Spend hands its viewer,
 // the data source and the query to its body (#2962); Skills hands its viewer,
 // the data source and the cursor to its body (#3098); Steering hands its viewer,
-// the data source and the query to the Steering feature (#2961); Billing hands
+// the data source and the query to the Steering feature (#2961); Tools hands
+// theirs, with the tab and the chips the URL names, to the Tools feature
+// (#2958); Billing hands
 // its viewer, the data source, the checkout outcome and the invoices cursor to
 // the Billing feature (WL-38); People renders its sections from org.members and
 // API keys its table from org.apiKeys. Run gains its body in WL-35.
@@ -39,11 +40,15 @@ const {
   OnboardingGate,
   Skills,
   SkillsLoading,
+  Tools,
+  ToolsLoading,
   members,
+  workspaces,
   apiKeys,
   source,
 } = vi.hoisted(() => {
   const members = vi.fn();
+  const workspaces = vi.fn();
   const apiKeys = vi.fn();
   return {
     requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
@@ -72,12 +77,25 @@ const {
       <p data-testid="skills-body" />
     )),
     SkillsLoading: vi.fn(() => null),
+    Tools: vi.fn((props: { searchParams: Record<string, string> }) => (
+      <p data-testid="tools-body" data-tab={props.searchParams.tab} />
+    )),
+    ToolsLoading: vi.fn(() => null),
     members,
+    workspaces,
     apiKeys,
-    source: { org: { members, apiKeys } },
+    source: { org: { members, workspaces, apiKeys } },
   };
 });
-vi.mock("@/server/viewer", () => ({ requireViewer }));
+// `WsCtx.is` is how the API keys section tells a workspace scope from an
+// organization one (ADR-073); the viewer classes are branded, so the stub
+// stands in for the brand with the field these fixtures carry.
+vi.mock("@/server/viewer", () => ({
+  requireViewer,
+  WsCtx: {
+    is: (x: unknown) => typeof x === "object" && x !== null && "wsSlug" in x,
+  },
+}));
 vi.mock("@/features/audit", () => ({ Audit, AuditSkeleton: () => null }));
 vi.mock("@/features/billing", () => ({ Billing }));
 vi.mock("@/features/fleet", () => ({ Fleet }));
@@ -93,19 +111,26 @@ vi.mock("@/features/organization", async (importOriginal) => ({
 }));
 vi.mock("@/features/onboarding", () => ({ OnboardingGate }));
 vi.mock("@/features/skills", () => ({ Skills, SkillsLoading }));
+vi.mock("@/features/tools", () => ({ Tools, ToolsLoading }));
 vi.mock("@/data/source", () => ({ dataSource: () => source }));
 vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
     Promise.resolve(translator(namespace)),
 }));
-// People is the one feature this file renders for real, so its client island
-// comes with it. The island imports the two server actions, and those import
-// the kernel seam, which loads both handler registries on import (§3.2) — a
-// graph no page test needs and one that never settles under jsdom. The writes
-// have their own tests; here the roster only has to render.
+// People and API keys are the features this file renders for real, so their
+// client islands come with them. Each island imports its server actions, and
+// those import the kernel seam, which loads both handler registries on import
+// (§3.2) — a graph no page test needs and one that never settles under jsdom.
+// The writes have their own tests; here the roster and the table only have to
+// render.
 vi.mock("@/features/organization/actions", () => ({
   changeMemberRole: vi.fn(),
   removeOrgMember: vi.fn(),
+}));
+vi.mock("@/features/organization/api-key-actions", () => ({
+  createApiKey: vi.fn(),
+  revokeApiKey: vi.fn(),
+  rotateApiKey: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
@@ -114,6 +139,8 @@ vi.mock("next/navigation", () => ({
 beforeEach(() => {
   requireViewer.mockReset();
   requireViewer.mockResolvedValue({});
+  workspaces.mockReset();
+  apiKeys.mockReset();
 });
 
 /** Every segment a page under /[org] can have; each page reads the ones in its path. */
@@ -129,11 +156,8 @@ const ORG = ["acme"];
 const WS = ["acme", "core-platform"];
 const title = translator("pages");
 
-const GAP_LANE: [string, Load][] = [
-  ["tools", () => import("./[ws]/tools/page")],
-];
-
 const SKILLS: Load = () => import("./[ws]/skills/page");
+const TOOLS: Load = () => import("./[ws]/tools/page");
 const STEERING: Load = () => import("./[ws]/steering/page");
 
 const FLEET: Load = () => import("./[ws]/page");
@@ -150,19 +174,35 @@ const API_KEYS: Load = () => import("./api-keys/page");
 const BILLING: Load = () => import("./billing/page");
 const AUDIT: Load = () => import("./audit/page");
 
-describe("gap-lane pages", () => {
-  it.each(GAP_LANE)(
-    "pages.%s resolves the workspace viewer, names the page once and renders its one NotRecorded row",
-    async (key, load) => {
-      await expectPageTitle(await load(), routeProps(SEGMENTS), title(key));
-      expect(requireViewer).toHaveBeenCalledWith(...WS);
-      expect(screen.getByRole("main")).toBeInTheDocument();
-      expect(screen.getByTestId("not-recorded")).toHaveAttribute(
-        "data-section",
-        key,
-      );
-    },
-  );
+describe("the Tools page", () => {
+  it("resolves the workspace viewer, names the page once under the workspace eyebrow and hands the viewer, the data source and the query to Tools", async () => {
+    const viewer = { wsSlug: "core-platform", wsName: "Core platform" };
+    requireViewer.mockResolvedValue(viewer);
+    const page = await expectPageTitle(
+      await TOOLS(),
+      routeProps(SEGMENTS, { tab: "switches", names: "api" }),
+      title("tools"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...WS);
+    expect(page).toHaveTextContent("Workspace · Core platform");
+    expect(Tools).toHaveBeenCalledOnce();
+    expect(Tools.mock.calls[0]?.[0]).toEqual({
+      ctx: viewer,
+      source,
+      searchParams: { tab: "switches", names: "api" },
+    });
+    expect(screen.getByTestId("tools-body")).toHaveAttribute(
+      "data-tab",
+      "switches",
+    );
+    // Tools has a page, so the UNRECORDED row it used to render is gone (§3.6).
+    expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+
+  it("hands Tools the registry with no query when the URL carries none", async () => {
+    await expectPageTitle(await TOOLS(), routeProps(SEGMENTS), title("tools"));
+    expect(Tools.mock.calls.at(-1)?.[0]).toMatchObject({ searchParams: {} });
+  });
 });
 
 describe("the Audit page", () => {
@@ -466,10 +506,44 @@ describe("Organization › Roles", () => {
   });
 });
 
+/**
+ * A row as `list_workspaces` answers it. `role` is what the viewer holds; a
+ * workspace they are not a member of answers null, and the picker drops it
+ * because viewer resolution 404s on one (INV-15).
+ */
+const wsRow = (slug: string, name: string) => ({
+  id: `wrk_${slug}`,
+  slug,
+  name,
+  role: "Owner",
+  archivedAt: null,
+});
+
 describe("Organization › API keys", () => {
-  it("resolves the organization viewer, names the page once and renders the keys org.apiKeys read for that viewer", async () => {
-    const ctx = { orgSlug: "acme", orgRole: "owner" };
+  beforeEach(() => {
+    workspaces.mockResolvedValue({
+      ok: true,
+      value: { workspaces: [wsRow("core-platform", "Core platform")] },
+    });
+  });
+
+  it("resolves the workspace the URL names and renders the keys org.apiKeys read in it", async () => {
+    // A key names a workspace (ADR-073): the page resolves one before it reads.
+    const ctx = {
+      orgSlug: "acme",
+      orgRole: "owner",
+      wsSlug: "core-platform",
+    };
     requireViewer.mockResolvedValue(ctx);
+    workspaces.mockResolvedValue({
+      ok: true,
+      value: {
+        workspaces: [
+          wsRow("core-platform", "Core platform"),
+          wsRow("growth", "Growth"),
+        ],
+      },
+    });
     apiKeys.mockResolvedValue({
       ok: true,
       value: [
@@ -481,24 +555,54 @@ describe("Organization › API keys", () => {
           lastUsedAt: null,
           expiresAt: null,
           revokedAt: null,
+          rotatable: true,
         },
       ],
     });
     await expectPageTitle(
       await API_KEYS(),
-      routeProps(SEGMENTS),
+      routeProps(SEGMENTS, { workspace: "growth" }),
       title("apiKeys"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
+    expect(requireViewer).toHaveBeenCalledWith("acme", "growth");
+    expect(workspaces).toHaveBeenCalledOnce();
     expect(apiKeys).toHaveBeenCalledWith(ctx);
     expect(screen.getByRole("main")).toHaveTextContent("ox_liveliveli");
     expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+
+  it("falls back to the first workspace the viewer may enter when the URL names none", async () => {
+    requireViewer.mockResolvedValue({
+      orgSlug: "acme",
+      orgRole: "owner",
+      wsSlug: "core-platform",
+    });
+    apiKeys.mockResolvedValue({ ok: true, value: [] });
+    await expectPageTitle(
+      await API_KEYS(),
+      routeProps(SEGMENTS),
+      title("apiKeys"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+  });
+
+  it("resolves no workspace and reads no key when the viewer may enter none (negative)", async () => {
+    requireViewer.mockResolvedValue({ orgSlug: "acme", orgRole: "owner" });
+    workspaces.mockResolvedValue({ ok: true, value: { workspaces: [] } });
+    await expectPageTitle(
+      await API_KEYS(),
+      routeProps(SEGMENTS),
+      title("apiKeys"),
+    );
+    expect(requireViewer).toHaveBeenCalledExactlyOnceWith(...ORG);
+    expect(apiKeys).not.toHaveBeenCalled();
   });
 });
 
 describe("a person requireViewer refuses", () => {
   it.each([
-    ...GAP_LANE.map(([key, load]) => [key, load] as const),
+    ["tools", TOOLS] as const,
     ["billing", BILLING] as const,
     ["skills", SKILLS] as const,
     ["steering", STEERING] as const,

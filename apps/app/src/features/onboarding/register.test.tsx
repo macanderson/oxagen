@@ -49,6 +49,7 @@ const ctx = unsafeMint(WsCtx, {
   workspaceId: "7b000000-0000-4000-8000-000000000001",
   wsSlug: "core-platform",
   wsName: "Core platform",
+  wsRole: "member",
 });
 
 async function renderStep(
@@ -123,9 +124,7 @@ describe("the wrap step", () => {
   it("offers the in-process path for an SDK agent, with no token to mint", async () => {
     await renderStep("wrap", "agt_releasebot", {
       state: readOk(onboardingGate()),
-      agent: readOk(
-        agentDetail({ identity: { harness: "claude-agent-sdk" } }),
-      ),
+      agent: readOk(agentDetail({ identity: { harness: "claude-agent-sdk" } })),
     });
     expect(screen.getByTestId("wrap-sdk")).toHaveTextContent(
       "Wrap it in your own process",
@@ -180,7 +179,9 @@ describe("the run step", () => {
     const panel = screen.getByTestId("detected-repository");
     expect(panel).toHaveTextContent("acme/platform");
     expect(
-      screen.getByRole("button", { name: "Bind acme/platform as the main repo" }),
+      screen.getByRole("button", {
+        name: "Bind acme/platform as the main repo",
+      }),
     ).toBeInTheDocument();
   });
 
@@ -228,8 +229,6 @@ describe("the run step", () => {
       state: readOk(onboardingGate({ step: "run" })),
       firstFrame: readError("onboarding_state_unavailable", 503),
     });
-    expect(
-      screen.getByText(/onboarding_state_unavailable/),
-    ).toBeVisible();
+    expect(screen.getByText(/onboarding_state_unavailable/)).toBeVisible();
   });
 });

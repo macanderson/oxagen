@@ -3,8 +3,12 @@
 // Flow:
 //   1. Auth + scope guard — require authenticated principal + orgId.
 //   2. Role gate — actor must hold Owner or Admin in the org.
-//   3. Resolve the key by publicId within ctx.orgId (IDOR guard: 404 if the
-//      key does not belong to this org, or if it is already revoked).
+//   3. Resolve the key by publicId within ctx.orgId (IDOR guard: a key that
+//      does not belong to this org, or is already revoked, is refused as
+//      HandlerError { code: "not_found", reason: "api_key_not_found" }, which
+//      every surface classifies — the API as 404, the app as `not_found`. An
+//      untyped Error here reached the app as an unavailable control plane, so
+//      revoking a key twice read as an outage.
 //   4. Reserved-purpose guard — refuse a server-owned credential, naming the
 //      capability that owns its lifecycle.
 //   5. Soft-delete: set deletedAt = now(), deletedByUserId = actorId.
@@ -79,7 +83,7 @@
 // panel, because a surface that hides a broken capability leaves it broken for
 // the other three.
 
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { apiKeyRevoke } from "@oxagen/oxagen/contracts/api.key.revoke";
 import { schema, withTenantDb } from "@oxagen/database";
@@ -162,9 +166,12 @@ export const apiKeyRevokeHandler: CapabilityHandler<
         { orgId: ctx.orgId, keyPublicId: input.keyPublicId },
         "api.key.revoke: key not found or already revoked",
       );
-      throw new Error(
-        "Not found: API key does not exist, is not in this org, or is already revoked",
-      );
+      throw new HandlerError({
+        code: "not_found",
+        reason: "api_key_not_found",
+        message:
+          "Not found: API key does not exist, is not in this org, or is already revoked",
+      });
     }
 
     // ── Reserved-purpose guard ───────────────────────────────────────────────

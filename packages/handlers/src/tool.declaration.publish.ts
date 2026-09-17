@@ -11,10 +11,7 @@ import {
 } from "@oxagen/iam/mandate-role";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { canonicalJson } from "./registry-digest";
-import {
-  publishTool,
-  type ActiveClassification,
-} from "./lib/tool-registry";
+import { publishTool, type ActiveClassification } from "./lib/tool-registry";
 
 /**
  * Publish one hand-authored tool declaration into the workspace registry

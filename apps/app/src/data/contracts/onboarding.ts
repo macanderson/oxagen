@@ -69,8 +69,6 @@ export const FirstFrame = z.object({
     })
     .nullable(),
   /** The first session ingested from that host; null until it arrives. */
-  firstFrame: z
-    .object({ runId: PublicId, receivedAt: Instant })
-    .nullable(),
+  firstFrame: z.object({ runId: PublicId, receivedAt: Instant }).nullable(),
 });
 export type FirstFrame = z.infer<typeof FirstFrame>;

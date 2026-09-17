@@ -110,6 +110,12 @@ export const ApiKey = z.object({
   lastUsedAt: z.iso.datetime().nullable(),
   expiresAt: z.iso.datetime().nullable(),
   revokedAt: z.iso.datetime().nullable(),
+  /**
+   * Whether `rotate_api_key` will replace this key. False for a key an
+   * enrollment or a login flow owns; the handler refuses to rotate those, so
+   * the page offers Revoke alone rather than a control that can only fail.
+   */
+  rotatable: z.boolean(),
 });
 export type ApiKey = z.infer<typeof ApiKey>;
 

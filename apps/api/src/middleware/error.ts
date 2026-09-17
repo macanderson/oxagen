@@ -237,10 +237,7 @@ export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
   // request from the surface that built the context, and a missing scope is
   // the same to the caller. Either way it is a 4xx, never a 500.
   if (isTenantScopeError(err)) {
-    logger.warn(
-      { requestId, message: err.message },
-      "tenant scope refused",
-    );
+    logger.warn({ requestId, message: err.message }, "tenant scope refused");
     return c.json(
       {
         error: {
