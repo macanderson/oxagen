@@ -4,6 +4,7 @@ import {
   type ChainCursor,
   type TachoEvent,
   type UnsealedTachoEvent,
+  digestUserEmail,
   sealEvent,
   sessionUuid,
 } from "@oxagen/tacho";
@@ -56,6 +57,7 @@ function unsealed(
   body: Record<string, unknown>,
   source: TachoEvent["source"] = "hook",
   label: AgentLabel = CLAUDE_CODE,
+  extra: Partial<UnsealedTachoEvent> = {},
 ): UnsealedTachoEvent {
   return {
     v: "tacho/1.0",
@@ -78,6 +80,7 @@ function unsealed(
       model: "claude-haiku-4-5-20251001",
       permission_mode: "default",
     },
+    ...extra,
     kind,
     body,
   } as UnsealedTachoEvent;
@@ -606,6 +609,55 @@ describe("ingest_tacho_events", () => {
       numElicitations: 1,
       telemetryGapCount: 1,
       numModelSwitches: 1,
+    });
+  });
+
+  it("stores the digest of the person's address and never the address", () => {
+    // tacho_events carried anthropic_user_email in the clear while every
+    // sibling identity column was a digest (#3072). The collector digests on
+    // the host now, so the address reaches no store: this asserts the session
+    // row holds the digest, and that no value written anywhere on the row
+    // looks like an address.
+    const digest = digestUserEmail("Ada.Lovelace@example.com");
+    const db = fakeDb();
+    wire(db);
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events: TachoEvent[] = [];
+    for (const draft of [
+      unsealed(
+        "agent_start",
+        { session_start_source: "startup" },
+        "hook",
+        CLAUDE_CODE,
+        { anthropic: { user_email_digest: digest } },
+      ),
+      unsealed("turn_start", { prompt_length: 3 }),
+    ]) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      events.push(sealed.event);
+    }
+    return tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events,
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    ).then(() => {
+      const row = db.sessions.get(SESSION) as Record<string, unknown>;
+      expect(row["anthropicUserEmailDigest"]).toBe(digest);
+      expect(row).not.toHaveProperty("anthropicUserEmail");
+      for (const value of Object.values(row)) {
+        if (typeof value === "string") expect(value).not.toContain("@");
+      }
+      const sent = mocks.insertTachoEvents.mock.calls[0]?.[0] as Array<{
+        event: TachoEvent;
+      }>;
+      for (const insert of sent) {
+        expect(JSON.stringify(insert.event)).not.toContain("@example.com");
+      }
     });
   });
 });
