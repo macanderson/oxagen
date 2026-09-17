@@ -405,6 +405,15 @@ interface ApplyGauReversalArgs {
  * Returns null when the event is not against a GAU purchase, which is the
  * caller's signal to fall through to the usage-credit clawback.
  *
+ * How much is withdrawn (ADR-085 §14): what the money is worth against the
+ * settlement, capped at what that purchase has left to give — its
+ * `quantity_gau` less the `requested_gau` already recorded by reversal rows
+ * for it. A refund and a dispute of one purchase are distinct events with
+ * distinct ids, so each arrives here on its own; without the cap the second
+ * prices itself against the full quantity again and takes units that a
+ * DIFFERENT purchase paid for, since a bucket is one balance for the
+ * organisation rather than a balance per purchase.
+ *
  * Which bucket is debited (ADR-085): the org's bucket for the period the
  * reversal is processed in, not the bucket the grant landed on. Only the
  * current bucket's balance is read by the gate, and the rollover folds last
@@ -606,13 +615,19 @@ export async function applyGauReversal(
  * `charge.refunded` against a GAU block purchase. Returns null when the charge
  * is not one, so the caller claws back usage credits instead.
  *
- * `amountRefundedCents` is cumulative on the charge, and the idempotency key is
- * the charge id, matching `onChargeRefunded`'s credit clawback: a second
- * partial refund on one charge redelivers the same charge id and is therefore
- * treated as a redelivery rather than as further units to withdraw. A GAU
- * purchase is sold in indivisible blocks and the product offers no partial
- * refund, so this is a deliberate consequence of matching the existing key
- * rather than an oversight (ADR-085).
+ * `amountRefundedCents` is CUMULATIVE over the charge, so a second partial
+ * refund redelivers the same charge id carrying a larger figure. The
+ * idempotency check therefore compares the amount and not just the id: an
+ * equal amount is a redelivery and withdraws nothing, a larger one is new
+ * money and withdraws the difference, and a smaller one is a stale delivery
+ * arriving out of order and is ignored (ADR-085 §10).
+ *
+ * Treating a larger figure as a redelivery — which an id-only key does — is a
+ * money-loss: the customer receives more money back and keeps the units.
+ *
+ * Whatever the sequence, no set of events against one purchase withdraws more
+ * than the units it granted; the cap is computed across every reversal row for
+ * the settlement before any debit (ADR-085 §14).
  */
 export async function reverseGauPurchaseForRefund(
   charge: BillingRefundedCharge,
@@ -638,6 +653,11 @@ export async function reverseGauPurchaseForRefund(
  * clawback takes: the funds are withheld from the moment of the dispute. A
  * dispute the org wins is a manual re-grant, as a won dispute's credits are
  * today — `dispute.closed` records the outcome and reverses nothing.
+ *
+ * "The units" means the units this purchase has left, not its full quantity. A
+ * dispute that follows a refund of the same purchase finds the entitlement
+ * already spent and withdraws nothing, rather than taking another purchase's
+ * units a second time (ADR-085 §14).
  */
 export async function reverseGauPurchaseForDispute(
   dispute: BillingDispute,

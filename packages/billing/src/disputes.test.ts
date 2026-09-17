@@ -18,6 +18,12 @@ import type { BillingDispute, BillingRefundedCharge } from "./provider";
 // Mocks
 // ---------------------------------------------------------------------------
 
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const real = await importOriginal<typeof import("drizzle-orm")>();
+  const { conditionMocks } = await import("./test-utils/gau-conditions");
+  return { ...real, ...conditionMocks };
+});
+
 const consumeCreditsMock = vi.fn().mockResolvedValue({
   chargedCents: 500n,
   shortfallCents: 0n,
@@ -66,6 +72,15 @@ interface DbState {
   insertCalled: boolean;
   updateSets: Array<Record<string, unknown>>;
   creditLedgerRow: Record<string, unknown> | null;
+  /**
+   * A checkout GAU settlement for this org that the ADR-085 migration could
+   * not give a payment identity to. Null — no such row — is the state every
+   * pre-existing test in this file runs in, and the state a deployment is in
+   * once the backfill has run.
+   */
+  unidentifiedGauSettlementRow: Record<string, unknown> | null;
+  /** Every condition the residue probe was built with, for shape assertions. */
+  gauSettlementWheres: unknown[];
 }
 
 function makeState(): DbState {
@@ -74,6 +89,8 @@ function makeState(): DbState {
     insertCalled: false,
     updateSets: [],
     creditLedgerRow: null,
+    unidentifiedGauSettlementRow: null,
+    gauSettlementWheres: [],
   };
 }
 
@@ -85,6 +102,12 @@ function makeDb(state: DbState) {
       },
       creditLedger: {
         findFirst: vi.fn(async () => state.creditLedgerRow),
+      },
+      gauSettlements: {
+        findFirst: vi.fn(async (args: { where?: unknown }) => {
+          state.gauSettlementWheres.push(args?.where);
+          return state.unidentifiedGauSettlementRow;
+        }),
       },
     },
     insert: vi.fn(() => {
@@ -346,6 +369,109 @@ describe("onChargeRefunded", () => {
     expect(call.referenceId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     );
+  });
+
+  describe("a legacy gau purchase the backfill could not identify", () => {
+    /**
+     * ADR-085 §15. A GAU purchase recorded before the payment identity landed
+     * has no stripe_payment_intent_id, and the createGauCheckout that paid for
+     * it put no metadata on the PaymentIntent, so its Charge cannot name it
+     * either. The migration backfills that column from the retained
+     * checkout.session.completed payload; these tests are about what happens
+     * to the rows it could not reach.
+     */
+    it("refuses the usage-credit clawback rather than debit a balance the purchase never credited", async () => {
+      const state = makeState();
+      state.creditLedgerRow = null;
+      // One checkout settlement for this org still has no payment identity.
+      state.unidentifiedGauSettlementRow = { id: "settle-legacy-1" };
+      dbHolder.instance = makeDb(state);
+
+      // A charge that says nothing about what it bought — which is exactly
+      // what a legacy GAU purchase's charge looks like.
+      await onChargeRefunded(
+        makeRefundedCharge({ orgId: "org-xyz", metadata: {} }),
+      );
+
+      // The assertion that pins the finding. Taking usage credits here is
+      // taking money from a balance this purchase never credited, and the
+      // units it did grant stay spendable either way.
+      expect(consumeCreditsMock).not.toHaveBeenCalled();
+    });
+
+    it("probes only for settlements that have no payment identity", async () => {
+      const state = makeState();
+      state.creditLedgerRow = null;
+      state.unidentifiedGauSettlementRow = { id: "settle-legacy-1" };
+      dbHolder.instance = makeDb(state);
+
+      await onChargeRefunded(
+        makeRefundedCharge({ orgId: "org-xyz", metadata: {} }),
+      );
+
+      // The row this returns is a fixture, so the mock cannot tell a filtered
+      // query from an unfiltered one by its answer. Assert the condition the
+      // query was BUILT with instead: without the IS NULL on
+      // stripe_payment_intent_id the probe matches any checkout purchase the
+      // organisation has ever made, and once the backfill has run that is all
+      // of them — every legitimate credit refund for a GAU customer would be
+      // refused, permanently, with no row left to clear the condition.
+      const where = state.gauSettlementWheres[0] as {
+        op: string;
+        conds: Array<{ op: string; val?: unknown }>;
+      };
+      expect(where.op).toBe("and");
+      expect(where.conds.some((c) => c.op === "isNull")).toBe(true);
+      // Scoped to THIS organisation. Without it one customer's unresolved
+      // purchase refuses every other customer's refunds — a blast radius the
+      // size of the platform, from a row belonging to someone else.
+      expect(
+        where.conds.some((c) => c.op === "eq" && c.val === "org-xyz"),
+      ).toBe(true);
+    });
+
+    it("still claws back normally once no settlement is missing its identity", async () => {
+      const state = makeState();
+      state.creditLedgerRow = null;
+      state.unidentifiedGauSettlementRow = null;
+      dbHolder.instance = makeDb(state);
+
+      await onChargeRefunded(
+        makeRefundedCharge({
+          orgId: "org-xyz",
+          metadata: {},
+          amountRefundedCents: 2000,
+        }),
+      );
+
+      // The guard is scoped to the unresolved residue and clears itself. A
+      // guard that fired whenever the charge carried no metadata would refuse
+      // every legitimate refund on a backfilled deployment.
+      expect(consumeCreditsMock).toHaveBeenCalledWith(
+        expect.objectContaining({ orgId: "org-xyz", requestedCents: 2000n }),
+      );
+    });
+
+    it("still claws back for a charge that says it bought credits, residue or not", async () => {
+      const state = makeState();
+      state.creditLedgerRow = null;
+      state.unidentifiedGauSettlementRow = { id: "settle-legacy-1" };
+      dbHolder.instance = makeDb(state);
+
+      await onChargeRefunded(
+        makeRefundedCharge({
+          orgId: "org-xyz",
+          metadata: { oxagen_kind: "usage_credits" },
+          amountRefundedCents: 2000,
+        }),
+      );
+
+      // This charge names what it bought, so there is nothing to be ambiguous
+      // about and the residue is irrelevant to it.
+      expect(consumeCreditsMock).toHaveBeenCalledWith(
+        expect.objectContaining({ orgId: "org-xyz", requestedCents: 2000n }),
+      );
+    });
   });
 
   it("idempotency: skips clawback when ledger row already exists for this charge", async () => {

@@ -110,23 +110,46 @@ that rolled out of the live balance before the refund arrived. Those are not
 recovered and not billed, and `unrecovered_gau` is where an operator reads that,
 rather than inferring it from a bucket that looks tidy.
 
-### 4. Idempotency matches the credit clawback
+### 4. Idempotency is keyed on the PaymentIntent, and compares the amount
 
-Stripe redelivers. The key is `(settlement_id, provider_event_id)` — the charge
-id for a refund, the dispute id for a dispute — enforced by
-`gau_reversals_settlement_event_idx` and pre-checked in the same transaction,
-which is the shape `onChargeRefunded` already uses for the credit ledger
-(`deterministicUuid(charge.id)` on `credit_ledger`).
+Stripe redelivers. The key is `(stripe_payment_intent_id, provider_event_id)` —
+the charge id for a refund, the dispute id for a dispute — enforced by
+`gau_reversals_payment_intent_event_idx` and pre-checked in the same
+transaction, which is the shape `onChargeRefunded` already uses for the credit
+ledger (`deterministicUuid(charge.id)` on `credit_ledger`). It is keyed on the
+PaymentIntent rather than the settlement so that it also holds for a row parked
+before its purchase was known (§5); for a row that has found its settlement the
+two are the same key by another name, since one PaymentIntent charges one
+Checkout Session.
 
-Keying on the charge id has a consequence worth stating: Stripe's
-`amount_refunded` is cumulative, so a *second* partial refund on one charge
-redelivers the same charge id and is treated as a redelivery rather than as
-further units to withdraw. The existing credit clawback behaves the same way. A
-block purchase is sold in indivisible blocks and the product offers no partial
-refund — the only partial refunds are operator goodwill from the Stripe
-dashboard, and the first one is honoured pro-rata. Matching the existing key
-beats inventing a second idempotency scheme for a case the product does not
-create.
+**The key alone is not the whole rule, and the decision changed during this
+change.** What was first accepted here was that a *second* partial refund on one
+charge redelivers the same charge id and is therefore treated as a redelivery,
+withdrawing nothing further — on the reasoning that a block purchase is sold in
+indivisible blocks, that the product offers no partial refund, and that matching
+the existing credit-clawback key beat inventing a second idempotency scheme for
+a case the product does not create.
+
+That was wrong, and measuring it is what changed it. Stripe's `amount_refunded`
+is **cumulative over the charge**, not per-refund: a second partial refund
+redelivers the same charge id carrying a *larger* figure. An id-only key reads
+that as a redelivery and withdraws nothing, so the customer receives more money
+back and keeps the units — the money-loss this ADR exists to close, reached
+through the idempotency check instead of through the handler. The reasoning
+above does not save it either: operator goodwill from the Stripe dashboard is
+precisely how these refunds arise, and nothing stops an operator issuing two.
+
+So the check compares the **amount**, not just the id. An equal amount is a
+redelivery and withdraws nothing; a larger one is new money and withdraws the
+difference, recomputed against the new cumulative total rather than prorated
+per delta, because proration floors and summing per-delta figures drifts below
+the total actually refunded; a smaller one is a stale delivery arriving out of
+order and is ignored. §10 carries the mechanism.
+
+Independently of the sequence, no set of events against one purchase may
+withdraw more than the units that purchase granted — see §14, which is a
+different rule with a different cause, and is enforced across every reversal row
+for the settlement rather than within one charge's history.
 
 ### 5. The dispatch is by what was sold, not by what resolves first
 
@@ -588,6 +611,57 @@ second full-quantity debit recovered nothing and looked correct. It asserted
 `requested_gau: 10_000` for that dispute, which is the defect's own output
 written down as the expectation. A bucket that still holds another purchase's
 units is what distinguishes the two, and that is what the tests now seed.
+
+### 15. The purchases that already exist get a payment identity too
+
+Adding `stripe_payment_intent_id` fixes the purchases made after the column
+exists. Every checkout settlement recorded before it carries NULL, and the
+`createGauCheckout` that paid for those put no metadata on the PaymentIntent
+either, so the Charge cannot name the purchase from the other side. A refund or
+dispute against one of them matches no settlement, cannot be parked, and leaves
+the units spendable — the money-loss this ADR exists to close, still open for
+the whole population that existed on the day it shipped. A fix at the write
+path does not reach state written before it.
+
+**The identity is recoverable without calling Stripe, and the coverage is
+structural rather than best-effort.** `billing.stripe_events` is an immutable
+raw-event store: `processStripeEvent` inserts the full webhook payload *before*
+dispatching it, never updates the row, and nothing in the tree deletes one. A
+`kind='checkout'` settlement can only have been created by
+`grantGauPurchaseForCheckout`, whose single caller is the
+`checkout.session.completed` branch of that dispatch. So the event that created
+each of these rows is still present, joinable on the session id the settlement
+already records, and `payment_intent` and `amount_total` are read straight off
+it. The migration backfills both.
+
+`charged_cents` is backfilled for the same reason and it is not cosmetic:
+without it `reversibleGau` falls back to the subtotal, and since a refund's
+amount includes refunded tax, a *partial* refund of a legacy purchase
+over-withdraws by exactly the tax rate — §6's defect, fixed for new rows and
+left standing for old ones. This is the second instance of the same shape in
+one change, which is the argument for looking for the shape rather than for the
+instance.
+
+**The alternative considered and rejected: a legacy provider lookup.** Asking
+Stripe for the session at refund time does not depend on what was stored, but
+it puts a network call and a new failure mode on the money path, needs
+credentials wherever reversals run, and — given the event store makes coverage
+a property of how rows are written — buys nothing the backfill does not already
+reach.
+
+**The residue fails loudly and safely, in that order.** Whatever the backfill
+cannot reach is reported at deploy time by a `RAISE WARNING` naming the count,
+not swallowed. It is a warning and not an exception on purpose: a row this
+cannot reach is not fixable from inside the migration, and wedging every future
+deploy behind it would trade a bounded, alerting blind spot for an unbounded
+outage. At runtime, `onChargeRefunded` refuses the usage-credit clawback while
+any such settlement remains for that organisation and a refund's charge does not
+say what it bought — because a block purchase's clawback would debit a balance
+it never credited, and "completes after a fatal log" is the behaviour being
+fixed, not one to reproduce in the new path. The probe is scoped to the one
+organisation and to settlements that actually lack the identity, so it clears
+itself once the backfill has run and one customer's unresolved purchase never
+refuses another customer's refund.
 
 ## Consequences
 

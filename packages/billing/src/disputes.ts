@@ -4,7 +4,7 @@
 // billing is org_only, no workspace_id).
 import { withSystemDb, schema } from "@oxagen/database";
 import type { Tx } from "@oxagen/database";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { deterministicUuid } from "./internal/deterministic-uuid";
 import { consumeCredits } from "./credits";
 import { CREDIT_REASONS } from "./constants";
@@ -419,6 +419,45 @@ export async function onChargeRefunded(
         "billing: charge.refunded — CRITICAL: cannot resolve orgId; clawback NOT applied — manual intervention required",
       );
       return;
+    }
+
+    // A GAU purchase recorded before this change carries no
+    // stripe_payment_intent_id, and the createGauCheckout that paid for it put
+    // no metadata on the PaymentIntent either — so the reversal above matched
+    // nothing, and the `oxagen_kind` guard did not fire, because this charge
+    // says nothing about what it bought. The ADR-085 migration backfills that
+    // column from the retained checkout.session.completed payload, so this is
+    // normally an empty set and this probe never stops anything.
+    //
+    // While one remains, a refund whose charge does not name what it bought
+    // cannot be PROVED to be a credit purchase, and clawing back usage credits
+    // for a block purchase takes money from a balance it never credited. The
+    // safe direction is to take nothing and say so: the units are not withdrawn
+    // either way, and that is what the alert is for. A charge that does name
+    // what it bought is unambiguous and never reaches here.
+    if (!charge.metadata.oxagen_kind) {
+      const unidentifiedGauPurchase = await tx.query.gauSettlements.findFirst({
+        where: and(
+          eq(schema.gauSettlements.orgId, orgId),
+          eq(schema.gauSettlements.kind, "checkout"),
+          isNull(schema.gauSettlements.stripePaymentIntentId),
+        ),
+        columns: { id: true },
+      });
+      if (unidentifiedGauPurchase) {
+        logger.fatal(
+          {
+            alert: "gau_reversal_unmatched",
+            stripeChargeId: charge.id,
+            paymentIntentId: charge.paymentIntentId,
+            amountRefundedCents: charge.amountRefundedCents,
+            orgId,
+            unidentifiedSettlementId: unidentifiedGauPurchase.id,
+          },
+          "billing: charge.refunded — CRITICAL: this organisation still has a gau purchase with no payment identity, so a refund carrying no oxagen_kind cannot be told apart from it; clawback NOT applied and units NOT withdrawn — manual intervention required",
+        );
+        return;
+      }
     }
 
     if (charge.amountRefundedCents <= 0) {
