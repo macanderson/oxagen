@@ -89,9 +89,9 @@ afterEach(() => {
 describe("MobileBottomBar — primary tabs", () => {
   it("renders the workspace destinations as client-routed tabs with resolved hrefs", () => {
     // Workspace mode has nine nav items in raw declaration order (overview,
-    // sessions, knowledge, agents, tools, environments, fleet, marketplace,
+    // sessions, fleet, knowledge, agents, tools, environments, marketplace,
     // settings); only the first four (MAX_BAR_ITEMS) fit the bar — everything
-    // from Tools onward overflows into the "More" sheet, covered below.
+    // from Agents onward overflows into the "More" sheet, covered below.
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(within(nav).getByRole("link", { name: "Sessions" })).toHaveAttribute(
@@ -105,9 +105,9 @@ describe("MobileBottomBar — primary tabs", () => {
     expect(
       within(nav).getByRole("link", { name: "Knowledge" }),
     ).toHaveAttribute("href", "/acme/prod/knowledge");
-    expect(within(nav).getByRole("link", { name: "Agents" })).toHaveAttribute(
+    expect(within(nav).getByRole("link", { name: "Fleet" })).toHaveAttribute(
       "href",
-      "/acme/prod/workbench/agents",
+      "/acme/prod/fleet",
     );
   });
 
@@ -122,17 +122,20 @@ describe("MobileBottomBar — primary tabs", () => {
     );
   });
 
-  it("overflows Tools, Environments, Fleet, Marketplace, and Settings into the More sheet while the first four destinations stay in the bar", async () => {
+  it("overflows Agents, Tools, Environments, Marketplace, and Settings into the More sheet while the first four destinations stay in the bar", async () => {
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(
       screen.getByRole("button", { name: /more navigation/i }),
     ).toBeInTheDocument();
-    // The first four (Overview, Sessions, Knowledge, Agents) stay in the bar.
+    // The first four (Overview, Sessions, Fleet, Knowledge) stay in the bar.
     expect(
-      within(nav).getByRole("link", { name: "Agents" }),
+      within(nav).getByRole("link", { name: "Knowledge" }),
     ).toBeInTheDocument();
-    // Items past MAX_BAR_ITEMS never render in the bar itself.
+    // Items past MAX_BAR_ITEMS never render in the bar itself. Fleet is a
+    // fourth primary destination (ADR-078), so Agents is now the first item
+    // past the cut and overflows with the rest.
+    expect(within(nav).queryByRole("link", { name: "Agents" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Tools" })).toBeNull();
     expect(
       within(nav).queryByRole("link", { name: "Environments" }),
@@ -154,6 +157,12 @@ describe("MobileBottomBar — primary tabs", () => {
         "/acme/prod/workbench/tools",
       );
     });
+    // Agents left the bar but stays reachable — the More sheet is the
+    // registered mobile reflow for every overflow destination (ADR-026).
+    expect(screen.getByRole("link", { name: "Agents" })).toHaveAttribute(
+      "href",
+      "/acme/prod/workbench/agents",
+    );
     expect(screen.getByRole("link", { name: "Environments" })).toHaveAttribute(
       "href",
       "/acme/prod/workbench/environments",
