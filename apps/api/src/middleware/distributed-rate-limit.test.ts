@@ -356,6 +356,76 @@ describe("distributedRateLimiter", () => {
     expect(next).toHaveBeenCalledTimes(2);
   });
 
+  // The inverse ordering of the case above, and the one recording-without-
+  // enforcing left open: the degraded path serves `max`, then the store comes
+  // back and its counter starts at 1, which would permit a second full `max`.
+  it("does not hand a second full allowance out when the store recovers mid-window", async () => {
+    let storeUp = false;
+    let healthyCount = 0;
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        if (!storeUp) throw new Error("db unavailable");
+        healthyCount += 1;
+        return fn({
+          execute: vi.fn().mockResolvedValue([{ count: healthyCount }]),
+        });
+      },
+    );
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 2,
+      bucketKey: trustedClientIpBucketKey,
+      storeErrorPolicy: "degrade-to-local",
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const headers = { "x-oxagen-client-ip": "198.51.100.44" };
+
+    // The whole ceiling is spent against a store that is down.
+    await mw(fakeContext({ headers }), next);
+    await mw(fakeContext({ headers }), next);
+    expect(next).toHaveBeenCalledTimes(2);
+
+    // Postgres comes back and starts counting this window from 1. The shadow
+    // count is what has to answer.
+    storeUp = true;
+    const third = (await mw(fakeContext({ headers }), next)) as
+      | { body: unknown; status: number }
+      | undefined;
+
+    expect(third?.status).toBe(429);
+    expect(third?.body).toMatchObject({ error: "rate_limited" });
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  it("leaves a healthy limiter's ceiling exactly where it was", async () => {
+    // The shadow gate must be inert while the store is up: the Postgres count
+    // is global and the shadow per-instance, so `count > max` always fires
+    // first and this mount still allows exactly `max`.
+    let served = 0;
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        served += 1;
+        return fn({ execute: vi.fn().mockResolvedValue([{ count: served }]) });
+      },
+    );
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 3,
+      bucketKey: trustedClientIpBucketKey,
+      storeErrorPolicy: "degrade-to-local",
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const headers = { "x-oxagen-client-ip": "198.51.100.45" };
+
+    for (let i = 0; i < 3; i += 1) await mw(fakeContext({ headers }), next);
+    const fourth = (await mw(fakeContext({ headers }), next)) as
+      | { status: number }
+      | undefined;
+
+    expect(next).toHaveBeenCalledTimes(3);
+    expect(fourth?.status).toBe(429);
+  });
+
   it("keeps the flapping ceiling per bucket", async () => {
     let storeUp = true;
     mocks.withSystemDb.mockImplementation(

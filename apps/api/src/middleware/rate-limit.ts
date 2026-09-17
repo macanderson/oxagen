@@ -15,13 +15,23 @@ interface Bucket {
   resetAt: number;
 }
 
-/** Above this many tracked keys, opportunistically sweep expired buckets on the next request. */
-const SWEEP_THRESHOLD = 10_000;
+/**
+ * Hard ceiling on tracked keys per counter instance. Reaching it evicts rather
+ * than merely sweeping — see `hit` for why that distinction is the whole point.
+ */
+const MAX_TRACKED_KEYS = 10_000;
 
 /** One counted hit: the running count for the key and when its window resets. */
 export interface FixedWindowHit {
   count: number;
   resetAt: number;
+}
+
+/** A bounded in-process fixed-window counter. */
+export interface FixedWindowCounter {
+  hit: (key: string) => FixedWindowHit;
+  /** Tracked keys. Exposed so the bound itself can be asserted in a test. */
+  readonly size: number;
 }
 
 /**
@@ -36,30 +46,68 @@ export interface FixedWindowHit {
  * a caller's local and distributed allowances straddle each other. It also
  * makes this file's doc comment true — it has said "fixed-window" since it was
  * written while the code rolled the window forward from each first hit.
+ *
+ * ## The map is bounded by eviction, not by expiry
+ *
+ * This counter is fed by pre-authentication limiters, so an unauthenticated
+ * caller chooses its own keys: one per `Authorization` value on the credential
+ * mounts. The bound therefore has to hold WITHIN a single window, against a
+ * caller that is deliberately minting keys.
+ *
+ * The previous version swept entries whose window had expired, above a
+ * threshold, on every hit. That bounds the map ACROSS windows and does nothing
+ * within one: mid-window nothing is expired, so past the threshold the sweep
+ * deleted nothing, scanned the whole map on every request — O(n) per request,
+ * quadratic over a flood — and the map kept growing. Two source IPs could stay
+ * under Tacho's 6,000-per-IP ceiling while creating more than 10,000 credential
+ * buckets in a minute. A comment calling that a sweep read like a bound and was
+ * not one.
+ *
+ * So: a hard `MAX_TRACKED_KEYS`, and at the cap the oldest entry is evicted.
+ * That is the pattern `cacheLocalDeny` already uses in distributed-rate-limit.ts.
+ * A key is re-inserted when its window rolls, so the map's iteration order is
+ * "least recently started a window first" and eviction discards stale keys
+ * before live ones. `Map.set` on an existing key keeps its original position,
+ * which is why the roll path deletes before setting; without that a long-lived
+ * legitimate key would sit at the front forever and be evicted first.
+ *
+ * What eviction costs, stated plainly: a caller flooding distinct keys can push
+ * another caller's count out of the map and hand it a fresh allowance. That is
+ * a weaker guarantee than an unbounded map would give and a much better one
+ * than running out of memory. On the healthy path it is not the operative
+ * ceiling at all — the Postgres counter is authoritative and global there, and
+ * this counter is the shadow that catches a store that flaps. On the degraded
+ * path it is the only ceiling, and a bounded, evictable ceiling is what that
+ * path is for.
  */
-export function createFixedWindowCounter(windowMs: number): {
-  hit: (key: string) => FixedWindowHit;
-} {
+export function createFixedWindowCounter(windowMs: number): FixedWindowCounter {
   const buckets = new Map<string, Bucket>();
 
   return {
+    get size(): number {
+      return buckets.size;
+    },
+
     hit(key: string): FixedWindowHit {
       const now = Date.now();
-      const resetAt = (Math.floor(now / windowMs) + 1) * windowMs;
-
-      if (buckets.size > SWEEP_THRESHOLD) {
-        for (const [k, b] of buckets) {
-          if (now >= b.resetAt) buckets.delete(k);
-        }
-      }
-
       const bucket = buckets.get(key);
-      if (!bucket || now >= bucket.resetAt) {
-        buckets.set(key, { count: 1, resetAt });
-        return { count: 1, resetAt };
+      if (bucket && now < bucket.resetAt) {
+        bucket.count += 1;
+        return { count: bucket.count, resetAt: bucket.resetAt };
       }
-      bucket.count += 1;
-      return { count: bucket.count, resetAt: bucket.resetAt };
+
+      // New key, or this key's window has rolled. Delete before setting so the
+      // entry moves to the back of the iteration order — see the note above.
+      buckets.delete(key);
+      while (buckets.size >= MAX_TRACKED_KEYS) {
+        const oldest = buckets.keys().next().value;
+        if (oldest === undefined) break;
+        buckets.delete(oldest);
+      }
+
+      const resetAt = (Math.floor(now / windowMs) + 1) * windowMs;
+      buckets.set(key, { count: 1, resetAt });
+      return { count: 1, resetAt };
     },
   };
 }

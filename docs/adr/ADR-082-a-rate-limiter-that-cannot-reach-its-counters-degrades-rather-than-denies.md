@@ -83,11 +83,32 @@ able to reason about at 3am.
   hold the change, only a reason to write it down.
 - `max` per warm instance is the bound in a flapping window too, not only in a
   clean outage. Every ALLOWED request is counted into the local counter,
-  including the ones the Postgres upsert handled, so a store that alternates
-  between working and failing cannot give a caller one allowance through each.
-  Counting only the failures would have made the real bound `2 × max` precisely
-  when the store is least reliable — a gap this ADR would have stated wrongly
-  rather than a behaviour anyone chose.
+  including the ones the Postgres upsert handled, and the shadow count is
+  ENFORCED on the healthy path rather than merely recorded. Recording alone
+  closes one ordering and not the other: healthy-then-failed is bounded because
+  the local counter starts from where Postgres got to, but failed-then-healthy
+  is not, because a recovered Postgres counter starts this window at 1 and would
+  permit a second full `max`. Both orderings had to be closed for the bound in
+  this ADR to be true.
+- **Counting on the healthy path has a memory cost, and it is adversarial.**
+  Mirroring every allowed request means one map entry per bucket key per window
+  on the four pre-authentication mounts — and on those mounts an unauthenticated
+  caller chooses its own keys, one per `Authorization` value. The first version
+  of this bounded the map by sweeping entries whose window had expired, which
+  bounds it across windows and not at all inside one: two source IPs could stay
+  under the 6,000-per-IP ceiling while minting more than 10,000 credential
+  buckets in a minute, with the sweep scanning the whole map on every request
+  and deleting nothing. `createFixedWindowCounter` now holds a hard maximum and
+  evicts the oldest entry, the pattern `cacheLocalDeny` already used.
+- **CI went 14/14 green over that defect, and over the quadratic scan under it.**
+  A correctness fix introduced a resource-exhaustion bug and the full gate —
+  lint, typecheck, unit, coverage, e2e, RLS, RDS — had nothing to say about it,
+  because none of those ask what a structure costs under a caller that is trying
+  to make it expensive. Anyone changing what this limiter counts on the healthy
+  path should assume the suite will not catch the cost, and should write the
+  bound as a test that floods distinct keys inside one frozen window and asserts
+  on the size of the map. A test that lets the window roll passes against the
+  broken version.
 - The degraded limiter's buckets live for the life of the process and are built
   on the first store failure, so a store outage that flaps does not reset the
   count each time.

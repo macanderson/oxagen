@@ -316,9 +316,11 @@ export function distributedRateLimiter(
    * however the window's requests happened to be split between them.
    *
    * The cost is one map entry per bucket key per window while the store is
-   * healthy, swept by `createFixedWindowCounter` above its threshold. Only the
-   * `degrade-to-local` mounts pay it; a fail-open limiter has no fallback to
-   * seed and never touches this.
+   * healthy. On a pre-authentication mount the caller chooses its own keys, so
+   * that cost is adversarial: `createFixedWindowCounter` bounds it with a hard
+   * maximum and eviction rather than by sweeping expired entries, which bounds
+   * nothing inside a single window. Only the `degrade-to-local` mounts pay it;
+   * a fail-open limiter has no fallback to seed and never touches this.
    */
   const localCounter = createFixedWindowCounter(windowMs);
 
@@ -421,10 +423,30 @@ export function distributedRateLimiter(
       return c.json({ error: "rate_limited" }, 429);
     }
 
-    // Mirror the allowed request into the degraded counter so a store that
-    // flaps mid-window cannot hand this caller a second full allowance — see
-    // `localCounter` above.
-    if (storeErrorPolicy === "degrade-to-local") localCounter.hit(key);
+    // Mirror the allowed request into the degraded counter, and ENFORCE the
+    // shadow count as well as record it. Recording alone closes only one of the
+    // two flapping orderings: healthy-then-failed, where the local counter
+    // starts from the count Postgres already reached. Failed-then-healthy stays
+    // open, because the recovered Postgres counter starts at 1 and would permit
+    // a second full `max` on top of the one the degraded path already served.
+    // The two ceilings bound the same window, so whichever of them is exhausted
+    // is the one that answers.
+    //
+    // This changes nothing on a healthy mount. The Postgres count is global and
+    // the shadow is per-instance, so the shadow can never exceed it while the
+    // store is up and `count > max` always fires first.
+    if (storeErrorPolicy === "degrade-to-local") {
+      const shadow = localCounter.hit(key);
+      if (shadow.count > max) {
+        cacheLocalDeny(key, resetAtMs, now);
+        c.header("X-RateLimit-Remaining", "0");
+        c.header(
+          "Retry-After",
+          String(Math.max(1, resetSeconds - Math.ceil(now / 1000))),
+        );
+        return c.json({ error: "rate_limited" }, 429);
+      }
+    }
 
     return next();
   };

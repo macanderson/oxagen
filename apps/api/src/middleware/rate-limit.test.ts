@@ -6,7 +6,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import type { Context } from "hono";
-import { rateLimiter } from "./rate-limit";
+import { createFixedWindowCounter, rateLimiter } from "./rate-limit";
 import type { AppEnv } from "../app";
 
 function fakeContext(headers: Record<string, string> = {}): Context<AppEnv> {
@@ -133,11 +133,7 @@ describe("rateLimiter", () => {
     expect(rejected?.status).toBe(429);
   });
 
-  it("opportunistically sweeps expired buckets once the tracked-key count crosses the threshold", async () => {
-    // The limiter only sweeps expired buckets when its map grows past
-    // SWEEP_THRESHOLD (10_000 keys). Fill it past that with distinct keys, let
-    // the window elapse so every bucket is stale, then drive one more request:
-    // the sweep runs, drops the dead buckets, and the limiter keeps working.
+  it("keeps working across a window roll without leaking the previous window's keys", async () => {
     vi.useFakeTimers();
     try {
       let keyCounter = 0;
@@ -148,24 +144,101 @@ describe("rateLimiter", () => {
       });
       const next = vi.fn().mockResolvedValue(undefined);
 
-      // 10_001 distinct keys → map size exceeds the 10_000 sweep threshold.
-      for (keyCounter = 0; keyCounter <= 10_000; keyCounter++) {
+      for (keyCounter = 0; keyCounter < 5_000; keyCounter++) {
         await middleware(fakeContext(), next);
       }
-      // Every bucket is now expired.
       vi.advanceTimersByTime(2_000);
 
-      // A fresh key triggers the size>threshold sweep at the top of the handler,
-      // deleting the 10_001 stale buckets before this request is counted.
       keyCounter = 999_999;
-      const swept = await middleware(fakeContext(), next);
-      expect(swept).toBeUndefined(); // allowed (fresh key, first hit)
-
-      // The limiter still enforces its limit for that key after the sweep.
+      expect(await middleware(fakeContext(), next)).toBeUndefined();
       const rejected = (await middleware(fakeContext(), next)) as
         | { status: number }
         | undefined;
       expect(rejected?.status).toBe(429);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// ── createFixedWindowCounter: the bound ───────────────────────────────────────
+//
+// These are about memory, not about limits. The counter is fed by
+// pre-authentication limiters, so the caller chooses its own keys and the bound
+// has to hold WITHIN one window. The version this replaced swept only expired
+// entries, which bounds the map across windows and not at all inside one — so a
+// test that lets the window roll passes against the broken code and proves
+// nothing. Every case here freezes the clock.
+
+describe("createFixedWindowCounter", () => {
+  it("bounds the tracked-key map inside a single window", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-17T12:00:00.000Z"));
+      const counter = createFixedWindowCounter(60_000);
+
+      // Far past the cap, all inside one window, nothing ever expiring — the
+      // shape of a caller minting a fresh Authorization value per request.
+      for (let i = 0; i < 25_000; i += 1) counter.hit(`credential:${i}`);
+
+      expect(counter.size).toBeLessThanOrEqual(10_000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still counts correctly for a key that survives a flood", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-17T12:00:00.000Z"));
+      const counter = createFixedWindowCounter(60_000);
+
+      for (let i = 0; i < 12_000; i += 1) counter.hit(`flood:${i}`);
+      const first = counter.hit("survivor");
+      const second = counter.hit("survivor");
+
+      expect(first.count).toBe(1);
+      expect(second.count).toBe(2);
+      expect(second.resetAt).toBe(first.resetAt);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("evicts a key that went quiet before one that is still active", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-17T12:00:00.000Z"));
+      const counter = createFixedWindowCounter(60_000);
+
+      // `keeper` is seen first, so on a plain `Map.set` it would stay at the
+      // front of the iteration order for ever and be the first thing evicted —
+      // exactly the wrong key. Re-inserting on a window roll is what moves it
+      // behind `quiet`.
+      counter.hit("keeper");
+      counter.hit("quiet");
+      vi.advanceTimersByTime(120_000);
+      counter.hit("keeper");
+
+      // 9_999 fresh keys take the map to the cap and force exactly one
+      // eviction, which must be `quiet`.
+      for (let i = 0; i < 9_999; i += 1) counter.hit(`flood:${i}`);
+
+      expect(counter.size).toBe(10_000);
+      expect(counter.hit("keeper").count).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("anchors the window to the epoch, not to the key's first hit", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-17T12:00:30.000Z"));
+      const counter = createFixedWindowCounter(60_000);
+      expect(counter.hit("k").resetAt).toBe(
+        new Date("2026-09-17T12:01:00.000Z").getTime(),
+      );
     } finally {
       vi.useRealTimers();
     }
