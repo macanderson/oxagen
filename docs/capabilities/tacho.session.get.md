@@ -23,13 +23,19 @@ One session's flight-recorder index (`docs/specs/tacho/data-model.md` section 3)
 
 | Field | Type | Description |
 |---|---|---|
-| `session` | object | the full session projection |
+| `session` | object | the full session projection, including `anthropicUserEmailDigest` |
 | `children` | object[] | subagent session summaries |
 | `models` | object[] | per-model usage |
 | `files` | object[] | paths touched with counts and seq range |
 | `commands` | object[] | shell commands with decision and rule |
 | `incidents` | object[] | |
 | `checkpointCount` | integer | |
+
+The session projection names the person behind the run as
+`anthropicUserEmailDigest`, a `sha256:…` value, never an address: the collector
+digests it on the host and no store holds a readable one (ADR-079,
+`docs/specs/tacho/data-model.md` section 2.2). Two sessions with the same digest
+are the same person; the digest cannot be turned back into an address.
 
 ## Honesty
 
