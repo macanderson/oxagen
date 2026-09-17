@@ -1580,6 +1580,35 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     });
   });
 
+  it("grades a genesis-and-seal batch with the tier it actually writes", async () => {
+    // The row and the seal must come from ONE derivation. They did not: the
+    // caller computed the tier from `existing?.genesisHash`, which is null for
+    // a session being created, so the seal graded `observe`; `genesisRow`
+    // computed it again from the batch's own first hash and wrote `gateway`.
+    // The sealed row then carried a gateway tier with an observe-derived
+    // grade, and a sealed session is never regraded — exports and attestations
+    // keep that pair for good.
+    //
+    // A daemon chain that opens and seals in one batch is the shape that
+    // reaches it: no existing row, and the seal computed in the same pass.
+    const db = fakeDb();
+    const events = sessionWithContent("gateway");
+    servedChain(db, events);
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+
+    const row = db.sessions.get(SESSION);
+    expect(row?.["enforcementTier"]).toBe("gateway");
+    // `fork` is what a gateway tier with a retained tool body grades to.
+    // `inspect` is what the observe-derived seal produced, which is the bug.
+    expect(row?.["replayGrade"]).toBe("fork");
+    expect(row?.["sealedAt"]).toBeDefined();
+  });
+
   it("seals below fork on a gateway-tier session whose tool call kept no result body (negative)", async () => {
     const db = fakeDb();
     const events = sessionWithContent("gateway");

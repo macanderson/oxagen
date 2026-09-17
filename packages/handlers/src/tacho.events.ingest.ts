@@ -524,10 +524,19 @@ function genesisRow(
   // migration every new session would fail to open — for a field that is null
   // on all but the gateway tier (discussion_r4040352870).
   sessionGatewayColumn: boolean,
-  // What the control plane recorded about this chain, and whether the batch
-  // opening it verifies.
-  chain: GatewayChainRecord | null,
-  chainVerified: boolean,
+  // The tier this session opens on, and the gateway call that justifies it.
+  //
+  // Passed in rather than derived here. This function used to compute it a
+  // second time, from the batch's own first hash, while the caller computed it
+  // from `existing?.genesisHash` — which is null for a session being created.
+  // The two disagreed for exactly the session this function is for: the row
+  // was written `gateway` and the seal, computed from the caller's value, was
+  // graded `observe`. A sealed session is never regraded, so exports and
+  // attestations carried that pair for good.
+  //
+  // One derivation, one caller. There is nothing left to disagree.
+  tier: string,
+  gatewayObservedAt: Date | null,
 ) {
   const first = events[0] as TachoEvent;
   const genesis = events.find((event) => event.kind === "agent_start") ?? first;
@@ -536,32 +545,11 @@ function genesisRow(
   const anthropic = genesis.anthropic ?? {};
   const subagent = genesis.subagent;
   const ingestedAt = new Date(first.ts);
-  // The chain's own genesis, which is what a gateway record is matched
-  // against. `seq === 0` or nothing: a batch that does not open the chain is
-  // not carrying its first event, and a hash taken from anywhere else would be
-  // matching the wrong thing.
+  // The chain's own genesis, recorded on the row so a later batch can be
+  // matched against it. `seq === 0` or nothing: a batch that does not open the
+  // chain is not carrying its first event, and a hash taken from anywhere else
+  // would be matching the wrong thing.
   const genesisHash = first.seq === 0 ? first.hash : null;
-  // A session being created by this batch CAN be `gateway`, and has to be.
-  //
-  // It could not while the correlation was a name plus a lifetime: at genesis
-  // there is no server-written `createdAt`, so the name stood alone and a
-  // forged first batch satisfied it as well as the real one. The genesis hash
-  // replaced that, and it works here exactly as it works later — the hash of
-  // the daemon's own first sealed event is not something a forger can produce.
-  //
-  // Refusing here is not the safe default it looks like. The control plane
-  // records a gateway call while HANDLING it and the daemon seals the event
-  // after the call returns, so a chain whose first gateway call precedes its
-  // first ingest arrives with its record already written. Refusing at genesis
-  // sent that chain to `observe` and — with the old lifetime bound — kept it
-  // there, permanently if the same batch sealed it.
-  const tier = enforcementTierOf(
-    chain,
-    host,
-    chainVerified,
-    sessionGatewayColumn,
-    genesisHash,
-  );
   return {
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
@@ -632,8 +620,7 @@ function genesisRow(
       ? {
           // The call that raised it, or nothing. A tier that is `gateway`
           // from the first row still has to point at what made it one.
-          gatewayObservedAt:
-            tier === TACHO_GATEWAY_TIER ? (chain?.at ?? null) : null,
+          gatewayObservedAt,
         }
       : {}),
     bundleMode: host.mode,
@@ -942,12 +929,18 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       // from it and signed into the attestation, and a value that moves
       // underneath a signature is the escalation, not the mislabel.
       const chainRecord = gatewayInvocations.get(sessionUuid) ?? null;
+      // The chain's genesis hash: the recorded one, or — for a session this
+      // batch is opening — the batch's own first event. Resolved HERE, because
+      // this value feeds both the row and the seal and deriving it twice is
+      // how they came to disagree.
+      const sessionGenesisHash =
+        existing?.genesisHash ?? (first.seq === 0 ? first.hash : null);
       const derivedTier = enforcementTierOf(
         chainRecord,
         host,
         ok,
         sessionGatewayColumn,
-        existing?.genesisHash ?? null,
+        sessionGenesisHash,
       );
       const promoteToGateway =
         existing !== undefined &&
@@ -1101,8 +1094,8 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           events,
           now,
           sessionGatewayColumn,
-          chainRecord,
-          ok,
+          derivedTier,
+          derivedTier === TACHO_GATEWAY_TIER ? (chainRecord?.at ?? null) : null,
         );
         await tx
           .insert(schema.tachoSessions)
