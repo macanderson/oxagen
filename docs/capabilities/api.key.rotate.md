@@ -47,7 +47,24 @@ events. The old key is invalid immediately after the call.
 > would require the API-key resolver to honor a future-dated revocation; the
 > current implementation revokes immediately.
 
+## Server-owned credentials are refused
+
+`auth.api_keys` also holds credentials the platform minted for something it
+tracks elsewhere, and rotating those means more than minting a replacement row.
+This capability refuses them and names the path that owns each one, matching
+`api.key.create`, which refuses to mint them, and `api.key.revoke`, which
+refuses to revoke them. The purpose is read from the stored `scope`, so the
+caller cannot avoid the check by omitting it.
+
+| `scope.purpose` | rotate it through |
+|---|---|
+| `tacho_host_v1` | operator re-enrollment |
+| `agent_credential_v1` | `rotate_agent_credential` |
+| `stella_operational_telemetry_v1` | operator re-enrollment |
+| `cli_session_v1` | `oxagen login` |
+
 ## Errors
 
 - Only org Owners and Admins can rotate API keys.
 - Throws when the key does not exist, is not in this org, or is already revoked.
+- `authz_denied` when the key carries a server-owned scope purpose; see above.
