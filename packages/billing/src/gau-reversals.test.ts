@@ -608,13 +608,13 @@ describe("a refund that arrives before its purchase (ADR-085 §5)", () => {
 
     // The grant lands afterwards. It adds 10,000 and the reconciliation takes
     // them straight back out, in the same transaction.
-    const bucket = seedBucket({ purchasedGau: 0 });
+    const bucket = seedBucket({ purchasedGau: 10_000 });
     const settlement = seedCheckoutSettlement();
     const tx = makeFakeGauTx(store);
     const settled = await reconcilePendingGauReversals(tx, {
       settlement,
       paymentIntentId: "pi_gau_001",
-      bucket: { ...bucket, purchasedGau: 10_000 },
+      now: NOW,
     });
 
     expect(settled).toHaveLength(1);
@@ -639,14 +639,14 @@ describe("a refund that arrives before its purchase (ADR-085 §5)", () => {
     await reverseGauPurchaseForRefund(
       refundedCharge({ amountRefundedCents: 2_750 }),
     );
-    const bucket = seedBucket({ purchasedGau: 0 });
+    const bucket = seedBucket({ purchasedGau: 10_000 });
     const settlement = seedCheckoutSettlement();
     const tx = makeFakeGauTx(store);
 
     await reconcilePendingGauReversals(tx, {
       settlement,
       paymentIntentId: "pi_gau_001",
-      bucket: { ...bucket, purchasedGau: 10_000 },
+      now: NOW,
     });
 
     // Half the money back, half the units — 5,000 left spendable, not 4,500.
@@ -674,12 +674,12 @@ describe("a refund that arrives before its purchase (ADR-085 §5)", () => {
     await reconcilePendingGauReversals(tx, {
       settlement,
       paymentIntentId: "pi_gau_001",
-      bucket,
+      now: NOW,
     });
     const again = await reconcilePendingGauReversals(tx, {
       settlement,
       paymentIntentId: "pi_gau_001",
-      bucket: store.buckets[0] as never,
+      now: NOW,
     });
 
     // The second pass matches nothing: the row is no longer pending.
@@ -697,13 +697,13 @@ describe("a refund that arrives before its purchase (ADR-085 §5)", () => {
     );
     expect(store.reversals).toHaveLength(2);
 
-    const bucket = seedBucket({ purchasedGau: 0 });
+    const bucket = seedBucket({ purchasedGau: 10_000 });
     const settlement = seedCheckoutSettlement();
     const tx = makeFakeGauTx(store);
     const settled = await reconcilePendingGauReversals(tx, {
       settlement,
       paymentIntentId: "pi_gau_001",
-      bucket: { ...bucket, purchasedGau: 10_000 },
+      now: NOW,
     });
 
     expect(settled).toHaveLength(2);
@@ -723,7 +723,7 @@ describe("a refund that arrives before its purchase (ADR-085 §5)", () => {
     const settled = await reconcilePendingGauReversals(tx, {
       settlement,
       paymentIntentId: "pi_other",
-      bucket,
+      now: NOW,
     });
 
     expect(settled).toHaveLength(0);
@@ -756,14 +756,14 @@ describe("a dispute that arrives before its purchase (ADR-085 §7)", () => {
 
   it("the grant then settles it and leaves no spendable units", async () => {
     await reverseGauPurchaseForDispute(dispute());
-    const bucket = seedBucket({ purchasedGau: 0 });
+    const bucket = seedBucket({ purchasedGau: 10_000 });
     const settlement = seedCheckoutSettlement();
     const tx = makeFakeGauTx(store);
 
     await reconcilePendingGauReversals(tx, {
       settlement,
       paymentIntentId: "pi_gau_001",
-      bucket: { ...bucket, purchasedGau: 10_000 },
+      now: NOW,
     });
 
     expect(store.buckets[0]).toMatchObject({ purchasedGau: 0 });
@@ -825,7 +825,7 @@ describe("both money paths take the PaymentIntent lock before deciding", () => {
     await reconcilePendingGauReversals(tx, {
       settlement,
       paymentIntentId: "pi_gau_001",
-      bucket,
+      now: NOW,
     });
 
     expect(store.log[0]).toMatchObject({
@@ -1019,7 +1019,7 @@ describe("the park decision reads its mutable input inside the lock", () => {
     await reconcilePendingGauReversals(tx, {
       settlement,
       paymentIntentId: "pi_gau_001",
-      bucket,
+      now: NOW,
     });
 
     const lockAt = store.log.findIndex((e) => e.op === "lock");

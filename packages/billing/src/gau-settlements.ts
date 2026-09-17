@@ -842,7 +842,11 @@ export async function grantGauPurchaseForCheckout(
       .returning({ id: schema.gauSettlements.id });
     if (inserted.length === 0) return false;
 
-    const granted = await ensureCurrentBucket(tx, purchase.orgId, {
+    // The grant itself. Its return value is no longer read: reconciliation
+    // resolves and re-locks the bucket for each debit rather than being handed
+    // this snapshot, so passing it on would be handing over exactly the stale
+    // counts that caused the round-six defect.
+    await ensureCurrentBucket(tx, purchase.orgId, {
       period,
       terms,
       usedDelta: 0,
@@ -871,7 +875,7 @@ export async function grantGauPurchaseForCheckout(
         chargedCents: session.amountTotalCents,
       },
       paymentIntentId: session.paymentIntentId,
-      bucket: granted,
+      now,
     });
     if (reconciled.length > 0) {
       logger.warn(

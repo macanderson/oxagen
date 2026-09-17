@@ -400,6 +400,17 @@ comment asking the next writer to remember — there *was* such a comment, ten
 lines of it, on the path that had it right, and the second path was written
 anyway.
 
+`reconcilePendingGauReversals` was the last place the rule lived outside the
+code that writes, and it goes the same way. It took the caller's bucket snapshot
+and tracked running counts across the pending rows, deferring one write to the
+end. That was *provably* safe — the grant holds the row lock for its whole
+transaction — but it was safe by context, which is the shape that has now failed
+twice here by being written beside. It now calls `debitCurrentBucket` per row,
+and the running counts delete themselves: they only ever stood in for a re-read,
+and standing in for a re-read with a held snapshot is precisely the defect. The
+change removed 14 lines net and one parameter, which is the usual sign that the
+safety argument was doing work the code should have been doing.
+
 ## Consequences
 
 - A purchase made before this change has no `stripe_payment_intent_id` and no

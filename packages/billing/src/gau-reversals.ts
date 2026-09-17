@@ -7,11 +7,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { schema, type Tx, withSystemDb } from "@oxagen/database";
 import { billingProvider } from "./client";
 import { readGauEntitlement } from "./contract-terms";
-import {
-  ensureCurrentBucket,
-  periodFor,
-  type GauBucketRow,
-} from "./gau-bucket";
+import { ensureCurrentBucket, periodFor } from "./gau-bucket";
 import { logger } from "./logger";
 import type { BillingDispute, BillingRefundedCharge } from "./provider";
 
@@ -643,7 +639,7 @@ export async function reconcilePendingGauReversals(
       "id" | "orgId" | "quantityGau" | "ratePerGauMicros" | "chargedCents"
     >;
     paymentIntentId: string | null;
-    bucket: Pick<GauBucketRow, "id" | "purchasedGau" | "carriedGau">;
+    now: Date;
   },
 ): Promise<GauReversalResult[]> {
   if (!args.paymentIntentId) return [];
@@ -665,23 +661,26 @@ export async function reconcilePendingGauReversals(
   // The bucket's counts move as each reversal takes from them, so they are
   // tracked here rather than re-read: the caller holds the row lock for the
   // whole transaction, and a re-read would return the same numbers anyway.
-  let purchased = args.bucket.purchasedGau;
-  let carried = args.bucket.carriedGau;
   const settled: GauReversalResult[] = [];
 
   for (const row of pending) {
     const requestedGau = reversibleGau(args.settlement, row.amountCents);
-    const fromPurchased = Math.min(purchased, requestedGau);
-    const fromCarried = Math.min(carried, requestedGau - fromPurchased);
-    const reversedGau = fromPurchased + fromCarried;
-    purchased -= fromPurchased;
-    carried -= fromCarried;
+    // Each debit re-resolves and re-locks, so the next one reads the balance
+    // this one left. That is why there is no running count to carry: the
+    // running count only existed to stand in for a re-read, and standing in
+    // for a re-read with a held snapshot is the defect this module has now
+    // produced twice.
+    const { bucketId, reversedGau } = await debitCurrentBucket(tx, {
+      orgId: args.settlement.orgId,
+      units: requestedGau,
+      now: args.now,
+    });
 
     await tx
       .update(schema.gauReversals)
       .set({
         settlementId: args.settlement.id,
-        bucketId: args.bucket.id,
+        bucketId,
         requestedGau,
         reversedGau,
         unrecoveredGau: requestedGau - reversedGau,
@@ -692,7 +691,7 @@ export async function reconcilePendingGauReversals(
       pending: false,
       orgId: args.settlement.orgId,
       settlementId: args.settlement.id,
-      bucketId: args.bucket.id,
+      bucketId,
       requestedGau,
       reversedGau,
       unrecoveredGau: requestedGau - reversedGau,
@@ -700,18 +699,5 @@ export async function reconcilePendingGauReversals(
     });
   }
 
-  if (
-    purchased !== args.bucket.purchasedGau ||
-    carried !== args.bucket.carriedGau
-  ) {
-    await tx
-      .update(schema.gauBuckets)
-      .set({
-        purchasedGau: purchased,
-        carriedGau: carried,
-        updatedAt: sql`now()`,
-      })
-      .where(eq(schema.gauBuckets.id, args.bucket.id));
-  }
   return settled;
 }
