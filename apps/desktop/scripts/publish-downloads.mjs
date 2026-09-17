@@ -64,9 +64,25 @@ if ((runId === undefined) === (fromDir === undefined)) {
   process.exit(2);
 }
 
+// Colour-forcing variables in the caller's shell (CLICOLOR_FORCE=1 is common in
+// an interactive zsh profile) make `gh` emit ANSI escapes even when its stdout
+// is a pipe, and `JSON.parse` on that fails with an unreadable "Unexpected token
+// ''" pointing at the first escape byte. The machine-readable output this script
+// depends on must not vary with whoever is running it, so every child process
+// gets colour forced off rather than inherited.
+const NO_COLOUR_ENV = {
+  ...process.env,
+  NO_COLOR: "1",
+  CLICOLOR: "0",
+  CLICOLOR_FORCE: "0",
+  FORCE_COLOR: "0",
+  GH_FORCE_TTY: "",
+};
+
 function sh(command, args, { capture = false } = {}) {
   const result = spawnSync(command, args, {
     encoding: "utf8",
+    env: NO_COLOUR_ENV,
     stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit",
   });
   if (result.status !== 0) {
@@ -237,6 +253,15 @@ if (!dryRun) {
       "--paths",
       "/",
       "/index.html",
+      // The versioned objects upload with `immutable, max-age=31536000` on the
+      // assumption that a fix always ships as a new version. Nothing enforces
+      // that, and republishing a version over itself is exactly what happens
+      // when a build is corrected before anyone is asked to upgrade. Without
+      // this line the edge keeps serving the superseded installer for a year
+      // while S3 and SHA256SUMS.txt show the new one — the worst shape of this
+      // bug, because the checksums published beside the file stop matching it.
+      // Invalidating a prefix that was never cached costs nothing.
+      `/desktop/${version}/*`,
     ]);
   } else {
     console.warn(
