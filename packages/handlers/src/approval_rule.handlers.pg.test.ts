@@ -192,6 +192,102 @@ describe.skipIf(!process.env.DATABASE_URL)(
       return row!;
     }
 
+    /**
+     * A declared, enabled tool whose slug names a registered capability, with
+     * the consequence tags it carries in each of the two halves.
+     *
+     * The capability registration is not decoration: a classified declaration
+     * whose slug names none is refused by `publish_tool_declaration`, and a
+     * rule over it by `rule_not_gated`, so a fixture without it would be a
+     * tool no workspace can hold.
+     */
+    async function declareCapabilityTool(
+      slug: string,
+      tags: { declared: string[]; classified: string[] },
+    ): Promise<{ toolId: string; versionId: string }> {
+      registerCapability({
+        name: slug,
+        domain: "testdom",
+        description: `${slug} capability the declared fixture tool binds to`,
+        mode: "sync",
+        surfaces: ["api", "mcp"],
+        layers: ["api", "mcp", "unit"],
+        scoped: true,
+        sensitivity: "high",
+        defaultEffect: "deny",
+        defaultRoles: { org: { Owner: "allow" }, workspace: {} },
+        input: z.object({}),
+        output: z.object({}),
+      });
+      const toolId = randomUUID();
+      const versionId = randomUUID();
+      await withSystemDb(async (tx) => {
+        await tx.insert(schema.tools).values({
+          id: toolId,
+          orgId,
+          workspaceId,
+          name: slug,
+          slug,
+          source: "builtin",
+          enabled: true,
+        });
+        await tx.insert(schema.toolVersions).values({
+          id: versionId,
+          orgId,
+          workspaceId,
+          toolId,
+          versionNumber: 1,
+          isLatest: true,
+          inputSchema: {},
+          riskGrade: "high",
+          manifest: {},
+          checksum: randomUUID().replace(/-/g, "").padEnd(64, "0"),
+          consequenceTags: tags.declared,
+          measures: {},
+          // A whole `toolClassificationSchema` value, not the tag list alone:
+          // a fixture carrying a key the schema does not have would document a
+          // field that does not exist. The three classification columns move
+          // together or not at all (`tool_versions_classification_check`), so
+          // a classified fixture carries the grade and the time as well —
+          // which is what `set_tool_classification` writes.
+          ...(tags.classified.length === 0
+            ? {}
+            : {
+                classification: {
+                  sideEffect: "write",
+                  egress: "local",
+                  consequenceTags: tags.classified,
+                  measures: {},
+                  dataClasses: [],
+                },
+                classifiedRiskGrade: "high" as const,
+                classifiedAt: new Date(),
+              }),
+        });
+        await tx
+          .update(schema.tools)
+          .set({ activeVersionId: versionId })
+          .where(eq(schema.tools.id, toolId));
+      });
+      return { toolId, versionId };
+    }
+
+    /** Tools before versions: `tools.active_version_id` references `tool_versions.id`. */
+    async function removeTools(
+      made: ReadonlyArray<{ toolId: string; versionId: string }>,
+    ): Promise<void> {
+      await withSystemDb(async (tx) => {
+        for (const t of made) {
+          await tx.delete(schema.tools).where(eq(schema.tools.id, t.toolId));
+        }
+        for (const t of made) {
+          await tx
+            .delete(schema.toolVersions)
+            .where(eq(schema.toolVersions.id, t.versionId));
+        }
+      });
+    }
+
     beforeAll(async () => {
       // The payment tool this file declares carries `moves_money` and
       // measures, which makes it a CLASSIFIED declaration — and
@@ -650,6 +746,84 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await set(ownerUserId, [RULE]);
       expect((await set(ownerUserId, [])).items).toEqual([]);
       expect((await list(ownerUserId)).items).toEqual([]);
+    });
+
+    it("saves a rule whose matched tools carry exactly the stamp's ceiling, and refuses one over it", async () => {
+      // The stamp is a stored field with a bound, and the bound is reachable:
+      // a version carries at most 16 declared tags and 32 classified ones, the
+      // vocabulary is open, and a rule matches as many tools as its patterns
+      // do. Before the guard, a rule every authoring check passed was refused
+      // at the store as `rule_set_would_not_load` — a fact about a generated
+      // field the author never wrote.
+      //
+      // The two cases straddle the ceiling, because a case that does not cross
+      // it proves nothing about either side of the comparison: 16 + 48 is
+      // exactly MAX_AUTHORED_CONSEQUENCES and saves, 17 + 48 is one over and
+      // is refused with the count.
+      const tags = (prefix: string, n: number) =>
+        Array.from(
+          { length: n },
+          (_, i) => `${prefix}_${String(i).padStart(2, "0")}`,
+        );
+      const wide = await declareCapabilityTool("cap__wide", {
+        // 16 declared is the publisher's ceiling; 32 classified is the
+        // classifier's. 48 is everything one version can carry.
+        declared: tags("wide_d", 16),
+        classified: tags("wide_c", 32),
+      });
+      const atLimit = await declareCapabilityTool("cap__at_limit", {
+        declared: tags("lim_d", 16),
+        classified: [],
+      });
+      const overLimit = await declareCapabilityTool("cap__over_limit", {
+        declared: tags("over_d", 16),
+        classified: tags("over_c", 1),
+      });
+
+      try {
+        const base = {
+          ...RULE,
+          id: "wide-surface",
+          maxMeasures: {},
+          allowTargets: {},
+        };
+        // Custom tags fall to DEFAULT_CONSEQUENCE_ROLES.other — Owner or
+        // Admin — so the consequence gate is not what answers either case.
+        const saved = await set(ownerUserId, [
+          { ...base, tools: ["cap__wide@*", "cap__at_limit@*"] },
+        ]);
+        expect(saved.items).toHaveLength(1);
+        const stored = (await settingsOf()).decisionRules as Record<
+          string,
+          unknown
+        >;
+        const rules = stored.autoApproval as Array<{
+          authoredConsequences: string[];
+        }>;
+        expect(rules[0]!.authoredConsequences).toHaveLength(64);
+
+        const before = await settingsOf();
+        await expect(
+          set(ownerUserId, [
+            { ...base, tools: ["cap__wide@*", "cap__over_limit@*"] },
+          ]),
+        ).rejects.toSatisfy((e: unknown) => {
+          if (!isHandlerError(e)) return false;
+          return (
+            e.code === "conflict" &&
+            e.reason === "too_many_consequences" &&
+            // The count and the limit, so the author learns what exceeded what.
+            e.message.includes("65") &&
+            e.message.includes("64")
+          );
+        });
+        // The refusal leaves the rule that did save exactly as it was.
+        expect(await settingsOf()).toEqual(before);
+
+        await set(ownerUserId, []);
+      } finally {
+        await removeTools([wide, atLimit, overLimit]);
+      }
     });
 
     // ── list and the counters ────────────────────────────────────────────────

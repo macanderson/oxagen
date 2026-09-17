@@ -24,6 +24,7 @@ import {
   type MeasureDeclarations,
 } from "@oxagen/oxagen/mandates/schemas";
 import {
+  MAX_AUTHORED_CONSEQUENCES,
   RULE_SET_SCHEMA_V2,
   type AutoApprovalRule,
   type AutoApprovalRuleBody,
@@ -397,6 +398,36 @@ export async function assertRulesSavable(
           perRule.add(tag);
         }
       }
+    }
+    // The stamp is a STORED field with a bound, and the bound is reachable.
+    // A version carries at most 16 declared tags (`publish_tool_declaration`)
+    // and 32 classified ones (`toolClassificationSchema`), and the vocabulary
+    // is open — `consequenceTagSchema` admits any snake_case string — so two
+    // matched tools can already contribute 96 distinct tags and a `*` pattern
+    // has no ceiling at all. There is no maximum to size the field for.
+    //
+    // Refused HERE rather than at the store. `writeRules` parses the document
+    // before writing it, so an over-long stamp was already refused — as
+    // `rule_set_would_not_load`, which names a document the author never
+    // wrote, about a field the handler generated and the page does not show.
+    // A rule the three guards above had just authorised, refused by a fact
+    // about its own provenance stamp, with nothing telling the author what to
+    // change. Named instead, in the shape `rule_not_gated` and
+    // `measure_not_declared` use: what exceeded what, and the one thing that
+    // fixes it.
+    //
+    // The breadth it refuses is worth refusing on its own account, which is
+    // why this is a guard and not a bigger constant: one rule spanning more
+    // than `MAX_AUTHORED_CONSEQUENCES` distinct consequences asks a single
+    // author to be accountable for all of them at once, which is the widening
+    // §6.9 part 2 exists to stop. Narrowing the patterns is the repair, and it
+    // leaves each narrower rule with an author who can answer for it.
+    if (perRule.size > MAX_AUTHORED_CONSEQUENCES) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "too_many_consequences",
+        message: `Rule "${rule.id}" matches tools carrying ${perRule.size} distinct consequences; at most ${MAX_AUTHORED_CONSEQUENCES} can be recorded against one rule, so narrow its tool patterns`,
+      });
     }
     authored.set(rule.id, [...perRule].sort());
   }

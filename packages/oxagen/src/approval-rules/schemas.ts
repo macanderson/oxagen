@@ -27,10 +27,28 @@ import { z } from "zod";
 import { consequenceTagSchema } from "../contracts/tool.classification";
 
 /**
- * The ceiling on a rule's authored-consequence stamp. A rule's patterns can
- * match many tools and each carries at most `MAX_CONSEQUENCE_TAGS`; this bound
- * is generous against that and exists so a stored document cannot grow without
- * limit.
+ * The ceiling on a rule's authored-consequence stamp, and the widest
+ * consequence surface one rule may be written over.
+ *
+ * It is a real bound rather than a generous one, because the thing it bounds
+ * has no maximum to size the field for. A tool version carries at most 16
+ * declared tags (`publish_tool_declaration`) and 32 classified ones
+ * (`toolClassificationSchema`) — 48 — and the vocabulary is open, since
+ * `consequenceTagSchema` admits any snake_case string rather than the starter
+ * set. So two matched tools can already contribute 96 distinct tags, and a
+ * rule whose pattern is `*` follows however many tools the workspace holds.
+ *
+ * `assertRulesSavable` enforces it where the union is formed, refusing the
+ * rule as `conflict` / `too_many_consequences` and naming the count against
+ * this limit. Without that the bound still applied — `writeRules` parses the
+ * document before storing it — but as `rule_set_would_not_load`, a fact about
+ * a generated field the author never wrote and cannot see, on a rule every
+ * authoring guard had just passed.
+ *
+ * The number is also a governance statement and not only a storage one: one
+ * rule spanning more than this many distinct consequences asks a single
+ * author to be accountable for all of them at once, which is the widening
+ * MC spec §6.9 part 2 exists to stop. Narrowing the patterns is the repair.
  */
 export const MAX_AUTHORED_CONSEQUENCES = 64;
 
