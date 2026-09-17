@@ -129,7 +129,19 @@ const REL_TYPES_MARKER = new RegExp(
 // belt-and-braces seam check. It is a conservative denylist — string literals
 // and comments are stripped first so a keyword inside a literal never
 // false-rejects a legitimate read.
-
+//
+// THESE FOUR KEEP `\b` DELIBERATELY, and the reason is the direction of the
+// error rather than an oversight. Every other `\b` in this file was replaced
+// because it delimited an ALLOW decision, where ASCII's laxity means matching
+// something that is not the token and letting a query through. Here the match is
+// a REFUSAL, and `\b` is strictly laxer than Cypher's rule, so it can only ever
+// refuse MORE: `créateur` has no `CREATE` in it, but were a name like `createé`
+// written it would be rejected as a write. It cannot hide a real write clause,
+// because a real one is preceded and followed by whitespace or a bracket, where
+// `\b` and the Unicode rule agree. The same argument covers `MUTATING_CALL`,
+// `\bUNION\b` and the literal-LIMIT rewrite in `clampLimits`, each of which
+// fails closed when it misses. A false refusal here is a loud, fixable error;
+// the Unicode fix on an allow-side delimiter was a silent cross-tenant read.
 const WRITE_KEYWORD = /\b(?:CREATE|MERGE|SET|DELETE|REMOVE|FOREACH)\b/i;
 // Mutating procedure calls that do not surface a top-level write keyword.
 const MUTATING_CALL =
