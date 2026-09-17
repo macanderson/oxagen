@@ -148,10 +148,26 @@ export function AssistantFlyout() {
   // Read by a turn that is still in flight when the person moves: the reply
   // resolves outside the render that started it and must compare against now,
   // not against then.
+  //
+  // Written here rather than from an effect. React commits the reset above and
+  // flushes that render's passive effects a task later, so a reply landing in
+  // between would read the generation the person has left, pass the guard, and
+  // append one workspace's answer, run and conversation id to another
+  // workspace's transcript — the very thing the reset just cleared. The
+  // invalidation has to be as synchronous as the reset is.
+  //
+  // Assigning on every render, not only on the change, is what makes a render
+  // write safe: the value is a pure function of this render's own state, so a
+  // render React discards leaves nothing behind — the next committed render
+  // writes what that render's state says, and a navigation that never commits
+  // restores the generation its turn was asked on.
   const generationRef = useRef(generation);
-  useEffect(() => {
-    generationRef.current = generation;
-  }, [generation]);
+  // react-hooks/refs guards against a ref whose value is *rendered from*, which
+  // can leave the screen behind the data. This one is never read during render
+  // — only from a turn's continuation, after the awaited action resolves — and
+  // the effect the rule steers towards is the defect being fixed here.
+  // eslint-disable-next-line react-hooks/refs -- an invalidation token read only outside render; an effect writes it a task too late (see above)
+  generationRef.current = generation;
 
   // Where focus came from, so closing can give it back. Captured at the open,
   // which is the launcher that was tapped — the rail's on a desktop, or, on a

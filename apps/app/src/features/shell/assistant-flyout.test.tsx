@@ -9,6 +9,7 @@
 // earns this file is the first one: a composer that reaches ask_assistant.
 import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { createRoot } from "react-dom/client";
 import {
   afterEach,
   beforeAll,
@@ -21,6 +22,16 @@ import {
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { ShellStateProvider, useShellState } from "./shell-state";
+
+declare global {
+  /**
+   * `@testing-library/react` and React's own `act` read this to decide whether
+   * React's scheduled work is flushed by the test or by the real scheduler.
+   * One test below turns it off, to reproduce the gap between a commit and its
+   * passive effects that `act` otherwise closes.
+   */
+  var IS_REACT_ACT_ENVIRONMENT: boolean;
+}
 
 const askAssistant = vi.fn();
 vi.mock("./assistant-actions", () => ({ askAssistant }));
@@ -74,6 +85,9 @@ async function openFlyout() {
     flyout: screen.getByTestId("assistant-flyout"),
   };
 }
+
+/** A macrotask: React schedules a commit's passive effects on one of these. */
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 async function ask(user: ReturnType<typeof userEvent.setup>, text: string) {
   await user.type(screen.getByTestId("assistant-composer"), text);
@@ -410,6 +424,59 @@ describe("AssistantFlyout", () => {
     expect(askAssistant.mock.calls[2]?.[2]).toMatchObject({
       conversationId: "6f1f5a8e-0000-4000-8000-00000000c0df",
     });
+  });
+
+  // The window between two moments React does not make adjacent: the
+  // workspace-change render commits — the transcript is already gone from the
+  // screen — and React flushes that render's passive effects a task later. A
+  // turn that resolves in between reads whatever the request guard holds, so a
+  // guard carried by `useEffect` still names the workspace the person left,
+  // and the reply, the run and the conversation id land in the transcript the
+  // switch had just cleared. Reproducing it needs the real scheduler: `act`,
+  // which every other test here runs inside, flushes passive effects with the
+  // commit and closes the window by hand, so this one drives its own root.
+  it("drops a reply that resolves after the workspace-change render commits but before its effects run (negative)", async () => {
+    let settle: (turn: unknown) => void = () => undefined;
+    askAssistant.mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve;
+      }),
+    );
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const user = userEvent.setup();
+    try {
+      act(() => {
+        root.render(tree());
+      });
+      await user.click(screen.getByRole("button", { name: "open assistant" }));
+      await ask(user, "what is live?");
+      expect(screen.getByTestId("assistant-thinking")).toBeTruthy();
+
+      // Out of `act`, so React schedules the passive effects the way a browser
+      // does rather than flushing them as part of the commit.
+      IS_REACT_ACT_ENVIRONMENT = false;
+      pathname.mockReturnValue("/acme/payments");
+      root.render(tree());
+      await tick();
+      // Committed: payments is on screen and core-platform's transcript is gone…
+      expect(screen.queryByTestId("assistant-log")).toBeNull();
+      // …and this is the window, before the effect that used to be the only
+      // thing carrying the new generation into the request guard.
+      settle(turn({ reply: "core-platform is live." }));
+      await tick();
+      await tick();
+
+      expect(screen.queryByTestId("assistant-answer")).toBeNull();
+      expect(screen.queryByText("core-platform is live.")).toBeNull();
+    } finally {
+      IS_REACT_ACT_ENVIRONMENT = true;
+      act(() => {
+        root.unmount();
+      });
+      host.remove();
+    }
   });
 
   it("keeps the transcript across an organization page, which owns no conversation", async () => {
