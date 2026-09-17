@@ -114,17 +114,55 @@ async function api(path, init) {
 }
 
 /**
+ * Conclusions that do not prove the pipeline ran.
+ *
+ * `cancelled` is what the #2730 incident produced, so counting it would blind
+ * the guard to the thing it exists for. The other three are the same class of
+ * mistake found later: a run that concluded without executing a job. The guard's
+ * own header names "a workflow that failed to start" as a cause it catches, and
+ * `startup_failure` is precisely that conclusion — treating it as an answer let
+ * the alert close although no job and no deploy had run.
+ */
+const HOLLOW_CONCLUSIONS = new Set([
+  "cancelled",
+  "startup_failure",
+  "skipped",
+  "action_required",
+]);
+
+/**
+ * Whether a `pipeline.yml` run is one that can answer for a commit on `main`.
+ *
+ * Only a `push` run can. `pipeline.yml` skips checks, tests and e2e for a
+ * `workflow_dispatch`, and both deploy jobs require a push to `main`, so a
+ * dispatch run concludes having verified and deployed nothing. Counting it as an
+ * answer supersedes the older missing push runs and closes the alert on exactly
+ * the condition the guard monitors.
+ *
+ * A run whose `event` the API did not report is not assumed to be a push: an
+ * unknown event is not an eligible one, the same way `applyGrace` leaves an
+ * undatable commit alone rather than guessing.
+ */
+export function isEligibleRun(run) {
+  return run?.event === "push";
+}
+
+/**
  * Classify one commit: `concluded`, `in_flight`, or `none`.
  *
- * A `cancelled` run is deliberately NOT a conclusion. Cancellation is exactly
- * what the incident produced, so counting it would make the guard blind to the
- * thing it exists for.
+ * `concluded` means an eligible run reached a conclusion that proves it
+ * executed. Everything else — a dispatch run, a cancellation, a startup failure
+ * — leaves the commit unanswered, because the question is whether anything
+ * verified it, not whether anything reported about it.
  */
 export function classifyRuns(runs) {
   if (!runs || runs.length === 0) return "none";
-  const real = runs.filter((r) => r.conclusion && r.conclusion !== "cancelled");
+  const eligible = runs.filter(isEligibleRun);
+  const real = eligible.filter(
+    (r) => r.conclusion && !HOLLOW_CONCLUSIONS.has(r.conclusion),
+  );
   if (real.length > 0) return "concluded";
-  if (runs.some((r) => r.status !== "completed")) return "in_flight";
+  if (eligible.some((r) => r.status !== "completed")) return "in_flight";
   return "none";
 }
 
@@ -191,7 +229,41 @@ async function openIssue() {
   return Array.isArray(found) && found.length > 0 ? found[0] : null;
 }
 
-async function main() {
+/**
+ * How long to wait before the grace can no longer be the reason for `pending`.
+ *
+ * `applyGrace` rewrites `none` to `too_young`, `verdictOf` folds that into
+ * `pending`, and `pending` neither announces nor closes. On the push trigger
+ * that is every commit seconds old — so without this the guard's only further
+ * looks are another push and the daily cron, and a commit that genuinely never
+ * gets a run stays unreported for up to a day rather than for the ten minutes
+ * the grace promises.
+ *
+ * Returns 0 when no commit is waiting on the grace, so the ordinary run does not
+ * pay for the case that is not happening. `+1000` clears the boundary the grace
+ * compares against rather than landing exactly on it.
+ */
+export function graceRemainingMs(states, graceMs) {
+  const ages = states
+    .filter((s) => s.state === "too_young" && typeof s.ageMs === "number")
+    .map((s) => graceMs - s.ageMs);
+  return ages.length === 0 ? 0 : Math.max(0, Math.max(...ages) + 1000);
+}
+
+/**
+ * The longest this invocation may sleep waiting the grace out.
+ *
+ * The job's `timeout-minutes` is the real ceiling; this keeps the script inside
+ * it rather than being killed mid-answer, and makes the bound visible here
+ * rather than only in the workflow.
+ */
+const MAX_WAIT_MS =
+  Number(process.env.MAIN_VERIFIED_MAX_WAIT_MINUTES ?? 12) * 60 * 1000;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Read the window and classify every commit in it against one clock. */
+async function readWindow() {
   const commits = await api(
     `/repos/${REPO}/commits?sha=main&per_page=${WINDOW}`,
   );
@@ -214,6 +286,23 @@ async function main() {
       // treats as "not young" rather than guessing.
       ageMs: Number.isNaN(committed) ? undefined : now - committed,
     });
+  }
+
+  return states;
+}
+
+async function main() {
+  let states = await readWindow();
+
+  // Wait the grace out rather than suppressing the finding until the next push
+  // or the daily cron. Only when something is actually inside the grace.
+  const wait = Math.min(graceRemainingMs(applyGrace(states, GRACE_MS), GRACE_MS), MAX_WAIT_MS);
+  if (wait > 0) {
+    console.log(
+      `[main-verified] within the grace; re-reading in ${Math.round(wait / 1000)}s`,
+    );
+    await sleep(wait);
+    states = await readWindow();
   }
 
   const judged = applySupersession(applyGrace(states, GRACE_MS));
