@@ -31,7 +31,7 @@ import {
   distributedRateLimiter,
   deriveBucketKey,
   rateLimitBudgets,
-  trustedVercelIpBucketKey,
+  trustedClientIpBucketKey,
 } from "./distributed-rate-limit";
 
 type FakeContextOpts = {
@@ -84,27 +84,88 @@ afterEach(() => {
 });
 
 describe("pre-authentication bucket keys", () => {
-  it("collapses all off-Vercel IP headers into one unverified bucket", () => {
+  // The regression #3167 is named for: off Vercel this returned a constant, so
+  // every caller on the internet shared one bucket and one Postgres row.
+  it("gives each edge-reported client address its own bucket off Vercel", () => {
     vi.stubEnv("VERCEL", "");
 
     expect(
-      trustedVercelIpBucketKey(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.1" } }),
+      ),
+    ).toBe("ip:198.51.100.1");
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-oxagen-client-ip": "2001:db8::1" } }),
+      ),
+    ).toBe("ip:2001:db8::1");
+  });
+
+  it("ignores the caller-writable forwarding headers off Vercel", () => {
+    vi.stubEnv("VERCEL", "");
+
+    // Only the edge header is written by a proxy that replaces a caller's copy;
+    // x-forwarded-for is appended to by both the ALB and Caddy, and x-real-ip
+    // is set by neither.
+    expect(
+      trustedClientIpBucketKey(
         fakeContext({
           headers: {
-            "x-forwarded-for": "198.51.100.1",
-            "x-vercel-forwarded-for": "203.0.113.1",
+            "x-oxagen-client-ip": "198.51.100.1",
+            "x-forwarded-for": "203.0.113.9",
+            "x-real-ip": "203.0.113.8",
+            "x-vercel-forwarded-for": "203.0.113.7",
+          },
+        }),
+      ),
+    ).toBe("ip:198.51.100.1");
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({
+          headers: {
+            "x-forwarded-for": "203.0.113.9",
+            "x-real-ip": "203.0.113.8",
           },
         }),
       ),
     ).toBe("ip:unverified");
+  });
+
+  it("falls back to the unverified bucket for anything that is not an address", () => {
+    vi.stubEnv("VERCEL", "");
+
+    for (const value of [
+      "not-an-ip",
+      "198.51.100.1, 203.0.113.9",
+      " ",
+      "f".repeat(46),
+    ]) {
+      expect(
+        trustedClientIpBucketKey(
+          fakeContext({ headers: { "x-oxagen-client-ip": value } }),
+        ),
+      ).toBe("ip:unverified");
+    }
+  });
+
+  it("trusts only Vercel's own header when running on Vercel", () => {
+    vi.stubEnv("VERCEL", "1");
+
+    // There is no Caddy in front of a Vercel deployment, so an edge header
+    // arriving there came from the caller and must not be believed.
     expect(
-      trustedVercelIpBucketKey(
+      trustedClientIpBucketKey(
         fakeContext({
           headers: {
-            "x-forwarded-for": "198.51.100.2",
-            "x-vercel-forwarded-for": "203.0.113.2",
+            "x-vercel-forwarded-for": "203.0.113.1, 10.0.0.1",
+            "x-oxagen-client-ip": "198.51.100.1",
           },
         }),
+      ),
+    ).toBe("ip:203.0.113.1");
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.1" } }),
       ),
     ).toBe("ip:unverified");
   });
@@ -170,22 +231,80 @@ describe("distributedRateLimiter", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  it("fails closed without calling next when the counter store is unavailable", async () => {
+  // ADR-079. The four pre-auth mounts used to answer 503 here, which is what
+  // took Tacho and Stella intake offline in #3167.
+  it("serves the request from the per-instance limiter when the counter store is unavailable", async () => {
     mocks.withSystemDb.mockRejectedValue(new Error("db unavailable"));
     const mw = distributedRateLimiter({
       keyPrefix: "preauth",
       max: 60,
-      failClosedOnStoreError: true,
+      storeErrorPolicy: "degrade-to-local",
     });
     const next = vi.fn().mockResolvedValue(undefined);
 
-    const result = (await mw(fakeContext(), next)) as
+    const result = await mw(
+      fakeContext({ headers: { "x-forwarded-for": "198.51.100.30" } }),
+      next,
+    );
+
+    expect(result).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("still enforces a ceiling, per instance, while the counter store is unavailable", async () => {
+    mocks.withSystemDb.mockRejectedValue(new Error("db unavailable"));
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 2,
+      storeErrorPolicy: "degrade-to-local",
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const headers = { "x-forwarded-for": "198.51.100.31" };
+
+    await mw(fakeContext({ headers }), next);
+    await mw(fakeContext({ headers }), next);
+    const third = (await mw(fakeContext({ headers }), next)) as
       | { body: unknown; status: number }
       | undefined;
 
-    expect(result?.status).toBe(503);
-    expect(result?.body).toEqual({ error: "rate_limit_unavailable" });
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(third?.status).toBe(429);
+    expect(third?.body).toMatchObject({ error: "rate_limited" });
+  });
+
+  it("keeps the degraded ceiling per bucket, not per limiter", async () => {
+    mocks.withSystemDb.mockRejectedValue(new Error("db unavailable"));
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 1,
+      storeErrorPolicy: "degrade-to-local",
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await mw(
+      fakeContext({ headers: { "x-forwarded-for": "198.51.100.32" } }),
+      next,
+    );
+    const otherCaller = await mw(
+      fakeContext({ headers: { "x-forwarded-for": "198.51.100.33" } }),
+      next,
+    );
+
+    expect(otherCaller).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  it("passes the request through uncounted when the store fails under the default policy", async () => {
+    mocks.withSystemDb.mockRejectedValue(new Error("db unavailable"));
+    const mw = distributedRateLimiter({ keyPrefix: "chat", max: 1 });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const headers = { "x-forwarded-for": "198.51.100.34" };
+
+    await mw(fakeContext({ headers }), next);
+    const second = await mw(fakeContext({ headers }), next);
+
+    expect(second).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(2);
   });
 
   it("serves an exhausted bucket from a local deny cache without another store write", async () => {

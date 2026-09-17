@@ -10,7 +10,7 @@ import {
   authorizationFingerprintBucketKey,
   distributedRateLimiter,
   rateLimitBudgets,
-  trustedVercelIpBucketKey,
+  trustedClientIpBucketKey,
 } from "./middleware/distributed-rate-limit";
 import { health } from "./routes/health";
 import { stripeWebhook } from "./routes/stripe";
@@ -265,9 +265,9 @@ app.use(
   distributedRateLimiter({
     keyPrefix: "stella-preauth-ip",
     max: 3_000,
-    bucketKey: trustedVercelIpBucketKey,
+    bucketKey: trustedClientIpBucketKey,
     methods: "all",
-    failClosedOnStoreError: true,
+    storeErrorPolicy: "degrade-to-local",
   }),
 );
 app.use(
@@ -277,7 +277,7 @@ app.use(
     max: 60,
     bucketKey: authorizationFingerprintBucketKey,
     methods: "all",
-    failClosedOnStoreError: true,
+    storeErrorPolicy: "degrade-to-local",
   }),
 );
 
@@ -335,9 +335,9 @@ app.use(
   distributedRateLimiter({
     keyPrefix: "tacho-preauth-ip",
     max: 6_000,
-    bucketKey: trustedVercelIpBucketKey,
+    bucketKey: trustedClientIpBucketKey,
     methods: "all",
-    failClosedOnStoreError: true,
+    storeErrorPolicy: "degrade-to-local",
   }),
 );
 app.use(
@@ -347,7 +347,7 @@ app.use(
     max: 120,
     bucketKey: authorizationFingerprintBucketKey,
     methods: "all",
-    failClosedOnStoreError: true,
+    storeErrorPolicy: "degrade-to-local",
   }),
 );
 // Post-auth ceiling for an enrolled Tacho host, in requests/minute. A constant
@@ -416,10 +416,7 @@ orgScoped.route("/billing/usage/breakdown", billingUsageBreakdownRoute);
 orgScoped.route("/billing/actions/rate-card", billingActionRateCardRoute);
 orgScoped.route("/billing/actions/usage", billingActionUsageRoute);
 orgScoped.route("/billing/actions/estimate", billingActionEstimateRoute);
-orgScoped.route(
-  "/billing/evidence/retention",
-  billingEvidenceRetentionRoute,
-);
+orgScoped.route("/billing/evidence/retention", billingEvidenceRetentionRoute);
 orgScoped.route("/chat/messages", chatMessageSendRoute);
 orgScoped.route("/chat/messages/execution", chatMessageExecutionRoute);
 orgScoped.route("/chat/stream", chatStreamRoute);

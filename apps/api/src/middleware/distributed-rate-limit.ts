@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { withSystemDb } from "@oxagen/database";
 import { requireEnv } from "@oxagen/config/env";
 import { logger } from "./logger";
+import { rateLimiter } from "./rate-limit";
 import type { AppEnv } from "../app";
 
 /**
@@ -32,9 +33,13 @@ import type { AppEnv } from "../app";
  *   4. Set X-RateLimit-Limit/Remaining/Reset on every counted response; on
  *      breach, 429 { error: "rate_limited" } + Retry-After.
  *
- * STORE FAILURE POLICY: fail-open remains the default because rate limiting is
- * secondary for authenticated product surfaces. Pre-authentication security
- * boundaries may opt into fail-closed behavior. A store error is warned at
+ * STORE FAILURE POLICY (ADR-079): fail-open remains the default because rate
+ * limiting is secondary for authenticated product surfaces. Pre-authentication
+ * security boundaries opt into `"degrade-to-local"`, which hands the request to
+ * the per-process limiter in rate-limit.ts rather than denying it. Neither
+ * policy denies traffic on a store error: a limiter that cannot reach its
+ * counters is a limiter problem, and turning it into a total ingress outage
+ * costs more than the ceiling it was protecting. A store error is warned at
  * most once per window so an outage cannot spam the logs.
  *
  * Once the shared store reports an exhausted bucket, this warm instance caches
@@ -60,11 +65,22 @@ export interface DistributedRateLimitOptions {
    */
   methods?: readonly string[] | "all";
   /**
-   * Deny when the shared counter store is unavailable. Defaults to false so
-   * authenticated product surfaces preserve their historical fail-open policy.
-   * Pre-authentication security boundaries should enable this explicitly.
+   * What to do when the shared counter store is unavailable (ADR-079).
+   *
+   * - `"fail-open"` (default) — pass the request through uncounted. The
+   *   historical policy for authenticated product surfaces, where the limit is
+   *   a spend guard rather than a security boundary.
+   * - `"degrade-to-local"` — hand the request to the per-process limiter in
+   *   rate-limit.ts, configured with this limiter's window, ceiling and bucket
+   *   key. The ceiling stops being global and becomes `max` per warm instance;
+   *   that is a weaker bound than the Postgres counter, and a real one.
+   *
+   * Neither option denies. `"degrade-to-local"` replaced a fail-closed policy
+   * that answered 503 to every caller for as long as the store was unreachable
+   * — see ADR-079 for why the deny bought nothing that the shared Postgres
+   * outage had not already bought.
    */
-  failClosedOnStoreError?: boolean;
+  storeErrorPolicy?: "fail-open" | "degrade-to-local";
   /**
    * Optional unprefixed bucket suffix for pre-authentication or other custom
    * scopes. The limiter always prepends `keyPrefix`, preventing cross-surface
@@ -101,17 +117,78 @@ export function deriveBucketKey(c: Context<AppEnv>, keyPrefix: string): string {
 }
 
 /**
- * Vercel replaces `x-vercel-forwarded-for` from its trusted network boundary,
- * unlike caller-controlled `x-forwarded-for`. Outside Vercel, collapse all
- * traffic into one conservative bucket rather than trusting a spoofable IP.
+ * Header the AWS edge sets from its own view of the connection. Caddy writes it
+ * with `header_up`, which SETS the field — any copy a caller sent is replaced
+ * before the request reaches this process — and fills it from Caddy's
+ * `{client_ip}`, resolved under `trusted_proxies static private_ranges` plus
+ * `trusted_proxies_strict` so it walks X-Forwarded-For from the right and lands
+ * on the address the ALB observed rather than on anything the caller wrote.
+ * See `infra/tools/caddy/Caddyfile.alb`, and
+ * `verifications/<session>/caddy-client-ip-header.txt` for that config answering
+ * the four spoof shapes.
  */
-export function trustedVercelIpBucketKey(c: Context<AppEnv>): string {
-  if (process.env.VERCEL !== "1") return "ip:unverified";
-  const trustedForwardedFor = c.req
-    .header("x-vercel-forwarded-for")
-    ?.split(",", 1)[0]
-    ?.trim();
-  return `ip:${trustedForwardedFor || "unverified"}`;
+const EDGE_CLIENT_IP_HEADER = "x-oxagen-client-ip";
+
+/**
+ * Longest address literal we accept. 45 characters is an IPv4-mapped IPv6
+ * address (`0000:...:ffff:255.255.255.255`), the longest textual form there is.
+ */
+const MAX_CLIENT_IP_LENGTH = 45;
+
+/** Characters that appear in an IPv4 or IPv6 literal, and nothing else. */
+const IP_LITERAL_PATTERN = /^[0-9a-fA-F.:]+$/;
+
+/**
+ * Bound what a header can put into a bucket key. A trusted proxy should never
+ * send anything but an address, so this is a guard against the proxy being
+ * misconfigured rather than against the caller: an unbounded or structured
+ * value would otherwise become an unbounded set of Postgres rows.
+ */
+function sanitizedIp(raw: string | undefined): string | null {
+  const value = raw?.trim();
+  if (!value || value.length > MAX_CLIENT_IP_LENGTH) return null;
+  return IP_LITERAL_PATTERN.test(value) ? value : null;
+}
+
+/**
+ * Per-client bucket for the pre-authentication ceilings, from whichever header
+ * the deployment's own edge writes.
+ *
+ * Exactly one header is trusted per deployment shape, and in both cases the
+ * edge SETS it rather than appending to it, so a caller-supplied copy cannot
+ * survive: `x-vercel-forwarded-for` on Vercel, `x-oxagen-client-ip` from Caddy
+ * on AWS. A value that is not an address literal, or that arrives on the wrong
+ * deployment shape, falls back to the single `ip:unverified` bucket.
+ *
+ * Rejected, and why:
+ *
+ * - **`x-forwarded-for`, leftmost entry.** Caller-controlled. Neither the ALB
+ *   nor Caddy strips an inbound copy — both append — so the leftmost entry is
+ *   whatever the client wrote. A caller could rotate it to get a fresh bucket
+ *   per request, or set a victim's address to spend someone else's ceiling.
+ * - **`x-forwarded-for`, counted from the right.** Correct today: the ALB
+ *   appends the address it saw (the client) and Caddy appends the address it
+ *   saw (the ALB), so the client is second from the right. The hop count is the
+ *   entire guarantee, though, and it is not visible from this file — add or
+ *   remove a proxy and the chosen entry silently becomes attacker-controlled,
+ *   with nothing here that could detect the change.
+ * - **`x-real-ip`.** Neither the ALB nor Caddy sets it. Anything arriving under
+ *   that name came from the caller.
+ * - **Keeping the single `ip:unverified` bucket off Vercel.** What this
+ *   replaces. It gave every caller on the internet one shared ceiling, made one
+ *   Postgres row the write-contention point for the whole ingress, and — while
+ *   these mounts were fail-closed — let that row's failure take Tacho and
+ *   Stella intake offline (#3167).
+ */
+export function trustedClientIpBucketKey(c: Context<AppEnv>): string {
+  if (process.env.VERCEL === "1") {
+    const vercelClientIp = sanitizedIp(
+      c.req.header("x-vercel-forwarded-for")?.split(",", 1)[0],
+    );
+    return `ip:${vercelClientIp ?? "unverified"}`;
+  }
+  const edgeClientIp = sanitizedIp(c.req.header(EDGE_CLIENT_IP_HEADER));
+  return `ip:${edgeClientIp ?? "unverified"}`;
 }
 
 /** Domain separator — see authorizationFingerprintBucketKey. */
@@ -141,14 +218,14 @@ export function authorizationFingerprintBucketKey(c: Context<AppEnv>): string {
   return `credential:${fingerprint}`;
 }
 
-// Throttle fail-open warnings to at most one per window per route group, so a
+// Throttle store-error warnings to at most one per window per route group, so a
 // store outage logs a signal without drowning the logs in one line per request.
 const lastWarnAtByPrefix = new Map<string, number>();
 function warnStoreError(
   keyPrefix: string,
   windowMs: number,
   err: unknown,
-  failClosed: boolean,
+  storeErrorPolicy: "fail-open" | "degrade-to-local",
 ): void {
   const now = Date.now();
   if (now - (lastWarnAtByPrefix.get(keyPrefix) ?? 0) < windowMs) return;
@@ -157,10 +234,10 @@ function warnStoreError(
     {
       keyPrefix,
       err: err instanceof Error ? err.message : String(err),
-      failClosed,
+      storeErrorPolicy,
     },
-    failClosed
-      ? "distributed rate limiter store error — failing closed"
+    storeErrorPolicy === "degrade-to-local"
+      ? "distributed rate limiter store error — degrading to the per-instance limiter"
       : "distributed rate limiter store error — failing open (allowing request)",
   );
 }
@@ -186,7 +263,25 @@ export function distributedRateLimiter(
 ): MiddlewareHandler<AppEnv> {
   const windowMs = opts.windowMs ?? DEFAULT_WINDOW_MS;
   const methods = opts.methods ?? DEFAULT_METHODS;
+  const storeErrorPolicy = opts.storeErrorPolicy ?? "fail-open";
   const localDenyUntilByKey = new Map<string, number>();
+
+  const bucketKeyOf = (c: Context<AppEnv>): string =>
+    opts.bucketKey
+      ? `${opts.keyPrefix}:${opts.bucketKey(c)}`
+      : deriveBucketKey(c, opts.keyPrefix);
+
+  /**
+   * The degraded ceiling, built on the first store failure and kept for the
+   * life of this limiter so its buckets survive across failed requests. It
+   * counts the same keys in the same window as the Postgres counter; only the
+   * scope narrows, from global to this process.
+   */
+  let localFallback: MiddlewareHandler<AppEnv> | null = null;
+  function localFallbackLimiter(max: number): MiddlewareHandler<AppEnv> {
+    localFallback ??= rateLimiter({ windowMs, max, keyFn: bucketKeyOf });
+    return localFallback;
+  }
 
   function cacheLocalDeny(key: string, denyUntil: number, now: number): void {
     if (localDenyUntilByKey.size >= LOCAL_DENY_CACHE_MAX) {
@@ -204,9 +299,7 @@ export function distributedRateLimiter(
   return async (c, next) => {
     if (methods !== "all" && !methods.includes(c.req.method)) return next();
 
-    const key = opts.bucketKey
-      ? `${opts.keyPrefix}:${opts.bucketKey(c)}`
-      : deriveBucketKey(c, opts.keyPrefix);
+    const key = bucketKeyOf(c);
     const now = Date.now();
     const windowStartMs = Math.floor(now / windowMs) * windowMs;
     const resetAtMs = windowStartMs + windowMs;
@@ -240,11 +333,9 @@ export function distributedRateLimiter(
         return rows[0]?.count ?? 0;
       });
     } catch (err) {
-      const failClosed = opts.failClosedOnStoreError === true;
-      warnStoreError(opts.keyPrefix, windowMs, err, failClosed);
-      if (failClosed) {
-        c.header("Retry-After", "1");
-        return c.json({ error: "rate_limit_unavailable" }, 503);
+      warnStoreError(opts.keyPrefix, windowMs, err, storeErrorPolicy);
+      if (storeErrorPolicy === "degrade-to-local") {
+        return localFallbackLimiter(max)(c, next);
       }
       return next();
     }

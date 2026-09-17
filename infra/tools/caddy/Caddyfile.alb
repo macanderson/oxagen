@@ -20,6 +20,28 @@
 # bound to 127.0.0.1 on the instance and is not reachable from Docker's
 # bridge network at all.
 
+# The ALB is the only thing that ever connects to this node, so the address
+# Caddy sees as the peer is always the load balancer, never a caller. Declaring
+# the VPC's private ranges trusted lets `{client_ip}` resolve past the ALB to
+# the address the ALB itself observed — the real client. Without this the
+# placeholder returns the load balancer's own private address and every caller
+# looks like the same one.
+#
+# `trusted_proxies_strict` is what makes that address trustworthy rather than
+# merely present. Caddy's default reads the LEFTMOST X-Forwarded-For entry,
+# which is whatever the caller wrote, because neither the ALB nor Caddy strips
+# an inbound copy — both append. Strict mode walks the header from the right
+# instead, skipping addresses inside the trusted ranges, so it lands on the
+# entry the ALB appended and a caller-supplied prefix is ignored. Dropping this
+# line does not fail any check; it silently hands `X-Oxagen-Client-Ip` to the
+# caller.
+{
+	servers {
+		trusted_proxies static private_ranges
+		trusted_proxies_strict
+	}
+}
+
 :80 {
 	route {
 		respond /healthz 200
@@ -61,6 +83,19 @@
 		handle @api {
 			encode gzip zstd
 			reverse_proxy 127.0.0.1:4000 {
+				# The API's pre-authentication rate limiters bucket by client
+				# address, and the only address they are allowed to believe is
+				# one this proxy wrote. `header_up` SETS the field, so a copy a
+				# caller sent under the same name is replaced here and never
+				# reaches the application — which is the whole reason the
+				# limiter trusts this header and not `X-Forwarded-For`, where
+				# both the ALB and Caddy append to whatever the caller started.
+				# Read by `trustedClientIpBucketKey` in
+				# apps/api/src/middleware/distributed-rate-limit.ts; renaming
+				# either side without the other silently collapses every caller
+				# back into one shared bucket.
+				header_up X-Oxagen-Client-Ip {client_ip}
+
 				transport http {
 					response_header_timeout 300s
 				}

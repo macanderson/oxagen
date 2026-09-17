@@ -383,20 +383,24 @@ describe("POST /v1/telemetry/stella/operational", () => {
     },
   );
 
-  it("fails closed before authentication when the pre-auth counter store degrades", async () => {
+  // ADR-079: the pre-auth ceilings degrade to the per-instance limiter rather
+  // than answering 503. #3167 is the outage the old policy caused — every
+  // enrolled host got a 503 on every request for as long as the counter
+  // statement was broken.
+  it("serves the request from the per-instance ceiling when the pre-auth counter store degrades", async () => {
     mocks.withSystemDb.mockRejectedValue(
       new Error("counter store unavailable"),
     );
 
     const response = await post(VALID_BATCH, {
       authorization: "Bearer counter_store_failure_key",
-      "x-vercel-forwarded-for": "203.0.113.60",
+      "x-oxagen-client-ip": "198.51.100.60",
     });
 
-    expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ error: "rate_limit_unavailable" });
-    expect(mocks.resolveApiKey).not.toHaveBeenCalled();
-    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(OUTPUT);
+    expect(mocks.resolveApiKey).toHaveBeenCalled();
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
   });
 
   it("runs both distributed pre-auth counters before auth middleware", async () => {
