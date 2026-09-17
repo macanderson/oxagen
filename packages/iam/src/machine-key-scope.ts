@@ -117,9 +117,24 @@ export function gatewayMayInvoke(capabilityName: string): boolean {
  * Sorted so the bundle's etag is stable across processes: registration order
  * depends on import order, and an etag that moved on every restart would make
  * every host refetch a mandate that had not changed.
+ *
+ * **`undefined` and `[]` are different answers, and the difference is the
+ * control.** `[]` is a mandate: the rule ran over a registry that exists and
+ * permitted nothing, so the gateway serves nothing. `undefined` is the
+ * absence of an answer: the registry is empty, which never means "no
+ * capability qualifies" — it means no contract has been imported into this
+ * process yet, and a mandate derived from that would take a healthy fleet's
+ * toolbelt to zero. So the two are returned as different values rather than
+ * collapsed into one empty list, and the caller that puts this on the wire
+ * omits the field only for `undefined`. Encoding "permits nothing" as absence
+ * would be a fail-open: absence on this wire means *not told*, and the gateway
+ * answers *not told* by serving the upstream list unfiltered.
  */
-export function gatewayMandateTools(): string[] {
-  return listCapabilities()
+export function gatewayMandateTools(): string[] | undefined {
+  const capabilities = listCapabilities();
+  // An empty registry is an uninitialised process, not a policy decision.
+  if (capabilities.length === 0) return undefined;
+  return capabilities
     .map((capability) => capability.name)
     .filter((name) => gatewayMayInvoke(name))
     .sort();

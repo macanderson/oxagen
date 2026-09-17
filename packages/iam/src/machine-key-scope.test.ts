@@ -303,8 +303,25 @@ describe("the mandate, materialised for the host that serves it", () => {
     expect(gatewayMandateTools()).toEqual(["a_tool", "m_tool", "z_tool"]);
   });
 
-  it("answers nothing for an empty registry rather than guessing", () => {
+  it("answers undefined for an empty registry rather than guessing", () => {
+    // Not `[]`. An empty registry is a process that has not imported its
+    // contracts, and `[]` is a mandate permitting nothing — a real answer the
+    // gateway acts on by serving no tools at all. Returning `[]` here would
+    // hand a healthy fleet an empty toolbelt on the say-so of an import order.
     registry();
+    expect(gatewayMandateTools()).toBeUndefined();
+  });
+
+  it("answers an empty list when the registry exists and permits nothing", () => {
+    // The case the caller must be able to tell apart from the one above: a
+    // populated registry whose every capability the rule refuses — a policy
+    // change leaving only mutating or high-sensitivity MCP tools. That is a
+    // decision, and it is stated as `[]`, never as silence.
+    registry(
+      capability("delete_workspace", { mutates: true }),
+      capability("reveal_secret", { sensitivity: "high" }),
+      capability("internal_thing", { surfaces: ["api"] }),
+    );
     expect(gatewayMandateTools()).toEqual([]);
   });
 });

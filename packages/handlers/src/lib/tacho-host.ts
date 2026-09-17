@@ -188,12 +188,23 @@ export async function readWorkspaceRetention(
  * tool only once it was selected — showing a connected app tools that could
  * only fail, and counting forbidden tools against `tool_ceiling`.
  *
- * Omitted rather than emitted empty when the registry is empty. An empty list
- * is a mandate that permits nothing, and the gateway serves nothing for it;
- * that is the right answer when it is a decision and the wrong one when it is
- * a runtime that has not imported its contracts. Absent means *not told*, and
- * the host then serves what it is given, which is what a bundle from before
- * this field means too.
+ * **Emitted empty when the mandate is empty; omitted only when there is no
+ * mandate to state.** These are not the same condition and must not share an
+ * encoding. A populated registry whose permitted set is empty — a policy
+ * change that leaves only mutating or high-sensitivity MCP tools — is a
+ * decision, and `gateway_tools: []` states it: the gateway serves nothing.
+ * An empty registry is a process that has not imported its contracts, which
+ * is not a decision about anything, and there the field is omitted.
+ * `gatewayMandateTools` returns `undefined` for exactly that case and a list
+ * (possibly empty) otherwise, so the two cannot be conflated here.
+ *
+ * Omitting for an empty permitted set would be a fail-open: absent means *not
+ * told* on this wire, and a gateway that is not told serves the upstream
+ * `tools/list` unfiltered (`mcp-gateway.ts`, `gatewayToolsOf`). "Permits
+ * nothing" collapsing into "serve everything" is the failure this field
+ * exists to prevent. Absent stays reserved for a bundle signed by a control
+ * plane that had nothing to say, which is also what a bundle from before this
+ * field means.
  *
  * **Phase 1 of two: emitted only to a host that said it can parse it.**
  * `policyBundleSchema` is `.strict()` on the host, so a daemon or CLI built
@@ -217,7 +228,8 @@ export async function readWorkspaceRetention(
 function gatewayTools(host: TachoHostRow): { gateway_tools?: string[] } {
   if (!parsesGatewayTools(host)) return {};
   const tools = gatewayMandateTools();
-  return tools.length === 0 ? {} : { gateway_tools: tools };
+  // `undefined` only — an empty list is a mandate and goes on the wire.
+  return tools === undefined ? {} : { gateway_tools: tools };
 }
 
 /** Whether this host named `gateway_tools` among the fields it can parse. */
@@ -418,6 +430,28 @@ export async function controlEnvelope(
  * upgraded host permanently ungated. The advertisement rides the health
  * report on every poll instead, so an upgraded host is gated in on its next
  * one.
+ *
+ * **It tracks downgrades too, which is why a health report without
+ * `bundle_features` clears the column rather than preserving it.** The
+ * advertisement is a statement about the parser now running, and the wire
+ * contract makes absence mean *this parser predates the field* — a daemon new
+ * enough to name a feature always names it (`daemon.ts` sends the full
+ * `TACHO_BUNDLE_FEATURES` on every poll). So the two cases are read apart:
+ *
+ *   - **no `daemon` object at all** — the poll reported no health, so there is
+ *     nothing to learn and the stored advertisement stands;
+ *   - **a `daemon` object without `bundle_features`** — the host reported its
+ *     health and named no features, so the stored support is stale and is
+ *     cleared to `[]`.
+ *
+ * Preserving the stale value is what breaks a rollback. An enrollment by a
+ * current CLI, or a feature poll that landed before a downgrade, leaves
+ * `gateway_tools` on the column; the control envelope then keeps publishing
+ * the etag of a bundle carrying that field, and the rolled-back host's
+ * `.strict()` parser rejects every refresh — stranded on a stale mandate,
+ * refetching forever, with no poll that can ever talk it back down. Clearing
+ * costs an upgraded host nothing, because it re-advertises on its very next
+ * poll.
  */
 export async function touchHost(
   tx: TachoTx,
@@ -454,8 +488,11 @@ export async function touchHost(
     values["hooksLastCheckedAt"] = now;
   }
   if (daemon?.otel_ok !== undefined) values["otelOk"] = daemon.otel_ok;
-  if (daemon?.bundle_features !== undefined)
-    values["bundleFeatures"] = daemon.bundle_features;
+  // Reported health with no features named is a downgrade, not a silence:
+  // clear the stale support. Only a poll with no health report at all leaves
+  // the stored advertisement alone.
+  if (daemon !== undefined)
+    values["bundleFeatures"] = daemon.bundle_features ?? [];
   if (daemon?.bundle_etag !== undefined)
     values["bundleEtagServed"] = daemon.bundle_etag;
   await tx

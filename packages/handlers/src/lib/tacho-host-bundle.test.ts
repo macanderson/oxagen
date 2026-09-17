@@ -14,7 +14,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const gatewayMandateTools = vi.fn(() => [] as string[]);
+const gatewayMandateTools = vi.fn(() => undefined as string[] | undefined);
 vi.mock("@oxagen/iam/machine-key-scope", () => ({
   gatewayMandateTools: () => gatewayMandateTools(),
 }));
@@ -75,7 +75,9 @@ const previousPolicyBundleSchema = policyBundleSchema
 
 beforeEach(() => {
   gatewayMandateTools.mockReset();
-  gatewayMandateTools.mockReturnValue([]);
+  // The uninitialised registry: no mandate to state. Cases that are about a
+  // mandate set their own.
+  gatewayMandateTools.mockReturnValue(undefined);
 });
 
 describe("the gateway mandate on the bundle", () => {
@@ -84,12 +86,43 @@ describe("the gateway mandate on the bundle", () => {
     expect(bundle().gateway_tools).toEqual(["get_run", "query_ontology"]);
   });
 
-  it("omits the field when the registry answers nothing", () => {
-    // Absent means *not told*, and the gateway then serves what it is given.
-    // An empty list means *permits nothing*, and the gateway serves nothing —
-    // the right answer when it is a decision, the wrong one when it is a
-    // runtime that has not imported its contracts.
+  it("omits the field when there is no mandate to state", () => {
+    // `undefined` from the rule is an empty registry: a process that has not
+    // imported its contracts. Absent means *not told*, and the gateway then
+    // serves what it is given — the right answer when nobody decided
+    // anything, and the wrong one for the case below.
+    gatewayMandateTools.mockReturnValue(undefined);
     expect(bundle()).not.toHaveProperty("gateway_tools");
+  });
+
+  it("emits an explicit empty mandate when the permitted set is empty", () => {
+    // The fail-open this guards. A populated registry whose capabilities the
+    // rule all refuses — a policy change leaving only mutating or
+    // high-sensitivity MCP tools — is a decision that permits nothing, and it
+    // has to reach the wire as `[]`. Omitting it would say *not told*, and
+    // `gatewayToolsOf` answers *not told* by serving the upstream
+    // `tools/list` unfiltered: "permits nothing" would become "serve
+    // everything", which is the one outcome the field exists to prevent.
+    gatewayMandateTools.mockReturnValue([]);
+    expect(bundle()).toHaveProperty("gateway_tools", []);
+  });
+
+  it("gives the empty mandate its own etag, distinct from having no mandate", () => {
+    // The two must be distinguishable end to end, not just in the object we
+    // build: a host holding one has to refetch to reach the other. Equal
+    // etags would leave a gateway serving an unfiltered list with no poll
+    // that could ever tell it otherwise.
+    gatewayMandateTools.mockReturnValue([]);
+    const empty = bundle().etag;
+    gatewayMandateTools.mockReturnValue(undefined);
+    expect(bundle().etag).not.toBe(empty);
+  });
+
+  it("puts the empty mandate through the host's strict schema", () => {
+    // `[]` has to survive the parse on the host, or the mandate that permits
+    // nothing never arrives and the gateway keeps the list it had.
+    gatewayMandateTools.mockReturnValue([]);
+    expect(policyBundleSchema.parse(served()).gateway_tools).toEqual([]);
   });
 
   it("changes the etag when the mandate changes, so a host refetches", () => {

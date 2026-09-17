@@ -487,29 +487,75 @@ describe("fetch_commands", () => {
     expect(neverAdvertised).not.toBe(already);
   });
 
-  it("leaves the advertisement alone when a poll carries none", async () => {
-    // A daemon too old to advertise must not have its record overwritten with
-    // an empty list on every poll, and must not be silently upgraded either.
+  /** One poll, returning what it wrote to the host row and what it served. */
+  const poll = async (
+    stored: string[],
+    daemon: Record<string, unknown> | undefined,
+  ): Promise<{ values: Record<string, unknown>; etag: string }> => {
     const db: Fake = {
-      hosts: [host({ bundleFeatures: ["gateway_tools"] })],
+      hosts: [host({ bundleFeatures: stored })],
       sessions: [],
       commands: [],
       updates: [],
       inserts: [],
     };
     wire(db);
-    await tachoCommandFetchHandler(
+    const out = await tachoCommandFetchHandler(
       {
         ...FETCH,
         host_enrollment_id: HOST_PUBLIC,
         acknowledgements: [],
-        daemon: { hooks_ok: true },
+        ...(daemon === undefined ? {} : { daemon }),
       },
       MACHINE,
     );
-    expect(
-      db.updates.find((u) => u.table === "hosts")?.values,
-    ).not.toHaveProperty("bundleFeatures");
+    return {
+      values: (db.updates.find((u) => u.table === "hosts")?.values ??
+        {}) as Record<string, unknown>,
+      etag: out.control.bundle_etag,
+    };
+  };
+
+  it("leaves the advertisement alone when a poll reports no health at all", async () => {
+    // No `daemon` object is not a statement about the parser — nothing was
+    // reported, so there is nothing to learn and the stored support stands.
+    const { values } = await poll(["gateway_tools"], undefined);
+    expect(values).not.toHaveProperty("bundleFeatures");
+  });
+
+  it("clears support a daemon reports health without, rather than keeping it stale", async () => {
+    // A daemon new enough to name a feature names it on every poll, so a
+    // health report that omits `bundle_features` says its parser predates the
+    // field — an emergency rollback after a feature poll was persisted, or a
+    // current CLI enrolling a host an older daemon then runs. Keeping the
+    // stored value is what strands it: the envelope keeps publishing the etag
+    // of a bundle carrying `gateway_tools`, and the host's `.strict()` parser
+    // rejects every refresh, forever.
+    const { values } = await poll(["gateway_tools"], { hooks_ok: true });
+    expect(values).toMatchObject({ bundleFeatures: [] });
+  });
+
+  it("does not silently upgrade a host that named no features", async () => {
+    // The other direction of the same rule: clearing is not granting.
+    const { values } = await poll([], { hooks_ok: true });
+    expect(values).toMatchObject({ bundleFeatures: [] });
+  });
+
+  it("serves the rolled-back host a parseable bundle on that same poll", async () => {
+    // The assertion the fix is actually for. Writing the cleared column but
+    // building this response from the host object the caller already held
+    // would serve the gated bundle one more time — and there is no later poll
+    // that fixes it, because the host cannot parse the bundle it is being
+    // told to refetch.
+    const rolledBack = await poll(["gateway_tools"], { hooks_ok: true });
+    const neverAdvertised = await poll([], { hooks_ok: true });
+    const stillCurrent = await poll(["gateway_tools"], {
+      bundle_features: ["gateway_tools"],
+    });
+    expect(rolledBack.etag).toBe(neverAdvertised.etag);
+    // Keeps the line above from holding vacuously: the gate has to make a
+    // difference to the bundle in this fixture at all.
+    expect(rolledBack.etag).not.toBe(stillCurrent.etag);
   });
 });
 
