@@ -517,24 +517,39 @@ function wire(db: FakeDb): void {
           values: (values: Record<string, unknown>) => {
             const name = tableName(table);
             const chain = {
-              onConflictDoUpdate: async (args?: { setWhere?: unknown }) => {
-                // `setWhere` is modelled, because the statement uses it to
-                // refuse to re-seal a row another request already sealed. A
-                // fixture that ignored it would report the guard working when
-                // it was not there at all.
+              onConflictDoUpdate: async (args?: {
+                setWhere?: unknown;
+                set?: Record<string, unknown>;
+              }) => {
+                // INSERT … ON CONFLICT DO UPDATE, both halves. A row that is
+                // already there takes the SET clause; only a row that is not
+                // takes the insert's values. Modelled rather than collapsed to
+                // "write the values", because the conflict path is where the
+                // tier and the grade have to agree, and a fixture that always
+                // wrote the insert would never exercise it.
+                const uuid = values["sessionUuid"] as string;
+                const present =
+                  name === "sessions" ? db.sessions.get(uuid) : undefined;
+                // `setWhere` refuses an already-sealed row outright: a seal is
+                // final, and nothing may overwrite one.
                 if (
                   args?.setWhere !== undefined &&
-                  name === "sessions" &&
-                  db.sessions.get(values["sessionUuid"] as string)?.["sealedAt"]
+                  present?.["sealedAt"] !== undefined &&
+                  present?.["sealedAt"] !== null
                 ) {
                   return;
                 }
-                if (name === "sessions")
-                  db.sessions.set(values["sessionUuid"] as string, {
-                    id: "s1",
-                    publicId: "tse_fake0000000000000001",
-                    ...values,
-                  });
+                if (name === "sessions") {
+                  if (present !== undefined) {
+                    Object.assign(present, args?.set ?? {});
+                  } else {
+                    db.sessions.set(uuid, {
+                      id: "s1",
+                      publicId: "tse_fake0000000000000001",
+                      ...values,
+                    });
+                  }
+                }
                 if (name === "session_models") db.models.push(values);
                 if (name === "session_files") db.files.push(values);
               },
@@ -1597,6 +1612,67 @@ describe("ingest_tacho_events: bodies and the seal", () => {
       replayGrade: "fork",
       completenessGaps: [],
     });
+  });
+
+  it("writes the tier with the grade when a racing insert rises to gateway", async () => {
+    // The winner inserted an unsealed row before this batch's read saw the
+    // gateway call; this batch read no row, derived `gateway`, and carries the
+    // terminal event. Applying `common` would write ITS grade and no tier —
+    // the tier is only set on the promotion path, which needs an `existing` —
+    // leaving the winner's tier paired with this batch's signed grade.
+    const db = fakeDb();
+    const events = sessionWithContent("gateway");
+    servedChain(db, events);
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "observe",
+      sealedAt: null,
+    });
+    db.hideSessionFromRead = true;
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+
+    const row = db.sessions.get(SESSION);
+    // Both from one derivation, and a rise rather than a downgrade.
+    expect(row?.["enforcementTier"]).toBe("gateway");
+    expect(row?.["replayGrade"]).toBe("fork");
+  });
+
+  it("writes no grade when a racing insert cannot know the winner's tier", async () => {
+    // The mirror case. This batch derived a non-gateway tier, so it cannot
+    // tell whether the row it is conflicting with is on a higher one — and a
+    // `replayGrade` computed from `observe` must not land on a `gateway` row.
+    // The seal is dropped; a later batch seals it through the existing-session
+    // path, which reads the real row.
+    const db = fakeDb();
+    const events = sessionWithContent("gateway");
+    // No chain record at all, so this batch derives the host's own mode.
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "gateway",
+      sealedAt: null,
+    });
+    db.hideSessionFromRead = true;
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+
+    const row = db.sessions.get(SESSION);
+    expect(row?.["enforcementTier"]).toBe("gateway");
+    // The winner's row is left unsealed and ungraded rather than graded wrong.
+    expect(row?.["replayGrade"]).toBeUndefined();
+    expect(row?.["sealedAt"] ?? null).toBeNull();
   });
 
   it("does not re-seal a row another request sealed first", async () => {

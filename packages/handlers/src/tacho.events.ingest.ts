@@ -630,6 +630,24 @@ function genesisRow(
   };
 }
 
+/**
+ * `common` with the seal taken back out.
+ *
+ * Used on the INSERT's conflict path by a batch that did not derive `gateway`:
+ * it cannot know whether the row it is conflicting with is on a higher tier, so
+ * a `replayGrade` computed from its own tier must not land. Everything else in
+ * `common` — the head, the counters, the terminal facts' siblings — is safe,
+ * because none of it is signed.
+ */
+function withoutTerminal(
+  common: Record<string, unknown>,
+  terminalColumns: Record<string, unknown>,
+): Record<string, unknown> {
+  const out = { ...common };
+  for (const key of Object.keys(terminalColumns)) delete out[key];
+  return out;
+}
+
 /** Terminal facts from an `agent_stop`, when the batch carries one. */
 function terminalPatch(
   events: TachoEvent[],
@@ -976,6 +994,9 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         : derivedTier;
       // The grade is computed once, at seal: a sealed session is never
       // sealed again, whatever a later batch carries.
+      // Whether THIS batch's own derivation is the gateway tier. Read by the
+      // insert's conflict path, where `existing` is stale by construction.
+      const risesToGateway = derivedTier === TACHO_GATEWAY_TIER;
       const terminal = existing?.sealedAt ? {} : terminalPatch(fresh, now);
       const { totalCostMicrosAuthoritative, ...terminalColumns } =
         terminal as Record<string, unknown> & {
@@ -1097,6 +1118,43 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         ...increments,
       };
 
+      // What the INSERT's conflict path applies, which is not the same thing.
+      //
+      // `common` is computed from `existing`, and on the insert path `existing`
+      // is the read that preceded the INSERT — it says nothing about the row
+      // this statement is now conflicting with. Two first-ingest requests can
+      // both read no row and derive DIFFERENT tiers, because a gateway call
+      // recorded between their two reads is visible to one and not the other.
+      //
+      // `common` then carries a `replayGrade` computed from the loser's tier
+      // and no `enforcementTier` at all — the tier is only set on the promotion
+      // path, which needs an `existing`. The winner's tier and the loser's
+      // signed grade end up on one sealed row, and a sealed session is never
+      // regraded.
+      //
+      // So the two move together here, in the only two shapes that are both
+      // consistent and monotonic:
+      //
+      //   - the loser derived `gateway`: write the tier WITH the grade. That is
+      //     a rise, which is the direction this tier is allowed to move, and
+      //     the pair comes from one derivation.
+      //   - the loser derived anything else: it cannot know whether the winner
+      //     is on a higher tier, so it must not write a grade computed from its
+      //     own. The seal is dropped and the session is sealed by a later batch,
+      //     through the existing-session path, which reads the real row.
+      //
+      // `setWhere` still refuses an already-sealed row outright: a seal is
+      // final, and neither shape above may overwrite one.
+      const conflictSet = risesToGateway
+        ? {
+            ...common,
+            enforcementTier: TACHO_GATEWAY_TIER,
+            ...(sessionGatewayColumn
+              ? { gatewayObservedAt: chainRecord?.at ?? null }
+              : {}),
+          }
+        : withoutTerminal(common, terminalColumns);
+
       if (existing) {
         await tx
           .update(schema.tachoSessions)
@@ -1128,7 +1186,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           } as typeof schema.tachoSessions.$inferInsert)
           .onConflictDoUpdate({
             target: schema.tachoSessions.sessionUuid,
-            set: common,
+            set: conflictSet,
             // Only while the row is not already sealed.
             //
             // `common` here was computed as though no row existed — `existing`
