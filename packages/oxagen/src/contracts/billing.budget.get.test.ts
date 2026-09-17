@@ -31,9 +31,9 @@ describe("billing.budget.get capability", () => {
           enabled: true,
           period: "monthly",
           windowDays: null,
-          limitUsd: 100,
-          spentUsd: 42.5,
-          projectedUsd: 90,
+          limit: { micros: "100000000", currency: "USD" },
+          spent: { micros: "42500000", currency: "USD" },
+          projected: { micros: "90000000", currency: "USD" },
           ratio: 0.425,
           state: "ok",
           reachedThreshold: 0,
@@ -44,6 +44,30 @@ describe("billing.budget.get capability", () => {
     });
     expect(parsed.budgets).toHaveLength(1);
     expect(parsed.budgets[0]!.scope).toBe("org");
+  });
+
+  it("refuses a float where micros belong", () => {
+    expect(() =>
+      billingBudgetGet.output.parse({
+        budgets: [
+          {
+            scope: "org",
+            publicId: null,
+            enabled: true,
+            period: "monthly",
+            windowDays: null,
+            limit: { micros: 100, currency: "USD" },
+            spent: { micros: "0", currency: "USD" },
+            projected: { micros: "0", currency: "USD" },
+            ratio: 0,
+            state: "ok",
+            reachedThreshold: 0,
+            windowStart: "x",
+            windowEnd: "y",
+          },
+        ],
+      }),
+    ).toThrow();
   });
 
   it("parses an empty budgets array (no ceilings configured)", () => {
@@ -60,9 +84,9 @@ describe("billing.budget.get capability", () => {
             enabled: false,
             period: "monthly",
             windowDays: null,
-            limitUsd: null,
-            spentUsd: 0,
-            projectedUsd: 0,
+            limit: null,
+            spent: { micros: "0", currency: "USD" },
+            projected: { micros: "0", currency: "USD" },
             ratio: 0,
             state: "over", // invalid
             reachedThreshold: 0,

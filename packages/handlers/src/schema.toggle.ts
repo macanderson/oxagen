@@ -40,7 +40,7 @@ export const schemaToggleHandler: CapabilityHandler<
     if (existing) {
       await tx
         .update(db.schemaActivations)
-        .set({ enabled, updatedByUserId: ctx.userId })
+        .set({ enabled, updatedById: ctx.userId })
         .where(eq(db.schemaActivations.id, existing.id));
     } else {
       await tx.insert(db.schemaActivations).values({
@@ -48,8 +48,8 @@ export const schemaToggleHandler: CapabilityHandler<
         workspaceId: ctx.workspaceId,
         schemaName,
         enabled,
-        createdByUserId: ctx.userId,
-        updatedByUserId: ctx.userId,
+        createdById: ctx.userId,
+        updatedById: ctx.userId,
       });
     }
   });

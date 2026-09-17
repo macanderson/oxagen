@@ -15,6 +15,7 @@ List the workspaces inside an organization the authenticated user belongs to. Ba
 | Field | Type | Notes |
 |---|---|---|
 | `orgSlug` | `string` | Slug of the organization whose workspaces to list. |
+| `includeArchived` | `boolean` | Also list archived workspaces (`archive_workspace`). Default `false`: the switcher and the CLI picker leave archived rows out; the Organization › Workspaces section asks for them. |
 
 ## Output
 
@@ -28,6 +29,7 @@ List the workspaces inside an organization the authenticated user belongs to. Ba
 | `organization.name` | `string` | Org display name. |
 | `workspaces` | `WorkspaceListItem[]` | The org's workspaces the caller can use. |
 | `workspaces[].id` | `string` | Internal UUID. |
+| `workspaces[].archivedAt` | `string \| null` | ISO-8601 when the workspace was archived; `null` while active. |
 | `workspaces[].publicId` | `string` | Prefixed public identifier. |
 | `workspaces[].slug` | `string` | Workspace slug (renameable). |
 | `workspaces[].namespace` | `string` | Immutable handle, unique within the org (middle `agentKey` segment). |

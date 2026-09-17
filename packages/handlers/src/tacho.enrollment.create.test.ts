@@ -26,9 +26,11 @@ vi.mock("./logger", () => ({
 import { verifyBundle } from "./lib/tacho-bundle-signing";
 import { signTachoEnrollment } from "./lib/tacho-enrollment-signing";
 import {
-  agentSlugFor,
   deviceKeyFingerprint,
   resolveAllowedEndpoints,
+} from "./lib/tacho-host-enroll";
+import {
+  agentSlugFor,
   tachoEnrollmentCreateHandler,
 } from "./tacho.enrollment.create";
 
@@ -71,6 +73,7 @@ function happyDb(clash = false): void {
             findFirst: async () => (clash ? { id: "existing" } : undefined),
           },
           authorizationDenyGenerations: { findMany: async () => [] },
+          retentionPolicyVersions: { findFirst: async () => undefined },
         },
         insert: (table: unknown) => ({
           values: (values: Record<string, unknown>) => ({
@@ -196,7 +199,7 @@ describe("create_tacho_enrollment", () => {
     const keyContext = { ...CONTEXT, userId: null, apiKeyId: "key-cli" };
     keyRow = {
       scope: {},
-      createdByUserId: creator,
+      createdById: creator,
       stellaTelemetryEnrollmentId: null,
     };
     const output = await tachoEnrollmentCreateHandler(INPUT, keyContext);
@@ -206,7 +209,7 @@ describe("create_tacho_enrollment", () => {
       creator,
     );
     const host = inserted.find((row) => row.table === "hosts");
-    expect(host?.values["createdByUserId"]).toBe(creator);
+    expect(host?.values["createdById"]).toBe(creator);
     expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({ actorUserId: creator }),
     );
@@ -217,7 +220,7 @@ describe("create_tacho_enrollment", () => {
         purpose: "tacho_host_v1",
         host_enrollment_id: output.hostEnrollmentId,
       },
-      createdByUserId: creator,
+      createdById: creator,
       stellaTelemetryEnrollmentId: null,
     };
     await expect(

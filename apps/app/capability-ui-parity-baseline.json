@@ -1,33 +1,4 @@
 {
-  "$comment": "UI-parity ratchet baseline (introduced by web-app-2.0 Phase 0). check_ui_parity.mjs --strict fails on any FORWARD gap whose capability is NOT listed in `grandfathered` below. These are the pre-existing app-layer capabilities that already have a UI binding but still lack a runtime `proof` (or, for a few, a binding at all) as of the strict-gate turn-on. They are the *content* work of web-app-2.0 Phases 1-6 — each phase that builds/finishes one of these pages MUST add its e2e/screenshot proof (or binding) and REMOVE the capability from this list. This is a one-way ratchet: the list only shrinks, and any NEW app-layer capability shipped without a working, proven page fails --strict immediately. Do NOT add names here to silence a fresh gap.",
-  "grandfathered": [
-    "activate_skill_version",
-    "change_member_role",
-    "draft_skill",
-    "export_skill",
-    "generate_video",
-    "get_agent_def",
-    "get_eval_run",
-    "get_budget_policy",
-    "get_model_settings",
-    "get_node",
-    "get_skill_metrics",
-    "get_skill_version",
-    "install_skill",
-    "list_notifications",
-    "list_plugin_registries",
-    "list_skill_versions",
-    "list_workspace_skills",
-    "mark_notification",
-    "remove_org_member",
-    "revise_agent_def",
-    "revise_skill",
-    "suggest_commands",
-    "uninstall_plugin",
-    "update_user_budget",
-    "update_user_preferences",
-    "update_workspace_user_preferences",
-    "upload_skill_version",
-    "write_memory"
-  ]
+  "$comment": "UI-parity ratchet baseline. check_ui_parity.mjs --strict fails on any FORWARD gap whose capability is NOT listed in `grandfathered`. The rebuilt app starts with none: WL-50 bound all 70 app-layer capabilities to a page with a proof, and retired the layer on the 50 with no rev1 surface (ADR-081), so there is no pre-existing debt to grandfather. The list only ever shrinks — an entry added here is a promise broken on purpose, and needs the same justification a new `app` layer without a page would.",
+  "grandfathered": []
 }

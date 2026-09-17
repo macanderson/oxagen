@@ -10,10 +10,10 @@ import {
 import type { JSONObject } from "@ai-sdk/provider";
 import {
   hashPrompt,
-  insertTokenUsage,
   providerFromModelId,
   type Surface,
 } from "@oxagen/telemetry";
+import { recordTokenUsage } from "./record-token-usage";
 import {
   chargeUsageCredits,
   providerCostUsdMicros,
@@ -431,7 +431,7 @@ export function streamAgentReply(
       // chat still completes and the message persists in Postgres.
       try {
         const promptHash = await hashPrompt(promptTextForHash);
-        await insertTokenUsage([
+        await recordTokenUsage([
           {
             execution_step_id: args.telemetry.messageId,
             org_id: args.telemetry.orgId,

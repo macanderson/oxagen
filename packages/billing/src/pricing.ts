@@ -780,7 +780,39 @@ export interface SubscriptionPlanDef {
   weight: number;
   /** Display-only feature bullets for the plan card. See {@link PlanFeatures}. */
   features: PlanFeatures;
+  /**
+   * ADR-055 §2: the tier's published governed-action terms, written to
+   * billing.plans by `pnpm billing:stripe-sync` and resolved live by
+   * resolveContractTerms for an org with no negotiated agreement.
+   * `(ratePerGauMicros * blockSizeGau) % 10000 === 0` so a block prices to
+   * whole cents (the plans_gau_terms_check CHECK).
+   */
+  gauTerms: GauTerms;
 }
+
+/** ADR-055 §2: the four figures that price governed action units for a tier. */
+export interface GauTerms {
+  /** ISO 4217, lower case, as billing.plans.currency stores it. */
+  currency: string;
+  /** Micro-dollars per GAU (1 cent = 10,000 micros). */
+  ratePerGauMicros: bigint;
+  /** GAUs per purchased block. */
+  blockSizeGau: number;
+  /** GAUs included in every month of a subscription. */
+  includedGauPerMonth: number;
+}
+
+/**
+ * The published rate, block size and currency are the same on every tier
+ * (v1 GAU pricing approved 2026-09-14, metering spec §4.2 / ADR-055: $5 per
+ * 1,000 GAU, 5,000-GAU blocks at $25.00, USD); tiers differ in the monthly
+ * allowance.
+ */
+const PUBLISHED_GAU_RATE = {
+  currency: "usd",
+  ratePerGauMicros: 5_000n,
+  blockSizeGau: 5_000,
+} as const;
 
 export interface CreditPackDef {
   /** Version-2 identifier (carries the `-v2` suffix). */
@@ -806,10 +838,12 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
     displayName: "Build",
     tier: "build",
     // v1 GAU pricing (maintainer, 2026-09-14; #2999): $199 / mo. Credits stay at
-    // 1.2 cr/¢ so the blended-margin solve is unchanged. These are the prices the
-    // shared Stripe sandbox (acct_1Ty2gjK5L8c4uZ0j) actually holds — the figures
-    // below are what `billing:stripe-sync` reconciles against, so a stale value
-    // here means the app quotes one price and Checkout charges another.
+    // 1.2 cr/¢ so the blended-margin solve is unchanged; the GAU terms (50,000 GAU
+    // / mo at 5,000 micros per GAU, 5,000-GAU blocks) are seeded by WL-24.
+    // These are the prices the shared Stripe sandbox (acct_1Ty2gjK5L8c4uZ0j)
+    // actually holds — the figures below are what `billing:stripe-sync`
+    // reconciles against, so a stale value here means the app quotes one price
+    // and Checkout charges another.
     includedCredits: 23_880, // $238.80 face value, sold for $199 → 16.7% discount
     monthlyCents: 19_900,
     annualCents: 199_000, // 2 months free
@@ -823,13 +857,15 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
         "Email support",
       ],
     },
+    gauTerms: { ...PUBLISHED_GAU_RATE, includedGauPerMonth: 50_000 },
   },
   {
     slug: "scale-v2",
     displayName: "Scale",
     tier: "scale",
     // v1 GAU pricing (maintainer, 2026-09-14; #2999): $999 / mo. Credits stay at
-    // 1.33 cr/¢ so the blended-margin solve is unchanged.
+    // 1.33 cr/¢ so the blended-margin solve is unchanged; the GAU terms (300,000
+    // GAU / mo at 5,000 micros per GAU, 5,000-GAU blocks) are seeded by WL-24.
     includedCredits: 133_200, // $1,332 face value, sold for $999 → 25% discount
     monthlyCents: 99_900,
     annualCents: 999_000, // 2 months free
@@ -843,6 +879,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
         "Priority support",
       ],
     },
+    gauTerms: { ...PUBLISHED_GAU_RATE, includedGauPerMonth: 300_000 },
   },
   {
     // Priced self-serve plan (Enterprise customers may also engage at rate card
@@ -877,6 +914,9 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
         "Immutable audit log",
       ],
     },
+    // Enterprise terms are negotiated (a billing.contract_terms row); the
+    // published row carries the Scale figures until one exists.
+    gauTerms: { ...PUBLISHED_GAU_RATE, includedGauPerMonth: 300_000 },
   },
 ];
 

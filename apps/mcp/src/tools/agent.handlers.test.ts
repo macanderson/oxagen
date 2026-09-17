@@ -40,6 +40,114 @@ beforeEach(() => {
   mocks.headers.mockReturnValue({ authorization: "Bearer test_key" });
 });
 
+// ── agent.approval.list ───────────────────────────────────────────────────────
+
+import handler_agentApprovalList, {
+  schema as agentApprovalListSchema,
+  metadata as agentApprovalListMetadata,
+} from "./agent.approval.list";
+
+describe("agent.approval.list handler", () => {
+  const validOutput = {
+    items: [
+      {
+        id: "apr_0123456789abcdefghjkmn",
+        runId: null,
+        tool: "create_workspace",
+        requester: "usr_0123456789abcdefghjkmn",
+        createdAt: "2026-09-13T10:00:00.000Z",
+        expiresAt: "2026-09-13T10:05:00.000Z",
+        // A row the chat approval gate wrote: no mandate hop, no parking rule,
+        // and no auto-approval rule read against it.
+        mandateId: null,
+        autoEligibility: null,
+        chain: { agentKey: null, rule: null },
+      },
+    ],
+    nextCursor: null,
+  };
+
+  it("exports the contract's schema and read-only metadata", () => {
+    expect(Object.keys(agentApprovalListSchema).sort()).toEqual([
+      "cursor",
+      "limit",
+      "runId",
+    ]);
+    expect(agentApprovalListMetadata.name).toBe("list_approvals");
+    expect(agentApprovalListMetadata.annotations?.readOnlyHint).toBe(true);
+  });
+
+  it("calls buildContext then invoke with 'list_approvals', the args and surface 'mcp'", async () => {
+    mocks.invoke.mockResolvedValue(validOutput);
+    const args = { runId: undefined, limit: 20, cursor: undefined };
+    const result = await handler_agentApprovalList(args);
+    expect(mocks.buildContext).toHaveBeenCalledOnce();
+    expect(mocks.invoke).toHaveBeenCalledWith("list_approvals", args, fakeCtx, {
+      surface: "mcp",
+    });
+    expect(result).toEqual(validOutput);
+  });
+
+  it("carries the mandate hop and the parking rule of a mandate-gate row", async () => {
+    const mandateRow = {
+      items: [
+        {
+          ...validOutput.items[0],
+          mandateId: "mnd_0123456789abcdefghjkmn",
+          autoEligibility: {
+            ruleId: "small-vendor-payments",
+            ok: false,
+            reasons: ["measure_above_ceiling:amount"],
+            floor: false,
+          },
+          chain: {
+            agentKey: null,
+            rule: "mandate:mnd_0123456789abcdefghjkmn:human_above:usd",
+          },
+        },
+      ],
+      nextCursor: null,
+    };
+    mocks.invoke.mockResolvedValue(mandateRow);
+    const result = await handler_agentApprovalList({
+      runId: undefined,
+      limit: 50,
+      cursor: undefined,
+    });
+    expect(result).toEqual(mandateRow);
+  });
+
+  it("refuses an output that carries a row uuid instead of a public id", async () => {
+    mocks.invoke.mockResolvedValue({
+      items: [
+        {
+          ...validOutput.items[0],
+          id: "0195b7c8-1e6e-7c3a-9f0e-0a1b2c3d4e5f",
+        },
+      ],
+      nextCursor: null,
+    });
+    await expect(
+      handler_agentApprovalList({
+        runId: undefined,
+        limit: 50,
+        cursor: undefined,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("propagates invoke errors", async () => {
+    mocks.invoke.mockRejectedValue(new Error("invoke failed"));
+    await expect(
+      handler_agentApprovalList({
+        runId: undefined,
+        limit: 50,
+        cursor: undefined,
+      }),
+    ).rejects.toThrow("invoke failed");
+  });
+});
+
 // ── agent.approval.resolve ────────────────────────────────────────────────────
 
 import handler_agentApprovalResolve, {
@@ -48,7 +156,12 @@ import handler_agentApprovalResolve, {
 } from "./agent.approval.resolve";
 
 describe("agent.approval.resolve handler", () => {
-  const validOutput = { approvalId: "apr_1", resolution: "approved" as const };
+  // A row the chat approval gate wrote settles no mandate reservation.
+  const validOutput = {
+    approvalId: "apr_1",
+    resolution: "approved" as const,
+    mandate: null,
+  };
 
   it("exports schema and metadata", () => {
     expect(agentApprovalResolveSchema).toBeDefined();
@@ -75,7 +188,27 @@ describe("agent.approval.resolve handler", () => {
     expect(result).toMatchObject({
       approvalId: "apr_1",
       resolution: "approved",
+      mandate: null,
     });
+  });
+
+  it("returns the mandate settlement of a mandate-gate row", async () => {
+    const settled = {
+      approvalId: "apr_1",
+      resolution: "approved" as const,
+      mandate: {
+        mandateId: "mnd_0123456789abcdefghjkmn",
+        reserved: [{ measure: "spend", value: "2.50", unitOrCurrency: "USD" }],
+        outcome: "held" as const,
+      },
+    };
+    mocks.invoke.mockResolvedValue(settled);
+    const result = await handler_agentApprovalResolve({
+      approvalId: "apr_1",
+      decision: "approved" as const,
+      note: undefined,
+    });
+    expect(result).toEqual(settled);
   });
 
   it("propagates invoke errors", async () => {

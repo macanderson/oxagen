@@ -69,7 +69,7 @@ export async function agentMcpSetEnabledHandler(
         workspaceId: ctx.workspaceId,
         mcpServerId: server.id,
         descriptors: probe.descriptors,
-        createdByUserId: ctx.userId,
+        createdById: ctx.userId,
       }).catch((err: unknown) => {
         // A dropped tool-snapshot means the server is being enabled with no
         // recorded baseline — the contract-governance / tool-poisoning-detection
@@ -93,7 +93,7 @@ export async function agentMcpSetEnabledHandler(
           ? { healthStatus, lastHealthcheckAt: new Date() }
           : {}),
         updatedAt: new Date(),
-        updatedByUserId: ctx.userId,
+        updatedById: ctx.userId,
       })
       .where(eq(schema.mcpServers.id, server.id)),
   );

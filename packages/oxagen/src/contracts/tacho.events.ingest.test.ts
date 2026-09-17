@@ -10,8 +10,8 @@ import { tachoEventsIngest } from "./tacho.events.ingest";
 const HOST = "tch_0123456789abcdefghjkmn";
 const SESSION = sessionUuid(HOST, "sess-1");
 
-function sealedGenesis() {
-  const unsealed = {
+function genesisDraft() {
+  return {
     v: "tacho/1.0",
     event_id: "evt_01ARZ3NDEKTSV4RRFFQ69G5FAV",
     session_id: "sess-1",
@@ -31,7 +31,10 @@ function sealedGenesis() {
     kind: "agent_start",
     body: { session_start_source: "startup" },
   } satisfies UnsealedTachoEvent;
-  return sealEvent(unsealed, GENESIS_CURSOR).event;
+}
+
+function sealedGenesis() {
+  return sealEvent(genesisDraft(), GENESIS_CURSOR).event;
 }
 
 function validBatch() {
@@ -52,6 +55,7 @@ describe("tachoEventsIngest", () => {
         accepted: 1,
         event_ids: [sealedGenesis().event_id_idem],
         chain_breaks: [],
+        body_rejections: [],
         control: {
           host_status: "active",
           deny_generation: { org: 1, workspace: 1 },
@@ -77,6 +81,7 @@ describe("tachoEventsIngest", () => {
         accepted: 2,
         event_ids: [sealedGenesis().event_id_idem],
         chain_breaks: [],
+        body_rejections: [],
         control: {
           host_status: "active",
           deny_generation: { org: 1, workspace: 1 },
@@ -93,5 +98,134 @@ describe("tachoEventsIngest", () => {
     expect(tachoEventsIngest.sensitivity).toBe("high");
     expect(tachoEventsIngest.defaultEffect).toBe("deny");
     expect(tachoEventsIngest.noBillingGate).toBe(true);
+  });
+});
+
+describe("frame bodies in a batch", () => {
+  it("accepts a body naming an event in the batch and refuses a malformed one", () => {
+    const genesis = sealedGenesis();
+    const withBody = {
+      ...validBatch(),
+      bodies: [
+        {
+          event_id_idem: genesis.event_id_idem,
+          content_type: "application/json",
+          bytes_base64: Buffer.from('{"prompt":"x"}').toString("base64"),
+        },
+      ],
+    };
+    expect(tachoEventsIngest.input.safeParse(withBody).success).toBe(true);
+    expect(
+      tachoEventsIngest.input.safeParse({
+        ...withBody,
+        bodies: [{ ...withBody.bodies[0], bytes_base64: "not base64!" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      tachoEventsIngest.input.safeParse({
+        ...withBody,
+        bodies: [{ ...withBody.bodies[0], event_id_idem: "evt_1" }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("reports rejected bodies with a closed reason set", () => {
+    const genesis = sealedGenesis();
+    const base = {
+      accepted: 1,
+      event_ids: [genesis.event_id_idem],
+      chain_breaks: [],
+      control: {
+        host_status: "active",
+        deny_generation: { org: 1, workspace: 1 },
+        bundle_etag: "etag",
+        commands: [],
+      },
+    };
+    expect(
+      tachoEventsIngest.output.safeParse({
+        ...base,
+        body_rejections: [
+          { event_id_idem: genesis.event_id_idem, reason: "digest_mismatch" },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      tachoEventsIngest.output.safeParse({
+        ...base,
+        body_rejections: [
+          { event_id_idem: genesis.event_id_idem, reason: "too_big" },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("proof.observed frames in a batch (ADR-064)", () => {
+  const d = (c: string) => `sha256:${c.repeat(64)}`;
+  const flip = {
+    witness_id: "wit_01K5RQ8M4",
+    oracle: "test_flip",
+    target_ref: "main",
+    target_sha: "a4c91e2",
+    pr_ref: "refs/pull/482/head",
+    pr_sha: "f70b3d9",
+    command_normalized_digest: d("1"),
+    target_result: "fail",
+    pr_result: "pass",
+    verdict: "flipped",
+    fail_fingerprint: d("2"),
+    pass_output_digest: d("3"),
+    tamper_exclusion: "held",
+    disclosure_grain: "L0",
+    witness_run_id: null,
+    runner_attestation: { key_id: "kms:witness/v3", signature: "MEUCIQ" },
+  };
+
+  function batchWithProof(body: Record<string, unknown>) {
+    const { event: genesis, next } = sealEvent(genesisDraft(), GENESIS_CURSOR);
+    const proof = sealEvent(
+      {
+        v: "tacho/1.0",
+        event_id: "evt_01ARZ3NDEKTSV4RRFFQ69G5FAW",
+        session_id: "sess-1",
+        session_uuid: SESSION,
+        root_session_uuid: SESSION,
+        ts: "2026-09-08T10:07:03.000Z",
+        fidelity: "sdk",
+        source: "hook",
+        agent: genesis.agent,
+        kind: "proof.observed",
+        body,
+      } satisfies UnsealedTachoEvent,
+      next,
+    ).event;
+    return { ...validBatch(), events: [genesis, proof] };
+  }
+
+  it("accepts a proof body that holds to the run-evidence schema", () => {
+    const parsed = tachoEventsIngest.input.parse(batchWithProof(flip));
+    expect(parsed.events[1]?.kind).toBe("proof.observed");
+  });
+
+  it("refuses the whole batch when a proof body claims a flip its results do not show (negative)", () => {
+    const result = tachoEventsIngest.input.safeParse(
+      batchWithProof({ ...flip, target_result: "pass" }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual([
+      "events",
+      1,
+      "body",
+      "verdict",
+    ]);
+  });
+
+  it("refuses a proof body carrying a field the schema does not name (negative)", () => {
+    expect(
+      tachoEventsIngest.input.safeParse(
+        batchWithProof({ ...flip, test_name: "notes.contract.test.ts" }),
+      ).success,
+    ).toBe(false);
   });
 });

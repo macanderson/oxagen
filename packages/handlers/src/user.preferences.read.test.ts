@@ -39,6 +39,7 @@ const FULL_ROW = {
   defaultTextModel: "anthropic/claude-opus-4.8",
   timezone: "America/New_York",
   language: "en",
+  theme: "dark",
 };
 
 describe("userPreferencesReadHandler (@oxagen/handlers)", () => {
@@ -68,6 +69,13 @@ describe("userPreferencesReadHandler (@oxagen/handlers)", () => {
     expect(result.defaultTextModel).toBe("anthropic/claude-opus-4.8");
     expect(result.timezone).toBe("America/New_York");
     expect(result.language).toBe("en");
+    expect(result.theme).toBe("dark");
+  });
+
+  it("reads a theme outside the three choices as system (negative)", async () => {
+    mocks.prefsFindFirst.mockResolvedValueOnce({ ...FULL_ROW, theme: "sepia" });
+    const result = await userPreferencesReadHandler({}, CTX);
+    expect(result.theme).toBe("system");
   });
 
   // ── no row — schema defaults ──────────────────────────────────────────────
@@ -83,6 +91,7 @@ describe("userPreferencesReadHandler (@oxagen/handlers)", () => {
     expect(result.defaultTextModel).toBeNull();
     expect(result.timezone).toBe("UTC");
     expect(result.language).toBe("en");
+    expect(result.theme).toBe("system");
   });
 
   // ── nullable model fields ─────────────────────────────────────────────────

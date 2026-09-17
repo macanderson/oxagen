@@ -1,0 +1,160 @@
+/**
+ * App shell styles.
+ *
+ * Pulls in the shared @oxagen/ui base which provides:
+ *   - Tailwind v4 + design tokens (tokens.css)
+ *   - Space Grotesk @font-face declarations (fonts/space-grotesk.css) — the
+ *     house typeface; self-hosted woff2 binaries live in
+ *     packages/ui/src/styles/fonts/ and are emitted by this app's build from
+ *     that one shared location
+ *   - CSS custom properties: --font-sans / --font-display / --font-mono
+ *   - Tailwind @theme font-family tokens: font-sans / font-display / font-mono
+ *   - Base heading styles (Space Grotesk 600, tracking -0.015em)
+ *   - Stock shadcn neutral tokens (glass/aurora utilities removed)
+ *
+ * See packages/ui/src/styles/fonts/README.md for the family/weight map.
+ */
+@import "@oxagen/ui/styles/globals.css";
+
+/**
+ * Streamdown streaming animation keyframes (sd-fadeIn, sd-blurIn, sd-slideUp).
+ * Must be imported for animated streaming mode to work.
+ */
+@import "streamdown/styles.css";
+
+/**
+ * Tailwind v4 @source — tell the build scanner to include Streamdown's dist
+ * bundles so all Tailwind utility classes used internally are generated.
+ * Paths are relative to this file (apps/app/src/app/globals.css).
+ * node-linker=hoisted means all packages land in the workspace root node_modules.
+ */
+@source "../../../../node_modules/streamdown/dist/*.js";
+@source "../../../../node_modules/@streamdown/code/dist/*.js";
+@source "../../../../node_modules/@streamdown/mermaid/dist/*.js";
+
+/* Scan the components folder located one directory up */
+@source "../components";
+
+/* Headings used to be overridden here to borrow the wordmark's face back from
+ * a separate display family. The house system is ONE face — --font-display and
+ * --font-wordmark both resolve to Space Grotesk — so the override said nothing
+ * and only fought the shared tracking. Removed with the house system. */
+
+/**
+ * Appearance preferences — flash-free via data-* attributes on <html>.
+ *
+ * data-font-size: set by root layout (SSR, from pref-font-size cookie) and
+ *   optimistically by the preferences form (client-side dataset write).
+ * data-density: same pattern with pref-density cookie.
+ *
+ * Font size scales the root rem so the whole rem-based UI grows/shrinks
+ * proportionally. Density exposes --density-gap for use in dense list
+ * components (chat messages, data tables) via a custom property.
+ */
+
+/* ── Font size ──────────────────────────────────────────────────────────── */
+html[data-font-size="small"] {
+  font-size: 15px;
+}
+html[data-font-size="medium"] {
+  font-size: 16px;
+}
+html[data-font-size="large"] {
+  font-size: 17.5px;
+}
+
+/* ── Density ────────────────────────────────────────────────────────────── */
+/*
+ * --density-gap: controls gap/padding in dense components.
+ * Compact: tighter information density for power users.
+ * Comfortable: default — balanced spacing.
+ * Spacious: more breathing room between messages and list items.
+ *
+ * Components that are density-aware should use var(--density-gap) or
+ * var(--density-py) for their internal gap/padding rather than fixed values.
+ */
+html[data-density="compact"] {
+  --density-gap: 0.25rem; /* 4px */
+  --density-py: 0.375rem; /* 6px */
+}
+html[data-density="comfortable"] {
+  --density-gap: 0.5rem; /* 8px */
+  --density-py: 0.625rem; /* 10px */
+}
+html[data-density="spacious"] {
+  --density-gap: 0.875rem; /* 14px */
+  --density-py: 1rem; /* 16px */
+}
+
+/* ── Mobile bottom navigation bar ───────────────────────────────────────── */
+/*
+ * Single source of truth for the fixed bottom nav's geometry (sub-`md` only).
+ * Any fixed-position element that must clear the bar — the shell <main>
+ * padding, the chat composer, the background-task tray, the wand FAB — reserves
+ * its space from these two custom properties instead of hard-coding 3.5rem.
+ * Bumping the bar height here cascades everywhere, so content can never hide
+ * beneath it (notably the chat Send button). The bar itself adds
+ * env(safe-area-inset-bottom) below this height for notched devices.
+ */
+:root {
+  --bottom-bar-h: 3.5rem; /* 56px — bar content height (icon + label, ≥44px tap target) */
+  --bottom-bar-gap: 0.75rem; /* 12px — breathing room reserved above the bar   */
+}
+
+/*
+ * Fixed bottom overlays that live OUTSIDE the shell (e.g. the PWA install
+ * toast in the root layout) read --pwa-toast-bottom for their `bottom`. When
+ * the mobile bottom nav is mounted (sub-`md` shell pages), raise them above
+ * the bar; everywhere else (auth pages, ≥md where the bar is display:none)
+ * they stay at the safe-area edge.
+ */
+@media (max-width: 767px) {
+  body:has([data-mobile-bottom-bar]) {
+    --pwa-toast-bottom: calc(
+      var(--bottom-bar-h) +
+      env(safe-area-inset-bottom, 0px)
+    );
+  }
+  /* Section pages add a fixed sub-nav switcher on top of the bar (3.8125rem =
+     py-2 ×2 + h-11 trigger + border, mirroring MobileSettingsNav's spacer);
+     overlays must clear that too. */
+  body:has([data-mobile-bottom-bar]):has([data-mobile-section-nav]) {
+    --pwa-toast-bottom: calc(
+      var(--bottom-bar-h) +
+      3.8125rem +
+      env(safe-area-inset-bottom, 0px)
+    );
+  }
+}
+
+/* ── Wand widget ────────────────────────────────────────────────────────── */
+/*
+ * The gradient ring on the floating wand button pulses gently to draw
+ * attention when closed. Suppressed by prefers-reduced-motion via the
+ * motion-reduce: Tailwind variant on the element itself.
+ */
+@keyframes wand-ring-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.04);
+  }
+}
+
+/* ── chat_ux_v2 mobile chat chrome ─────────────────────────────────────── */
+/*
+ * While a v2 mobile chat surface is mounted (chat-shell-client sets the body
+ * attribute below md), the chat screen owns its own slim header — so the app
+ * shell's top bar and the ConversationNav mobile trigger hide. Client-side
+ * navigation away from the chat removes the attribute and restores both.
+ */
+@media (max-width: 767px) {
+  body[data-chat-ux-v2-mobile="1"] [data-shell-topbar],
+  body[data-chat-ux-v2-mobile="1"] [data-conversation-nav-trigger] {
+    display: none;
+  }
+}

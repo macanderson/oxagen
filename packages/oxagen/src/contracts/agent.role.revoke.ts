@@ -16,14 +16,14 @@ export const agentRoleRevoke = registerCapability({
     "Revoke an IAM role from an agent's delegated principal — soft-deletes the principal_role_assignments row (audit trail preserved). Idempotent: returns revoked=false when the agent did not hold the role. Audited with principal_kind='agent'.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["api", "mcp", "unit", "docs", "app"],
+  layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "mutation" },
   sensitivity: "high",
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
-    workspace: { Owner: "allow" },
+    workspace: {},
   },
   input: z.object({
     agentId: z

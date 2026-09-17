@@ -37,8 +37,8 @@ export async function agentDefinitionDeleteHandler(
       .update(schema.agents)
       .set({
         deletedAt: new Date(),
-        deletedByUserId: userId,
-        updatedByUserId: userId,
+        deletedById: userId,
+        updatedById: userId,
       })
       .where(
         and(
@@ -61,7 +61,7 @@ export async function agentDefinitionDeleteHandler(
         .update(schema.principals)
         .set({
           status: "deleted",
-          updatedByUserId: userId,
+          updatedById: userId,
         })
         .where(eq(schema.principals.id, row.principalId));
     }

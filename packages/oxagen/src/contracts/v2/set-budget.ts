@@ -41,10 +41,14 @@ import { workspaceBudgetPolicyRead } from "../workspace.budget_policy.read";
  *    new state without a second round trip. That is v1 `set_spend_budget`'s
  *    round-trip behaviour, widened to the levels §12.5 adds.
  *
- * Amounts stay plain USD numbers rather than A.8's `limit_micros`, carried from
- * the v1 contracts along with the reason: the handler converts, so the client
- * never juggles bigints. §12.3's integer-micro-USD rule governs cost records
- * and statement lines, not the ceiling a human types.
+ * Amounts are `Money` — integer micro-units in a decimal string with their
+ * currency — carried from `set_spend_budget`, which moved to that shape with
+ * the rest of the billing contracts (ADR-057 decision 2). A ceiling is A.8's
+ * `limit_micros` on the way in as well as on the way out, so §12.3's
+ * integer-micro rule now governs the ceiling a human types the same way it
+ * governs the cost records it is compared against, and no float sits between
+ * the two. `update_user_budget`'s plain-USD `limitUsd` carries into it as a
+ * rename, declared below.
  */
 
 // Carried by import and widened per §12.5: "Each budget belongs to an
@@ -150,6 +154,14 @@ export const setBudget = defineTool({
     "update_user_budget",
     "get_user_budget",
     "get_budget_policy",
+  ],
+  renames: [
+    {
+      from: "limitUsd",
+      source: "update_user_budget",
+      to: "limit",
+      why: "The ceiling is `Money` — integer micro-units with a currency (ADR-057 decision 2) — carried by import from `set_spend_budget`, whose own `limitUsd` moved to `limit` in the same change. `update_user_budget`'s plain-USD number is the same ceiling in the weaker encoding, so this is a rename onto the carried field, not a second amount",
+    },
   ],
   drops: [
     {

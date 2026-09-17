@@ -31,15 +31,25 @@ import {
   TACHO_HARNESS_LABELS,
   type TachoHarness,
   tachoHarnessSchema,
+  type TokenEnrollmentResponse,
+  tokenEnrollmentResponseSchema,
 } from "../wire";
 import {
   type CliDeps,
   type CredentialOptions,
+  resolveApiUrl,
   resolveCredentials,
 } from "./deps";
 import { revokeAndMark, stripEnrollmentHooks } from "./unenroll";
 
 export interface EnrollOptions extends CredentialOptions {
+  /**
+   * A one-time enrollment token from `create_enrollment_token` (`oxagen
+   * agent enroll --token …`). With one, no session, org or workspace is
+   * needed: the control plane resolves the tenant and the agent from the
+   * token, and the host file records what it answered.
+   */
+  enrollmentToken?: string;
   managed?: boolean;
   printManaged?: boolean;
   port?: number;
@@ -108,6 +118,35 @@ function listLabels(harnesses: readonly TachoHarness[]): string {
   return `${labels.slice(0, -1).join(", ")} and ${labels.at(-1) ?? ""}`;
 }
 
+async function postEnrollment(
+  deps: CliDeps,
+  apiUrl: string,
+  path: string,
+  headers: Record<string, string>,
+  body: Record<string, unknown>,
+): Promise<string> {
+  let response: Awaited<ReturnType<CliDeps["fetch"]>>;
+  try {
+    response = await deps.fetch(`${apiUrl}${path}`, {
+      method: "POST",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+        "User-Agent": `tacho/${deps.wrapperVersion}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    throw new Error(
+      `cannot reach ${apiUrl}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  const text = await response.text();
+  if (!response.ok) throw new ControlError(response.status, text);
+  return text;
+}
+
+/** The operator's path: the CLI's own session against the org and workspace it picked. */
 async function callEnrollment(
   deps: CliDeps,
   credentials: {
@@ -118,26 +157,31 @@ async function callEnrollment(
   },
   body: Record<string, unknown>,
 ): Promise<ReturnType<typeof enrollmentResponseSchema.parse>> {
-  const url = `${credentials.apiUrl}/v1/${credentials.org}/${credentials.workspace}/tacho/enrollments`;
-  let response: Awaited<ReturnType<CliDeps["fetch"]>>;
-  try {
-    response = await deps.fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${credentials.token}`,
-        "Content-Type": "application/json",
-        "User-Agent": `tacho/${deps.wrapperVersion}`,
-      },
-      body: JSON.stringify(body),
-    });
-  } catch (error) {
-    throw new Error(
-      `cannot reach ${credentials.apiUrl}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-  const text = await response.text();
-  if (!response.ok) throw new ControlError(response.status, text);
+  const text = await postEnrollment(
+    deps,
+    credentials.apiUrl,
+    `/v1/${credentials.org}/${credentials.workspace}/tacho/enrollments`,
+    { Authorization: `Bearer ${credentials.token}` },
+    body,
+  );
   return enrollmentResponseSchema.parse(JSON.parse(text));
+}
+
+/** The token path: no credential but the one-time token in the body (`enroll_host`). */
+async function callTokenEnrollment(
+  deps: CliDeps,
+  apiUrl: string,
+  body: Record<string, unknown>,
+): Promise<TokenEnrollmentResponse> {
+  const text = await postEnrollment(deps, apiUrl, "/v1/tacho/enroll", {}, body);
+  return tokenEnrollmentResponseSchema.parse(JSON.parse(text));
+}
+
+/** The git remote of the working directory, for the gate's "Repository detected" offer; undefined outside a repository. */
+function repositoryRemote(deps: CliDeps): string | undefined {
+  const result = deps.exec("git", ["config", "--get", "remote.origin.url"]);
+  const remote = result.status === 0 ? result.stdout.trim() : "";
+  return remote.length > 0 ? remote : undefined;
 }
 
 /**
@@ -214,33 +258,51 @@ export async function enroll(
       );
       return { ok: false, warnings };
     }
-    step(1, "Authenticating with Oxagen");
-    // A harness addition stays in the host's own org and workspace: the
-    // token may come from flags, env or config.json, the pair may not.
-    const resolved = resolveCredentials(
-      live
-        ? {
-            ...options,
-            org: existing.org_slug,
-            workspace: existing.workspace_slug,
-            apiUrl: options.apiUrl ?? existing.api_url,
-          }
-        : options,
-      deps.env,
-      deps.home,
-    );
-    if ("missing" in resolved) {
-      deps.err(
-        `Not logged in. Provide ${resolved.missing.join(", ")} or run \`oxagen login\` first.`,
+    // The token path carries its own credential; the operator path needs the
+    // CLI's session and a picked org and workspace.
+    let credentials:
+      | { token: string; org: string; workspace: string; apiUrl: string }
+      | undefined;
+    const apiUrl = resolveApiUrl(options, deps.env, deps.home);
+    if (options.enrollmentToken !== undefined) {
+      step(1, "Presenting the one-time enrollment token");
+    } else {
+      step(1, "Authenticating with Oxagen");
+      // A harness addition stays in the host's own org and workspace: the
+      // token may come from flags, env or config.json, the pair may not.
+      const resolved = resolveCredentials(
+        live
+          ? {
+              ...options,
+              org: existing.org_slug,
+              workspace: existing.workspace_slug,
+              apiUrl: options.apiUrl ?? existing.api_url,
+            }
+          : options,
+        deps.env,
+        deps.home,
       );
-      return { ok: false, warnings };
+      if ("missing" in resolved) {
+        deps.err(
+          `Not logged in. Provide ${resolved.missing.join(", ")} or run \`oxagen login\` first.`,
+        );
+        return { ok: false, warnings };
+      }
+      credentials = resolved.credentials;
     }
-    const { credentials } = resolved;
     const managed =
       options.managed === true ||
       options.printManaged === true ||
       (live && existing.managed);
     if (live) {
+      // Adding a harness revokes the live enrollment first, which takes the
+      // CLI's session; a one-time token cannot revoke.
+      if (credentials === undefined) {
+        deps.err(
+          "Adding a harness to an enrolled host needs the CLI's session: run `oxagen login` and enroll again. A one-time token enrolls an agent that has no live host, so to use one here, revoke this host first (`oxagen login`, then `tacho unenroll`, or revoke it from the fleet page) and enroll with a new token.",
+        );
+        return { ok: false, warnings };
+      }
       harnesses = [...(existing.harnesses as TachoHarness[]), ...added];
       deps.out(
         `      adding ${added.join(", ")} to ${existing.agent_key}: revoking ${existing.host_enrollment_id} and enrolling again for ${harnesses.join(", ")} so the control plane's host record follows (device key, port and local token kept)`,
@@ -269,32 +331,53 @@ export async function enroll(
     const stella = harnesses.includes("stella") ? deps.stella() : {};
     step(
       3,
-      `Enrolling ${deps.hostname} in ${credentials.org}/${credentials.workspace} for ${harnesses.join(", ")}`,
+      credentials
+        ? `Enrolling ${deps.hostname} in ${credentials.org}/${credentials.workspace} for ${harnesses.join(", ")}`
+        : `Enrolling ${deps.hostname} for ${harnesses.join(", ")}`,
     );
+    const facts = {
+      hostname: deps.hostname,
+      osUser: deps.osUser,
+      platform: deps.platform,
+      osVersion: deps.osVersion,
+      arch: deps.arch,
+      devicePublicKey: key.publicKey,
+      harnesses,
+      ...(claude.version !== undefined
+        ? { claudeVersion: claude.version }
+        : {}),
+      ...(claude.path !== undefined ? { claudeExecpath: claude.path } : {}),
+      nodeVersion: deps.nodeVersion,
+      wrapperVersion: deps.wrapperVersion,
+      ...(deps.env["SHELL"] !== undefined ? { shell: deps.env["SHELL"] } : {}),
+      managed,
+      validityDays: options.validityDays ?? 180,
+    };
     let response: Awaited<ReturnType<typeof callEnrollment>>;
+    let tenant: { orgSlug: string; workspaceSlug: string };
     try {
-      response = await callEnrollment(deps, credentials, {
-        hostname: deps.hostname,
-        osUser: deps.osUser,
-        platform: deps.platform,
-        osVersion: deps.osVersion,
-        arch: deps.arch,
-        devicePublicKey: key.publicKey,
-        harnesses,
-        ...(claude.version !== undefined
-          ? { claudeVersion: claude.version }
-          : {}),
-        ...(claude.path !== undefined ? { claudeExecpath: claude.path } : {}),
-        nodeVersion: deps.nodeVersion,
-        wrapperVersion: deps.wrapperVersion,
-        ...(deps.env["SHELL"] !== undefined
-          ? { shell: deps.env["SHELL"] }
-          : {}),
-        managed: managed,
-        validityDays: options.validityDays ?? 180,
-      });
+      if (credentials) {
+        response = await callEnrollment(deps, credentials, facts);
+        tenant = {
+          orgSlug: credentials.org,
+          workspaceSlug: credentials.workspace,
+        };
+      } else {
+        const remote = repositoryRemote(deps);
+        const answer = await callTokenEnrollment(deps, apiUrl, {
+          token: options.enrollmentToken,
+          ...facts,
+          ...(remote !== undefined ? { repositoryRemote: remote } : {}),
+        });
+        response = answer;
+        tenant = {
+          orgSlug: answer.orgSlug,
+          workspaceSlug: answer.workspaceSlug,
+        };
+      }
     } catch (error) {
       if (
+        credentials &&
         error instanceof ControlError &&
         (error.status === 401 || error.status === 403)
       ) {
@@ -305,6 +388,16 @@ export async function enroll(
           error.status === 401
             ? `Oxagen refused the enrollment (401)${reason}: your token is invalid or expired. Run \`oxagen login\` and enroll again.`
             : `Oxagen refused the enrollment (403)${reason}: your token cannot create Tacho enrollments in ${credentials.org}/${credentials.workspace}. Enrolling a host takes an org Owner or Admin; run \`oxagen login\` as one and enroll again.`,
+        );
+      } else if (
+        !credentials &&
+        error instanceof ControlError &&
+        (error.status === 404 || error.status === 409)
+      ) {
+        // enroll_host: an unknown token is 404; a used or expired one is 409
+        // (single use), and the body names which.
+        deps.err(
+          `Oxagen rejected the enrollment token (${error.status}): ${error.body.slice(0, 256)}. Issue a new token from the Agents page or \`oxagen agent register\`.`,
         );
       } else {
         deps.err(
@@ -331,9 +424,9 @@ export async function enroll(
       agent_key: response.agentKey,
       organization_id: response.enrollment.claims.organization_id,
       workspace_id: response.enrollment.claims.workspace_id,
-      org_slug: credentials.org,
-      workspace_slug: credentials.workspace,
-      api_url: credentials.apiUrl,
+      org_slug: tenant.orgSlug,
+      workspace_slug: tenant.workspaceSlug,
+      api_url: apiUrl,
       api_key: response.apiKey,
       api_key_public_id: response.apiKeyPublicId,
       ...(response.gatewayApiKey !== undefined

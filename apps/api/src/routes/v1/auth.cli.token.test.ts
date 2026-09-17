@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@oxagen/auth/cli-auth", () => ({
+  CLI_SESSION_SCOPE_PURPOSE: "cli_session_v1",
   consumeCliAuthCode: mocks.consumeCliAuthCode,
   verifyPkceS256: mocks.verifyPkceS256,
 }));
@@ -140,9 +141,9 @@ describe("POST /token — happy path", () => {
         keyPrefix: "ox_testrawke",
         keyHash: "sha256hexhash",
         name: VALID_CODE_DATA.label,
-        scope: {},
-        createdByUserId: VALID_CODE_DATA.userId,
-        updatedByUserId: VALID_CODE_DATA.userId,
+        scope: { purpose: "cli_session_v1" },
+        createdById: VALID_CODE_DATA.userId,
+        updatedById: VALID_CODE_DATA.userId,
       }),
     );
   });

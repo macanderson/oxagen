@@ -293,6 +293,110 @@ describe("validateInlineEventPayload", () => {
     ).toThrow(RunSpecValidationError);
   });
 
+  it("accepts the in-app agent's engine receipts, keyed by the engine frame seq", () => {
+    const model = validateInlineEventPayload("model.engine_call_completed", {
+      engine_seq: 7,
+      model_call_id: "req_1",
+      role: "worker",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+      outcome: "completed",
+      input_tokens: 120,
+      output_tokens: 40,
+      cached_input_tokens: 100,
+    });
+    expect(model.stage).toBe("model");
+    expect(retentionContentClassOf("model.engine_call_completed")).toBe(
+      "model_call",
+    );
+    const tool = validateInlineEventPayload("tool.engine_call_completed", {
+      engine_seq: 9,
+      tool_call_id: "req_2",
+      tool_name: "search_tools",
+      outcome: "completed",
+      input_digest: DIGEST_A,
+      output_digest: DIGEST_B,
+      duration_ms: 12,
+    });
+    expect(tool.stage).toBe("tool");
+    expect(retentionContentClassOf("tool.engine_call_completed")).toBe(
+      "tool_call",
+    );
+  });
+
+  it("accepts the write-ahead model intention and keeps it unreadable as a call", () => {
+    const started = validateInlineEventPayload("model.engine_call_started", {
+      engine_seq: 7,
+      model_call_id: "req_1",
+      role: "worker",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+    });
+    expect(started.stage).toBe("model");
+    expect(retentionContentClassOf("model.engine_call_started")).toBe(
+      "model_call",
+    );
+    // The intention states no outcome and no token counts. A reader that
+    // mistook one for a completed call would report a charge that was never
+    // made, so the fields it would test are refused outright rather than
+    // merely left unset.
+    expect(() =>
+      validateInlineEventPayload("model.engine_call_started", {
+        engine_seq: 7,
+        model_call_id: "req_1",
+        role: "worker",
+        provider: "oxagen",
+        model: "m",
+        outcome: "completed",
+      }),
+    ).toThrow(RunSpecValidationError);
+    expect(() =>
+      validateInlineEventPayload("model.engine_call_started", {
+        engine_seq: 7,
+        model_call_id: "req_1",
+        role: "worker",
+        provider: "oxagen",
+        model: "m",
+        input_tokens: 120,
+      }),
+    ).toThrow(RunSpecValidationError);
+  });
+
+  it("rejects an engine receipt that carries prose or an unknown key", () => {
+    expect(() =>
+      validateInlineEventPayload("tool.engine_call_completed", {
+        engine_seq: 9,
+        tool_call_id: "req_2",
+        tool_name: "search_tools",
+        outcome: "completed",
+        input_digest: DIGEST_A,
+        duration_ms: 12,
+        output: "the rows the model was shown",
+      }),
+    ).toThrow(ForbiddenEventPayloadFieldError);
+    expect(() =>
+      validateInlineEventPayload("tool.engine_call_completed", {
+        engine_seq: 9,
+        tool_call_id: "req_2",
+        tool_name: "search_tools",
+        outcome: "completed",
+        input_digest: DIGEST_A,
+        duration_ms: 12,
+        rows_shown: 8,
+      }),
+    ).toThrow(RunSpecValidationError);
+    expect(() =>
+      validateInlineEventPayload("model.engine_call_completed", {
+        engine_seq: -1,
+        model_call_id: "req_1",
+        role: "worker",
+        provider: "oxagen",
+        model: "m",
+        outcome: "completed",
+      }),
+    ).toThrow(RunSpecValidationError);
+  });
+
   it("digests independently of key order", () => {
     const a = validateInlineEventPayload("checkout.unavailable", {
       reason_code: "sandbox_unavailable",

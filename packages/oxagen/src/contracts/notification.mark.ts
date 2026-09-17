@@ -12,8 +12,11 @@ export const notificationsMark = registerCapability({
     "Mark a notification as read and/or archived for the calling user.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["api", "docs", "mcp", "unit", "app"],
+  layers: ["api", "docs", "mcp", "unit"],
   scoped: true,
+  // Marking your own notification read is a settings write, never a governed
+  // action (ADR-052 exclusion 2). The write is the record of the mark.
+  noBillingGate: true,
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {

@@ -176,8 +176,8 @@ lives in Neo4j). Tables defined in <code>packages/database/src/schema/billing.ts
 <table>
 <tr><th>Tier</th><th>Price</th><th>Notes</th></tr>
 <tr><td><code>free</code></td><td>$0</td><td>500 non-expiring signup credits ($5). Cannot buy credit packs (must subscribe first).</td></tr>
-<tr><td><code>build</code></td><td>$20/mo</td><td>Self-serve growth tier.</td></tr>
-<tr><td><code>scale</code></td><td>$99/mo</td><td>Higher included credits + seats.</td></tr>
+<tr><td><code>build</code></td><td>$199/mo</td><td>Self-serve growth tier.</td></tr>
+<tr><td><code>scale</code></td><td>$999/mo</td><td>Higher included credits + seats.</td></tr>
 <tr><td><code>enterprise</code></td><td>$500/mo</td><td>Sales-led. Gates ACLs / SSO / SCIM / immutable audit (<code>entitlements.ts</code>).</td></tr>
 </table>
 <p>Tier feature gates are pure functions of the tier in <code>entitlements.ts</code> (<code>requireTier</code>,

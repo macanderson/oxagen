@@ -34,6 +34,7 @@ import {
   stripeClient,
   SUBSCRIPTION_PLANS,
   CREDIT_PACKS,
+  FREE_PLAN_SLUG,
   PROVIDER_RATE_CARD,
   type DerivedProduct,
 } from "@oxagen/billing";
@@ -438,11 +439,18 @@ async function upsertPlans(
       // 1 credit = 1 cent → included credit count == included credit cents.
       includedCreditCents: plan.includedCredits,
       includedSeats: plan.seats,
-      // `billing.plans.included_actions_annual` is NOT NULL DEFAULT 25000 — the
-      // FREE allowance. Omitting it here priced every paid plan this script
-      // created at one fifteenth of Scale's allowance and billed governed-action
-      // overage from action 25,001, on the PRIMARY meter under ADR-052.
-      includedActionsAnnual: BigInt(plan.includedActionsAnnual),
+      // ADR-055 §2: the tier's published GAU terms, read live by
+      // resolveContractTerms for an org with no negotiated agreement.
+      currency: plan.gauTerms.currency,
+      ratePerGauMicros: plan.gauTerms.ratePerGauMicros,
+      blockSizeGau: plan.gauTerms.blockSizeGau,
+      // The published allowance is `included_gau_per_month` now. #2999 had this
+      // row also write `included_actions_annual`, because that column was NOT
+      // NULL DEFAULT 25000 and omitting it put every paid plan this script
+      // created on the free allowance. The 2026-09-15 counter drop removed the
+      // column, so the figure it protected is the monthly GAU allowance above
+      // and there is nothing left to omit.
+      includedGauPerMonth: plan.gauTerms.includedGauPerMonth,
       features: plan.features,
       isPublic: true,
     };
@@ -467,7 +475,10 @@ async function upsertPlans(
           annualCents: row.annualCents,
           includedCreditCents: row.includedCreditCents,
           includedSeats: row.includedSeats,
-          includedActionsAnnual: row.includedActionsAnnual,
+          currency: row.currency,
+          ratePerGauMicros: row.ratePerGauMicros,
+          blockSizeGau: row.blockSizeGau,
+          includedGauPerMonth: row.includedGauPerMonth,
           features: row.features,
           updatedAt: new Date(),
         },
@@ -484,11 +495,15 @@ async function upsertPlans(
 
   // Reconcile deletions. upsertPlans only ever *adds* the canonical plans, so
   // without this step any row that drops out of the source of truth — a legacy
-  // pre-`-v2` slug, the seeded `free` tier, an e2e-test plan — lingers with
+  // pre-`-v2` slug, an e2e-test plan — lingers with
   // is_public = true and surfaces in the billing UI as a duplicate/unrelated
   // plan. Tombstone (is_public = false) rather than DELETE: subscriptions FK
   // billing.plans, and the row is still needed to name historical plans.
-  const canonicalSlugs = SUBSCRIPTION_PLANS.map((p) => p.slug);
+  // Free is written by seedPlatform, not by this script, and stays public.
+  const canonicalSlugs = [
+    FREE_PLAN_SLUG,
+    ...SUBSCRIPTION_PLANS.map((p) => p.slug),
+  ];
   if (apply) {
     const hidden = await d
       .update(schema.plans)

@@ -55,7 +55,7 @@ export const schemaLabelDeleteHandler: CapabilityHandler<
     // Soft-delete properties owned by this label
     await tx
       .update(db.schemaProperties)
-      .set({ deletedAt: now, updatedByUserId: ctx.userId })
+      .set({ deletedAt: now, updatedById: ctx.userId })
       .where(
         and(
           eq(db.schemaProperties.nodeLabelId, labelRow.id),
@@ -66,7 +66,7 @@ export const schemaLabelDeleteHandler: CapabilityHandler<
     // Soft-delete label
     await tx
       .update(db.nodeLabels)
-      .set({ deletedAt: now, updatedByUserId: ctx.userId })
+      .set({ deletedAt: now, updatedById: ctx.userId })
       .where(eq(db.nodeLabels.id, labelRow.id));
 
     return true;

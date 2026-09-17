@@ -24,6 +24,7 @@ _None._
 | slug | string | URL slug (unique within the org) |
 | description | string \| null | Free-text description (stored in the settings bag) |
 | avatarUrl | string \| null | `https://` URL or `avatar:v1:<json>` designed-avatar spec; `null` when unset |
+| consequenceRoles | Record<tag, OrgRole[]> | The effective consequence-role map for mandates (ADR-059 decision 1): every starter tag plus the workspace's own, with the org roles that may grant, change or revoke a mandate for it; the stored overrides applied over `DEFAULT_CONSEQUENCE_ROLES` |
 
 ## Side effects
 

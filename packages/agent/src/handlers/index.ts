@@ -53,6 +53,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   list_memory_citations: () => import("./agent.memory_citation.list"),
   get_citation_stats: () => import("./agent.memory_citation.stats"),
   resolve_approval: () => import("./agent.approval.resolve"),
+  list_approvals: () => import("./agent.approval.list"),
   list_executions: () => import("./agent.execution.list"),
   get_execution_trace: () => import("./agent.trace.get"),
   debug_execution: () => import("./agent.debug.trace"),
@@ -66,6 +67,10 @@ const LOADERS: Record<string, LoaderEntry> = {
   publish_agent_def: () => import("./agent.definition.publish"),
   get_agent_def: () => import("./agent.definition.get"),
   list_agent_defs: () => import("./agent.definition.list"),
+  // Agent identity (MC spec §6.2, #2956): the identities table and the one
+  // identity read with credentials, roles, hosts and the definition of record.
+  list_agents: () => import("./agent.list"),
+  get_agent: () => import("./agent.get"),
   deploy_agent: () => import("./agent.deploy"),
   // Agent RBAC role assignment (docs/specs/agent-rbac/spec.md §3.2) — attach/
   // detach/inspect IAM roles on an agent's delegated principal.
@@ -73,6 +78,12 @@ const LOADERS: Record<string, LoaderEntry> = {
   revoke_agent_role: () => import("./agent.role.revoke"),
   list_agent_roles: () => import("./agent.role.list"),
   get_agent_role: () => import("./agent.role.get"),
+  // The in-app agent on stella-serve (#2968, ADR-053): the turn, the engine
+  // probe, and the two belt meta-tools outside a turn.
+  ask_assistant: () => import("./assistant.ask"),
+  get_assistant_engine: () => import("./assistant.engine.get"),
+  search_tools: () => import("./tools.search"),
+  load_tools: () => import("./tools.load"),
 };
 
 /** Capability names this package supplies handlers for. Consumed by

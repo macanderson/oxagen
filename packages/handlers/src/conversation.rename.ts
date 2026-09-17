@@ -24,7 +24,7 @@ export const conversationRenameHandler: CapabilityHandler<
       .set({
         title: input.title,
         updatedAt: now,
-        updatedByUserId: userId,
+        updatedById: userId,
       })
       .where(
         and(

@@ -1,35 +1,11 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
-
-// Mirrors SpendBudgetPeriod / SpendBudgetScope in @oxagen/billing (literal to
-// keep the contract layer dependency-light). The values are a locked API surface.
-const spendPeriod = z.enum(["monthly", "rolling"]);
-const spendScope = z.enum(["org", "workspace"]);
-const spendState = z.enum([
-  "ok",
-  "threshold_50",
-  "threshold_80",
-  "threshold_95",
-  "exceeded",
-]);
-
-// The saved ceiling with its live burn (same shape get_spend_budget returns per
-// scope) so a set round-trips the new state the panel should render immediately.
-const spendBudgetStatus = z.object({
-  scope: spendScope,
-  publicId: z.string().nullable(),
-  enabled: z.boolean(),
-  period: spendPeriod,
-  windowDays: z.number().int().positive().nullable(),
-  limitUsd: z.number().nonnegative().nullable(),
-  spentUsd: z.number().nonnegative(),
-  projectedUsd: z.number().nonnegative(),
-  ratio: z.number().nonnegative(),
-  state: spendState,
-  reachedThreshold: z.number().int().nonnegative(),
-  windowStart: z.string(),
-  windowEnd: z.string(),
-});
+import { moneySchema } from "./spend.shared";
+import {
+  spendBudgetStatus,
+  spendPeriod,
+  spendScope,
+} from "./billing.budget.get";
 
 // The base object (before the cross-field refine) so surfaces that need the
 // field shape — the MCP tool's xmcp schema — can read `.shape`; a refined
@@ -44,28 +20,42 @@ export const spendBudgetSetInputObject = z.object({
   period: spendPeriod,
   /** Required for "rolling" (trailing N days, > 0); must be omitted/null for "monthly". */
   windowDays: z.number().int().positive().nullable().optional(),
-  /** The hard ceiling in USD (> 0). */
-  limitUsd: z.number().positive(),
+  /**
+   * The hard ceiling in micro-units (> 0). The store records the ceiling in
+   * micro-USD (`billing.spend_budgets.limit_micros`), so `currency` is `USD`.
+   */
+  limit: moneySchema,
 });
 
-// Mirror the DB CHECK: a rolling budget carries a positive window; a monthly one must not.
-const spendBudgetSetInput = spendBudgetSetInputObject.refine(
-  (v) =>
-    v.period === "rolling"
-      ? v.windowDays != null && v.windowDays > 0
-      : v.windowDays == null,
-  {
+// Mirror the DB CHECK: a rolling budget carries a positive window; a monthly
+// one must not. A ceiling is positive and in the store's currency.
+const spendBudgetSetInput = spendBudgetSetInputObject
+  .refine(
+    (v) =>
+      v.period === "rolling"
+        ? v.windowDays != null && v.windowDays > 0
+        : v.windowDays == null,
+    {
+      message:
+        "windowDays is required (and > 0) for period 'rolling', and must be omitted for 'monthly'",
+      path: ["windowDays"],
+    },
+  )
+  .refine((v) => v.limit.currency === "USD", {
     message:
-      "windowDays is required (and > 0) for period 'rolling', and must be omitted for 'monthly'",
-    path: ["windowDays"],
-  },
-);
+      "limit.currency must be USD: the store records ceilings in micro-USD",
+    path: ["limit", "currency"],
+  })
+  .refine((v) => /^[1-9]\d*$/.test(v.limit.micros), {
+    message: "limit.micros must be a positive integer",
+    path: ["limit", "micros"],
+  });
 
 export const billingBudgetSet = registerCapability({
   name: "set_spend_budget",
   domain: "billing",
   description:
-    "Set (create or replace) the hard period-to-date spend ceiling for one scope — the org-level ceiling that covers every workspace, or this workspace's own ceiling. Choose the window (monthly = calendar month to date; rolling = a trailing N-day window), the USD limit, and whether it is enforced. Over-ceiling agent runs are denied at invoke() before any provider call; RAISING a ceiling here is the org-admin override that clears a denial (IAM-gated and audited). Owner / Admin / Billing only.",
+    "Set (create or replace) the hard period-to-date spend ceiling for one scope — the org-level ceiling that covers every workspace, or this workspace's own ceiling. Choose the window (monthly = calendar month to date; rolling = a trailing N-day window), the limit in micro-units, and whether it is enforced. Over-ceiling agent runs are denied at invoke() before any provider call; RAISING a ceiling here is the org-admin override that clears a denial (IAM-gated and audited). Owner / Admin / Billing only.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "docs", "mcp", "unit", "app"],

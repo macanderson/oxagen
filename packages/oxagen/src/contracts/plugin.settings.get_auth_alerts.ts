@@ -20,7 +20,7 @@ export const pluginSettingsGetAuthAlerts = registerCapability({
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },
-  layers: ["api", "docs", "mcp", "unit", "app"],
+  layers: ["api", "docs", "mcp", "unit"],
   scoped: true,
   // A notification-preference read; must not consume credits or be balance-gated.
   noBillingGate: true,

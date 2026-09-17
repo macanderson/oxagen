@@ -58,7 +58,7 @@
             "updatedAt": {
               "type": "string"
             },
-            "createdByUserId": {
+            "createdById": {
               "anyOf": [
                 {
                   "type": "string"
@@ -68,7 +68,7 @@
                 }
               ]
             },
-            "updatedByUserId": {
+            "updatedById": {
               "anyOf": [
                 {
                   "type": "string"
@@ -88,7 +88,7 @@
                 }
               ]
             },
-            "deletedByUserId": {
+            "deletedById": {
               "anyOf": [
                 {
                   "type": "string"
@@ -183,10 +183,10 @@
             "publicId",
             "createdAt",
             "updatedAt",
-            "createdByUserId",
-            "updatedByUserId",
+            "createdById",
+            "updatedById",
             "deletedAt",
-            "deletedByUserId",
+            "deletedById",
             "orgId",
             "workspaceId",
             "pluginType",

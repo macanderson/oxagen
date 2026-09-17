@@ -15,9 +15,51 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-vi.mock("@oxagen/iam", () => ({
+// The audit sink is stubbed; the delegation ceiling runs for real over the
+// fake transaction below (its reads are the same select chains).
+vi.mock("@oxagen/iam", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/iam")>()),
   emitAudit: mocks.emitAudit,
 }));
+
+// The role gate reads iam.principal_role_assignments and the key's creator
+// from auth.api_keys; the tests decide both. role-check.test.ts in
+// packages/handlers pins the call shape.
+const gate = vi.hoisted(() => ({
+  keyCreator: "u_creator" as string | null,
+  orgRole: "Owner" as string | null,
+  calls: [] as { userId: string | null; org: readonly string[] }[],
+}));
+vi.mock("@oxagen/iam/org-role", async () => {
+  const { HandlerError } = await import("@oxagen/oxagen");
+  return {
+    resolveActingUserId: async (c: {
+      userId: string | null;
+      apiKeyId: string | null;
+    }) => c.userId ?? (c.apiKeyId ? gate.keyCreator : null),
+    assertOrgRole: async (
+      actor: { userId: string | null },
+      required: { org: readonly string[] },
+    ) => {
+      gate.calls.push({ userId: actor.userId, org: required.org });
+      if (!actor.userId) {
+        throw new HandlerError({
+          code: "forbidden",
+          reason: "no_principal",
+          message: "No signed-in user on the request",
+        });
+      }
+      if (gate.orgRole === null || !required.org.includes(gate.orgRole)) {
+        throw new HandlerError({
+          code: "forbidden",
+          reason: "org_role_required",
+          message: `Requires one of the org roles ${required.org.join(", ")}`,
+        });
+      }
+      return gate.orgRole;
+    },
+  };
+});
 
 import { agentRoleAssignHandler } from "./agent.role.assign";
 import {
@@ -26,7 +68,6 @@ import {
   AgentRoleNotAssignableError,
   AgentRoleNotFoundError,
 } from "./_agent-role";
-import { TierDeniedError } from "@oxagen/billing";
 import { makeCTX } from "../test-utils/fixtures";
 
 const AGENT_ROW = {
@@ -61,6 +102,9 @@ const CTX_ENTERPRISE = makeCTX({ planTier: "enterprise" });
 beforeEach(() => {
   fake.reset();
   mocks.emitAudit.mockClear();
+  gate.keyCreator = "u_creator";
+  gate.orgRole = "Owner";
+  gate.calls = [];
 });
 
 describe("agent.role.assign handler", () => {
@@ -140,14 +184,35 @@ describe("agent.role.assign handler", () => {
     expect(fake.mutations.insert).toBe(0);
   });
 
-  it("gates CUSTOM roles to enterprise (TierDeniedError on lower tiers)", async () => {
-    fake.enqueue([AGENT_ROW], [CUSTOM_ROLE]);
-    const err = await agentRoleAssignHandler(
+  // ADR-069 removed the tier gate from create_role and set_role_grants but
+  // left this one, so on Free, Build and Scale the Roles editor created custom
+  // roles that nothing could bind — a working editor and an invisible wall at
+  // the last step. The tier decides whether the kernel RESOLVES a grant, which
+  // list_iam_roles reports as `enforcement`; it never decided whether a role
+  // may be held.
+  it("assigns a CUSTOM role at a non-enterprise tier, with no ceiling queries", async () => {
+    fake.enqueue(
+      [AGENT_ROW], // agent select
+      [CUSTOM_ROLE], // role select (custom)
+      [], // existing assignment select
+      [], // pra insert
+    );
+    const out = await agentRoleAssignHandler(
       { agentId: "agt_1", roleName: "Data Steward" },
       CTX_BUILD,
+    );
+    expect(out.assigned).toBe(true);
+    expect(fake.mutations.insert).toBe(1);
+  });
+
+  // The ceiling is still the control, and it still runs where the resolver does.
+  it("still refuses a human org role at a non-enterprise tier (negative)", async () => {
+    fake.enqueue([AGENT_ROW], [{ ...SYSTEM_ROLE, name: "Owner" }]);
+    const err = await agentRoleAssignHandler(
+      { agentId: "agt_1", roleName: "Owner" },
+      CTX_BUILD,
     ).catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(TierDeniedError);
-    expect((err as TierDeniedError).code).toBe("TIER_DENIED");
+    expect(err).toBeInstanceOf(AgentRoleNotAssignableError);
     expect(fake.mutations.insert).toBe(0);
   });
 
@@ -263,11 +328,67 @@ describe("agent.role.assign handler", () => {
       /Agent not found/,
     );
   });
+});
 
-  it("rejects an unauthenticated call", async () => {
+describe("agent.role.assign — role gate (org Owner or Admin)", () => {
+  const forbidden = (reason: string) => ({ code: "forbidden", reason });
+
+  it("gates the signed-in user on org Owner or Admin", async () => {
+    fake.enqueue([AGENT_ROW], [SYSTEM_ROLE], [], []);
+    await agentRoleAssignHandler(INPUT, CTX_BUILD);
+    expect(gate.calls).toEqual([{ userId: "u_1", org: ["Owner", "Admin"] }]);
+  });
+
+  it("refuses an org Member before any query, and writes and audits nothing (negative)", async () => {
+    gate.orgRole = "Member";
+    await expect(
+      agentRoleAssignHandler(INPUT, CTX_BUILD),
+    ).rejects.toMatchObject(forbidden("org_role_required"));
+    expect(fake.mutations.insert).toBe(0);
+    expect(fake.mutations.update).toBe(0);
+    expect(mocks.emitAudit).not.toHaveBeenCalled();
+  });
+
+  it("refuses a call with no user and no API key with no_principal (negative)", async () => {
     await expect(
       agentRoleAssignHandler(INPUT, makeCTX({ userId: null, apiKeyId: null })),
-    ).rejects.toThrow(/Unauthorized/);
+    ).rejects.toMatchObject(forbidden("no_principal"));
+    expect(fake.mutations.insert).toBe(0);
+  });
+
+  describe("an API-key call acts as the key's creator", () => {
+    const KEY_CTX = makeCTX({
+      planTier: "build",
+      userId: null,
+      apiKeyId: "aky_1",
+    });
+
+    it("assigns for a creator who is an org Admin", async () => {
+      gate.orgRole = "Admin";
+      fake.enqueue([AGENT_ROW], [SYSTEM_ROLE], [], []);
+      const out = await agentRoleAssignHandler(INPUT, KEY_CTX);
+      expect(out.assigned).toBe(true);
+      expect(gate.calls).toEqual([
+        { userId: "u_creator", org: ["Owner", "Admin"] },
+      ]);
+      expect(fake.mutations.insert).toBe(1);
+    });
+
+    it("refuses a key whose creator is an org Member (negative)", async () => {
+      gate.orgRole = "Member";
+      await expect(
+        agentRoleAssignHandler(INPUT, KEY_CTX),
+      ).rejects.toMatchObject(forbidden("org_role_required"));
+      expect(fake.mutations.insert).toBe(0);
+    });
+
+    it("refuses a key with no creator (negative)", async () => {
+      gate.keyCreator = null;
+      await expect(
+        agentRoleAssignHandler(INPUT, KEY_CTX),
+      ).rejects.toMatchObject(forbidden("no_principal"));
+      expect(fake.mutations.insert).toBe(0);
+    });
   });
 });
 

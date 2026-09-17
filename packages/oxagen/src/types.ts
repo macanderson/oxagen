@@ -203,6 +203,18 @@ export interface CapabilityDeclaration<
    */
   noBillingGate?: boolean;
   /**
+   * When true, this capability is reachable only from a platform operator:
+   * the kernel refuses it before the IAM check unless the `CapabilityContext`
+   * carries a `platformOperator` binding minted by
+   * `createPlatformOperatorContext` (apps/app/ARCHITECTURE.md §3.9 item 12,
+   * INV-31). Pair it with `surfaces: []` so no surface can dispatch it either.
+   *
+   * Default false. The flag is a kernel-enforced authorization boundary, not
+   * documentation: `defaultRoles` cannot express "nobody in any organisation",
+   * because the IAM check allows every capability for a non-enterprise org.
+   */
+  platformOnly?: boolean;
+  /**
    * Sensitivity classification for this capability. Required — the IAM
    * resolver uses it for logging and the seed migration uses it for default
    * role-grant decisions.
@@ -367,6 +379,32 @@ export type CapabilityHandler<C extends CapabilityDeclaration> = (
  */
 export type PlanTier = "free" | "build" | "scale" | "enterprise";
 
+/**
+ * The workspace id an organization-level invoke carries (#3029).
+ *
+ * `invoke` enters a tenant scope for every scoped capability, and
+ * `runInTenantScope` asserts both ids are uuids, so a surface that has an org
+ * but no workspace cannot pass `""`: the call is refused with a
+ * `TenantScopeError` before any handler runs. This uuid-shaped constant names
+ * no workspace, so it satisfies the assertion without widening anything.
+ *
+ * Whether it is SOUND for a given table is a property of the table, not of the
+ * capability (ADR-068): `packages/database/src/tenant-policy.manifest.ts`
+ * records each one's class, and only `org_only` genuinely ignores the
+ * workspace GUC. A `standard` or `workspace_only` table compares the row's
+ * `workspace_id` against it and raises `42501` — which is not `23505`, so it
+ * escapes an `isUniqueViolation` catch and surfaces as a 500. A
+ * `workspace_nullable` table is worse: it raises nothing and simply hides
+ * every row carrying a real workspace, so a check-then-act reads zero. A
+ * capability reached under this sentinel that touches any of those three must
+ * first re-enter the target workspace's scope, or read org-wide through
+ * `withSystemDb` with an explicit `org_id` fence.
+ *
+ * Every surface builder uses this one constant: `apps/app`'s kernel seam and
+ * `apps/api`'s `capabilityContext` when a route needs no workspace.
+ */
+export const ORG_ONLY_WORKSPACE_ID = "00000000-0000-0000-0000-000000000000";
+
 export interface CapabilityContext {
   orgId: string;
   workspaceId: string;
@@ -387,8 +425,8 @@ export interface CapabilityContext {
    *
    * A capability could not previously tell which execution it was part of, so
    * the sole producer of `skill_loads` wrote `execution_step_id: null` on every
-   * row and the read-side join in `skill-telemetry.ts` had never returned
-   * anything (#2597). The key itself was not missing: each surface already
+   * row and the read-side join over it had never returned anything (#2597;
+   * both were deleted with #3098). The key itself was not missing: each surface already
    * computed one and handed it to the metered AI port, which is what fills
    * `token_usage.execution_step_id`. It simply had no name here, so three
    * surfaces each decided independently that some other id would double as it.
@@ -450,6 +488,38 @@ export interface CapabilityContext {
    * keeps `edit_repo_file` agent-only (spec §"Launch changes", item 1).
    */
   deployedAgentInvocation?: DeployedAgentInvocationContext;
+  /**
+   * Present ONLY on an invocation made by a platform operator running an
+   * operator script — the one way to reach a `platformOnly` capability
+   * (apps/app/ARCHITECTURE.md §3.9 item 12, INV-31).
+   *
+   * `createPlatformOperatorContext` (platform-operator.ts) mints it and records
+   * the object in a module-private registry; a literal `true`, a spread copy
+   * or any other value the registry does not hold fails
+   * `isKernelIssuedPlatformOperator` and the kernel refuses the whole
+   * invocation as a forged binding. No surface context builder mints one.
+   */
+  platformOperator?: PlatformOperatorBinding;
+}
+
+/**
+ * A kernel-minted marker that this invocation comes from a platform operator
+ * rather than from any organisation's surface.
+ *
+ * It carries no principal: a platform operator acts on an organisation's
+ * commercial terms, not as a member of it, so there is nobody in the tenant to
+ * name. The request id is the correlation key the audit row is found by.
+ *
+ * The `__kernelIssued` brand is declared with a module-private unique symbol,
+ * so no code outside this module can name the key — the compile-time half of
+ * the guarantee. The runtime half is the registry in platform-operator.ts,
+ * because a cast can defeat any purely structural brand.
+ */
+export interface PlatformOperatorBinding {
+  readonly principalKind: "platform_operator";
+  /** Correlation key for the operator run that minted this binding. */
+  readonly requestId: string;
+  readonly [kernelIssuedBrand]: true;
 }
 
 /**

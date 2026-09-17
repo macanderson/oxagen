@@ -77,7 +77,7 @@ export const schemaPropertyDeleteHandler: CapabilityHandler<
 
     await tx
       .update(db.schemaProperties)
-      .set({ deletedAt: new Date(), updatedByUserId: ctx.userId })
+      .set({ deletedAt: new Date(), updatedById: ctx.userId })
       .where(eq(db.schemaProperties.id, propRow.id));
 
     return true;

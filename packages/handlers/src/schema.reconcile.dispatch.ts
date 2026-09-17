@@ -61,7 +61,7 @@ export const schemaReconcileDispatchHandler: CapabilityHandler<
         state: initialState,
         startedAt: null,
         completedAt: null,
-        createdByUserId: ctx.userId ?? null,
+        createdById: ctx.userId ?? null,
       })
       .returning({
         id: db.agentExecutions.id,
