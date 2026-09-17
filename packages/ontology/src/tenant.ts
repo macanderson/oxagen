@@ -72,7 +72,7 @@ export type { GraphScope };
 // depth. `tenant.scope-guard.test.ts` carries a describe block asserting the
 // cross-tenant queries it is KNOWN to accept, so the gap stays visible. The
 // durable answer is to construct the scoping rather than validate it; see
-// docs/adr/ADR-082.
+// docs/adr/ADR-087.
 const SCOPE_GUARD = /\borgId\s*[:=]\s*\$orgId\b/;
 
 /**

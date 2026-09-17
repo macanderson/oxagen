@@ -1,4 +1,4 @@
-# ADR-082: The Neo4j tenancy seam constructs scoping rather than validating it
+# ADR-087: The Neo4j tenancy seam constructs scoping rather than validating it
 
 - **Status:** Proposed
 - **Date:** 2026-09-17
@@ -58,6 +58,24 @@ Four such queries are asserted as accepted in
 `packages/ontology/src/tenant.scope-guard.test.ts`, so the limitation is a
 recorded property of the seam rather than something the next reviewer
 rediscovers.
+
+### Why the test suite kept saying the guard was sound
+
+Across the six rounds the mutation table reached **0 survivors three times** —
+on three different guards, each of which permitted a cross-tenant read. That is
+worth stating as a general caution and not just a fact about this file:
+
+> A mutation score is evidence about the mutants you wrote. Every mutant here
+> was a mangling of the filter — a weaker regex, a dropped sanitiser, a coarser
+> position rule — and none was a query that satisfies the filter and still
+> leaks. So the score measured how well the tests detect damage to the check,
+> and never whether the check measures the right thing. A check can score
+> perfectly on the thing it does not measure.
+
+The cases that actually moved the work forward were never found by mutation.
+Each came from a reader constructing a query that passes. That asymmetry is the
+reason this ADR concludes the dimension is wrong rather than that the rule needs
+another refinement.
 
 ## Decision
 
