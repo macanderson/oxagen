@@ -89,17 +89,14 @@ describe("update_profile contract", () => {
     }
   });
 
-  // The handler acts on `ctx.userId` alone, and `resolveMcpContext` builds
-  // every MCP context with `userId: null` (an API key carries no person) —
-  // so an MCP tool for this capability could only ever answer `forbidden`.
-  // Advertising one is a broken surface; resolving the key's creator instead
-  // would let a machine credential rewrite a person's identity. API only.
-  it("is not exposed on MCP, agent or CLI: no surface can carry a person but the API", () => {
+  // MCP authenticates with an API key and `resolveMcpContext` builds every
+  // context with `userId: null`, so a machine credential has no own profile
+  // to change: an MCP tool here could only ever return forbidden. The surface
+  // list is pinned so the tool cannot be re-advertised without the principal
+  // arriving first.
+  it("carries no MCP surface while MCP contexts carry no person", () => {
     expect(userProfileUpdate.surfaces).toEqual(["api"]);
-    expect(userProfileUpdate.surfaces).not.toContain("mcp");
     expect(userProfileUpdate.layers).not.toContain("mcp");
-    expect(userProfileUpdate.layers).not.toContain("cli");
-    expect(userProfileUpdate.layers).not.toContain("agent");
   });
 
   it("answers with the persisted display name and avatar", () => {

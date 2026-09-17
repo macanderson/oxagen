@@ -8,7 +8,7 @@
 // is `resolver-not-from-viewer`: the name alone proves nothing.
 import path from "node:path";
 import ts from "typescript";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   APP_DIR,
   baselineEntries,
@@ -368,11 +368,19 @@ const PROBES: Readonly<Record<string, { at: string; expect: string | null }>> =
   };
 
 describe("route guard", () => {
-  const routes = guardedRoutes(productionFiles());
   const probeRoutes = Object.keys(PROBES).map(
     (probe) => `${PROBE_DIR}/${probe}`,
   );
-  const program = createProgram([...routes, ...probeRoutes]);
+  // Enumerating the tree and building the program are the expensive half, so
+  // they run in a hook that declares a budget: at `describe` scope they would
+  // run during collection, where no timeout governs them (INV-25).
+  let routes: string[] = [];
+  let program: ts.Program;
+
+  beforeAll(() => {
+    routes = guardedRoutes(productionFiles());
+    program = createProgram([...routes, ...probeRoutes]);
+  }, WHOLE_TREE_TIMEOUT_MS);
 
   it("covers page, layout and route modules with an [org] segment, under src/app/[org] and src/app/api alike", () => {
     expect(

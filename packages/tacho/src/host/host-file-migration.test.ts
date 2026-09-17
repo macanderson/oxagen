@@ -12,7 +12,12 @@
  * directions.
  */
 import { describe, expect, it } from "vitest";
-import { hostFileSchema, mcpEndpointFor, readHostFile } from "./host-file";
+import {
+  hostFileSchema,
+  mcpEndpointFor,
+  mcpEndpointOverrideRequestFrom,
+  readHostFile,
+} from "./host-file";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -116,6 +121,122 @@ describe("the endpoint resolver", () => {
     expect(
       mcpEndpointFor(host("https://api.oxagen.sh"), { TACHO_MCP_ENDPOINT: "" }),
     ).toBe("https://mcp.oxagen.sh/mcp");
+  });
+
+  // The daemon is a background service. `enroll` installs it with TACHO_HOME,
+  // CLAUDE_CONFIG_DIR, PATH and HOME and nothing else, so TACHO_MCP_ENDPOINT
+  // as exported in the enrolling shell is absent from tachod's environment:
+  // every resolution below happens with an EMPTY env, which is what the daemon
+  // actually has.
+  it("reads the pinned override out of host.json, which is all tachod has", () => {
+    expect(
+      mcpEndpointFor(
+        {
+          ...host("http://localhost:4000"),
+          mcp_endpoint_override: "http://127.0.0.1:4100/mcp",
+        },
+        {},
+      ),
+    ).toBe("http://127.0.0.1:4100/mcp");
+  });
+
+  it("prefers the pinned override to the signed claim, as the live variable does", () => {
+    expect(
+      mcpEndpointFor(
+        {
+          ...host("https://api.oxagen.sh", "https://mcp.example.test/mcp"),
+          mcp_endpoint_override: "http://127.0.0.1:4100/mcp",
+        },
+        {},
+      ),
+    ).toBe("http://127.0.0.1:4100/mcp");
+  });
+
+  it("still lets the live variable win over the pinned one", () => {
+    expect(
+      mcpEndpointFor(
+        {
+          ...host("https://api.oxagen.sh"),
+          mcp_endpoint_override: "http://127.0.0.1:4100/mcp",
+        },
+        { TACHO_MCP_ENDPOINT: "http://127.0.0.1:4199/mcp" },
+      ),
+    ).toBe("http://127.0.0.1:4199/mcp");
+  });
+});
+
+describe("the persisted endpoint override", () => {
+  it("is accepted by the strict schema and survives a round trip", () => {
+    const file = testHostFile(signer, bundle, {
+      mcp_endpoint_override: "http://127.0.0.1:4100/mcp",
+    });
+    expect(
+      hostFileSchema.parse(JSON.parse(JSON.stringify(file)))
+        .mcp_endpoint_override,
+    ).toBe("http://127.0.0.1:4100/mcp");
+  });
+
+  it("is absent from a file written before it existed, which still loads", () => {
+    expect(
+      hostFileSchema.parse(v1File()).mcp_endpoint_override,
+    ).toBeUndefined();
+  });
+
+  it("only takes a URL, and says so when it refuses one", () => {
+    // writeHostFile does not validate and readHostFile does. Persisting
+    // `TACHO_MCP_ENDPOINT=4100` would write a file the next start rejects.
+    // Refusing it is right; refusing it silently left an operator repairing a
+    // live host with no sign their value had been ignored, so the reason comes
+    // back with the verdict and every caller reports it identically.
+    const typo = mcpEndpointOverrideRequestFrom({ TACHO_MCP_ENDPOINT: "4100" });
+    expect(typo.pinned).toBeUndefined();
+    expect(typo.warning).toContain("TACHO_MCP_ENDPOINT");
+    expect(typo.warning).toContain("4100");
+
+    // Absent and empty are not a refusal — there is nothing to report.
+    for (const env of [{ TACHO_MCP_ENDPOINT: "" }, {}]) {
+      expect(mcpEndpointOverrideRequestFrom(env)).toEqual({
+        pinned: undefined,
+        warning: undefined,
+      });
+    }
+
+    expect(
+      mcpEndpointOverrideRequestFrom({
+        TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
+      }),
+    ).toEqual({ pinned: "http://127.0.0.1:4100/mcp", warning: undefined });
+  });
+
+  it("refuses a URL that parses but names a scheme fetch will not follow", () => {
+    // `new URL("localhost:4100/mcp")` does not throw — it reads `localhost:`
+    // as the scheme — so the commonest typo, leaving off `https://`, cleared
+    // the parse and got pinned. The gateway then handed it to `fetch`, which
+    // refuses the scheme on every connected-app tool call, far from the
+    // enrollment that accepted it.
+    for (const raw of [
+      "localhost:4100/mcp",
+      "ftp://mcp.oxagen.sh/mcp",
+      "file:///tmp/mcp",
+    ]) {
+      const refused = mcpEndpointOverrideRequestFrom({
+        TACHO_MCP_ENDPOINT: raw,
+      });
+      expect(refused.pinned, raw).toBeUndefined();
+      expect(refused.warning, raw).toContain(raw);
+      // It parsed, so the refusal must say which fact failed rather than
+      // repeating the "not a URL" reason, which would send an operator looking
+      // for a syntax error that is not there.
+      expect(refused.warning, raw).toContain("http(s)");
+    }
+
+    // https stays accepted, so the check is narrowing the scheme rather than
+    // refusing everything that reaches it.
+    expect(
+      mcpEndpointOverrideRequestFrom({
+        TACHO_MCP_ENDPOINT: "https://mcp.oxagen.sh/mcp",
+      }),
+    ).toEqual({ pinned: "https://mcp.oxagen.sh/mcp", warning: undefined });
   });
 });
 

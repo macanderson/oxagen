@@ -517,9 +517,11 @@ describe("POST /v1/telemetry/stella/operational", () => {
   });
 
   it("invokes the API capability with tenant scope exclusively from the API key", async () => {
-    // Two hops with one trusted proxy: 203.0.113.9 is whatever the caller put
-    // in the header, 10.0.0.1 is what the proxy appended. clientIp is the
-    // latter — see extractClientIp in src/lib/context.ts.
+    // 10.0.0.1 is the proxy this deployment names; 203.0.113.9 is the address
+    // it vouched for. clientIp is the CLIENT, 203.0.113.9 — it used to be the
+    // proxy, which is what made an IP allowlist judge the load balancer.
+    vi.stubEnv("TRUSTED_PROXY_CIDRS", "10.0.0.0/8");
+    __resetTrustedProxyHopsForTests();
     const response = await post(VALID_BATCH, {
       authorization: "Bearer ox_test_key",
       "x-forwarded-for": "203.0.113.9, 10.0.0.1",
@@ -538,7 +540,7 @@ describe("POST /v1/telemetry/stella/operational", () => {
         requestId: REQUEST_ID,
         surface: "api",
         messageId: null,
-        clientIp: "10.0.0.1",
+        clientIp: "203.0.113.9",
       },
       { surface: "api" },
     );

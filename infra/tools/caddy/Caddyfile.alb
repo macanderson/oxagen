@@ -44,12 +44,12 @@
 # add a second place for a network change to break the client IP silently.
 #
 # After this deploys, set TRUSTED_PROXY_CIDRS for apps/api to the range these
-# proxies sit in — that is the switch that turns the pre-authentication IP
-# ceilings on, and the safe form: the app walks the chain from the right while
-# each entry is a named proxy and stops at the first that is not, so a caller
-# padding the header cannot move the result. TRUSTED_PROXY_HOP_COUNT is the
-# legacy form, still read by the IAM allowlist, and it does NOT enable those
-# ceilings. See #3167.
+# proxies sit in. It is the only way the app attributes a client address: it
+# walks the chain from the right while each entry is a named proxy and stops at
+# the first that is not, so a caller padding the header cannot move the result.
+# Unset, no client address is derived at all and both readers fail safe — the
+# IAM ip_ranges / ip_allow conditions deny, and the pre-authentication IP
+# ceilings skip. See #3167.
 {
 	servers {
 		trusted_proxies static private_ranges
