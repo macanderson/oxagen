@@ -241,7 +241,18 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
 }
 
 /**
- * Whether this batch carries a call made through the local MCP gateway.
+ * Which chain of the batch the daemon filed a gateway call on.
+ *
+ * **This is correlation, never authority.** It answers *which* session a
+ * gateway call belongs to, and it is asked only after the control plane has
+ * already established from its own records that a gateway call happened at all
+ * (`gatewayObservationFor`). On its own it decides nothing, because everything
+ * in a submitted batch is client-attested: `normalizeOtlp` used to keep unknown
+ * attributes verbatim, so any process holding the local OTLP bearer could put
+ * this key on an ordinary record and have the daemon seal it onto a valid
+ * chain. `otel.ts` now quarantines the whole `oxagen.` namespace on the way in,
+ * which is the belt; the server observation is the braces, and the braces are
+ * what hold.
  *
  * `recordGatewayCall` puts `oxagen.enforcement_tier: "gateway"` in the event
  * `attrs`; the daemon's host recorder sets no identity tier, so the envelope
@@ -261,13 +272,64 @@ export function carriesGatewayCall(events: TachoEvent[]): boolean {
   );
 }
 
+/** The bits of the host row the tier is derived from. Nothing else may be. */
+export interface GatewayObservable {
+  mode: string;
+  gatewayLastSeenAt: Date | null;
+}
+
 /**
- * The enforcement tier a batch of events was produced under.
+ * The control plane's own record that this host served a gateway call, or
+ * `null` when it has none.
  *
- * `agent.enforcement_tier` is the envelope's own field and wins when a recorder
- * sets it. Otherwise a batch carrying any gateway call is gateway-enforced.
+ * `tacho_hosts.gateway_last_seen_at` is written in
+ * `@oxagen/iam`'s `machineKeyDenial`, at the one moment the platform *knows*
+ * rather than *is told*: it authenticated a server-minted, per-host
+ * `tacho_gateway_v1` credential and is about to serve the call. Enrollment
+ * mints that credential and writes the host id into its scope, and
+ * `create_api_key` refuses a caller-supplied reserved purpose, so the host the
+ * observation is filed under is the server's own attribution throughout.
  *
- * ## Why ANY rather than ALL
+ * Nothing a batch carries reaches this. The process in the P1 finding holds the
+ * *local* OTLP bearer; the gateway credential never leaves the daemon.
+ *
+ * Null with no default. A host that has never had a gateway call authorised has
+ * no observation, and no evidence must read as no evidence rather than as a
+ * tier.
+ */
+export function gatewayObservationFor(host: GatewayObservable): Date | null {
+  // `?? null`, not a bare read: a row fetched before this column existed, or a
+  // projection that omits it, arrives `undefined`. Absent must land on the
+  // no-evidence branch, never on a truthy object nobody can date.
+  return host.gatewayLastSeenAt ?? null;
+}
+
+/**
+ * The enforcement tier a session is recorded under.
+ *
+ * Derived from what the control plane observed, never from what the batch
+ * says. Neither `attrs[oxagen.enforcement_tier]` nor the envelope's
+ * `agent.enforcement_tier` is read for it — both are submitted, and the tier
+ * exists precisely to separate what the platform enforced from what the agent
+ * claims. A tier the agent can set is not a weaker version of that separation;
+ * it is the absence of one, with a signature on top
+ * (discussion_r4036718127, P1).
+ *
+ * `gateway` needs all three, and the first is the one that holds:
+ *
+ *  1. The control plane authorised a call on this host's gateway credential.
+ *     Its own record, unreachable from any submission.
+ *  2. The observation does not predate the session. `sinceAt` is the session
+ *     row's server-clock `createdAt`; a gateway call Oxagen served before this
+ *     chain existed cannot be what enforced anything on it. `null` for a
+ *     session being opened by this very batch, where nothing predates it.
+ *  3. The batch files a gateway call on *this* chain, which says which session
+ *     of the host's the observation belongs to (`carriesGatewayCall`).
+ *
+ * Otherwise the host's own mode decides, which is server-owned already: the
+ * operator sets it in Oxagen and the daemon is told, not asked.
+ *
+ * ## Why ANY event rather than ALL, on condition 3
  *
  * The first version of this required every event in the batch to agree, which
  * read as conservative and was in fact the bug (discussion_r4034318913). A
@@ -275,19 +337,20 @@ export function carriesGatewayCall(events: TachoEvent[]): boolean {
  * is the daemon's `agent_start` — so the batch is mixed by construction and
  * unanimity always fell back to the host's observe/harness mode. Nothing was
  * ever labelled `gateway`.
- *
- * Requiring agreement is also the wrong question. A wrapped agent's chain never
- * carries a gateway event at all, so it keeps its harness tier either way; the
- * only chain this can promote is one that really did serve a connected app.
  */
 export function enforcementTierOf(
   events: TachoEvent[],
-  hostMode: string,
+  host: GatewayObservable,
+  sinceAt: Date | null,
 ): string {
-  const declared = events[0]?.agent.enforcement_tier;
-  if (declared) return declared;
-  if (carriesGatewayCall(events)) return TACHO_GATEWAY_TIER;
-  return hostMode === "enforce" ? "harness" : "observe";
+  const observed = gatewayObservationFor(host);
+  if (
+    observed !== null &&
+    (sinceAt == null || observed.getTime() >= sinceAt.getTime()) &&
+    carriesGatewayCall(events)
+  )
+    return TACHO_GATEWAY_TIER;
+  return host.mode === "enforce" ? "harness" : "observe";
 }
 
 /**
@@ -329,6 +392,9 @@ function genesisRow(
   const anthropic = genesis.anthropic ?? {};
   const subagent = genesis.subagent;
   const ingestedAt = new Date(first.ts);
+  // `null`: this row is the session's creation, so there is no earlier
+  // lifetime for the host's observation to predate.
+  const tier = enforcementTierOf(events, host, null);
   return {
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
@@ -393,7 +459,11 @@ function genesisRow(
     hooksRegistered: body["hooks_registered"] ?? null,
     envSnapshot: body["env_snapshot"] ?? null,
     memoryPaths: body["memory_paths"] ?? null,
-    enforcementTier: enforcementTierOf(events, host.mode),
+    enforcementTier: tier,
+    // The evidence the tier stands on, written only when it is what raised
+    // the row: a `gateway` session points at the observation that made it one.
+    gatewayObservedAt:
+      tier === TACHO_GATEWAY_TIER ? gatewayObservationFor(host) : null,
     bundleMode: host.mode,
     genesisHash: first.seq === 0 ? first.hash : null,
     createdAt: now,
@@ -600,6 +670,9 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           toolBodyFrames: true,
           enforcementTier: true,
           sealedAt: true,
+          // The session's own server-clock birth. A gateway call the control
+          // plane served before this chain existed is not evidence about it.
+          createdAt: true,
         },
       });
       if (existing && existing.hostId !== host.id) {
@@ -667,6 +740,34 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       const toolBodyFrames = freshBodies.filter(
         (body) => body.kind === "tool_call",
       ).length;
+      // The tier this batch leaves the session on, derived once from the
+      // control plane's own records so the row and the seal cannot disagree
+      // and neither is read off the batch (discussion_r4036718127, P1).
+      //
+      // A rise to `gateway` is allowed — a daemon chain opens long before the
+      // first connected app calls anything, so the tier genuinely becomes true
+      // later — but only on evidence Oxagen itself holds, and never after the
+      // seal. A sealed session's tier is final: its replay grade was computed
+      // from it and signed into the attestation, and a value that moves
+      // underneath a signature is the escalation, not the mislabel.
+      const derivedTier = enforcementTierOf(
+        events,
+        host,
+        existing?.createdAt ?? null,
+      );
+      const promoteToGateway =
+        existing !== undefined &&
+        // Truthiness, matching `terminal` just below: a row read without the
+        // column is as unsealed as one that is null, and either way an absent
+        // seal must not read as a sealed one.
+        !existing.sealedAt &&
+        existing.enforcementTier !== TACHO_GATEWAY_TIER &&
+        derivedTier === TACHO_GATEWAY_TIER;
+      const effectiveTier = existing
+        ? promoteToGateway
+          ? TACHO_GATEWAY_TIER
+          : existing.enforcementTier
+        : derivedTier;
       // The grade is computed once, at seal: a sealed session is never
       // sealed again, whatever a later batch carries.
       const terminal = existing?.sealedAt ? {} : terminalPatch(fresh, now);
@@ -688,10 +789,11 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           bodyFrames: (existing?.bodyFrames ?? 0) + bodyFrames,
           toolCalls: (existing?.numToolCalls ?? 0) + delta.numToolCalls,
           toolBodyFrames: (existing?.toolBodyFrames ?? 0) + toolBodyFrames,
-          enforcementTier:
-            existing?.enforcementTier ??
-            first.agent.enforcement_tier ??
-            (host.mode === "enforce" ? "harness" : "observe"),
+          // Derived, not declared. This used to fall through to
+          // `first.agent.enforcement_tier` — the envelope field, which the
+          // submitter fills — so a claimed tier was signed into the replay
+          // grade that the export bundle and the attestation carry.
+          enforcementTier: effectiveTier,
         });
         terminalColumns["completenessGaps"] = seal.completenessGaps;
         terminalColumns["replayGrade"] = seal.replayGrade;
@@ -748,20 +850,33 @@ export const tachoEventsIngestHandler: CapabilityHandler<
               gitHeadShaEnd: tail.context?.git_head_sha ?? null,
             }
           : {}),
-        // Carried on EVERY batch, not only the one that opened the chain.
+        // The rise to `gateway`, on every batch rather than only the one that
+        // opened the chain.
         //
         // A gateway call joins the daemon's long-lived `tachod-*` chain, whose
         // genesis row was written when the daemon started and long before any
-        // connected app called anything. Computing the tier at insert therefore
-        // never reached the row: the existing-session branch applies this patch
-        // and nothing else. The promotion belongs here, where it is applied to
-        // the chain that actually carries the call.
+        // connected app called anything. Computing the tier at insert alone
+        // therefore never reached the row: the existing-session branch applies
+        // this patch and nothing else.
         //
-        // Monotonic on purpose. Once a chain has served a connected app that
-        // fact does not stop being true, so a later batch of daemon bookkeeping
-        // must not demote it back to the host's mode.
-        ...(carriesGatewayCall(events)
-          ? { enforcementTier: TACHO_GATEWAY_TIER }
+        // What changed (discussion_r4036718127, P1): the condition used to be
+        // `carriesGatewayCall(events)` on its own — an attribute in the batch,
+        // which a process holding the local OTLP bearer can set on an ordinary
+        // record. That made a later submission able to promote an existing
+        // observe session retroactively, and exports then signed the tier.
+        // `promoteToGateway` is the same rise gated on the control plane's own
+        // observation, bounded to the session's lifetime, and refused outright
+        // once the session is sealed.
+        //
+        // Monotonic still. Once a chain has served a connected app that fact
+        // does not stop being true, so a later batch of daemon bookkeeping must
+        // not demote it back to the host's mode.
+        ...(promoteToGateway
+          ? {
+              enforcementTier: TACHO_GATEWAY_TIER,
+              // What raised it. A tier that rose must point at the evidence.
+              gatewayObservedAt: gatewayObservationFor(host),
+            }
           : {}),
         updatedAt: now,
         ...terminalColumns,

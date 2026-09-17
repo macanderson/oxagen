@@ -198,6 +198,22 @@ export const tachoHosts = tachoSchema.table(
     lastSeenAt: ts("last_seen_at"),
     lastIngestAt: ts("last_ingest_at"),
     lastHeartbeatAt: ts("last_heartbeat_at"),
+    /**
+     * When the control plane last AUTHORISED a call presenting this host's
+     * `tacho_gateway_v1` key — a server observation, not a client claim.
+     *
+     * The enforcement tier exists to separate what the platform enforced from
+     * what the agent says it did, so it may not be read off a submitted
+     * record. A harness holds the local bearer and OTLP attributes pass
+     * through the normalizer verbatim, so anything the daemon seals is
+     * attested by the client; the seal proves the record was not altered after
+     * collection, never that the value was true going in.
+     *
+     * This column is the other thing: written where the gateway key is
+     * authenticated, from a request the control plane served itself. Ingest
+     * derives the `gateway` tier from it rather than from the batch.
+     */
+    gatewayLastSeenAt: ts("gateway_last_seen_at"),
     spoolDepth: integer("spool_depth").notNull().default(0),
     spoolOldestAt: ts("spool_oldest_at"),
     hooksOk: boolean("hooks_ok"),
@@ -409,7 +425,25 @@ export const tachoSessions = tachoSchema.table(
     permissionDenials: jsonb("permission_denials"),
     modelsUsed: jsonb("models_used"),
     // Policy
+    /**
+     * Derived by `tacho.events.ingest` from the control plane's own records —
+     * the host's mode, and `tacho_hosts.gateway_last_seen_at` for `gateway`.
+     * Never read off a submitted batch: the tier's whole value is that it
+     * separates what the platform enforced from what the agent claims, and a
+     * tier the agent can set is the absence of that, with a seal over it.
+     */
     enforcementTier: text("enforcement_tier").notNull().default("observe"),
+    /**
+     * The gateway observation this row's `gateway` tier stands on: the host's
+     * `gateway_last_seen_at` as it read when the tier was set. Null on every
+     * other tier.
+     *
+     * A tier may rise after the fact — a daemon chain opens before the first
+     * connected app calls anything — so a risen tier has to be answerable for
+     * itself. This column is that answer, and its absence on a `gateway` row
+     * is a defect, not a blank.
+     */
+    gatewayObservedAt: ts("gateway_observed_at"),
     bundleMode: text("bundle_mode"),
     bundleVersion: integer("bundle_version"),
     policyDecisions: integer("policy_decisions").notNull().default(0),

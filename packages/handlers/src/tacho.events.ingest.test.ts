@@ -306,6 +306,10 @@ function fakeDb(): FakeDb {
         workspaceId: CONTEXT.workspaceId,
         status: "active",
         mode: "observe",
+        // No gateway call has ever been authorised for this host. The default,
+        // because it is the honest one: a tier may only rise on evidence the
+        // control plane holds, and by default it holds none.
+        gatewayLastSeenAt: null,
         expiresAt: new Date("2027-01-01T00:00:00.000Z"),
         bundleVersionServed: null,
         createdById: ENROLLER_USER_ID,
@@ -343,6 +347,19 @@ function fakeDb(): FakeDb {
     updates: [],
     retentionPolicy: undefined,
   };
+}
+
+/**
+ * The control plane's own record that this host served a gateway call:
+ * `machineKeyDenial` stamps it when it authorises a call presenting the host's
+ * `tacho_gateway_v1` credential. Without it no batch can reach the `gateway`
+ * tier, whatever the batch says.
+ */
+function watchedGatewayHost(
+  db: FakeDb,
+  at = new Date("2026-09-08T09:00:00.000Z"),
+): void {
+  (db.hosts[0] as Record<string, unknown>)["gatewayLastSeenAt"] = at;
 }
 
 function tableName(table: unknown): string {
@@ -965,7 +982,15 @@ const TOOL_OUTPUT = '{"stdout":"hi\\n"}';
  * `tier` is the enforcement tier the events claim; the host's mode decides
  * when they claim none.
  */
-function sessionWithContent(tier?: "gateway" | "harness"): TachoEvent[] {
+/**
+ * `gateway` files the call the way the daemon does — the collector attribute
+ * on the tool call — not by declaring a tier on the envelope. The envelope
+ * field decides nothing any more (discussion_r4036718127, P1), so a test that
+ * set it would be asserting against a tier the handler no longer reads. The
+ * caller must also put the matching observation on the host row; a batch alone
+ * cannot make a session gateway, which is the whole point.
+ */
+function sessionWithContent(tier?: "gateway"): TachoEvent[] {
   let cursor: ChainCursor = GENESIS_CURSOR;
   const out: TachoEvent[] = [];
   for (const draft of [
@@ -985,7 +1010,10 @@ function sessionWithContent(tier?: "gateway" | "harness"): TachoEvent[] {
       session_end_reason: "other",
     }),
   ]) {
-    if (tier) draft.agent.enforcement_tier = tier;
+    if (tier === "gateway" && draft.kind === "tool_call")
+      (draft as UnsealedTachoEvent).attrs = {
+        "oxagen.enforcement_tier": "gateway",
+      };
     const sealed = sealEvent(draft, cursor);
     cursor = sealed.next;
     out.push(sealed.event);
@@ -1186,6 +1214,7 @@ describe("ingest_tacho_events: bodies and the seal", () => {
 
   it("seals fork on a gateway-tier session whose tool call kept its result body", async () => {
     const db = fakeDb();
+    watchedGatewayHost(db);
     wire(db);
     const events = sessionWithContent("gateway");
     await tachoEventsIngestHandler(
@@ -1200,6 +1229,7 @@ describe("ingest_tacho_events: bodies and the seal", () => {
 
   it("seals below fork on a gateway-tier session whose tool call kept no result body (negative)", async () => {
     const db = fakeDb();
+    watchedGatewayHost(db);
     wire(db);
     await tachoEventsIngestHandler(
       batch(sessionWithContent("gateway")),
@@ -1527,13 +1557,22 @@ describe("enforcementTierOf", () => {
       ...over,
     }) as never;
 
-  it("takes the tier the envelope declares", () => {
+  const AT = new Date("2026-09-08T10:00:00.000Z");
+  /** A host whose gateway credential the control plane has seen authorised. */
+  const watched = (mode: string) => ({ mode, gatewayLastSeenAt: AT });
+  /** A host that has never had a gateway call authorised. */
+  const unwatched = (mode: string) => ({ mode, gatewayLastSeenAt: null });
+
+  it("ignores the tier the envelope declares", () => {
+    // The envelope field is as submitted as the attribute. It used to win
+    // outright (discussion_r4036718127, P1).
     expect(
       enforcementTierOf(
-        [event({ agent: { enforcement_tier: "harness" } })],
-        "observe",
+        [event({ agent: { enforcement_tier: "gateway" } })],
+        unwatched("observe"),
+        null,
       ),
-    ).toBe("harness");
+    ).toBe("observe");
   });
 
   it("recognises a gateway batch the recorder did not label", () => {
@@ -1547,7 +1586,8 @@ describe("enforcementTierOf", () => {
           event({ attrs: { "oxagen.enforcement_tier": "gateway" } }),
           event({ attrs: { "oxagen.enforcement_tier": "gateway" } }),
         ],
-        "observe",
+        watched("observe"),
+        null,
       ),
     ).toBe("gateway");
   });
@@ -1560,19 +1600,57 @@ describe("enforcementTierOf", () => {
     expect(
       enforcementTierOf(
         [event({ attrs: { "oxagen.enforcement_tier": "gateway" } }), event()],
-        "enforce",
+        watched("enforce"),
+        null,
+      ),
+    ).toBe("gateway");
+  });
+
+  it("refuses the batch's word on a host the server never watched serve one", () => {
+    // The attack. Same batch as the case above, on a host with no observation.
+    expect(
+      enforcementTierOf(
+        [event({ attrs: { "oxagen.enforcement_tier": "gateway" } }), event()],
+        unwatched("observe"),
+        null,
+      ),
+    ).toBe("observe");
+  });
+
+  it("will not raise a session the observation predates", () => {
+    // A gateway call Oxagen served before this chain existed is not evidence
+    // about it. This is what stops a stale observation reaching back.
+    expect(
+      enforcementTierOf(
+        [event({ attrs: { "oxagen.enforcement_tier": "gateway" } })],
+        watched("observe"),
+        new Date(AT.getTime() + 1),
+      ),
+    ).toBe("observe");
+    expect(
+      enforcementTierOf(
+        [event({ attrs: { "oxagen.enforcement_tier": "gateway" } })],
+        watched("observe"),
+        AT,
       ),
     ).toBe("gateway");
   });
 
   it("leaves a chain that carries no gateway call alone", () => {
-    // A wrapped agent's chain never carries one, so promotion cannot reach it.
-    expect(enforcementTierOf([event(), event()], "enforce")).toBe("harness");
+    // A wrapped agent's chain never carries one, so promotion cannot reach it
+    // even on a host the server HAS watched serve gateway calls.
+    expect(
+      enforcementTierOf([event(), event()], watched("enforce"), null),
+    ).toBe("harness");
   });
 
   it("falls back to the host mode when nothing says otherwise", () => {
-    expect(enforcementTierOf([event()], "observe")).toBe("observe");
-    expect(enforcementTierOf([event()], "enforce")).toBe("harness");
+    expect(enforcementTierOf([event()], unwatched("observe"), null)).toBe(
+      "observe",
+    );
+    expect(enforcementTierOf([event()], unwatched("enforce"), null)).toBe(
+      "harness",
+    );
   });
 });
 
@@ -1606,12 +1684,15 @@ describe("gateway attribution reaches the chain that carries the call", () => {
   // handler takes its existing-session branch and applies only `common`.
   it("promotes an EXISTING session's tier on the update path", async () => {
     const db = fakeDb();
+    watchedGatewayHost(db);
     // The chain already exists, opened before any connected app called anything.
     db.sessions.set(SESSION, {
       id: "s1",
       sessionUuid: SESSION,
       hostId: HOST_ID,
       enforcementTier: "observe",
+      createdAt: new Date("2026-09-08T08:00:00.000Z"),
+      sealedAt: null,
     });
     wire(db);
 
@@ -1787,14 +1868,14 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
     // The fix must not buy safety by labelling nothing. With the control
     // plane's own observation on the host row, the daemon's chain is gateway.
     const db = fakeDb();
-    (db.hosts[0] as Record<string, unknown>)["gatewayLastSeenAt"] = new Date(
-      "2026-09-08T10:00:00.000Z",
-    );
+    watchedGatewayHost(db);
     db.sessions.set(SESSION, {
       id: "s1",
       sessionUuid: SESSION,
       hostId: HOST_ID,
       enforcementTier: "observe",
+      createdAt: new Date("2026-09-08T08:00:00.000Z"),
+      sealedAt: null,
     });
     wire(db);
 
@@ -1809,5 +1890,72 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
     );
 
     expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("gateway");
+    // And the rise points at what raised it. A tier that moves after the fact
+    // has to be answerable for itself.
+    expect(db.sessions.get(SESSION)?.["gatewayObservedAt"]).toBeInstanceOf(
+      Date,
+    );
+  });
+
+  it("never re-tiers a SEALED session, even on a real observation", async () => {
+    // The seal signed a replay grade computed from the tier. A value that moves
+    // underneath a signature is the escalation rather than the mislabel, so a
+    // sealed session's tier is final whatever a later batch — or a later
+    // gateway call on the same host — would otherwise derive.
+    const db = fakeDb();
+    watchedGatewayHost(db);
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "observe",
+      createdAt: new Date("2026-09-08T08:00:00.000Z"),
+      sealedAt: new Date("2026-09-08T09:30:00.000Z"),
+    });
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: gatewayBatch(),
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+
+    expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("observe");
+    for (const update of db.updates.filter((u) => u.table === "sessions")) {
+      expect(update.values).not.toHaveProperty("enforcementTier");
+    }
+  });
+
+  it("does not reach back to a session the observation predates", async () => {
+    // The host really did serve a gateway call — but after this chain had
+    // already been opened and run. Evidence from after the fact is not evidence
+    // about it.
+    const db = fakeDb();
+    watchedGatewayHost(db, new Date("2026-09-08T07:00:00.000Z"));
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "observe",
+      createdAt: new Date("2026-09-08T08:00:00.000Z"),
+      sealedAt: null,
+    });
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: gatewayBatch(),
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+
+    expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("observe");
   });
 });
