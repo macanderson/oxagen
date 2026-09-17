@@ -193,12 +193,28 @@ matches the provider within one round-trip.</p>
 <ul>
   <li><strong>No active subscription</strong> (free) → returns a Stripe <em>Checkout</em> URL; caller redirects.</li>
   <li><strong>Active subscription</strong> → swaps the price in place (no second subscription). The direction is
-      decided from the <em>money</em>: the amount billed per period today, at the interval the org is billed on, against
-      the amount the target plan bills at the interval it is moving to, both taken from <code>billing.plans</code> (with
-      the <code>SUBSCRIPTION_PLANS</code> catalogue as the fallback) and compared in integral micro-USD.
+      decided from the <em>money</em>, and the two sides come from different places.
+      <ul>
+        <li><strong>What the org is billed today</strong> comes from the subscription:
+            <code>billing.subscriptions.unit_amount_cents</code>, written by
+            <code>syncSubscriptionFromStripe</code> on every <code>subscription.*</code> webhook, priced at the
+            interval that subscription is billed on. A row written before that column existed falls back to a
+            single provider read of the subscription. <strong>Not <code>billing.plans</code></strong>: provider
+            prices are immutable, so a reprice mints a new price and overwrites the plan row while every live
+            subscription stays on the price it was created with — the catalogue row stops describing a
+            grandfathered subscriber the moment the catalogue moves, and reading it there turns a rise in the
+            bill into a fall (#3157).</li>
+        <li><strong>What the target plan bills</strong> comes from <code>billing.plans</code> (with the
+            <code>SUBSCRIPTION_PLANS</code> catalogue as the fallback), at the interval being moved to. The
+            catalogue is the right source on this side: a move to that plan is billed at the price it publishes
+            now.</li>
+      </ul>
+      Both are compared in integral micro-USD.
       Bill rises → <code>always_invoice</code> (charge the proration now) <em>and</em> a prorated grant of the new
       plan's extra included credits (<code>grantProratedPlanUpgradeCredits</code>). Bill falls or holds →
-      <code>none</code> (keeps access until renewal, no proration line).</li>
+      <code>none</code> (keeps access until renewal, no proration line). A current price that resolves from
+      neither source settles as <code>always_invoice</code>, never <code>none</code> — an invoice can be
+      credited back, a charge that was never raised is simply lost.</li>
   <li>The entitlement tier ordering (<code>TIER_ORDER</code> / <code>meetsMinimumTier</code>) answers a different
       question — <em>does this plan include that feature</em> — and is never read as a price direction. The two
       disagree in the live catalogue: Enterprise outranks Scale on features and costs half as much, so deciding
@@ -206,7 +222,9 @@ matches the provider within one round-trip.</p>
       one (#3157).</li>
 </ul>
 <p><code>previewPlanChange</code> simulates the change first (see Seats — same <code>invoices.createPreview</code> mechanism),
-so the UI shows the prorated charge + card before committing.</p>
+so the UI shows the prorated charge + card before committing. It reads the current price from the same place
+<code>changeOrgPlan</code> does — the subscription, not the plan row — because a preview computed against one
+figure while the change bills against another quotes a price the change will not honour.</p>
 <p>Cancel / reactivate set <code>cancel_at_period_end</code> (access continues to period end; reversible).</p>
 
 <!-- ───────────────────────── SEATS ───────────────────────── -->
