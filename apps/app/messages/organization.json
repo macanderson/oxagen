@@ -119,7 +119,7 @@
       "empty": "No invitations are waiting for an answer."
     },
     "apiKeys": {
-      "lead": "A key acts as the person who created it: on the API, MCP and the CLI it can do what that person can do, and no more.",
+      "lead": "A key acts as the person who created it, in this workspace: on the API, MCP and the CLI it can do what that person can do here, and no more.",
       "tableLabel": "API keys",
       "columns": {
         "name": "Name",
@@ -127,16 +127,71 @@
         "created": "Created",
         "lastUsed": "Last used",
         "expires": "Expires",
-        "status": "Status"
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "actions": {
+        "create": {
+          "open": "Create a key",
+          "title": "Create an API key",
+          "body": "The key acts as you. Oxagen shows the secret once and stores only its prefix and a hash, so a lost key is rotated, never recovered.",
+          "name": "Name",
+          "expires": "Expires at the end of this day, UTC (optional)",
+          "expiresUtc": "Leave this empty for a key that does not expire. The day is read in UTC, not your local time.",
+          "expiresAt": "The key stops working at {at}.",
+          "confirm": "Create it",
+          "pending": "Creating"
+        },
+        "rotate": {
+          "open": "Rotate",
+          "title": "Rotate {name}",
+          "body": "This issues a replacement with the same expiry and ends this key in the same transaction. Requests presenting the old key are refused from that moment, so put the new one in place first. An expired key cannot be rotated, because the replacement would carry the expiry that ended it.",
+          "confirm": "Rotate it",
+          "pending": "Rotating"
+        },
+        "revoke": {
+          "open": "Revoke",
+          "title": "Revoke {name}",
+          "body": "Every request presenting this key is refused from this moment. The row stays in the record with the time it ended. Only a new key restores access.",
+          "confirm": "Revoke",
+          "pending": "Revoking"
+        },
+        "secret": {
+          "title": "Copy the key now",
+          "body": "This is the only time Oxagen shows it. Close this and the secret is gone from here for good.",
+          "named": "{name} · begins {prefix}"
+        },
+        "failure": {
+          "denied": "Your organization role does not allow this. Nothing was changed.",
+          "keyNotFound": "This key is no longer here, or it was already revoked.",
+          "keyExpired": "This key expired while the page was open. Rotating it would copy the expiry that ended it onto the replacement, so nothing was changed. Create a new key instead.",
+          "nameRequired": "Give the key a name so the roster can tell it apart.",
+          "expiryNotADay": "That expiry is not a date. Pick a day, or leave it empty for a key that does not expire.",
+          "expiryInThePast": "That day is already over. Pick a later one, or leave it empty for a key that does not expire.",
+          "refused": "The change was refused: {code}. Nothing was changed.",
+          "invalid": "The request was refused as invalid. Nothing was changed.",
+          "pendingApproval": "The change is waiting for approval, request {accessRequestId}.",
+          "unavailable": "The change could not be made: {code}. Nothing was changed.",
+          "workspaceArchived": "That workspace was archived while this page was open. Its keys are listed so they can be revoked; no new key is issued into it."
+        }
       },
       "status": {
         "live": "live",
         "expired": "expired",
         "revoked": "revoked"
       },
+      "workspace": {
+        "label": "Workspace",
+        "archived": "{name} (archived)",
+        "archivedNote": "This workspace is archived. Its keys still authenticate, so they are listed here until they are revoked — but no new key is issued into it."
+      },
+      "noWorkspace": {
+        "title": "A key needs a workspace",
+        "body": "A key is issued into one workspace and acts only there. This organization has no workspace you are a member of, so there is nowhere to issue one yet."
+      },
       "never": "Never",
       "neverUsed": "Never used",
-      "empty": "This organization has no API keys.",
+      "empty": "This workspace has no API keys.",
       "denied": {
         "title": "You cannot see this organization’s API keys",
         "body": "Signed in as {role}. Needed: {permission}. An owner can grant it, and the grant is recorded in the audit record."

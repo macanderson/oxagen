@@ -73,6 +73,7 @@ export function apiKey(overrides: Partial<ApiKey> = {}): ApiKey {
     lastUsedAt: "2026-09-14T11:30:00.000Z",
     expiresAt: null,
     revokedAt: null,
+    rotatable: true,
     ...overrides,
   };
 }

@@ -16,6 +16,7 @@ const stored = {
   lastUsedAt: "2026-09-14T11:30:00.000Z",
   expiresAt: null,
   revokedAt: null,
+  rotatable: true,
 };
 
 describe("ApiKey", () => {
@@ -28,6 +29,7 @@ describe("ApiKey", () => {
       "lastUsedAt",
       "expiresAt",
       "revokedAt",
+      "rotatable",
     ]);
     expect(
       Object.keys(ApiKey.shape).filter((f) => SECRET_SHAPED.test(f)),

@@ -105,5 +105,6 @@ export function toApiKeys(
     lastUsedAt: key.lastUsedAt,
     expiresAt: key.expiresAt,
     revokedAt: key.revokedAt,
+    rotatable: key.rotatable,
   }));
 }

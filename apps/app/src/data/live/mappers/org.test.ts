@@ -298,6 +298,7 @@ const storedKey = {
   lastUsedAt: "2026-09-14T11:30:00.000Z",
   expiresAt: null,
   revokedAt: null,
+  rotatable: true,
 };
 const revokedKey = {
   publicId: "aky_9z8y7x6w5v4t3s2r1q0p9n",
@@ -307,6 +308,7 @@ const revokedKey = {
   lastUsedAt: null,
   expiresAt: "2026-12-31T00:00:00.000Z",
   revokedAt: "2026-09-10T08:00:00.000Z",
+  rotatable: true,
 };
 
 function keys(sample: unknown) {
@@ -327,6 +329,7 @@ describe("toApiKeys", () => {
         lastUsedAt: "2026-09-14T11:30:00.000Z",
         expiresAt: null,
         revokedAt: null,
+        rotatable: true,
       },
       {
         id: "aky_9z8y7x6w5v4t3s2r1q0p9n",
@@ -336,8 +339,17 @@ describe("toApiKeys", () => {
         lastUsedAt: null,
         expiresAt: "2026-12-31T00:00:00.000Z",
         revokedAt: "2026-09-10T08:00:00.000Z",
+        rotatable: true,
       },
     ]);
+  });
+
+  it("carries whether the key may be rotated, so the page offers no control the handler refuses", () => {
+    // A key an enrollment or a login flow owns: rotate_api_key refuses it.
+    const [owned] = ApiKeyList.parse(
+      toApiKeys(keys({ items: [{ ...storedKey, rotatable: false }] })),
+    );
+    expect(owned?.rotatable).toBe(false);
   });
 
   it("keeps an unused key, a key with no expiry and a live key as null, never an invented value", () => {
@@ -367,6 +379,7 @@ describe("toApiKeys", () => {
       "lastUsedAt",
       "expiresAt",
       "revokedAt",
+      "rotatable",
     ]);
     expect(JSON.stringify(view)).not.toContain("sha256-of-the-live-key");
     expect(JSON.stringify(view)).not.toContain("ox_thewholekey");

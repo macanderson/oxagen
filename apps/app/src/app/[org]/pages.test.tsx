@@ -40,10 +40,12 @@ const {
   Skills,
   SkillsLoading,
   members,
+  workspaces,
   apiKeys,
   source,
 } = vi.hoisted(() => {
   const members = vi.fn();
+  const workspaces = vi.fn();
   const apiKeys = vi.fn();
   return {
     requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
@@ -73,11 +75,20 @@ const {
     )),
     SkillsLoading: vi.fn(() => null),
     members,
+    workspaces,
     apiKeys,
-    source: { org: { members, apiKeys } },
+    source: { org: { members, workspaces, apiKeys } },
   };
 });
-vi.mock("@/server/viewer", () => ({ requireViewer }));
+// `WsCtx.is` is how the API keys section tells a workspace scope from an
+// organization one (ADR-073); the viewer classes are branded, so the stub
+// stands in for the brand with the field these fixtures carry.
+vi.mock("@/server/viewer", () => ({
+  requireViewer,
+  WsCtx: {
+    is: (x: unknown) => typeof x === "object" && x !== null && "wsSlug" in x,
+  },
+}));
 vi.mock("@/features/audit", () => ({ Audit, AuditSkeleton: () => null }));
 vi.mock("@/features/billing", () => ({ Billing }));
 vi.mock("@/features/fleet", () => ({ Fleet }));
@@ -98,14 +109,20 @@ vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
     Promise.resolve(translator(namespace)),
 }));
-// People is the one feature this file renders for real, so its client island
-// comes with it. The island imports the two server actions, and those import
-// the kernel seam, which loads both handler registries on import (§3.2) — a
-// graph no page test needs and one that never settles under jsdom. The writes
-// have their own tests; here the roster only has to render.
+// People and API keys are the features this file renders for real, so their
+// client islands come with them. Each island imports its server actions, and
+// those import the kernel seam, which loads both handler registries on import
+// (§3.2) — a graph no page test needs and one that never settles under jsdom.
+// The writes have their own tests; here the roster and the table only have to
+// render.
 vi.mock("@/features/organization/actions", () => ({
   changeMemberRole: vi.fn(),
   removeOrgMember: vi.fn(),
+}));
+vi.mock("@/features/organization/api-key-actions", () => ({
+  createApiKey: vi.fn(),
+  revokeApiKey: vi.fn(),
+  rotateApiKey: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
@@ -114,6 +131,8 @@ vi.mock("next/navigation", () => ({
 beforeEach(() => {
   requireViewer.mockReset();
   requireViewer.mockResolvedValue({});
+  workspaces.mockReset();
+  apiKeys.mockReset();
 });
 
 /** Every segment a page under /[org] can have; each page reads the ones in its path. */
@@ -466,10 +485,44 @@ describe("Organization › Roles", () => {
   });
 });
 
+/**
+ * A row as `list_workspaces` answers it. `role` is what the viewer holds; a
+ * workspace they are not a member of answers null, and the picker drops it
+ * because viewer resolution 404s on one (INV-15).
+ */
+const wsRow = (slug: string, name: string) => ({
+  id: `wrk_${slug}`,
+  slug,
+  name,
+  role: "Owner",
+  archivedAt: null,
+});
+
 describe("Organization › API keys", () => {
-  it("resolves the organization viewer, names the page once and renders the keys org.apiKeys read for that viewer", async () => {
-    const ctx = { orgSlug: "acme", orgRole: "owner" };
+  beforeEach(() => {
+    workspaces.mockResolvedValue({
+      ok: true,
+      value: { workspaces: [wsRow("core-platform", "Core platform")] },
+    });
+  });
+
+  it("resolves the workspace the URL names and renders the keys org.apiKeys read in it", async () => {
+    // A key names a workspace (ADR-073): the page resolves one before it reads.
+    const ctx = {
+      orgSlug: "acme",
+      orgRole: "owner",
+      wsSlug: "core-platform",
+    };
     requireViewer.mockResolvedValue(ctx);
+    workspaces.mockResolvedValue({
+      ok: true,
+      value: {
+        workspaces: [
+          wsRow("core-platform", "Core platform"),
+          wsRow("growth", "Growth"),
+        ],
+      },
+    });
     apiKeys.mockResolvedValue({
       ok: true,
       value: [
@@ -481,18 +534,48 @@ describe("Organization › API keys", () => {
           lastUsedAt: null,
           expiresAt: null,
           revokedAt: null,
+          rotatable: true,
         },
       ],
     });
     await expectPageTitle(
       await API_KEYS(),
-      routeProps(SEGMENTS),
+      routeProps(SEGMENTS, { workspace: "growth" }),
       title("apiKeys"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
+    expect(requireViewer).toHaveBeenCalledWith("acme", "growth");
+    expect(workspaces).toHaveBeenCalledOnce();
     expect(apiKeys).toHaveBeenCalledWith(ctx);
     expect(screen.getByRole("main")).toHaveTextContent("ox_liveliveli");
     expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+
+  it("falls back to the first workspace the viewer may enter when the URL names none", async () => {
+    requireViewer.mockResolvedValue({
+      orgSlug: "acme",
+      orgRole: "owner",
+      wsSlug: "core-platform",
+    });
+    apiKeys.mockResolvedValue({ ok: true, value: [] });
+    await expectPageTitle(
+      await API_KEYS(),
+      routeProps(SEGMENTS),
+      title("apiKeys"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+  });
+
+  it("resolves no workspace and reads no key when the viewer may enter none (negative)", async () => {
+    requireViewer.mockResolvedValue({ orgSlug: "acme", orgRole: "owner" });
+    workspaces.mockResolvedValue({ ok: true, value: { workspaces: [] } });
+    await expectPageTitle(
+      await API_KEYS(),
+      routeProps(SEGMENTS),
+      title("apiKeys"),
+    );
+    expect(requireViewer).toHaveBeenCalledExactlyOnceWith(...ORG);
+    expect(apiKeys).not.toHaveBeenCalled();
   });
 });
 

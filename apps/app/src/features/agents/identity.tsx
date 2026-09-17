@@ -1,9 +1,16 @@
 // The Identity section: the principal as Postgres records it, the roles on it
 // and the long-lived credentials it holds (prefix and dates, never a secret).
+//
+// A credential row is its own client component (`credential-row.tsx`): its
+// state is read off both fields that disqualify it, and the expiry half is
+// judged against a clock that keeps running, so a row whose expiry passes
+// while the page is open says "expired" rather than "active". The claim this
+// page makes is what authority the agent actually holds.
 import { useTranslations } from "next-intl";
 import type { AgentDetail } from "@/data/contracts/agents";
 import { mono } from "@/ui/control-styles";
 import { cell, Table } from "@/ui/table";
+import { CredentialRow } from "./credential-row";
 import {
   AgentStatusBadge,
   Facts,
@@ -52,8 +59,11 @@ function Roles({ roles }: { roles: AgentDetail["roles"] }) {
 
 function Credentials({
   credentials,
+  now,
 }: {
   credentials: AgentDetail["credentials"];
+  /** The instant the agent was read, against which an expiry is judged. */
+  now: number;
 }) {
   const t = useTranslations("agents.detail.credentials");
   return (
@@ -72,40 +82,11 @@ function Credentials({
           ]}
         >
           {credentials.map((credential) => (
-            <tr key={credential.id}>
-              <td className={cell}>
-                <span className={mono}>{credential.prefix}</span>
-                <span className="block text-xs text-muted-foreground">
-                  {credential.name}
-                </span>
-              </td>
-              <td className={cell}>
-                <Instant at={credential.createdAt} />
-              </td>
-              <td className={cell}>
-                {credential.lastUsedAt === null ? (
-                  t("never")
-                ) : (
-                  <Instant at={credential.lastUsedAt} />
-                )}
-              </td>
-              <td className={cell}>
-                {credential.expiresAt === null ? (
-                  t("noExpiry")
-                ) : (
-                  <Instant at={credential.expiresAt} />
-                )}
-              </td>
-              <td className={cell}>
-                {credential.revokedAt === null ? (
-                  t("active")
-                ) : (
-                  <>
-                    {t("revoked")} <Instant at={credential.revokedAt} />
-                  </>
-                )}
-              </td>
-            </tr>
+            <CredentialRow
+              key={credential.id}
+              credential={credential}
+              now={now}
+            />
           ))}
         </Table>
       )}
@@ -113,7 +94,14 @@ function Credentials({
   );
 }
 
-export function IdentitySection({ detail }: { detail: AgentDetail }) {
+export function IdentitySection({
+  detail,
+  now,
+}: {
+  detail: AgentDetail;
+  /** The instant the agent was read; a credential's expiry is judged against it. */
+  now: number;
+}) {
   const t = useTranslations("agents");
   const { identity } = detail;
   const id = (value: string | null) =>
@@ -169,7 +157,7 @@ export function IdentitySection({ detail }: { detail: AgentDetail }) {
       </Panel>
       <Roles roles={detail.roles} />
       <div className="lg:col-span-2">
-        <Credentials credentials={detail.credentials} />
+        <Credentials credentials={detail.credentials} now={now} />
       </div>
     </div>
   );

@@ -2,7 +2,8 @@
 // the Organization page, list_iam_roles for the roles and the permission
 // catalogue, list_workspaces for the Workspaces section and list_api_keys for
 // the API keys page, each mapped into its view model, with a refusal passed
-// through and an unmappable answer reported once.
+// through and an unmappable answer reported once. The keys are read
+// through a WsCtx: a key names a workspace (ADR-073).
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
@@ -18,17 +19,27 @@ vi.mock("@oxagen/telemetry", () => ({ captureError }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
-const { OrgCtx } = await import("@/server/viewer");
+const { OrgCtx, WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { readError, readOk } = await import("@/data/read");
 const { org } = await import("./org");
 
-const ctx = unsafeMint(OrgCtx, {
+const ORG_FIELDS = {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
   orgId: "7a000000-0000-4000-8000-0000000000a1",
   orgSlug: "acme",
   orgName: "Acme Robotics",
   orgRole: "member",
+} as const;
+
+const ctx = unsafeMint(OrgCtx, ORG_FIELDS);
+
+/** The workspace scope the keys read runs in. */
+const wsCtx = unsafeMint(WsCtx, {
+  ...ORG_FIELDS,
+  workspaceId: "7a000000-0000-4000-8000-0000000000c3",
+  wsSlug: "core-platform",
+  wsName: "Core platform",
 });
 
 const member = {
@@ -317,12 +328,13 @@ const storedKey = {
   lastUsedAt: null,
   expiresAt: null,
   revokedAt: null,
+  rotatable: true,
 };
 
 describe("org.apiKeys", () => {
-  it("reads list_api_keys for the organization page and returns the API keys view model", async () => {
+  it("reads list_api_keys in the workspace scope and returns the API keys view model", async () => {
     kernelRead.mockResolvedValue(readOk({ items: [storedKey] }));
-    expect(await org.apiKeys(ctx)).toEqual(
+    expect(await org.apiKeys(wsCtx)).toEqual(
       readOk([
         {
           id: "aky_7k2m9q4x8r1t5v3w6y0z2a",
@@ -332,10 +344,11 @@ describe("org.apiKeys", () => {
           lastUsedAt: null,
           expiresAt: null,
           revokedAt: null,
+          rotatable: true,
         },
       ]),
     );
-    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+    expect(kernelRead).toHaveBeenCalledWith(wsCtx, {
       contract: apiKeyList,
       input: {},
       page: "organization",
@@ -343,22 +356,22 @@ describe("org.apiKeys", () => {
     expect(captureError).not.toHaveBeenCalled();
   });
 
-  it("returns an empty list for an organization holding no keys", async () => {
+  it("returns an empty list for a workspace holding no keys", async () => {
     kernelRead.mockResolvedValue(readOk({ items: [] }));
-    expect(await org.apiKeys(ctx)).toEqual(readOk([]));
+    expect(await org.apiKeys(wsCtx)).toEqual(readOk([]));
   });
 
   it("passes a denied read through (negative)", async () => {
     const denied = { ok: false, reason: "denied", permission: "org.admin" };
     kernelRead.mockResolvedValue(denied);
-    expect(await org.apiKeys(ctx)).toEqual(denied);
+    expect(await org.apiKeys(wsCtx)).toEqual(denied);
     expect(captureError).not.toHaveBeenCalled();
   });
 
   it("passes a failed read through (negative)", async () => {
     const down = readError("control_plane_unavailable", 503);
     kernelRead.mockResolvedValue(down);
-    expect(await org.apiKeys(ctx)).toEqual(down);
+    expect(await org.apiKeys(wsCtx)).toEqual(down);
   });
 
   it("answers record_unmappable and reports once for a key the view model refuses (negative)", async () => {
@@ -369,7 +382,9 @@ describe("org.apiKeys", () => {
         ],
       }),
     );
-    expect(await org.apiKeys(ctx)).toEqual(readError("record_unmappable", 502));
+    expect(await org.apiKeys(wsCtx)).toEqual(
+      readError("record_unmappable", 502),
+    );
     expect(captureError).toHaveBeenCalledOnce();
   });
 });

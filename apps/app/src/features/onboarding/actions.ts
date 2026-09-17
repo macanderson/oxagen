@@ -150,7 +150,10 @@ export async function advanceOnboarding(
   const ctx = await requireViewer(org, ws);
   const result = await kernelWrite(ctx, onboardingAdvance, { to });
   return result.ok
-    ? { ok: true, value: { step: result.value.step, changedAt: result.value.changedAt } }
+    ? {
+        ok: true,
+        value: { step: result.value.step, changedAt: result.value.changedAt },
+      }
     : result;
 }
 

@@ -51,10 +51,13 @@ export function createKillSwitchListHandler(
 ): CapabilityHandler<typeof killSwitchList> {
   return async (input, ctx) => {
     const actingUserId = await resolveActingUserId(ctx);
-    await assertOrgRole({ ...ctx, userId: actingUserId }, {
-      org: ["Owner", "Admin", "Compliance"],
-      workspace: ["Owner", "Member"],
-    });
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      {
+        org: ["Owner", "Admin", "Compliance"],
+        workspace: ["Owner", "Member"],
+      },
+    );
     const { generation, rows } = await deps.read({
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,

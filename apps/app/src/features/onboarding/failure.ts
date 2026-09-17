@@ -8,9 +8,7 @@ import type { ActionResult } from "@/server/kernel";
 
 export type OnboardingFailure = Exclude<ActionResult<unknown>, { ok: true }>;
 
-export function useOnboardingFailure(): (
-  failure: OnboardingFailure,
-) => string {
+export function useOnboardingFailure(): (failure: OnboardingFailure) => string {
   const t = useTranslations("onboarding.register.failure");
   return (failure) => {
     switch (failure.reason) {

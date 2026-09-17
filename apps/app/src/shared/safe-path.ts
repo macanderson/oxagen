@@ -90,7 +90,13 @@ export const routes = {
   people: (org: string): SafePath => pathOf(org),
   /** Organization › Roles: the roles and the permission catalogue (#2964). */
   roles: (org: string): SafePath => pathOf(org, "roles"),
-  apiKeys: (org: string): SafePath => pathOf(org, "api-keys"),
+  /**
+   * Organization › API keys. A key names a workspace (ADR-073), so the
+   * workspace in scope is a query value on this one route rather than a route
+   * of its own; left off, the page takes the viewer's first workspace.
+   */
+  apiKeys: (org: string, q?: { workspace?: string }): SafePath =>
+    withQuery(pathOf(org, "api-keys"), { workspace: q?.workspace }),
   /** Fleet; `cursor` opens a later page of its runs table. */
   fleet: (org: string, ws: string, q?: { cursor: string }): SafePath =>
     withQuery(pathOf(org, ws), { cursor: q?.cursor }),

@@ -106,6 +106,7 @@
         "never": "never",
         "noExpiry": "does not expire",
         "active": "active",
+        "expired": "expired",
         "revoked": "revoked"
       },
       "toolbelt": {
@@ -188,6 +189,7 @@
         "bundleVersion": "version {version}",
         "never": "never",
         "revoked": "revoked",
+        "expired": "expired",
         "empty": {
           "title": "No host is enrolled under this agent",
           "body": "Enroll the host it runs on, from the repository it works in:",

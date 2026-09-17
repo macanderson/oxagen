@@ -182,10 +182,11 @@ export interface DataSource {
     ): Promise<Read<FirstFrame>>;
   };
   /**
-   * The Organization pages' four reads, each noBillingGate and org-scoped
-   * (#2964, WL-37), each an Owner-or-Admin read checked in its handler;
-   * callers: features/organization/people.tsx, roles.tsx, workspaces.tsx,
-   * api-keys.tsx and features/audit/audit.tsx (actor names, off `members`).
+   * The Organization pages' four reads, each noBillingGate (#2964, WL-37,
+   * WL-43), each an Owner-or-Admin read checked in its handler; callers:
+   * features/organization/people.tsx, roles.tsx, workspaces.tsx, api-keys.tsx
+   * and features/audit/audit.tsx (actor names, off `members`). Three are
+   * org-scoped; `apiKeys` is not, because a key names a workspace (ADR-073).
    */
   org: {
     /** list_members {scope:"org"} */
@@ -194,8 +195,15 @@ export interface DataSource {
     roles(ctx: OrgCtx): Promise<Read<RoleCatalog>>;
     /** list_workspaces, archived rows included */
     workspaces(ctx: OrgCtx): Promise<Read<WorkspaceList>>;
-    /** list_api_keys, every key in scope, newest first, revoked ones included */
-    apiKeys(ctx: OrgCtx): Promise<Read<ApiKey[]>>;
+    /**
+     * list_api_keys, every key of the workspace in scope, newest first,
+     * revoked ones included. A `WsCtx`, never an `OrgCtx`: `auth.api_keys` is
+     * policy class `standard`, so under the org-only sentinel the list matches
+     * no key that exists and a mint writes one into a workspace that does not
+     * (ADR-073). The page picks a workspace off `workspaces` and resolves into
+     * it before it reads a key.
+     */
+    apiKeys(ctx: WsCtx): Promise<Read<ApiKey[]>>;
   };
   /**
    * The organization's audit record (#3097), both noBillingGate reads for an
