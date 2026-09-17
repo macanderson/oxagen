@@ -1027,6 +1027,16 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "get_main_repository",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "mandate",
       "name": "get_mandate",
       "reads": [],
@@ -1740,6 +1750,16 @@
     {
       "domain": "tacho",
       "name": "list_incidents",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "list_installation_repositories",
       "reads": [],
       "surfaces": [
         "api",
@@ -3353,7 +3373,7 @@
       "writes": []
     }
   ],
-  "contentHash": "581751fd363fe4b29a33fe233423aa25da3a8443a22a9855e375bc78769237be",
+  "contentHash": "1aab064b9d7dd9c2cf9e50c91c0b91ef026f4a9a6025d6efe5b49a9b7aafc8ef",
   "domains": [
     {
       "name": "agent",
