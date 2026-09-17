@@ -2521,7 +2521,7 @@
       "writes": []
     }
   ],
-  "contentHash": "c2c80c64e919240de8d94da857ecbded80af20a55aabfd6bc83a168b87440bea",
+  "contentHash": "a630b9537304133aac9c00d3a5f0fd0edea58dab2011cd4e762f67fed5f4bae9",
   "domains": [
     {
       "name": "agent",
@@ -13056,6 +13056,12 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "negotiated_actions_annual",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bigint"
         },
         {
           "name": "status",
