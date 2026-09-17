@@ -1593,8 +1593,8 @@ describe("getChargeMetadata — an outage is not an answer (ADR-085 §9)", () =>
   });
 
   /** Stripe's SDK tags its errors with `type`; that is what classifies them. */
-  function stripeError(type: string, message = "boom"): Error {
-    return Object.assign(new Error(message), { type });
+  function stripeError(type: string, message = "boom", code?: string): Error {
+    return Object.assign(new Error(message), code ? { type, code } : { type });
   }
 
   it("returns the charge's metadata on a successful read", async () => {
@@ -1610,31 +1610,57 @@ describe("getChargeMetadata — an outage is not an answer (ADR-085 §9)", () =>
   });
 
   it("returns {} when Stripe says the charge does not exist — retrying cannot change that", async () => {
+    // `resource_missing` is the one code that means "Stripe looked, and there
+    // is no such charge". It is the sole definitive answer this classifier
+    // recognises.
     stripeMethods.charges.retrieve.mockRejectedValue(
-      stripeError("StripeInvalidRequestError", "No such charge"),
+      stripeError(
+        "StripeInvalidRequestError",
+        "No such charge",
+        "resource_missing",
+      ),
     );
 
     await expect(provider.getChargeMetadata("ch_gone")).resolves.toEqual({});
   });
 
-  it("returns {} when this key may not read the charge", async () => {
-    stripeMethods.charges.retrieve.mockRejectedValue(
-      stripeError("StripePermissionError"),
-    );
+  // The sibling of the permission finding. An invalid request that is NOT
+  // `resource_missing` — a bad expand, an API version we no longer send, a
+  // malformed id — is OUR defect, not a fact about the charge. It is
+  // correctable by a deploy, and until it is corrected it would otherwise
+  // finalise every dispute that reached it: each one reads as "this charge
+  // bought nothing", drops, and is marked processed for ever. Systematically
+  // losing every disputed unit is far worse than a redelivery, so this
+  // propagates too.
+  it.each([
+    ["a parameter we sent wrongly", "parameter_unknown"],
+    ["an invalid request carrying no code at all", undefined],
+  ])(
+    "throws on an invalid request that is not resource_missing (%s)",
+    async (_label, code) => {
+      stripeMethods.charges.retrieve.mockRejectedValue(
+        stripeError("StripeInvalidRequestError", "bad expand", code),
+      );
 
-    await expect(provider.getChargeMetadata("ch_1")).resolves.toEqual({});
-  });
+      await expect(provider.getChargeMetadata("ch_1")).rejects.toThrow(
+        "bad expand",
+      );
+    },
+  );
 
-  // The regression. Each of these used to come back as `{}`, which tells the
-  // dispute handler the charge has no organisation and bought nothing — so the
-  // dispute is dropped and the webhook is marked processed for ever, while a
-  // later checkout retry hands out every unit. An outage must not be
-  // indistinguishable from an answer.
+  // The test is not "did Stripe answer" but "can this answer change on its
+  // own?". A key that lacks charge-read permission can be granted it by an
+  // operator minutes later, and the identical call then returns real metadata.
+  // That is an operator-correctable condition, not a fact about the charge, so
+  // it belongs on the retry path with the outages.
   it.each([
     ["StripeConnectionError"],
     ["StripeAPIError"],
     ["StripeRateLimitError"],
     ["StripeAuthenticationError"],
+    ["StripePermissionError"],
+    // Not a type this codebase knows. Unknown must fall to the safe side.
+    ["StripeSomeFutureError"],
   ])("throws on %s so the webhook is retried", async (type) => {
     stripeMethods.charges.retrieve.mockRejectedValue(stripeError(type));
 

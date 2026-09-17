@@ -126,22 +126,98 @@ function stripeChargeToNeutral(c: Stripe.Charge): BillingRefundedCharge {
 }
 
 /**
- * Whether Stripe has definitively answered that a charge cannot be read, as
- * opposed to failing to answer.
+ * What a failed Stripe read establishes.
  *
- * Definitive: the id is wrong or the resource is gone
- * (`StripeInvalidRequestError`), or this key may not see it
- * (`StripePermissionError`). Retrying returns the same thing.
+ * "definitive" — Stripe looked and answered about the resource, and the answer
+ * cannot change on its own. The identical call returns the identical thing on
+ * the redelivery, so the caller's "no metadata" branch is the correct one.
  *
- * Everything else — connection errors, 5xx, rate limits, authentication
- * faults — is the absence of an answer. Treating absence as "no metadata"
- * silently converts an outage into a dropped dispute, so those propagate.
+ * "retry" — the call established nothing about the resource. Either it never
+ * reached Stripe, or it failed on a condition someone can CORRECT, after which
+ * the unchanged call returns real data.
+ *
+ * The test is not "did Stripe answer" but "can this answer change on its own?"
+ * — which is why a permission error is not definitive: an operator grants the
+ * key `charges:read` and the same request then succeeds. That is a fact about
+ * our configuration, not about the charge.
+ *
+ * The two costs are not symmetric and the asymmetry is what decides every
+ * doubtful case. Wrongly retrying costs a redelivery. Wrongly finalising costs
+ * the units: no metadata means no organisation, so the dispute is not parked,
+ * the handler RETURNS, `processStripeEvent` marks the event processed for ever,
+ * and the retried checkout grants every disputed unit. Unknown therefore
+ * resolves to "retry", never to "definitive".
  */
-function isDefinitiveStripeReadFailure(err: unknown): boolean {
-  const type = (err as { type?: unknown } | null)?.type;
-  return (
-    type === "StripeInvalidRequestError" || type === "StripePermissionError"
-  );
+type StripeReadDisposition = "definitive" | "retry";
+
+/**
+ * The error types this build's Stripe SDK can tag a thrown error with. The
+ * SDK generates this union from its OpenAPI spec, so an upgrade that adds a
+ * type widens it — and the `satisfies` below then fails to compile until the
+ * new type is classified.
+ */
+type StripeErrorType = Stripe.errors.StripeError["type"];
+
+/**
+ * The fork as a TOTAL mapping rather than a pair of lists.
+ *
+ * A list-shaped classifier is cheap to extend and silent when extended wrongly:
+ * an error absent from both lists, or added to the wrong one, fails in the
+ * direction of granting units and nothing says so. A total map over the SDK's
+ * own union makes the next error type a COMPILE error instead of a default —
+ * whoever upgrades the SDK has to answer the question rather than inherit an
+ * answer. `stripeReadDisposition` keeps a runtime fallback as well, because the
+ * value arrives as `unknown` and a string this build has never heard of is
+ * exactly the case a compiler cannot see.
+ */
+const STRIPE_READ_DISPOSITION = {
+  // The one fact here that cannot change on its own. Narrowed further by code
+  // below: only `resource_missing` is "Stripe looked and there is no such
+  // charge". Every other invalid request is a bug or a misconfiguration on our
+  // side — a bad expand, a wrong API version — which someone corrects and
+  // redeploys, so it belongs with the correctable ones.
+  StripeInvalidRequestError: "definitive",
+
+  // Correctable by an operator, without any change to this call.
+  StripePermissionError: "retry",
+  StripeAuthenticationError: "retry",
+  StripeInvalidGrantError: "retry",
+  TemporarySessionExpiredError: "retry",
+
+  // Never reached Stripe, or Stripe could not answer.
+  StripeConnectionError: "retry",
+  StripeAPIError: "retry",
+  StripeRateLimitError: "retry",
+
+  // Cannot arise from a charge read. Mapped anyway so the table stays total,
+  // and mapped to the safe side so that if one ever does, it costs a
+  // redelivery rather than the units.
+  StripeError: "retry",
+  StripeCardError: "retry",
+  StripeIdempotencyError: "retry",
+  StripeSignatureVerificationError: "retry",
+} satisfies Record<StripeErrorType, StripeReadDisposition>;
+
+/** Stripe's code for "I looked, and there is no such object." */
+const STRIPE_RESOURCE_MISSING = "resource_missing";
+
+function stripeReadDisposition(err: unknown): StripeReadDisposition {
+  const fields = err as { type?: unknown; code?: unknown } | null;
+  const type = fields?.type;
+  if (typeof type !== "string") return "retry";
+
+  // Deliberately indexed as a plain record rather than asserted to
+  // `StripeErrorType`: at runtime the string can be a type this build's SDK
+  // does not have, and that is the case the compiler cannot reach.
+  const disposition = (
+    STRIPE_READ_DISPOSITION as Record<string, StripeReadDisposition | undefined>
+  )[type];
+  if (disposition !== "definitive") return "retry";
+
+  // "Definitive" means the object is gone, not merely that the request was
+  // rejected. An invalid request for any other reason is our defect, and our
+  // defects get corrected.
+  return fields?.code === STRIPE_RESOURCE_MISSING ? "definitive" : "retry";
 }
 
 /** Micro-dollars in one cent. */
@@ -955,17 +1031,17 @@ export class StripeProvider implements BillingProvider {
       const charge = await this.client().charges.retrieve(chargeId);
       return (charge.metadata as Record<string, string>) ?? {};
     } catch (err) {
-      if (isDefinitiveStripeReadFailure(err)) {
-        // Stripe answered: this charge does not exist, or we may not read it.
-        // Retrying cannot change that, and the caller's "no metadata" branch
-        // is the correct one.
+      if (stripeReadDisposition(err) === "definitive") {
+        // Stripe answered: there is no such charge. Retrying cannot change
+        // that, and the caller's "no metadata" branch is the correct one.
         logger.warn(
           { chargeId, err: err instanceof Error ? err.message : String(err) },
           "billing: charge cannot be read; treating as no metadata",
         );
         return {};
       }
-      // A timeout, a 5xx or a rate limit is NOT an answer. Returning `{}` here
+      // A timeout, a 5xx, a rate limit or a permission we have not been granted
+      // yet is NOT an answer about the charge. Returning `{}` here
       // would tell the dispute handler the charge has no organisation and
       // nothing was bought, so the dispute would be dropped and the webhook
       // marked processed for ever — the exact defect ADR-085 §5 and §8 exist

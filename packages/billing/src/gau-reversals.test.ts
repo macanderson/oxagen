@@ -47,6 +47,22 @@ vi.mock(
     }) as never,
 );
 
+// A real StripeProvider, so one test can compose the real read-failure
+// classifier with the real park decision. Everything else in this file drives
+// `getChargeMetadata` directly; that is faster, but it cannot catch a
+// classifier that answers `{}` where it should have thrown, because the stub
+// IS the classifier's answer.
+const stripeCharges = vi.hoisted(() => ({ retrieve: vi.fn() }));
+vi.mock("stripe", () => ({
+  default: vi.fn(() => ({ charges: stripeCharges })),
+}));
+vi.mock("@oxagen/config/env", () => ({
+  requireEnv: vi.fn(() => ({
+    STRIPE_SECRET_KEY: "sk_test_mock",
+    STRIPE_WEBHOOK_SECRET: "whsec_mock",
+  })),
+}));
+
 vi.mock(
   "./contract-terms",
   () =>
@@ -58,6 +74,7 @@ vi.mock(
 const { applyGauReversal, reversibleGau } = await import("./gau-reversals");
 const { reverseGauPurchaseForDispute, reverseGauPurchaseForRefund } =
   await import("./gau-reversals");
+const { StripeProvider } = await import("./stripe-provider");
 const { reconcilePendingGauReversals } = await import("./gau-reversals");
 
 const ORG = "00000000-0000-0000-0000-00000000a0a1";
@@ -856,6 +873,70 @@ describe("a charge read that fails is not an answer (ADR-085 §9)", () => {
 
     expect(result).toBeNull();
     expect(store.reversals).toHaveLength(0);
+  });
+});
+
+describe("a charge this key may not read is retried, not finalised", () => {
+  // Composed on purpose: the real classifier feeding the real park decision.
+  // Every other test here stubs `getChargeMetadata`, so it asserts what the
+  // park path does with an answer — it cannot see the classifier hand it the
+  // WRONG answer. This one can.
+  //
+  // The chain the finding named: a dispute arrives before its checkout
+  // settlement; the configured key temporarily lacks charge-read permission;
+  // the classifier calls that definitive; `{}` comes back; there is no org to
+  // attribute to, so the reversal is not parked; the handler RETURNS, which
+  // marks the event processed for ever; the retried checkout then grants every
+  // disputed unit. The webhook succeeds and the money is gone.
+  function permissionError(): Error {
+    return Object.assign(new Error("key lacks charges:read"), {
+      type: "StripePermissionError",
+    });
+  }
+
+  beforeEach(() => {
+    const provider = new StripeProvider();
+    mocks.getChargeMetadata.mockImplementation((chargeId: string) =>
+      provider.getChargeMetadata(chargeId),
+    );
+  });
+
+  it("does not park, and does not silently succeed, while the key is unauthorized", async () => {
+    stripeCharges.retrieve.mockRejectedValue(permissionError());
+
+    // Throwing is the whole ask: processStripeEvent re-dispatches only an
+    // event whose handler threw. Returning null here would be the defect --
+    // indistinguishable, to the webhook, from "this charge bought no GAUs".
+    await expect(reverseGauPurchaseForDispute(dispute())).rejects.toThrow(
+      "key lacks charges:read",
+    );
+    expect(store.reversals).toHaveLength(0);
+  });
+
+  it("parks on the redelivery once an operator grants the permission", async () => {
+    // The half that proves the retry RECOVERS rather than merely being asked
+    // for. A permission is operator-correctable: the same call, unchanged,
+    // returns real metadata once the key is fixed. That is precisely what
+    // makes it transient rather than a fact about the charge.
+    stripeCharges.retrieve.mockRejectedValueOnce(permissionError());
+    await expect(reverseGauPurchaseForDispute(dispute())).rejects.toThrow();
+
+    stripeCharges.retrieve.mockResolvedValue({
+      id: "ch_gau_001",
+      metadata: { oxagen_kind: "gau_purchase", org_id: ORG },
+    });
+
+    const result = await reverseGauPurchaseForDispute(dispute());
+
+    expect(result).toMatchObject({ pending: true, orgId: ORG });
+    expect(store.reversals).toHaveLength(1);
+    expect(store.reversals[0]).toMatchObject({
+      orgId: ORG,
+      settlementId: null,
+      stripePaymentIntentId: "pi_gau_001",
+      providerEventId: "dp_gau_001",
+      amountCents: 5_500,
+    });
   });
 });
 
