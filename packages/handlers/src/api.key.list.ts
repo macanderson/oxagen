@@ -153,13 +153,9 @@ export const apiKeyListHandler: CapabilityHandler<typeof apiKeyList> = async (
   // judged against different clocks.
   const now = Date.now();
   // A workspace row that is not there fails closed. `rotate_api_key` answers
-  // `not_found` for it, so the honest `rotatable` is false; the sentinel date
-  // only has to be non-null, because nothing renders it — the page reads the
-  // boolean, and the handler composes its own message from the row it locked.
-  const rotationWorkspace = workspace ?? {
-    name: "",
-    archivedAt: new Date(0),
-  };
+  // `not_found` for it, so the honest `rotatable` is false. Expressed here
+  // rather than as a stand-in workspace object, so nothing downstream can read
+  // a fabricated name or archival date back out.
   return {
     items: rows.map((row) => ({
       publicId: row.publicId,
@@ -169,15 +165,17 @@ export const apiKeyListHandler: CapabilityHandler<typeof apiKeyList> = async (
       lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
       expiresAt: row.expiresAt?.toISOString() ?? null,
       revokedAt: row.revokedAt?.toISOString() ?? null,
-      rotatable: isRotatableKey(
-        {
-          scope: row.scope,
-          expiresAt: row.expiresAt,
-          revokedAt: row.revokedAt,
-        },
-        now,
-        rotationWorkspace,
-      ),
+      rotatable: workspace
+        ? isRotatableKey(
+            {
+              scope: row.scope,
+              expiresAt: row.expiresAt,
+              revokedAt: row.revokedAt,
+            },
+            now,
+            workspace,
+          )
+        : false,
     })),
   };
 };
