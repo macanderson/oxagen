@@ -149,15 +149,12 @@
 # closed: IAM `ip_ranges` mandates deny and the pre-authentication ceilings skip.
 # That is the safe direction and the reason the flag is a separate step.
 #
-# Do NOT set `TRUSTED_PROXY_CIDRS` for this shape, and the ordering is the whole
-# reason: a non-empty list makes the application's identity walk decide alone —
-# it does not fall through to the hop count — and after the rewrite below there
-# is no proxy entry left in the header to vouch for the client, so the walk
-# returns nothing. That denies every IAM `ip_ranges` mandate and skips the
-# pre-authentication ceilings. The variable belongs to the PRE-rewrite shape,
-# where the ALB's own address is still in the chain. After the rewrite, the edge
-# header is what attributes the caller. ADR-083 has the sequencing; #3167 tracks
-# the ceilings.
+# Do NOT set `TRUSTED_PROXY_CIDRS` for this shape either, for the reason just
+# given: it is the identity walk, and after the rewrite below there is no proxy
+# entry left for it to vouch with. Setting it here attributes nothing rather
+# than restoring anything. The variable belongs to the PRE-rewrite shape, where
+# the ALB's own address is still in the chain. ADR-083's "The attribution order,
+# stated once" has the sequencing; #3167 tracks the ceilings.
 {
 	servers {
 		# Substituted by infra/tools/install-node-scripts.sh; see "Why the list
