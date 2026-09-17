@@ -285,10 +285,18 @@ function enumeratesTreeIn(context: Symbols): CallTest {
     // The argument's VALUE, not its spelling: `listFiles(SRC)` where
     // `const SRC = "src"` is the same walk as the literal, and asking the
     // checker for the type costs nothing here since it is already resolving
-    // this callee. A widened `string` answers false, which is the safe
-    // direction only because `productionFiles` above is unconditional.
+    // this callee.
+    //
+    // A type the checker cannot pin to a literal — `const root: string =
+    // "src"`, or a parameter — counts as the tree. EXCLUDING a walk is the
+    // direction that silently drops coverage: answering false here means no
+    // budget is required, so an unprovable argument would buy an exemption by
+    // being unreadable. Requiring the budget instead costs a named subtree
+    // nothing (its literal resolves) and costs a widened one an explicit
+    // timeout, which is the answer we would want anyway.
     const type = context.checker.getTypeAtLocation(argument);
-    return type.isStringLiteral() && type.value === "src";
+    if (!type.isStringLiteral()) return true;
+    return type.value === "src";
   };
 }
 
@@ -882,6 +890,16 @@ describe("whole-tree timeout budget", () => {
     ]);
   });
 
+  it("a root the checker cannot pin to a subtree counts as the tree", () => {
+    // The exclusion is the direction that silently drops coverage, so it now
+    // requires proof: an argument whose type is not a string literal is the
+    // tree until shown otherwise. Every real subtree in the suite resolves to a
+    // literal, so this costs the existing call sites nothing.
+    expect(probe("widened-root.test.ts")).toEqual([
+      `${RULE} ${PROBES}/widened-root.test.ts:8 it none`,
+    ]);
+  });
+
   it('listFiles("src") counts, and a named subtree does not', () => {
     expect(probe("list-src.test.ts")).toEqual([
       `${RULE} ${PROBES}/list-src.test.ts:5 it none`,
@@ -942,6 +960,7 @@ describe("whole-tree timeout budget", () => {
       "shorthand.test.ts",
       "subtree.test.ts",
       "value-alias.test.ts",
+      "widened-root.test.ts",
       "wrong-budget.test.ts",
     ]);
   });
