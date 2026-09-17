@@ -161,6 +161,13 @@ export async function applyGauReversal(
     // Materialise the current bucket the way the grant does, so an org whose
     // month has rolled with no activity still has the row its carried units
     // are on before they are taken off it.
+    //
+    // It is also what makes the absolute-valued UPDATE below correct. The
+    // upsert takes the bucket's row lock and holds it to commit, so the counts
+    // it returns cannot move under us and `purchasedGau - fromPurchased` is
+    // exact. A plain SELECT here would read the same numbers and then race a
+    // concurrent recorder, withdrawing units it had just granted. Replacing
+    // this call with a read is not a simplification.
     const { terms, subscription } = await readGauEntitlement(
       tx,
       settlement.orgId,
