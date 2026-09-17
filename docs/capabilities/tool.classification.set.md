@@ -46,6 +46,7 @@ Updates `agent.tool_versions` (`classified_risk_grade`, `classification`, `class
 
 - `PUT /v1/{org}/{ws}/tools/versions/classification`
 - MCP tool `set_tool_classification` (an API key acts as its creator at the role gate, ADR-072 decision 8)
+- App: **Tools → Registry → a row opens the tool dialog** at `/{org}/{ws}/tools` — the reclassification form; the version's measures are carried through unchanged.
 
 ## Errors
 

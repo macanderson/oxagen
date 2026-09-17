@@ -34,7 +34,6 @@ type Messages = {
     audit: string;
   };
   unrecorded: {
-    tools: string;
     run: {
       frames_wrapped: string;
     };
@@ -1876,6 +1875,290 @@ type Messages = {
         headMoved: string;
         baseMoved: string;
         githubRefused: string;
+        refused: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
+    };
+  };
+  tools: {
+    eyebrow: string;
+    lede: string;
+    loading: string;
+    notCarried: string;
+    nextPage: string;
+    roles: {
+      owner: string;
+      admin: string;
+      member: string;
+      billing: string;
+      compliance: string;
+      viewer: string;
+    };
+    tabs: {
+      label: string;
+      registry: string;
+      connections: string;
+      switches: string;
+      switchesOn: string;
+      switchesOnAtLeast: string;
+    };
+    gate: {
+      open: string;
+      killed_version: string;
+      killed_server: string;
+      killed_class: string;
+    };
+    registry: {
+      title: string;
+      lead: string;
+      categories: string;
+      allCategories: string;
+      categoriesNote: string;
+      allOnPage: string;
+      categoriesDeclaredNote: string;
+      categoriesFilteredNote: string;
+      unclassified: string;
+      noTags: string;
+      emptyCategory: string;
+      gateNote: string;
+      empty: {
+        title: string;
+        body: string;
+      };
+      columns: {
+        version: string;
+        category: string;
+        hazard: string;
+        gate: string;
+        egress: string;
+        financial: string;
+        origin: string;
+        digest: string;
+        calls: string;
+      };
+      names: {
+        label: string;
+        labels: string;
+        api: string;
+      };
+      risk: {
+        low: string;
+        medium: string;
+        high: string;
+        critical: string;
+      };
+      sideEffect: {
+        read: string;
+        write: string;
+        irreversible: string;
+      };
+      egress: {
+        local: string;
+        org_tenant: string;
+        third_party: string;
+      };
+      financial: {
+        yes: string;
+      };
+      origin: {
+        declared: string;
+        imported: string;
+      };
+    };
+    tool: {
+      yes: string;
+      no: string;
+      unclassified: string;
+      source: {
+        builtin: string;
+        custom: string;
+        mcp: string;
+        foundry: string;
+      };
+      facts: {
+        id: string;
+        capability: string;
+        source: string;
+        gate: string;
+        origin: string;
+        digest: string;
+        readOnly: string;
+        enabled: string;
+        classifiedAt: string;
+        measures: string;
+        updatedAt: string;
+      };
+      classify: {
+        lead: string;
+        riskGrade: string;
+        sideEffect: string;
+        egress: string;
+        consequenceTags: string;
+        tagsHint: string;
+        dataClasses: string;
+        dataClassesHint: string;
+        dataClassesPlaceholder: string;
+        reason: string;
+        reasonHint: string;
+        confirm: string;
+        pending: string;
+        denied: string;
+        tagsPlaceholder: string;
+      };
+    };
+    import: {
+      open: string;
+      title: string;
+      body: string;
+      serverId: string;
+      tools: string;
+      toolsHint: string;
+      confirm: string;
+      pending: string;
+      done: string;
+      serverIdPlaceholder: string;
+    };
+    connections: {
+      title: string;
+      lead: string;
+      noRun: string;
+      brokerNote: string;
+      notCarriedNote: string;
+      empty: {
+        title: string;
+        body: string;
+      };
+      columns: {
+        grant: string;
+        server: string;
+        run: string;
+        connection: string;
+        scope: string;
+        ttl: string;
+        state: string;
+      };
+      ttl: string;
+      downscope: {
+        token_exchange: string;
+        session_policy: string;
+        restricted_key: string;
+        none: string;
+      };
+      authKind: {
+        oauth: string;
+        secret: string;
+      };
+      status: {
+        active: string;
+        expired: string;
+        revoked: string;
+      };
+    };
+    switches: {
+      title: string;
+      lead: string;
+      generation: string;
+      classHeading: string;
+      scopedHeading: string;
+      empty: string;
+      truncated: string;
+      allowing: string;
+      denying: string;
+      flippedByUnrecorded: string;
+      takesEffect: string;
+      kinds: {
+        class: string;
+        org: string;
+        workspace: string;
+        tool_server: string;
+        tool_version: string;
+        connection: string;
+        agent: string;
+        operator: string;
+      };
+      blastRadius: {
+        class: string;
+        org: string;
+        workspace: string;
+        tool_server: string;
+        tool_version: string;
+        connection: string;
+        agent: string;
+        operator: string;
+      };
+      facts: {
+        blastRadius: string;
+        takesEffect: string;
+        flippedBy: string;
+        reason: string;
+        clearedAt: string;
+      };
+      dialog: {
+        openHeader: string;
+        openDeny: string;
+        openAllow: string;
+        titleDeny: string;
+        titleAllow: string;
+        kind: string;
+        target: string;
+        targetHint: {
+          class: string;
+          org: string;
+          workspace: string;
+          tool_server: string;
+          tool_version: string;
+          connection: string;
+          agent: string;
+          operator: string;
+        };
+        blastTitle: string;
+        blastBody: string;
+        restoreTitle: string;
+        restoreBody: string;
+        classNote: string;
+        connectionNote: string;
+        reason: string;
+        takesEffect: string;
+        takesEffectValue: string;
+        takesEffectValueIfChanged: string;
+        recordedAs: string;
+        recordedAsValue: string;
+        confirmDeny: string;
+        confirmAllow: string;
+        pending: string;
+        unchanged: string;
+      };
+      noNames: string;
+    };
+    failure: {
+      back: string;
+      denied: {
+        title: string;
+        body: string;
+        signedIn: string;
+        needed: string;
+        decidedBy: string;
+      };
+      pending: {
+        title: string;
+        body: string;
+      };
+      error: {
+        title: string;
+        body: string;
+        code: string;
+        retry: string;
+      };
+    };
+    actions: {
+      failure: {
+        orgRoleRequired: string;
+        noPrincipal: string;
+        serverNotFound: string;
+        versionNotFound: string;
+        killSwitchOn: string;
         refused: string;
         invalid: string;
         pendingApproval: string;
