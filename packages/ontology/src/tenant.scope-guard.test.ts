@@ -32,7 +32,10 @@ vi.mock("./client", () => ({ session: () => ({ run, close }) }));
 
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "./tenant";
-import { stripLiteralsAndComments } from "./graph-scope";
+import {
+  keepFilteringPositions,
+  stripLiteralsAndComments,
+} from "./graph-scope";
 
 const ORG = "00000000-0000-0000-0000-00000000a111";
 const WS = "00000000-0000-0000-0000-00000000b222";
@@ -160,6 +163,68 @@ describe("tenancy guard — the token in a non-filtering clause", () => {
   }
 });
 
+// The deepest of the four rounds. Every earlier version checked WHERE the
+// tenant token sits — anywhere, then beside `:` or `=`, then in a filtering
+// position — and none checked WHAT IT BINDS TO. Each query below is in a WHERE
+// or a pattern property, compares the tenant column, and reads another
+// organisation's rows, because the parameter on the other side is one the
+// CALLER supplies. Only `$orgId` is seam-owned: run() overwrites it on every
+// call, so it is the one value a caller cannot influence.
+//
+// Two of these were, until this round, asserted as ACCEPTANCE cases in this
+// file — tests locking in a cross-tenant read.
+describe("tenancy guard — anchored to a parameter the caller controls", () => {
+  const notSeamBound: Array<[name: string, cypher: string]> = [
+    [
+      "WHERE against a caller-supplied parameter",
+      "MATCH (n) WHERE n.orgId = $victimOrgId RETURN n",
+    ],
+    [
+      "pattern property against a caller-supplied parameter",
+      "MATCH (n:GraphNode {orgId: $someOtherParam}) RETURN n",
+    ],
+    [
+      "membership against a caller-supplied list",
+      "MATCH (n) WHERE n.orgId IN $arbitraryList RETURN n",
+    ],
+    [
+      "hard-coded literal tenant",
+      "MATCH (n) WHERE n.orgId = 'some-uuid' RETURN n",
+    ],
+    [
+      "reversed comparison against a caller-supplied parameter",
+      "MATCH (n) WHERE $victimOrgId = n.orgId RETURN n",
+    ],
+    [
+      "parameter whose name merely starts with orgId",
+      "MATCH (n) WHERE n.orgId = $orgIdOverride RETURN n",
+    ],
+    [
+      "MERGE key against a caller-supplied parameter",
+      "MERGE (e:Execution {id: $id, orgId: $callerChosenOrg})",
+    ],
+  ];
+
+  for (const [name, cypher] of notSeamBound) {
+    it(`rejects: ${name}`, async () => {
+      // Discriminating against the round-3 guard, which checked position and
+      // shape and never checked the binding.
+      const round3 = /\borgId\s*[:=]|\borgId\s+IN\b|=\s*[\w$]+\.orgId\b/;
+      expect(round3.test(keepFilteringPositions(cypher))).toBe(true);
+      await expect(guardAccepts(cypher)).resolves.toBe(false);
+    });
+  }
+
+  it("accepts the seam parameter in both binding shapes", async () => {
+    await expect(
+      guardAccepts("MATCH (n) WHERE n.orgId = $orgId RETURN n"),
+    ).resolves.toBe(true);
+    await expect(
+      guardAccepts("MATCH (n:GraphNode {orgId: $orgId}) RETURN n"),
+    ).resolves.toBe(true);
+  });
+});
+
 describe("tenancy guard — shapes that really do anchor the tenant", () => {
   const anchored: Array<[name: string, cypher: string]> = [
     [
@@ -186,14 +251,6 @@ describe("tenancy guard — shapes that really do anchor the tenant", () => {
     [
       "relationship pattern property",
       "MERGE (a)-[r:INVOKED {orgId: $orgId}]->(b) RETURN r",
-    ],
-    [
-      "reversed comparison inside a WHERE",
-      "MATCH (n:GraphNode) WHERE $orgId = n.orgId RETURN n",
-    ],
-    [
-      "membership inside a WHERE",
-      "MATCH (n:GraphNode) WHERE n.orgId IN $orgIds RETURN n",
     ],
     [
       "anchored WHERE with a CALL subquery after it",

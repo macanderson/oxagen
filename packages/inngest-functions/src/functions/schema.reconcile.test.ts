@@ -160,7 +160,12 @@ function applyWriteBack(
   removeClause: string,
 ): Record<string, unknown> {
   const next = { ...stored, ...props }; // `+=` merges; it never deletes.
-  for (const m of removeClause.matchAll(/r\.`([^`]+)`/g)) delete next[m[1]!];
+  // Parse `r.`key`` the way Cypher reads a quoted identifier: a doubled
+  // backtick is one literal backtick, a single one ends the name. Modelling
+  // this rather than a naive [^`]+ is what makes the escaping test meaningful.
+  for (const m of removeClause.matchAll(/r\.`((?:[^`]|``)*)`/g)) {
+    delete next[m[1]!.replace(/``/g, "`")];
+  }
   return next;
 }
 
@@ -242,14 +247,54 @@ describe("relationship prune write-back", () => {
     expect(buildRelationshipWriteBack([]).setClause).toBe("SET r += $props");
   });
 
-  it("throws rather than silently skipping a key it cannot interpolate", () => {
+  // `schema.property.upsert` accepts any non-empty string up to 200 characters,
+  // so these are ORDINARY valid property names, not hostile input. An earlier
+  // version of this builder restricted keys to JavaScript-identifier syntax and
+  // threw on them — failing the reconcile step on exactly the legacy keys the
+  // prune exists to clean up.
+  it("prunes legal property names that need escaping", () => {
+    const keys = [
+      "legacy-note",
+      "display name",
+      "with`backtick",
+      "a".repeat(200),
+    ];
+    const stored: Record<string, unknown> = { confidence: 0.9 };
+    for (const k of keys) stored[k] = "x";
+
+    const { pruned, removedKeys } = buildPrunedProperties(
+      stored,
+      ["confidence"],
+      RESERVED_RELATIONSHIP_PROPERTY_KEYS,
+    );
+    const { removeClause } = buildRelationshipWriteBack(removedKeys);
+    const after = applyWriteBack(stored, pruned, removeClause);
+
+    for (const k of keys) expect(after).not.toHaveProperty(k);
+    expect(after.confidence).toBe(0.9);
+  });
+
+  it("escapes an embedded backtick by doubling, so a key cannot close the quote", () => {
+    // Without doubling, a key of "a`) DETACH DELETE r //" would end the quoted
+    // identifier and append a clause.
+    const { removeClause } = buildRelationshipWriteBack([
+      "a`) DETACH DELETE r //",
+    ]);
+    expect(removeClause).toBe(" REMOVE r.`a``) DETACH DELETE r //`");
+    // Exactly one quoted identifier: every backtick inside it is doubled.
+    expect(removeClause.match(/`/g)?.length).toBe(4);
+  });
+
+  it("quotes a 200-character key without truncating it", () => {
+    const key = "k".repeat(200);
+    expect(buildRelationshipWriteBack([key]).removeClause).toBe(
+      ` REMOVE r.\`${key}\``,
+    );
+  });
+
+  it("throws rather than silently skipping an unexpressable key", () => {
     // Skipping would restore the original defect: a prune that reports success
     // and removes nothing.
-    expect(() => buildRelationshipWriteBack(["bad`key"])).toThrow(
-      /fails the lexical guard/,
-    );
-    expect(() => buildRelationshipWriteBack(["has space"])).toThrow(
-      /fails the lexical guard/,
-    );
+    expect(() => buildRelationshipWriteBack([""])).toThrow(/empty/);
   });
 });

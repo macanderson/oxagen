@@ -67,12 +67,25 @@ export const RESERVED_RELATIONSHIP_PROPERTY_KEYS: ReadonlySet<string> = new Set(
   ],
 );
 
-// A property key safe to interpolate into a REMOVE clause. Cypher has no
-// parameter form for a property NAME, so the key is interpolated; this is the
-// same lexical-guard-then-interpolate shape `ontology.query` uses for
-// relationship types, and it throws rather than skipping, because skipping is
-// how a prune reports success while removing nothing.
-const PROPERTY_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+/**
+ * Quote a property name for interpolation into a REMOVE clause.
+ *
+ * Cypher has no parameter form for a property NAME, so the key has to be
+ * interpolated. The safe move is to ESCAPE every legal name, not to restrict to
+ * the subset that needs no escaping: `schema.property.upsert` accepts any
+ * non-empty string up to 200 characters, so `legacy-note` and `display name`
+ * are ordinary valid property names. A guard that only admitted
+ * JavaScript-identifier syntax would throw on data the prune exists to handle,
+ * failing the reconcile step on exactly the legacy keys it was meant to clean
+ * up.
+ *
+ * Backtick-quoting covers every such name, and an embedded backtick is escaped
+ * by doubling it — which is Cypher's own rule for quoted identifiers, and what
+ * stops a crafted key from closing the quote and injecting a clause.
+ */
+function quotePropertyKey(key: string): string {
+  return `\`${key.replace(/`/g, "``")}\``;
+}
 
 /**
  * Build the write-back for one relationship.
@@ -86,15 +99,22 @@ const PROPERTY_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
  * Removal is enumerated rather than achieved by replacement (`SET r = $props`)
  * on purpose: with replacement, one key missing from the reserved set silently
  * deletes data, whereas here deleting a property requires naming it.
+ *
+ * Every key is backtick-quoted, so a legal-but-awkward property name —
+ * `legacy-note`, `display name`, one containing a backtick — is pruned rather
+ * than rejected.
  */
 export function buildRelationshipWriteBack(removedKeys: readonly string[]): {
   setClause: string;
   removeClause: string;
 } {
   for (const key of removedKeys) {
-    if (!PROPERTY_KEY_PATTERN.test(key)) {
+    // The only input that cannot be expressed as a quoted identifier. Kept as a
+    // throw rather than a skip: skipping is how a prune reports success having
+    // removed nothing, which is the defect this builder exists to fix.
+    if (key.length === 0) {
       throw new Error(
-        `schema.reconcile: relationship property key ${JSON.stringify(key)} fails the lexical guard and cannot be pruned`,
+        "schema.reconcile: an empty relationship property key cannot be pruned",
       );
     }
   }
@@ -102,7 +122,7 @@ export function buildRelationshipWriteBack(removedKeys: readonly string[]): {
     setClause: "SET r += $props",
     removeClause:
       removedKeys.length > 0
-        ? ` REMOVE ${removedKeys.map((k) => `r.\`${k}\``).join(", ")}`
+        ? ` REMOVE ${removedKeys.map((k) => `r.${quotePropertyKey(k)}`).join(", ")}`
         : "",
   };
 }

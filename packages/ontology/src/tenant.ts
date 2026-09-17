@@ -19,45 +19,55 @@ import type { GraphScope } from "./graph-scope";
 export { GraphScopeError };
 export type { GraphScope };
 
-// A scoped query must bind the tenant in a position that restricts which rows
-// it touches. Three conditions, each closing a hole the one before it left.
+// A scoped query must bind the tenant to THE SEAM'S OWN PARAMETER. Four
+// conditions; the fourth is the one the first three spent three review rounds
+// not having.
 //
-// 1) SANITIZED text. `stripLiteralsAndComments` (shared with the Phase-3 marker
-//    guard in ./graph-scope.ts — one implementation, not two) blanks comments,
-//    string literals and backtick identifiers, so `orgId` named only in a
-//    comment or inside a quoted value cannot satisfy the guard.
-// 2) FILTERING position. `keepFilteringPositions` then blanks everything that
-//    is not a `WHERE` clause or an inline pattern property map. This is the
-//    condition the previous version of this guard lacked, and the gap was not
-//    academic: `/\borgId\s*[:=]/` over the whole query accepted
+// 1) SANITIZED text. `stripLiteralsAndComments` blanks comments, string
+//    literals and backtick identifiers, so `orgId` named only in a comment or a
+//    quoted value cannot satisfy the guard.
+// 2) FILTERING position. `keepFilteringPositions` blanks everything that is not
+//    a `WHERE` clause or an inline pattern property map, so a `SET` target
+//    (`MATCH (n) SET n.orgId = $orgId`, which reassigns every tenant's nodes to
+//    the caller) and a `RETURN`/`WITH` projection do not count.
+// 3) A binding SHAPE: `orgId` against `:` or `=`.
+// 4) THE SEAM'S PARAMETER on the other side of it. Conditions 1–3 check the
+//    GRAMMAR of a tenancy anchor and never check what it binds to, which is a
+//    hole wide enough to drive a whole tenant through:
 //
-//        MATCH (n) SET n.orgId = $orgId
+//        MATCH (n) WHERE n.orgId = $victimOrgId RETURN n
 //
-//    which selects EVERY tenant's nodes and reassigns them to the caller's
-//    organisation. The old comment here called a SET target a legitimate anchor.
-//    It is the opposite of one — a SET says where a value lands, never which
-//    rows were chosen — so that spelling passed a guard whose whole job was to
-//    stop it.
-// 3) A binding SHAPE within that position: `orgId` against `:` or `=`, or an
-//    `IN` membership, or the reversed comparison. Position alone is not enough
-//    either — `WHERE n.author = $orgId` sits in a WHERE and compares the tenant
-//    value to something that is not the tenant column.
+//    sits in a WHERE, in a filtering position, comparing the tenant column to a
+//    parameter — it satisfies every earlier refinement — and the caller chooses
+//    `$victimOrgId`, so it reads another organisation's rows while the injected
+//    `$orgId` goes unused. Only `$orgId` is seam-owned: run() overwrites it on
+//    every call (`{ ...params, orgId, workspaceId }`), so a caller cannot
+//    influence it. Any other parameter name is caller-controlled by definition.
 //
-// What this does NOT promise: isolation. A query can anchor one MATCH and leave
-// a second unanchored. The seam establishes that the tenant participates in
-// filtering, which is what a lexical check can enforce on all 63 production
-// queries without a false reject taking the graph layer down.
-const SCOPE_GUARD = /\borgId\s*[:=]|\borgId\s+IN\b|=\s*[\w$]+\.orgId\b/;
+// `orgId IN $orgIds` is deliberately NOT accepted. The seam injects no list, so
+// that form can only ever compare against a caller-supplied value; an earlier
+// version of this guard accepted it, and this file carried a test asserting
+// that acceptance — a test that asserted a cross-tenant read was fine.
+//
+// The reversed comparison (`$orgId = n.orgId`) is not accepted either: no query
+// in the tree writes it, and every accepted shape is another way through.
+//
+// What this still does NOT promise: isolation. A query can anchor one MATCH
+// with $orgId and leave a second MATCH unanchored. The seam establishes that
+// the tenant filter exists, is positioned to filter, and is bound to the
+// caller's own organisation — which is what a lexical check can enforce across
+// every query in the platform.
+const SCOPE_GUARD = /\borgId\s*[:=]\s*\$orgId\b/;
 
 /**
  * Return a Neo4j session bound to the active tenant scope. Throws
  * TenantScopeError immediately if there is no active tenant scope (checked at
  * scopedSession() call time, not lazily inside run()). The returned session's
  * run():
- *  1. Rejects Cypher that does not BIND `orgId` in a FILTERING position — a
- *     WHERE predicate (`WHERE n.orgId = $orgId`) or an inline pattern property
- *     (`MATCH (n {orgId: $orgId})`). A SET target, a RETURN projection and an
- *     aliased expression all fail (seam-bypass guard).
+ *  1. Rejects Cypher that does not bind `orgId` TO THE INJECTED `$orgId` in a
+ *     FILTERING position — `WHERE n.orgId = $orgId` or
+ *     `MATCH (n {orgId: $orgId})`. A SET target, a RETURN projection, and any
+ *     other parameter name all fail (seam-bypass guard).
  *  2. Injects `$orgId` and `$workspaceId` into every params object so the
  *     Cypher never has to thread them manually.
  *
@@ -120,7 +130,7 @@ export function scopedSession(scope?: GraphScope): {
       // which is what the author wrote and has to fix.
       if (!SCOPE_GUARD.test(keepFilteringPositions(cypher))) {
         throw new TenantScopeError(
-          `Cypher over a scoped session must bind the tenant in a WHERE predicate (\`WHERE n.orgId = $orgId\`) or an inline pattern property (\`MATCH (n {orgId: $orgId})\`); a SET target or a RETURN projection does not scope anything: ${cypher.slice(0, 80)}`,
+          `Cypher over a scoped session must bind the tenant to the seam's own $orgId, in a WHERE predicate (\`WHERE n.orgId = $orgId\`) or an inline pattern property (\`MATCH (n {orgId: $orgId})\`). A SET target, a RETURN projection, and any other parameter name (which the caller controls) do not scope anything: ${cypher.slice(0, 80)}`,
         );
       }
       const sess = await ensureSession();
