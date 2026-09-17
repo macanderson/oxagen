@@ -182,9 +182,40 @@ function isFunctionLike(node: ts.Node): boolean {
 }
 
 /**
+ * Whether this call, or a same-file helper it invokes, walks the whole tree.
+ *
+ * Rule 2 judges the call that *reaches* the tree, not only a literal
+ * `productionFiles()`. Judging the literal alone let the walk hide one call
+ * deep: wrap it in a named helper, invoke the helper during collection, and
+ * read the result from a test. The enumeration inside the helper is exempt
+ * (it is charged where the helper is called), the helper's invocation is not
+ * an enumeration, and the reading test reaches nothing — so an unbounded
+ * collection-time walk passed. That is a condition approving on a proxy
+ * (*is this lexically inside a named function?*) instead of the property
+ * (*is this reached from a budgeted callback?*), which is the shape of defect
+ * this whole file exists to catch.
+ */
+function reachesTreeFromCall(
+  call: ts.CallExpression,
+  functions: ReadonlyMap<string, ts.Node>,
+): boolean {
+  if (enumeratesTree(call)) return true;
+  if (!ts.isIdentifier(call.expression)) return false;
+  const body = functions.get(call.expression.text);
+  return (
+    body !== undefined &&
+    reaches(body, functions, enumeratesTree, new Set([call.expression.text]))
+  );
+}
+
+/**
  * Whether an enumeration evaluates under some budget: inside a registrar's
  * callback, or inside a named function a callback can call. Anything else runs
  * at module or `describe` scope, during collection, ungoverned.
+ *
+ * The named-function exemption is sound only because rule 2 now checks every
+ * collection-scope *invocation* too: the exemption says "charged where it is
+ * called", and every call site at collection scope is charged.
  */
 function isBudgeted(call: ts.CallExpression): boolean {
   let node: ts.Node = call.parent;
@@ -217,7 +248,7 @@ function wholeTreeTests(sf: ts.SourceFile): {
   const file = sf.fileName;
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
-      if (enumeratesTree(node) && !isBudgeted(node)) {
+      if (reachesTreeFromCall(node, functions) && !isBudgeted(node)) {
         violations.push(
           `${RULE} ${file}:${String(lineOf(sf, node))} collection-scope`,
         );
@@ -317,6 +348,12 @@ describe("whole-tree timeout budget", () => {
     ]);
   });
 
+  it("a helper called at collection scope fails, one call deep", () => {
+    expect(probe("helper-at-collection.test.ts")).toEqual([
+      `${RULE} ${PROBES}/helper-at-collection.test.ts:14 collection-scope`,
+    ]);
+  });
+
   it("reaches the tree through a function declared in the same file", () => {
     expect(probe("helper.test.ts")).toEqual([
       `${RULE} ${PROBES}/helper.test.ts:9 it none`,
@@ -352,6 +389,7 @@ describe("whole-tree timeout budget", () => {
   it("every probe file is placed", () => {
     expect(listFiles(PROBES).map((f) => f.slice(PROBES.length + 1))).toEqual([
       "collected.test.ts",
+      "helper-at-collection.test.ts",
       "helper.test.ts",
       "hook.test.ts",
       "list-src.test.ts",
