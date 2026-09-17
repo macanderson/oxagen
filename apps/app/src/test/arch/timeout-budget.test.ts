@@ -93,13 +93,22 @@ type CallTest = (call: ts.CallExpression) => boolean;
 /**
  * The analysis context: one program over the arch suite and its probes, with
  * the host confined to `src/` exactly as route-guard.test.ts does it, so
- * platform packages resolve to nothing and the program stays small (41 files,
- * no lib, no node_modules; 67ms to build, 291ms including every callee
- * resolved). The checker is here because WHICH DECLARATION A CALLEE RESOLVES TO
- * is a binding question, and a binding question is what a symbol table answers
+ * platform packages resolve to nothing and the program stays small. Measured,
+ * not estimated: 42 roots, 47 files, no lib and no node_modules; ~125ms to
+ * build, ~400ms with all 8587 identifiers resolved. In CI, where the figure
+ * that matters is the job, the app's coverage step read 153s before this change
+ * and 158s after, on one cold-cache sample each (the turbo remote cache has been
+ * answering 402 all day), while the job total went 349s -> 337s. So the cost is
+ * real but below this job's run-to-run noise, and it is paid once in a beforeAll
+ * rather than per test.
+ *
+ * The checker is here because WHICH DECLARATION A CALLEE RESOLVES TO is a
+ * binding question, and a binding question is what a symbol table answers
  * exactly. The predicate used to compare the callee's spelling, so
  * `import { productionFiles as files }` and `arch.productionFiles()` were the
- * same walk under another name and it saw neither.
+ * same walk under another name and it saw neither -- while a local function
+ * that merely happened to be spelled `productionFiles` was reported although it
+ * enumerates nothing. Matching text was wrong in both directions at once.
  */
 type Context = {
   readonly program: ts.Program;
