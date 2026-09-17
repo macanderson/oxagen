@@ -21,7 +21,7 @@ type ActionFailure = Exclude<ActionResult<unknown>, { ok: true }>;
  * want an org role only; `import` is `import_tools`, the one that also grants
  * a workspace role.
  */
-export type ToolsWriteKind = "org" | "import";
+type ToolsWriteKind = "org" | "import";
 
 export function useActionFailure(
   kind: ToolsWriteKind = "org",
