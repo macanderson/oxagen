@@ -8,6 +8,7 @@
  *   - Toggle button has aria-label="Toggle sidebar"
  *   - Children render inside main
  *   - Sidebar renders
+ *   - The content panel carries no decorative texture layer
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -253,5 +254,18 @@ describe("ShellFrame — agent bottom bar", () => {
       </ShellFrame>,
     );
     expect(screen.queryByTestId("agent-bottom-bar")).not.toBeInTheDocument();
+  });
+});
+
+describe("ShellFrame — content panel surface", () => {
+  it("paints no graph-paper texture layer over the panel", () => {
+    // The panel used to carry a `-z-10` `.ox-panel-grid` layer that ruled a
+    // 40px line grid behind every page. It was removed so the panel is a flat,
+    // opaque token surface; this asserts it does not creep back, since a
+    // decorative layer that sits behind all content is easy to reintroduce and
+    // invisible in a diff review of any single page.
+    const { container } = renderShellFrame();
+    expect(container.querySelector(".ox-panel-grid")).toBeNull();
+    expect(container.querySelectorAll('[class*="panel-grid"]')).toHaveLength(0);
   });
 });
