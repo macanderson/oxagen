@@ -12,7 +12,11 @@ name: Desktop
 #            Exported to the build only inside the certificate-import step, which
 #            runs only when APPLE_CERTIFICATE is set: an empty
 #            APPLE_SIGNING_IDENTITY makes tauri run `codesign -s ""`, which fails
-#            with "no identity found" instead of skipping.
+#            with "no identity found" instead of skipping. Without the
+#            certificate the next step signs ad-hoc ("-") instead, which seals
+#            the bundle so it verifies and can be opened through the
+#            unidentified-developer prompt. Notarization still needs the secrets;
+#            until they exist, macOS downloads carry that prompt.
 #   Windows  not signed yet. tauri-bundler signs only through
 #            bundle.windows.certificateThumbprint or signCommand, neither of
 #            which is configured, and no signing tool is installed here;
@@ -130,6 +134,28 @@ jobs:
               echo "$name=$value" >> "$GITHUB_ENV"
             fi
           done
+
+      # Without a Developer ID, tauri leaves the bundle with only the linker's
+      # ad-hoc signature and no Contents/_CodeSignature seal. That app is not
+      # merely unsigned — `codesign --verify` rejects it with "code has no
+      # resources but signature indicates they must be present", and macOS
+      # refuses a quarantined copy outright as damaged, which the right-click
+      # Open override cannot rescue. Signing with the explicit ad-hoc identity
+      # "-" writes the seal, so the bundle verifies, the sidecars are sealed as
+      # nested code, and Gatekeeper's refusal becomes the ordinary
+      # unidentified-developer prompt a user can accept. It is not a substitute
+      # for notarization; it is the difference between a build a determined user
+      # can open and one nobody can.
+      #
+      # "-" is required rather than an empty value: an empty APPLE_SIGNING_IDENTITY
+      # makes tauri run `codesign -s ""`, which fails with "no identity found".
+      - name: Ad-hoc sign when no Developer ID is configured
+        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE == ''
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+        run: |
+          echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+          echo "::notice::No Apple Developer ID secrets; ad-hoc signing the bundle so it verifies and can be opened via the unidentified-developer prompt. Not notarized."
 
       # Updater signing is all-or-nothing: with the key, sign and publish
       # latest.json; without it, switch updater artifacts off for this build.

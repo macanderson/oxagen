@@ -33,6 +33,9 @@ vi.mock("../../middleware/distributed-rate-limit", () => ({
   distributedRateLimiter:
     () => async (_c: unknown, next: () => Promise<void>) =>
       next(),
+  // Routes pass this to `distributedRateLimiter` at module scope, so the mock
+  // has to carry it even though the stubbed limiter never calls it.
+  trustedClientIpBucketKey: () => null,
 }));
 
 import { agentCredentialRotate } from "@oxagen/oxagen/contracts/agent.credential.rotate";

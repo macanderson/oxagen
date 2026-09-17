@@ -467,7 +467,10 @@ describe("leaving the page", () => {
 
     // A rotation's replacement carries an id of its own, so the roster this
     // row was rendered from does not list it and the showing stands.
-    answer({ ok: true, value: { ...minted, id: "aky_0a1b2c3d4e5f6g7h8j9k0m" } });
+    answer({
+      ok: true,
+      value: { ...minted, id: "aky_0a1b2c3d4e5f6g7h8j9k0m" },
+    });
     expect(await screen.findByTestId("api-key-secret")).toBeInTheDocument();
   });
 

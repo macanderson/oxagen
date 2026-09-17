@@ -573,7 +573,11 @@ describe("Enrollment", () => {
     const [host] = agentDetail().hosts;
     const expiresAt = new Date(CLOCK_NOW + 20_000).toISOString();
     await renderAgent(
-      { get: readOk(agentDetail({ hosts: host ? [{ ...host, expiresAt }] : [] })) },
+      {
+        get: readOk(
+          agentDetail({ hosts: host ? [{ ...host, expiresAt }] : [] }),
+        ),
+      },
       "enrollment",
     );
     const state = () =>
