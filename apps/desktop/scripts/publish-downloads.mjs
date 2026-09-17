@@ -116,6 +116,55 @@ function sha256(path) {
   });
 }
 
+const prefix = `s3://${bucket}/desktop/${version}`;
+
+// `immutable, max-age=31536000` is a promise to every cache that fetched the
+// URL, not just to CloudFront. Overwriting the object cannot take that promise
+// back: a browser or a corporate proxy that already downloaded the installer
+// will keep serving its copy for the rest of the year without revalidating,
+// and an invalidation only reaches the edge. So a corrected build has to ship
+// under a new version, and this refuses to republish one rather than leave the
+// fleet split between two different files answering to one URL and one
+// checksum. --allow-overwrite is for the publish that failed before anyone was
+// given the URL, where nothing downstream can hold a stale copy.
+//
+// The probe runs before anything is fetched, so a refusal costs one
+// ListObjects rather than ~500 MB of downloaded artifacts and a pass of
+// SHA-256 over them — and leaves no temp directory behind, since it precedes
+// the mkdtemp below.
+const published = sh("aws", ["s3", "ls", `${prefix}/`], {
+  capture: true,
+  allowFailure: true,
+});
+// `aws s3 ls` exits 1 on a prefix that holds no objects, which is the answer
+// this wants. Anything above that is the CLI itself failing — bad credentials,
+// no such bucket — and reading that as "not published yet" would turn the one
+// check standing between a republish and a split fleet into a no-op exactly
+// when it is least safe to skip.
+if (published.status > 1) {
+  console.error(
+    `✖ aws s3 ls ${prefix}/ exited ${published.status}, so whether ${version} is\n` +
+      "  already published is unknown; refusing rather than risk overwriting it.",
+  );
+  process.exit(published.status);
+}
+if (published.status === 0 && published.stdout.trim() !== "") {
+  if (!allowOverwrite) {
+    console.error(
+      `✖ ${version} is already published at ${prefix}/.\n` +
+        "  Those URLs were served as immutable, so caches downstream of\n" +
+        "  CloudFront may hold the old installers for up to a year and no\n" +
+        "  invalidation can reach them. Ship the fix as a new version.\n" +
+        "  If nobody was ever given these URLs, re-run with --allow-overwrite.",
+    );
+    process.exit(1);
+  }
+  console.warn(
+    `! overwriting the published ${version}; only caches that never fetched\n` +
+      "  these URLs will see the new installers",
+  );
+}
+
 // 1. Collect the build outputs.
 const work = mkdtempSync(join(tmpdir(), "oxagen-downloads-"));
 let source = fromDir !== undefined ? resolve(fromDir) : work;
@@ -201,41 +250,9 @@ writeFileSync(
   }),
 );
 
-// 4. Upload. Versioned paths are immutable (a fix ships as a new version),
-// so they cache for a year; the page is short-lived because it moves with
-// every release.
-const prefix = `s3://${bucket}/desktop/${version}`;
-
-// `immutable, max-age=31536000` is a promise to every cache that fetched the
-// URL, not just to CloudFront. Overwriting the object cannot take that promise
-// back: a browser or a corporate proxy that already downloaded the installer
-// will keep serving its copy for the rest of the year without revalidating,
-// and an invalidation only reaches the edge. So a corrected build has to ship
-// under a new version, and this refuses to republish one rather than leave the
-// fleet split between two different files answering to one URL and one
-// checksum. --allow-overwrite is for the publish that failed before anyone was
-// given the URL, where nothing downstream can hold a stale copy.
-const published = sh("aws", ["s3", "ls", `${prefix}/`], {
-  capture: true,
-  allowFailure: true,
-});
-if (published.status === 0 && published.stdout.trim() !== "") {
-  if (!allowOverwrite) {
-    console.error(
-      `✖ ${version} is already published at ${prefix}/.\n` +
-        "  Those URLs were served as immutable, so caches downstream of\n" +
-        "  CloudFront may hold the old installers for up to a year and no\n" +
-        "  invalidation can reach them. Ship the fix as a new version.\n" +
-        "  If nobody was ever given these URLs, re-run with --allow-overwrite.",
-    );
-    process.exit(1);
-  }
-  console.warn(
-    `! overwriting the published ${version}; only caches that never fetched\n` +
-      "  these URLs will see the new installers",
-  );
-}
-
+// 4. Upload. Versioned paths are immutable (a fix ships as a new version,
+// enforced above), so they cache for a year; the page is short-lived because
+// it moves with every release.
 const upload = (path, key, contentType, cacheControl) => {
   const args = [
     "s3",
