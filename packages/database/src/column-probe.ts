@@ -34,7 +34,6 @@ import {
   getScope,
   resolveDataPlane,
 } from "@oxagen/tenancy";
-import type { Tx } from "./tenant";
 
 /**
  * The least a caller must hand over: something that can run a statement.
