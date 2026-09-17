@@ -1137,7 +1137,10 @@ export function readBaseline(root = ROOT) {
       );
     }
   }
-  return [...waived, ...acknowledged];
+  return [
+    ...waived.map((w) => ({ ...w, kind: "waived" })),
+    ...acknowledged.map((a) => ({ ...a, kind: "acknowledged" })),
+  ];
 }
 
 /**
@@ -1221,17 +1224,23 @@ export function findSentinelNarrowedReads(root = ROOT) {
     return false;
   });
   const staleWaivers = baseline.filter((w) => !matched.has(findingKey(w)));
+  // Counted apart, because the two lists mean different things: a waiver is a
+  // live defect with an owner and an end, an acknowledgement is not a defect at
+  // all. Pooling them under one "waived" number reports a waiver that does not
+  // exist and hides an acknowledgement that does.
+  const suppressed = baseline.filter((w) => matched.has(findingKey(w)));
   return {
     files: files.length,
     policiedTables: policyClasses.size,
     findings: unwaived,
-    waived: all.length - unwaived.length,
+    waived: suppressed.filter((w) => w.kind === "waived").length,
+    acknowledged: suppressed.filter((w) => w.kind === "acknowledged").length,
     staleWaivers,
   };
 }
 
 function main() {
-  const { files, policiedTables, findings, waived, staleWaivers } =
+  const { files, policiedTables, findings, waived, acknowledged, staleWaivers } =
     findSentinelNarrowedReads();
 
   if (process.argv.includes("--json")) {
@@ -1250,9 +1259,12 @@ function main() {
     process.exit(1);
   }
 
+  const parts = [];
+  if (waived > 0) parts.push(`${waived} waived`);
+  if (acknowledged > 0) parts.push(`${acknowledged} acknowledged`);
   const tail =
-    waived > 0
-      ? ` (${waived} waived, see org-sentinel-reads-baseline.json)`
+    parts.length > 0
+      ? ` (${parts.join(", ")}, see org-sentinel-reads-baseline.json)`
       : "";
 
   if (findings.length === 0) {

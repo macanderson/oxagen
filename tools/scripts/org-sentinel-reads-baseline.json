@@ -5,16 +5,16 @@
     "A waiver matches ONE site, ONE capability, and ONE exact set of offending",
     "tables. Anything else is a new finding: a table the handler did not narrow",
     "before, a different capability, a moved file. The table set is in the match",
-    "identity on purpose \u2014 without it a waiver would keep matching after the",
+    "identity on purpose — without it a waiver would keep matching after the",
     "handler grew a second narrowed table, suppressing a new defect while still",
     "reading as live.",
     "",
     "It RATCHETS DOWN: an entry matching no finding is itself an error, so an",
     "entry cannot outlive the defect it waives, and a defect that changes shape",
-    "reports twice \u2014 once as a new finding, once as a stale waiver.",
+    "reports twice — once as a new finding, once as a stale waiver.",
     "",
     "Two kinds. `waived` is a real defect whose fix belongs to another change;",
-    "`acknowledged` is not a defect at all \u2014 something this check reports that a",
+    "`acknowledged` is not a defect at all — something this check reports that a",
     "more precise analysis would not, with `needs` naming which analysis. An",
     "acknowledged entry without `needs` is rejected, so the category cannot",
     "become a place to put anything inconvenient.",
@@ -23,17 +23,7 @@
     "change, and name that change in `fixedBy` so the entry has an owner and an",
     "end. Never add either kind to make your own diff pass."
   ],
-  "waived": [
-    {
-      "file": "apps/app/src/data/live/org.ts (apiKeys)",
-      "capability": "list_api_keys",
-      "reason": "Live instance in the Mission Control rebuild, inherited from the base and not introduced here. The `org.apiKeys` port takes an OrgCtx, so `capabilityContext` in apps/app/src/server/kernel.ts hands list_api_keys the org-only sentinel, and its handler reads auth.api_keys (policy class `standard`) through withTenantDb \u2014 so the organization API-keys page is answered no keys at all. Found by the pass that models the kernelRead seam, which was added in this change after a review pointed out the checker could not see the rebuild's architecture at all.",
-      "fixedBy": "#3116 (ADR-073), which splits the port by scope: apiKeys(ctx: WsCtx). Verified against that branch \u2014 the finding is absent there, and this entry will fail as stale the moment it merges.",
-      "tables": [
-        "auth.api_keys"
-      ]
-    }
-  ],
+  "waived": [],
   "acknowledged": [
     {
       "file": "apps/app/src/data/live/org.ts (members)",
