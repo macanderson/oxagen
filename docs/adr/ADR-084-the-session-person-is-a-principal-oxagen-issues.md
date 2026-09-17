@@ -76,7 +76,7 @@ the address, not a hash of it, not a keyed digest of it. `tacho_events` and
 
 The reason this costs nothing: `tacho.sessions` already carries
 `agent_principal_id`, `initiating_principal_id` and `initiating_user_id`
-(`packages/database/src/schema/tacho.ts:226-228`) — identities this deployment
+(`packages/database/src/schema/tacho.ts:256-258`) — identities this deployment
 mints and governs. "Who is this session's person" was already answered by a
 value a producer cannot choose and which needs no key to stay meaningful. The
 address digest was a second, weaker answer to a question that already had one.
@@ -127,7 +127,7 @@ later migration, for the reason below.
 
 This change removes the columns from the code and adds no migration, because
 `deploy-node` ships the API on merge with no migration dependency
-(`.github/workflows/pipeline.yml:763`, whose own comment records that the
+(`.github/workflows/pipeline.yml:802-806`, whose own comment records that the
 `migrate` wait was retired and that "deploying code ahead of its migration is
 what took production login down once already"), while the production Postgres
 and ClickHouse migrations are dispatched by hand. That is issue #3186.
