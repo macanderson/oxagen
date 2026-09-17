@@ -119,7 +119,10 @@ describe("a CLI session key on MCP acts for the person who approved it", () => {
 
   it("puts the key's person on the context", async () => {
     cliSessionKeyFor(ALICE);
-    const resolution = await resolveMcpContext("Bearer ox_cli_session", "req-1");
+    const resolution = await resolveMcpContext(
+      "Bearer ox_cli_session",
+      "req-1",
+    );
     expect(resolution.ok).toBe(true);
     if (!resolution.ok) return;
     expect(resolution.ctx.userId).toBe(ALICE);
@@ -133,7 +136,10 @@ describe("a CLI session key on MCP acts for the person who approved it", () => {
     cliSessionKeyFor(ALICE);
     orgUsersRole.value = "member";
 
-    const resolution = await resolveMcpContext("Bearer ox_cli_session", "req-2");
+    const resolution = await resolveMcpContext(
+      "Bearer ox_cli_session",
+      "req-2",
+    );
     expect(resolution.ok).toBe(true);
     if (!resolution.ok) return;
 
@@ -145,7 +151,10 @@ describe("a CLI session key on MCP acts for the person who approved it", () => {
   it("still admits the same person while she holds the role", async () => {
     cliSessionKeyFor(ALICE);
     orgUsersRole.value = "admin";
-    const resolution = await resolveMcpContext("Bearer ox_cli_session", "req-3");
+    const resolution = await resolveMcpContext(
+      "Bearer ox_cli_session",
+      "req-3",
+    );
     expect(resolution.ok).toBe(true);
     if (!resolution.ok) return;
     await expect(
@@ -160,7 +169,11 @@ describe("a CLI session key on MCP acts for the person who approved it", () => {
     const { emitSecurityEvent } = await import("@oxagen/database/security");
     vi.mocked(emitSecurityEvent).mockClear();
     cliSessionKeyFor(ALICE);
-    await resolveMcpContext("Bearer ox_cli_session", "req-audit", "203.0.113.7");
+    await resolveMcpContext(
+      "Bearer ox_cli_session",
+      "req-audit",
+      "203.0.113.7",
+    );
     expect(emitSecurityEvent).toHaveBeenCalledOnce();
     const event = vi.mocked(emitSecurityEvent).mock.calls[0]?.[0];
     expect(event?.eventType).toBe("api_key.used");

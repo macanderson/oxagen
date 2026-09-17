@@ -105,6 +105,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "billing.contract_terms", policyClass: "org_only" },
   { table: "billing.gau_buckets", policyClass: "org_only" },
   { table: "billing.gau_settlements", policyClass: "org_only" },
+  // The refunded/disputed half of the settlement ledger (ADR-085). org_id NOT
+  // NULL, no workspace_id, written only by the webhook through withSystemDb.
+  { table: "billing.gau_reversals", policyClass: "org_only" },
   // Period-to-date spend ceiling. org_id NOT NULL + workspace_id NULLABLE
   // (a NULL-workspace row is the org-level ceiling) → workspace_nullable.
   { table: "billing.spend_budgets", policyClass: "workspace_nullable" },

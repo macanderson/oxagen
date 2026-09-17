@@ -195,15 +195,19 @@ describe("tenant policy manifest", () => {
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
     //
-    // 111 as of tacho.gateway_chains (#3221), the control plane's record
-    // of each authorised local-MCP-gateway call and the daemon chain it was
-    // serving. It landed unregistered on its first push: the migration
-    // installs standard tenant RLS and the table carries both org columns, but
-    // the manifest is where that is DECLARED, so it was reported as unscoped
-    // and would have failed `rls-integration` once the migration applied — and
-    // been left out of every generated RLS migration after.
+    // 112: both sides of this merge added a table. `tacho.gateway_chains`
+    // (#3221) is the control plane's record of each authorised
+    // local-MCP-gateway call and the daemon chain it was serving; it landed
+    // unregistered on its first push, because the migration installs standard
+    // tenant RLS and the table carries both org columns while the manifest is
+    // where that is DECLARED — so it read as unscoped and would have failed
+    // `rls-integration` once the migration applied, and been left out of every
+    // generated RLS migration after.
     //
-    // 110 as of mcp.credential_grants (ADR-072, #2958), which lands on top of
+    // `billing.gau_reversals` (ADR-085) is the record of a refunded or disputed
+    // GAU block purchase.
+    //
+    // Was 110 as of mcp.credential_grants (ADR-072, #2958), which landed on
     // the 109 this branch merged. Those 109 were evidence.witnesses,
     // evidence.verdicts and evidence.disclosure_policies (ADR-064, #2955)
     // alongside tools.mandates and tools.mandate_ledger (ADR-059, G2957), both
@@ -224,7 +228,7 @@ describe("tenant policy manifest", () => {
     // said 91, so it had already drifted from the number it was describing — a
     // count nobody can check against its own comment is a pin with no ratchet
     // behind it.
-    expect(POLICY_MANIFEST.length).toBe(111);
+    expect(POLICY_MANIFEST.length).toBe(112);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {
