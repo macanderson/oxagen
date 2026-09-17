@@ -130,12 +130,54 @@ render_caddyfile() {
   fi
 }
 
-echo "==> uploading tools/caddy/$CADDYFILE -> s3://$BUCKET/_caddy/Caddyfile"
+# The canonical object is PUBLISHED LAST, and this is the whole reason.
+#
+# `_caddy/Caddyfile` is not just this run's input. The node bootstrap
+# (infra/modules/app-node/user-data.sh.tftpl) copies whatever is under that key
+# onto a brand-new node at boot. So writing it before the config has been
+# validated makes every future node replacement the blast radius of a syntax
+# error in this render: this node keeps its previous config and looks fine,
+# while the next node to come up — at a scale-out, or after an instance
+# replacement weeks later — takes the broken object and never serves.
+#
+# The placeholder guard above is specific: it catches an unsubstituted
+# `__ALB_SUBNET_CIDRS__` and nothing else. Every OTHER way a render can be
+# invalid — a stray brace, a directive `caddy:2` does not know, a bad CIDR from
+# the ALB lookup — is only caught by `caddy validate`, and that runs on the
+# node, after the upload.
+#
+# So upload a CANDIDATE, validate it there, and promote it to the canonical key
+# only once the node has accepted it. A failed validation leaves the canonical
+# object exactly as it was: not deleted, not half-written, not touched at all.
+# The promotion is a single server-side copy, so a reader (the bootstrap) sees
+# either the whole old object or the whole new one and never a partial write.
+#
+# Nothing reads the candidate key but the remote script in this same run. Do
+# not point a reader at it — it exists precisely because it carries no
+# authority until it is promoted.
+CANDIDATE_KEY="_caddy/Caddyfile.candidate.$(date -u +%Y%m%dT%H%M%SZ).$$"
+
 CADDYFILE_RENDERED=$(mktemp "${TMPDIR:-/tmp}/oxagen-caddyfile-XXXXXX")
-trap 'rm -f "$CADDYFILE_RENDERED"' EXIT
+REMOTE_FILE=$(mktemp "${TMPDIR:-/tmp}/oxagen-remote-XXXXXX")
+PARAMS_FILE=$(mktemp "${TMPDIR:-/tmp}/oxagen-params-XXXXXX")
+
+# One trap, not three. Each `trap ... EXIT` REPLACES the previous one, so the
+# three this file used to install left the first two files behind — and would
+# now leave a candidate object in the bucket on any early exit.
+cleanup() {
+  rm -f "$CADDYFILE_RENDERED" "$REMOTE_FILE" "$PARAMS_FILE"
+  if [[ -n "${CANDIDATE_UPLOADED:-}" ]]; then
+    aws s3 rm "s3://$BUCKET/$CANDIDATE_KEY" --region "$REGION" --only-show-errors \
+      || echo "warning: could not remove candidate s3://$BUCKET/$CANDIDATE_KEY" >&2
+  fi
+}
+trap cleanup EXIT
+
+echo "==> uploading tools/caddy/$CADDYFILE -> s3://$BUCKET/$CANDIDATE_KEY (candidate)"
 render_caddyfile "$HERE/caddy/$CADDYFILE" "$CADDYFILE_RENDERED"
-aws s3 cp "$CADDYFILE_RENDERED" "s3://$BUCKET/_caddy/Caddyfile" \
+aws s3 cp "$CADDYFILE_RENDERED" "s3://$BUCKET/$CANDIDATE_KEY" \
   --region "$REGION" --only-show-errors
+CANDIDATE_UPLOADED=1
 
 read -r -d '' REMOTE_TEMPLATE <<'REMOTE_EOF' || true
 set -euxo pipefail
@@ -154,7 +196,12 @@ ls -l /opt/oxagen/bin
 # if it does not parse. `caddy reload` would refuse a bad config too, but by
 # then the file on disk is already wrong and the next container restart picks
 # it up — which turns a typo into an outage that appears hours later.
-aws s3 cp s3://__BUCKET__/_caddy/Caddyfile /tmp/Caddyfile.incoming --region __REGION__
+#
+# This reads the CANDIDATE key, not the canonical one. `set -e` is on, so a
+# validation failure ends this script, SSM reports Failed, and the caller never
+# promotes — which is what keeps a bad render out of the object a future node
+# boots from.
+aws s3 cp s3://__BUCKET__/__CANDIDATE_KEY__ /tmp/Caddyfile.incoming --region __REGION__
 docker run --rm -v /tmp/Caddyfile.incoming:/etc/caddy/Caddyfile:ro caddy:2 \
   caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
@@ -176,14 +223,12 @@ REMOTE_EOF
 # deploy-service.sh, at deploy time).
 REMOTE=${REMOTE_TEMPLATE//__BUCKET__/$BUCKET}
 REMOTE=${REMOTE//__REGION__/$REGION}
+REMOTE=${REMOTE//__CANDIDATE_KEY__/$CANDIDATE_KEY}
 
 # The script goes to SSM as a JSON file, not as an inline shell-interpolated
 # argument. Interpolating it collapsed every newline into a literal "n" during
 # the migration, so the remote shell received one run-on line and reported
 # Success for a command that had executed nothing.
-REMOTE_FILE=$(mktemp "${TMPDIR:-/tmp}/oxagen-remote-XXXXXX")
-PARAMS_FILE=$(mktemp "${TMPDIR:-/tmp}/oxagen-params-XXXXXX")
-trap 'rm -f "$REMOTE_FILE" "$PARAMS_FILE"' EXIT
 printf '%s\n' "$REMOTE" > "$REMOTE_FILE"
 
 python3 - "$REMOTE_FILE" "$PARAMS_FILE" <<'PY'
@@ -212,4 +257,17 @@ aws ssm get-command-invocation --region "$REGION" --command-id "$CMD" --instance
 aws ssm get-command-invocation --region "$REGION" --command-id "$CMD" --instance-id "$INSTANCE" \
   --query StandardErrorContent --output text 2>/dev/null | tail -20
 
-[[ $st == Success ]] || exit 1
+if [[ $st != Success ]]; then
+  echo "==> remote install did not succeed ($st)" >&2
+  echo "    s3://$BUCKET/_caddy/Caddyfile is UNCHANGED — the candidate was never promoted," >&2
+  echo "    so a node replacement still boots the last config this node validated." >&2
+  exit 1
+fi
+
+# The node validated this render and is running it. Promote the candidate to the
+# key the bootstrap reads, as one server-side copy: S3 object writes are atomic
+# for a reader, so a node booting during this instant gets the whole old object
+# or the whole new one.
+echo "==> promoting candidate -> s3://$BUCKET/_caddy/Caddyfile"
+aws s3 cp "s3://$BUCKET/$CANDIDATE_KEY" "s3://$BUCKET/_caddy/Caddyfile" \
+  --region "$REGION" --only-show-errors

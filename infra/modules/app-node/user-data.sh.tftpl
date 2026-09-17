@@ -308,10 +308,47 @@ chmod 0755 /opt/oxagen/bin/*.sh || true
 
 # The real Caddyfile, replacing the 503 placeholder above. Absent on a first
 # ever provision, which is why this does not fail the boot.
-if aws s3 cp "s3://${deploy_bucket}/_caddy/Caddyfile" /opt/oxagen/caddy/Caddyfile \
+#
+# It is fetched to a temp path and VALIDATED before it replaces the placeholder.
+# This used to copy the object straight over /opt/oxagen/caddy/Caddyfile and
+# then `caddy reload ... || true`, which had two failure modes and no signal for
+# either:
+#
+#   - the running container kept the placeholder in memory because the reload
+#     was refused, while the file on disk was already the broken one — so the
+#     node served nothing, and the next container restart (this container is
+#     `--restart unless-stopped`) could not start Caddy at all;
+#   - `|| true` erased the difference between "no config published yet", which
+#     is normal on a first provision, and "the published config is broken",
+#     which is an outage. Both looked like a quiet boot.
+#
+# Validating first means a broken object cannot destroy the placeholder. The
+# node then stays visibly unhealthy — the placeholder deliberately does not
+# answer /healthz 200, see the note above it — which is the honest answer and
+# the one the 2026-09-08 incident is about.
+#
+# The boot continues either way, on purpose. Aborting here would skip the
+# service restore loop below and turn a Caddy problem into a node with no
+# services on it, which is a worse recovery than a node that is loudly
+# unhealthy. Loud, not fatal.
+if aws s3 cp "s3://${deploy_bucket}/_caddy/Caddyfile" /tmp/Caddyfile.incoming \
      --region "$REGION" --only-show-errors; then
-  docker exec oxagen-caddy caddy reload \
-    --config /etc/caddy/Caddyfile --adapter caddyfile || true
+  if docker run --rm -v /tmp/Caddyfile.incoming:/etc/caddy/Caddyfile:ro caddy:2 \
+       caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile; then
+    cp /tmp/Caddyfile.incoming /opt/oxagen/caddy/Caddyfile
+    if docker exec oxagen-caddy caddy reload \
+         --config /etc/caddy/Caddyfile --adapter caddyfile; then
+      echo "caddy: published config installed and reloaded"
+    else
+      echo "CADDY BOOTSTRAP: config validated but reload FAILED — node is not serving" >&2
+    fi
+  else
+    echo "CADDY BOOTSTRAP: published s3://${deploy_bucket}/_caddy/Caddyfile FAILED validation" >&2
+    echo "CADDY BOOTSTRAP: keeping the 503 placeholder; this node will stay unhealthy on purpose" >&2
+  fi
+  rm -f /tmp/Caddyfile.incoming
+else
+  echo "caddy: no published config yet (first provision) — keeping the 503 placeholder"
 fi
 
 # Every service with an artifact. Read from the bucket rather than listed here,
