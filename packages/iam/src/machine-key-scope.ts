@@ -47,6 +47,7 @@
  * denied every capability, which broke `oxagen login`'s org/workspace picker
  * outright.
  */
+import { CLI_SESSION_SCOPE_PURPOSE } from "@oxagen/auth/cli-auth";
 import {
   hasColumn,
   HOST_GATEWAY_COLUMN,
@@ -305,6 +306,19 @@ export async function machineKeyDenial(
   if (scope.kind === "personal") return undefined;
 
   const { purpose } = scope;
+
+  // A CLI session key also acts for a person — its creator, whose org and
+  // workspace membership `resolveApiKey` re-checks on every call — so it is
+  // not a machine credential and not subject to a machine mandate. Without
+  // this branch it reaches the unrecognised-purpose denial below and is
+  // refused EVERY capability, which breaks `oxagen login` outright.
+  //
+  // This exemption has now been lost to a merge twice: #3222 added it, and
+  // #3178 — branched before #3222 landed — took its own older copy of this
+  // file whole and reverted it. The test file kept its unused
+  // CLI_SESSION_SCOPE_PURPOSE import, so nothing went red. The regression
+  // test in machine-key-scope.test.ts is what makes a third loss fail loudly.
+  if (purpose === CLI_SESSION_SCOPE_PURPOSE) return undefined;
 
   if (purpose === TACHO_GATEWAY_PURPOSE) {
     // The observation the enforcement tier is derived from.

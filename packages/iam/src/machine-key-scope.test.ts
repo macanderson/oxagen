@@ -505,3 +505,50 @@ describe("the mandate, materialised for the host that serves it", () => {
     expect(gatewayMandateTools()).toEqual([]);
   });
 });
+
+describe("a CLI session key acts for its creator", () => {
+  // Regression guard for the exemption twice lost to a merge: #3222 added it,
+  // and #3178 -- branched before #3222 landed -- took its own older copy of
+  // machine-key-scope.ts whole and reverted it, while the test file kept the
+  // now-unused CLI_SESSION_SCOPE_PURPOSE import. Source broken, suite green.
+  //
+  // `oxagen login` mints scope.purpose = "cli_session_v1", and resolveApiKey
+  // resolves that key to the person who approved the flow, re-checking their
+  // org/workspace membership on every call. It is not a machine credential, so
+  // it is not subject to a machine mandate. Without the exemption it falls into
+  // the "unrecognised purpose" branch and is denied EVERY capability.
+  it("is exempt from the machine mandate, not merely allow-listed", async () => {
+    keyWithScope({ purpose: CLI_SESSION_SCOPE_PURPOSE });
+    // A read a CLI user makes constantly -- the login org/workspace picker.
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "key-cli",
+        capabilityName: "list_workspaces",
+      }),
+    ).toBeUndefined();
+    // And a mutating, high-sensitivity capability the gateway rule refuses.
+    // Asserting only the read would pass against a wrong fix that added
+    // `cli_session_v1` to MACHINE_KEY_CAPABILITIES with one entry; exemption
+    // and allow-listing are different claims and this distinguishes them.
+    keyWithScope({ purpose: CLI_SESSION_SCOPE_PURPOSE });
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "key-cli",
+        capabilityName: "set_model_credential",
+      }),
+    ).toBeUndefined();
+  });
+
+  it("does not exempt an unrecognised purpose alongside it", async () => {
+    keyWithScope({ purpose: "not_a_real_purpose_v1" });
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "key-x",
+        capabilityName: "list_workspaces",
+      }),
+    ).toMatch(/does not recognise/);
+  });
+});
