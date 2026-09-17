@@ -179,6 +179,32 @@ export interface RegistryState {
   agents?: AgentRosterEntry[];
 }
 
+/**
+ * The daemon-state file as a `RegistryState`, or `undefined` if it is not one.
+ *
+ * The daemon used to cast the parsed JSON straight to this type. A cast is an
+ * assertion that the shape is right, and this is the one place where the shape
+ * is known to be wrong: the file on disk was written by whichever build was
+ * running before the upgrade, which is precisely why a legacy
+ * `anthropic.user_email` survived #3072's fix (`SessionRecorder.restore` now
+ * scrubs it, and this stops the cast that let an arbitrary object reach it).
+ *
+ * Deliberately shallow and forgiving about members it does not know. Rejecting
+ * a state file loses a live session's chain cursor, which is worse than the
+ * unknown member — so this validates the envelope and hands the rest to
+ * `restore`, which sanitizes what it reads. Over-accepting structure is
+ * recoverable; letting the address through is not.
+ */
+export function parseRegistryState(value: unknown): RegistryState | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const candidate = value as Partial<RegistryState>;
+  if (candidate.schema !== "tacho.daemon-state.v1") return undefined;
+  if (!Array.isArray(candidate.sessions)) return undefined;
+  if (candidate.agents !== undefined && !Array.isArray(candidate.agents))
+    return undefined;
+  return candidate as RegistryState;
+}
+
 export interface RegistryOptions {
   context: ClaudeCodeContext;
   scope: string;
