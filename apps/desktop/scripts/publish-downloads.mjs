@@ -82,6 +82,9 @@ const NO_COLOUR_ENV = {
   CLICOLOR_FORCE: "0",
   FORCE_COLOR: "0",
   GH_FORCE_TTY: "",
+  // Same hazard from a different direction: an inherited AWS_PAGER sends
+  // captured JSON through a pager instead of the pipe this script reads.
+  AWS_PAGER: "",
 };
 
 function sh(command, args, { capture = false, allowFailure = false } = {}) {
@@ -116,7 +119,8 @@ function sha256(path) {
   });
 }
 
-const prefix = `s3://${bucket}/desktop/${version}`;
+const keyPrefix = `desktop/${version}`;
+const prefix = `s3://${bucket}/${keyPrefix}`;
 
 // `immutable, max-age=31536000` is a promise to every cache that fetched the
 // URL, not just to CloudFront. Overwriting the object cannot take that promise
@@ -128,27 +132,55 @@ const prefix = `s3://${bucket}/desktop/${version}`;
 // checksum. --allow-overwrite is for the publish that failed before anyone was
 // given the URL, where nothing downstream can hold a stale copy.
 //
-// The probe runs before anything is fetched, so a refusal costs one
-// ListObjects rather than ~500 MB of downloaded artifacts and a pass of
-// SHA-256 over them — and leaves no temp directory behind, since it precedes
-// the mkdtemp below.
-const published = sh("aws", ["s3", "ls", `${prefix}/`], {
-  capture: true,
-  allowFailure: true,
-});
-// `aws s3 ls` exits 1 on a prefix that holds no objects, which is the answer
-// this wants. Anything above that is the CLI itself failing — bad credentials,
-// no such bucket — and reading that as "not published yet" would turn the one
-// check standing between a republish and a split fleet into a no-op exactly
-// when it is least safe to skip.
-if (published.status > 1) {
+// The probe runs before anything is fetched, so a refusal costs one request
+// rather than ~500 MB of downloaded artifacts and a pass of SHA-256 over
+// them — and leaves no temp directory behind, since it precedes the mkdtemp
+// below.
+//
+// `s3api list-objects-v2` rather than `s3 ls` because only the former answers
+// this question unambiguously: an empty prefix is exit 0 with `KeyCount: 0`,
+// so every nonzero exit is the probe failing rather than a version being
+// absent. `s3 ls` overloads exit 1 across "no objects here" and "the command
+// failed", and this guard is the only thing standing between a republish and
+// a fleet split across two files answering to one URL, so it has to fail
+// closed: an expired session, a transient S3 error, or a principal holding
+// PutObject without ListBucket must all stop the publish, not wave it
+// through.
+const probe = sh(
+  "aws",
+  [
+    "s3api",
+    "list-objects-v2",
+    "--bucket",
+    bucket,
+    "--prefix",
+    `${keyPrefix}/`,
+    "--max-keys",
+    "1",
+    "--output",
+    "json",
+  ],
+  { capture: true, allowFailure: true },
+);
+if (probe.status !== 0) {
   console.error(
-    `✖ aws s3 ls ${prefix}/ exited ${published.status}, so whether ${version} is\n` +
-      "  already published is unknown; refusing rather than risk overwriting it.",
+    `✖ could not list ${prefix}/ (aws exited ${probe.status}), so whether\n` +
+      `  ${version} is already published is unknown. Refusing rather than risk\n` +
+      "  overwriting installers whose URLs promised they would never change.",
   );
-  process.exit(published.status);
+  process.exit(probe.status);
 }
-if (published.status === 0 && published.stdout.trim() !== "") {
+let listing;
+try {
+  listing = JSON.parse(probe.stdout);
+} catch (error) {
+  console.error(
+    `✖ could not read the listing of ${prefix}/ (${error.message}), so whether\n` +
+      `  ${version} is already published is unknown; refusing.`,
+  );
+  process.exit(1);
+}
+if ((listing.Contents ?? []).length > 0 || (listing.KeyCount ?? 0) > 0) {
   if (!allowOverwrite) {
     console.error(
       `✖ ${version} is already published at ${prefix}/.\n` +

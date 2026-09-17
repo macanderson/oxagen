@@ -80,7 +80,9 @@ fetches them and not only to CloudFront, so publishing a version that is
 already there is refused: a corrected build ships as a new version. Pass
 `--allow-overwrite` only when the previous publish failed before anyone was
 given the URLs, since nothing can pull a stale copy back out of a browser or a
-proxy that already has one.
+proxy that already has one. The check runs before any artifact is downloaded,
+and it fails closed — if the bucket cannot be listed at all, the publish stops
+rather than assume the version is free.
 
 `smoke:e2e` (`scripts/e2e-smoke.mjs`, no repo needed — copy it to the test
 machine) drives the installed app's sidecars with the wizard's own argv against
