@@ -34,7 +34,7 @@ export const orgList = registerCapability({
     "List the organizations (tenants) the authenticated user belongs to, with the caller's role in each. Backs the CLI tenant picker.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   agent: {
     requiresApproval: false,

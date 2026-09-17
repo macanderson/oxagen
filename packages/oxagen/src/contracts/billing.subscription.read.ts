@@ -8,7 +8,7 @@ export const billingSubscriptionRead = registerCapability({
     "Read the current subscription, plan, and period bounds for the active tenant",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
   agent: {
     requiresApproval: false,

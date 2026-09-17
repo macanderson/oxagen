@@ -41,7 +41,7 @@ export const onboardingStateGet = registerCapability({
     "Where the signed-in person is in the onboarding gate: the current step, the gate's workspace, the first frame once one arrived, and the provisional window until a main repository is bound.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   noBillingGate: true,
   mutates: false,

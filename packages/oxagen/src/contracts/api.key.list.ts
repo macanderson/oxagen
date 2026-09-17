@@ -29,7 +29,7 @@ export const apiKeyList = registerCapability({
     "List the API keys in scope with their metadata: public id, name, prefix, creation, last use, expiry and revocation times. Never returns a key's secret or its hash.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["api", "docs", "mcp", "unit"],
+  layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: true,
   // A console read is never a governed action (ADR-052 exclusion 2).
   noBillingGate: true,

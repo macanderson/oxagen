@@ -16,7 +16,7 @@ export const workspaceSettingsWrite = registerCapability({
     "Update a workspace's general settings (partial): name, slug, description, and the consequence-role overrides for mandates. The active workspace unless workspaceId names another one in the organization. The handler checks roles: org Owners and Admins edit any workspace of the organization; the Owner or Admin of the workspace the call is scoped to edits that workspace only, without workspaceId. Only an org Owner writes consequenceRoles.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   // A settings write, never a governed action (ADR-052 exclusion 2; INV-28).
   noBillingGate: true,

@@ -17,7 +17,7 @@ export const workspaceCreate = registerCapability({
     "Create a workspace within the active tenant. Refused for a slug already used in the organization.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   // A settings write, never a governed action (ADR-052 exclusion 2; INV-28).
   noBillingGate: true,

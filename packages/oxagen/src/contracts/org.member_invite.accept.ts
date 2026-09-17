@@ -10,7 +10,7 @@ export const orgMemberInviteAccept = registerCapability({
     "Accept a pending org invitation. Creates the membership row and provisions least-privilege IAM.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
   // Membership is never a charge (ADR-052 exclusion 2): the billing gate and
   // the governed-action recorder both skip this contract.

@@ -13,7 +13,7 @@ export const mandateRequest = registerCapability({
     "Ask for a mandate on behalf of an agent: the same shape as grant_mandate, recorded as a draft for the role accountable for the consequence to grant or decline.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "governance" },

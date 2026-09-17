@@ -21,7 +21,7 @@ export const iamRoleGrantsSet = registerCapability({
     "Replace a custom IAM role's grants with a set of permissions from the catalogue. System roles are read-only; the new set is refused above the granter's own permissions.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "iam" },

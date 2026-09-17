@@ -20,7 +20,7 @@ export const findingFixRecord = registerCapability({
     "Record that the fix an open finding names was applied (org Owner or Admin): the finding becomes applied with the request id of this call, and later passes cite only runs that start after it.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

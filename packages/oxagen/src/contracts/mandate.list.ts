@@ -18,7 +18,7 @@ export const mandateList = registerCapability({
     "List the workspace's mandates with remaining authority by measure, newest first, optionally narrowed to one agent or one status.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

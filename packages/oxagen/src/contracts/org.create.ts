@@ -120,7 +120,7 @@ export const organizationCreate = registerCapability({
     "Create a new organization with a globally-unique slug, its owner membership, IAM bootstrap and first workspace",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   // Pre-tenant: the caller has no org yet. The kernel skips the billing gate
   // and the recorder for an unscoped invoke, and the app reaches it with a
   // PretenantCtx.

@@ -34,7 +34,7 @@ export const tachoEnrollmentTokenCreate = registerCapability({
   mode: "sync",
   // A credential mint: never reachable by a model (no agent, no MCP).
   surfaces: ["api", "cli"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

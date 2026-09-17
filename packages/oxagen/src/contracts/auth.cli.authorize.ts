@@ -28,7 +28,7 @@ export const authCliAuthorize = registerCapability({
     "Mint the single-use PKCE authorization code that lets the Oxagen CLI obtain an API key for one org and workspace after the signed-in person consents.",
   mode: "sync",
   surfaces: [],
-  layers: ["schema", "unit", "docs"],
+  layers: ["schema", "unit", "docs", "app"],
   scoped: true,
   // A credential-issuing settings write is never a governed action (§1.5).
   noBillingGate: true,

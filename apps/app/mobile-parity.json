@@ -1,0 +1,29 @@
+{
+  "$comment": "Mobile feature parity (ADR-026): every desktop-only affordance in apps/app is registered here with the mobile path that reaches the same capability. `reflow` means the same control is reachable in a different layout; `hidden` means the affordance is desktop-only and names why. pnpm check:mobile-parity reads this file and the src/ scan.",
+  "entries": [
+    {
+      "file": "apps/app/src/features/shell/sidebar.tsx",
+      "match": "sticky top-0 z-40 hidden h-dvh flex-col overflow-y-auto border-r border-sidebar-border bg-sidebar-bg text-sidebar-fg md:col-start-1 md:row-span-2 md:row-start-1 md:flex",
+      "kind": "reflow",
+      "equivalent": "Desktop persistent navigation rail. On a phone the same nav tree renders in ShellMobileNav (features/shell/mobile-nav.tsx): a five-slot bottom bar carrying the primary destinations with the waiting-approvals count, plus a 'More' SheetDialog and NavDrawer holding the rest. Every destination the rail reaches is reachable from a thumb."
+    },
+    {
+      "file": "apps/app/src/features/shell/shell-frame.tsx",
+      "match": "sticky top-0 hidden h-dvh border-r border-sidebar-border bg-sidebar-bg md:col-start-1 md:row-span-2 md:row-start-1 md:block",
+      "kind": "reflow",
+      "equivalent": "The grid column that holds the desktop rail. It collapses on a phone because the navigation moves into ShellMobileNav's bottom bar and drawer (features/shell/mobile-nav.tsx); the frame itself carries no affordance, only the rail's placement."
+    },
+    {
+      "file": "apps/app/src/features/shell/topbar.tsx",
+      "match": "hidden lg:inline",
+      "kind": "reflow",
+      "equivalent": "The word 'Search' beside the command-menu button's magnifier icon. The button itself is always rendered and keeps its aria-label, so the command menu opens by tap on every width; only the redundant text label reflows out below lg."
+    },
+    {
+      "file": "apps/app/src/features/shell/topbar.tsx",
+      "match": "hidden rounded border border-app-topbar-border px-1 font-mono text-[11px] sm:inline",
+      "kind": "reflow",
+      "equivalent": "The Cmd+K hint inside the command-menu button. It is aria-hidden decoration for a keyboard that a phone does not have; the button it sits in is always tappable, so the capability is unaffected."
+    }
+  ]
+}

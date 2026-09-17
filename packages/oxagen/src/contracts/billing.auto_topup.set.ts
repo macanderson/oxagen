@@ -36,7 +36,7 @@ export const billingAutoTopupSet = registerCapability({
     "Turn automatic top-up on or off for the organization and set how many governed-action-unit blocks each top-up buys.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

@@ -75,7 +75,7 @@ export const billingInvoiceList = registerCapability({
     "List the organization's invoices, newest first, in one cursor-paged list: number, status, what each invoice charged for (the subscription, a block purchase, an auto top-up, an interim or a period-close charge), amounts due and paid, period and the Stripe-hosted page.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

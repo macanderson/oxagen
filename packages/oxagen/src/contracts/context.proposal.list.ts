@@ -15,7 +15,7 @@ export const contextProposalList = registerCapability({
     "List the workspace's record proposals with their support and Context PR state, newest first, optionally narrowed to one status or lineage",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

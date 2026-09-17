@@ -24,7 +24,7 @@ export const onboardingFirstFrameGet = registerCapability({
     "For one registered agent: the host enrolled for it, what that host last reported, and the first frame ingested from it, long-polled for up to waitMs.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

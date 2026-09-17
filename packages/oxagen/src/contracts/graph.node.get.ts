@@ -7,7 +7,7 @@ export const graphNodeGet = registerCapability({
   description: "Retrieve a customer-context graph node by its publicId.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"] as const,
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "graph" },
   sensitivity: "low",

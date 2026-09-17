@@ -8,4 +8,4 @@
 // exist (implementation plan §6 Q2). The cutover batch flips this to "apps/app"
 // in the same PR that commits the new app's capability-ui-map.json,
 // mobile-parity.json and regenerated baseline.
-export const APP_DIR = "apps/app_deprecated";
+export const APP_DIR = "apps/app";

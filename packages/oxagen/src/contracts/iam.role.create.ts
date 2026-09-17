@@ -36,7 +36,7 @@ export const iamRoleCreate = registerCapability({
     "Create a custom IAM role from the permission catalogue. Writes one allow grant per capability the chosen permissions name; refused above the granter's own permissions and for a name another role of the org already uses.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   // A settings write, never a governed action (ADR-052 exclusion 2; INV-28).
   noBillingGate: true,

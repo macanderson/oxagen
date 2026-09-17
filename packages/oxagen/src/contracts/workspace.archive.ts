@@ -21,7 +21,7 @@ export const workspaceArchive = registerCapability({
     "Archive a workspace: it leaves the workspace lists, its slug stays taken and everything recorded in it stays readable. Refused when already archived or while an agent is registered in it; deregister or move those agents first.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   // A settings write, never a governed action (ADR-052 exclusion 2; INV-28).
   noBillingGate: true,

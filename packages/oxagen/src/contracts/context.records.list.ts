@@ -20,7 +20,7 @@ export const contextRecordsList = registerCapability({
     "List the workspace's published steering records with kind, force, constraint effect, scope, lineage, commit and path, filtered by kind, scope, status or lineage",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

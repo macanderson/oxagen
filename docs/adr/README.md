@@ -107,3 +107,4 @@ first. Move a row into its epic when one fits.
 - [ADR-078](./ADR-078-wrapped-and-connected-are-two-enforcement-tiers-neither-dominates.md) — wrapped (`harness`) and connected (`gateway`) are two enforcement tiers and neither dominates: wrapped is broader and client-attested, connected is narrower and server-enforced; the local gateway is a proxy, not a second materialiser
 - [ADR-079](./ADR-079-an-oxagen-login-key-acts-for-its-creator-on-host-enrollment.md) — An `oxagen login` key acts for its creator on Tacho host enrollment; machine-bound keys never do
 - [ADR-080](./ADR-080-stella-is-wrapped-through-its-hooks-until-it-speaks-the-tacho-contract-natively.md) — Stella is wrapped through its hooks until it speaks the Tacho contract natively
+- [ADR-081](./ADR-081-app-layers-retired-at-mission-control-cutover.md) — The `app` layer is retired at the Mission Control cutover for every capability rev1 does not surface

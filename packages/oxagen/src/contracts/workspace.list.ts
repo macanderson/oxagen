@@ -41,7 +41,7 @@ export const workspaceList = registerCapability({
     "List the workspaces inside an organization the authenticated user belongs to. Backs the CLI workspace picker in `oxagen init`.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   agent: { requiresApproval: false, riskLevel: "low", category: "workspace" },
   sensitivity: "low",

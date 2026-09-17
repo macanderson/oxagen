@@ -46,7 +46,7 @@ export const billingGauBucketPurchase = registerCapability({
     "Buy governed action units in block quantities at the organisation's contracted rate through Stripe Checkout; returns the Checkout URL, the quantity, the block size and the number of blocks",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "billing" },
   sensitivity: "high",

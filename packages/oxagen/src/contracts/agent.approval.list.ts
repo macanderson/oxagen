@@ -80,7 +80,7 @@ export const agentApprovalList = registerCapability({
     "List the workspace's pending tool-call approvals, soonest expiry first, cursor-paged, optionally narrowed to one run",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

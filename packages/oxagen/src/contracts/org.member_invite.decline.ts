@@ -9,7 +9,7 @@ export const orgMemberInviteDecline = registerCapability({
   description: "Decline a pending org invitation. Frees the reserved seat.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
   // Membership is never a charge (ADR-052 exclusion 2): the billing gate and
   // the governed-action recorder both skip this contract.

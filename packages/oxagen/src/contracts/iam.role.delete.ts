@@ -17,7 +17,7 @@ export const iamRoleDelete = registerCapability({
     "Delete a custom IAM role and its grants. Refused for a system role and for a role any principal still holds.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "iam" },

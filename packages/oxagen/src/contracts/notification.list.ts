@@ -25,7 +25,7 @@ export const notificationsList = registerCapability({
     "List in-app notifications for the calling user. Supports filtering to unread-only and pagination.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["api", "docs", "mcp", "unit", "app"],
+  layers: ["api", "docs", "mcp", "unit"],
   scoped: true,
   // A console read is never a governed action (ADR-052 exclusion 2).
   noBillingGate: true,

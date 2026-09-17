@@ -16,7 +16,7 @@ export const findingDismiss = registerCapability({
     "Dismiss an open finding without applying its fix (org Owner or Admin); later passes cite only runs that start after the dismissal.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

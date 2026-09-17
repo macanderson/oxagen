@@ -36,7 +36,7 @@ export const repositoryMainBind = registerCapability({
     "Bind a GitHub repository the workspace's GitHub App installation reaches as its main repo, and close the onboarding gate's provisional window.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

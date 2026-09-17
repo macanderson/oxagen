@@ -135,7 +135,7 @@ export const billingGauBucketGet = registerCapability({
     "Read the organization's governed action unit bucket for the current month: the billing mode, the period, the units included, purchased, carried forward, used and remaining, plus the invoice thresholds of an invoice-billed organization or the auto top-up state of a prepaid one.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

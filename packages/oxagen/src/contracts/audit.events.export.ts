@@ -44,7 +44,7 @@ export const auditEventsExport = registerCapability({
     "Export the org's security audit events over the query_audit_log filters as CSV or NDJSON, signed with HMAC-SHA256 so the file can be verified after download. Up to 50,000 events; a wider match is refused.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

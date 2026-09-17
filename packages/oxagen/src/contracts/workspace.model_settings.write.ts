@@ -8,7 +8,7 @@ export const workspaceModelSettingsWrite = registerCapability({
     "Update the workspace-level model defaults (partial update — only provided fields are changed)",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "docs", "mcp", "unit", "app"],
+  layers: ["schema", "api", "docs", "mcp", "unit"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "workspace" },
   sensitivity: "medium",

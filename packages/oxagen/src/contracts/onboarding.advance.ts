@@ -24,7 +24,7 @@ export const onboardingAdvance = registerCapability({
     "Move the onboarding gate between the wrap and run steps. The run step completes only on the first frame, so unlocked is never a target.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

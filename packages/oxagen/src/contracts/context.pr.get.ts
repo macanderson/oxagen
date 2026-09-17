@@ -12,7 +12,7 @@ export const contextPrGet = registerCapability({
     "Get a proposal's Context PR: state, branch, checks with their outcomes, what merge will do, and the promotion event once merged",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

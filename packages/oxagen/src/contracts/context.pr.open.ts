@@ -92,7 +92,7 @@ export const contextPrOpen = registerCapability({
     "Open the Context PR for a proposal: branch context/<lineage> from the production branch, the single record file under .oxagen/rules/, the PR body with rationale, supporting records and evidence, then the six checks one at a time as GitHub check runs. Re-runs the checks when the PR is already open.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

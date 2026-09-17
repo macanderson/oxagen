@@ -24,7 +24,7 @@ export const agentRegister = registerCapability({
   // (resolveActingUserId, assertOrgRole, INV-29). The write ships on the API
   // alone: no MCP tool is built for it.
   surfaces: ["api", "cli"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,
