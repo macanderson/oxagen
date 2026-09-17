@@ -1,10 +1,19 @@
 // ask_assistant: one turn of the in-app agent. Every adapter reaches the turn
 // through the kernel and this handler: the API route and the MCP tool run it
-// to completion, and the SSE route streams it with the hooks it carries beside
-// the invoke (`streamAssistantTurn`). The contract's gates run once, the same
-// way, on all three. The stream is what names the surface: `POST /chat/stream`
-// is the app's one transport and the only caller that carries one, so a
-// streamed turn is admitted on `chat` and every other turn on `api-chat`.
+// to completion, the SSE route streams it with the hooks it carries beside the
+// invoke (`streamAssistantTurn`), and the app's shell flyout invokes it from a
+// Server Action through `kernelWrite`. The contract's gates run once, the same
+// way, on all four.
+//
+// The turn's surface is the app, not the transport. `chat` means "a person
+// asked this in the product" and `api-chat` means "a caller asked it over the
+// API or MCP"; the run row, both message rows and the AI telemetry
+// (`assistant-turn.ts` maps `chat` to the `app` telemetry surface) are keyed
+// on it, and `list_runs` excludes both of them from the customer's own runs.
+// A stream is one way for the app to arrive and `ctx.surface === "app"` is
+// the other, so the surface is read from both. Reading only the stream
+// attributed every flyout turn as an API turn — a ledger that looks complete
+// and is wrong, which is worse than one that is missing.
 //
 // The kernel enters the tenant scope before this runs; the turn re-enters it
 // around each store call because the engine's reverse requests arrive on the
@@ -19,6 +28,7 @@ import { HandlerError } from "@oxagen/oxagen";
 import { runOutsideGovernedAction } from "@oxagen/oxagen/kernel";
 import { schema, withTenantDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
+import type { AssistantRunSurface } from "../runtime/assistant-run";
 import { takeAssistantStream } from "../runtime/assistant-stream";
 import {
   AssistantTurnNeedsUserError,
@@ -26,6 +36,18 @@ import {
   prepareAssistantTurn,
 } from "../runtime/assistant-turn";
 import type { CapabilityContext } from "../types";
+
+/**
+ * The surface a turn is recorded on: `chat` when the app asked it — over the
+ * SSE transport (which carries a stream) or from a Server Action (which
+ * carries `surface: "app"`) — and `api-chat` for every caller outside it.
+ */
+function runSurfaceOf(
+  ctx: CapabilityContext,
+  streamed: boolean,
+): AssistantRunSurface {
+  return streamed || ctx.surface === "app" ? "chat" : "api-chat";
+}
 
 export async function assistantAskHandler(
   input: AssistantAskInput,
@@ -36,7 +58,7 @@ export async function assistantAskHandler(
   try {
     const prepared = await prepareAssistantTurn({
       ctx,
-      surface: stream ? "chat" : "api-chat",
+      surface: runSurfaceOf(ctx, stream !== null),
       orgSlug: slugs.orgSlug,
       workspaceSlug: slugs.workspaceSlug,
       conversationId: input.conversationId,

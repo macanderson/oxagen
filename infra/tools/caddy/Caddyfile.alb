@@ -20,39 +20,148 @@
 # bound to 127.0.0.1 on the instance and is not reachable from Docker's
 # bridge network at all.
 
-# Trust the ALB in front of this node, so the client address survives to the
-# services behind it.
+# The ALB is the only thing that ever connects to this node, so the address
+# Caddy sees as the peer is always the load balancer, never a caller. Declaring
+# the load balancer trusted lets `{client_ip}` resolve past it to the address
+# the ALB itself observed — the real client. Without this the placeholder
+# returns the load balancer's own private address and every caller looks like
+# the same one.
 #
-# Caddy's `reverse_proxy` does NOT append to an inbound X-Forwarded-For unless
-# the immediate peer is a trusted proxy — it REPLACES the header with the peer's
-# own address. Measured against `caddy:2`, the image this node runs: a request
-# arriving with `X-Forwarded-For: 203.0.113.99` reached the upstream as
-# `X-Forwarded-For: 172.17.0.1` with a plain `reverse_proxy`, and as
-# `203.0.113.99, 172.17.0.1` with this block in place. So without it the API
-# never sees a client address at all — only the load balancer's — and no amount
-# of forwarded-header configuration on the application side can recover one.
+# This is measured rather than argued, against `caddy:2`, the image this node
+# runs. A request arriving as `X-Forwarded-For: 203.0.113.99`:
 #
-# Two things downstream depend on the real client address: the IAM
-# `ip_ranges` / `ip_allow` conditions, which were therefore being evaluated
-# against the ALB, and the pre-authentication rate-limit ceilings on the Tacho
-# and Stella machine routes, which refuse to enforce a bucket they cannot
-# attribute to a caller.
+#     plain reverse_proxy:                XFF="172.17.0.1"
+#     with the ALB's ranges trusted:      XFF="203.0.113.99, 172.17.0.1"
 #
-# `private_ranges` rather than the VPC CIDR: the security group admits the ALB's
-# security group alone (see the header above), so the only peer that can reach
-# this listener is already the load balancer. Naming an exact CIDR here would
-# add a second place for a network change to break the client IP silently.
+# So `reverse_proxy` does NOT append to an inbound chain unless the immediate
+# peer is a trusted proxy — it REPLACES the header with the peer's own address.
+# Until this block existed the API had never seen a client address in
+# production, only the load balancer's, and no TRUSTED_PROXY_HOP_COUNT could
+# have recovered one.
 #
-# After this deploys, set TRUSTED_PROXY_CIDRS for apps/api to the range these
-# proxies sit in. It is the only way the app attributes a client address: it
-# walks the chain from the right while each entry is a named proxy and stops at
-# the first that is not, so a caller padding the header cannot move the result.
-# Unset, no client address is derived at all and both readers fail safe — the
-# IAM ip_ranges / ip_allow conditions deny, and the pre-authentication IP
-# ceilings skip. See #3167.
+# ## Why the list is the ALB's subnets and NOT `private_ranges`
+#
+# This block said `trusted_proxies static private_ranges` until a review caught
+# what that means on a PUBLIC load balancer, and it is the same defect the
+# application side already fixed one layer up: a trust list that can contain the
+# caller is not a trust list.
+#
+# `private_ranges` is every RFC1918 block. The ALB is internet-facing, so a
+# request can reach it from an RFC1918 source — a workload inside this VPC, a
+# peered VPC, a VPN or Direct Connect client. The ALB appends the address it
+# saw, so that private CLIENT address lands in `X-Forwarded-For`. Strict mode
+# then walks from the right skipping every entry it considers a trusted proxy,
+# classifies the caller's own private address as one, and keeps walking LEFT
+# into the prefix the caller wrote. The caller therefore chooses `{client_ip}`,
+# which this file writes into `X-Oxagen-Client-Ip` and `X-Forwarded-For` as
+# though the edge had vouched for it, and which the application feeds into the
+# IAM `ip_ranges` / `ip_allow` conditions — and those ALLOW on a CIDR match.
+# Padding the header is free; nothing downstream can tell the difference.
+#
+# Note that the security group is not the mitigation. It bounds who can open a
+# TCP connection to THIS listener, which is the ALB and only the ALB. It says
+# nothing about who can reach the ALB, and the entry being trusted here is one
+# the ALB wrote on behalf of somebody else.
+#
+# So trust the load balancer's actual address ranges. `__ALB_SUBNET_CIDRS__` is
+# substituted at upload time by `infra/tools/install-node-scripts.sh` with the
+# CIDR of every subnet the ALB is attached to, resolved from the live load
+# balancer: `describe-load-balancers` gives its subnet ids and
+# `describe-subnets` gives their CIDRs. Subnets are the right grain — the ALB's
+# individual private IPs are per-AZ ENIs that come and go as it scales, so a
+# list of addresses goes stale silently, while the subnets it scales WITHIN are
+# fixed at `aws_lb.app.subnets` (`infra/stacks-new/oxagen/main.tf`, the two
+# PUBLIC subnets from `module.network`). Re-running the installer refreshes the
+# list, which is the only way this file is ever deployed.
+#
+# Those public subnets deliberately exclude the private subnets the workloads
+# run in, so a VPC workload calling the public ALB is now correctly NOT a
+# trusted proxy and the walk stops at its address.
+#
+# The placeholder has no fallback ON PURPOSE. It is not a valid CIDR, so an
+# unsubstituted file fails `caddy validate` — which the installer runs on the
+# node before the config is installed, and the node keeps the previous config
+# when it fails — and the installer refuses to upload a rendered file that still
+# contains it. A default would be the bug: every safe-looking default for "which
+# proxies are in front of me" is a widening, and widening this list is exactly
+# what the review found. Absent must fail, not fall back.
+#
+# ## Client address (ADR-083)
+#
+# Every application upstream below is handed the same client address twice, as
+# `X-Oxagen-Client-Ip` and as `X-Forwarded-For`, and both are SET with
+# `header_up` rather than appended to.
+#
+# The application reads `X-Oxagen-Client-Ip` (`extractTrustedClientIp`,
+# packages/oxagen/src/client-ip.ts) — but only once an operator has set
+# `TRUST_EDGE_CLIENT_IP_HEADER=true`, which is step 2 of the rollout and comes
+# AFTER this file is uploaded and reloaded. The flag exists because the previous
+# version of this file has no rule for that header name and forwards a
+# caller-supplied copy straight through; a reader that trusted it on sight would
+# be handed a forged address by name. Until the flag is set the application
+# falls back to the `x-forwarded-for` walk, which is where it already was.
+# ADR-083 carries the reasoning.
+#
+# `X-Forwarded-For` is rewritten to the same
+# value because the chain itself was the vulnerability: the ALB appends and
+# Caddy appends, neither strips an inbound copy, so the LEFTMOST entry reaching
+# an upstream is whatever the caller typed. Anything reading that entry — and
+# three surfaces did, feeding it into IAM `ip_ranges`, which ALLOWS on a CIDR
+# match — could be handed an allowlisted address by the very caller it was
+# meant to check.
+#
+# Rewriting it means no untrusted copy of that value exists inside the
+# perimeter, so the next consumer who reaches for `X-Forwarded-For` out of
+# habit is safe without knowing any of this. Nothing in this repo walks the
+# chain: the four readers each want a single client address. A future consumer
+# that genuinely needs the hops takes them from the ALB access logs, which keep
+# the full chain (`access_logs` in stacks-new/oxagen/main.tf).
+#
+# `X-Real-Ip` is DELETED for the same reason. Nothing in this path sets it —
+# not the ALB, not Caddy — so a value arriving under that name came from the
+# caller, and it survived to the upstream untouched until this line. The
+# application already refuses to read it; deleting it here means a consumer
+# that reaches for it finds nothing rather than finding a lie.
+#
+# `trusted_proxies_strict` is what makes that address trustworthy rather than
+# merely present. Caddy's default reads the LEFTMOST X-Forwarded-For entry,
+# which is whatever the caller wrote, because the ALB appends to an inbound copy
+# rather than stripping it. Strict mode walks the header from the right instead,
+# skipping addresses inside the trusted ranges, so it lands on the entry the ALB
+# appended and a caller-supplied prefix is ignored. Dropping this line does not
+# fail any check; it silently hands `X-Oxagen-Client-Ip` to the caller.
+#
+# Strict mode and the list above are one mechanism, not two settings. The walk
+# stops at the first entry that is not in the list, so the list decides where it
+# stops — which is why widening the list back toward `private_ranges` does not
+# merely coarsen the answer, it lets the caller pick it.
+#
+# ## After this deploys
+#
+# One application-side value finishes the rollout, and it is a deliberate act:
+# `TRUST_EDGE_CLIENT_IP_HEADER=true` for apps/api, apps/app and apps/mcp, which
+# is what makes `X-Oxagen-Client-Ip` believable. Until then the application
+# ignores that header entirely and attributes NO client address at all. There is
+# no hop-count walk to fall back to — that form was deleted in #3205, not
+# deprecated — and the rewrite below leaves a single entry that is the client's
+# own, with no proxy entry beside it for the identity walk to vouch with. So the
+# window between this reload and that flag is briefly unattributed, and it fails
+# closed: IAM `ip_ranges` mandates deny and the pre-authentication ceilings skip.
+# That is the safe direction and the reason the flag is a separate step.
+#
+# Do NOT set `TRUSTED_PROXY_CIDRS` for this shape either, for the reason just
+# given: it is the identity walk, and after the rewrite below there is no proxy
+# entry left for it to vouch with. Setting it here attributes nothing rather
+# than restoring anything. The variable belongs to the PRE-rewrite shape, where
+# the ALB's own address is still in the chain. ADR-083's "The attribution order,
+# stated once" has the sequencing; #3167 tracks the ceilings.
 {
 	servers {
-		trusted_proxies static private_ranges
+		# Substituted by infra/tools/install-node-scripts.sh; see "Why the list
+		# is the ALB's subnets" above. No default, deliberately — an
+		# unsubstituted file must fail to parse rather than widen.
+		trusted_proxies static __ALB_SUBNET_CIDRS__
+		trusted_proxies_strict
 	}
 }
 
@@ -87,6 +196,12 @@
 		handle @app {
 			encode gzip zstd
 			reverse_proxy 127.0.0.1:3000 {
+				# The client-address pair every application upstream gets; see
+				# "Client address" in this file's header for why both are SET.
+				header_up X-Oxagen-Client-Ip {client_ip}
+				header_up X-Forwarded-For {client_ip}
+				header_up -X-Real-Ip
+
 				transport http {
 					response_header_timeout 300s
 				}
@@ -97,6 +212,12 @@
 		handle @api {
 			encode gzip zstd
 			reverse_proxy 127.0.0.1:4000 {
+				# The client-address pair every application upstream gets; see
+				# "Client address" in this file's header for why both are SET.
+				header_up X-Oxagen-Client-Ip {client_ip}
+				header_up X-Forwarded-For {client_ip}
+				header_up -X-Real-Ip
+
 				transport http {
 					response_header_timeout 300s
 				}
@@ -109,6 +230,12 @@
 			# MCP's streamable HTTP transport is `text/event-stream`, and a
 			# compressor in front of it batches events instead of streaming them.
 			reverse_proxy 127.0.0.1:4100 {
+				# The client-address pair every application upstream gets; see
+				# "Client address" in this file's header for why both are SET.
+				header_up X-Oxagen-Client-Ip {client_ip}
+				header_up X-Forwarded-For {client_ip}
+				header_up -X-Real-Ip
+
 				flush_interval -1
 
 				transport http {

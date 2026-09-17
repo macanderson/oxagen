@@ -130,9 +130,12 @@ const {
   TACHO_HOST_PURPOSE,
 } = await import("./machine-key-scope");
 
-const { CLI_SESSION_SCOPE_PURPOSE } = await import("@oxagen/auth/cli-auth");
+const { CLI_SESSION_SCOPE_PURPOSE } =
+  await import("@oxagen/oxagen/cli-session");
 
 const ORG = "11111111-1111-4111-8111-111111111111";
+/** The person a surface resolved a CLI session key to. */
+const PERSON = "33333333-3333-4333-8333-333333333333";
 
 function keyWithScope(scope: unknown): void {
   findFirst.mockResolvedValue({ scope });
@@ -162,23 +165,78 @@ describe("a person's credential is untouched", () => {
       await machineKeyDenial({
         orgId: ORG,
         apiKeyId: null,
+        userId: null,
         capabilityName: "set_model_credential",
       }),
     ).toBeUndefined();
     expect(findFirst).not.toHaveBeenCalled();
   });
 
-  it("lets a key with no purpose act for its creator, as before", async () => {
-    // `oxagen login` mints these. They carry no purpose and keep the
-    // creator-derived authority the rest of the system expects.
-    keyWithScope({ note: "cli" });
+  it("lets a key with no purpose through, as before", async () => {
+    // A plain org API key. `oxagen login` used to mint these and no longer
+    // does (#2997 gave it `cli_session_v1`); the comment that still said so
+    // is the belief this gate's CLI-session bug was built on. What is true of
+    // them is only that they carry no purpose, so this gate has nothing to
+    // constrain them by and the handler's own role gate decides.
+    keyWithScope({ note: "unscoped" });
     expect(
       await machineKeyDenial({
         orgId: ORG,
         apiKeyId: "aky_person",
+        userId: null,
         capabilityName: "set_model_credential",
       }),
     ).toBeUndefined();
+  });
+
+  it("exempts a CLI session key from the mandate entirely, not from one entry", async () => {
+    // `oxagen login`'s token exchange mints these with `purpose:
+    // "cli_session_v1"`. `resolveApiKey` resolves that purpose to the
+    // approving person (re-checked for org/workspace membership on every
+    // call), so it must not fall into the "unrecognised purpose" branch
+    // below — that regression denied the CLI's org/workspace picker every
+    // capability outright, twice: once when #2997 introduced the purpose, and
+    // again when #3178's squash overwrote the exemption #3222 had just added.
+    //
+    // `set_model_credential` is the second capability on purpose. It mutates
+    // and is `sensitivity: "high"`, so it is outside even the widest machine
+    // allowance this module grants (the gateway rule), and no
+    // `MACHINE_KEY_CAPABILITIES` list contains it. A fix that merely
+    // allow-listed `list_workspaces` somewhere would pass the first assertion
+    // and fail this one: what is pinned here is that the key is not a machine
+    // credential at all, not that one call was permitted.
+    for (const capability of ["list_workspaces", "set_model_credential"]) {
+      keyWithScope({ purpose: CLI_SESSION_SCOPE_PURPOSE });
+      expect(
+        await machineKeyDenial({
+          orgId: ORG,
+          apiKeyId: "aky_cli",
+          userId: PERSON,
+          capabilityName: capability,
+        }),
+        capability,
+      ).toBeUndefined();
+    }
+  });
+
+  it("denies a CLI session key that reached a surface which resolved no person", async () => {
+    // The exemption above is justified by `resolveApiKey` resolving the key to
+    // its creator. A surface that does not take that answer — `apps/mcp` did
+    // not — presents a person's exemption with no person, and
+    // `assertCallerRole` short-circuits on `!ctx.userId`, which at the
+    // non-enterprise tier is the only role gate that runs. So the exemption is
+    // conditional on the caller rather than on a file in another package
+    // continuing to behave.
+    keyWithScope({ purpose: CLI_SESSION_SCOPE_PURPOSE });
+    const denial = await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_cli",
+      userId: null,
+      capabilityName: "set_model_credential",
+    });
+    expect(denial).toBeDefined();
+    expect(denial).toContain("resolved to no person");
+    expect(denial).toContain("set_model_credential");
   });
 
   it("treats a null scope as no purpose", async () => {
@@ -187,6 +245,7 @@ describe("a person's credential is untouched", () => {
       await machineKeyDenial({
         orgId: ORG,
         apiKeyId: "aky_null",
+        userId: null,
         capabilityName: "query_ontology",
       }),
     ).toBeUndefined();
@@ -205,6 +264,7 @@ describe("a key that is no longer there", () => {
       await machineKeyDenial({
         orgId: ORG,
         apiKeyId: "aky_gone",
+        userId: null,
         capabilityName: "query_ontology",
       }),
     ).toMatch(/no longer valid/);
@@ -216,6 +276,7 @@ describe("a key that is no longer there", () => {
       await machineKeyDenial({
         orgId: ORG,
         apiKeyId: "aky_gone",
+        userId: null,
         capabilityName: "set_model_credential",
       }),
     ).toMatch(/set_model_credential/);
@@ -237,6 +298,7 @@ describe("the Tacho host key", () => {
         await machineKeyDenial({
           orgId: ORG,
           apiKeyId: "aky_h",
+          userId: null,
           capabilityName: capability,
         }),
         capability,
@@ -260,6 +322,7 @@ describe("the Tacho host key", () => {
       const denial = await machineKeyDenial({
         orgId: ORG,
         apiKeyId: "aky_h",
+        userId: null,
         capabilityName: capability,
       });
       expect(denial, capability).toBeDefined();
@@ -274,6 +337,7 @@ describe("the Tacho host key", () => {
       await machineKeyDenial({
         orgId: ORG,
         apiKeyId: "aky_h",
+        userId: null,
         capabilityName: "create_tacho_enrollment",
       }),
     ).toBeDefined();
@@ -295,6 +359,7 @@ describe("the gateway key", () => {
       await machineKeyDenial({
         orgId: ORG,
         apiKeyId: "aky_g",
+        userId: null,
         capabilityName: "query_ontology",
       }),
     ).toBeUndefined();
@@ -334,6 +399,7 @@ describe("the gateway key", () => {
     const denial = await machineKeyDenial({
       orgId: ORG,
       apiKeyId: "aky_g",
+      userId: null,
       capabilityName: "delete_workspace",
     });
     expect(denial).toContain("mandate");
@@ -364,6 +430,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
       await machineKeyDenial({
         orgId: ORG,
         apiKeyId: "aky_g",
+        userId: null,
         capabilityName: "query_ontology",
       }),
     ).toBeUndefined();
@@ -390,6 +457,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
       await machineKeyDenial({
         orgId: ORG,
         apiKeyId: "aky_g",
+        userId: null,
         capabilityName: "query_ontology",
       }),
       // Still allowed: a missing observation is not a reason to refuse a call
@@ -417,6 +485,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
     const denial = await machineKeyDenial({
       orgId: ORG,
       apiKeyId: "aky_g",
+      userId: null,
       capabilityName: "delete_workspace",
     });
     // Still refused. Recording the attempt does not permit it.
@@ -439,6 +508,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
     await machineKeyDenial({
       orgId: ORG,
       apiKeyId: "aky_g",
+      userId: null,
       capabilityName: "query_ontology",
       gatewaySessionUuid: "tachod-abc",
     });
@@ -469,6 +539,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
       await machineKeyDenial({
         orgId: ORG,
         apiKeyId: "aky_g",
+        userId: null,
         capabilityName: "query_ontology",
         gatewaySessionUuid: "tachod-abc",
       });
@@ -489,6 +560,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
       await machineKeyDenial({
         orgId: ORG,
         apiKeyId: "aky_g",
+        userId: null,
         capabilityName: "query_ontology",
         gatewaySessionUuid: chain,
       });
@@ -505,6 +577,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
     const denial = await machineKeyDenial({
       orgId: ORG,
       apiKeyId: "aky_g",
+      userId: null,
       capabilityName: "delete_workspace",
       gatewaySessionUuid: "tachod-abc",
     });
@@ -530,6 +603,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
     await machineKeyDenial({
       orgId: ORG,
       apiKeyId: "aky_g",
+      userId: null,
       capabilityName: "query_ontology",
     });
     expect(hostUpdates).toHaveLength(1);
@@ -551,6 +625,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
       await machineKeyDenial({
         orgId: ORG,
         apiKeyId: "aky_g",
+        userId: null,
         capabilityName: "query_ontology",
         gatewaySessionUuid: "tachod-abc",
       }),
@@ -572,6 +647,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
     await machineKeyDenial({
       orgId: ORG,
       apiKeyId: "aky_g",
+      userId: null,
       capabilityName: "query_ontology",
       gatewaySessionUuid: "tachod-abc",
     });
@@ -594,6 +670,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
     await machineKeyDenial({
       orgId: ORG,
       apiKeyId: "aky_h",
+      userId: null,
       capabilityName: allowed as string,
       gatewaySessionUuid: "tachod-abc",
     });
@@ -613,6 +690,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
     await machineKeyDenial({
       orgId: ORG,
       apiKeyId: "aky_h",
+      userId: null,
       capabilityName: allowed as string,
     });
     expect(hostUpdates).toHaveLength(0);
@@ -628,6 +706,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
       await machineKeyDenial({
         orgId: ORG,
         apiKeyId: "aky_g",
+        userId: null,
         capabilityName: "query_ontology",
       }),
     ).toBeUndefined();
@@ -641,6 +720,7 @@ describe("fail closed", () => {
     const denial = await machineKeyDenial({
       orgId: ORG,
       apiKeyId: "aky_future",
+      userId: null,
       capabilityName: "query_ontology",
     });
     expect(denial).toBeDefined();
@@ -653,6 +733,7 @@ describe("fail closed", () => {
       await machineKeyDenial({
         orgId: ORG,
         apiKeyId: "aky_s",
+        userId: null,
         capabilityName: "ingest_stella_operational_telemetry",
       }),
     ).toBeUndefined();
@@ -661,6 +742,7 @@ describe("fail closed", () => {
       await machineKeyDenial({
         orgId: ORG,
         apiKeyId: "aky_s",
+        userId: null,
         capabilityName: "ingest_tacho_events",
       }),
     ).toBeDefined();

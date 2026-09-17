@@ -308,11 +308,122 @@ chmod 0755 /opt/oxagen/bin/*.sh || true
 
 # The real Caddyfile, replacing the 503 placeholder above. Absent on a first
 # ever provision, which is why this does not fail the boot.
-if aws s3 cp "s3://${deploy_bucket}/_caddy/Caddyfile" /opt/oxagen/caddy/Caddyfile \
-     --region "$REGION" --only-show-errors; then
-  docker exec oxagen-caddy caddy reload \
-    --config /etc/caddy/Caddyfile --adapter caddyfile || true
+#
+# It is fetched to a temp path and VALIDATED before it replaces the placeholder.
+# This used to copy the object straight over /opt/oxagen/caddy/Caddyfile and
+# then `caddy reload ... || true`, which had two failure modes and no signal for
+# either:
+#
+#   - the running container kept the placeholder in memory because the reload
+#     was refused, while the file on disk was already the broken one — so the
+#     node served nothing, and the next container restart (this container is
+#     `--restart unless-stopped`) could not start Caddy at all;
+#   - `|| true` erased the difference between "no config published yet", which
+#     is normal on a first provision, and "the published config is broken",
+#     which is an outage. Both looked like a quiet boot.
+#
+# Validating first means a broken object cannot destroy the placeholder. The
+# node then stays visibly unhealthy — the placeholder deliberately does not
+# answer /healthz 200, see the note above it — which is the honest answer and
+# the one the 2026-09-08 incident is about.
+#
+# The boot continues either way, on purpose. Aborting here would skip the
+# service restore loop below and turn a Caddy problem into a node with no
+# services on it, which is a worse recovery than a node that is loudly
+# unhealthy. Loud, not fatal.
+# ── The same node-wide lock the installer takes ─────────────────────────────
+#
+# This bootstrap is the SECOND writer of the paths below. `install-node-scripts.sh`
+# writes the same `/tmp/Caddyfile.incoming` and the same
+# `/opt/oxagen/caddy/Caddyfile`, and until this block took the lock only one of
+# the two participants held it — which is a lock over half a transaction. The
+# interleaving is not hypothetical, it is the deployment path: changing this file
+# REPLACES the instance, so a replacement node is running this bootstrap exactly
+# when an operator is most likely to be running the installer.
+#
+#   installer fetches candidate B -> /tmp/Caddyfile.incoming = B
+#   this bootstrap fetches the canonical object -> same path, now A
+#   installer validates and reloads             -> the node runs A
+#   installer exits 0, and its caller publishes B, which nothing validated
+#
+# Same lock file, same `flock`, so there is one mechanism and not two. What
+# differs is the response to not getting it, and the difference is this file's
+# own doctrine rather than a new idea: the installer FAILS (SSM reports Failed,
+# nothing is promoted, an operator retries), because a refused install costs
+# nothing. A bootstrap cannot fail here. Aborting the boot for a lock would be
+# the "fatal" this file rejects three paragraphs up — a node that never joins
+# the target group is worse than a node that is loudly unhealthy — so a bootstrap
+# that cannot take the lock SKIPS the Caddy step, keeps the 503 placeholder, and
+# goes on to restore its services. That is also the correct outcome rather than
+# merely the safe one: whoever holds the lock is an installer that is about to
+# reload this node with a config it validated.
+#
+# Scoped to a subshell rather than held to process exit, which is the opposite of
+# the installer's choice and for the same reason. There the lock must outlive the
+# script so the `trap ... EXIT` restore runs inside it. Here the restore is inline
+# in the `else` below, so the subshell already contains it — and holding the lock
+# to the end of THIS script would keep it through the service-restore loop, for
+# minutes, which would time out every concurrent installer instead of serialising
+# with it.
+#
+# `set -e` is on, so the acquisition is written as a tested `if` and the subshell
+# closes with `|| echo`: neither a lock we did not get nor a step that failed
+# inside may end the boot.
+#
+# The markers around it are load-bearing, for the same reason the installer's
+# are: they let this block be run against stubs in a test, and the defect it was
+# fixed for is an INTERLEAVING of two scripts, which no reading of either one
+# decides.
+# >>> caddy-bootstrap
+(
+if ! command -v flock >/dev/null; then
+  # Proceed unlocked, loudly. A missing flock is a node-image regression rather
+  # than a concurrency event, and turning it into "this node never serves" is
+  # the fatal-not-loud direction this file exists to reject.
+  echo "CADDY BOOTSTRAP: flock is missing — proceeding WITHOUT serialising against a concurrent install" >&2
+elif ! flock -x -w 60 200; then
+  echo "caddy: an install holds /opt/oxagen/caddy-install.lock — skipping the config step" >&2
+  echo "caddy: keeping the 503 placeholder; that install is reloading this node with a config it validated" >&2
+  exit 0
 fi
+
+if aws s3 cp "s3://${deploy_bucket}/_caddy/Caddyfile" /tmp/Caddyfile.incoming \
+     --region "$REGION" --only-show-errors; then
+  if docker run --rm -v /tmp/Caddyfile.incoming:/etc/caddy/Caddyfile:ro caddy:2 \
+       caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile; then
+    # Kept so the reload failure below can put back what Caddy is actually
+    # running. Validation proves the file PARSES; it does not prove the running
+    # process took it, and a validated config whose reload fails transiently was
+    # left on disk exactly like a broken one — the same window the comment above
+    # describes, reached through the other door.
+    #
+    # This file is read later by install-node-scripts.sh, whose `cmp -s` treats
+    # it as "the config Caddy accepted". One left here unaccepted makes that
+    # comparison report "unchanged", which skips the reload and promotes the
+    # candidate as successful — so a bootstrap that quietly leaves the wrong
+    # file reopens the TRUST_EDGE_CLIENT_IP_HEADER hazard from the installer
+    # side. The file has to mean what the installer reads it to mean.
+    cp /opt/oxagen/caddy/Caddyfile /tmp/Caddyfile.accepted
+    cp /tmp/Caddyfile.incoming /opt/oxagen/caddy/Caddyfile
+    if docker exec oxagen-caddy caddy reload \
+         --config /etc/caddy/Caddyfile --adapter caddyfile; then
+      echo "caddy: published config installed and reloaded"
+    else
+      cp /tmp/Caddyfile.accepted /opt/oxagen/caddy/Caddyfile
+      echo "CADDY BOOTSTRAP: config validated but reload FAILED — node is not serving" >&2
+      echo "CADDY BOOTSTRAP: restored the config Caddy is running, so a later install still reloads" >&2
+    fi
+    rm -f /tmp/Caddyfile.accepted
+  else
+    echo "CADDY BOOTSTRAP: published s3://${deploy_bucket}/_caddy/Caddyfile FAILED validation" >&2
+    echo "CADDY BOOTSTRAP: keeping the 503 placeholder; this node will stay unhealthy on purpose" >&2
+  fi
+  rm -f /tmp/Caddyfile.incoming
+else
+  echo "caddy: no published config yet (first provision) — keeping the 503 placeholder"
+fi
+) 200>/opt/oxagen/caddy-install.lock || echo "CADDY BOOTSTRAP: the caddy config step did not complete — continuing the boot" >&2
+# <<< caddy-bootstrap
 
 # Every service with an artifact. Read from the bucket rather than listed here,
 # so adding a service to the platform does not also mean editing this file and

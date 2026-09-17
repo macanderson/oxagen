@@ -29,7 +29,6 @@ vi.mock("@oxagen/config/env", async (importOriginal) => {
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { logger } from "./logger";
-import { __resetTrustedProxyHopsForTests } from "../lib/context";
 import {
   authorizationFingerprintBucketKey,
   enrolledMachineBucketKey,
@@ -37,6 +36,7 @@ import {
   deriveBucketKey,
   rateLimitBudgets,
   trustedClientIpBucketKey,
+  __resetRateLimitEnvForTests,
 } from "./distributed-rate-limit";
 
 type FakeContextOpts = {
@@ -78,9 +78,20 @@ function scriptCount(count: number): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // extractClientIp memoizes the hop count on first use; drop it so each case
-  // can set its own TRUSTED_PROXY_HOP_COUNT.
-  __resetTrustedProxyHopsForTests();
+  // Both the edge-header gate and the trusted-proxy list are memoized on first
+  // read, in this file and in lib/context.ts. Dropping both per case is how a
+  // test that names proxies stops changing how the next one attributes an
+  // address — that memo outliving a case is a green run for the wrong reason.
+  __resetRateLimitEnvForTests();
+  // Most cases here model the deployment AFTER the edge is in place and the
+  // operator has turned the flag on, because that is the state the per-address
+  // bucketing is for. The gate-off and no-proxies-named states have their own
+  // cases below.
+  mocks.requireEnv.mockReturnValue({
+    TRUST_EDGE_CLIENT_IP_HEADER: true,
+    TRUSTED_PROXY_CIDRS: "",
+    RATE_LIMIT_CHAT_PER_MIN: 60,
+  });
   // Keep the opportunistic cleanup (Math.random < 0.01) from firing so
   // withSystemDb is called exactly once per counted request.
   vi.spyOn(Math, "random").mockReturnValue(0.5);
@@ -92,16 +103,22 @@ afterEach(() => {
 });
 
 describe("pre-authentication bucket keys", () => {
-  // This used to return the constant "ip:unverified" for every off-Vercel
-  // caller, i.e. always in production. On a fail-closed pre-auth mount that
-  // hands anyone who can reach the host the power to take the whole ingress
-  // offline with `max + 1` requests. Two callers must never share a bucket, and
-  // where no client can be identified the limiter must skip rather than pool.
+  // The regression #3167 is named for: off Vercel this returned the constant
+  // "ip:unverified" for every caller, so the whole internet shared one bucket
+  // and one Postgres row. On a mount that runs before any credential exists
+  // that is not a ceiling — it hands anyone who can reach the host the power to
+  // take the entire Tacho and Stella ingress offline with `max + 1` requests.
+  // Two callers must never share a bucket, and where no client can be
+  // identified the limiter must SKIP rather than pool.
+  //
+  // Two declarations can name a caller: the proxies named in
+  // TRUSTED_PROXY_CIDRS, and the edge header once its gate is on (ADR-083).
+  // Counting hops names nobody anywhere any more: that branch was deleted in
+  // #3205 rather than deprecated.
   it("gives two off-Vercel callers two different buckets", () => {
     vi.stubEnv("VERCEL", "");
     mocks.requireEnv.mockReturnValue({
       TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
-      TRUSTED_PROXY_HOP_COUNT: 1,
     });
 
     // The trailing entry is the named proxy: an address is only attributable
@@ -122,7 +139,6 @@ describe("pre-authentication bucket keys", () => {
     vi.stubEnv("VERCEL", "");
     mocks.requireEnv.mockReturnValue({
       TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
-      TRUSTED_PROXY_HOP_COUNT: 2,
     });
 
     expect(
@@ -138,6 +154,29 @@ describe("pre-authentication bucket keys", () => {
     ).toBe("ip:198.51.100.7");
   });
 
+  it("refuses a chain that no trusted proxy vouched for", () => {
+    // No named proxy stands to the right of the rightmost entry, so nothing
+    // wrote it but the caller — a typo in the CIDR list, a network change, or
+    // a path that bypasses the proxy all look like this.
+    vi.stubEnv("VERCEL", "");
+    mocks.requireEnv.mockReturnValue({
+      TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
+    });
+
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-forwarded-for": "198.51.100.1" } }),
+      ),
+    ).toBeNull();
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({
+          headers: { "x-forwarded-for": "10.0.0.5, 198.51.100.1" },
+        }),
+      ),
+    ).toBeNull();
+  });
+
   it("refuses to enforce a ceiling whose proxies the deployment has not named", () => {
     // A hop count is not enough on this mount: one that is too high lets a
     // caller pad x-forwarded-for until the arithmetic lands on a value the
@@ -146,7 +185,6 @@ describe("pre-authentication bucket keys", () => {
     vi.stubEnv("VERCEL", "");
     mocks.requireEnv.mockReturnValue({
       TRUSTED_PROXY_CIDRS: "",
-      TRUSTED_PROXY_HOP_COUNT: 1,
     });
 
     expect(
@@ -160,7 +198,6 @@ describe("pre-authentication bucket keys", () => {
     vi.stubEnv("VERCEL", "");
     mocks.requireEnv.mockReturnValue({
       TRUSTED_PROXY_CIDRS: "",
-      TRUSTED_PROXY_HOP_COUNT: 0,
     });
 
     expect(
@@ -179,6 +216,137 @@ describe("pre-authentication bucket keys", () => {
     ).toBeNull();
   });
 
+  // ── the edge header (ADR-083) ────────────────────────────────────────────
+  // The second way a caller can be named here. Caddy SETS x-oxagen-client-ip
+  // with `header_up`, which REPLACES a copy the caller sent, so the value is
+  // the edge's own — but only once the operator has turned the gate on, which
+  // is the default state of these cases.
+
+  it("gives each edge-reported client address its own bucket off Vercel", () => {
+    vi.stubEnv("VERCEL", "");
+
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.1" } }),
+      ),
+    ).toBe("ip:198.51.100.1");
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-oxagen-client-ip": "2001:db8::1" } }),
+      ),
+    ).toBe("ip:2001:db8::1");
+  });
+
+  it("prefers the edge-written address over the named-proxy walk", () => {
+    // Both declarations are in force. The edge header is the one the deployment
+    // writes itself, so it wins, and the two must never disagree about which
+    // caller a bucket belongs to.
+    vi.stubEnv("VERCEL", "");
+    mocks.requireEnv.mockReturnValue({
+      TRUST_EDGE_CLIENT_IP_HEADER: true,
+      TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
+    });
+
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({
+          headers: {
+            "x-oxagen-client-ip": "198.51.100.1",
+            "x-forwarded-for": "203.0.113.9, 10.0.0.5",
+          },
+        }),
+      ),
+    ).toBe("ip:198.51.100.1");
+  });
+
+  it("ignores the caller-writable forwarding headers off Vercel", () => {
+    vi.stubEnv("VERCEL", "");
+
+    // Only the edge header is written by a proxy that replaces a caller's copy.
+    // x-forwarded-for is appended to by both the ALB and Caddy and names no
+    // trusted proxy here, and x-real-ip is set by neither.
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({
+          headers: {
+            "x-oxagen-client-ip": "198.51.100.1",
+            "x-forwarded-for": "203.0.113.9",
+            "x-real-ip": "203.0.113.8",
+            "x-vercel-forwarded-for": "203.0.113.7",
+          },
+        }),
+      ),
+    ).toBe("ip:198.51.100.1");
+    // And with no edge header and no named proxies, nothing names the caller,
+    // so the ceiling skips rather than pooling every caller into one bucket.
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({
+          headers: {
+            "x-forwarded-for": "203.0.113.9",
+            "x-real-ip": "203.0.113.8",
+          },
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("does not believe the edge header before the gate is turned on", () => {
+    // Before the Caddy config lands, the OLD Caddyfile has no rule for this
+    // header name and forwards a caller's copy unchanged. Trusting it on sight
+    // would hand a caller a by-name route into a bucket key of its choosing.
+    vi.stubEnv("VERCEL", "");
+    mocks.requireEnv.mockReturnValue({
+      TRUST_EDGE_CLIENT_IP_HEADER: false,
+      TRUSTED_PROXY_CIDRS: "",
+    });
+
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.1" } }),
+      ),
+    ).toBeNull();
+  });
+
+  it("skips rather than bucketing anything that is not an address", () => {
+    vi.stubEnv("VERCEL", "");
+
+    for (const value of [
+      "not-an-ip",
+      "198.51.100.1, 203.0.113.9",
+      " ",
+      "f".repeat(46),
+    ]) {
+      expect(
+        trustedClientIpBucketKey(
+          fakeContext({ headers: { "x-oxagen-client-ip": value } }),
+        ),
+      ).toBeNull();
+    }
+  });
+
+  it("trusts only Vercel's own header when running on Vercel", () => {
+    vi.stubEnv("VERCEL", "1");
+
+    // There is no Caddy in front of a Vercel deployment, so an edge header
+    // arriving there came from the caller and must not be believed.
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({
+          headers: {
+            "x-vercel-forwarded-for": "203.0.113.1, 10.0.0.1",
+            "x-oxagen-client-ip": "198.51.100.1",
+          },
+        }),
+      ),
+    ).toBe("ip:203.0.113.1");
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.1" } }),
+      ),
+    ).toBeNull();
+  });
+
   it("normalizes a bearer credential and returns only a SHA-256 fingerprint", () => {
     const compact = authorizationFingerprintBucketKey(
       fakeContext({ headers: { authorization: "Bearer secret-key" } }),
@@ -193,6 +361,57 @@ describe("pre-authentication bucket keys", () => {
   });
 });
 
+// The #3183 second P1. The edge header is believed only because Caddy SETS it,
+// and Caddy's config deploys through the infra pipeline while this code deploys
+// through the application one. In the skew window the old Caddyfile has no rule
+// for that header name and forwards a caller-supplied copy unchanged.
+//
+// What these cases have to discriminate: an implementation that reads the
+// header whenever it is present passes every assertion above, because every
+// assertion above is about a header that is genuinely from the edge. So here
+// the header is forged, the flag is off, and the assertion is that the forged
+// value does NOT become a bucket of its own.
+describe("pre-authentication bucket keys with the edge header ungated", () => {
+  beforeEach(() => {
+    __resetRateLimitEnvForTests();
+    mocks.requireEnv.mockReturnValue({
+      TRUST_EDGE_CLIENT_IP_HEADER: false,
+      TRUSTED_PROXY_CIDRS: "",
+      RATE_LIMIT_CHAT_PER_MIN: 60,
+    });
+  });
+
+  it("does not let a forged edge header mint its own bucket", () => {
+    vi.stubEnv("VERCEL", "");
+
+    // Two callers, two forged addresses, and no bucket for either: nothing the
+    // deployment wrote names them, so the ceiling skips. It must not be one
+    // shared bucket either — on a pre-authentication mount that is one caller's
+    // power to deny the ingress to all the others.
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.1" } }),
+      ),
+    ).toBeNull();
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.2" } }),
+      ),
+    ).toBeNull();
+  });
+
+  it("keeps the forged header out of the deriveBucketKey fallback too", () => {
+    vi.stubEnv("VERCEL", "");
+
+    expect(
+      deriveBucketKey(
+        fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.1" } }),
+        "chat",
+      ),
+    ).toBe("chat:ip:unknown");
+  });
+});
+
 describe("deriveBucketKey", () => {
   it("prefers workspace scope when a workspaceId is present", () => {
     const c = fakeContext({ vars: { workspaceId: "ws_1", orgId: "org_1" } });
@@ -204,20 +423,28 @@ describe("deriveBucketKey", () => {
     expect(deriveBucketKey(c, "chat")).toBe("chat:org:org_1");
   });
 
-  it("falls back to the client IP when neither workspace nor org is set", () => {
+  it("falls back to the edge-reported client IP when neither workspace nor org is set", () => {
     const c = fakeContext({
-      headers: { "x-forwarded-for": "203.0.113.7, 10.0.0.1" },
+      headers: { "x-oxagen-client-ip": "203.0.113.7" },
     });
     expect(deriveBucketKey(c, "chat")).toBe("chat:ip:203.0.113.7");
   });
 
-  it('uses x-real-ip, then "unknown", when x-forwarded-for is absent', () => {
+  // #3183 P1, one layer down from the pre-auth buckets: this fallback read the
+  // leftmost x-forwarded-for entry and then x-real-ip, so a caller could mint
+  // an unbounded number of buckets by varying a header it writes itself.
+  it("ignores the caller-writable headers and collapses to one bucket instead", () => {
     expect(
       deriveBucketKey(
-        fakeContext({ headers: { "x-real-ip": "198.51.100.9" } }),
+        fakeContext({
+          headers: {
+            "x-forwarded-for": "203.0.113.7, 10.0.0.1",
+            "x-real-ip": "198.51.100.9",
+          },
+        }),
         "stella-telemetry",
       ),
-    ).toBe("stella-telemetry:ip:198.51.100.9");
+    ).toBe("stella-telemetry:ip:unknown");
     expect(deriveBucketKey(fakeContext(), "stella-telemetry")).toBe(
       "stella-telemetry:ip:unknown",
     );
@@ -240,22 +467,652 @@ describe("distributedRateLimiter", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  it("fails closed without calling next when the counter store is unavailable", async () => {
+  // ADR-082. The four pre-auth mounts used to answer 503 here, which is what
+  // took Tacho and Stella intake offline in #3167.
+  it("serves the request from the per-instance limiter when the counter store is unavailable", async () => {
     mocks.withSystemDb.mockRejectedValue(new Error("db unavailable"));
     const mw = distributedRateLimiter({
       keyPrefix: "preauth",
       max: 60,
-      failClosedOnStoreError: true,
+      storeErrorPolicy: "degrade-to-local",
     });
     const next = vi.fn().mockResolvedValue(undefined);
 
-    const result = (await mw(fakeContext(), next)) as
+    const result = await mw(
+      fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.30" } }),
+      next,
+    );
+
+    expect(result).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("still enforces a ceiling, per instance, while the counter store is unavailable", async () => {
+    mocks.withSystemDb.mockRejectedValue(new Error("db unavailable"));
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 2,
+      bucketKey: trustedClientIpBucketKey,
+      storeErrorPolicy: "degrade-to-local",
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const headers = { "x-oxagen-client-ip": "198.51.100.31" };
+
+    await mw(fakeContext({ headers }), next);
+    await mw(fakeContext({ headers }), next);
+    const third = (await mw(fakeContext({ headers }), next)) as
       | { body: unknown; status: number }
       | undefined;
 
-    expect(result?.status).toBe(503);
-    expect(result?.body).toEqual({ error: "rate_limit_unavailable" });
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(third?.status).toBe(429);
+    expect(third?.body).toMatchObject({ error: "rate_limited" });
+  });
+
+  it("keeps the degraded ceiling per bucket, not per limiter", async () => {
+    mocks.withSystemDb.mockRejectedValue(new Error("db unavailable"));
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 1,
+      bucketKey: trustedClientIpBucketKey,
+      storeErrorPolicy: "degrade-to-local",
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await mw(
+      fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.32" } }),
+      next,
+    );
+    const otherCaller = await mw(
+      fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.33" } }),
+      next,
+    );
+
+    expect(otherCaller).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  // #3183 P2. A store that flaps sends some requests down the success path and
+  // some down the failure path. While only the failures were counted locally, a
+  // caller could spend `max` through Postgres and another `max` through the
+  // degraded counter inside one window — 2 x max exactly when the store is
+  // least reliable, which is not the bound ADR-082 states.
+  it("does not hand a second full allowance out when the store flaps mid-window", async () => {
+    let storeUp = true;
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        if (!storeUp) throw new Error("db unavailable");
+        return fn({
+          execute: vi.fn().mockResolvedValue([{ count: served + 1 }]),
+        });
+      },
+    );
+    let served = 0;
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 2,
+      bucketKey: trustedClientIpBucketKey,
+      storeErrorPolicy: "degrade-to-local",
+    });
+    const next = vi.fn().mockImplementation(async () => {
+      served += 1;
+    });
+    const headers = { "x-oxagen-client-ip": "198.51.100.40" };
+
+    // Two requests spend the whole ceiling against a healthy store.
+    await mw(fakeContext({ headers }), next);
+    await mw(fakeContext({ headers }), next);
+    expect(next).toHaveBeenCalledTimes(2);
+
+    // The store drops. The ceiling is already spent, so the degraded path must
+    // refuse rather than start a fresh count.
+    storeUp = false;
+    const third = (await mw(fakeContext({ headers }), next)) as
+      | { body: unknown; status: number }
+      | undefined;
+    const fourth = (await mw(fakeContext({ headers }), next)) as
+      | { status: number }
+      | undefined;
+
+    expect(third?.status).toBe(429);
+    expect(third?.body).toMatchObject({ error: "rate_limited" });
+    expect(fourth?.status).toBe(429);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  // The inverse ordering of the case above, and the one recording-without-
+  // enforcing left open: the degraded path serves `max`, then the store comes
+  // back and its counter starts at 1, which would permit a second full `max`.
+  it("does not hand a second full allowance out when the store recovers mid-window", async () => {
+    let storeUp = false;
+    let healthyCount = 0;
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        if (!storeUp) throw new Error("db unavailable");
+        healthyCount += 1;
+        return fn({
+          execute: vi.fn().mockResolvedValue([{ count: healthyCount }]),
+        });
+      },
+    );
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 2,
+      bucketKey: trustedClientIpBucketKey,
+      storeErrorPolicy: "degrade-to-local",
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const headers = { "x-oxagen-client-ip": "198.51.100.44" };
+
+    // The whole ceiling is spent against a store that is down.
+    await mw(fakeContext({ headers }), next);
+    await mw(fakeContext({ headers }), next);
+    expect(next).toHaveBeenCalledTimes(2);
+
+    // Postgres comes back and starts counting this window from 1. The shadow
+    // count is what has to answer.
+    storeUp = true;
+    const third = (await mw(fakeContext({ headers }), next)) as
+      | { body: unknown; status: number }
+      | undefined;
+
+    expect(third?.status).toBe(429);
+    expect(third?.body).toMatchObject({ error: "rate_limited" });
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  // The crossings, not the steady states. Healthy is covered, fully-degraded is
+  // covered, and both of the two P2s below live at a boundary the earlier cases
+  // step over: a window rolling mid-request, and the store coming back inside a
+  // window the shadow already owns.
+
+  // The Postgres `window_start` is derived from a timestamp captured BEFORE the
+  // upsert is awaited. If the shadow counter reads the clock again afterwards,
+  // a request whose await crossed a window boundary is recorded in Postgres
+  // under one window and locally under the next — one request in two windows.
+  //
+  // A burst entirely inside one window passes against the unfixed code, because
+  // the boundary IS the defect. What separates them is a burst that straddles
+  // it, so the clock is frozen either side and each request's window is pinned.
+  it("counts a boundary-crossing request in the window it started in", async () => {
+    vi.useFakeTimers();
+    try {
+      // One millisecond before the minute rolls. The store call advances the
+      // clock past it, which is what a slow upsert does.
+      vi.setSystemTime(new Date("2026-09-17T12:00:59.999Z"));
+      mocks.withSystemDb.mockImplementation(
+        async (fn: (tx: unknown) => Promise<unknown>) => {
+          vi.advanceTimersByTime(2);
+          // Postgres counts each window from 1, so only the shadow can deny.
+          return fn({ execute: vi.fn().mockResolvedValue([{ count: 1 }]) });
+        },
+      );
+      const mw = distributedRateLimiter({
+        keyPrefix: "preauth",
+        max: 2,
+        bucketKey: trustedClientIpBucketKey,
+        storeErrorPolicy: "degrade-to-local",
+      });
+      const next = vi.fn().mockResolvedValue(undefined);
+      const headers = { "x-oxagen-client-ip": "198.51.100.60" };
+
+      // Starts at 12:00:59.999, finishes at 12:01:00.001. Its shadow hit
+      // belongs to the window ending 12:01:00 — the one the response's
+      // X-RateLimit-Reset names.
+      const crossing = fakeContext({ headers });
+      await mw(crossing, next);
+      expect(responseHeadersOf(crossing)["X-RateLimit-Reset"]).toBe(
+        String(new Date("2026-09-17T12:01:00.000Z").getTime() / 1000),
+      );
+
+      // Two more, now wholly inside the new window. With the shadow hit in the
+      // right window these are its 1st and 2nd; with the boundary-crossing one
+      // wrongly counted here they are its 2nd and 3rd, and the last is a 429.
+      await mw(fakeContext({ headers }), next);
+      const third = (await mw(fakeContext({ headers }), next)) as
+        | { status: number }
+        | undefined;
+
+      expect(third).toBeUndefined();
+      expect(next).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The case above completes the crossing request BEFORE starting the
+  // new-window ones, so this counter sees its hits in timestamp order and the
+  // out-of-order defect cannot appear. Concurrency does not work that way: each
+  // request captures `now` before awaiting the upsert, and they finish in
+  // whatever order the store returns.
+  //
+  // Here the two are genuinely interleaved — both started, the NEWER one
+  // resolved first — which is the only ordering that exposes it.
+  it("does not charge a request to a window a faster request installed", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-17T12:00:59.999Z"));
+
+      // Each store call parks until its own resolver is called, so the test
+      // decides the completion order rather than the scheduler.
+      const gates: Array<() => void> = [];
+      mocks.withSystemDb.mockImplementation(
+        async (fn: (tx: unknown) => Promise<unknown>) => {
+          await new Promise<void>((resolve) => gates.push(resolve));
+          // Postgres counts each window from 1, so only the shadow can deny.
+          return fn({ execute: vi.fn().mockResolvedValue([{ count: 1 }]) });
+        },
+      );
+
+      // The middleware awaits its bucket-key resolver before capturing `now`,
+      // so a single microtask tick is not enough to be sure a request has
+      // reached the store. Drain until it has, and fail loudly rather than
+      // hanging if it never does.
+      const waitForGates = async (count: number): Promise<void> => {
+        for (let tick = 0; tick < 50 && gates.length < count; tick += 1) {
+          await Promise.resolve();
+        }
+        expect(gates.length).toBe(count);
+      };
+
+      const mw = distributedRateLimiter({
+        keyPrefix: "preauth",
+        max: 1,
+        bucketKey: trustedClientIpBucketKey,
+        storeErrorPolicy: "degrade-to-local",
+      });
+      const next = vi.fn().mockResolvedValue(undefined);
+      const headers = { "x-oxagen-client-ip": "198.51.100.61" };
+
+      // Request A starts in the old window and blocks on the store, holding a
+      // captured `now` of 12:00:59.999.
+      const a = fakeContext({ headers });
+      const aDone = mw(a, next);
+      await waitForGates(1);
+
+      // The minute rolls while A is still in flight. Request B starts in the
+      // NEW window and its store call returns first.
+      vi.setSystemTime(new Date("2026-09-17T12:01:00.001Z"));
+      const b = fakeContext({ headers });
+      const bDone = mw(b, next);
+      await waitForGates(2);
+
+      gates[1]!();
+      await bDone;
+      gates[0]!();
+      await aDone;
+
+      // Each request is the first in its own window, so with max = 1 neither is
+      // denied. Against `now < bucket.resetAt`, A lands in B's window as its
+      // second hit and comes back 429 — rejected by a count it was never part
+      // of, because a boundary happened to fall inside its store call.
+      expect(a.json).not.toHaveBeenCalled();
+      expect(b.json).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalledTimes(2);
+
+      // And the new window has spent B's allowance and only B's: the NEXT
+      // request in it is the one that trips the ceiling. Against the old code A
+      // had already spent it, so this would have been the third denial rather
+      // than the first.
+      gates.length = 0;
+      const c = fakeContext({ headers });
+      const cDone = mw(c, next);
+      await waitForGates(1);
+      gates[0]!();
+      const cRes = (await cDone) as { status: number } | undefined;
+      expect(cRes?.status).toBe(429);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The case above straddles ONE boundary, which the counter's retained
+  // previous window absorbs. This one straddles two, which it cannot: the
+  // counter keeps exactly one previous window, deliberately, so per-key state
+  // stays a constant rather than a history a pre-authentication caller can
+  // grow. A hit older than both retained windows has no window left to land in,
+  // and the counter answers the only honest thing it can — that it has no
+  // record, reported as `count: 1`.
+  //
+  // It says that INDEPENDENTLY to every member of a cohort in the same
+  // position, and that is the defect: the cohort is bounded by how many
+  // requests a caller can park behind one slow store call, not by `max`. Both
+  // halves of "slow enough" are facts of this tree rather than a hypothesis —
+  // these limiters use 60-second windows, and the pool in
+  // packages/database/src/client.ts sets `max` and `prepare: false` and nothing
+  // else, so no statement timeout bounds a call at 120 seconds.
+  //
+  // The fix is that the shadow hit is taken at admission rather than after the
+  // await, so the cohort is counted while its window is still live. Note the
+  // completion order below: A, B and C are released LAST-first. Timestamp order
+  // is what the pre-existing boundary test happened to supply, and it is why
+  // that test stayed green against unfixed code once already.
+  it("bounds a cohort whose store calls outlive two window rolls", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-17T12:00:30.000Z"));
+
+      const gates: Array<() => void> = [];
+      mocks.withSystemDb.mockImplementation(
+        async (fn: (tx: unknown) => Promise<unknown>) => {
+          await new Promise<void>((resolve) => gates.push(resolve));
+          // Postgres counts each window from 1, so only the shadow can deny.
+          // Without that, this would pass on the global counter and prove
+          // nothing about the degraded ceiling.
+          return fn({ execute: vi.fn().mockResolvedValue([{ count: 1 }]) });
+        },
+      );
+      const waitForGates = async (count: number): Promise<void> => {
+        for (let tick = 0; tick < 50 && gates.length < count; tick += 1) {
+          await Promise.resolve();
+        }
+        expect(gates.length).toBe(count);
+      };
+
+      const mw = distributedRateLimiter({
+        keyPrefix: "preauth",
+        max: 2,
+        bucketKey: trustedClientIpBucketKey,
+        storeErrorPolicy: "degrade-to-local",
+      });
+      const next = vi.fn().mockResolvedValue(undefined);
+      const headers = { "x-oxagen-client-ip": "198.51.100.62" };
+
+      // Four requests, all captured inside the window ending 12:01:00, all
+      // parked on the store. max = 2, so two of them must be refused.
+      const pending: Array<Promise<unknown>> = [];
+      const contexts = [] as ReturnType<typeof fakeContext>[];
+      for (let i = 0; i < 4; i += 1) {
+        const ctx = fakeContext({ headers });
+        contexts.push(ctx);
+        pending.push(mw(ctx, next));
+        await waitForGates(i + 1);
+      }
+
+      // Two full windows roll while every one of them is still in flight. The
+      // counter's retained pair is now {12:02:00, 12:01:00}; the cohort's
+      // window, 12:00:00, is off the end of it.
+      vi.setSystemTime(new Date("2026-09-17T12:02:30.000Z"));
+
+      // Released newest-first. Against the unfixed code each completion asks
+      // the counter about a dropped window, each is told `count: 1`, and all
+      // four are served.
+      for (let i = gates.length - 1; i >= 0; i -= 1) gates[i]!();
+      const results = (await Promise.all(pending)) as Array<
+        { status: number } | undefined
+      >;
+
+      const denied = results.filter((r) => r?.status === 429).length;
+      expect(denied).toBe(2);
+      expect(next).toHaveBeenCalledTimes(2);
+
+      // And the denials are the 3rd and 4th admitted, not an arbitrary two:
+      // the ceiling is spent in admission order, which is the order the caller
+      // actually made the requests in.
+      expect(results[0]).toBeUndefined();
+      expect(results[1]).toBeUndefined();
+      expect(results[2]?.status).toBe(429);
+      expect(results[3]?.status).toBe(429);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The case above leaves this key's counter EMPTY while the cohort is parked,
+  // so the first completion to arrive installs the cohort's own window and the
+  // rest land beside it. That is enough to kill a shadow hit moved back behind
+  // the await, but it kills it on the ORDER the ceiling is spent in rather than
+  // on the count, and an ordering assertion is the kind this branch has already
+  // had to rewrite once.
+  //
+  // This is the review's literal shape: "requests from two later windows finish
+  // first". Two single requests, one per later window, complete while the
+  // cohort is still parked, so by the time the cohort arrives the counter's
+  // retained pair is {W2, W1} and the cohort's W0 is off the end of it. The
+  // assertion is the count — the cohort may not exceed `max` between them —
+  // which is the invariant the finding names, and which holds whatever order
+  // the store returns them in.
+  it("bounds a cohort even when two later windows have already been counted", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-17T12:00:30.000Z"));
+
+      const gates: Array<() => void> = [];
+      let park = true;
+      mocks.withSystemDb.mockImplementation(
+        async (fn: (tx: unknown) => Promise<unknown>) => {
+          if (park) await new Promise<void>((resolve) => gates.push(resolve));
+          // Postgres counts each window from 1, so only the shadow can deny.
+          return fn({ execute: vi.fn().mockResolvedValue([{ count: 1 }]) });
+        },
+      );
+      const waitForGates = async (count: number): Promise<void> => {
+        for (let tick = 0; tick < 50 && gates.length < count; tick += 1) {
+          await Promise.resolve();
+        }
+        expect(gates.length).toBe(count);
+      };
+
+      const mw = distributedRateLimiter({
+        keyPrefix: "preauth",
+        max: 2,
+        bucketKey: trustedClientIpBucketKey,
+        storeErrorPolicy: "degrade-to-local",
+      });
+      const next = vi.fn().mockResolvedValue(undefined);
+      const headers = { "x-oxagen-client-ip": "198.51.100.63" };
+
+      // Four requests captured in the window ending 12:01:00, all parked.
+      const pending: Array<Promise<unknown>> = [];
+      for (let i = 0; i < 4; i += 1) {
+        pending.push(mw(fakeContext({ headers }), next));
+        await waitForGates(i + 1);
+      }
+
+      // One request per later window, each completing while the cohort waits.
+      // These are what install {12:01:00, 12:02:00} as the retained pair.
+      park = false;
+      vi.setSystemTime(new Date("2026-09-17T12:01:30.000Z"));
+      await mw(fakeContext({ headers }), next);
+      vi.setSystemTime(new Date("2026-09-17T12:02:30.000Z"));
+      await mw(fakeContext({ headers }), next);
+
+      const nextBeforeCohort = next.mock.calls.length;
+
+      // Now the cohort drains. Against a shadow hit taken after the await, each
+      // completion asks the counter about 12:00:00 — off the end of the
+      // retained pair — is told `count: 1`, and all four are served.
+      for (let i = gates.length - 1; i >= 0; i -= 1) gates[i]!();
+      const results = (await Promise.all(pending)) as Array<
+        { status: number } | undefined
+      >;
+
+      const served = results.filter((r) => r === undefined).length;
+      expect(served).toBe(2);
+      expect(results.filter((r) => r?.status === 429).length).toBe(2);
+      expect(next.mock.calls.length - nextBeforeCohort).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The headers a client paces against. When the store comes back inside a
+  // window the shadow already owns, the shadow is the operative ceiling and the
+  // Postgres count is the smaller, irrelevant one. Reporting the smaller number
+  // tells the client it has room and then rejects its next request.
+  //
+  // Asserting only that the next request is rejected passes against the unfixed
+  // code — the rejection was already right. What discriminates is asserting the
+  // number the client would have paced against, and then that the next outcome
+  // matches it.
+  it("reports the stricter of the two counts once the store recovers", async () => {
+    let storeUp = false;
+    let healthyCount = 0;
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        if (!storeUp) throw new Error("db unavailable");
+        healthyCount += 1;
+        return fn({
+          execute: vi.fn().mockResolvedValue([{ count: healthyCount }]),
+        });
+      },
+    );
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 5,
+      bucketKey: trustedClientIpBucketKey,
+      storeErrorPolicy: "degrade-to-local",
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const headers = { "x-oxagen-client-ip": "198.51.100.61" };
+
+    // Four served by the degraded path: the shadow count for this window is 4.
+    for (let i = 0; i < 4; i += 1) await mw(fakeContext({ headers }), next);
+    expect(next).toHaveBeenCalledTimes(4);
+
+    // The store comes back and reports 1 for this window. The shadow says 5.
+    storeUp = true;
+    const recovered = fakeContext({ headers });
+    const allowed = (await mw(recovered, next)) as
+      | { status: number }
+      | undefined;
+
+    expect(allowed).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(5);
+    // Not "4" — that is `max - count` from the Postgres side, and it is a
+    // promise the next line breaks.
+    expect(responseHeadersOf(recovered)["X-RateLimit-Remaining"]).toBe("0");
+
+    const rejected = (await mw(fakeContext({ headers }), next)) as
+      | { status: number }
+      | undefined;
+    expect(rejected?.status).toBe(429);
+    expect(next).toHaveBeenCalledTimes(5);
+  });
+
+  it("leaves a healthy limiter's ceiling exactly where it was", async () => {
+    // The shadow gate must be inert while the store is up: the Postgres count
+    // is global and the shadow per-instance, so `count > max` always fires
+    // first and this mount still allows exactly `max`.
+    let served = 0;
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        served += 1;
+        return fn({ execute: vi.fn().mockResolvedValue([{ count: served }]) });
+      },
+    );
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 3,
+      bucketKey: trustedClientIpBucketKey,
+      storeErrorPolicy: "degrade-to-local",
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const headers = { "x-oxagen-client-ip": "198.51.100.45" };
+
+    for (let i = 0; i < 3; i += 1) await mw(fakeContext({ headers }), next);
+    const fourth = (await mw(fakeContext({ headers }), next)) as
+      | { status: number }
+      | undefined;
+
+    expect(next).toHaveBeenCalledTimes(3);
+    expect(fourth?.status).toBe(429);
+  });
+
+  // A test that only asserts the second 429 passes against the unfixed code.
+  // The discriminating assertion is that the store was not consulted again:
+  // `degrade-to-local` exists to take load off a struggling database, and a
+  // denial path that re-enters `withSystemDb` per request puts it back on.
+  it("stops calling the store once a degraded bucket is exhausted", async () => {
+    mocks.withSystemDb.mockRejectedValue(new Error("db unavailable"));
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 1,
+      bucketKey: trustedClientIpBucketKey,
+      storeErrorPolicy: "degrade-to-local",
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const headers = { "x-oxagen-client-ip": "198.51.100.50" };
+
+    await mw(fakeContext({ headers }), next); // allowed, local count 1
+    const denied = (await mw(fakeContext({ headers }), next)) as
+      | { status: number }
+      | undefined;
+    expect(denied?.status).toBe(429);
+
+    const callsAfterFirstDenial = mocks.withSystemDb.mock.calls.length;
+    const repeat = (await mw(fakeContext({ headers }), next)) as
+      | { status: number }
+      | undefined;
+
+    expect(repeat?.status).toBe(429);
+    expect(mocks.withSystemDb.mock.calls.length).toBe(callsAfterFirstDenial);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the flapping ceiling per bucket", async () => {
+    let storeUp = true;
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        if (!storeUp) throw new Error("db unavailable");
+        return fn({ execute: vi.fn().mockResolvedValue([{ count: 1 }]) });
+      },
+    );
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 1,
+      bucketKey: trustedClientIpBucketKey,
+      storeErrorPolicy: "degrade-to-local",
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await mw(
+      fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.41" } }),
+      next,
+    );
+    storeUp = false;
+    const otherCaller = await mw(
+      fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.42" } }),
+      next,
+    );
+
+    expect(otherCaller).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not accrue a local count on a fail-open limiter", async () => {
+    // Only degrade-to-local mounts pay the per-request map entry; a fail-open
+    // limiter has no fallback to seed.
+    let storeUp = true;
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        if (!storeUp) throw new Error("db unavailable");
+        return fn({ execute: vi.fn().mockResolvedValue([{ count: 1 }]) });
+      },
+    );
+    const mw = distributedRateLimiter({ keyPrefix: "chat", max: 1 });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const headers = { "x-oxagen-client-ip": "198.51.100.43" };
+
+    await mw(fakeContext({ headers }), next);
+    storeUp = false;
+    const afterOutage = await mw(fakeContext({ headers }), next);
+
+    expect(afterOutage).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  it("passes the request through uncounted when the store fails under the default policy", async () => {
+    mocks.withSystemDb.mockRejectedValue(new Error("db unavailable"));
+    const mw = distributedRateLimiter({ keyPrefix: "chat", max: 1 });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const headers = { "x-oxagen-client-ip": "198.51.100.34" };
+
+    await mw(fakeContext({ headers }), next);
+    const second = await mw(fakeContext({ headers }), next);
+
+    expect(second).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(2);
   });
 
   it("serves an exhausted bucket from a local deny cache without another store write", async () => {
@@ -271,6 +1128,86 @@ describe("distributedRateLimiter", () => {
     expect(second?.status).toBe(429);
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
     expect(next).not.toHaveBeenCalled();
+  });
+
+  // The deny cache is the one piece of state a request writes that outlives it,
+  // and a request that has been parked on the store carries a `now` from
+  // whenever it started. Writing that window's reset time over a live entry
+  // moves the cache's expiry BACKWARDS, past the current clock, so the next
+  // request drops the entry and goes back to the database — which is the
+  // round-trip `degrade-to-local` exists to stop making against a store that is
+  // already failing.
+  //
+  // Asserting the next request's 429 proves nothing: it is denied either way,
+  // by the cache when the cache holds and by the shadow counter when it does
+  // not. The discriminating assertion is that the store was not consulted,
+  // exactly as in "stops calling the store once a degraded bucket is
+  // exhausted" above.
+  it("does not let a late completion expire a deny the current window cached", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-17T12:00:30.000Z"));
+
+      const gates: Array<() => void> = [];
+      let park = true;
+      mocks.withSystemDb.mockImplementation(async () => {
+        if (park) await new Promise<void>((resolve) => gates.push(resolve));
+        throw new Error("db unavailable");
+      });
+      const waitForGates = async (count: number): Promise<void> => {
+        for (let tick = 0; tick < 50 && gates.length < count; tick += 1) {
+          await Promise.resolve();
+        }
+        expect(gates.length).toBe(count);
+      };
+
+      const mw = distributedRateLimiter({
+        keyPrefix: "preauth",
+        max: 1,
+        bucketKey: trustedClientIpBucketKey,
+        storeErrorPolicy: "degrade-to-local",
+      });
+      const next = vi.fn().mockResolvedValue(undefined);
+      const headers = { "x-oxagen-client-ip": "198.51.100.64" };
+
+      // Two requests in the window ending 12:01:00, both parked on the store.
+      // The second is already over `max` as far as the shadow counter is
+      // concerned; it just cannot say so until its store call comes back.
+      const early = [mw(fakeContext({ headers }), next)];
+      await waitForGates(1);
+      early.push(mw(fakeContext({ headers }), next));
+      await waitForGates(2);
+
+      // The window rolls. Two more requests, failing fast, exhaust the bucket
+      // in the window ending 12:02:00 and cache a denial until 12:02:00.
+      park = false;
+      vi.setSystemTime(new Date("2026-09-17T12:01:30.000Z"));
+      await mw(fakeContext({ headers }), next);
+      const currentWindowDenial = (await mw(fakeContext({ headers }), next)) as
+        | { status: number }
+        | undefined;
+      expect(currentWindowDenial?.status).toBe(429);
+
+      // The parked pair finally fails, a full window after it was admitted. The
+      // over-limit one wants to cache a denial that expired at 12:01:00.
+      vi.setSystemTime(new Date("2026-09-17T12:01:40.000Z"));
+      gates[0]!();
+      gates[1]!();
+      await Promise.all(early);
+
+      // The cached denial must still be the live one, so this is served from
+      // the cache and the failing store is left alone.
+      vi.setSystemTime(new Date("2026-09-17T12:01:45.000Z"));
+      const callsBefore = mocks.withSystemDb.mock.calls.length;
+      const afterLateCompletion = (await mw(fakeContext({ headers }), next)) as
+        | { status: number }
+        | undefined;
+
+      expect(afterLateCompletion?.status).toBe(429);
+      expect(mocks.withSystemDb.mock.calls.length).toBe(callsBefore);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("uses a custom bucket-key resolver without trusting the default client IP", async () => {
@@ -581,10 +1518,10 @@ describe("enrolled-machine bucket key", () => {
 
 describe("unattributable bucket", () => {
   // A ceiling whose bucket cannot be attributed to one caller is not a ceiling.
-  // On a fail-closed pre-auth mount it is strictly worse than nothing: one
-  // abuser exhausts the shared counter and everyone else is denied. The
-  // limiter must pass the request through instead — the per-credential ceiling
-  // beside it still applies.
+  // On a pre-authentication mount it is strictly worse than nothing: one abuser
+  // exhausts the shared counter and every other caller is denied before its
+  // credential is ever checked. The limiter must pass the request through
+  // instead — the per-credential ceiling beside it still applies.
   it("skips entirely when the resolver cannot name a bucket", async () => {
     const warn = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
     scriptCount(1);
@@ -596,17 +1533,52 @@ describe("unattributable bucket", () => {
       max: 1,
       bucketKey: () => null,
       methods: "all",
-      failClosedOnStoreError: true,
+      // The strictest policy this limiter has under ADR-082. The skip must hold
+      // under it, not only under fail-open.
+      storeErrorPolicy: "degrade-to-local",
     })(c, next);
 
     expect(next).toHaveBeenCalledOnce();
     expect(res).toBeUndefined();
     // Never counted: no store round-trip at all.
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
-    // And never denied, despite fail-closed.
+    // And never denied.
     expect(c.json).not.toHaveBeenCalled();
     // The operator can see the deployment is not enforcing it.
     expect(warn).toHaveBeenCalledOnce();
-    expect(warn.mock.calls[0]?.[1]).toContain("TRUSTED_PROXY_CIDRS");
+    const message = warn.mock.calls[0]?.[1] as string;
+    // BOTH topologies, because the remedy differs between them and a message
+    // naming one is wrong for the other half of the fleet. After the ADR-083
+    // edge rewrite, x-forwarded-for reaches the app as a single entry which is
+    // Caddy itself, so `extractTrustedClientIp`'s identity walk finds every
+    // entry trusted and therefore none of them a client, and returns null.
+    // `TRUSTED_PROXY_CIDRS` attributes nothing there: the operator who sets it
+    // sees no change, no explanation, and keeps believing the ceiling is on.
+    expect(message).toContain("TRUST_EDGE_CLIENT_IP_HEADER=true");
+    expect(message).toContain("TRUSTED_PROXY_CIDRS");
+    // The edge flag is never recommended bare. Enabling it before the rewrite
+    // is live believes a header the old config forwards caller-supplied, which
+    // is the worse of the two errors, so "verified live" precedes the name.
+    expect(message).toMatch(/verified live[\s\S]*TRUST_EDGE_CLIENT_IP_HEADER/);
+  });
+
+  // The other half of the same contract: a resolver that DOES name a caller
+  // must still be counted. Without this, a skip bug that skipped everything
+  // would pass the case above.
+  it("still counts when the resolver names a bucket", async () => {
+    scriptCount(1);
+
+    const next = vi.fn();
+    const c = fakeContext();
+    await distributedRateLimiter({
+      keyPrefix: "preauth-ip",
+      max: 1,
+      bucketKey: () => "ip:198.51.100.1",
+      methods: "all",
+      storeErrorPolicy: "degrade-to-local",
+    })(c, next);
+
+    expect(mocks.withSystemDb).toHaveBeenCalledOnce();
+    expect(next).toHaveBeenCalledOnce();
   });
 });

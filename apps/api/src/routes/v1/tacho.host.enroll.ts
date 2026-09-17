@@ -68,6 +68,13 @@ tachoHostEnrollRoute.use(
     },
   }),
 );
+// Both ceilings degrade to the per-instance limiter rather than denying when
+// the counter store is unreachable (ADR-082). The reasoning that applies to the
+// other pre-auth mounts applies here unchanged: these counters live in the same
+// Postgres that validates the enrollment token, so a store failure that would
+// have tripped a fail-closed deny has already taken the thing the deny was
+// protecting — while a counter statement that breaks on its own would have
+// taken enrollment offline for everyone, which is how #3167 started.
 tachoHostEnrollRoute.use(
   "*",
   distributedRateLimiter({
@@ -75,7 +82,7 @@ tachoHostEnrollRoute.use(
     max: ENROLL_PER_IP_PER_MIN,
     bucketKey: trustedClientIpBucketKey,
     methods: "all",
-    failClosedOnStoreError: true,
+    storeErrorPolicy: "degrade-to-local",
   }),
 );
 tachoHostEnrollRoute.use(
@@ -85,7 +92,7 @@ tachoHostEnrollRoute.use(
     max: ENROLL_PER_TOKEN_PER_MIN,
     bucketKey: enrollmentTokenBucketKey,
     methods: "all",
-    failClosedOnStoreError: true,
+    storeErrorPolicy: "degrade-to-local",
   }),
 );
 
