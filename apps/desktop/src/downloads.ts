@@ -232,11 +232,13 @@ export type PublicationDecision =
 /**
  * How many objects the probe found, or `null` when its output cannot be read.
  *
- * `aws s3api list-objects-v2` prints nothing when a prefix holds no keys and
- * a JSON object with a `Contents` array when it holds some, so an empty
- * capture is a real answer. Anything else — output that is not JSON, or a
- * `Contents` that is not an array — is no answer at all and must not be
- * rounded down to zero.
+ * `aws s3api list-objects-v2` answers with `KeyCount` and, when there is
+ * anything to list, a `Contents` array; with the CLI's own pagination merging
+ * pages it answers with `Contents` alone and prints nothing at all for a
+ * prefix that holds nothing. All three are real answers, so both fields are
+ * read and the larger wins. Anything else — output that is not JSON, a
+ * `Contents` that is not an array, a `KeyCount` that is not a number — is no
+ * answer at all and must not be rounded down to zero.
  */
 export function countPublishedObjects(stdout: string): number | null {
   const text = stdout.trim();
@@ -248,10 +250,21 @@ export function countPublishedObjects(stdout: string): number | null {
     return null;
   }
   if (parsed === null || typeof parsed !== "object") return null;
-  const contents = (parsed as { Contents?: unknown }).Contents;
-  if (contents === undefined || contents === null) return 0;
-  if (!Array.isArray(contents)) return null;
-  return contents.length;
+  const listing = parsed as { Contents?: unknown; KeyCount?: unknown };
+  let count = 0;
+  if (listing.Contents !== undefined && listing.Contents !== null) {
+    if (!Array.isArray(listing.Contents)) return null;
+    count = listing.Contents.length;
+  }
+  if (listing.KeyCount !== undefined && listing.KeyCount !== null) {
+    if (
+      typeof listing.KeyCount !== "number" ||
+      !Number.isFinite(listing.KeyCount)
+    )
+      return null;
+    count = Math.max(count, listing.KeyCount);
+  }
+  return count;
 }
 
 /**

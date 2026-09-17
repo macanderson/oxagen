@@ -142,17 +142,34 @@ describe("countPublishedObjects", () => {
     expect(countPublishedObjects("  \n ")).toBe(0);
   });
 
-  it("reads a listing with no Contents as a prefix that holds nothing", () => {
+  it("reads a listing with no keys as a prefix that holds nothing", () => {
     expect(countPublishedObjects('{"RequestCharged": null}')).toBe(0);
     expect(countPublishedObjects('{"Contents": null}')).toBe(0);
+    // What `--max-keys 1` (pagination off) prints for an empty prefix.
+    expect(
+      countPublishedObjects(
+        JSON.stringify({ IsTruncated: false, MaxKeys: 1, KeyCount: 0 }),
+      ),
+    ).toBe(0);
   });
 
-  it("counts the keys a listing reports", () => {
+  it("counts the keys a listing reports, by either field", () => {
     expect(
       countPublishedObjects(
         JSON.stringify({ Contents: [{ Key: `desktop/${V}/SHA256SUMS.txt` }] }),
       ),
     ).toBe(1);
+    expect(
+      countPublishedObjects(
+        JSON.stringify({
+          Contents: [{ Key: `desktop/${V}/SHA256SUMS.txt` }],
+          KeyCount: 1,
+          IsTruncated: true,
+        }),
+      ),
+    ).toBe(1);
+    // A KeyCount the truncated Contents does not show still counts.
+    expect(countPublishedObjects('{"KeyCount": 7}')).toBe(7);
   });
 
   it("refuses to round an unreadable answer down to zero", () => {
@@ -160,6 +177,7 @@ describe("countPublishedObjects", () => {
     expect(countPublishedObjects("null")).toBeNull();
     expect(countPublishedObjects('"a string"')).toBeNull();
     expect(countPublishedObjects('{"Contents": 3}')).toBeNull();
+    expect(countPublishedObjects('{"KeyCount": "1"}')).toBeNull();
   });
 });
 

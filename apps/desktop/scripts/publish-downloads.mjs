@@ -86,6 +86,9 @@ const NO_COLOUR_ENV = {
   CLICOLOR_FORCE: "0",
   FORCE_COLOR: "0",
   GH_FORCE_TTY: "",
+  // Same hazard from a different direction: an inherited AWS_PAGER sends
+  // captured JSON through a pager instead of the pipe this script reads.
+  AWS_PAGER: "",
 };
 
 function sh(command, args, { capture = false, allowFailure = false } = {}) {
@@ -130,8 +133,8 @@ function sha256(path) {
   });
 }
 
-const prefix = `s3://${bucket}/desktop/${version}`;
 const keyPrefix = `desktop/${version}/`;
+const prefix = `s3://${bucket}/desktop/${version}`;
 
 // `immutable, max-age=31536000` is a promise to every cache that fetched the
 // URL, not just to CloudFront. Overwriting the object cannot take that promise
@@ -143,21 +146,23 @@ const keyPrefix = `desktop/${version}/`;
 // checksum. --allow-overwrite is for the publish that failed before anyone was
 // given the URL, where nothing downstream can hold a stale copy.
 //
-// The probe is `s3api list-objects-v2`, not `aws s3 ls`, because this guard
-// must be able to tell "nothing is there" from "I could not find out", and
-// `s3 ls` cannot say it: given a key it runs `_check_no_objects()` and exits 1
-// for a prefix that holds nothing, so 1 means both "empty" and, per the
-// documented return codes, "the S3 command failed". A guard that reads a
-// failure as "empty" fails open exactly when it matters — an expired session,
-// a transient S3 error, or a principal holding PutObject without ListBucket
-// would all wave a republish through. `list-objects-v2` exits 0 only when the
-// listing succeeded, so here every nonzero status, every signal, and every
-// unreadable answer stops the publish.
-//
-// It runs before anything is fetched, so a refusal costs one ListObjects
+// The probe runs before anything is fetched, so a refusal costs one request
 // rather than ~500 MB of downloaded artifacts and a pass of SHA-256 over
 // them — and leaves no temp directory behind, since it precedes the mkdtemp
 // below.
+//
+// `s3api list-objects-v2` rather than `s3 ls`, because this guard must be
+// able to tell "nothing is there" from "I could not find out" and `s3 ls`
+// cannot say it: given a key it runs `_check_no_objects()` and exits 1 for a
+// prefix that holds nothing, so 1 means both "empty" and, per the documented
+// return codes, "the S3 command failed". A guard that reads a failure as
+// "empty" fails open exactly when it matters — an expired session, a
+// transient S3 error, or a principal holding PutObject without ListBucket
+// would all wave a republish through. `list-objects-v2` exits 0 only when the
+// listing succeeded, so here every nonzero status, every signal, and every
+// unreadable answer stops the publish. `--max-keys 1` also turns the CLI's
+// own pagination off, so what comes back is the one raw response, KeyCount
+// and all, rather than a merged result whose shape depends on the page count.
 const probe = sh(
   "aws",
   [
@@ -167,7 +172,7 @@ const probe = sh(
     bucket,
     "--prefix",
     keyPrefix,
-    "--max-items",
+    "--max-keys",
     "1",
     "--output",
     "json",
