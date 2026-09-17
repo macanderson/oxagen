@@ -3353,7 +3353,7 @@
       "writes": []
     }
   ],
-  "contentHash": "92ed03cb564ca104ae28b1377f47737b74e2aeecdd6fc85344f0232c325a85e3",
+  "contentHash": "97379f803f0da6027394c7e225e9575b9b1650337589aee24cc0842c3a3deac7",
   "domains": [
     {
       "name": "agent",
@@ -17868,8 +17868,9 @@
       "domain": "tacho",
       "id": "postgres:tacho.gateway_invocations",
       "name": "gateway_invocations",
+      "rls": "standard",
       "store": "postgres",
-      "tenantScoped": false
+      "tenantScoped": true
     },
     {
       "columns": [
