@@ -26,7 +26,11 @@ const askAssistant = vi.fn();
 vi.mock("./assistant-actions", () => ({ askAssistant }));
 
 const pathname = vi.fn(() => "/acme/core-platform");
-vi.mock("next/navigation", () => ({ usePathname: () => pathname() }));
+const refresh = vi.fn();
+vi.mock("next/navigation", () => ({
+  usePathname: () => pathname(),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
+}));
 
 const { AssistantFlyout } = await import("./assistant-flyout");
 
@@ -100,6 +104,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   askAssistant.mockReset();
+  refresh.mockReset();
   askAssistant.mockResolvedValue(turn());
   pathname.mockReturnValue("/acme/core-platform");
 });
@@ -201,6 +206,47 @@ describe("AssistantFlyout", () => {
     );
   });
 
+  // Fleet reads its approvals once, on the server, when it renders
+  // (features/fleet/fleet.tsx) — a write parked by this turn is not in that
+  // read, and the sentence beside the cards tells the person to go approve
+  // them there before they expire.
+  it("re-renders the server components when a turn parks writes, so Fleet can show them", async () => {
+    askAssistant.mockResolvedValue(
+      turn({
+        parkedCards: [
+          {
+            approvalId: "apr_1",
+            capability: "retire_agent",
+            expiresAt: "2026-09-17T18:00:00Z",
+          },
+        ],
+      }),
+    );
+    const { user } = await openFlyout();
+    await ask(user, "retire the stale agent");
+    await screen.findByTestId("assistant-parked");
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes nothing for a turn that parked no write (negative)", async () => {
+    const { user } = await openFlyout();
+    await ask(user, "what is live?");
+    await screen.findByTestId("assistant-answer");
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("refreshes nothing for a refused turn (negative)", async () => {
+    askAssistant.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "forbidden",
+    });
+    const { user } = await openFlyout();
+    await ask(user, "what is live?");
+    await screen.findByTestId("assistant-denied");
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   it("reads a refusal rather than showing an empty answer (negative)", async () => {
     askAssistant.mockResolvedValue({
       ok: false,
@@ -286,6 +332,93 @@ describe("AssistantFlyout", () => {
     // …and the composer is not left waiting on a turn that will never show.
     expect(screen.queryByTestId("assistant-thinking")).toBeNull();
     expect(screen.getByTestId("assistant-composer")).not.toBeDisabled();
+  });
+
+  // "acme/core-platform" names a place; two visits to it are two occasions.
+  // A guard that compares the place lets a turn from the first visit land in
+  // the transcript the second visit just cleared, so the reply, the run link
+  // and the conversation id all belong to a conversation that is gone.
+  it("does not resurrect a turn from an earlier visit when the person goes away and comes back (negative)", async () => {
+    let settle: (turn: unknown) => void = () => undefined;
+    askAssistant.mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve;
+      }),
+    );
+    const { user, renavigate } = await openFlyout();
+    await ask(user, "what is live?");
+
+    renavigate("/acme/payments");
+    renavigate("/acme/core-platform");
+    settle(turn({ reply: "an answer from the first visit." }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByTestId("assistant-answer")).toBeNull();
+    expect(screen.queryByText("an answer from the first visit.")).toBeNull();
+    expect(screen.getByTestId("assistant-intro")).toBeTruthy();
+
+    // …and the conversation it would have opened is not carried either.
+    askAssistant.mockResolvedValue(turn());
+    await ask(user, "second");
+    expect(askAssistant.mock.calls[1]?.[2]).toMatchObject({
+      conversationId: null,
+    });
+  });
+
+  // The guard above is a generation and nothing more, which is only sound
+  // because one generation holds at most one turn in flight. This is that
+  // premise: drop the `pending` gate and the conversation id has two writers.
+  it("refuses a second question while a turn is in flight (negative)", async () => {
+    askAssistant.mockReturnValue(new Promise(() => undefined));
+    const { user } = await openFlyout();
+    await ask(user, "first");
+
+    expect(screen.getByTestId("assistant-composer")).toBeDisabled();
+    await user.type(screen.getByTestId("assistant-composer"), "second");
+    await user.click(screen.getByTestId("assistant-send"));
+    expect(askAssistant).toHaveBeenCalledTimes(1);
+  });
+
+  // A workspace change clears `pending`, so a person who comes back can ask
+  // again before the first turn resolves. The newest owns the transcript; the
+  // older belongs to an earlier generation and is discarded.
+  it("lets the newest turn own the conversation when an older one is still in flight (negative)", async () => {
+    let settleFirst: (turn: unknown) => void = () => undefined;
+    askAssistant.mockReturnValueOnce(
+      new Promise((resolve) => {
+        settleFirst = resolve;
+      }),
+    );
+    const { user, renavigate } = await openFlyout();
+    await ask(user, "first");
+
+    // Away and back: the transcript is cleared and the composer is live again.
+    renavigate("/acme/payments");
+    renavigate("/acme/core-platform");
+    askAssistant.mockResolvedValue(
+      turn({
+        conversationId: "6f1f5a8e-0000-4000-8000-00000000c0df",
+        reply: "the second answer.",
+      }),
+    );
+    await ask(user, "second");
+    expect(await screen.findByTestId("assistant-answer")).toHaveTextContent(
+      "the second answer.",
+    );
+
+    settleFirst(turn({ reply: "the first answer." }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText("the first answer.")).toBeNull();
+    expect(screen.getAllByTestId("assistant-answer")).toHaveLength(1);
+    await ask(user, "third");
+    expect(askAssistant.mock.calls[2]?.[2]).toMatchObject({
+      conversationId: "6f1f5a8e-0000-4000-8000-00000000c0df",
+    });
   });
 
   it("keeps the transcript across an organization page, which owns no conversation", async () => {

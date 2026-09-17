@@ -25,6 +25,15 @@
 // workspace it does not belong to. Standing on an organization page is not a
 // switch: it has no workspace of its own, so the transcript waits.
 //
+// A turn in flight is invalidated by the occasion it was asked on, not by the
+// place. "org/ws" names a place: A → B → A puts the same string back, so a
+// comparison on it cannot tell "still the turn I started" from "back where I
+// started", and a slow A turn would land in the transcript the return to A had
+// just cleared. The reset bumps a generation instead, and each turn also
+// carries the value of the monotonic turn counter it was started with — so the
+// newest turn owns the reply, the run and the conversation id, and an older
+// one in flight beside it is discarded rather than racing it.
+//
 // Each answer names the run it was recorded as, as a link to that run's page.
 // `list_runs` excludes the `chat` and `api-chat` surfaces — the assistant is
 // Oxagen's, and its turns are recorded but never listed as the customer's own
@@ -48,7 +57,7 @@ import { parseShellPath } from "./nav";
 import { useShellState } from "./shell-state";
 import { routes, type SafePath } from "@/shared/safe-path";
 import { linkText, mono } from "@/ui/control-styles";
-import { SafeLink } from "@/ui/navigation";
+import { SafeLink, useNavigate } from "@/ui/navigation";
 
 type Entry =
   | { kind: "asked"; id: string; text: string }
@@ -121,22 +130,27 @@ export function AssistantFlyout() {
   // organization page, which owns no conversation and so changes nothing.
   const scope = org === null || ws === null ? null : `${org}/${ws}`;
   const [scopeShown, setScopeShown] = useState(scope);
-  // The latest workspace the flyout has been in, read by a turn that is still
-  // in flight when the person moves. A ref, because the reply resolves outside
-  // the render that started it and must compare against now, not against then.
-  const scopeRef = useRef(scope);
+  // Which visit to a workspace the transcript belongs to. Every transition
+  // bumps it, a return to a workspace included, which is the whole point: a
+  // turn started on the first visit to A must not land on the second.
+  const [generation, setGeneration] = useState(0);
   if (scope !== null && scope !== scopeShown) {
     // Adjusting state during render rather than in an effect: the stale
     // transcript never paints under the new workspace.
     setScopeShown(scope);
+    setGeneration((n) => n + 1);
     setEntries([]);
     setConversationId(null);
     setDraft("");
     setPending(false);
   }
+  // Read by a turn that is still in flight when the person moves: the reply
+  // resolves outside the render that started it and must compare against now,
+  // not against then.
+  const generationRef = useRef(generation);
   useEffect(() => {
-    if (scope !== null) scopeRef.current = scope;
-  }, [scope]);
+    generationRef.current = generation;
+  }, [generation]);
 
   // Where focus came from, so closing can give it back. Captured at the open,
   // which is the launcher that was tapped — the rail's on a desktop, or, on a
@@ -178,6 +192,7 @@ export function AssistantFlyout() {
     log.scrollTo({ top: log.scrollHeight });
   }, [entries]);
 
+  const navigate = useNavigate();
   const inWorkspace = scope !== null;
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
@@ -189,9 +204,21 @@ export function AssistantFlyout() {
     setEntries((prior) => [...prior, { kind: "asked", id, text: content }]);
     setDraft("");
     setPending(true);
-    const asked = `${org}/${ws}`;
-    /** The person is still in the workspace this turn was asked from. */
-    const stillThere = () => scopeRef.current === asked;
+    const asked = generationRef.current;
+    /**
+     * This turn still owns the transcript: the person has not left the
+     * workspace, nor left it and come back, since it was asked. Either would
+     * make its reply, its run and its conversation id belong to a transcript
+     * that is no longer this one.
+     *
+     * One generation holds at most one turn in flight, so nothing else can be
+     * racing this one for `conversationId`: a second turn needs a second
+     * submit, `onSubmit` refuses one while `pending`, and the only thing that
+     * clears `pending` early is the reset — which bumps the generation and
+     * discards this turn on its way past. The test named "refuses a second
+     * question while a turn is in flight" is what keeps that true.
+     */
+    const stillOurs = () => generationRef.current === asked;
     try {
       const result = await askAssistant(org, ws, {
         conversationId,
@@ -199,7 +226,7 @@ export function AssistantFlyout() {
         route: rest[0] ?? "fleet",
         entityId: rest[1] ?? null,
       });
-      if (!stillThere()) return;
+      if (!stillOurs()) return;
       if (result.ok) {
         setConversationId(result.value.conversationId);
         setEntries((prior) => [
@@ -213,6 +240,16 @@ export function AssistantFlyout() {
             parked: result.value.parkedCards,
           },
         ]);
+        // A parked write is a new approval on the record, created after Fleet
+        // and the shell's waiting count were server-rendered
+        // (`features/fleet/fleet.tsx` reads `approvals.pending` once per
+        // render, and there is no poll). The sentence beside this sends the
+        // person to Fleet to approve them and they expire, so a stale view has
+        // a deadline on it. `navigate.refresh()` re-renders the server
+        // components at the URL already showing, without a history entry —
+        // only when something actually parked, because an ordinary turn
+        // changes nothing either surface reads.
+        if (result.value.parkedCards.length > 0) navigate.refresh();
       } else {
         setEntries((prior) => [
           ...prior,
@@ -220,13 +257,13 @@ export function AssistantFlyout() {
         ]);
       }
     } catch {
-      if (!stillThere()) return;
+      if (!stillOurs()) return;
       setEntries((prior) => [
         ...prior,
         { kind: "refused", id: `${id}-a`, code: "unavailable" },
       ]);
     } finally {
-      if (stillThere()) setPending(false);
+      if (stillOurs()) setPending(false);
     }
   }
 
