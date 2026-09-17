@@ -705,7 +705,7 @@ describe("whole-tree timeout budget", () => {
     const files = judgedTestFiles();
     expect(files.length).toBeGreaterThan(0);
     expect(files.flatMap(judged)).toEqual([]);
-  });
+  }, WHOLE_TREE_TIMEOUT_MS);
 
   it("finds whole-tree registrations to judge, in more than one file", () => {
     const perFile = judgedTestFiles().map((file) => ({
@@ -717,7 +717,7 @@ describe("whole-tree timeout budget", () => {
     // if the detector stops recognising the suite it is meant to police.
     expect(carrying.length).toBeGreaterThan(3);
     expect(perFile.flatMap((entry) => entry.found).length).toBeGreaterThan(8);
-  });
+  }, WHOLE_TREE_TIMEOUT_MS);
 
   it("a budget on the it, on a beforeAll and on a helper's caller passes", () => {
     expect(probe("ok.test.ts")).toEqual([]);
@@ -841,6 +841,23 @@ describe("whole-tree timeout budget", () => {
     expect(probe("shadowed-registrar.test.ts")).toEqual([]);
   });
 
+  it("SITE AUDIT: an imported module's initializer is not judged (lax, open)", () => {
+    // Raised in review as a sixth spelling, and it is real: `module-init.test.ts`
+    // imports a value whose sibling computes it with `productionFiles()` at
+    // MODULE scope, so the walk runs during collection, one module away, with no
+    // budget over it. `judge` opens only `.test.ts` files, and `carriers` records
+    // named function bodies, so an initializer is neither judged nor a carrier.
+    //
+    // NOT fixed here, deliberately. Five rounds have each widened the judged set
+    // by one shape; this one has zero instances in the tree (audited: the only
+    // module-scope walks are in parse.ts's own definitions and in probes). The
+    // stopping rule set before this round was that a sixth shape is stated as a
+    // limit rather than chased, because a checker extended for a case nobody
+    // writes buys complexity with no coverage. Asserted as it behaves, so the
+    // boundary is executable and a future fix has a failing expectation to flip.
+    expect(probe("module-init.test.ts")).toEqual([]);
+  });
+
   it("a budget constant is the one parse.ts declares, not one so spelled", () => {
     expect(probe("shadowed-budget.test.ts")).toEqual([
       `${RULE} ${PROBES}/shadowed-budget.test.ts:9 it WHOLE_TREE_TIMEOUT_MS shadowed`,
@@ -910,6 +927,8 @@ describe("whole-tree timeout budget", () => {
       "list-src.test.ts",
       "magic-number.test.ts",
       "missing.test.ts",
+      "module-init-source.ts",
+      "module-init.test.ts",
       "named-callback.test.ts",
       "namespace.test.ts",
       "ok.test.ts",
