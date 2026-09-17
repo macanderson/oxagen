@@ -35,21 +35,35 @@ Org Owner, Org Admin.
 - Postgres: soft-deletes the `auth.api_keys` row (sets `deleted_at`).
 - ClickHouse: emits `api_key.revoked` audit event.
 
-## Server-owned credentials are refused
+## Some server-owned credentials are refused
 
 `auth.api_keys` also holds credentials the platform minted for something it
-tracks elsewhere, and revoking those means more than soft-deleting the key.
-This capability refuses them and names the path that owns each one, matching
-`api.key.create`, which refuses to mint them, and `api.key.rotate`, which
-refuses to rotate them. The purpose is read from the stored `scope`, so the
-caller cannot avoid the check by omitting it.
+tracks elsewhere, and revoking those means more than soft-deleting the key. The
+purpose is read from the stored `scope`, so the caller cannot avoid the check by
+omitting it.
+
+A refusal has to pass one test: **the path it names must achieve what the
+refused operation was for.** Three of the four server-owned purposes pass it and
+are refused. `cli_session_v1` does not, and is revocable here.
 
 | `scope.purpose` | revoke it through | what a generic revoke would miss |
 |---|---|---|
 | `tacho_host_v1` | `revoke_tacho_enrollment` | the host row staying `active`, and the queued `revoke` control command a collector mid-poll needs |
 | `agent_credential_v1` | `rotate_agent_credential`, `retire_agent` | the paired mint, or the agent's retirement — unpaired, the agent is live with no credential |
 | `stella_operational_telemetry_v1` | operator revocation | no governed path exists yet; ingestion would end with nothing recording why |
-| `cli_session_v1` | `oxagen login`, or `remove_org_member` | nothing structurally; refused for symmetry with rotate |
+
+### `cli_session_v1` is revocable here, deliberately
+
+This is the only proportionate way to invalidate a lost or compromised CLI
+credential. `oxagen login` only mints an additional key and never soft-deletes
+the previous one; `oxagen logout` clears the local config file and makes no
+server call; there is no session-scoped revoke route. Refusing it would leave
+`remove_org_member` as the sole revocation path, which also strips the person's
+organization access.
+
+`api.key.rotate` does refuse it, and that asymmetry is correct: `oxagen login`
+gives the operator a fresh working credential, which is what rotation is for. It
+does not invalidate the old one, which is what revocation is for.
 
 ## Surfaces
 
@@ -61,7 +75,7 @@ caller cannot avoid the check by omitting it.
 | code | meaning |
 |---|---|
 | `unauthorized` | Caller is not an org Owner or Admin. |
-| `authz_denied` | The key carries a server-owned scope purpose; see above. |
+| `authz_denied` | The key carries one of the three refused server-owned scope purposes; see above. |
 | `not_found` | No key with the given public ID exists in this org. |
 | `already_revoked` | Key has already been revoked. |
 | `validation_error` | Input failed Zod parse. |

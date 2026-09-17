@@ -12,11 +12,13 @@
 //
 // WHY STEP 4 EXISTS. `auth.api_keys` holds two kinds of row: keys an operator
 // minted here, and credentials the platform minted for something it also
-// tracks elsewhere. `api.key.create` refuses to MINT any of the four
-// server-owned purposes and `api.key.rotate` refuses to ROTATE them, each
-// naming the path that owns it. Revoke had neither check, and its single
-// `UPDATE auth.api_keys SET deleted_at` is not what revoking those credentials
-// means:
+// tracks elsewhere. For those, this handler's single
+// `UPDATE auth.api_keys SET deleted_at` is not what revoking them means.
+//
+// THE TEST A REFUSAL HAS TO PASS: **the path the refusal names must achieve
+// what the refused operation was for.** Refusing without that is not a guard,
+// it is the removal of a capability. Three purposes pass it, one does not, and
+// the difference is not which of them is "server-owned" — all four are.
 //
 //   tacho_host_v1    → revoke_tacho_enrollment, via revokeHostEnrollment,
 //     which does THREE writes: the host row becomes `revoked` with its reason,
@@ -26,16 +28,41 @@
 //     `tacho_hosts.status` still reads `active`, no command is queued, and the
 //     fleet record now says a host is live that cannot authenticate. A revoke
 //     that appears to succeed and leaves the record lying is worse than one
-//     that refuses.
+//     that refuses — and the named path does revoke, more completely.
 //   agent_credential_v1 → rotate_agent_credential / retire_agent, where the
 //     revoke is always PAIRED — with a fresh mint, or with the agent's
 //     retirement in one transaction. Unpaired, the agent row stays live with
-//     no credential and nothing re-mints.
-//   stella_operational_telemetry_v1 → operator enrollment. No governed revoke
-//     exists yet, so a generic one ends ingestion with nothing recording why.
-//   cli_session_v1 → replaced by `oxagen login`. No second row to corrupt, but
-//     rotate already refuses it, and two sibling capabilities answering the
-//     same question differently is how several defects on this PR started.
+//     no credential and nothing re-mints. Both named paths revoke.
+//   stella_operational_telemetry_v1 → operator enrollment, which revokes.
+//
+// NOT REFUSED — cli_session_v1, and this is the exclusion to confront rather
+// than tidy away. An earlier revision of this guard refused it too, for
+// symmetry with rotate and because there is no second row to corrupt. Both
+// observations are true and neither is a reason: "no second row to corrupt" is
+// the statement that the rationale above DOES NOT APPLY here, and it was read
+// as permission to refuse anyway.
+//
+// It fails the test outright. `oxagen login` (apps/api/src/routes/v1/
+// auth.cli.token.ts) only INSERTS another key — it never soft-deletes the
+// previous one, so the old credential stays live. `oxagen logout` clears
+// ~/.config/oxagen/config.json and makes no server call at all. There is no
+// session-scoped revoke route. So refusing here leaves exactly one way to
+// invalidate a lost or compromised CLI key: `remove_org_member`, which revokes
+// every CLI key that person holds AND removes their org access. That trades a
+// proportionate security control for an argument about consistency, and a
+// compromised laptop then costs the operator their entire membership.
+//
+// Rotate is genuinely different, which is why its refusal stays correct: a
+// rotation hands the new raw key back through the capability's output, and
+// nothing writes it into the operator's config file, so a rotated CLI session
+// would revoke the working credential and mint one the CLI never receives.
+// `oxagen login` DOES achieve what rotation is for — a fresh working
+// credential. It does not achieve what revocation is for.
+//
+// If a session-scoped revoke capability is built later, move cli_session_v1
+// into the refused set and name it here. Until then it must stay revocable,
+// and `api.key.revoke.test.ts` asserts that so restoring the symmetry fails
+// loudly rather than silently closing the only door.
 //
 // Reachable from every surface, not just the app: the org tokens panel read
 // `auth.api_keys` (policy class `standard`) under the org-only workspace
@@ -57,7 +84,6 @@ import {
 } from "./lib/api-key-authz";
 import { requestsReservedStellaTelemetryPurpose } from "./lib/stella-telemetry-enrollment";
 import { requestsReservedTachoPurpose } from "./lib/tacho-enrollment";
-import { requestsReservedCliSessionPurpose } from "@oxagen/auth/cli-auth";
 import { requestsReservedAgentCredentialPurpose } from "@oxagen/oxagen/agent-credential";
 import { logger } from "./logger";
 
@@ -175,17 +201,11 @@ export const apiKeyRevokeHandler: CapabilityHandler<
       );
     }
 
-    if (requestsReservedCliSessionPurpose(existing.scope)) {
-      logger.warn(
-        { orgId: ctx.orgId, keyPublicId: existing.publicId },
-        "api.key.revoke: rejected — reserved CLI session purpose",
-      );
-      throw new CapabilityError(
-        "revoke_api_key",
-        "authz_denied",
-        "Forbidden: a CLI session key is replaced by `oxagen login`, and removing the member revokes it",
-      );
-    }
+    // DELIBERATELY NOT REFUSED: cli_session_v1. See the header — `oxagen login`
+    // only mints another key and `oxagen logout` is local-only, so this is the
+    // only proportionate way to invalidate a lost CLI credential. Adding it to
+    // the set above would leave `remove_org_member` as the sole revocation, at
+    // the cost of the person's org access.
 
     await tx
       .update(schema.apiKeys)

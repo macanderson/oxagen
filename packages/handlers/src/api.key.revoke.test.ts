@@ -274,28 +274,33 @@ describe("api.key.revoke handler — key not found", () => {
 });
 
 /**
- * The generic revoke must refuse a credential the platform owns.
+ * The generic revoke must refuse a credential whose revocation means more than
+ * soft-deleting the key — and must NOT refuse one that has nowhere else to go.
  *
  * The sharp case is `tacho_host_v1`: `revokeHostEnrollment` does three writes
  * and this handler does one, so letting it through soft-deletes the key while
  * `tacho_hosts.status` still reads `active` and no revoke command is queued —
- * the collector is dead and the fleet record says it is live. The other three
- * are a lifecycle pairing (`agent_credential_v1`), an absent governed path
- * (`stella_operational_telemetry_v1`), and symmetry with rotate, which already
- * refuses all four (`cli_session_v1`).
+ * the collector is dead and the fleet record says it is live.
  *
- * Asserted per purpose rather than in aggregate, and each assertion checks the
+ * The test each refusal has to pass is that **the path it names achieves what
+ * the refused operation was for**. `cli_session_v1` fails that test and is
+ * therefore NOT refused; the case below pins it, because an earlier revision of
+ * the guard did refuse it and these very tests passed while the hole opened.
+ * Every case here asserted a purpose was refused, so a suite shaped like that
+ * confirms whatever set it is handed. The revocable case is the one that
+ * constrains the set.
+ *
+ * Asserted per purpose rather than in aggregate, and each refusal checks the
  * message NAMES the owning path: a refusal with no destination is how an
- * operator ends up reaching for raw SQL. The case that matters most is the
- * ordering one — the refusal happens BEFORE the update, so a refused revoke
- * leaves the row untouched rather than half-applying.
+ * operator ends up reaching for raw SQL. The ordering case matters too — the
+ * refusal happens BEFORE the update, so a refused revoke leaves the row
+ * untouched rather than half-applying.
  */
 describe("api.key.revoke handler — reserved server-owned purposes", () => {
   const RESERVED: [string, RegExp][] = [
     ["tacho_host_v1", /revoke_tacho_enrollment/],
     ["agent_credential_v1", /rotate_agent_credential|retire_agent/],
     ["stella_operational_telemetry_v1", /operator revocation/],
-    ["cli_session_v1", /oxagen login/],
   ];
 
   function setupWithPurpose(purpose: string) {
@@ -347,6 +352,45 @@ describe("api.key.revoke handler — reserved server-owned purposes", () => {
 
     await expect(apiKeyRevokeHandler(BASE_INPUT, TEST_CTX)).rejects.toThrow();
     expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The case that constrains the refusal set, and the one whose absence let an
+   * earlier revision of this guard remove a security control.
+   *
+   * A `cli_session_v1` key MUST stay revocable. `oxagen login`
+   * (apps/api/src/routes/v1/auth.cli.token.ts) only inserts another key and
+   * never soft-deletes the previous one; `oxagen logout` clears the local
+   * config file and makes no server call; there is no session-scoped revoke
+   * route. Refuse here and the only way to invalidate a lost or compromised CLI
+   * credential is `remove_org_member`, which also strips the person's org
+   * access — a proportionate control traded for a symmetry argument.
+   *
+   * If a session-scoped revoke capability is ever built, this expectation is
+   * what has to be changed, deliberately, with the header updated to name it.
+   * Until then, adding `cli_session_v1` back to the refusal set fails here.
+   */
+  it("REVOKES a cli_session_v1 key — refusing it would leave remove_org_member as the only path", async () => {
+    vi.clearAllMocks();
+    const tx = makeSoftDeleteTx({
+      id: "key-uuid-1",
+      publicId: "aky_test123",
+      scope: { purpose: "cli_session_v1" },
+    });
+    let callCount = 0;
+    mocks.withTenantDb.mockImplementation(
+      (fn: (t: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1)
+          return fn(makeRoleResolutionTx("principal-uuid-1", "Owner"));
+        return fn(tx);
+      },
+    );
+
+    const result = await apiKeyRevokeHandler(BASE_INPUT, TEST_CTX);
+    expect(result.revoked).toBe(true);
+    // Not merely "did not throw" — the soft-delete actually ran.
+    expect(tx.update).toHaveBeenCalled();
   });
 
   it("revokes an operator key, which carries no reserved purpose", async () => {
