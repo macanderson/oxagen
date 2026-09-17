@@ -295,7 +295,18 @@ export async function enroll(
     let credentials:
       | { token: string; org: string; workspace: string; apiUrl: string }
       | undefined;
-    const apiUrl = resolveApiUrl(options, deps.env, deps.home);
+    // The control plane this enrollment actually talks to. A harness addition
+    // re-enrolls in place, so it stays on the host's own API unless a flag
+    // names another — the rule the credential resolution just below already
+    // follows. Resolving `OXAGEN_API_URL` (or config.json) for it instead
+    // posted the enrollment to `existing.api_url` while recording whatever
+    // the environment happened to say, so `host.api_url` named a deployment
+    // the host had never enrolled with.
+    const apiUrl = resolveApiUrl(
+      live ? { apiUrl: options.apiUrl ?? existing.api_url } : options,
+      deps.env,
+      deps.home,
+    );
     if (options.enrollmentToken !== undefined) {
       step(1, "Presenting the one-time enrollment token");
     } else {
@@ -450,20 +461,26 @@ export async function enroll(
     }
     const port = options.port ?? existing?.port ?? (await deps.findFreePort());
     const now = toProtocolTimestamp(deps.now());
-    // A pin outranks the signed claim in `mcpEndpointFor`, so it is inherited
-    // only where the rest of this machine's local settings are — a harness
-    // addition, which re-enrolls in place and keeps the device key, the port
-    // and the local token. A fresh, forced or post-revoke enrollment (the path
-    // `reassign` takes) re-states the host against whichever control plane it
-    // is now enrolling with, and carrying the previous deployment's pin there
-    // aimed every connected-app call at a local server the new control plane
-    // knows nothing about — while the enrollment reported success. Dropping it
-    // is what `--force` already promises: set this host up as if fresh. An
-    // operator who still wants the pin exports `TACHO_MCP_ENDPOINT`, which is
-    // the same thing they did to create it.
+    // A pin outranks the signed claim in `mcpEndpointFor`, so it is worth
+    // exactly as much as the deployment it was aimed at. Carrying it to a
+    // different API deployment aimed every connected-app call at a local
+    // server the new control plane knows nothing about — while the enrollment
+    // reported success — so a move drops it and the newly signed claim wins.
+    // A move is the fact to test, and `--force` is not that fact: `reassign`
+    // passes `force: true` for a workspace or harness change that defaults
+    // `apiUrl` to the host's existing one and never leaves the deployment,
+    // and keying the drop on the flag threw away a locally pinned
+    // `127.0.0.1:4100/mcp` on every such reassignment. So the pin survives
+    // every enrollment that re-states this host against the API it already
+    // talks to — a harness addition, a post-revoke recovery, a `--force`
+    // repair — beside the other local settings that survive one (the device
+    // key, the port, the local token), and an exported `TACHO_MCP_ENDPOINT`
+    // still outranks both.
+    const movesDeployment =
+      existing !== undefined && apiUrl !== existing.api_url;
     const mcpEndpointOverride =
       requestedMcpEndpoint(deps, warnings) ??
-      (live ? existing?.mcp_endpoint_override : undefined);
+      (movesDeployment ? undefined : existing?.mcp_endpoint_override);
     host = {
       schema: HOST_FILE_SCHEMA,
       host_enrollment_id: response.hostEnrollmentId,
