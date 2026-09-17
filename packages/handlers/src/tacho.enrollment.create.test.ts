@@ -168,6 +168,28 @@ describe("create_tacho_enrollment", () => {
     );
   });
 
+  it("records what the enrolling client says its bundle parser understands", async () => {
+    // Enrollment hands back the host's first policy bundle, parsed by a
+    // `.strict()` schema, so a gated field must not be signed into it unless
+    // the client named the field. A client that says nothing gets an empty
+    // list, which is the same answer as cannot parse it.
+    happyDb();
+    await tachoEnrollmentCreateHandler(
+      { ...INPUT, bundleFeatures: ["gateway_tools"] },
+      CONTEXT,
+    );
+    expect(inserted.find((row) => row.table === "hosts")?.values).toMatchObject(
+      { bundleFeatures: ["gateway_tools"] },
+    );
+
+    inserted = [];
+    happyDb();
+    await tachoEnrollmentCreateHandler(INPUT, CONTEXT);
+    expect(inserted.find((row) => row.table === "hosts")?.values).toMatchObject(
+      { bundleFeatures: [] },
+    );
+  });
+
   it("suffixes the agent key when the hostname slug is taken", async () => {
     happyDb(true);
     const output = await tachoEnrollmentCreateHandler(INPUT, CONTEXT);

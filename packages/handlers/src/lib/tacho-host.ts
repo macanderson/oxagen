@@ -12,7 +12,12 @@ import {
   tachoBundleModeSchema,
   tachoHostStatusSchema,
 } from "@oxagen/oxagen/tacho/schemas";
-import { digestJcs, type JsonValue } from "@oxagen/tacho";
+import { gatewayMandateTools } from "@oxagen/iam/machine-key-scope";
+import {
+  BUNDLE_FEATURE_GATEWAY_TOOLS,
+  digestJcs,
+  type JsonValue,
+} from "@oxagen/tacho";
 import { schema } from "@oxagen/database";
 import { RETENTION_CONTENT_CLASSES } from "@oxagen/run-ledger";
 import {
@@ -171,6 +176,71 @@ export async function readWorkspaceRetention(
 }
 
 /** The unsigned bundle for a host at this moment (spec section 7.1). */
+/**
+ * The gateway mandate, materialised for the host that has to serve it
+ * (ADR-078 §4).
+ *
+ * `gatewayMayInvoke` is a rule over the capability registry, and only the
+ * control plane can evaluate it: `@oxagen/tacho` takes no `@oxagen/*` runtime
+ * dependency, so the local MCP gateway cannot read a capability's surfaces,
+ * mutation or sensitivity. Without the answer on the wire the gateway
+ * advertised the whole workspace toolbelt and left the mandate to refuse a
+ * tool only once it was selected — showing a connected app tools that could
+ * only fail, and counting forbidden tools against `tool_ceiling`.
+ *
+ * **Emitted empty when the mandate is empty; omitted only when there is no
+ * mandate to state.** These are not the same condition and must not share an
+ * encoding. A populated registry whose permitted set is empty — a policy
+ * change that leaves only mutating or high-sensitivity MCP tools — is a
+ * decision, and `gateway_tools: []` states it: the gateway serves nothing.
+ * An empty registry is a process that has not imported its contracts, which
+ * is not a decision about anything, and there the field is omitted.
+ * `gatewayMandateTools` returns `undefined` for exactly that case and a list
+ * (possibly empty) otherwise, so the two cannot be conflated here.
+ *
+ * Omitting for an empty permitted set would be a fail-open: absent means *not
+ * told* on this wire, and a gateway that is not told serves the upstream
+ * `tools/list` unfiltered (`mcp-gateway.ts`, `gatewayToolsOf`). "Permits
+ * nothing" collapsing into "serve everything" is the failure this field
+ * exists to prevent. Absent stays reserved for a bundle signed by a control
+ * plane that had nothing to say, which is also what a bundle from before this
+ * field means.
+ *
+ * **Phase 1 of two: emitted only to a host that said it can parse it.**
+ * `policyBundleSchema` is `.strict()` on the host, so a daemon or CLI built
+ * before this field rejects the *whole* mandate the moment a bundle carries
+ * one. The control plane deploys before the fleet upgrades, so emitting it to
+ * everyone would fail every bundle refresh on every installed host — stranding
+ * each on a stale mandate — and would stop an un-upgraded CLI enrolling at
+ * all, since enrollment parses a bundle too. So the host advertises
+ * `BUNDLE_FEATURE_GATEWAY_TOOLS` (`hosts.bundle_features`, written at
+ * enrollment and refreshed from every control poll) and only then is it sent.
+ *
+ * **The gate is a compatibility constraint, not a change of mind about the
+ * control.** An unfiltered `tools/list` is a security hole — it offers a
+ * connected app tools the mandate forbids — and a host that has not
+ * advertised keeps that hole until it upgrades. That is the cost of not
+ * breaking it outright, and it is bounded by the fleet upgrading. Phase 2
+ * makes the field required in `policyBundleSchema` and deletes this gate, so
+ * absent stops being representable. Until then: do not widen this to every
+ * host, and do not delete it as dead weight.
+ */
+function gatewayTools(host: TachoHostRow): { gateway_tools?: string[] } {
+  if (!parsesGatewayTools(host)) return {};
+  const tools = gatewayMandateTools();
+  // `undefined` only — an empty list is a mandate and goes on the wire.
+  return tools === undefined ? {} : { gateway_tools: tools };
+}
+
+/** Whether this host named `gateway_tools` among the fields it can parse. */
+function parsesGatewayTools(host: TachoHostRow): boolean {
+  const advertised: unknown = host.bundleFeatures;
+  return (
+    Array.isArray(advertised) &&
+    advertised.includes(BUNDLE_FEATURE_GATEWAY_TOOLS)
+  );
+}
+
 export function unsignedBundle(
   host: TachoHostRow,
   denyGeneration: DenyGeneration,
@@ -195,6 +265,7 @@ export function unsignedBundle(
     context: { system: null },
     retention,
     mode,
+    ...gatewayTools(host),
   };
   const etag = digestJcs(content as unknown as JsonValue).slice(
     "sha256:".length,
@@ -348,7 +419,40 @@ export async function controlEnvelope(
   });
 }
 
-/** Touch the host's liveness columns from what the daemon reported. */
+/**
+ * Touch the host's liveness columns from what the daemon reported.
+ *
+ * `bundle_features` is here rather than only at enrollment because it has to
+ * track the code the host is **running**. `wrapper_version` and
+ * `daemon_version` both originate in `host.json`, which `tacho enroll` writes
+ * once and no upgrade rewrites, so a host that upgrades in place keeps
+ * reporting the version it enrolled with forever — which would leave every
+ * upgraded host permanently ungated. The advertisement rides the health
+ * report on every poll instead, so an upgraded host is gated in on its next
+ * one.
+ *
+ * **It tracks downgrades too, which is why a health report without
+ * `bundle_features` clears the column rather than preserving it.** The
+ * advertisement is a statement about the parser now running, and the wire
+ * contract makes absence mean *this parser predates the field* — a daemon new
+ * enough to name a feature always names it (`daemon.ts` sends the full
+ * `TACHO_BUNDLE_FEATURES` on every poll). So the two cases are read apart:
+ *
+ *   - **no `daemon` object at all** — the poll reported no health, so there is
+ *     nothing to learn and the stored advertisement stands;
+ *   - **a `daemon` object without `bundle_features`** — the host reported its
+ *     health and named no features, so the stored support is stale and is
+ *     cleared to `[]`.
+ *
+ * Preserving the stale value is what breaks a rollback. An enrollment by a
+ * current CLI, or a feature poll that landed before a downgrade, leaves
+ * `gateway_tools` on the column; the control envelope then keeps publishing
+ * the etag of a bundle carrying that field, and the rolled-back host's
+ * `.strict()` parser rejects every refresh — stranded on a stale mandate,
+ * refetching forever, with no poll that can ever talk it back down. Clearing
+ * costs an upgraded host nothing, because it re-advertises on its very next
+ * poll.
+ */
 export async function touchHost(
   tx: TachoTx,
   host: TachoHostRow,
@@ -361,11 +465,12 @@ export async function touchHost(
         hooks_ok?: boolean;
         otel_ok?: boolean;
         bundle_etag?: string;
+        bundle_features?: string[];
       }
     | undefined,
   now: Date,
   ingest: boolean,
-): Promise<void> {
+): Promise<TachoHostRow> {
   const values: Record<string, unknown> = {
     lastSeenAt: now,
     lastHeartbeatAt: now,
@@ -383,12 +488,24 @@ export async function touchHost(
     values["hooksLastCheckedAt"] = now;
   }
   if (daemon?.otel_ok !== undefined) values["otelOk"] = daemon.otel_ok;
+  // Reported health with no features named is a downgrade, not a silence:
+  // clear the stale support. Only a poll with no health report at all leaves
+  // the stored advertisement alone.
+  if (daemon !== undefined)
+    values["bundleFeatures"] = daemon.bundle_features ?? [];
   if (daemon?.bundle_etag !== undefined)
     values["bundleEtagServed"] = daemon.bundle_etag;
   await tx
     .update(schema.tachoHosts)
     .set(values)
     .where(eq(schema.tachoHosts.id, host.id));
+  // The caller builds this poll's control envelope from the host it holds, and
+  // `bundleFeatures` decides which mandate that envelope carries. Persisting
+  // the advertisement without handing it back would leave the first poll after
+  // an upgrade computing its bundle — and its etag — from the features the host
+  // had BEFORE it upgraded, so an upgraded daemon would keep serving the
+  // unfiltered tool list until some later poll.
+  return { ...host, ...values } as TachoHostRow;
 }
 
 /** `sql` re-export so handlers can express counter increments without importing drizzle themselves. */
