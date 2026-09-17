@@ -11,6 +11,7 @@ import {
   listFiles,
   parse,
   readSource,
+  WHOLE_TREE_TIMEOUT_MS,
   type SourceText,
 } from "./parse";
 
@@ -150,13 +151,17 @@ const probe = (name: string): string[] =>
   liveAdapterViolations(readSource(`${PROBES}/${name}`));
 
 describe("live adapters", () => {
-  it("every port method under src/data/live calls kernelRead", () => {
-    const files = liveFiles(listFiles("src"));
-    expect(files.length).toBeGreaterThan(0);
-    expect(
-      files.flatMap((file) => liveAdapterViolations(readSource(file))),
-    ).toEqual([]);
-  });
+  it(
+    "every port method under src/data/live calls kernelRead",
+    () => {
+      const files = liveFiles(listFiles("src"));
+      expect(files.length).toBeGreaterThan(0);
+      expect(
+        files.flatMap((file) => liveAdapterViolations(readSource(file))),
+      ).toEqual([]);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
 
   it("a port whose methods call kernelRead passes, with a private helper", () => {
     expect(probe("ok.ts")).toEqual([]);

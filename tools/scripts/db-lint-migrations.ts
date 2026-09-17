@@ -151,6 +151,9 @@ function lintAtlas(): void {
     byVersion.set(version, group);
   }
 
+  // The ClickHouse migrations directory has the same failure mode and its own
+  // guard: tools/scripts/check-ch-migration-ordinals.mjs, run by
+  // `check:contracts` on the same CI line as this script.
   for (const [version, group] of byVersion) {
     if (group.length > 1) {
       errors.push(
