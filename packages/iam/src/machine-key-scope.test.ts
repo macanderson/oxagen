@@ -66,15 +66,7 @@ describe("a person's credential is untouched", () => {
     ).toBeUndefined();
   });
 
-  it("treats a missing key and a null scope as no purpose", async () => {
-    findFirst.mockResolvedValue(undefined);
-    expect(
-      await machineKeyDenial({
-        orgId: ORG,
-        apiKeyId: "aky_gone",
-        capabilityName: "query_ontology",
-      }),
-    ).toBeUndefined();
+  it("treats a null scope as no purpose", async () => {
     keyWithScope(null);
     expect(
       await machineKeyDenial({
@@ -83,6 +75,35 @@ describe("a person's credential is untouched", () => {
         capabilityName: "query_ontology",
       }),
     ).toBeUndefined();
+  });
+});
+
+describe("a key that is no longer there", () => {
+  // `resolveApiKey` and this gate are two separate reads. Revocation soft-deletes
+  // the row between them, and the row vanishing used to read as "no purpose" —
+  // i.e. a person's key — which on a non-enterprise org the tier fast-path then
+  // allows outright. A host key racing its own revocation got one unrestricted
+  // invocation outside its mandate.
+  it("denies rather than falling through to the personal-key path", async () => {
+    findFirst.mockResolvedValue(undefined);
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_gone",
+        capabilityName: "query_ontology",
+      }),
+    ).toMatch(/no longer valid/);
+  });
+
+  it("denies a capability a live personal key would have been allowed", async () => {
+    findFirst.mockResolvedValue(undefined);
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_gone",
+        capabilityName: "set_model_credential",
+      }),
+    ).toMatch(/set_model_credential/);
   });
 });
 

@@ -109,15 +109,35 @@ export interface MachineKeyCheck {
 }
 
 /**
- * The scope purpose on a key, or undefined when it has none (a person's key)
- * or the key cannot be read. `withSystemDb` because this runs inside the
+ * What reading a key's scope found.
+ *
+ * `missing` and `personal` are kept apart on purpose. They used to be the same
+ * `undefined`, and that conflation was a hole: `resolveApiKey` and this gate
+ * are two separate reads, so a key soft-deleted between them — which is exactly
+ * what revocation does — vanished here and was read as a key that simply has no
+ * purpose, i.e. a person's key acting for its creator. On a non-enterprise org
+ * `checkIAM`'s tier fast-path then allows the capability outright, so a host key
+ * racing its own revocation got one unrestricted invocation outside its mandate.
+ *
+ * A row this gate cannot see is not a row it may reason about.
+ */
+export type KeyScope =
+  | { kind: "missing" }
+  | { kind: "personal" }
+  | { kind: "purpose"; purpose: string };
+
+/**
+ * The scope purpose on a key. `withSystemDb` because this runs inside the
  * kernel's IAM adapter, which is identity resolution: the answer decides
  * whether the caller may touch the tenant at all.
+ *
+ * `withSystemDb` also means RLS is not what hides a row here: a key absent from
+ * this read is deleted, expired out of the org, or never existed.
  */
-async function purposeOf(
+export async function readKeyScope(
   orgId: string,
   apiKeyId: string,
-): Promise<string | undefined> {
+): Promise<KeyScope> {
   const key = await withSystemDb((tx) =>
     tx.query.apiKeys.findFirst({
       where: and(
@@ -128,10 +148,13 @@ async function purposeOf(
       columns: { scope: true },
     }),
   );
-  const scope = key?.scope;
-  if (scope === null || typeof scope !== "object") return undefined;
+  if (key === undefined) return { kind: "missing" };
+  const scope = key.scope;
+  if (scope === null || typeof scope !== "object") return { kind: "personal" };
   const purpose = (scope as { purpose?: unknown }).purpose;
-  return typeof purpose === "string" ? purpose : undefined;
+  return typeof purpose === "string"
+    ? { kind: "purpose", purpose }
+    : { kind: "personal" };
 }
 
 /**
@@ -148,9 +171,19 @@ export async function machineKeyDenial(
   const { apiKeyId, orgId, capabilityName } = check;
   if (!apiKeyId || !orgId) return undefined;
 
-  const purpose = await purposeOf(orgId, apiKeyId);
+  const scope = await readKeyScope(orgId, apiKeyId);
+
+  // The key is gone between `resolveApiKey` and here — a revocation landing
+  // mid-request is the ordinary way that happens. Deny rather than fall through
+  // to the personal-key path, which on a non-enterprise org allows everything.
+  if (scope.kind === "missing") {
+    return `Forbidden: this credential is no longer valid, so it may not invoke ${capabilityName}.`;
+  }
+
   // No purpose: a person's key, acting for its creator. Unchanged.
-  if (purpose === undefined) return undefined;
+  if (scope.kind === "personal") return undefined;
+
+  const { purpose } = scope;
 
   if (purpose === TACHO_GATEWAY_PURPOSE) {
     return gatewayMayInvoke(capabilityName)
