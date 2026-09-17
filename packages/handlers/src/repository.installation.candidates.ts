@@ -29,6 +29,7 @@ import { logger } from "./logger";
 import {
   githubUserInstallationsDeps,
   type GithubUserInstallationsDeps,
+  type UserGithubInstallation,
 } from "./repository.github-user-installations";
 
 const MAIN_REPOSITORY_ROLES = ["Owner", "Admin"] as const;
@@ -64,7 +65,7 @@ export function createInstallationCandidatesHandler(
     const named = candidates.filter(
       (
         installation,
-      ): installation is typeof installation & { accountLogin: string } =>
+      ): installation is UserGithubInstallation & { accountLogin: string } =>
         installation.accountLogin !== null,
     );
 
