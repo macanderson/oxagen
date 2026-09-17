@@ -53,9 +53,7 @@ export async function hostGatewayColumnReady(tx: ProbeTx): Promise<boolean> {
 }
 
 /** Whether `tacho.sessions.gateway_observed_at` is present. */
-export async function sessionGatewayColumnReady(
-  tx: ProbeTx,
-): Promise<boolean> {
+export async function sessionGatewayColumnReady(tx: ProbeTx): Promise<boolean> {
   return hasColumn(tx, SESSION_GATEWAY_COLUMN, await ambientPlaneKey());
 }
 

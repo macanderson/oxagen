@@ -76,23 +76,23 @@ describe("classifyRuns", () => {
   });
 
   it("separates a run still in flight from no run at all", () => {
-    expect(classifyRuns([push({ status: "in_progress", conclusion: null })])).toBe(
-      "in_flight",
-    );
+    expect(
+      classifyRuns([push({ status: "in_progress", conclusion: null })]),
+    ).toBe("in_flight");
     expect(classifyRuns([])).toBe("none");
     expect(classifyRuns(undefined)).toBe("none");
   });
 
   it("prefers a real conclusion over a cancelled sibling", () => {
-    expect(
-      classifyRuns([push({ conclusion: "cancelled" }), push()]),
-    ).toBe("concluded");
+    expect(classifyRuns([push({ conclusion: "cancelled" }), push()])).toBe(
+      "concluded",
+    );
   });
 
   it("prefers a real push conclusion over a dispatch sibling", () => {
-    expect(
-      classifyRuns([push({ event: "workflow_dispatch" }), push()]),
-    ).toBe("concluded");
+    expect(classifyRuns([push({ event: "workflow_dispatch" }), push()])).toBe(
+      "concluded",
+    );
   });
 });
 

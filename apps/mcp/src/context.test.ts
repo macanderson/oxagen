@@ -177,7 +177,10 @@ describe("resolveMcpContext", () => {
     expect(event.outcome).toBe("success");
     expect(event.orgId).toBe("org-1");
     expect(event.workspaceId).toBe("ws-1");
-    expect(event.actorUserId).toBeNull(); // machine auth — no user
+    // This key resolved to no person, so the access-log row records none.
+    // A CLI session key resolves to one, and the row carries it — see
+    // context.cli-session.test.ts.
+    expect(event.actorUserId).toBeNull();
     expect(event.ip).toBe("203.0.113.7"); // resolved client IP, not from a trusted source
     expect(event.requestId).toBe(requestId);
   });
@@ -577,7 +580,10 @@ describe("buildContext", () => {
     ).rejects.toMatchObject({ reason: "invalid_token" });
   });
 
-  it("sets userId to null (MCP only uses API keys, not session users)", async () => {
+  it("carries the resolver's principal — null for a key that acts for nobody", async () => {
+    // Not "MCP has no users". MCP has no *session* users; a bearer key may
+    // still act for a person, and `resolveApiKey` is the one thing that
+    // decides which. See context.cli-session.test.ts for the key that does.
     vi.mocked(resolveApiKey).mockResolvedValue({
       ok: true,
       orgId: "org-1",
