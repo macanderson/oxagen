@@ -56,48 +56,54 @@ vi.mock("@oxagen/billing", () => ({
   isLowBalance: vi.fn(async () => ({ balanceCents: 500, low: false })),
 }));
 
-vi.mock("@oxagen/database", () => ({
-  withTenantDb: vi.fn(async () => []),
-  schema: {
-    conversations: {
-      publicId: "publicId",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      archivedAt: "archivedAt",
-      deletedAt: "deletedAt",
-      updatedAt: "updatedAt",
+vi.mock("@oxagen/database", () => {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    withTenantDb: vi.fn(async () => []),
+    schema: {
+      conversations: {
+        publicId: "publicId",
+        orgId: "orgId",
+        workspaceId: "workspaceId",
+        archivedAt: "archivedAt",
+        deletedAt: "deletedAt",
+        updatedAt: "updatedAt",
+      },
+      messages: { conversationId: "conversationId", createdAt: "createdAt" },
+      mcpServers: {
+        publicId: "publicId",
+        name: "name",
+        healthStatus: "healthStatus",
+        discoveredTools: "discoveredTools",
+        orgListingId: "orgListingId",
+        orgId: "orgId",
+        workspaceId: "workspaceId",
+        enabled: "enabled",
+      },
+      pluginInstalledPlugins: {
+        id: "id",
+        enabled: "enabled",
+        deletedAt: "deletedAt",
+      },
+      // @oxagen/agent's _agent-definition builds its column map at module scope,
+      // so schema.agents must exist even though no test queries it.
+      agents: {
+        id: "id",
+        publicId: "publicId",
+        slug: "slug",
+        name: "name",
+        description: "description",
+        agentType: "agentType",
+        status: "status",
+        deploymentStatus: "deploymentStatus",
+        activeVersionId: "activeVersionId",
+      },
     },
-    messages: { conversationId: "conversationId", createdAt: "createdAt" },
-    mcpServers: {
-      publicId: "publicId",
-      name: "name",
-      healthStatus: "healthStatus",
-      discoveredTools: "discoveredTools",
-      orgListingId: "orgListingId",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      enabled: "enabled",
-    },
-    pluginInstalledPlugins: {
-      id: "id",
-      enabled: "enabled",
-      deletedAt: "deletedAt",
-    },
-    // @oxagen/agent's _agent-definition builds its column map at module scope,
-    // so schema.agents must exist even though no test queries it.
-    agents: {
-      id: "id",
-      publicId: "publicId",
-      slug: "slug",
-      name: "name",
-      description: "description",
-      agentType: "agentType",
-      status: "status",
-      deploymentStatus: "deploymentStatus",
-      activeVersionId: "activeVersionId",
-    },
-  },
-}));
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 
 vi.mock("@oxagen/tenancy", () => ({
   // Run the callback so the inner withTenantDb mocks resolve.

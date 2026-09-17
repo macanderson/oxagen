@@ -148,7 +148,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     }),
   });
 
-  return {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
     withTenantDb: vi.fn(
       (fn: (tx: ReturnType<typeof makeTenantTx>) => unknown) => {
         return fn(makeTenantTx());
@@ -190,6 +193,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     },
     deriveNamespace: actual.deriveNamespace,
   };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 // Silence logger output in tests (seed-failure branches call logger.error).

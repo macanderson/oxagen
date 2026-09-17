@@ -110,12 +110,16 @@ const dbHolder: { instance: ReturnType<typeof makeDb> | null } = {
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
     ...real,
     db: () => dbHolder.instance,
     withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbHolder.instance),
     withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbHolder.instance),
   };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 // Import after mocks.

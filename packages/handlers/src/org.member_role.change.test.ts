@@ -44,10 +44,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return {
     ...real,
     // The handler runs the actor role gate + all reads + writes inside a single
-    // withTenantDb (one RLS-scoped transaction) so the authorization check and the
+    // withOrgDb (one org-wide RLS-scoped transaction) so the authorization check and the
     // mutation are atomic (no TOCTOU). The mock routes to the same fluent tx mock
     // so the call sequence is continuous.
-    withTenantDb: async (fn: (tx: typeof mockTx) => Promise<unknown>) =>
+    withOrgDb: async (fn: (tx: typeof mockTx) => Promise<unknown>) =>
       fn(mockTx),
   };
 });
@@ -230,7 +230,7 @@ describe("orgMemberRoleChangeHandler", () => {
   });
 
   it("happy path → changes role, emits org.role_changed, returns changed:true", async () => {
-    // All reads run inside withTenantDb on the same tx → continuous sequence:
+    // All reads run inside withOrgDb on the same tx → continuous sequence:
     // 1-2 resolveActor, 3-7 main guards, 8 mutation principal lookup.
     mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }], // 1: actor principal

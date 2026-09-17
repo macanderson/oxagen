@@ -17,12 +17,19 @@ vi.mock("@oxagen/ai", () => ({
 // ── Mock withTenantDb / org settings ─────────────────────────────────────────
 
 const mockWithTenantDb = vi.fn();
-vi.mock("@oxagen/database", () => ({
-  schema: {
-    organizations: { id: "id", settings: "settings" },
-  },
-  withTenantDb: (fn: (tx: unknown) => Promise<unknown>) => mockWithTenantDb(fn),
-}));
+vi.mock("@oxagen/database", () => {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    schema: {
+      organizations: { id: "id", settings: "settings" },
+    },
+    withTenantDb: (fn: (tx: unknown) => Promise<unknown>) =>
+      mockWithTenantDb(fn),
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 
 vi.mock("drizzle-orm", async (importOriginal) => {
   // Partial: the handler now imports CREDIT_REASONS from @oxagen/billing, whose

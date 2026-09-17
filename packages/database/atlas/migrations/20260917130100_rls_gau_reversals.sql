@@ -10,6 +10,18 @@
 -- Bypass-aware: app.rls_bypass='on' (set by withSystemDb / the seeding window
 -- when TENANT_RLS_ENFORCEMENT_ENABLED=false) disables filtering; tenant
 -- sessions get app.current_org_id / app.current_workspace_id via withTenantDb.
+--
+-- Org-wide-aware (ADR-086): app.org_wide='on', set by withOrgDb and nothing
+-- else, widens the READ of an org-scoped table to every workspace in the
+-- organisation while the org fence still holds. It is the whole predicate of a
+-- separate FOR SELECT policy, tenant_org_wide_read, and appears NOWHERE in
+-- tenant_isolation. USING is the OLD-row test for UPDATE and DELETE too, and
+-- WITH CHECK never runs for DELETE, so an org-wide disjunct inside
+-- tenant_isolation would widen deletion to the organisation rather than widen
+-- the read. Permissive policies are OR'd within a command and AND'd across
+-- command types, so a FOR SELECT policy cannot reach an UPDATE's or a DELETE's
+-- old-row test. workspace_only tables get no such policy: no org column to
+-- fence with. Witness: integration/org-only-sentinel-refusal.test.ts.
 -- FORCE applies policies to the table owner too; only superusers and
 -- BYPASSRLS roles are exempt — oxagen_app is neither.
 -- 1 of 111 manifest tables (--only=billing.gau_reversals).
@@ -17,6 +29,7 @@
 ALTER TABLE billing.gau_reversals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE billing.gau_reversals FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON billing.gau_reversals;
+DROP POLICY IF EXISTS tenant_org_wide_read ON billing.gau_reversals;
 CREATE POLICY tenant_isolation ON billing.gau_reversals
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid))
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid));
