@@ -104,11 +104,13 @@ describe("pre-authentication bucket keys", () => {
       TRUSTED_PROXY_HOP_COUNT: 1,
     });
 
+    // The trailing entry is the named proxy: an address is only attributable
+    // when a trusted proxy wrote it.
     const first = trustedClientIpBucketKey(
-      fakeContext({ headers: { "x-forwarded-for": "198.51.100.1" } }),
+      fakeContext({ headers: { "x-forwarded-for": "198.51.100.1, 10.0.0.5" } }),
     );
     const second = trustedClientIpBucketKey(
-      fakeContext({ headers: { "x-forwarded-for": "198.51.100.2" } }),
+      fakeContext({ headers: { "x-forwarded-for": "198.51.100.2, 10.0.0.5" } }),
     );
 
     expect(first).toBe("ip:198.51.100.1");

@@ -273,6 +273,19 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
     ).toBe("203.0.113.7");
   });
 
+  it("refuses a chain that never reaches a trusted proxy", async () => {
+    // No named proxy stands to the right of the rightmost entry, so nothing
+    // vouched for it — that is what a request which never passed through the
+    // expected proxy looks like, whether from a typo in the CIDR list, a
+    // network change, or a path that bypasses it. The entry is then whatever
+    // the caller sent.
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(await clientIpFor({ "x-forwarded-for": "203.0.113.7" })).toBeNull();
+    expect(
+      await clientIpFor({ "x-forwarded-for": "10.0.0.5, 203.0.113.7" }),
+    ).toBeNull();
+  });
+
   it("refuses when every entry is a trusted proxy", async () => {
     setTrustedProxyCidrs("10.0.0.0/8");
     expect(

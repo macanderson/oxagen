@@ -84,9 +84,22 @@ export function extractClientIp(c: Context<AppEnv>): string | null {
       .split(",")
       .map((hop) => hop.trim())
       .filter((hop) => hop.length > 0);
+    let vouchedFor = false;
     for (let i = chain.length - 1; i >= 0; i--) {
       const entry = chain[i] as string;
-      if (!ipInRanges(entry, cidrs)) return entry;
+      if (ipInRanges(entry, cidrs)) {
+        vouchedFor = true;
+        continue;
+      }
+      // An entry is only attributable if a TRUSTED PROXY WROTE IT, which means
+      // at least one trusted entry stood to its right. Without that, the
+      // rightmost entry is whatever the caller sent — which is what a request
+      // that never passed through a named proxy looks like, whether from a
+      // typo in the CIDR list, a network change, or a path that bypasses the
+      // proxy altogether. Returning it would hand the IAM allowlist and the
+      // pre-auth ceilings an address the caller chose, which is the whole class
+      // of bug this walk exists to close.
+      return vouchedFor ? entry : null;
     }
     // Every entry is a trusted proxy, so none of them is a client. Nothing to
     // attribute — better than returning a proxy and calling it a caller.
