@@ -79,7 +79,10 @@ vi.mock("@oxagen/database", () => {
       values: (_values: Record<string, unknown>) => Promise.resolve(undefined),
     }),
   });
-  return {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
     schema: {
       orgUsers: SENTINEL.orgUsers,
       organizations: SENTINEL.organizations,
@@ -88,6 +91,7 @@ vi.mock("@oxagen/database", () => {
       fn(makeTx()),
     ),
   };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 import { updateOrgGeneralAction } from "./general-action";

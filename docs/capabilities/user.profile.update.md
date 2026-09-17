@@ -18,6 +18,23 @@ The input carries no user id: the handler acts on the authenticated principal on
 - Capability name: `update_profile`
 - Not billed (`noBillingGate: true`): a settings write is never a governed action (ADR-052 exclusion 2).
 
+## Access
+
+`defaultEffect: "allow"`, and every system role at each scope is granted
+explicitly: org `Owner`, `Admin`, `Compliance`, `Billing`; workspace `Owner`,
+`Member`, `Viewer`. A person is never the wrong person to be, so the only gate
+is the handler's: no authenticated principal, no write.
+
+The role map alone would not be enough. On an enterprise org — the only tier
+that runs the IAM resolver, since `checkIAM` fast-paths every other tier to an
+unconditional allow for a non-agent principal — a role the map omits gets no
+seeded grant, and the four system org roles are Owner, Admin, **Compliance**
+and **Billing** (there is no org-level `Member` or `Viewer`; those are
+workspace roles). `defaultEffect: "allow"` is rule 8 of the resolver and is
+role-agnostic, so a role added later cannot fall through it. An explicit denial
+still wins: rule 7 evaluates role grants deny-first and hard-stops before rule 8
+is reached.
+
 ## Input
 
 Both fields are required — this is a full replace of the identity fields, not a partial update.

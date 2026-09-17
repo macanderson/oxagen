@@ -1,5 +1,26 @@
 import { describe, expect, it } from "vitest";
+import type { SystemOrgRole, SystemWorkspaceRole } from "../types";
 import { userProfileUpdate } from "./user.profile.update";
+
+/**
+ * The role enumerations as values. Each is a `Record` over its union, so
+ * adding a role to `SystemOrgRole` or `SystemWorkspaceRole` fails to compile
+ * here until someone has decided what it means for a person's own profile —
+ * which is the thing that went wrong: this contract's org map named `Member`
+ * and `Viewer`, which are workspace roles, and omitted `Compliance` and
+ * `Billing`, which are the org roles it needed.
+ */
+const EVERY_ORG_ROLE: Record<SystemOrgRole, true> = {
+  Owner: true,
+  Admin: true,
+  Compliance: true,
+  Billing: true,
+};
+const EVERY_WORKSPACE_ROLE: Record<SystemWorkspaceRole, true> = {
+  Owner: true,
+  Member: true,
+  Viewer: true,
+};
 
 describe("update_profile contract", () => {
   it("is a user-global identity write: unscoped, mutating, noBillingGate", () => {
@@ -97,6 +118,32 @@ describe("update_profile contract", () => {
   it("carries no MCP surface while MCP contexts carry no person", () => {
     expect(userProfileUpdate.surfaces).toEqual(["api"]);
     expect(userProfileUpdate.layers).not.toContain("mcp");
+  });
+
+  // On an enterprise org the resolver is the only gate, and `iam-provision`
+  // seeds role_grants by iterating the REAL role list and reading this map by
+  // name: a key that is not a role of that scope seeds nothing, and a role the
+  // map omits gets no grant. Owner and Admin were the only two org grants this
+  // capability seeded, so a Compliance or Billing member was refused on their
+  // own name — in the one tier that paid for role enforcement.
+  it("grants every system role at each scope, and names no role that does not exist there", () => {
+    expect(Object.keys(userProfileUpdate.defaultRoles.org).sort()).toEqual(
+      Object.keys(EVERY_ORG_ROLE).sort(),
+    );
+    expect(
+      Object.keys(userProfileUpdate.defaultRoles.workspace).sort(),
+    ).toEqual(Object.keys(EVERY_WORKSPACE_ROLE).sort());
+    expect(Object.values(userProfileUpdate.defaultRoles.org)).toEqual(
+      Object.values(userProfileUpdate.defaultRoles.org).map(() => "allow"),
+    );
+  });
+
+  // The durable half, and the one a new role cannot go stale against: rule 8
+  // of the resolver is role-agnostic, so nobody added to the role table later
+  // can fall through it. An explicit deny still wins — rule 7 evaluates role
+  // grants deny-first and hard-stops before rule 8 runs.
+  it("is intrinsically allowed: a person is never the wrong person to be", () => {
+    expect(userProfileUpdate.defaultEffect).toBe("allow");
   });
 
   it("answers with the persisted display name and avatar", () => {

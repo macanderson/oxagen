@@ -1,0 +1,21 @@
+-- What a Tacho host told us its bundle parser understands (PR #3182 review).
+--
+-- policy_bundle is validated by a `.strict()` schema on the host, so every new
+-- bundle field is a migration and not an extension: a daemon or CLI built
+-- before the field rejects the whole mandate the day the control plane starts
+-- signing one in. Bundle refresh then fails on every poll, leaving the host on
+-- a stale mandate, and a fresh enrollment cannot parse its first bundle at all.
+-- The control plane deploys before the fleet upgrades, so that is the ordinary
+-- case.
+--
+-- The host therefore declares which fields it can read, and the control plane
+-- emits a gated field only to a host that named it. It is stored per host
+-- rather than read off the request because the control envelope on an ingest
+-- or command poll publishes bundle_etag and the daemon refetches whenever it
+-- differs from the bundle it holds -- a gate answered from the request would
+-- disagree between the two paths and refetch forever.
+--
+-- Empty is the honest default for every existing row: those hosts have never
+-- advertised anything, which is indistinguishable from cannot parse it.
+ALTER TABLE "tacho"."hosts"
+  ADD COLUMN "bundle_features" jsonb NOT NULL DEFAULT '[]'::jsonb;

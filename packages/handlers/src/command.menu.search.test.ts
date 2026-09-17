@@ -11,36 +11,43 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
 
 // withTenantDb — returns an empty list by default; override per test.
 const mockWithTenantDb = vi.fn().mockResolvedValue([]);
-vi.mock("@oxagen/database", () => ({
-  schema: {
-    agentExecutions: {
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      publicId: "publicId",
-      status: "status",
-      createdAt: "createdAt",
-      deletedAt: "deletedAt",
+vi.mock("@oxagen/database", () => {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    schema: {
+      agentExecutions: {
+        orgId: "orgId",
+        workspaceId: "workspaceId",
+        publicId: "publicId",
+        status: "status",
+        createdAt: "createdAt",
+        deletedAt: "deletedAt",
+      },
+      agents: {
+        orgId: "orgId",
+        workspaceId: "workspaceId",
+        publicId: "publicId",
+        name: "name",
+        slug: "slug",
+        status: "status",
+        deletedAt: "deletedAt",
+      },
+      principals: {
+        orgId: "orgId",
+        publicId: "publicId",
+        displayName: "displayName",
+        kind: "kind",
+        status: "status",
+        idpSubject: "idpSubject",
+      },
     },
-    agents: {
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      publicId: "publicId",
-      name: "name",
-      slug: "slug",
-      status: "status",
-      deletedAt: "deletedAt",
-    },
-    principals: {
-      orgId: "orgId",
-      publicId: "publicId",
-      displayName: "displayName",
-      kind: "kind",
-      status: "status",
-      idpSubject: "idpSubject",
-    },
-  },
-  withTenantDb: (fn: (tx: unknown) => Promise<unknown>) => mockWithTenantDb(fn),
-}));
+    withTenantDb: (fn: (tx: unknown) => Promise<unknown>) =>
+      mockWithTenantDb(fn),
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 
 // drizzle functions — just return their args so we can verify they don't throw
 vi.mock("drizzle-orm", () => ({

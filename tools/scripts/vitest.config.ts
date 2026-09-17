@@ -21,12 +21,19 @@ export default defineConfig({
     // with no test at all; the number is low on purpose rather than aspirational,
     // because a threshold nobody can meet gets lowered, and a lowered ratchet is
     // no ratchet.
+    //
+    // Re-measured 2026-09-17 while adding codemod-db-mock-org-seam.test.ts:
+    // 44.43 statements / 88.28 branches / 62.75 functions / 44.43 lines. The
+    // floors below are those less the 2.5 points of headroom, for the three
+    // metrics that test raised. Branches is left where it was: the new suite
+    // did not move it (88.34 before, 88.28 after), so claiming it here would be
+    // claiming someone else's work.
     coverage: {
       thresholds: {
-        statements: 26,
+        statements: 41,
         branches: 82,
-        functions: 49,
-        lines: 26,
+        functions: 60,
+        lines: 41,
       },
     },
   },
