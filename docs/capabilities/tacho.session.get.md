@@ -36,7 +36,7 @@ The session projection names the person behind the run as
 control plane stamps it with a key no host, tenant or store reader holds, so
 two sessions with the same value are the same person and nobody reading the
 record can turn it back into an address by guessing one — which a plain hash of
-something as low-entropy as an address would not have prevented (ADR-079,
+something as low-entropy as an address would not have prevented (ADR-084,
 `docs/specs/tacho/data-model.md` section 2.2). It is empty for a session that
 named nobody, and for one recorded while the deployment held no key.
 

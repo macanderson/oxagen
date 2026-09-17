@@ -80,7 +80,7 @@ so little entropy that whoever can read this column guesses a colleague's
 address, hashes it and compares. This table has no row policy, which is what
 made the plaintext column reachable by an ordinary org-scoped analytics query
 in the first place. Only a key that reader cannot obtain closes it, and the key
-reaches no tenant, no host and no store. ADR-079 has the reasoning and what
+reaches no tenant, no host and no store. ADR-084 has the reasoning and what
 rotation costs.
 
 The column is therefore **server-stamped**, listed with `org_id`,

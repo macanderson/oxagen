@@ -1,4 +1,4 @@
-# ADR-079: The stored stand-in for a person's address is keyed by the control plane, and the wire keeps its legacy member
+# ADR-084: The stored stand-in for a person's address is keyed by the control plane, and the wire keeps its legacy member
 
 - **Status:** Accepted
 - **Date:** 2026-09-17

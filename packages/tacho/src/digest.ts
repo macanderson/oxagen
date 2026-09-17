@@ -70,7 +70,7 @@ const USER_EMAIL_DIGEST_DOMAIN = "oxagen:tacho:user_email:v1\0";
  * a one-way function in practice: whoever holds the digest can guess
  * `someone@a-company-they-know.com`, hash it and compare. The domain prefix
  * above does not change that, because it is published — in this file, in
- * ADR-079, and in the migrations.
+ * ADR-084, and in the migrations.
  *
  * What the control plane stores is an HMAC of this value under a key no host,
  * tenant or store reader holds
