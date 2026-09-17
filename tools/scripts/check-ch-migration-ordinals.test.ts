@@ -508,6 +508,42 @@ describe("a shipped migration filename is frozen", () => {
     expect(staleExemptions(renamed)).toEqual(["0020_eval_item_results.sql"]);
   });
 
+  it("does not name a grandfathered sibling as the rename target of its own pair", () => {
+    // The fabrication this guards against, asserted directly rather than as a
+    // side effect of the rename tests above.
+    //
+    // Two files sit at ordinal 0026 — cache_write_tokens and
+    // stella_operational_events, the grandfathered pair. If one goes missing,
+    // the only other file at that ordinal is its SIBLING, which is itself
+    // frozen and manifestly not a rename of anything. Without the frozen
+    // exclusion in the candidate filter, the guard would report
+    // "0026_cache_write_tokens.sql has been renamed to
+    // 0026_stella_operational_events.sql" — a fabricated fact, in an error
+    // message an operator reads while already in trouble, telling them to
+    // restore a file that never moved. `now: null` says the true thing: it is
+    // gone, and nothing here knows what became of it.
+    //
+    // Measured without the exclusion, this case returns
+    // { was: "0026_cache_write_tokens.sql", now: "0026_stella_operational_events.sql" }.
+    // The same removal fails exactly one other test, so this is the direction
+    // the exclusion was otherwise unasserted in.
+    const gone = REAL.filter((f) => f !== "0026_cache_write_tokens.sql");
+    expect(shippedRenames(gone)).toEqual([
+      { was: "0026_cache_write_tokens.sql", now: null },
+    ]);
+
+    // And the mirror at the other grandfathered ordinal, both directions, so
+    // the rule is not an artefact of which half of the pair was removed.
+    for (const half of [
+      "0020_error_events.sql",
+      "0020_eval_item_results.sql",
+    ]) {
+      expect(shippedRenames(REAL.filter((f) => f !== half))).toEqual([
+        { was: half, now: null },
+      ]);
+    }
+  });
+
   it("catches a rename that also moves the ordinal", () => {
     // No file takes the vacated ordinal, so there is no new name to point at.
     // Reported as gone rather than renamed — same consequence for the ledger,
