@@ -388,19 +388,36 @@ export function gatewayObservationFor(host: GatewayObservable): Date | null {
  *     `genesisHash` must equal the session's own. The uuid alone is a NAME,
  *     which a forger holding the host's ingest key can write; the genesis hash
  *     is the hash of the daemon's own first sealed event, which it cannot.
- *  3. That call does not predate the session. `sinceAt` is the session row's
- *     server-clock `createdAt`; a gateway call Oxagen served before this chain
- *     existed cannot be what enforced anything on it.
- *
- * `sinceAt` is `null` only at genesis, and a genesis row passes `null` for
- * `invocationAt` too, so the two nulls never meet: a session being created by
- * this batch is never `gateway`. Matching the chain by NAME says a real chain
- * served a gateway call; it does not say this batch came from that chain, and
- * at genesis the lifetime bound that would catch the difference does not exist
- * yet. `genesisRow` explains the race that makes this load-bearing.
+ *  3. The chain the batch presents actually verifies. An unverified chain
+ *     proves nothing about the hashes in it, and the genesis hash above is one
+ *     of them — a forger who cannot produce the daemon's first event can still
+ *     WRITE its hash into an event of their own, and only chain verification
+ *     catches that.
  *
  * Otherwise the host's own mode decides, which is server-owned already: the
  * operator sets it in Oxagen and the daemon is told, not asked.
+ *
+ * ## Why there is no lifetime bound any more
+ *
+ * There used to be a fourth condition: the call must not predate the session's
+ * `createdAt`. It existed when the correlation was a host-level timestamp with
+ * no session on it, where "predates" was the only thing standing between a
+ * stale observation and a chain it had nothing to do with.
+ *
+ * The genesis hash subsumes it, and keeping it was actively wrong. The control
+ * plane records the call while HANDLING it; the daemon seals the corresponding
+ * event only after the call returns. When those events are the chain's first
+ * batch, `createdAt` is necessarily later than the record — so a chain whose
+ * first gateway call precedes its first ingest failed the comparison at
+ * genesis and kept failing it on every later batch, until some other gateway
+ * call happened to advance `lastSeenAt`. If that first batch also sealed the
+ * chain, the wrong tier was permanent.
+ *
+ * That is the failure this file has had twice before, in the direction that
+ * does not announce itself: nothing is labelled `gateway`, and a silent
+ * under-report of enforcement looks exactly like a quiet system. A record
+ * bound to this exact chain by its genesis hash is about this chain whenever
+ * it was written, so there is nothing left for an ordering to decide.
  *
  * ## What is no longer read
  *
@@ -414,7 +431,10 @@ export function gatewayObservationFor(host: GatewayObservable): Date | null {
 export function enforcementTierOf(
   chain: GatewayChainRecord | null,
   host: GatewayObservable,
-  sinceAt: Date | null,
+  // Whether the chain the batch presents verifies. An unverified chain's
+  // hashes are unproven, and the genesis hash the match turns on is one of
+  // them.
+  chainVerified: boolean,
   // Whether `tacho.sessions.gateway_observed_at` exists yet.
   //
   // `gateway` is never assigned without somewhere to write the observation
@@ -429,11 +449,9 @@ export function enforcementTierOf(
   // self-correcting: the probe re-asks once a minute, and a session that was
   // not sealed meanwhile is promoted by the next batch, evidence and all.
   evidenceColumn: boolean,
-  // The session row's OWN genesis hash, as the server recorded it when the
-  // chain opened. Null for a session with none — an older row, or one whose
-  // first batch did not start at seq 0 — and null never matches. Last because
-  // it is the newest condition, and the three before it are the ones the
-  // docblock numbers.
+  // This chain's OWN genesis hash: the session row's, or for a session being
+  // created by this batch, the batch's first event. Null for a chain with none
+  // — one whose first batch did not start at seq 0 — and null never matches.
   sessionGenesisHash: string | null,
 ): string {
   const observed = gatewayObservationFor(host);
@@ -459,14 +477,12 @@ export function enforcementTierOf(
     chain.genesisHash !== null &&
     sessionGenesisHash !== null &&
     chain.genesisHash === sessionGenesisHash &&
-    // A server-known lifetime is REQUIRED, not merely respected when present.
-    // `sinceAt` null means the session row does not exist yet, so there is no
-    // server-clock `createdAt` to bound the observation against and the chain
-    // match stands alone — which a forged genesis batch naming a real chain id
-    // satisfies as well as the real one does. Stated here rather than left to
-    // each caller to pass the right thing, so a future caller cannot reopen it.
-    sinceAt != null &&
-    chain.at.getTime() >= sinceAt.getTime()
+    // …and the chain it came from verifies. Without this the match is on a
+    // hash the batch simply asserts: a forger cannot produce the daemon's
+    // first event, but nothing stops them writing its hash into an event of
+    // their own, and only `verifyChain` rejects an event whose hash is not the
+    // hash of its contents.
+    chainVerified
   )
     return TACHO_GATEWAY_TIER;
   return host.mode === "enforce" ? "harness" : "observe";
@@ -508,6 +524,10 @@ function genesisRow(
   // migration every new session would fail to open — for a field that is null
   // on all but the gateway tier (discussion_r4040352870).
   sessionGatewayColumn: boolean,
+  // What the control plane recorded about this chain, and whether the batch
+  // opening it verifies.
+  chain: GatewayChainRecord | null,
+  chainVerified: boolean,
 ) {
   const first = events[0] as TachoEvent;
   const genesis = events.find((event) => event.kind === "agent_start") ?? first;
@@ -516,30 +536,32 @@ function genesisRow(
   const anthropic = genesis.anthropic ?? {};
   const subagent = genesis.subagent;
   const ingestedAt = new Date(first.ts);
-  // A session being CREATED by this batch is never `gateway`, whatever the
-  // gateway-chain record says.
+  // The chain's own genesis, which is what a gateway record is matched
+  // against. `seq === 0` or nothing: a batch that does not open the chain is
+  // not carrying its first event, and a hash taken from anywhere else would be
+  // matching the wrong thing.
+  const genesisHash = first.seq === 0 ? first.hash : null;
+  // A session being created by this batch CAN be `gateway`, and has to be.
   //
-  // Both arguments are null on purpose and the first is the load-bearing one.
-  // Matching the chain by name is enough to say a real chain served a gateway
-  // call; it is not enough to say THIS BATCH came from that chain, and at
-  // genesis there is nothing else to check it against. A session row has a
-  // server-clock `createdAt` that bounds the observation to its lifetime; a row
-  // being inserted has no lifetime, so the bound is vacuous and the match
-  // stands alone.
+  // It could not while the correlation was a name plus a lifetime: at genesis
+  // there is no server-written `createdAt`, so the name stood alone and a
+  // forged first batch satisfied it as well as the real one. The genesis hash
+  // replaced that, and it works here exactly as it works later — the hash of
+  // the daemon's own first sealed event is not something a forger can produce.
   //
-  // That is a race, not a hypothetical: a holder of the host's ingest key who
-  // learns a legitimate `tachod-*` chain id can beat the daemon's first flush
-  // with an internally valid genesis batch naming it, and take the tier the
-  // real chain earned — sealing it before the real batch ever arrives. Nothing
-  // in the correlation row distinguishes the two, because the chain id is all
-  // either batch carries.
-  //
-  // Refusing here costs nothing that is not recovered. The tier is monotonic
-  // and rises on any later batch: `promoteToGateway` reads the same record
-  // against a `createdAt` the server wrote, which is the check genesis cannot
-  // make. A daemon chain lives for the daemon's run and flushes repeatedly, so
-  // "the next batch" is the ordinary case, not a hoped-for one.
-  const tier = enforcementTierOf(null, host, null, sessionGatewayColumn, null);
+  // Refusing here is not the safe default it looks like. The control plane
+  // records a gateway call while HANDLING it and the daemon seals the event
+  // after the call returns, so a chain whose first gateway call precedes its
+  // first ingest arrives with its record already written. Refusing at genesis
+  // sent that chain to `observe` and — with the old lifetime bound — kept it
+  // there, permanently if the same batch sealed it.
+  const tier = enforcementTierOf(
+    chain,
+    host,
+    chainVerified,
+    sessionGatewayColumn,
+    genesisHash,
+  );
   return {
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
@@ -608,14 +630,14 @@ function genesisRow(
     // the row: a `gateway` session points at the observation that made it one.
     ...(sessionGatewayColumn
       ? {
-          // Always null: a genesis row is never `gateway` (see the tier
-          // above), so there is never evidence to point at. Written rather
-          // than omitted so the column is explicitly nothing, not absent.
-          gatewayObservedAt: null,
+          // The call that raised it, or nothing. A tier that is `gateway`
+          // from the first row still has to point at what made it one.
+          gatewayObservedAt:
+            tier === TACHO_GATEWAY_TIER ? (chain?.at ?? null) : null,
         }
       : {}),
     bundleMode: host.mode,
-    genesisHash: first.seq === 0 ? first.hash : null,
+    genesisHash,
     createdAt: now,
     updatedAt: now,
   };
@@ -923,7 +945,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       const derivedTier = enforcementTierOf(
         chainRecord,
         host,
-        existing?.createdAt ?? null,
+        ok,
         sessionGatewayColumn,
         existing?.genesisHash ?? null,
       );
@@ -1079,6 +1101,8 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           events,
           now,
           sessionGatewayColumn,
+          chainRecord,
+          ok,
         );
         await tx
           .insert(schema.tachoSessions)

@@ -62,7 +62,7 @@ export const TACHO_GATEWAY_SESSION_HEADER = "x-tacho-gateway-session" as const;
  * The request header the local MCP gateway states its chain's GENESIS HASH on.
  *
  * The chain id alone is a name, and a name is something a forger can also
- * write. A holder of the host's ingest key who learns a real `tachod-*` id can
+ * write. A holder of the host's ingest key who learns a real chain uuid can
  * open that session first with a chain of its own and then be promoted by the
  * next genuine gateway call, because every check the server could make —
  * the chain name, the session's lifetime — is satisfied by the forged row it
