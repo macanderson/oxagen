@@ -1176,29 +1176,6 @@
     );
   }
 
-  /* In-app graph-paper texture — a crisp, very faint line grid painted onto the
-     content panel so the login's "chart paper" reads subtly inside the app. It
-     is a real background on the panel (NOT the blurred backdrop), so the lines
-     stay crisp behind the frosting, and a top-down linear mask dissolves it so
-     it is densest near the header and gone by mid-page. Token-driven (foreground
-     at 4% alpha) so it flips with the theme. Kept deliberately subtle — a touch. */
-  .ox-panel-grid {
-    background-image:
-      linear-gradient(
-        to right,
-        color-mix(in oklch, var(--foreground) 4%, transparent) 1px,
-        transparent 1px
-      ),
-      linear-gradient(
-        to bottom,
-        color-mix(in oklch, var(--foreground) 4%, transparent) 1px,
-        transparent 1px
-      );
-    background-size: 40px 40px;
-    mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
-    -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
-  }
-
   /* Vibrant code/terminal surface — a warm charcoal fill with the ember brand
      gradient painted into a 1px border (padding-box fill + border-box gradient),
      identical in light and dark so a code block reads as a high-contrast, bold

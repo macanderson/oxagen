@@ -73,7 +73,8 @@
     "check:mcp-externals": "tsx tools/scripts/check-mcp-externals.ts",
     "check:inngest-senders": "tsx tools/scripts/check-inngest-senders.ts",
     "check:control-bytes": "node tools/scripts/check-control-bytes.mjs",
-    "check:prose": "node tools/scripts/check-prose.mjs"
+    "check:prose": "node tools/scripts/check-prose.mjs",
+    "db:provision-enterprise": "tsx --env-file-if-exists=.env.local tools/scripts/provision-enterprise-org.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.0",
