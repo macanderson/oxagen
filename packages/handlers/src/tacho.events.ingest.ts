@@ -933,8 +933,27 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       // batch is opening — the batch's own first event. Resolved HERE, because
       // this value feeds both the row and the seal and deriving it twice is
       // how they came to disagree.
-      const sessionGenesisHash =
-        existing?.genesisHash ?? (first.seq === 0 ? first.hash : null);
+      //
+      // `existing ? … : …` rather than `existing?.genesisHash ?? …`. A row that
+      // exists and recorded no genesis is answered with NOTHING, not with a
+      // hash off the batch. Those are different questions: the recorded value
+      // is what the row can be checked against afterwards, and a batch's
+      // re-sent seq-0 event is not written back to it — so promoting on one
+      // would leave a `gateway` row whose `genesis_hash` is null, pointing at
+      // evidence nobody can re-derive. That is the failure this whole
+      // correlation exists to end, one level in.
+      //
+      // Rows predating this feature are the reachable case, not a hypothetical:
+      // they carry a null `genesis_hash` and a true `chain_verified`, and
+      // whether they promote would otherwise depend on whether some later batch
+      // happened to re-send seq 0. They stay on the host's own mode instead,
+      // which is the same degradation a daemon too old to state its genesis
+      // gets.
+      const sessionGenesisHash = existing
+        ? existing.genesisHash
+        : first.seq === 0
+          ? first.hash
+          : null;
       const derivedTier = enforcementTierOf(
         chainRecord,
         host,

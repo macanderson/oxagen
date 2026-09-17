@@ -2167,6 +2167,56 @@ describe("gateway attribution reaches the chain that carries the call", () => {
     expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("gateway");
   });
 
+  it("refuses a recorded session that has no genesis hash of its own", async () => {
+    // A row that EXISTS and recorded no genesis is answered with nothing, not
+    // with a hash taken off the batch. The two are different questions: the
+    // recorded value is what the row can be checked against afterwards, and a
+    // batch's re-sent seq-0 event is never written back to it — so promoting on
+    // one would leave a `gateway` row whose `genesis_hash` is null, citing
+    // evidence nobody can re-derive.
+    //
+    // Reachable rather than hypothetical: every session row created before this
+    // feature carries a null `genesis_hash` and a true `chain_verified`, and
+    // whether it promoted would otherwise depend on whether some later batch
+    // happened to re-send seq 0.
+    //
+    // Discriminating against "promotes an EXISTING session's tier" directly
+    // above: same host, same chain record, same batch, and the row's own
+    // genesis hash is the only difference.
+    const db = fakeDb();
+    const events = gatewayBatch();
+    servedChain(db, events);
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "observe",
+      createdAt: new Date("2026-09-08T08:00:00.000Z"),
+      sealedAt: null,
+      // The whole of the difference.
+      genesisHash: null,
+      seqCount: 0,
+      lastHash: null,
+      chainVerified: true,
+    });
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events,
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+
+    expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("observe");
+    for (const update of db.updates.filter((u) => u.table === "sessions")) {
+      expect(update.values["enforcementTier"]).not.toBe("gateway");
+    }
+  });
+
   it("leaves an existing wrapped-agent chain at its own tier", async () => {
     // No gateway event, so nothing to promote and nothing to demote.
     const db = fakeDb();
