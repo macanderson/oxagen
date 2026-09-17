@@ -403,10 +403,18 @@ export interface SubscriptionGuardDecision {
    */
   subscriptionWins: boolean;
   /**
-   * Whether the Owner preflight has anything to protect — that is, whether
-   * this run can actually make the EFFECTIVE tier enterprise.
+   * Whether this run writes `organizations.plan_type = 'enterprise'` — which
+   * is the same question as whether the Owner preflight has anything to
+   * protect, and is deliberately ONE field so the two cannot drift.
+   *
+   * They drifted once already. Skipping the preflight while still storing the
+   * enterprise fallback leaves a value that does nothing today and locks the
+   * organisation out the day the subscription is cancelled: tier resolution
+   * falls through to the column, enterprise runs the full default-deny IAM
+   * resolver, and the org this run explicitly allowed to have no usable Owner
+   * has none.
    */
-  checkOwnerReadiness: boolean;
+  writesEnterpriseTier: boolean;
 }
 
 /**
@@ -426,11 +434,15 @@ export interface SubscriptionGuardDecision {
  *    enterprise-plan branch, an org on an entitled Build or Scale subscription
  *    skipped the refusal: the figure was written, reported as set, and
  *    ignored.
- *  - Owner readiness is required only when this run can cause a lockout.
- *    Unconditionally, a target with an entitled non-enterprise subscription
- *    and no usable org-wide Owner had its whole run refused for a lockout that
- *    cannot happen — and lost the credit-floor and billing-setting updates the
+ *  - Owner readiness is required exactly when this run writes the enterprise
+ *    tier, which is the only thing that can cause a lockout. Unconditionally,
+ *    a target with an entitled non-enterprise subscription and no usable
+ *    org-wide Owner had its whole run refused for a lockout that cannot happen
+ *    — and lost the credit-floor and billing-setting updates the
  *    `subscriptionOverrides` path applies deliberately even while exiting 2.
+ *    The converse matters as much: while the subscription wins, the tier write
+ *    is inert TODAY and a trap TOMORROW, so it is skipped rather than stored
+ *    unverified.
  *
  * Both guards are checkable and both checked the wrong thing, which is worse
  * than absent: one refused work that was safe, the other permitted a write
@@ -451,10 +463,10 @@ export function subscriptionGuard(
       ),
       subscriptionWins,
       // A refused organisation is never written to, so nothing downstream asks.
-      checkOwnerReadiness: false,
+      writesEnterpriseTier: false,
     };
   }
-  return { subscriptionWins, checkOwnerReadiness: !subscriptionWins };
+  return { subscriptionWins, writesEnterpriseTier: !subscriptionWins };
 }
 
 export function isLocalHost(host: string): boolean {
@@ -868,7 +880,7 @@ async function main(): Promise<void> {
       // billing-setting updates the `subscriptionOverrides` path below applies
       // deliberately, even while returning exit 2 (#3225). So the run did less
       // than it was designed to, in the one case where it was safe all along.
-      if (guard.checkOwnerReadiness) {
+      if (guard.writesEnterpriseTier) {
         // Enterprise runs the full IAM resolver, whose default effect is deny. An
         // org with no usable Owner therefore loses every governed action the
         // moment the tier lands, and the operator finds out from the customer.
@@ -970,65 +982,87 @@ async function main(): Promise<void> {
           `      iam             : resolver confirms an org-owner super-user`,
         );
       }
-      // ── 2b. Tier + recorded action commitment ──────────────────────────────
+      // ── 2c. Tier + recorded action commitment ──────────────────────────────
       // These move together because enterprise is the tier whose allowance the
       // meter refuses to infer: setting the tier without recording a figure is
       // exactly the mis-provisioned state `billing_enterprise_allowance_missing`
       // alerts on, and it would alert on every governed action from here on.
-      const tierIsSet =
-        org.planType === "enterprise" && org.status === "active";
-      // On a database behind 20260916120000 there is no column to compare or to
-      // write, so the allowance half is satisfied by definition and the org
-      // keeps `resolveActionAllowance`'s bounded enterprise fallback.
-      // A stored figure the operator did not ask to change is a signed
-      // commitment, not a difference to reconcile. Writing the default over it
-      // on the documented recurring top-up run is how a negotiated allowance
-      // silently shrank and the org began paying overage.
-      const writeAllowance =
-        canRecordAllowance &&
-        shouldWriteAllowance(org.negotiatedActionsAnnual, actionsAnnualGiven);
-      const allowanceIsSet =
-        !writeAllowance ||
-        Number(org.negotiatedActionsAnnual) === actionsAnnual;
-      const recorded = !canRecordAllowance
-        ? " (allowance column absent — bounded fallback applies)"
-        : writeAllowance
-          ? `, ${actionsAnnual.toLocaleString("en-US")} actions/yr recorded`
-          : `, ${Number(org.negotiatedActionsAnnual).toLocaleString("en-US")} actions/yr left as recorded (pass --actions-annual to change it)`;
-
-      if (tierIsSet && allowanceIsSet) {
+      //
+      // Skipped entirely while an entitled non-enterprise subscription wins,
+      // on the SAME flag that decided the Owner preflight above — so the
+      // invariant is structural: the enterprise tier is stored only by a run
+      // that verified the organisation still has a usable org-wide Owner.
+      //
+      // Storing it anyway would be inert today and a lockout tomorrow. Tier
+      // resolution reads the subscription first, so nothing changes while the
+      // subscription is entitled; the day it is cancelled, resolution falls
+      // through to the column, enterprise runs the full default-deny IAM
+      // resolver, and an organisation this run explicitly allowed to have no
+      // usable Owner has none. The run still applies the credit floor and the
+      // billing settings below, which is what the `subscriptionOverrides`
+      // path is for, and still exits 2.
+      if (!guard.writesEnterpriseTier) {
         console.log(
-          `      tier            : already enterprise/active${recorded}`,
-        );
-      } else if (DRY_RUN) {
-        console.log(
-          kleur.blue(
-            `      tier            : would set plan_type '${org.planType}' → 'enterprise', status '${org.status}' → 'active'${
-              writeAllowance
-                ? `, negotiated_actions_annual ${org.negotiatedActionsAnnual ?? "NULL"} → ${actionsAnnual}`
-                : canRecordAllowance
-                  ? `, negotiated_actions_annual left at ${org.negotiatedActionsAnnual}`
-                  : " (allowance column absent — skipped)"
-            }`,
+          kleur.yellow(
+            `      tier            : not written while the subscription wins — a stored 'enterprise' would do nothing now and lock the org out when the subscription ends, and this run did not verify an Owner. Credit floor and billing settings below still apply.`,
           ),
         );
       } else {
-        await withSystemDb((tx) =>
-          tx
-            .update(schema.organizations)
-            .set({
-              planType: "enterprise",
-              status: "active",
-              ...(writeAllowance
-                ? { negotiatedActionsAnnual: BigInt(actionsAnnual) }
-                : {}),
-              updatedAt: new Date(),
-            })
-            .where(eq(schema.organizations.id, org.id)),
-        );
-        console.log(
-          kleur.green(`      tier            : enterprise/active${recorded}`),
-        );
+        const tierIsSet =
+          org.planType === "enterprise" && org.status === "active";
+        // On a database behind 20260916120000 there is no column to compare or to
+        // write, so the allowance half is satisfied by definition and the org
+        // keeps `resolveActionAllowance`'s bounded enterprise fallback.
+        // A stored figure the operator did not ask to change is a signed
+        // commitment, not a difference to reconcile. Writing the default over it
+        // on the documented recurring top-up run is how a negotiated allowance
+        // silently shrank and the org began paying overage.
+        const writeAllowance =
+          canRecordAllowance &&
+          shouldWriteAllowance(org.negotiatedActionsAnnual, actionsAnnualGiven);
+        const allowanceIsSet =
+          !writeAllowance ||
+          Number(org.negotiatedActionsAnnual) === actionsAnnual;
+        const recorded = !canRecordAllowance
+          ? " (allowance column absent — bounded fallback applies)"
+          : writeAllowance
+            ? `, ${actionsAnnual.toLocaleString("en-US")} actions/yr recorded`
+            : `, ${Number(org.negotiatedActionsAnnual).toLocaleString("en-US")} actions/yr left as recorded (pass --actions-annual to change it)`;
+
+        if (tierIsSet && allowanceIsSet) {
+          console.log(
+            `      tier            : already enterprise/active${recorded}`,
+          );
+        } else if (DRY_RUN) {
+          console.log(
+            kleur.blue(
+              `      tier            : would set plan_type '${org.planType}' → 'enterprise', status '${org.status}' → 'active'${
+                writeAllowance
+                  ? `, negotiated_actions_annual ${org.negotiatedActionsAnnual ?? "NULL"} → ${actionsAnnual}`
+                  : canRecordAllowance
+                    ? `, negotiated_actions_annual left at ${org.negotiatedActionsAnnual}`
+                    : " (allowance column absent — skipped)"
+              }`,
+            ),
+          );
+        } else {
+          await withSystemDb((tx) =>
+            tx
+              .update(schema.organizations)
+              .set({
+                planType: "enterprise",
+                status: "active",
+                ...(writeAllowance
+                  ? { negotiatedActionsAnnual: BigInt(actionsAnnual) }
+                  : {}),
+                updatedAt: new Date(),
+              })
+              .where(eq(schema.organizations.id, org.id)),
+          );
+          console.log(
+            kleur.green(`      tier            : enterprise/active${recorded}`),
+          );
+        }
       }
 
       // ── 3. Billing settings: no assistant cap, no dunning hold ─────────────

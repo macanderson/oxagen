@@ -104,6 +104,36 @@ export function isOrgOnlyWorkspaceReadRefusal(err: unknown): boolean {
  * tenant explicitly moved its data out of — the precise failure ADR-042 exists
  * to make impossible.
  */
+/**
+ * The probe cache key for a dedicated plane.
+ *
+ * `configDigest` identifies the physical database — it is what the pool keys
+ * its connections on — so two organisations on the same dedicated plane share
+ * a probe answer and two planes never do.
+ *
+ * It is `string | null`: the resolver returns null for a binding written
+ * without one. `dedicated:${digest}` then mapped every such database to the
+ * literal key `dedicated:null`, so two null-digest organisations on DIFFERENT
+ * dedicated databases shared one answer — and a positive probe on the migrated
+ * one would be kept for the life of the process and handed to the other,
+ * dropping the compatibility projection against a database that still lacks
+ * the column. That is the failure #3223 exists to prevent, reintroduced
+ * through a null.
+ *
+ * So a missing digest keys per ORGANISATION, mirroring `data-plane-pool`'s
+ * cache key and its reasoning exactly. It loses nothing but sharing: two orgs
+ * on one plane probe once each rather than once between them. Correctness
+ * first.
+ */
+export function dedicatedPlaneKey(
+  orgId: string,
+  configDigest: string | null | undefined,
+): string {
+  return configDigest == null
+    ? `dedicated:org:${orgId}`
+    : `dedicated:${configDigest}`;
+}
+
 async function tenantPlaneDb(
   orgId: string,
 ): Promise<{ database: Database; planeKey: string }> {
@@ -120,7 +150,22 @@ async function tenantPlaneDb(
     // comes from THIS resolution — the one that just chose the connection —
     // rather than from a second one made later by the probe, which could
     // disagree with it if the organisation were repointed in between (#3223).
-    planeKey: `dedicated:${plane.configDigest}`,
+    //
+    // Falls back to the ORGANISATION when the digest is absent, mirroring
+    // `data-plane-pool`'s cache key for the same reason and with the same
+    // trade. `configDigest` is `string | null` — the resolver returns null for
+    // a binding written without one — so `dedicated:${plane.configDigest}`
+    // mapped every such database to the literal key `dedicated:null`. Two
+    // null-digest organisations on DIFFERENT dedicated databases would then
+    // share one answer, and a positive probe on the migrated one would be kept
+    // for the life of the process and handed to the other, dropping the
+    // compatibility projection against a database that still lacks the column.
+    // That is the exact failure #3223 fixed, reintroduced through a null.
+    //
+    // Keying per organisation loses nothing but sharing: two orgs on the same
+    // dedicated plane probe once each instead of once between them. Correctness
+    // first, as the pool puts it.
+    planeKey: dedicatedPlaneKey(orgId, plane.configDigest),
   };
 }
 

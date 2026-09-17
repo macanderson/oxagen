@@ -1507,6 +1507,33 @@ describe("ingest_tacho_events: bodies and the seal", () => {
   it("seals fork on a gateway-tier session whose tool call kept its result body", async () => {
     const db = fakeDb();
     watchedGatewayHost(db);
+    // The chain exists before the batch that seals it. A gateway tier is only
+    // ever reached on a session the server already has a `createdAt` for —
+    // genesis cannot be promoted, because there is no lifetime to bound the
+    // observation against and a forged first batch naming a real chain id
+    // would satisfy the match as well as the real one. That is also the real
+    // shape: a daemon chain opens when the daemon starts and flushes many
+    // times before it ends.
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "observe",
+      createdAt: new Date("2026-09-08T08:00:00.000Z"),
+      sealedAt: null,
+      // A chain that is open but has recorded nothing, which is what a daemon
+      // chain looks like between its genesis and its first flush. Both fields
+      // matter: without `seqCount` every event reads as re-sent, so nothing is
+      // fresh and nothing seals; without `lastHash` the chain-continuity check
+      // compares the batch's first `prev_hash` against `undefined` and reports
+      // a break, which drops the replay grade.
+      seqCount: 0,
+      lastHash: null,
+      // An unverified row can never become verified — `ok` is forced false for
+      // one — so a fixture that omits this grades every batch as a chain
+      // break, whatever the batch actually contains.
+      chainVerified: true,
+    });
     wire(db);
     const events = sessionWithContent("gateway");
     await tachoEventsIngestHandler(
@@ -1522,6 +1549,33 @@ describe("ingest_tacho_events: bodies and the seal", () => {
   it("seals below fork on a gateway-tier session whose tool call kept no result body (negative)", async () => {
     const db = fakeDb();
     watchedGatewayHost(db);
+    // The chain exists before the batch that seals it. A gateway tier is only
+    // ever reached on a session the server already has a `createdAt` for —
+    // genesis cannot be promoted, because there is no lifetime to bound the
+    // observation against and a forged first batch naming a real chain id
+    // would satisfy the match as well as the real one. That is also the real
+    // shape: a daemon chain opens when the daemon starts and flushes many
+    // times before it ends.
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "observe",
+      createdAt: new Date("2026-09-08T08:00:00.000Z"),
+      sealedAt: null,
+      // A chain that is open but has recorded nothing, which is what a daemon
+      // chain looks like between its genesis and its first flush. Both fields
+      // matter: without `seqCount` every event reads as re-sent, so nothing is
+      // fresh and nothing seals; without `lastHash` the chain-continuity check
+      // compares the batch's first `prev_hash` against `undefined` and reports
+      // a break, which drops the replay grade.
+      seqCount: 0,
+      lastHash: null,
+      // An unverified row can never become verified — `ok` is forced false for
+      // one — so a fixture that omits this grades every batch as a chain
+      // break, whatever the batch actually contains.
+      chainVerified: true,
+    });
     wire(db);
     await tachoEventsIngestHandler(
       batch(sessionWithContent("gateway")),
@@ -1846,13 +1900,32 @@ describe("enforcementTierOf", () => {
   /** A host that has never had a gateway call authorised. */
   const unwatched = (mode: string) => ({ mode, gatewayLastSeenAt: null });
 
+  const OPENED = new Date("2026-09-08T09:00:00.000Z");
+
   it("labels a chain the control plane served a gateway call for", () => {
     // recordGatewayCall seals the call onto the daemon's own tachod-* chain
     // and the host recorder sets no identity tier, so these calls used to be
     // filed under the HOST's mode -- the wrong enforcement semantics for the
     // one kind of call Oxagen saw directly (#3161, discussion_r4033641270).
-    expect(enforcementTierOf(AT, watched("observe"), null, true)).toBe(
+    expect(enforcementTierOf(AT, watched("observe"), OPENED, true)).toBe(
       "gateway",
+    );
+  });
+
+  it("refuses a session with no server-known lifetime", () => {
+    // `sinceAt` null means the session row does not exist yet, so there is no
+    // server-clock `createdAt` to bound the observation against and the chain
+    // match stands alone. A holder of the host's ingest key who learns a real
+    // `tachod-*` chain id can beat the daemon's first flush with an internally
+    // valid genesis batch naming it, and take the tier the real chain earned.
+    //
+    // Discriminating against the case above: same invocation, same watched
+    // host, only the lifetime differs.
+    expect(enforcementTierOf(AT, watched("observe"), null, true)).toBe(
+      "observe",
+    );
+    expect(enforcementTierOf(AT, watched("enforce"), null, true)).toBe(
+      "harness",
     );
   });
 
@@ -1865,10 +1938,10 @@ describe("enforcementTierOf", () => {
     // observation at any session. Now the answer comes from
     // `tacho.gateway_chains` and a chain nobody's gateway served has no
     // row there, whatever the batch says about it.
-    expect(enforcementTierOf(null, watched("observe"), null, true)).toBe(
+    expect(enforcementTierOf(null, watched("observe"), OPENED, true)).toBe(
       "observe",
     );
-    expect(enforcementTierOf(null, watched("enforce"), null, true)).toBe(
+    expect(enforcementTierOf(null, watched("enforce"), OPENED, true)).toBe(
       "harness",
     );
   });
@@ -1877,7 +1950,7 @@ describe("enforcementTierOf", () => {
     // The belt. The two records are written by the same function but by
     // separate statements, and a deployment can be mid-migration on one and
     // not the other; disagreement is not evidence.
-    expect(enforcementTierOf(AT, unwatched("observe"), null, true)).toBe(
+    expect(enforcementTierOf(AT, unwatched("observe"), OPENED, true)).toBe(
       "observe",
     );
   });
@@ -1897,10 +1970,10 @@ describe("enforcementTierOf", () => {
   });
 
   it("falls back to the host mode when nothing says otherwise", () => {
-    expect(enforcementTierOf(null, unwatched("observe"), null, true)).toBe(
+    expect(enforcementTierOf(null, unwatched("observe"), OPENED, true)).toBe(
       "observe",
     );
-    expect(enforcementTierOf(null, unwatched("enforce"), null, true)).toBe(
+    expect(enforcementTierOf(null, unwatched("enforce"), OPENED, true)).toBe(
       "harness",
     );
   });
@@ -1915,10 +1988,10 @@ describe("enforcementTierOf", () => {
     // Same invocation and same watched host as the case that returns
     // `gateway` above — only the evidence column differs, which is what makes
     // this discriminating.
-    expect(enforcementTierOf(AT, watched("enforce"), null, false)).toBe(
+    expect(enforcementTierOf(AT, watched("enforce"), OPENED, false)).toBe(
       "harness",
     );
-    expect(enforcementTierOf(AT, watched("observe"), null, false)).toBe(
+    expect(enforcementTierOf(AT, watched("observe"), OPENED, false)).toBe(
       "observe",
     );
   });
@@ -1940,6 +2013,18 @@ describe("gateway attribution reaches the chain that carries the call", () => {
       enforcementTier: "observe",
       createdAt: new Date("2026-09-08T08:00:00.000Z"),
       sealedAt: null,
+      // A chain that is open but has recorded nothing, which is what a daemon
+      // chain looks like between its genesis and its first flush. Both fields
+      // matter: without `seqCount` every event reads as re-sent, so nothing is
+      // fresh and nothing seals; without `lastHash` the chain-continuity check
+      // compares the batch's first `prev_hash` against `undefined` and reports
+      // a break, which drops the replay grade.
+      seqCount: 0,
+      lastHash: null,
+      // An unverified row can never become verified — `ok` is forced false for
+      // one — so a fixture that omits this grades every batch as a chain
+      // break, whatever the batch actually contains.
+      chainVerified: true,
     });
     wire(db);
 
@@ -2123,6 +2208,18 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
       enforcementTier: "observe",
       createdAt: new Date("2026-09-08T08:00:00.000Z"),
       sealedAt: null,
+      // A chain that is open but has recorded nothing, which is what a daemon
+      // chain looks like between its genesis and its first flush. Both fields
+      // matter: without `seqCount` every event reads as re-sent, so nothing is
+      // fresh and nothing seals; without `lastHash` the chain-continuity check
+      // compares the batch's first `prev_hash` against `undefined` and reports
+      // a break, which drops the replay grade.
+      seqCount: 0,
+      lastHash: null,
+      // An unverified row can never become verified — `ok` is forced false for
+      // one — so a fixture that omits this grades every batch as a chain
+      // break, whatever the batch actually contains.
+      chainVerified: true,
     });
     wire(db);
 
@@ -2200,6 +2297,18 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
       enforcementTier: "observe",
       createdAt: new Date("2026-09-08T08:00:00.000Z"),
       sealedAt: null,
+      // A chain that is open but has recorded nothing, which is what a daemon
+      // chain looks like between its genesis and its first flush. Both fields
+      // matter: without `seqCount` every event reads as re-sent, so nothing is
+      // fresh and nothing seals; without `lastHash` the chain-continuity check
+      // compares the batch's first `prev_hash` against `undefined` and reports
+      // a break, which drops the replay grade.
+      seqCount: 0,
+      lastHash: null,
+      // An unverified row can never become verified — `ok` is forced false for
+      // one — so a fixture that omits this grades every batch as a chain
+      // break, whatever the batch actually contains.
+      chainVerified: true,
     });
     wire(db);
 
@@ -2217,6 +2326,39 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
     for (const update of db.updates.filter((u) => u.table === "sessions")) {
       expect(update.values["enforcementTier"]).not.toBe("gateway");
     }
+  });
+
+  it("refuses a genesis batch naming a chain the gateway really served", async () => {
+    // The race. The chain id is real, the gateway call is real, the
+    // `gateway_chains` row is real — and the batch opening the session is
+    // forged. A holder of the host's ingest key who learns a legitimate
+    // `tachod-*` id can beat the daemon's first flush with an internally valid
+    // genesis batch naming it, and take the tier the real chain earned. Both
+    // batches carry the same chain id and nothing else distinguishes them, so
+    // matching by name cannot tell them apart.
+    //
+    // What separates them is a lifetime the server wrote: a session row has a
+    // `createdAt`, a row being inserted does not. So genesis never promotes,
+    // and the real chain is promoted by its next batch instead.
+    //
+    // Discriminating against "promotes an EXISTING session's tier" above: same
+    // host, same chain record, same batch — only the session row is missing.
+    const db = fakeDb();
+    watchedGatewayHost(db);
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: gatewayBatch(),
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+
+    expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("observe");
+    expect(db.sessions.get(SESSION)?.["gatewayObservedAt"]).toBe(null);
   });
 
   it("refuses a session INVENTED by the forged batch", async () => {
@@ -2257,6 +2399,18 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
       enforcementTier: "observe",
       createdAt: new Date("2026-09-08T08:00:00.000Z"),
       sealedAt: null,
+      // A chain that is open but has recorded nothing, which is what a daemon
+      // chain looks like between its genesis and its first flush. Both fields
+      // matter: without `seqCount` every event reads as re-sent, so nothing is
+      // fresh and nothing seals; without `lastHash` the chain-continuity check
+      // compares the batch's first `prev_hash` against `undefined` and reports
+      // a break, which drops the replay grade.
+      seqCount: 0,
+      lastHash: null,
+      // An unverified row can never become verified — `ok` is forced false for
+      // one — so a fixture that omits this grades every batch as a chain
+      // break, whatever the batch actually contains.
+      chainVerified: true,
     });
     wire(db);
 

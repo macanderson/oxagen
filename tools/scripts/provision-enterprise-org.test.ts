@@ -28,6 +28,7 @@ import {
   PLAN_ALLOWANCE_COLUMN,
   subscriptionAllowanceRefusal,
   subscriptionGuard,
+  type EntitledSubscription,
   sanitizeUrl,
   shouldWriteAllowance,
   topUpCents,
@@ -548,7 +549,7 @@ describe("subscriptionGuard", () => {
     // make the org enterprise and the Owner preflight has something to protect.
     expect(subscriptionGuard(undefined, false, 0)).toEqual({
       subscriptionWins: false,
-      checkOwnerReadiness: true,
+      writesEnterpriseTier: true,
     });
   });
 
@@ -561,7 +562,7 @@ describe("subscriptionGuard", () => {
     // `subscriptionOverrides` path applies deliberately while exiting 2.
     expect(subscriptionGuard(scaleSub, false, 0)).toEqual({
       subscriptionWins: true,
-      checkOwnerReadiness: false,
+      writesEnterpriseTier: false,
     });
   });
 
@@ -570,7 +571,7 @@ describe("subscriptionGuard", () => {
     // a lockout IS reachable and the preflight still applies.
     expect(subscriptionGuard(enterpriseSub, false, 0)).toEqual({
       subscriptionWins: false,
-      checkOwnerReadiness: true,
+      writesEnterpriseTier: true,
     });
   });
 
@@ -582,7 +583,7 @@ describe("subscriptionGuard", () => {
     // SUBSCRIBED plan's monthly allowance first, whatever tier that plan is on.
     const decision = subscriptionGuard(scaleSub, true, 24_000_000);
     expect(decision.refusal).toBeDefined();
-    expect(decision.checkOwnerReadiness).toBe(false);
+    expect(decision.writesEnterpriseTier).toBe(false);
   });
 
   it("gives it the same message an enterprise-plan org gets", () => {
@@ -607,12 +608,47 @@ describe("subscriptionGuard", () => {
     );
   });
 
+  it("never writes the enterprise tier for a winning subscription", () => {
+    // The invariant that makes skipping the Owner preflight safe. The same
+    // field gates the preflight and the `plan_type = 'enterprise'` write, so a
+    // run cannot store the fallback without having checked — there is one
+    // field, not two that must agree.
+    //
+    // Storing it unchecked is inert today and a lockout tomorrow: resolution
+    // reads the subscription first, so nothing changes while it is entitled,
+    // and the day it is cancelled resolution falls through to the column,
+    // enterprise runs the full default-deny IAM resolver, and an organisation
+    // this run explicitly allowed to have no usable Owner has none.
+    const table: Array<{
+      sub: EntitledSubscription | undefined;
+      flag: boolean;
+      writes: boolean;
+    }> = [
+      { sub: undefined, flag: false, writes: true },
+      { sub: undefined, flag: true, writes: true },
+      { sub: enterpriseSub, flag: false, writes: true },
+      // Refused before anything is written.
+      { sub: enterpriseSub, flag: true, writes: false },
+      // The case this is all about: the write would be inert and unverified.
+      { sub: scaleSub, flag: false, writes: false },
+      { sub: scaleSub, flag: true, writes: false },
+    ];
+    for (const { sub, flag, writes } of table) {
+      const decision = subscriptionGuard(sub, flag, 24_000_000);
+      expect({
+        plan: sub?.planSlug ?? "none",
+        flag,
+        writes: decision.writesEnterpriseTier,
+      }).toEqual({ plan: sub?.planSlug ?? "none", flag, writes });
+    }
+  });
+
   it("does not refuse --actions-annual for an org with no subscription", () => {
     // The figure is read for an unsubscribed enterprise org, which is the case
     // the flag exists for. Refusing here would be the mirror-image bug.
     expect(subscriptionGuard(undefined, true, 24_000_000)).toEqual({
       subscriptionWins: false,
-      checkOwnerReadiness: true,
+      writesEnterpriseTier: true,
     });
   });
 });
