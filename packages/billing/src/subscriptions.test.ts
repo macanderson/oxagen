@@ -520,6 +520,7 @@ describe("previewPlanChange — the quote and the change agree (#3157)", () => {
       prorationDate: 1_700_000_000,
       totalCents: 0,
       amountDueCents: 0,
+      billingInterval: "month",
       lines: [],
     });
     dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);
@@ -551,6 +552,7 @@ describe("previewPlanChange — the quote and the change agree (#3157)", () => {
       prorationDate: 1_700_000_000,
       totalCents: 0,
       amountDueCents: 0,
+      billingInterval: "month",
       lines: [],
     });
     dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);
@@ -602,6 +604,10 @@ describe("previewPlanChange — the quote and the change agree (#3157)", () => {
       // No account balance here, so the collection equals the invoice. The
       // case where they differ is `plan-change-provider-interval.test.ts`.
       amountDueCents: 15_000,
+      // The subscription this preview priced is the ANNUAL one. It is the
+      // preview that says so, not a second read of the subscription — see
+      // BillingProrationPreview.billingInterval.
+      billingInterval: "year",
       lines: [],
     });
     getSubscriptionMock.mockResolvedValue(
@@ -632,6 +638,7 @@ describe("previewPlanChange — the quote and the change agree (#3157)", () => {
       prorationDate: 1_700_000_000,
       totalCents: 0,
       amountDueCents: 0,
+      billingInterval: "month",
       lines: [],
     });
     dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);

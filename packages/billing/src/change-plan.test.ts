@@ -27,7 +27,19 @@ const createSubscriptionCheckoutMock = vi.fn();
  * would raise — discounts included — and its sign is the answer.
  */
 const previewPlanChangeMock = vi.fn();
-function previewingProration(amountCents: number) {
+/**
+ * @param billingInterval The interval of the subscription THIS preview was
+ * computed against — the field the adapter now carries back so the interval
+ * comparison never straddles two provider reads. Monthly unless a test says
+ * otherwise, matching {@link stubProviderSubscription}. A test that wants the
+ * two to DISAGREE sets this and leaves the `getSubscription` stub alone; that
+ * is the concurrent-update interleaving, and the fixture can express it
+ * because the two are separate mocks.
+ */
+function previewingProration(
+  amountCents: number,
+  billingInterval: "month" | "year" = "month",
+) {
   previewPlanChangeMock.mockResolvedValue({
     amountCents,
     isCharge: amountCents > 0,
@@ -37,6 +49,7 @@ function previewingProration(amountCents: number) {
     // What the provider would collect. Equal to the total here: none of these
     // cases give the customer an account balance.
     amountDueCents: amountCents,
+    billingInterval,
     lines: [],
   });
 }
@@ -525,7 +538,7 @@ describe("changeOrgPlan proration direction (#3157)", () => {
 
   it("monthly → annual on one plan is whatever the invoice says, not what the rates suggest", async () => {
     // The per-month rate falls (two months free) and the next invoice rises.
-    previewingProration(899_100);
+    previewingProration(899_100, "month");
     stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
     onPrice("price_scale_m", {
       planId: "plan-scale-id",

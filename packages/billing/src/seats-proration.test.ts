@@ -161,6 +161,10 @@ function makeProrationPreview(
     prorationDate: 1700000000,
     totalCents: 2000,
     amountDueCents: 2000,
+    // The interval of the subscription this preview priced. It comes back on
+    // the preview so the caller never takes a second read of the subscription
+    // to compare against — see BillingProrationPreview.billingInterval.
+    billingInterval: "month",
     lines: [],
     ...overrides,
   };

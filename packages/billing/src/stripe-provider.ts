@@ -151,6 +151,16 @@ function summarizeProration(
    * {@link AmbiguousProrationAnchorError}.
    */
   pendingAtAnchor: number,
+  /**
+   * The subscription this preview was computed against — the very object the
+   * item being repriced was taken from, not a second retrieval of it.
+   *
+   * Passed as a REQUIRED parameter rather than spread onto the result by each
+   * caller, so a future preview path cannot ship without saying which
+   * subscription it priced. See {@link BillingProrationPreview.billingInterval}
+   * for what goes wrong when the caller sources that separately.
+   */
+  previewedSubscription: Stripe.Subscription,
 ): BillingProrationPreview {
   // Somebody else's change already occupies this second, so the lines carrying
   // our anchor are not all ours and nothing in the payload says which are.
@@ -200,6 +210,10 @@ function summarizeProration(
     // to `amount_due`, so this is the figure the confirmation screen means by
     // "charged now" (#3157, PR #3171 review).
     amountDueCents: preview.amount_due,
+    // The interval of the subscription that was priced, derived by the one
+    // helper `getSubscription` derives it with — a second derivation would be
+    // a second thing to keep in step, which is the defect this field closes.
+    billingInterval: pickInterval(previewedSubscription),
     lines: prorationLines,
   };
 }
@@ -875,7 +889,13 @@ export class StripeProvider implements BillingProvider {
         proration_date: prorationDate,
       },
     );
-    return summarizeProration(preview, lines, prorationDate, pendingAtAnchor);
+    return summarizeProration(
+      preview,
+      lines,
+      prorationDate,
+      pendingAtAnchor,
+      sub,
+    );
   }
 
   async previewPlanChange(
@@ -897,7 +917,13 @@ export class StripeProvider implements BillingProvider {
         proration_date: prorationDate,
       },
     );
-    return summarizeProration(preview, lines, prorationDate, pendingAtAnchor);
+    return summarizeProration(
+      preview,
+      lines,
+      prorationDate,
+      pendingAtAnchor,
+      sub,
+    );
   }
 
   // ── Payment methods ───────────────────────────────────────────────────────────

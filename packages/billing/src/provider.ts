@@ -244,6 +244,27 @@ export interface BillingProrationPreview {
    * issued, so it draws it the same way.
    */
   amountDueCents: number;
+  /**
+   * The recurring interval of the subscription THIS preview was computed
+   * against, read from the same retrieval that produced it.
+   *
+   * It is here because the caller needs it and must not fetch it separately.
+   * Whether a change resets the billing-cycle anchor is decided by comparing
+   * the interval the subscription is on against the one being asked for, and a
+   * caller that takes the first from its own `getSubscription` is comparing
+   * against a subscription that is not the one this preview priced. Another
+   * plan update landing between the two reads makes them describe different
+   * subscriptions: the caller sees monthly, the preview is computed on annual,
+   * a move to monthly scores as same-interval, its negative proration reads as
+   * a downgrade, `none` is selected and the quote is $0 — while the provider
+   * resets the anchor and invoices the whole new month anyway.
+   *
+   * One read, one answer. The adapter already retrieves the subscription to
+   * find the item to price, so carrying the interval back costs nothing, and
+   * there is no second value left to keep in step (#3157, PR #3171 review,
+   * r4042249142).
+   */
+  billingInterval: BillingInterval;
   /** Per-line breakdown of the proration adjustments. */
   lines: BillingProrationLine[];
 }

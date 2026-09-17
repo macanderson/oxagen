@@ -5,7 +5,7 @@ import { billingProvider } from "./client";
 import { logger } from "./logger";
 import { getOrgSeatUsage, SeatLimitError } from "./seats";
 import { hasPlanUpgradeGrant } from "./grants";
-import type { BillingProrationPreview } from "./provider";
+import type { BillingInterval, BillingProrationPreview } from "./provider";
 
 /**
  * Raised when the provider cannot tell us what a change would cost.
@@ -111,11 +111,37 @@ export interface PlanChangeDirection {
  * The entitlement ordering in `entitlements.ts` (`TIER_ORDER` /
  * `meetsMinimumTier`) answers a different question — *does this plan include
  * that feature?* — and is never read here.
+ *
+ * WHETHER THE INTERVAL CHANGES IS MEASURED HERE, FROM THE PREVIEW ITSELF.
+ *
+ * This used to take a boolean the caller had computed, from an interval the
+ * caller had read with its own `getSubscription`. Two provider reads of one
+ * remote object in one logical operation, and nothing holds them together: a
+ * plan update landing in between makes the boolean describe the subscription
+ * before it and the preview describe the subscription after it. Caller sees
+ * monthly, the preview is computed on annual, this request targets monthly —
+ * `false` is passed, the annual→monthly credit reads as a downgrade, `none` is
+ * selected and the quote is $0, while the provider resets the anchor and
+ * invoices the whole new month. The customer is charged a month they were told
+ * was free (#3157, PR #3171 review, r4042249142).
+ *
+ * So the caller passes the interval it is ASKING FOR — a request parameter,
+ * which cannot go stale because it is not a reading of anything — and the
+ * interval being moved FROM comes back on the preview, off the same retrieval
+ * that produced it. One read, one comparison, nothing to keep in step. The
+ * alternative on offer was to verify the subscription had not changed between
+ * the two reads, which is two values plus a check that can itself go stale
+ * between passing and being acted on; SCR-002 takes the option that cannot be
+ * questioned later, and not fetching a second copy is that option.
  */
 async function planChangeDirection(
   stripeSubscriptionId: string,
   newPriceId: string,
-  intervalChanges: boolean,
+  /**
+   * The interval being moved TO. Not a reading of provider state — it is what
+   * this request asks for, so it has no staleness to have.
+   */
+  targetInterval: BillingInterval,
 ): Promise<PlanChangeDirection> {
   try {
     const preview = await billingProvider().previewPlanChange(
@@ -138,6 +164,11 @@ async function planChangeDirection(
     // credit balance is not charged the total — Stripe applies the balance and
     // collects `amount_due`. The total overstated the charge by the whole
     // balance (#3157, PR #3171 review).
+    //
+    // The interval moved FROM is the preview's own: the subscription it was
+    // computed against, not a second retrieval that may describe a different
+    // one. See the header and BillingProrationPreview.billingInterval.
+    const intervalChanges = preview.billingInterval !== targetInterval;
     if (intervalChanges) {
       return {
         prorationBehavior: "always_invoice",
@@ -624,31 +655,40 @@ async function clearPlanUpgradeIntent(
  * It is raised BEFORE any provider mutation and before the durable upgrade
  * intent is written, so a refusal leaves nothing half-done.
  *
- * THE INTERVAL COMES BACK FOR THE SAME REASON THE PRICE DOES.
+ * THE PRICE ID IS ALL THIS RETURNS, AND THE INTERVAL DELIBERATELY IS NOT.
  *
- * `subscriptions.billing_interval` is written by the same post-mutation sync
- * and is stale in the same failure, and the decision it feeds is worse to get
- * wrong: whether the change resets the billing-cycle anchor. After an
- * unrecorded monthly→annual swap the column still says `month`, so a move back
- * to monthly reads as same-interval, its negative proration reads as a
- * downgrade, `none` is selected and the quote is $0 — while the provider
- * resets the anchor and invoices the new month anyway. This function was
- * already reading the provider subscription and discarding the one field that
- * settles it (#3157, PR #3171 review).
+ * It returned the interval too, for a good reason that stopped short of the
+ * conclusion: `subscriptions.billing_interval` is written by the same
+ * post-mutation sync, is stale in the same failure, and feeds a worse
+ * decision — whether the change resets the billing-cycle anchor. True. But
+ * answering it HERE meant the interval and the preview came from two separate
+ * provider reads, and nothing holds two reads of one remote object together.
+ * A plan update landing in between makes them describe different
+ * subscriptions, and the decision they jointly feed is then made about neither
+ * (#3157, PR #3171 review, r4042249142).
+ *
+ * The preview now carries the interval of the subscription it was computed
+ * against ({@link BillingProrationPreview.billingInterval}), so this function
+ * does not hand one out for anybody to compare it with. That is the point of
+ * the narrowing rather than a side effect of it: a value nobody can obtain
+ * here is a value that cannot disagree with the preview, whereas returning it
+ * unused would leave the next caller a plausible-looking second source.
+ *
+ * What remains — the active price id — is consumed BEFORE the preview is
+ * taken, to recognise a swap that has already been applied. It is a single
+ * read feeding a single decision, with nothing to be out of step with. See
+ * that guard for what it does and does not establish.
  */
 async function resolveActiveProviderState(
   stripeSubscriptionId: string,
-): Promise<{
-  priceId: string | null;
-  billingInterval: "month" | "year";
-}> {
+): Promise<{ priceId: string | null }> {
   try {
     const sub = await billingProvider().getSubscription(stripeSubscriptionId);
-    return { priceId: sub.priceId, billingInterval: sub.billingInterval };
+    return { priceId: sub.priceId };
   } catch (err) {
     logger.warn(
       { stripeSubId: stripeSubscriptionId, err },
-      "billing: could not read the provider's active price and interval for a plan change — refusing to act on the last synced values",
+      "billing: could not read the provider's active price for a plan change — refusing to act on the last synced value",
     );
     throw new SubscriptionStateUnavailableError(stripeSubscriptionId);
   }
@@ -767,8 +807,9 @@ export async function changeOrgPlan(
   // Asked of the PROVIDER, not of our record of the provider — see
   // resolveActiveProviderState for why the local column is blind to exactly the
   // failure this guard exists for.
-  const { priceId: activePriceId, billingInterval: currentInterval } =
-    await resolveActiveProviderState(activeSubRow.stripeSubscriptionId);
+  const { priceId: activePriceId } = await resolveActiveProviderState(
+    activeSubRow.stripeSubscriptionId,
+  );
 
   if (activePriceId && activePriceId === newPriceId) {
     // ── Is this request resuming a mutation, or did nothing happen? ─────────
@@ -956,14 +997,15 @@ export async function changeOrgPlan(
   // Active subscription — swap the price in-place. Proration follows the money
   // the change will actually move.
   //
-  // `currentInterval` is the PROVIDER's, resolved above alongside the active
-  // price. The local column cannot be trusted for this: see
-  // resolveActiveProviderState.
+  // What goes in is the interval being ASKED FOR. The interval being moved
+  // from is measured inside, off the preview's own subscription read, so the
+  // comparison cannot straddle two different readings of one subscription —
+  // see planChangeDirection.
   const { prorationBehavior, direction, amountCents, preview } =
     await planChangeDirection(
       activeSubRow.stripeSubscriptionId,
       newPriceId,
-      currentInterval !== interval,
+      interval,
     );
   // Reported, never used to decide the credit grant. Whether the customer owes
   // money and whether their included allowance went up are different
@@ -981,10 +1023,11 @@ export async function changeOrgPlan(
       interval,
       currentTier: currentPlanRow?.tier,
       targetTier: targetPlan.tier,
-      currentInterval,
-      // The interval was measured at the provider; say whether the local
-      // column agreed, so a row drifting from the provider is visible in the
-      // log rather than only in its consequences.
+      // The interval of the subscription the preview priced — the one the
+      // decision was actually made against, not a separate reading of it.
+      previewedInterval: preview?.billingInterval ?? null,
+      // What the local column said, logged beside it so a row drifting from
+      // the provider is visible here rather than only in its consequences.
       recordedInterval: activeSubRow.billingInterval,
       previewedProrationCents: amountCents,
       // The invoice, and what will actually be collected off it. They differ
@@ -1405,15 +1448,34 @@ export async function previewPlanChange(
   // billed, which the subscription carries, and the plan row behind it would
   // only reintroduce the catalogue figure this path must not read (#3157).
   //
-  // The interval is the provider's, for the reason resolveActiveProviderState
-  // gives: the local column describes the subscription the last successful
-  // sync saw, and whether this change resets the billing-cycle anchor is
-  // decided by the subscription the provider has now. The quote path has to
-  // reach the same answer as the swap path or the confirmation screen promises
-  // something the change will not do.
-  const { billingInterval: currentInterval } = await resolveActiveProviderState(
-    activeSub.stripeSubscriptionId,
-  );
+  // ONE PROVIDER READ, AND IT IS THE PREVIEW.
+  //
+  // This used to take its own `getSubscription` here, purely to learn the
+  // interval being moved from, and hand the comparison to
+  // `planChangeDirection` as a boolean. That is two reads of one remote
+  // object inside one quote, with nothing holding them together: a plan
+  // update landing between them makes the boolean describe the subscription
+  // before it and the preview describe the subscription after it. Read says
+  // monthly, preview is computed on annual, this request asks for monthly —
+  // the comparison scores same-interval, the annual→monthly credit reads as a
+  // downgrade, `none` is selected, and the screen quotes $0 while the swap
+  // that follows resets the anchor and invoices the whole new month.
+  //
+  // It is the identical defect the swap path carried, on the path that is
+  // strictly worse to get wrong: this number is the one a person reads before
+  // pressing the button (#3157, PR #3171 review, r4042249142).
+  //
+  // So nothing is read here. The interval moved TO is `interval`, a request
+  // parameter with no staleness to have, and the interval moved FROM comes
+  // back on the preview off the same retrieval that priced it.
+  //
+  // Losing the separate read does not lose the refusal it used to provide: a
+  // provider that cannot be reached cannot produce a preview either, and the
+  // null amount that follows throws PlanChangePreviewUnavailableError below.
+  // What it does lose is the case where only that extra call failed — and
+  // there the quote is now simply correct, computed from the subscription the
+  // preview priced, rather than refused.
+  //
   // One preview answers both questions: which way the money moves, and how
   // much of it moves now. Taken exactly as changeOrgPlan takes it, because a
   // preview computed from one measure while the change bills against another
@@ -1422,7 +1484,7 @@ export async function previewPlanChange(
     await planChangeDirection(
       activeSub.stripeSubscriptionId,
       newPriceId,
-      currentInterval !== interval,
+      interval,
     );
   // Log only. Not a statement about credits — see the grant in changeOrgPlan.
   const billsMoreNow =
@@ -1451,7 +1513,11 @@ export async function previewPlanChange(
       orgId,
       targetPlanSlug,
       interval,
-      currentInterval,
+      // The interval of the subscription the preview priced — the one the
+      // quote was actually computed against, not a separate reading of it.
+      previewedInterval: preview?.billingInterval ?? null,
+      // What the local column said, logged beside it so a row drifting from
+      // the provider is visible here rather than only in its consequences.
       recordedInterval: activeSub.billingInterval,
       previewedProrationCents: amountCents,
       previewedInvoiceTotalCents: preview?.totalCents ?? null,

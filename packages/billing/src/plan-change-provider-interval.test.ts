@@ -16,9 +16,14 @@
  *     downgrade, `none` is selected and the confirmation quotes $0 — while
  *     Stripe resets the billing-cycle anchor and invoices the new month.
  *
- *     The provider knows: `getSubscription` returns `billingInterval` off the
- *     live subscription's price. The already-applied guard had begun asking it
- *     for the price and throwing that field away (#3157, PR #3171 review).
+ *     The provider knows. The first fix for this had the caller issue its own
+ *     `getSubscription` and hand the comparison down as a boolean — which
+ *     traded a stale column for a SECOND provider read of the same
+ *     subscription, with nothing holding it and the preview to one
+ *     observation. The interval now comes back ON the preview, off the
+ *     retrieval that priced it, and the caller passes only the interval it is
+ *     asking for. See the last describe in this file for what the two-read
+ *     form cost (#3157, PR #3171 review, r4042249142).
  *
  *  2. THE AMOUNT. `invoice.total` is the invoice; `invoice.amount_due` is what
  *     Stripe will collect. A customer carrying a credit balance (a refund, an
@@ -274,17 +279,25 @@ describe("a plan change whose local interval column is stale (#3157, PR #3171 re
     expect(prorationBehaviorSent()).not.toBe("none");
   });
 
-  it("asks the provider for the interval rather than trusting the synced column", async () => {
+  it("takes the interval off the subscription the preview priced, not off the synced column", async () => {
     await previewPlanChange("org-abc", "build-v2", "month");
 
     // The mechanism, asserted directly. Without this, a quote that came out
-    // right for some other reason would pass above. The expand is what
-    // `getSubscription` sends and the adapter's own preview does not, so this
-    // pins the subscription READ rather than any retrieve at all.
+    // right for some other reason would pass above.
+    //
+    // It used to be asserted as "`getSubscription` was called" — the expanded
+    // retrieve that the adapter's own preview does not send. That pinned the
+    // wrong mechanism: a SECOND read of the subscription is precisely what
+    // this path must not take, because it and the preview can describe
+    // different subscriptions (r4042249142). So what is pinned now is that
+    // the subscription was retrieved AT ALL — by the preview — and that the
+    // annual interval it reports is what the quote was decided on, while the
+    // local column saying `month` was not.
     expect(stripeMethods.subscriptions.retrieve).toHaveBeenCalledWith(
       "sub_active_001",
-      { expand: ["items.data.price.product"] },
     );
+    // `createPreview` is the call the decision is actually made from.
+    expect(stripeMethods.invoices.createPreview).toHaveBeenCalled();
   });
 });
 
@@ -376,13 +389,38 @@ describe("a transient failure of the provider-state read (#3157, PR #3171 review
     );
   });
 
-  it("refuses to quote from a subscription it could not confirm", async () => {
-    // Falling back returned the stale row — month, on the monthly price —
-    // and the preview that followed succeeded, so the customer was quoted a
-    // same-interval change against a subscription that is on annual.
+  it("quotes correctly from the preview when only the extra read fails, because it no longer takes one", async () => {
+    // This used to assert a REFUSAL. The quote path issued its own expanded
+    // `getSubscription` purely to learn the interval, so failing that one
+    // call left it with nothing but the stale row — month, on the monthly
+    // price — while the preview that followed succeeded against an annual
+    // subscription. Refusing was the right answer to a question it should
+    // never have been asking.
+    //
+    // It no longer asks: the interval arrives on the preview, off the same
+    // retrieval that priced it (r4042249142). So a transient failure of a
+    // call this path does not make cannot affect it, and the correct quote
+    // is the one that now comes out — the anchor-reset invoice, from the
+    // annual subscription the preview really was computed against.
+    const quote = await previewPlanChange("org-abc", "build-v2", "month");
+
+    expect(quote.isCharge).toBe(true);
+    expect(quote.amountCents).toBe(COLLECTIBLE_CENTS);
+    expect(quote.amountCents).not.toBe(0);
+  });
+
+  it("still refuses to quote when the PREVIEW itself cannot be taken", async () => {
+    // The refusal that matters is preserved, and now keyed on the thing the
+    // decision is actually made from. A provider that cannot price the change
+    // yields no number, and a quote of $0 would promise the customer that
+    // `always_invoice` will charge them nothing.
+    stripeMethods.invoices.createPreview.mockRejectedValue(
+      new Error("503 from Stripe"),
+    );
+
     await expect(
       previewPlanChange("org-abc", "build-v2", "month"),
-    ).rejects.toMatchObject({ code: "SUBSCRIPTION_STATE_UNAVAILABLE" });
+    ).rejects.toMatchObject({ code: "PLAN_CHANGE_PREVIEW_UNAVAILABLE" });
   });
 
   it("does not mutate a subscription whose state it could not confirm", async () => {
@@ -411,4 +449,183 @@ describe("a transient failure of the provider-state read (#3157, PR #3171 review
 // Leave the singleton as this file found it.
 afterEach(() => {
   resetBillingProvider();
+});
+
+// ---------------------------------------------------------------------------
+// The finding this file was extended for: TWO provider reads of ONE
+// subscription inside one logical operation (#3157, PR #3171 review,
+// r4042249142).
+//
+// Every describe above puts the provider in ONE state and holds it there, so
+// the interval read separately and the interval the preview was computed
+// against always agreed. They agreed because nothing moved, not because
+// anything held them together — which is exactly the thing a fixture can hide.
+//
+// Here they DISAGREE, because a concurrent plan update lands between them.
+// `subscriptions.retrieve` is keyed on `expand`: the expanded call is
+// `getSubscription`, the bare one is the adapter's own retrieval inside
+// `previewPlanChange`. The expanded call answers MONTHLY; the update lands;
+// every call after it — including the preview's — answers ANNUAL.
+//
+// THE FIXTURE CAN REPRESENT THE INTERLEAVING, and that is load-bearing. The
+// two reads are distinguishable (only `getSubscription` passes `expand`) and
+// the stub is an implementation rather than a fixed value, so "the
+// subscription changed between the two reads" is a state this mock can be in.
+// A stub that answered one interval to every caller could not express it, and
+// a test built on one would pass against the defect.
+//
+// What it costs when nothing holds them together: the request asks for
+// monthly, the separately-read interval says monthly, so the change scores as
+// same-interval; the preview — computed on the ANNUAL subscription — nets
+// negative, because it is the credit for the unused year; a negative net
+// reads as a downgrade, which ships `none` and quotes $0. Stripe resets the
+// billing-cycle anchor on an interval change regardless of the proration flag
+// and invoices the new month immediately. The customer is told $0 and charged
+// a month.
+// ---------------------------------------------------------------------------
+
+/**
+ * A plan update landing between the two reads, moving the subscription from a
+ * MONTHLY price to an ANNUAL one.
+ *
+ * Neither price is the one this request targets (`price_build_m`), so the
+ * already-applied guard in `changeOrgPlan` does not fire and the swap path is
+ * the one under test. That matters: the guard firing would make these tests
+ * pass by never reaching the decision they are about.
+ *
+ * @param before what the separately-issued `getSubscription` sees — the
+ *   subscription BEFORE the concurrent update. It carries `expand`; nothing
+ *   else does, which is what makes the two reads distinguishable here.
+ * @param after what every later read sees, including the one the preview is
+ *   computed from — the subscription AFTER it.
+ */
+function stubConcurrentIntervalUpdate(
+  before: { interval: "month" | "year"; priceId: string },
+  after: { interval: "month" | "year"; priceId: string },
+): void {
+  stripeMethods.subscriptions.retrieve.mockImplementation(
+    async (_id: string, opts?: { expand?: string[] }) => {
+      const seen = opts?.expand ? before : after;
+      return {
+        id: "sub_active_001",
+        customer: "cus_001",
+        metadata: { org_id: "org-abc" },
+        status: "active",
+        items: {
+          data: [
+            {
+              id: "si_001",
+              quantity: 1,
+              price: {
+                id: seen.priceId,
+                recurring: { interval: seen.interval },
+                product: "prod_build",
+              },
+            },
+          ],
+        },
+        current_period_start: 1_756_684_800,
+        current_period_end: 1_788_220_800,
+        cancel_at_period_end: false,
+        canceled_at: null,
+        trial_end: null,
+      };
+    },
+  );
+}
+
+describe("a plan update landing between two reads of one subscription (#3157, PR #3171 review, r4042249142)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setBillingProvider(new StripeProvider());
+    // The first read sees a MONTHLY price. The update to annual lands.
+    // Everything after it — the preview included — sees ANNUAL.
+    stubConcurrentIntervalUpdate(
+      { interval: "month", priceId: "price_scale_m" },
+      { interval: "year", priceId: "price_build_y" },
+    );
+    stubAnchorResetPreview();
+    stubStaleMonthlyRow();
+    stubPlanLookups();
+    stripeMethods.customers.retrieve.mockResolvedValue({
+      id: "cus_001",
+      deleted: false,
+      invoice_settings: { default_payment_method: null },
+    });
+    stripeMethods.subscriptions.update.mockResolvedValue(undefined);
+  });
+
+  it("the fixture really does put the two reads in disagreement", async () => {
+    // Guard the test itself. Every assertion below is about a disagreement,
+    // and a fixture that quietly stopped producing one would make all of them
+    // pass for the wrong reason — which is how three findings on #3238 and
+    // three on #3187 stayed hidden.
+    const expanded = (await stripeMethods.subscriptions.retrieve(
+      "sub_active_001",
+      { expand: ["items.data.price.product"] },
+    )) as {
+      items: { data: Array<{ price: { recurring: { interval: string } } }> };
+    };
+    const bare = (await stripeMethods.subscriptions.retrieve(
+      "sub_active_001",
+    )) as {
+      items: { data: Array<{ price: { recurring: { interval: string } } }> };
+    };
+
+    expect(expanded.items.data[0]?.price.recurring.interval).toBe("month");
+    expect(bare.items.data[0]?.price.recurring.interval).toBe("year");
+  });
+
+  it("quotes the anchor-reset invoice, not the $0 the stale read would have produced", async () => {
+    const quote = await previewPlanChange("org-abc", "build-v2", "month");
+
+    // The subscription the preview PRICED is annual, so moving to monthly is
+    // an interval change and owes the invoice the anchor reset raises.
+    expect(quote.isCharge).toBe(true);
+    expect(quote.amountCents).toBe(COLLECTIBLE_CENTS);
+    // The defect's output, named so a regression cannot pass as a pass.
+    expect(quote.amountCents).not.toBe(0);
+    // And not the credit either — the sign of the proration is not the answer.
+    expect(quote.amountCents).not.toBe(UNUSED_ANNUAL_CREDIT_CENTS);
+  });
+
+  it("bills the swap under always_invoice, not the 'none' that drops the month", async () => {
+    await changeOrgPlan("org-abc", "build-v2", "month");
+
+    expect(stripeMethods.subscriptions.update).toHaveBeenCalledTimes(1);
+    expect(prorationBehaviorSent()).toBe("always_invoice");
+    expect(prorationBehaviorSent()).not.toBe("none");
+  });
+
+  it("the quote takes no reading of the subscription of its own", async () => {
+    // The mechanism, not just its output. A quote that came out right while
+    // still holding a second read would regress the moment the two diverged
+    // again, so what is pinned is that there is nothing to diverge FROM: the
+    // only retrievals the quote path makes are the adapter's own, and none of
+    // them carries the `expand` that `getSubscription` alone passes.
+    await previewPlanChange("org-abc", "build-v2", "month");
+
+    const expandedReads =
+      stripeMethods.subscriptions.retrieve.mock.calls.filter(
+        (call) => (call[1] as { expand?: string[] } | undefined)?.expand,
+      );
+    expect(expandedReads).toHaveLength(0);
+  });
+
+  it("the swap's own second read decides nothing about the interval", async () => {
+    // changeOrgPlan DOES still read the subscription separately — for the
+    // active price id, to recognise a swap already applied. That read is
+    // consumed before the preview is taken and feeds one decision, so it is
+    // not the straddle this finding is about. Pin that it cannot reach the
+    // interval: it reports monthly, and the change is still billed as the
+    // interval change the preview says it is.
+    await changeOrgPlan("org-abc", "build-v2", "month");
+
+    const expandedReads =
+      stripeMethods.subscriptions.retrieve.mock.calls.filter(
+        (call) => (call[1] as { expand?: string[] } | undefined)?.expand,
+      );
+    expect(expandedReads.length).toBeGreaterThan(0);
+    expect(prorationBehaviorSent()).toBe("always_invoice");
+  });
 });
