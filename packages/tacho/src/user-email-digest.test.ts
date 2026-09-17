@@ -1,20 +1,25 @@
 /**
- * The address of the person behind a session must never reach a store (#3072).
+ * The collector half of #3072: the address of the person behind a session must
+ * not cross the wire, and no column a producer can write may carry it.
  *
- * `tacho_events` had one readable personal identifier, `anthropic_user_email`,
- * while every sibling identity column on the same table was a digest — and
- * ClickHouse has no row policy, so an ordinary analytics query could read a
- * real address back out. These tests hold the fix in place from both ends: the
- * collector digests on the host, and nothing downstream carries a column or an
- * envelope member that could hold the address again.
+ * The other half — making the STORED value one-way for whoever can read
+ * `tacho_events` — is keying, and it lives on the control plane:
+ * `packages/handlers/src/lib/tacho-user-email-digest.test.ts`. These tests are
+ * deliberately careful not to claim the pre-image computed here is safe to
+ * store on its own.
  */
 import { describe, expect, it } from "vitest";
 import { normalizeOtlp } from "./claude-code/otel";
 import { SessionRecorder } from "./claude-code/recorder";
-import { ENVELOPE_COLUMNS, TACHO_EVENT_COLUMNS, flattenEvent } from "./columns";
+import {
+  ENVELOPE_COLUMNS,
+  SERVER_STAMPED_COLUMNS,
+  TACHO_EVENT_COLUMNS,
+  flattenEvent,
+} from "./columns";
 import { digestBytes, digestUserEmail, isSha256Digest } from "./digest";
-import { anthropicSchema } from "./envelope";
-import { TEST_HOST, TEST_SESSION_ID } from "./test-helpers";
+import { anthropicSchema, parseTachoEvent } from "./envelope";
+import { TEST_HOST, TEST_SESSION_ID, minimalSession } from "./test-helpers";
 
 const ADDRESS = "Ada.Lovelace@example.com";
 const NORMALIZED = "ada.lovelace@example.com";
@@ -26,6 +31,18 @@ function strings(value: unknown, out: string[] = []): string[] {
   else if (value !== null && typeof value === "object")
     for (const member of Object.values(value)) strings(member, out);
   return out;
+}
+
+/** A valid event carrying the anthropic block a test wants to exercise. */
+function eventWithAnthropic(anthropic: Record<string, string>) {
+  const [genesis] = minimalSession();
+  const rest = { ...(genesis as unknown as Record<string, unknown>) };
+  delete rest["hash"];
+  return parseTachoEvent({
+    ...rest,
+    anthropic,
+    hash: `sha256:${"1".repeat(64)}`,
+  });
 }
 
 function otlpLog(attrs: Record<string, string>) {
@@ -54,16 +71,8 @@ function otlpLog(attrs: Record<string, string>) {
   };
 }
 
-describe("digestUserEmail", () => {
-  it("is domain-separated, so it is not a lookup away from the address", () => {
-    // An email address carries little enough entropy that a bare sha256 of one
-    // is reversible against any address list. If this ever equals the plain
-    // digest, the domain separator has been dropped.
-    expect(digestUserEmail(ADDRESS)).not.toBe(digestBytes(ADDRESS));
-    expect(digestUserEmail(ADDRESS)).not.toBe(digestBytes(NORMALIZED));
-  });
-
-  it("is the same value every time for the same person", () => {
+describe("digestUserEmail is a pre-image, not a stored value", () => {
+  it("reduces the same person to the same value", () => {
     const expected = digestUserEmail(NORMALIZED);
     expect(isSha256Digest(expected)).toBe(true);
     expect(digestUserEmail(ADDRESS)).toBe(expected);
@@ -84,36 +93,51 @@ describe("digestUserEmail", () => {
     expect(digestUserEmail("   ")).toBeUndefined();
   });
 
-  it("matches the vector the store migrations reproduce in SQL", () => {
-    // packages/telemetry/src/migrations/0028_tacho_events_email_digest.sql and
-    // packages/database/atlas/migrations/*_tacho_sessions_email_digest.sql
-    // backfill already-written rows with their own SQL SHA-256 over the same
-    // domain string, NUL byte and normalized address. A backfilled row has to
-    // join a newly written one, so this vector pins both sides: change the
-    // domain, the normalization or the encoding here and this fails.
-    expect(digestUserEmail(ADDRESS)).toBe(
-      digestBytes(`oxagen:tacho:user_email:v1\0${NORMALIZED}`),
+  it("is reproducible by anyone who guesses the address, which is why the stored value is keyed", () => {
+    // The finding on the first draft of #3072, pinned so the claim cannot
+    // quietly come back: the domain separator is public, so a guesser
+    // reproduces this exactly. Nothing may store this value as though it were
+    // one-way — see the server-stamped column below.
+    const whatAGuesserComputes = digestBytes(
+      `oxagen:tacho:user_email:v1\0${NORMALIZED}`,
     );
+    expect(digestUserEmail(ADDRESS)).toBe(whatAGuesserComputes);
   });
 });
 
-describe("the wire carries no address", () => {
-  it("rejects an envelope that still names the plaintext member", () => {
-    expect(() => anthropicSchema.parse({ user_email: ADDRESS })).toThrowError();
+describe("the wire", () => {
+  it("still accepts the legacy plaintext member, so installed collectors keep reporting", () => {
+    // Removing `user_email` from this strict schema rejected the WHOLE ingest
+    // batch for any host that had not upgraded, and left sealed WAL entries
+    // permanently unsendable. The wire version is still tacho/1.0, so a host
+    // has no signal to upgrade on.
+    expect(anthropicSchema.parse({ user_email: ADDRESS })).toEqual({
+      user_email: ADDRESS,
+    });
   });
 
-  it("accepts only a sha256 digest in its place", () => {
+  it("accepts the host-side pre-image a current collector sends", () => {
+    const digest = digestUserEmail(ADDRESS);
+    expect(anthropicSchema.parse({ user_email_digest: digest })).toEqual({
+      user_email_digest: digest,
+    });
+  });
+
+  it("still refuses a pre-image that is not a sha256 digest", () => {
     expect(() =>
       anthropicSchema.parse({ user_email_digest: ADDRESS }),
     ).toThrowError();
+  });
+
+  it("parses a whole legacy event carrying the address", () => {
     expect(
-      anthropicSchema.parse({ user_email_digest: digestUserEmail(ADDRESS) }),
-    ).toEqual({ user_email_digest: digestUserEmail(ADDRESS) });
+      eventWithAnthropic({ user_email: ADDRESS }).anthropic?.user_email,
+    ).toBe(ADDRESS);
   });
 });
 
-describe("the collector digests on the host", () => {
-  it("turns OTel user.email into a digest and keeps the address out of the event", () => {
+describe("the collector hashes on the host", () => {
+  it("turns OTel user.email into a pre-image and keeps the address out of the event", () => {
     const recorder = new SessionRecorder({
       context: {
         agent: {
@@ -139,6 +163,7 @@ describe("the collector digests on the host", () => {
     expect(events.length).toBeGreaterThan(0);
     const event = events[events.length - 1];
     expect(event?.anthropic?.user_email_digest).toBe(digestUserEmail(ADDRESS));
+    expect(event?.anthropic?.user_email).toBeUndefined();
     for (const text of strings(event)) {
       expect(text.toLowerCase()).not.toContain(NORMALIZED);
       expect(text).not.toContain("@example.com");
@@ -163,44 +188,33 @@ describe("the collector digests on the host", () => {
 });
 
 describe("the tacho_events column set", () => {
+  it("lets no producer write the person column", () => {
+    // Server-stamped, like org_id: the stored value is keyed with a secret the
+    // producer does not hold, so a producer-supplied one would be either
+    // forged or reversible.
+    expect(SERVER_STAMPED_COLUMNS).toContain("anthropic_user_email_digest");
+    expect(ENVELOPE_COLUMNS).not.toContain("anthropic_user_email_digest");
+    expect(TACHO_EVENT_COLUMNS).not.toContain("anthropic_user_email_digest");
+  });
+
   it("has no column that could hold a readable address", () => {
     expect(ENVELOPE_COLUMNS).not.toContain("anthropic_user_email");
     expect(TACHO_EVENT_COLUMNS).not.toContain("anthropic_user_email");
-    expect(ENVELOPE_COLUMNS).toContain("anthropic_user_email_digest");
     // Any future `*_email` column would be this defect again under a new name.
     for (const column of TACHO_EVENT_COLUMNS) {
       expect(column).not.toMatch(/email$/);
     }
   });
 
-  it("flattens the digest, not the address", () => {
-    const digest = digestUserEmail(ADDRESS);
-    const row = flattenEvent({
-      v: "tacho/1.0",
-      event_id: "01K0000000000000000000000",
-      event_id_idem: `evt_${"0".repeat(64)}`,
-      session_id: TEST_SESSION_ID,
-      session_uuid: "340ed354-6344-4727-9f8b-1e40b5e12aa7",
-      root_session_uuid: "340ed354-6344-4727-9f8b-1e40b5e12aa7",
-      seq: 0,
-      ts: "2026-09-08T10:06:03.000Z",
-      fidelity: "sdk",
-      source: "otel_log",
-      kind: "model_call",
-      agent: {
-        agent_key: "acme.core.cc-laptop",
-        fleet_id: "wrk_test",
-        runtime: "claude-code",
-        harness: "claude-code",
-        wrapper_version: "2.1.1",
-        host_enrollment_id: TEST_HOST,
-      },
-      anthropic: { user_email_digest: digest },
-      body: {},
-      prev_hash: `sha256:${"0".repeat(64)}`,
-      hash: `sha256:${"1".repeat(64)}`,
-    } as never);
-    expect(row["anthropic_user_email_digest"]).toBe(digest);
+  it("flattens neither the address nor the pre-image", () => {
+    const row = flattenEvent(
+      eventWithAnthropic({
+        user_email: ADDRESS,
+        user_email_digest: digestUserEmail(ADDRESS) as string,
+      }),
+    );
+    expect(row["anthropic_user_email"]).toBeUndefined();
+    expect(row["anthropic_user_email_digest"]).toBeUndefined();
     for (const text of strings(row)) {
       expect(text.toLowerCase()).not.toContain(NORMALIZED);
     }

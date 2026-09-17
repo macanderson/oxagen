@@ -718,14 +718,30 @@ export const hostSchema = z
 
 /**
  * What the harness reports about the Anthropic account behind the session.
- * The address itself is never carried: the collector digests it on the host
- * (`digestUserEmail`) and only `user_email_digest` crosses the wire, so no
- * store on the control plane ever holds a readable address (#3072).
+ *
+ * Two members can carry the person's address, and NEITHER is ever stored
+ * (#3072). The control plane stamps `anthropic_user_email_digest` from a key
+ * only it holds and drops both of these on the way in; see
+ * `packages/handlers/src/lib/tacho-user-email-digest.ts`.
+ *
+ * `user_email_digest` is what a collector from this release on sends: the
+ * address is hashed on the host, so it never crosses the wire.
+ *
+ * `user_email` is the legacy member, still accepted because removing it would
+ * be a silent, uncoordinated break. The wire version is still `tacho/1.0`, so
+ * an installed collector has no signal to upgrade on, and this schema is
+ * `.strict()` inside a request validator that rejects the WHOLE batch — one
+ * event from an un-upgraded host would have taken its batch-mates down with
+ * it, and a sealed WAL entry already carrying the member could never be sent
+ * at all. Both members reduce to the same stored digest, so a fleet part-way
+ * through an upgrade produces one value per person, not two.
  */
 export const anthropicSchema = z
   .object({
     user_id_hash: short.optional(),
     user_email_digest: digest.optional(),
+    /** Legacy; accepted, never stored. See the note above. */
+    user_email: short.optional(),
     account_uuid: short.optional(),
     account_id: short.optional(),
     org_uuid: short.optional(),

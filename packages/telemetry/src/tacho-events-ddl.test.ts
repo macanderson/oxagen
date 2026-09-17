@@ -25,11 +25,15 @@ describe("tacho_events DDL", () => {
     const names = tachoEventsColumns().map((column) => column.name);
     expect(new Set(names).size).toBe(names.length);
     expect(names.slice(0, 2)).toEqual(["org_id", "workspace_id"]);
-    expect(names.slice(-2)).toEqual(["received_at", "chain_verified"]);
+    expect(names.slice(-3)).toEqual([
+      "received_at",
+      "chain_verified",
+      "anthropic_user_email_digest",
+    ]);
     for (const column of ENVELOPE_COLUMNS) expect(names).toContain(column);
     for (const member of BODY_MEMBER_NAMES) expect(names).toContain(member);
     expect(names.length).toBe(
-      ENVELOPE_COLUMNS.length + BODY_MEMBER_NAMES.length + 4,
+      ENVELOPE_COLUMNS.length + BODY_MEMBER_NAMES.length + 5,
     );
   });
 

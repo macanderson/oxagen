@@ -8,8 +8,13 @@ import {
   sealEvent,
   sessionUuid,
 } from "@oxagen/tacho";
+import { tachoEventRow } from "@oxagen/telemetry";
+import {
+  resetUserEmailDigestWarningForTests,
+  USER_EMAIL_DIGEST_KEY_ENV,
+} from "./lib/tacho-user-email-digest";
 import { schema } from "@oxagen/database";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   insertTachoEvents: vi.fn(),
@@ -612,52 +617,159 @@ describe("ingest_tacho_events", () => {
     });
   });
 
-  it("stores the digest of the person's address and never the address", () => {
-    // tacho_events carried anthropic_user_email in the clear while every
-    // sibling identity column was a digest (#3072). The collector digests on
-    // the host now, so the address reaches no store: this asserts the session
-    // row holds the digest, and that no value written anywhere on the row
-    // looks like an address.
-    const digest = digestUserEmail("Ada.Lovelace@example.com");
-    const db = fakeDb();
-    wire(db);
-    let cursor: ChainCursor = GENESIS_CURSOR;
-    const events: TachoEvent[] = [];
-    for (const draft of [
-      unsealed(
-        "agent_start",
-        { session_start_source: "startup" },
-        "hook",
-        CLAUDE_CODE,
-        { anthropic: { user_email_digest: digest } },
-      ),
-      unsealed("turn_start", { prompt_length: 3 }),
-    ]) {
-      const sealed = sealEvent(draft, cursor);
-      cursor = sealed.next;
-      events.push(sealed.event);
+  describe("the person behind the session (#3072)", () => {
+    const ADDRESS = "Ada.Lovelace@example.com";
+
+    function batch(
+      anthropic: Record<string, string> | undefined,
+    ): TachoEvent[] {
+      let cursor: ChainCursor = GENESIS_CURSOR;
+      const out: TachoEvent[] = [];
+      for (const draft of [
+        unsealed(
+          "agent_start",
+          { session_start_source: "startup" },
+          "hook",
+          CLAUDE_CODE,
+          anthropic ? { anthropic } : {},
+        ),
+        unsealed("turn_start", { prompt_length: 3 }),
+        unsealed("turn_end", {}),
+      ]) {
+        const sealed = sealEvent(draft, cursor);
+        cursor = sealed.next;
+        out.push(sealed.event);
+      }
+      return out;
     }
-    return tachoEventsIngestHandler(
-      {
-        schema: "tacho.batch.v1",
-        host_enrollment_id: HOST_PUBLIC,
-        events,
-        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
-      },
-      CONTEXT,
-    ).then(() => {
+
+    function run(events: TachoEvent[]) {
+      return tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events,
+          daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+        },
+        CONTEXT,
+      );
+    }
+
+    beforeEach(() => {
+      resetUserEmailDigestWarningForTests();
+      vi.stubEnv(USER_EMAIL_DIGEST_KEY_ENV, "test-user-email-digest-key");
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("accepts a legacy batch carrying the plaintext address and stores no address", async () => {
+      // An installed collector, or an upgraded one draining a WAL sealed
+      // before the change, still sends anthropic.user_email. Rejecting it took
+      // the WHOLE batch down and left those sealed entries unsendable.
+      const db = fakeDb();
+      wire(db);
+      const events = batch({ user_email: ADDRESS });
+
+      const output = await run(events);
+
+      expect(output.accepted).toBe(events.length);
+      expect(output.chain_breaks).toEqual([]);
+      // every batch-mate landed, not just the one carrying the member
+      expect(output.event_ids).toEqual(events.map((e) => e.event_id_idem));
+
       const row = db.sessions.get(SESSION) as Record<string, unknown>;
-      expect(row["anthropicUserEmailDigest"]).toBe(digest);
+      expect(row["anthropicUserEmailDigest"]).toMatch(
+        /^hmac-sha256:[0-9a-f]{64}$/,
+      );
       expect(row).not.toHaveProperty("anthropicUserEmail");
       for (const value of Object.values(row)) {
         if (typeof value === "string") expect(value).not.toContain("@");
       }
+    });
+
+    it("gives a legacy batch and a current one the same stored value", async () => {
+      const legacyDb = fakeDb();
+      wire(legacyDb);
+      await run(batch({ user_email: ADDRESS }));
+      const fromLegacy = (
+        legacyDb.sessions.get(SESSION) as Record<string, unknown>
+      )["anthropicUserEmailDigest"];
+
+      const currentDb = fakeDb();
+      wire(currentDb);
+      await run(
+        batch({ user_email_digest: digestUserEmail(ADDRESS) as string }),
+      );
+      const fromCurrent = (
+        currentDb.sessions.get(SESSION) as Record<string, unknown>
+      )["anthropicUserEmailDigest"];
+
+      expect(fromCurrent).toBe(fromLegacy);
+    });
+
+    it("hands ClickHouse the keyed value and never the pre-image or the address", async () => {
+      const db = fakeDb();
+      wire(db);
+      await run(batch({ user_email: ADDRESS }));
+
       const sent = mocks.insertTachoEvents.mock.calls[0]?.[0] as Array<{
         event: TachoEvent;
+        userEmailDigest?: string;
       }>;
+      // Stamped per event, from what that event carried: the genesis names the
+      // person, the rest of this batch names nobody.
+      const named = sent.filter(
+        (insert) => insert.event.anthropic !== undefined,
+      );
+      expect(named).toHaveLength(1);
       for (const insert of sent) {
-        expect(JSON.stringify(insert.event)).not.toContain("@example.com");
+        expect(insert.userEmailDigest).not.toBe(digestUserEmail(ADDRESS));
+        expect(insert.userEmailDigest ?? "").not.toContain("@");
       }
+      const keyed = named[0]?.userEmailDigest;
+      expect(keyed).toMatch(/^hmac-sha256:[0-9a-f]{64}$/);
+
+      // The row builder drops the envelope member and takes the column from
+      // the stamped value alone, so nothing downstream can put an address or a
+      // guessable pre-image into it.
+      const row = tachoEventRow(
+        {
+          event: named[0]!.event,
+          chainVerified: true,
+          userEmailDigest: keyed,
+        },
+        "2026-09-17T00:00:00.000Z",
+      );
+      expect(JSON.stringify(row)).not.toContain("@example.com");
+      expect(row["anthropic_user_email"]).toBeUndefined();
+      expect(row["anthropic_user_email_digest"]).toBe(keyed);
+
+      // ...and a producer that tries to write the column itself is ignored.
+      const forged = tachoEventRow(
+        {
+          event: {
+            ...named[0]!.event,
+            anthropic: {
+              ...named[0]!.event.anthropic,
+              user_email: ADDRESS,
+            },
+          } as TachoEvent,
+          chainVerified: true,
+          userEmailDigest: keyed,
+        },
+        "2026-09-17T00:00:00.000Z",
+      );
+      expect(JSON.stringify(forged)).not.toContain("@example.com");
+    });
+
+    it("records nothing for a session that named nobody", async () => {
+      const db = fakeDb();
+      wire(db);
+      await run(batch(undefined));
+      const row = db.sessions.get(SESSION) as Record<string, unknown>;
+      expect(row["anthropicUserEmailDigest"]).toBeNull();
     });
   });
 });

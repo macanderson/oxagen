@@ -25,7 +25,6 @@ export const ENVELOPE_COLUMNS = [
   "fleet_id",
   // anthropic observations (2.2)
   "anthropic_user_id_hash",
-  "anthropic_user_email_digest",
   "anthropic_account_uuid",
   "anthropic_account_id",
   "anthropic_org_uuid",
@@ -113,6 +112,11 @@ export const SERVER_STAMPED_COLUMNS = [
   "workspace_id",
   "received_at",
   "chain_verified",
+  // The person behind the session, keyed with a secret only the control plane
+  // holds (#3072). Stamped here for the same reason org_id is: the producer
+  // must not be able to choose it, and an unkeyed value is reversible by
+  // whoever can read the table. flattenEvent never emits it.
+  "anthropic_user_email_digest",
 ] as const;
 
 export type TachoEventRow = Record<string, unknown>;
@@ -149,7 +153,6 @@ export function flattenEvent(event: TachoEvent): TachoEventRow {
     fleet_id: event.agent.fleet_id,
 
     anthropic_user_id_hash: event.anthropic?.user_id_hash,
-    anthropic_user_email_digest: event.anthropic?.user_email_digest,
     anthropic_account_uuid: event.anthropic?.account_uuid,
     anthropic_account_id: event.anthropic?.account_id,
     anthropic_org_uuid: event.anthropic?.org_uuid,

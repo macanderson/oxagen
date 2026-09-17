@@ -32,10 +32,13 @@ One session's flight-recorder index (`docs/specs/tacho/data-model.md` section 3)
 | `checkpointCount` | integer | |
 
 The session projection names the person behind the run as
-`anthropicUserEmailDigest`, a `sha256:…` value, never an address: the collector
-digests it on the host and no store holds a readable one (ADR-079,
-`docs/specs/tacho/data-model.md` section 2.2). Two sessions with the same digest
-are the same person; the digest cannot be turned back into an address.
+`anthropicUserEmailDigest`, an `hmac-sha256:…` value, never an address. The
+control plane stamps it with a key no host, tenant or store reader holds, so
+two sessions with the same value are the same person and nobody reading the
+record can turn it back into an address by guessing one — which a plain hash of
+something as low-entropy as an address would not have prevented (ADR-079,
+`docs/specs/tacho/data-model.md` section 2.2). It is empty for a session that
+named nobody, and for one recorded while the deployment held no key.
 
 ## Honesty
 

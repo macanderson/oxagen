@@ -353,6 +353,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -1051,6 +1055,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -1873,6 +1881,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -2500,6 +2512,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -3036,6 +3052,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -3736,6 +3756,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -4340,6 +4364,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -4946,6 +4974,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -5551,6 +5583,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -6155,6 +6191,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -6836,6 +6876,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -7536,6 +7580,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -8234,6 +8282,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -8934,6 +8986,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -9470,6 +9526,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -10170,6 +10230,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -10869,6 +10933,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -11359,6 +11427,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -11859,6 +11931,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -12774,6 +12850,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -13288,6 +13368,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -13801,6 +13885,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -14623,6 +14711,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -15280,6 +15372,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -15866,6 +15962,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -16451,6 +16551,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -17045,6 +17149,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -17732,6 +17840,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -18496,6 +18608,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -19086,6 +19202,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -19678,6 +19798,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -20268,6 +20392,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -20860,6 +20988,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -21451,6 +21583,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -22041,6 +22177,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -22863,6 +23003,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -23453,6 +23597,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -24135,6 +24283,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -24721,6 +24873,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -25306,6 +25462,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -25988,6 +26148,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -26669,6 +26833,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -27278,6 +27446,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",
@@ -27936,6 +28108,10 @@
                     "user_email_digest": {
                       "type": "string"
                     },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "account_uuid": {
                       "type": "string",
                       "maxLength": 512
@@ -28449,6 +28625,10 @@
                     },
                     "user_email_digest": {
                       "type": "string"
+                    },
+                    "user_email": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "account_uuid": {
                       "type": "string",

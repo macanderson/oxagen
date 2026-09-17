@@ -2,18 +2,13 @@
  * tacho.sessions must hold no readable email address (#3072).
  *
  * The column used to carry the real address of the person behind the session,
- * the only column on the table that identified a person in the clear. The
- * schema now carries a digest, and the migration that made the change also
- * backfilled the rows already written — in SQL, because the rows are already
- * in the database and no collector will rewrite them.
+ * the only column on the table that identified a person in the clear.
  *
- * That backfill has to produce byte-for-byte what `digestUserEmail` in
- * packages/tacho/src/digest.ts produces, or a backfilled session would never
- * join a newly written one for the same person. These read the committed
- * migration rather than a description of it, and pin the resulting digest to a
- * fixed vector, so drift on either side fails here.
+ * The digest is keyed on the control plane, so it cannot be computed in SQL
+ * without putting the key into a statement and its log. The migration
+ * therefore drops the addresses rather than re-encoding them. These read the
+ * committed migration rather than a description of it.
  */
-import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,13 +34,6 @@ function migrationsNewestFirst(): { file: string; sql: string }[] {
 const DIGEST_MIGRATION = migrationsNewestFirst().find(({ sql }) =>
   sql.includes('"anthropic_user_email_digest"'),
 );
-
-/**
- * The same vector packages/tacho/src/user-email-digest.test.ts pins for
- * `digestUserEmail("Ada.Lovelace@example.com")`.
- */
-const EXPECTED =
-  "sha256:74bfced307a6754c7a896feedc59f158892f454a80e08c05aa2f895f59628c08";
 
 describe("tacho.sessions holds a digest, not an address", () => {
   it("has no plaintext column in the Drizzle schema", () => {
@@ -83,35 +71,35 @@ describe("tacho.sessions holds a digest, not an address", () => {
     );
   });
 
-  it("backfills with the domain-separated digest, not a bare sha256", () => {
+  it("does not backfill, and references the old column only to drop it", () => {
     const sql = DIGEST_MIGRATION?.sql ?? "";
-    const domain =
-      /convert_to\('([^']+)',\s*'UTF8'\)\s*\n?\s*\|\|\s*'\\x00'::bytea/.exec(
-        sql,
-      )?.[1];
-    expect(domain).toBeDefined();
-    const address = "ada.lovelace@example.com";
-    const digested = `sha256:${createHash("sha256")
-      .update(
-        Buffer.concat([
-          Buffer.from(domain as string, "utf8"),
-          Buffer.from([0]),
-          Buffer.from(address, "utf8"),
-        ]),
+    // The stored digest is keyed with a secret the control plane holds
+    // (packages/handlers/src/lib/tacho-user-email-digest.ts). Postgres could
+    // call pgcrypto's hmac() here, but the key would travel inside the
+    // statement and land in the server log -- and ClickHouse, which must
+    // produce the identical value for the same person, has no HMAC function at
+    // all. So the rows already written lose the attribute: the addresses are
+    // gone rather than re-encoded.
+    const statements = sql
+      .split(";")
+      .map((part) =>
+        part
+          .split("\n")
+          .filter((line) => !line.trim().startsWith("--"))
+          .join("\n")
+          .trim(),
       )
-      .digest("hex")}`;
-    expect(digested).toBe(EXPECTED);
-    // A bare sha256 of a low-entropy address is reversible against any address
-    // list, which is the whole reason the domain prefix is there.
-    expect(digested).not.toBe(
-      `sha256:${createHash("sha256").update(address).digest("hex")}`,
-    );
-  });
-
-  it("normalizes case and surrounding space before digesting", () => {
-    const sql = DIGEST_MIGRATION?.sql ?? "";
-    expect(sql).toContain('lower(btrim("anthropic_user_email"))');
-    expect(sql).toContain("encode(");
-    expect(sql).toContain("'hex'");
+      .filter((part) => part.length > 0);
+    expect(statements).toHaveLength(2);
+    const executed = statements.join(";").toLowerCase();
+    expect(executed).not.toContain("update");
+    expect(executed).not.toContain("hmac");
+    expect(executed).not.toContain("sha256");
+    expect(executed).not.toContain("encode(");
+    for (const statement of statements) {
+      if (/"anthropic_user_email"/.test(statement)) {
+        expect(statement).toContain("DROP COLUMN");
+      }
+    }
   });
 });

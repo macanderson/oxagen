@@ -52,25 +52,38 @@ export function isSha256Digest(value: unknown): value is Sha256Digest {
 }
 
 /**
- * Domain separator for `digestUserEmail`. See that function for why it exists.
+ * Domain separator for `digestUserEmail`.
+ *
+ * It rules out a collision with a hash of the same address computed elsewhere,
+ * and with a generic precomputed table. It does NOT make the result one-way:
+ * this string is public, so anyone holding the digest and a candidate address
+ * can compute the same value and compare. See `digestUserEmail`.
  */
 const USER_EMAIL_DIGEST_DOMAIN = "oxagen:tacho:user_email:v1\0";
 
 /**
- * The stable, non-reversible stand-in for a person's email address.
+ * The PRE-IMAGE a collector sends in place of the address, so the address
+ * itself never crosses the wire (#3072).
  *
- * An email address carries very little entropy: a bare `sha256(address)` is a
- * lookup away from the address itself, because anyone holding a list of
- * candidate addresses can digest each one and compare. Prefixing a fixed
- * domain string — the same shape `authorizationFingerprintBucketKey` uses in
- * `apps/api/src/middleware/distributed-rate-limit.ts` — means a digest written
- * here matches nothing a generic rainbow table or a digest computed anywhere
- * else in the platform would produce, while staying stable for one address so
- * distinct-person counts and per-person joins still work.
+ * This is not the value any store holds, and on its own it is not a safe thing
+ * to store. An email address carries so little entropy that hashing one is not
+ * a one-way function in practice: whoever holds the digest can guess
+ * `someone@a-company-they-know.com`, hash it and compare. The domain prefix
+ * above does not change that, because it is published — in this file, in
+ * ADR-079, and in the migrations.
  *
- * The address is lowercased and trimmed first so the same person digests to
- * the same value whatever casing the harness reports. An empty or missing
- * address yields `undefined`, never a digest of the empty string.
+ * What the control plane stores is an HMAC of this value under a key no host,
+ * tenant or store reader holds
+ * (`packages/handlers/src/lib/tacho-user-email-digest.ts`). Keying is what
+ * makes it one-way for the reader the defect is about; hashing here is what
+ * keeps the address off the wire. The two do different jobs and the second
+ * does not substitute for the first.
+ *
+ * The address is lowercased and trimmed first so the same person reduces to
+ * the same value whatever casing the harness reports, and so a legacy event
+ * carrying the address reduces to what a current collector would have sent.
+ * An empty or missing address yields `undefined`, never a digest of the empty
+ * string.
  */
 export function digestUserEmail(
   email: string | undefined | null,

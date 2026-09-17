@@ -892,6 +892,24 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "",
   },
+  TACHO_USER_EMAIL_DIGEST_KEY: {
+    group: "Inngest",
+    description:
+      "HMAC key this deployment stamps tacho session and event rows with in place of the " +
+      "address of the person behind the session (#3072). The column has no ClickHouse row " +
+      "policy, and an email address has too little entropy for an unkeyed hash to resist a " +
+      "reader who guesses a candidate and hashes it, so only a key they cannot obtain makes " +
+      "the value one-way. Never leaves the API deployment: no host and no tenant receives it. " +
+      "Unset means sessions record no person digest; ingestion continues and no address is " +
+      "stored either way. Rotating it re-bases the digest, so rows either side of a rotation " +
+      "no longer join.",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "",
+  },
   TACHO_BUNDLE_SIGNING_PRIVATE_KEY: {
     group: "Inngest",
     description:
