@@ -67,6 +67,8 @@ const {
   TACHO_HOST_PURPOSE,
 } = await import("./machine-key-scope");
 
+const { CLI_SESSION_SCOPE_PURPOSE } = await import("@oxagen/auth/cli-auth");
+
 const ORG = "11111111-1111-4111-8111-111111111111";
 
 function keyWithScope(scope: unknown): void {

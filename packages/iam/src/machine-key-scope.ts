@@ -37,7 +37,15 @@
  *
  * It constrains machine keys only. A key with no `purpose` is what
  * `oxagen login` mints for a person, and it keeps acting for its creator
- * exactly as before.
+ * exactly as before. `cli_session_v1` (`CLI_SESSION_SCOPE_PURPOSE`) carries a
+ * purpose too, but it is not a machine credential: `resolveApiKey`
+ * (`packages/auth/src/resolvers/api-key.ts`) resolves it to the *person* who
+ * approved the `oxagen login` flow — re-checking their org/workspace
+ * membership on every call — and treats every other purpose as a bare
+ * machine key with `userId: null`. Before this exemption existed, every CLI
+ * session key fell into the "unrecognised purpose" branch below and was
+ * denied every capability, which broke `oxagen login`'s org/workspace picker
+ * outright.
  */
 import {
   hasColumn,
