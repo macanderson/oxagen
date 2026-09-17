@@ -18,6 +18,7 @@ import {
   createControlClient,
   type ControlClient,
   type FetchLike,
+  type RateLimitHint,
 } from "../host/control-client";
 import { type DeviceKey, loadOrCreateDeviceKey } from "../host/device-key";
 import {
@@ -239,12 +240,23 @@ export async function startDaemon(
   let commandPollNextAttemptAt = 0;
   let commandPollFailures = 0;
 
+  // The client is built before the Shipper but must deliver rate-limit hints
+  // to it, so the callback is indirected through a sink that the Shipper fills
+  // in below. A hint arriving before the Shipper exists is simply dropped —
+  // there is no backlog to pace before the first tick.
+  const rateLimitSink: { notify?: (hint: RateLimitHint) => void } = {};
+
   const client: ControlClient = createControlClient({
     endpoints: host.endpoints,
     apiKey: host.api_key,
     hostEnrollmentId: host.host_enrollment_id,
     ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),
     userAgent: `tachod/${host.wrapper_version}`,
+    now,
+    // Every counted response tells us what is left of this host's budget.
+    // Feeding it to the Shipper is what lets a backlog drain pace itself
+    // instead of spending the whole window in the first second of a tick.
+    onRateLimit: (hint) => rateLimitSink.notify?.(hint),
   });
 
   function persistState(): void {
@@ -371,6 +383,10 @@ export async function startDaemon(
     log,
     now,
   });
+
+  // The client can now deliver budget hints to the Shipper (see rateLimitSink
+  // above): every counted response reports what is left of this host's window.
+  rateLimitSink.notify = (hint) => shipper.noteRateLimit(hint);
 
   const detector = new Detector({
     registry,

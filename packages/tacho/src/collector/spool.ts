@@ -12,6 +12,7 @@ import {
   ControlError,
   ControlUnreachable,
   type ControlClient,
+  type RateLimitHint,
 } from "../host/control-client";
 import { ensureDir, writeSensitiveFileAtomic } from "../host/fs";
 import type { Wal } from "../host/wal";
@@ -42,11 +43,31 @@ export interface ShipResult {
   reachable: boolean;
 }
 
+/**
+ * The wait a 429 asked for, in milliseconds, or undefined when the server gave
+ * no usable hint. `Retry-After` wins; `X-RateLimit-Reset` is the fallback,
+ * since a fixed-window limiter is spent until the window turns over. Capped so
+ * a malformed or hostile header cannot park the daemon indefinitely, and
+ * floored at a second so a reset already in the past does not spin.
+ */
+const MAX_SERVER_REQUESTED_WAIT_MS = 5 * 60_000;
+function serverRequestedWaitMs(error: ControlError): number | undefined {
+  if (error.status !== 429) return undefined;
+  const hint = error.rateLimit;
+  if (!hint) return undefined;
+  const wait =
+    hint.retryAfterMs ??
+    (hint.resetAtMs === undefined ? undefined : hint.resetAtMs - Date.now());
+  if (wait === undefined || !Number.isFinite(wait)) return undefined;
+  return Math.min(Math.max(wait, 1_000), MAX_SERVER_REQUESTED_WAIT_MS);
+}
+
 export class Shipper {
   private readonly options: ShipperOptions;
   private backoffMs: number;
   private nextAttemptAt = 0;
   private consecutiveFailures = 0;
+  private lastRateLimit: RateLimitHint | undefined;
   lastSuccessAt: number | undefined;
   lastError: string | undefined;
 
@@ -76,11 +97,35 @@ export class Shipper {
   private fail(error: unknown): void {
     this.consecutiveFailures += 1;
     this.lastError = error instanceof Error ? error.message : String(error);
+    // When the server said how long to wait, wait exactly that long. Blind
+    // exponential backoff against a fixed-window limiter is strictly worse in
+    // both directions: it can idle 60s through a window that resets in five,
+    // and — because the API caches an exhausted bucket for the rest of the
+    // window — every batch of a backlog drain is refused, so the doubling runs
+    // to its cap on the first drain and stays there. `Retry-After` is the
+    // server telling us the one number that ends the wait.
+    const told =
+      error instanceof ControlError ? serverRequestedWaitMs(error) : undefined;
+    if (told !== undefined) {
+      this.nextAttemptAt = this.options.now() + told;
+      // Do NOT escalate backoffMs here. A 429 answered on time is the limiter
+      // working as designed, not a degrading control plane, and letting it
+      // ratchet the blind backoff would punish a host for obeying the ceiling.
+      return;
+    }
     this.nextAttemptAt = this.options.now() + this.backoffMs;
     this.backoffMs = Math.min(
       this.backoffMs * 2,
       this.options.maxBackoffMs ?? 60_000,
     );
+  }
+
+  /**
+   * Record what the control plane last said about our budget. Called for every
+   * response that carried the headers, success or failure.
+   */
+  noteRateLimit(hint: RateLimitHint): void {
+    this.lastRateLimit = hint;
   }
 
   private quarantine(event: TachoEvent, reason: string): void {
@@ -170,7 +215,29 @@ export class Shipper {
     }
   }
 
-  /** Ship until the WAL is drained or a failure stops the loop. */
+  /**
+   * Stop draining when the control plane has said this window is spent.
+   *
+   * `drain()` loops until the WAL is empty, which is right for a few queued
+   * events and wrong for a backlog: 45,000 spooled events are 226 batches, and
+   * firing them back to back spends a per-minute ceiling in seconds and earns
+   * a 429 for every batch after it. The server already reports what is left on
+   * every counted response, so pace against that number rather than
+   * rediscovering the ceiling by being refused. Nothing here hardcodes the
+   * ceiling: a server that sends no headers drains exactly as before.
+   */
+  private windowSpent(): boolean {
+    const hint = this.lastRateLimit;
+    if (!hint || hint.remaining === undefined || hint.remaining > 0)
+      return false;
+    if (hint.resetAtMs !== undefined) {
+      // Hold off until the window turns over, then let the loop resume.
+      this.nextAttemptAt = Math.max(this.nextAttemptAt, hint.resetAtMs);
+    }
+    return true;
+  }
+
+  /** Ship until the WAL is drained, the window is spent, or a failure stops the loop. */
   async drain(): Promise<ShipResult> {
     const total: ShipResult = {
       shipped: 0,
@@ -183,6 +250,7 @@ export class Shipper {
       total.quarantined += result.quarantined;
       total.reachable = result.reachable;
       if (result.shipped + result.quarantined === 0) return total;
+      if (this.windowSpent()) return total;
     }
   }
 }

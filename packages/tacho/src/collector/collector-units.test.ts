@@ -17,7 +17,7 @@ import { mergeTachoSettings } from "../host/settings-writer";
 import { scratchPaths, TEST_ENROLLMENT } from "../host/test-support";
 import { Wal } from "../host/wal";
 import { minimalSession } from "../test-helpers";
-import type { DeliveredCommand } from "../wire";
+import { TACHO_MAX_BATCH, type DeliveredCommand } from "../wire";
 import { Detector, listTranscripts } from "./detector";
 import {
   exportOtlpJson,
@@ -555,6 +555,131 @@ describe("shipper", () => {
     expect(wal.stats().unshipped).toBe(0);
     expect(controls.length).toBeGreaterThan(0);
     expect(logs.some((l) => l.includes("quarantined"))).toBe(true);
+  });
+
+  // ── Rate-limit awareness (throughput under many agents) ────────────────────
+  //
+  // One tachod carries every agent on a machine — 222 sessions on the machine
+  // that prompted this — so agent count becomes event volume, not request
+  // volume, and the batching absorbs it. What does not absorb is a backlog:
+  // 45,000 spooled events are 226 batches, and `drain()` used to fire them
+  // back to back, spend a per-minute ceiling in seconds, and then take a 429
+  // for every batch after it while blind exponential backoff climbed to its
+  // cap. The server already says what is left and how long to wait; these
+  // tests pin that the daemon listens.
+
+  it("waits exactly as long as a 429 asked, without escalating its own backoff", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    wal.append(minimalSession());
+    let clock = 0;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async () => {
+          throw new ControlError(429, "rate_limited", undefined, {
+            retryAfterMs: 3_000,
+          });
+        },
+      },
+      paths.quarantine,
+      () => clock,
+    );
+
+    await s.drain();
+    // minBackoffMs is 1s here; the server said 3s, and the server wins.
+    clock = 2_999;
+    expect(s.ready()).toBe(false);
+    clock = 3_000;
+    expect(s.ready()).toBe(true);
+
+    // A second 429 asking the same wait gets the same wait — obeying a ceiling
+    // is not a degrading control plane and must not ratchet the blind backoff.
+    await s.drain();
+    clock = 6_000;
+    expect(s.ready()).toBe(true);
+  });
+
+  it("falls back to X-RateLimit-Reset when a 429 carries no Retry-After", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    wal.append(minimalSession());
+    let clock = 0;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async () => {
+          throw new ControlError(429, "rate_limited", undefined, {
+            resetAtMs: Date.now() + 8_000,
+          });
+        },
+      },
+      paths.quarantine,
+      () => clock,
+    );
+    await s.drain();
+    // Past maxBackoffMs (4s), so blind exponential backoff would already be
+    // ready here. Only the server's reset hint keeps it waiting at 5s.
+    clock = 5_000;
+    expect(s.ready()).toBe(false);
+  });
+
+  it("stops draining when the server reports the window is spent", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    // Enough events to need more than one batch: TACHO_MAX_BATCH is 200, so an
+    // unpaced drain would issue several requests back to back. That burst is
+    // precisely what a real backlog does and what the pacing has to stop.
+    for (let i = 0; i < 60; i += 1) wal.append(minimalSession());
+    const before = wal.stats().unshipped;
+    expect(before).toBeGreaterThan(TACHO_MAX_BATCH);
+
+    let calls = 0;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          calls += 1;
+          // The first response says this was the last request in the window.
+          s.noteRateLimit({ remaining: 0, resetAtMs: 60_000 });
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+
+    // One request, not a loop: the drain stopped the moment the server said the
+    // window was spent, instead of firing every remaining batch into a 429.
+    // `shipped` must be non-zero — without it this assertion is also satisfied
+    // by the batch FAILING once, which is how it would pass against a Shipper
+    // that has no noteRateLimit at all.
+    const result = await s.drain();
+    expect(calls).toBe(1);
+    expect(result.shipped).toBeGreaterThan(0);
+    // Held until the window turns over, then free to continue.
+    expect(s.ready()).toBe(false);
+  });
+
+  it("drains without pacing when the server sends no rate-limit headers", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    for (let i = 0; i < 3; i += 1) wal.append(minimalSession());
+    let calls = 0;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          calls += 1;
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    await s.drain();
+    expect(calls).toBeGreaterThan(0);
+    expect(wal.stats().unshipped).toBe(0);
   });
 
   it("backs off exponentially on transport failure and retries after a 5xx", async () => {
