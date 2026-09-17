@@ -74,8 +74,11 @@ describe("the real ledger", () => {
 
   it("preserves the marketplace and the fourteen de-registered connectors", () => {
     const paths = preservedPaths(markdown)!;
+    // apps/app_deprecated, not apps/app: the Mission Control rebuild renamed
+    // the old app, and cfb55cf93 moved this ledger entry with it so the path
+    // still resolves in the tree. The rebuilt app ships no marketplace route.
     expect(paths).toContain(
-      "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace",
+      "apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/marketplace",
     );
     expect(paths).toContain(
       "packages/oxagen/src/contracts/plugin.org.install.ts",
