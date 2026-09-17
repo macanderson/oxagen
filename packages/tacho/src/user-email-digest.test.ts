@@ -2,11 +2,13 @@
  * The collector half of #3072: the address of the person behind a session must
  * not cross the wire, and no column a producer can write may carry it.
  *
- * The other half — making the STORED value one-way for whoever can read
- * `tacho_events` — is keying, and it lives on the control plane:
- * `packages/handlers/src/lib/tacho-user-email-digest.test.ts`. These tests are
- * deliberately careful not to claim the pre-image computed here is safe to
- * store on its own.
+ * There is no other half. An earlier round keyed the digest on the control
+ * plane so the stored value would be one-way for whoever can read
+ * `tacho_events`; that was withdrawn, because the server was computing a
+ * stable function of a producer-chosen input and handing the answer back to
+ * the principal who chose it. Nothing derived from the address is stored now,
+ * in either store (ADR-084), and these tests are deliberately careful not to
+ * claim the pre-image computed here would be safe to store on its own.
  */
 import { describe, expect, it } from "vitest";
 import { normalizeOtlp } from "./claude-code/otel";

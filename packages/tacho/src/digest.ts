@@ -72,12 +72,17 @@ const USER_EMAIL_DIGEST_DOMAIN = "oxagen:tacho:user_email:v1\0";
  * above does not change that, because it is published — in this file, in
  * ADR-084, and in the migrations.
  *
- * What the control plane stores is an HMAC of this value under a key no host,
- * tenant or store reader holds
- * (`packages/handlers/src/lib/tacho-user-email-digest.ts`). Keying is what
- * makes it one-way for the reader the defect is about; hashing here is what
- * keeps the address off the wire. The two do different jobs and the second
- * does not substitute for the first.
+ * The control plane stores NOTHING derived from this value, and there is no
+ * column for one in either store. An earlier round of #3072 keyed it with an
+ * HMAC held by the API deployment; that was withdrawn, because a host key may
+ * ingest and an org Member may read the session back, so the server was
+ * computing a stable function of a producer-chosen input and handing back the
+ * answer — a dictionary oracle the secrecy of the key does nothing about. The
+ * session's person is `initiating_principal_id` on `tacho.sessions`, an
+ * identity this deployment issues. ADR-084 has the reasoning.
+ *
+ * So the only job left for this function is keeping the address off the wire,
+ * which is a job worth doing and is the whole of what it does.
  *
  * The address is lowercased and trimmed first so the same person reduces to
  * the same value whatever casing the harness reports, and so a legacy event

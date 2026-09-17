@@ -740,8 +740,14 @@ export const hostSchema = z
  * `.strict()` inside a request validator that rejects the WHOLE batch — one
  * event from an un-upgraded host would have taken its batch-mates down with
  * it, and a sealed WAL entry already carrying the member could never be sent
- * at all. Both members reduce to the same stored digest, so a fleet part-way
- * through an upgrade produces one value per person, not two.
+ * at all. Neither is stored, so a fleet part-way through an upgrade has no
+ * skew to reconcile: both members are read and dropped.
+ *
+ * The rejection this avoids was at the REQUEST VALIDATOR, not the handler:
+ * `apps/api/src/routes/v1/tacho.events.ingest.ts:56` runs
+ * `tachoEventsIngest.input.parse(rawInput)` before `invoke()`, and that input
+ * is this schema, so a `.strict()` failure on one event fails the whole batch
+ * before any handler sees it.
  */
 export const anthropicSchema = z
   .object({

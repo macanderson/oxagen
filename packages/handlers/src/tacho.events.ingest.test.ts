@@ -61,6 +61,7 @@ vi.mock("./event-client", () => ({
 }));
 
 import { digestBytes } from "@oxagen/tacho";
+import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
 import { foldDelta, tachoEventsIngestHandler } from "./tacho.events.ingest";
 
 const HOST_PUBLIC = "tch_0123456789abcdefghjkmn";
@@ -1003,6 +1004,81 @@ describe("ingest_tacho_events", () => {
       expect(output.event_ids).toEqual(events.map((e) => e.event_id_idem));
     });
 
+    it("accepts a sealed legacy batch through the REAL request validator, not just the handler", async () => {
+      // The reviewed break was at the request validator, one layer above the
+      // handler: `apps/api/src/routes/v1/tacho.events.ingest.ts:56` runs
+      // `tachoEventsIngest.input.parse(rawInput)` BEFORE `invoke()`, and that
+      // input is `anthropicSchema`, which is `.strict()`. A test that calls
+      // `tachoEventsIngestHandler` directly passes on exactly the
+      // implementation the finding describes, because the batch would already
+      // have been rejected before the handler ran. So parse first, with the
+      // contract's own schema, and only hand the PARSED value on.
+      const events = batch({ user_email: ADDRESS });
+      const submitted = {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events,
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      };
+
+      const parsed = tachoEventsIngest.input.safeParse(submitted);
+      expect(parsed.error?.issues ?? []).toEqual([]);
+      if (!parsed.success) throw new Error("unreachable");
+
+      // The member survives validation rather than being stripped. It has to:
+      // the seal covers every member, so a stripped one breaks the chain for a
+      // WAL entry sealed before this change.
+      const first = parsed.data.events[0] as TachoEvent;
+      expect(first.anthropic?.user_email).toBe(ADDRESS);
+
+      mocks.insertTachoEvents.mockClear();
+      const db = fakeDb();
+      wire(db);
+      const output = await tachoEventsIngestHandler(parsed.data, CONTEXT);
+
+      expect(output.accepted).toBe(events.length);
+      expect(output.chain_breaks).toEqual([]);
+
+      // accepted, and still nothing about the address persisted
+      const sent = (mocks.insertTachoEvents.mock.calls[0]?.[0] ?? []) as Array<{
+        event: TachoEvent;
+        [k: string]: unknown;
+      }>;
+      const written = JSON.stringify({
+        session: literals(db.sessions.get(SESSION) as Record<string, unknown>),
+        clickhouse: sent.map(({ event: _event, ...stamped }) => stamped),
+      });
+      expect(written).not.toContain("@example.com");
+      expect(written.toLowerCase()).not.toContain("email");
+    });
+
+    it("still rejects an unknown member, so acceptance is not a loosened schema", async () => {
+      // Guards the test above. If `anthropicSchema` had been changed from
+      // `.strict()` to passthrough, the legacy batch would also be accepted —
+      // and every unvetted member the harness invents would be accepted with
+      // it. Acceptance of `user_email` has to be a named member, not an
+      // absence of checking.
+      // `sealEvent` parses too, so the member is injected into the already
+      // sealed event rather than passed to `batch` — which is the shape a
+      // hostile or buggy host actually submits.
+      const events = batch({ user_email: ADDRESS }).map((event, i) =>
+        i === 0
+          ? {
+              ...event,
+              anthropic: { ...event.anthropic, invented_member: "x" },
+            }
+          : event,
+      );
+      const parsed = tachoEventsIngest.input.safeParse({
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events,
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      });
+      expect(parsed.success).toBe(false);
+      expect(JSON.stringify(parsed.error?.issues)).toContain("invented_member");
+    });
+
     it("names the session's person with an identity this deployment issues", async () => {
       // What replaces the digest: the row already carries principals the
       // control plane minted, which a producer cannot choose and which need no
@@ -1015,7 +1091,7 @@ describe("ingest_tacho_events", () => {
 
     it("queries no column this PR adds, so a deploy before its migration is safe", async () => {
       // #3186: deploy-node ships on merge with no migration dependency
-      // (pipeline.yml:763) while the Postgres and ClickHouse migrations are
+      // (pipeline.yml:802-806) while the Postgres and ClickHouse migrations are
       // dispatched by hand. Code that needs a column the running schema lacks
       // breaks ingestion in that window. This handler writes only columns the
       // deployed schema already has.
