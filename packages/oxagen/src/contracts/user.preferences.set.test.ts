@@ -1,8 +1,38 @@
 import { describe, expect, it } from "vitest";
 import { userPreferencesSet } from "./user.preferences.set";
+import type { SystemOrgRole, SystemWorkspaceRole } from "../types";
 import { userPreferencesRead } from "./user.preferences.read";
 
+/**
+ * The role enumerations as values: adding a role to either union fails to
+ * compile here until someone has decided what it means for a person's own
+ * settings. The org map named `Member` and `Viewer`, which are workspace
+ * roles, and omitted `Compliance` and `Billing`, which are the org roles it
+ * needed, so an enterprise org seeded grants for Owner and Admin alone.
+ */
+const EVERY_ORG_ROLE: Record<SystemOrgRole, true> = {
+  Owner: true,
+  Admin: true,
+  Compliance: true,
+  Billing: true,
+};
+const EVERY_WORKSPACE_ROLE: Record<SystemWorkspaceRole, true> = {
+  Owner: true,
+  Member: true,
+  Viewer: true,
+};
+
 describe("set_preferences contract", () => {
+  it("is self-scoped: intrinsically allowed, and every real role at each scope", () => {
+    expect(userPreferencesSet.defaultEffect).toBe("allow");
+    expect(Object.keys(userPreferencesSet.defaultRoles.org).sort()).toEqual(
+      Object.keys(EVERY_ORG_ROLE).sort(),
+    );
+    expect(
+      Object.keys(userPreferencesSet.defaultRoles.workspace).sort(),
+    ).toEqual(Object.keys(EVERY_WORKSPACE_ROLE).sort());
+  });
+
   it("is a user-global settings write: unscoped, mutating, noBillingGate", () => {
     expect(userPreferencesSet.scoped).toBe(false);
     expect(userPreferencesSet.mutates).toBe(true);
