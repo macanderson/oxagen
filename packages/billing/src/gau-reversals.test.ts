@@ -1030,3 +1030,101 @@ describe("the park decision reads its mutable input inside the lock", () => {
     expect(lockAt).toBeLessThan(pendingReadAt);
   });
 });
+
+describe("a second partial refund after a period rollover (ADR-085 §11)", () => {
+  const AUGUST_START = new Date("2026-08-01T00:00:00.000Z");
+
+  it("debits the CURRENT bucket's carried units, not the bucket the first refund used", async () => {
+    // August is where the first refund took its units. The rollover carried
+    // what was left into September, which is the only balance the gate reads.
+    // `existing.bucketId` still says August — a fact about when the row was
+    // written, not about where the units live now. Debiting it would leave
+    // September's carried units spendable although more money went back.
+    const august = seedBucket({
+      periodStart: AUGUST_START,
+      periodEnd: PERIOD_START,
+      purchasedGau: 5_000,
+      carriedGau: 0,
+    });
+    const september = seedBucket({ purchasedGau: 0, carriedGau: 5_000 });
+    const settlement = seedCheckoutSettlement({ bucketId: august.id });
+
+    // The first refund, already recorded against August.
+    store.reversals.push({
+      id: crypto.randomUUID(),
+      orgId: ORG,
+      settlementId: settlement.id,
+      bucketId: august.id,
+      stripePaymentIntentId: "pi_gau_001",
+      kind: "refund",
+      providerEventId: "ch_gau_001",
+      requestedGau: 5_000,
+      reversedGau: 5_000,
+      unrecoveredGau: 0,
+      amountCents: 2_750,
+      currency: "usd",
+      createdAt: NOW,
+    });
+
+    // The operator refunds the rest: cumulative 5,500c of a 5,500c charge.
+    const result = await reverseGauPurchaseForRefund(
+      refundedCharge({ amountRefundedCents: 5_500 }),
+    );
+
+    expect(result).toMatchObject({
+      applied: true,
+      requestedGau: 10_000,
+      reversedGau: 10_000,
+      unrecoveredGau: 0,
+      bucketId: september.id,
+    });
+    // The row that matters: September's carried units are gone.
+    const septemberAfter = store.buckets.find((b) => b.id === september.id);
+    expect(septemberAfter).toMatchObject({ purchasedGau: 0, carriedGau: 0 });
+    // And August is untouched — it is history, not a balance.
+    const augustAfter = store.buckets.find((b) => b.id === august.id);
+    expect(augustAfter).toMatchObject({ purchasedGau: 5_000, carriedGau: 0 });
+    // The reversal now points at where the units actually went.
+    expect(store.reversals[0]).toMatchObject({ bucketId: september.id });
+  });
+
+  it("materialises the current bucket when the rolled month has no row yet", async () => {
+    const august = seedBucket({
+      periodStart: AUGUST_START,
+      periodEnd: PERIOD_START,
+      purchasedGau: 10_000,
+      usedGau: 0,
+    });
+    const settlement = seedCheckoutSettlement({ bucketId: august.id });
+    store.reversals.push({
+      id: crypto.randomUUID(),
+      orgId: ORG,
+      settlementId: settlement.id,
+      bucketId: august.id,
+      stripePaymentIntentId: "pi_gau_001",
+      kind: "refund",
+      providerEventId: "ch_gau_001",
+      requestedGau: 5_000,
+      reversedGau: 5_000,
+      unrecoveredGau: 0,
+      amountCents: 2_750,
+      currency: "usd",
+      createdAt: NOW,
+    });
+
+    await reverseGauPurchaseForRefund(
+      refundedCharge({ amountRefundedCents: 5_500 }),
+    );
+
+    // September did not exist; it is created with August's carry and debited.
+    expect(store.buckets).toHaveLength(2);
+    const september = store.buckets.find(
+      (b) => (b.periodStart as Date).getTime() === PERIOD_START.getTime(),
+    );
+    expect(september).toBeDefined();
+    expect(september).toMatchObject({ orgId: ORG });
+    expect(store.buckets.find((b) => b.id === august.id)).toMatchObject({
+      purchasedGau: 10_000,
+    });
+  });
+});

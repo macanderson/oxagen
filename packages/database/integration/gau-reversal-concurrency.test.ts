@@ -198,6 +198,85 @@ afterAll(async () => {
   await Promise.all([a.end(), b.end(), admin.end()]);
 });
 
+/**
+ * A reversal debiting the bucket while an unrelated purchase lands on it.
+ *
+ * The PaymentIntent advisory lock serialises reversals of ONE purchase against
+ * each other. A concurrent checkout or auto top-up is a different PaymentIntent
+ * and takes a different lock, so it is not held back at all — the lock never
+ * protected the bucket from it. What protects the bucket is the row lock that
+ * `ensureCurrentBucket`'s upsert takes.
+ *
+ * `locked: false` reproduces the read-modify-write: a plain SELECT, then a
+ * concurrent relative increment commits, then an absolute write from the stale
+ * snapshot erases it. `locked: true` takes the row lock the way the code does.
+ */
+async function runBucketRace(opts: { locked: boolean }): Promise<void> {
+  const reversal = a.begin(async (tx) => {
+    await tx.unsafe(`SET LOCAL app.rls_bypass = 'on'`);
+    // Both forms read the same counts; only one holds the row while it does.
+    const rows = opts.locked
+      ? await tx.unsafe(
+          `SELECT purchased_gau FROM billing.gau_buckets WHERE id = '${BUCKET}' FOR UPDATE`,
+        )
+      : await tx.unsafe(
+          `SELECT purchased_gau FROM billing.gau_buckets WHERE id = '${BUCKET}'`,
+        );
+    const before = Number(
+      (rows as unknown as { purchased_gau: string }[])[0]!.purchased_gau,
+    );
+    await sleep(200);
+    // The absolute write from the snapshot read above.
+    await tx.unsafe(
+      `UPDATE billing.gau_buckets SET purchased_gau = ${before - 2000} WHERE id = '${BUCKET}'`,
+    );
+  });
+
+  const purchase = b.begin(async (tx) => {
+    await tx.unsafe(`SET LOCAL app.rls_bypass = 'on'`);
+    await sleep(100);
+    // A different purchase on a different PaymentIntent: a relative increment
+    // under the bucket's own row lock, exactly what ensureCurrentBucket issues.
+    await tx.unsafe(
+      `INSERT INTO billing.gau_buckets (id, org_id, period_start, period_end, included_gau, purchased_gau)
+       VALUES ('${BUCKET}', '${ORG}', '2026-09-01Z', '2026-10-01Z', 5000, 5000)
+       ON CONFLICT (org_id, period_start)
+       DO UPDATE SET purchased_gau = billing.gau_buckets.purchased_gau + EXCLUDED.purchased_gau`,
+    );
+  });
+
+  await Promise.all([reversal, purchase]);
+}
+
+describe("a reversal debiting while an unrelated purchase lands", () => {
+  it("WITHOUT the row lock, the absolute write erases the new purchase", async () => {
+    // Start at 10,000. The reversal takes 2,000 and a concurrent purchase adds
+    // 5,000, so the honest total is 13,000. The stale snapshot writes 8,000 and
+    // the 5,000 just paid for is gone.
+    await admin.unsafe(`SET app.rls_bypass = 'on'`);
+    await admin.unsafe(
+      `UPDATE billing.gau_buckets SET purchased_gau = 10000 WHERE id = '${BUCKET}'`,
+    );
+
+    await runBucketRace({ locked: false });
+
+    expect(await spendableUnits()).toBe(8_000);
+  });
+
+  it("WITH the row lock, the purchase survives the debit", async () => {
+    await admin.unsafe(`SET app.rls_bypass = 'on'`);
+    await admin.unsafe(
+      `UPDATE billing.gau_buckets SET purchased_gau = 10000 WHERE id = '${BUCKET}'`,
+    );
+
+    await runBucketRace({ locked: true });
+
+    // 10,000 − 2,000 + 5,000. The purchase waits for the reversal to commit and
+    // increments the post-debit figure.
+    expect(await spendableUnits()).toBe(13_000);
+  });
+});
+
 describe("grant vs refund on one PaymentIntent", () => {
   it("WITHOUT the lock, both commit and the refunded units stay spendable", async () => {
     // The defect, driven against the real schema. Neither transaction did

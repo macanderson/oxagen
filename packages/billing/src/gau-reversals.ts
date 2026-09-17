@@ -144,6 +144,67 @@ export function reversibleGau(
   );
 }
 
+/**
+ * Take `units` off the organisation's CURRENT bucket, and report what it got.
+ *
+ * Every single-debit reversal path goes through here, and that is the point.
+ * Two properties are load-bearing and both come from `ensureCurrentBucket`:
+ *
+ *  1. **The bucket is resolved now, not remembered.** A stored `bucket_id` is a
+ *     fact about when a row was written, not about where the units live today.
+ *     After a period rollover the units a second refund must take are the
+ *     CURRENT bucket's `carried_gau`; debiting the historical bucket leaves
+ *     them spendable.
+ *  2. **The upsert takes the bucket's row lock and holds it to commit**, which
+ *     is what makes the absolute-valued UPDATE below correct. A plain SELECT
+ *     reads the same numbers and then races a concurrent grant or auto top-up,
+ *     whose relative increment this would then erase — and that grant holds a
+ *     DIFFERENT advisory lock, because `gau_purchase:<payment_intent_id>`
+ *     serialises reversals of one purchase against each other and says nothing
+ *     about a purchase on another PaymentIntent touching the same bucket.
+ *
+ * Both were true of the first reversal path and neither survived being written
+ * a second time for cumulative refunds, so there is now one implementation
+ * rather than a rule to remember. Replacing this call with a read is not a
+ * simplification.
+ */
+async function debitCurrentBucket(
+  tx: Tx,
+  args: { orgId: string; units: number; now: Date },
+): Promise<{ bucketId: string; reversedGau: number }> {
+  const { terms, subscription } = await readGauEntitlement(
+    tx,
+    args.orgId,
+    args.now,
+  );
+  const bucket = await ensureCurrentBucket(tx, args.orgId, {
+    period: periodFor(subscription, args.now),
+    terms,
+    usedDelta: 0,
+    purchasedDelta: 0,
+  });
+
+  // Purchased before carried: the order bought units are held in across a
+  // rollover. Both clamp at zero — `gau_buckets_counts_non_negative` refuses a
+  // negative count, so an unclamped write fails the whole webhook.
+  const units = Math.max(0, args.units);
+  const fromPurchased = Math.min(bucket.purchasedGau, units);
+  const fromCarried = Math.min(bucket.carriedGau, units - fromPurchased);
+  const reversedGau = fromPurchased + fromCarried;
+
+  if (reversedGau > 0) {
+    await tx
+      .update(schema.gauBuckets)
+      .set({
+        purchasedGau: bucket.purchasedGau - fromPurchased,
+        carriedGau: bucket.carriedGau - fromCarried,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(schema.gauBuckets.id, bucket.id));
+  }
+  return { bucketId: bucket.id, reversedGau };
+}
+
 type GauReversalRow = typeof schema.gauReversals.$inferSelect;
 
 /**
@@ -221,34 +282,23 @@ async function applyCumulativeIncrease(
   const totalRequestedGau = reversibleGau(settlement, args.amountCents);
   const deltaGau = Math.max(0, totalRequestedGau - existing.requestedGau);
 
-  const rows = await tx
-    .select()
-    .from(schema.gauBuckets)
-    .where(eq(schema.gauBuckets.id, existing.bucketId))
-    .limit(1);
-  const bucket = rows[0];
-  const fromPurchased = bucket ? Math.min(bucket.purchasedGau, deltaGau) : 0;
-  const fromCarried = bucket
-    ? Math.min(bucket.carriedGau, deltaGau - fromPurchased)
-    : 0;
-  const newlyReversed = fromPurchased + fromCarried;
-
-  if (bucket && newlyReversed > 0) {
-    await tx
-      .update(schema.gauBuckets)
-      .set({
-        purchasedGau: bucket.purchasedGau - fromPurchased,
-        carriedGau: bucket.carriedGau - fromCarried,
-        updatedAt: sql`now()`,
-      })
-      .where(eq(schema.gauBuckets.id, bucket.id));
-  }
+  // The current bucket, NOT `existing.bucketId`. That id records where the
+  // first refund took its units; after a rollover the units this one must take
+  // are the current bucket's carried balance, and debiting the historical row
+  // would leave them spendable.
+  const { bucketId, reversedGau: newlyReversed } = await debitCurrentBucket(
+    tx,
+    { orgId: settlement.orgId, units: deltaGau, now: args.now },
+  );
 
   const reversedGau = existing.reversedGau + newlyReversed;
   await tx
     .update(schema.gauReversals)
     .set({
       amountCents: args.amountCents,
+      // The row points at the bucket it most recently took from, so a reader
+      // lands on where the units actually went.
+      bucketId,
       requestedGau: totalRequestedGau,
       reversedGau,
       unrecoveredGau: totalRequestedGau - reversedGau,
@@ -259,7 +309,7 @@ async function applyCumulativeIncrease(
     pending: false,
     orgId: existing.orgId,
     settlementId: existing.settlementId,
-    bucketId: existing.bucketId,
+    bucketId,
     requestedGau: totalRequestedGau,
     reversedGau,
     unrecoveredGau: totalRequestedGau - reversedGau,
@@ -408,51 +458,20 @@ export async function applyGauReversal(
 
     const requestedGau = reversibleGau(settlement, args.amountCents);
 
-    // Materialise the current bucket the way the grant does, so an org whose
-    // month has rolled with no activity still has the row its carried units
-    // are on before they are taken off it.
-    //
-    // It is also what makes the absolute-valued UPDATE below correct. The
-    // upsert takes the bucket's row lock and holds it to commit, so the counts
-    // it returns cannot move under us and `purchasedGau - fromPurchased` is
-    // exact. A plain SELECT here would read the same numbers and then race a
-    // concurrent recorder, withdrawing units it had just granted. Replacing
-    // this call with a read is not a simplification.
-    const { terms, subscription } = await readGauEntitlement(
-      tx,
-      settlement.orgId,
+    // One implementation for every single-debit path: resolves the CURRENT
+    // bucket and takes its row lock, both of which the absolute write depends
+    // on. See debitCurrentBucket.
+    const { bucketId, reversedGau } = await debitCurrentBucket(tx, {
+      orgId: settlement.orgId,
+      units: requestedGau,
       now,
-    );
-    const bucket = await ensureCurrentBucket(tx, settlement.orgId, {
-      period: periodFor(subscription, now),
-      terms,
-      usedDelta: 0,
-      purchasedDelta: 0,
     });
-
-    const fromPurchased = Math.min(bucket.purchasedGau, requestedGau);
-    const fromCarried = Math.min(
-      bucket.carriedGau,
-      requestedGau - fromPurchased,
-    );
-    const reversedGau = fromPurchased + fromCarried;
     const unrecoveredGau = requestedGau - reversedGau;
-
-    if (reversedGau > 0) {
-      await tx
-        .update(schema.gauBuckets)
-        .set({
-          purchasedGau: bucket.purchasedGau - fromPurchased,
-          carriedGau: bucket.carriedGau - fromCarried,
-          updatedAt: sql`now()`,
-        })
-        .where(eq(schema.gauBuckets.id, bucket.id));
-    }
 
     await tx.insert(schema.gauReversals).values({
       orgId: settlement.orgId,
       settlementId: settlement.id,
-      bucketId: bucket.id,
+      bucketId,
       stripePaymentIntentId: args.paymentIntentId,
       kind: args.kind,
       providerEventId: args.providerEventId,
@@ -467,7 +486,7 @@ export async function applyGauReversal(
       pending: false,
       orgId: settlement.orgId,
       settlementId: settlement.id,
-      bucketId: bucket.id,
+      bucketId,
       requestedGau,
       reversedGau,
       unrecoveredGau,

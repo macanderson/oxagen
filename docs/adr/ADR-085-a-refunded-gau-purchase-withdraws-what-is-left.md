@@ -350,6 +350,56 @@ built it.
 A row still pending has no settlement to price against, so an increase only
 records the larger amount and reconciliation prorates the final total once.
 
+### 11. One debit path, because the rule did not survive being written twice
+
+§7 established the PaymentIntent advisory lock, and §3 established that the
+absolute-valued bucket write is only correct because `ensureCurrentBucket`'s
+upsert holds the row lock. Both were true of the first reversal path. The
+cumulative-refund path in §10 was written beside it with a plain `SELECT` and an
+absolute write, and inherited neither — a correct fix that was a property of the
+branch it was applied to rather than of the module.
+
+Two defects came out of that one omission.
+
+**The advisory lock never protected the bucket.**
+`gau_purchase:<payment_intent_id>` serialises reversals of *one purchase*
+against each other. A concurrent checkout grant or auto top-up is a **different**
+PaymentIntent, takes a **different** lock, and proceeds freely — it was never
+held back at all. So a plain read followed by
+`purchased_gau = <snapshot> − delta` is a read-modify-write over a row that
+other, differently-keyed transactions increment, and the absolute write erases
+whatever landed in the gap. The §7 invariant — "two concurrent transactions
+cannot both satisfy it" — held for the pair it was written about and was silent
+about this one.
+
+**A stored `bucket_id` is not where the units live.** After a rollover, the
+units a second refund must take are the *current* bucket's `carried_gau`;
+`existing.bucket_id` records where the *first* refund took its units. Debiting
+that historical row leaves the current balance spendable although more money
+went back.
+
+Both are fixed by the same thing, and deliberately by the same *code*:
+`debitCurrentBucket` is now the one implementation every single-debit path
+calls. It resolves the bucket at debit time (so the rollover case is right by
+construction) and takes the row lock through `ensureCurrentBucket` (so the
+absolute write is safe against any other writer, whatever lock it holds).
+
+Choosing the row lock over an atomic SQL decrement was deliberate. An atomic
+`SET purchased_gau = purchased_gau − LEAST(purchased_gau, $n)` removes the
+window rather than guarding it, which is attractive — but it cannot report *how
+much it removed* without reading the prior values, and `reversed_gau` /
+`unrecovered_gau` are the record this whole design exists to keep. Recovering
+the old values needs either `RETURNING` over the old row (Postgres 18) or a
+`FOR UPDATE` CTE, which is the row lock again with more moving parts. The row
+lock is also what the grant, the recorder and the first reversal path already
+take, and one concurrency strategy in a module beats two correct ones.
+
+The lesson the sequence records: a fix applied to a branch is not a fix to the
+module. The way to make it one is to leave a single implementation behind, not a
+comment asking the next writer to remember — there *was* such a comment, ten
+lines of it, on the path that had it right, and the second path was written
+anyway.
+
 ## Consequences
 
 - A purchase made before this change has no `stripe_payment_intent_id` and no
