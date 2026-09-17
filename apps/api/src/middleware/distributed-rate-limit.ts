@@ -4,7 +4,12 @@ import { sql } from "drizzle-orm";
 import { withSystemDb } from "@oxagen/database";
 import { requireEnv } from "@oxagen/config/env";
 import { logger } from "./logger";
-import { extractClientIp, trustedProxyCidrs } from "../lib/context";
+import { extractTrustedClientIp } from "@oxagen/oxagen/client-ip";
+import { createFixedWindowCounter } from "./rate-limit";
+import {
+  trustedProxyCidrs,
+  __resetTrustedProxyHopsForTests,
+} from "../lib/context";
 import type { AppEnv } from "../app";
 
 /**
@@ -33,9 +38,13 @@ import type { AppEnv } from "../app";
  *   4. Set X-RateLimit-Limit/Remaining/Reset on every counted response; on
  *      breach, 429 { error: "rate_limited" } + Retry-After.
  *
- * STORE FAILURE POLICY: fail-open remains the default because rate limiting is
- * secondary for authenticated product surfaces. Pre-authentication security
- * boundaries may opt into fail-closed behavior. A store error is warned at
+ * STORE FAILURE POLICY (ADR-082): fail-open remains the default because rate
+ * limiting is secondary for authenticated product surfaces. Pre-authentication
+ * security boundaries opt into `"degrade-to-local"`, which hands the request to
+ * the per-process limiter in rate-limit.ts rather than denying it. Neither
+ * policy denies traffic on a store error: a limiter that cannot reach its
+ * counters is a limiter problem, and turning it into a total ingress outage
+ * costs more than the ceiling it was protecting. A store error is warned at
  * most once per window so an outage cannot spam the logs.
  *
  * Once the shared store reports an exhausted bucket, this warm instance caches
@@ -61,11 +70,22 @@ export interface DistributedRateLimitOptions {
    */
   methods?: readonly string[] | "all";
   /**
-   * Deny when the shared counter store is unavailable. Defaults to false so
-   * authenticated product surfaces preserve their historical fail-open policy.
-   * Pre-authentication security boundaries should enable this explicitly.
+   * What to do when the shared counter store is unavailable (ADR-082).
+   *
+   * - `"fail-open"` (default) — pass the request through uncounted. The
+   *   historical policy for authenticated product surfaces, where the limit is
+   *   a spend guard rather than a security boundary.
+   * - `"degrade-to-local"` — hand the request to the per-process limiter in
+   *   rate-limit.ts, configured with this limiter's window, ceiling and bucket
+   *   key. The ceiling stops being global and becomes `max` per warm instance;
+   *   that is a weaker bound than the Postgres counter, and a real one.
+   *
+   * Neither option denies. `"degrade-to-local"` replaced a fail-closed policy
+   * that answered 503 to every caller for as long as the store was unreachable
+   * — see ADR-082 for why the deny bought nothing that the shared Postgres
+   * outage had not already bought.
    */
-  failClosedOnStoreError?: boolean;
+  storeErrorPolicy?: "fail-open" | "degrade-to-local";
   /**
    * Optional unprefixed bucket suffix for pre-authentication or other custom
    * scopes. The limiter always prepends `keyPrefix`, preventing cross-surface
@@ -73,8 +93,8 @@ export interface DistributedRateLimitOptions {
    * that reads the request body returns a promise.
    *
    * Returning `null` means "this request cannot be attributed to a bucket",
-   * and the limiter SKIPS — it does not count, and it does not deny, not even
-   * when `failClosedOnStoreError` is set. A resolver must never substitute a
+   * and the limiter SKIPS — it does not count, and it does not deny, whatever
+   * the `storeErrorPolicy`. A resolver must never substitute a
    * shared constant for an identity it cannot establish: every caller in one
    * bucket is not a ceiling, it is one abuser's power to lock everyone else
    * out. See `trustedClientIpBucketKey`.
@@ -89,11 +109,52 @@ const CLEANUP_SAMPLE_RATE = 0.01;
 /** Bound exhausted-bucket memory per limiter instance. */
 const LOCAL_DENY_CACHE_MAX = 10_000;
 
-/** Best-effort client IP — the same proxy header chain as the in-memory limiter. */
+/**
+ * Whether the edge-written `x-oxagen-client-ip` header is believed, resolved
+ * from the validated env once and memoized, and read lazily for the same reason
+ * as `rateLimitBudgets()` below: importing the app must not trigger env access.
+ *
+ * Off by default. The header is trustworthy only because Caddy SETS it, and
+ * that config ships through the infra pipeline while this code ships through
+ * the application one. Until the flag is on the header is not read at all, so a
+ * caller-supplied copy of it cannot mint a bucket of its own; attribution then
+ * rests on TRUSTED_PROXY_CIDRS, and where that is unset the pre-authentication
+ * ceilings skip. See packages/oxagen/src/client-ip.ts.
+ */
+let cachedTrustEdgeHeader: boolean | null = null;
+function trustEdgeHeader(): boolean {
+  if (cachedTrustEdgeHeader !== null) return cachedTrustEdgeHeader;
+  cachedTrustEdgeHeader = requireEnv([
+    "TRUST_EDGE_CLIENT_IP_HEADER",
+  ] as const).TRUST_EDGE_CLIENT_IP_HEADER;
+  return cachedTrustEdgeHeader;
+}
+
+/**
+ * Client IP for the last-resort bucket, through the shared derivation so this
+ * file has no second opinion about who a caller is. It read the leftmost
+ * `x-forwarded-for` entry and then `x-real-ip`, both caller-written, which let
+ * one client mint an unbounded number of buckets by varying a header.
+ *
+ * Only the edge header and the named-proxy walk can name a caller, the same two
+ * as `trustedClientIpBucketKey` — there is no third, weaker reading left in the
+ * derivation to fall back to.
+ *
+ * Unlike the pre-authentication ceilings, this one falls back to a shared
+ * `ip:unknown` partition rather than skipping. That is safe only because
+ * `deriveBucketKey` serves the fail-open, post-authentication surfaces, where
+ * the request has already been attributed to a workspace or an org in all but
+ * the residual case. A pre-authentication ceiling must never take this
+ * fallback — see `trustedClientIpBucketKey`.
+ */
 function clientIp(c: Context<AppEnv>): string {
-  const forwarded = c.req.header("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0]!.trim();
-  return c.req.header("x-real-ip") ?? "unknown";
+  return (
+    extractTrustedClientIp((name) => c.req.header(name), {
+      trustedProxyCidrs: trustedProxyCidrs(),
+      trustEdgeHeader: trustEdgeHeader(),
+      onVercel: process.env.VERCEL === "1",
+    }) ?? "unknown"
+  );
 }
 
 /**
@@ -137,79 +198,49 @@ export function enrolledMachineBucketKey(c: Context<AppEnv>): string {
 }
 
 /**
- * The client address, as far as this deployment can actually vouch for it, or
- * `null` when it cannot vouch for one at all.
+ * Per-client bucket for the pre-authentication ceilings, or `null` when this
+ * deployment cannot say who the caller is.
  *
- * This used to return the constant `ip:unverified` for every caller whenever
- * `VERCEL !== "1"` — which is always, since production runs on AWS behind an
- * ALB and Caddy. A single bucket shared by every caller on the internet is not
- * a rate limit; it is shared fate. It was harmless only because the counter
- * store threw on every request, and this PR fixes that: on these fail-closed
- * pre-auth mounts, one client sending `max + 1` requests in a window would take
- * the entire Tacho and Stella ingress offline for everyone, before any
- * credential was checked. That is a denial of service handed to anyone who can
- * reach the host.
+ * The address itself comes from `extractTrustedClientIp`
+ * (`@oxagen/oxagen/client-ip`), which is the one derivation every surface in
+ * the repo reads a client address through, and which documents why each header
+ * is or is not believed. A limiter bucket and an IAM `ip_ranges` decision want
+ * the same answer to the same question, and the two diverging is how the
+ * leftmost `x-forwarded-for` entry ended up deciding a mandate while this file
+ * had already stopped trusting it.
  *
- * So: derive a real client address. `extractClientIp` (lib/context.ts) already
- * does the hardened version of this — it walks the forwarded-for chain from the
- * RIGHT through the proxies named in TRUSTED_PROXY_CIDRS, so entries a caller
- * prepends itself can never move the entry it picks, and it is the same
- * derivation the IAM `ip_ranges` / `ip_allow` conditions are judged on.
+ * Two declarations can name a caller here, and NEITHER of them is a hop count —
+ * that form is gone from the derivation entirely (#3205):
  *
- * Returning `null` is deliberate and load-bearing: it means this deployment has
- * no trusted proxy chain to read, so there is no per-client bucket to enforce,
- * and the limiter SKIPS rather than lumping everyone together (see the
- * `bucketKey` contract). An unattributable ceiling is worse than no ceiling,
- * because it converts one abuser into an outage for every other caller. The
- * per-credential ceiling mounted beside this one is unaffected either way.
+ *  - the edge header `x-oxagen-client-ip`, once `TRUST_EDGE_CLIENT_IP_HEADER`
+ *    says the Caddy config that SETS it is deployed (ADR-083);
+ *  - `TRUSTED_PROXY_CIDRS`, which names the proxies so the chain walk stops on
+ *    what an entry IS rather than on how many entries there are.
  *
- * The ceiling is therefore enforced ONLY where the deployment has named its
- * proxies, by setting TRUSTED_PROXY_CIDRS. A hop count is not enough here: it
- * trusts the COUNT to be right, and a count that is too high lets a caller pad
- * x-forwarded-for until the arithmetic lands on a value the caller chose, which
- * on this ceiling means a fresh bucket per request and no ceiling at all.
- * Nothing in the request separates that from a correct deeper chain. Naming the
- * proxies does separate it: the walk stops on what an entry IS, so padding only
- * lengthens a prefix it never reaches. Undeclared proxies are an
- * unattributable request, so it skips.
+ * A hop count cannot defend itself anywhere, which is why it no longer exists.
+ * One that is too high lets a caller pad `x-forwarded-for` until the arithmetic
+ * lands on a value the caller chose — here, a fresh bucket per request and no
+ * ceiling at all; on the IAM path, an allowlist it should have failed. Nothing
+ * readable from the request separates that from a correct deeper chain.
  *
- * Production needs a change OUTSIDE this file before any depth is correct.
- * Caddy's `reverse_proxy` does not append to an inbound X-Forwarded-For unless
- * the peer is a trusted proxy — it REPLACES it. Measured against `caddy:2`:
- * a request arriving as `X-Forwarded-For: 203.0.113.99` reached the upstream as
- * `172.17.0.1` with a plain `reverse_proxy`, and as `203.0.113.99, 172.17.0.1`
- * once `trusted_proxies` was set. So until the Caddyfile change ships, the API
- * sees only the load balancer and NO hop count recovers a client. The
- * `trusted_proxies` block is in infra/tools/caddy/Caddyfile.alb; after it
- * deploys the chain is two deep and the depth to declare is 2.
- *
- * That leaves an unconfigured deployment exactly where it is today — this
- * counter has never once incremented — rather than switching on a ceiling
- * nobody has told us how to attribute. Naming the proxies turns it on.
- * Sequencing the Caddy deploy and that value is tracked on #3167; nothing here
- * enforces until both are done.
+ * Returning `null` is load-bearing. It means the request cannot be attributed,
+ * and the limiter SKIPS — it does not count and it does not deny. The
+ * alternative this replaced was a single shared `ip:unverified` bucket, which
+ * on a mount that runs before any credential exists is not a ceiling but one
+ * caller's power to deny the ingress to every other: send `max + 1` in a window
+ * and every enrolled Tacho and Stella host is refused. It was also one Postgres
+ * row as the write contention point for the whole ingress. The per-credential
+ * ceiling mounted beside this one is unaffected either way, and a throttled
+ * warn names the deployment fact so an operator sees it rather than inferring
+ * it from a counter that never moves.
  */
 export function trustedClientIpBucketKey(c: Context<AppEnv>): string | null {
-  // Vercel replaces `x-vercel-forwarded-for` at its own trusted network
-  // boundary, so it needs no hop arithmetic. Kept for preview deployments.
-  if (process.env.VERCEL === "1") {
-    const trustedForwardedFor = c.req
-      .header("x-vercel-forwarded-for")
-      ?.split(",", 1)[0]
-      ?.trim();
-    return trustedForwardedFor ? `ip:${trustedForwardedFor}` : null;
-  }
-  // These mounts require the SAFE form of the declaration: the proxies named by
-  // identity, not counted. A hop count trusts itself to be right, and one that
-  // is too high lets a caller pad x-forwarded-for until the arithmetic lands on
-  // a value the caller chose — which on this ceiling means minting a fresh
-  // bucket per request and evading it entirely. Nothing in the request
-  // distinguishes an over-declared count from a correct deeper chain, so a
-  // count cannot defend itself here. Undeclared proxies are an unattributable
-  // request, and unattributable skips.
-  if (trustedProxyCidrs().length === 0) return null;
-  const clientAddress = extractClientIp(c);
-  return clientAddress ? `ip:${clientAddress}` : null;
+  const ip = extractTrustedClientIp((name) => c.req.header(name), {
+    trustedProxyCidrs: trustedProxyCidrs(),
+    trustEdgeHeader: trustEdgeHeader(),
+    onVercel: process.env.VERCEL === "1",
+  });
+  return ip ? `ip:${ip}` : null;
 }
 
 /** Domain separator — see authorizationFingerprintBucketKey. */
@@ -239,7 +270,7 @@ export function authorizationFingerprintBucketKey(c: Context<AppEnv>): string {
   return `credential:${fingerprint}`;
 }
 
-// Throttle fail-open warnings to at most one per window per route group, so a
+// Throttle store-error warnings to at most one per window per route group, so a
 // store outage logs a signal without drowning the logs in one line per request.
 const lastWarnAtByPrefix = new Map<string, number>();
 
@@ -268,7 +299,7 @@ function warnStoreError(
   keyPrefix: string,
   windowMs: number,
   err: unknown,
-  failClosed: boolean,
+  storeErrorPolicy: "fail-open" | "degrade-to-local",
 ): void {
   const now = Date.now();
   if (now - (lastWarnAtByPrefix.get(keyPrefix) ?? 0) < windowMs) return;
@@ -277,10 +308,10 @@ function warnStoreError(
     {
       keyPrefix,
       err: describeError(err),
-      failClosed,
+      storeErrorPolicy,
     },
-    failClosed
-      ? "distributed rate limiter store error — failing closed"
+    storeErrorPolicy === "degrade-to-local"
+      ? "distributed rate limiter store error — degrading to the per-instance limiter"
       : "distributed rate limiter store error — failing open (allowing request)",
   );
 }
@@ -312,6 +343,19 @@ function sweepStaleWindows(olderThan: Date): void {
  * A ceiling that cannot name who it is limiting is not being enforced, and that
  * is a deployment fact an operator should be able to see rather than infer from
  * a counter that never moves. Throttled per prefix like the store-error warn.
+ *
+ * The remedy depends on which topology is live, and naming only one of them
+ * sends half the fleet's operators somewhere that cannot work. Once the Caddy
+ * config of ADR-083 is reloaded, the edge rewrites `x-forwarded-for` to a
+ * single entry which is Caddy itself; `extractTrustedClientIp` walks that chain
+ * by proxy IDENTITY, finds every entry trusted and therefore none of them a
+ * client, and returns `null`. Setting `TRUSTED_PROXY_CIDRS` after the rewrite
+ * attributes nothing at all — the operator who follows that advice gets no
+ * change and no explanation, and goes on believing the pre-authentication
+ * ceilings are enforced. `TRUST_EDGE_CLIENT_IP_HEADER` is what attributes the
+ * caller there, and it is named with "verify it is live" attached rather than
+ * bare, because enabling it BEFORE the rewrite believes a header the old config
+ * forwards caller-supplied (ADR-083) — which is the worse of the two errors.
  */
 const lastUnattributableWarnAtByPrefix = new Map<string, number>();
 function warnUnattributable(keyPrefix: string, windowMs: number): void {
@@ -322,8 +366,11 @@ function warnUnattributable(keyPrefix: string, windowMs: number): void {
   logger.warn(
     { keyPrefix },
     "distributed rate limiter has no attributable bucket for this request — " +
-      "skipping (set TRUSTED_PROXY_CIDRS to the proxies in front of this " +
-      "deployment)",
+      "skipping (after the ADR-083 edge rewrite is verified live, set " +
+      "TRUST_EDGE_CLIENT_IP_HEADER=true: the rewrite leaves x-forwarded-for " +
+      "one entry and no proxy hop for TRUSTED_PROXY_CIDRS to vouch with; " +
+      "before the rewrite, set TRUSTED_PROXY_CIDRS to the proxies in front of " +
+      "this deployment)",
   );
 }
 
@@ -332,9 +379,83 @@ export function distributedRateLimiter(
 ): MiddlewareHandler<AppEnv> {
   const windowMs = opts.windowMs ?? DEFAULT_WINDOW_MS;
   const methods = opts.methods ?? DEFAULT_METHODS;
+  const storeErrorPolicy = opts.storeErrorPolicy ?? "fail-open";
   const localDenyUntilByKey = new Map<string, number>();
 
-  function cacheLocalDeny(key: string, denyUntil: number, now: number): void {
+  // `bucketKey` may be async (main made it `string | Promise<string>`), so this
+  // awaits it. Interpolating it directly would have rendered a pending promise
+  // as the literal string "[object Promise]" — one bucket for every caller,
+  // silently, which is the bug #3167 opened with.
+  const bucketKeyOf = async (c: Context<AppEnv>): Promise<string | null> => {
+    if (!opts.bucketKey) return deriveBucketKey(c, opts.keyPrefix);
+    const suffix = await opts.bucketKey(c);
+    // `null` means unattributable and propagates; it must never become the
+    // string "null" in a bucket key, which would be a shared bucket by another
+    // name.
+    return suffix === null ? null : `${opts.keyPrefix}:${suffix}`;
+  };
+
+  /**
+   * The degraded ceiling. It counts the same keys into the same epoch-anchored
+   * window as the Postgres counter; only the scope narrows, from global to this
+   * process.
+   *
+   * Every ALLOWED request is counted here, including the ones the Postgres
+   * upsert handled. That looks redundant while the store is healthy and is the
+   * whole point when it is not: a store that flaps sends some requests down the
+   * success path and some down the failure path, and if only the failures were
+   * counted locally a caller could spend `max` through Postgres and another
+   * `max` through this counter inside one window — `2 × max` exactly when the
+   * store is least reliable, which is not the bound ADR-082 states. Counting
+   * both paths into one counter makes the degraded ceiling `max` in total,
+   * however the window's requests happened to be split between them.
+   *
+   * The cost is one map entry per bucket key per window while the store is
+   * healthy. On a pre-authentication mount the caller chooses its own keys, so
+   * that cost is adversarial: `createFixedWindowCounter` bounds it with a hard
+   * maximum and eviction rather than by sweeping expired entries, which bounds
+   * nothing inside a single window. Only the `degrade-to-local` mounts pay it;
+   * a fail-open limiter has no fallback to seed and never touches this.
+   */
+  const localCounter = createFixedWindowCounter(windowMs);
+
+  /**
+   * Remember that `key` is exhausted until `denyUntil`, judged against the
+   * clock NOW rather than against the caller's captured one.
+   *
+   * Every call site is past an `await` on the store, so the caller's `now` is
+   * as old as its store call took, and this store's calls are bounded by
+   * nothing: the pool in `packages/database/src/client.ts` sets `max` and
+   * `prepare: false` and no statement timeout, against 60-second windows.
+   * A request admitted in one window and completing two windows later then
+   * offers the reset time of a window that closed while it waited. Against its
+   * own captured clock that reset is still in the future, so it wrote — over
+   * whatever the current window had cached, moving the cache's expiry
+   * BACKWARDS past the real clock. The next request reads an entry that has
+   * already expired, deletes it, and goes back to the database. That is the
+   * round-trip `degrade-to-local` exists to stop making, arriving exactly when
+   * the store is least able to serve it.
+   *
+   * Reading the clock here closes it in one place for all three call sites,
+   * and it is the whole of the rule: a completion may not write state a later
+   * window has already superseded. The counter in rate-limit.ts holds the same
+   * rule from the other end — a hit older than both retained windows leaves
+   * them untouched rather than borrowing from one.
+   *
+   * It also subsumes "keep the later of the two expiries", which was the other
+   * half of the review and which no reachable case can now exercise. Both
+   * values are the reset of the window that contained some captured `now`, and
+   * both captures precede the current clock. For the incoming one to survive
+   * the guard the current clock must lie inside its window; for the cached one
+   * to still be live the current clock must lie inside that window too. One
+   * clock is in one fixed window, so the two resets are equal — a strictly
+   * smaller live incoming value needs the clock to step backwards, and a
+   * backwards step lands on the guard rather than past it. An unreachable
+   * comparison is not a second guard, it is a line no test can pin.
+   */
+  function cacheLocalDeny(key: string, denyUntil: number): void {
+    const now = Date.now();
+    if (denyUntil <= now) return;
     if (localDenyUntilByKey.size >= LOCAL_DENY_CACHE_MAX) {
       for (const [cachedKey, cachedUntil] of localDenyUntilByKey) {
         if (cachedUntil <= now) localDenyUntilByKey.delete(cachedKey);
@@ -347,19 +468,41 @@ export function distributedRateLimiter(
     localDenyUntilByKey.set(key, denyUntil);
   }
 
+  /**
+   * The crossings on this path, enumerated, because three separate findings on
+   * this middleware were all about the state on the way to a state rather than
+   * at it. Healthy and fully-degraded were each covered by a test; none of the
+   * transitions were.
+   *
+   *  1. Store fails mid-request → the `catch` below, which counts against the
+   *     captured `now` so the degraded hit lands in the window the rest of the
+   *     request is about.
+   *  2. Window rolls while the upsert is in flight → both counters derive their
+   *     window from that same `now`. The counter takes it as an argument for
+   *     exactly this reason; re-reading the clock put one request in two
+   *     windows.
+   *  3. Store recovers inside a window the shadow already owns → the headers
+   *     and the decision both use the stricter of the two counts.
+   *  4. A cached deny outliving its window, or a late completion cutting a live
+   *     one short → `cacheLocalDeny` judges the reset time it is handed against
+   *     the clock NOW rather than the caller's captured one, so a completion
+   *     whose own window has closed writes nothing at all.
+   *  5. Bucket key resolution awaits before `now` is captured, so the key and
+   *     the window cannot disagree about which request this is.
+   *
+   * A fail-open mount reaches none of this: it has no fallback to seed and
+   * never touches the local counter.
+   */
   return async (c, next) => {
     if (methods !== "all" && !methods.includes(c.req.method)) return next();
 
-    let key: string;
-    if (opts.bucketKey) {
-      const suffix = await opts.bucketKey(c);
-      if (suffix === null) {
-        warnUnattributable(opts.keyPrefix, windowMs);
-        return next();
-      }
-      key = `${opts.keyPrefix}:${suffix}`;
-    } else {
-      key = deriveBucketKey(c, opts.keyPrefix);
+    const key = await bucketKeyOf(c);
+    if (key === null) {
+      // The resolver could not name a caller. Skip rather than pool: an
+      // unattributable ceiling converts one abuser into an outage for everyone
+      // else, which on these pre-auth mounts is strictly worse than no ceiling.
+      warnUnattributable(opts.keyPrefix, windowMs);
+      return next();
     }
     const now = Date.now();
     const windowStartMs = Math.floor(now / windowMs) * windowMs;
@@ -380,6 +523,46 @@ export function distributedRateLimiter(
       return c.json({ error: "rate_limited" }, 429);
     }
     if (locallyDeniedUntil) localDenyUntilByKey.delete(key);
+
+    // The shadow hit is taken HERE, at admission, and not after the store call
+    // returns. The counter is told the same captured `now` either way, so the
+    // window it lands in is unchanged; what changes is WHEN it lands, and that
+    // is the whole of it.
+    //
+    // Counting afterwards made the hit's arrival depend on the store. A call
+    // still in flight after two window rolls comes back asking the counter
+    // about a window it no longer retains — `createFixedWindowCounter` keeps
+    // exactly one previous window, deliberately, so that per-key state stays a
+    // constant rather than a history a pre-authentication caller can grow — and
+    // the counter answers the only honest thing it can, that it has no record.
+    // It says so as `count: 1`, and it says it INDEPENDENTLY to every member of
+    // the cohort. So a cohort of any size, captured in one window behind one
+    // slow store call, all read 1 and all pass a ceiling of `max`.
+    //
+    // That is reachable rather than theoretical, and both halves were checked
+    // in this tree: these limiters use 60-second windows (`DEFAULT_WINDOW_MS`,
+    // and `/v1/telemetry/usage` passes 60_000 explicitly), and the pool in
+    // `packages/database/src/client.ts` is built with `max` and
+    // `prepare: false` and nothing else — no `statement_timeout`, no
+    // `connect_timeout` — so nothing bounds a store call at 120 seconds.
+    //
+    // Counting at admission bounds the cohort whether or not the store call
+    // ever returns, and it does so without retaining a window until its
+    // outstanding calls drain, which would put back exactly the unbounded
+    // per-key state the one-previous-window rule exists to prevent. It also
+    // removes out-of-order arrival as a concern for this call site rather than
+    // handling it: `now` is captured and the hit taken in the same synchronous
+    // run, so for a given key these arrive in clock order however the store
+    // behaves. The counter's own out-of-order paths stay — it is exported and
+    // `rateLimiter` uses it too — but nothing here reaches them any more.
+    //
+    // Only a `degrade-to-local` mount counts, as before: a fail-open mount has
+    // no fallback to seed, and the map entry per bucket key per window is a
+    // cost a pre-authentication caller chooses.
+    const shadow =
+      storeErrorPolicy === "degrade-to-local"
+        ? localCounter.hit(key, now)
+        : null;
 
     let count: number;
     try {
@@ -410,11 +593,33 @@ export function distributedRateLimiter(
         return rows[0]?.count ?? 0;
       });
     } catch (err) {
-      const failClosed = opts.failClosedOnStoreError === true;
-      warnStoreError(opts.keyPrefix, windowMs, err, failClosed);
-      if (failClosed) {
-        c.header("Retry-After", "1");
-        return c.json({ error: "rate_limit_unavailable" }, 503);
+      warnStoreError(opts.keyPrefix, windowMs, err, storeErrorPolicy);
+      // `shadow` is non-null exactly when the policy is `degrade-to-local`, so
+      // this is the same gate as testing the policy and it carries the
+      // narrowing with it. Reading it rather than the policy is what leaves no
+      // `localCounter.hit` on this side of the await at all: the previous form
+      // fell back to taking one here, which could not run but was the shape the
+      // hit was moved out of, one edit away from coming back.
+      if (!shadow) return next();
+
+      const local = shadow;
+      c.header("X-RateLimit-Limit", String(max));
+      c.header("X-RateLimit-Remaining", String(Math.max(0, max - local.count)));
+      c.header("X-RateLimit-Reset", String(Math.ceil(local.resetAt / 1000)));
+      if (local.count > max) {
+        // Cache the denial, exactly as the healthy path does. Without this,
+        // every further request from an exhausted bucket re-enters the `try`
+        // above, waits for `withSystemDb` to fail AGAIN, and only then rejects
+        // — a failing database round-trip per request, under the flood this
+        // limiter exists for, against a store that is already unwell.
+        // `degrade-to-local` exists to take load OFF the store; a denial path
+        // that puts it back on is the mode defeating its own purpose.
+        cacheLocalDeny(key, local.resetAt);
+        c.header(
+          "Retry-After",
+          String(Math.max(1, Math.ceil((local.resetAt - now) / 1000))),
+        );
+        return c.json({ error: "rate_limited" }, 429);
       }
       return next();
     }
@@ -425,13 +630,54 @@ export function distributedRateLimiter(
     }
 
     c.header("X-RateLimit-Limit", String(max));
-    c.header("X-RateLimit-Remaining", String(Math.max(0, max - count)));
     c.header("X-RateLimit-Reset", String(resetSeconds));
 
     if (count > max) {
-      cacheLocalDeny(key, resetAtMs, now);
+      c.header("X-RateLimit-Remaining", "0");
+      cacheLocalDeny(key, resetAtMs);
       const retryAfter = Math.max(1, resetSeconds - Math.ceil(now / 1000));
       c.header("Retry-After", String(retryAfter));
+      return c.json({ error: "rate_limited" }, 429);
+    }
+
+    // Mirror the allowed request into the degraded counter, and ENFORCE the
+    // shadow count as well as record it. Recording alone closes only one of the
+    // two flapping orderings: healthy-then-failed, where the local counter
+    // starts from the count Postgres already reached. Failed-then-healthy stays
+    // open, because the recovered Postgres counter starts at 1 and would permit
+    // a second full `max` on top of the one the degraded path already served.
+    // The two ceilings bound the same window, so whichever of them is exhausted
+    // is the one that answers.
+    //
+    // This changes nothing on a healthy mount. The Postgres count is global and
+    // the shadow is per-instance, so the shadow can never exceed it while the
+    // store is up and `count > max` always fires first.
+    //
+    // The hit itself was taken at admission, against the captured `now`, for
+    // the reason written where it is taken: a shadow hit that waits for the
+    // store inherits the store's latency, and past two window rolls the counter
+    // no longer has the window to put it in. Reading the clock again here would
+    // have been worse still — it would land the hit in the NEXT window,
+    // counting one request twice and caching a denial against a reset time that
+    // had already passed.
+    //
+    // `effectiveCount` is the stricter of the two, and it is what the headers
+    // report. Reporting the Postgres count while the shadow is the operative
+    // ceiling tells a client it has room and then rejects its next request; a
+    // header a client paces against and cannot trust is worse than no header.
+    const effectiveCount = shadow ? Math.max(count, shadow.count) : count;
+
+    c.header(
+      "X-RateLimit-Remaining",
+      String(Math.max(0, max - effectiveCount)),
+    );
+
+    if (effectiveCount > max) {
+      cacheLocalDeny(key, resetAtMs);
+      c.header(
+        "Retry-After",
+        String(Math.max(1, resetSeconds - Math.ceil(now / 1000))),
+      );
       return c.json({ error: "rate_limited" }, 429);
     }
 
@@ -459,4 +705,18 @@ export function rateLimitBudgets(): { chat: number } {
   const env = requireEnv(["RATE_LIMIT_CHAT_PER_MIN"] as const);
   cachedBudgets = { chat: env.RATE_LIMIT_CHAT_PER_MIN };
   return cachedBudgets;
+}
+
+/**
+ * Test seam: drop the memoized env reads so a case can set a different value.
+ * The edge-header flag is the one that matters here — a case asserting the
+ * forged-header behaviour has to be able to turn it on and off.
+ */
+export function __resetRateLimitEnvForTests(): void {
+  cachedBudgets = null;
+  cachedTrustEdgeHeader = null;
+  // `trustedProxyCidrs()` memoizes in lib/context.ts, and the memo outliving a
+  // case is how a test that names proxies changes how a later one attributes an
+  // address — a green run for the wrong reason.
+  __resetTrustedProxyHopsForTests();
 }

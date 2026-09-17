@@ -204,12 +204,48 @@ on ECS is possible but adds a stateful component. **Recommendation:** keep
 Inngest Cloud through the migration; revisit self-hosting separately.
 
 ### 4.6 Distributed rate limiting — **required before scaling out**
-`RATE_LIMIT_CHAT_PER_MIN` / `RATE_LIMIT_AGENT_EXEC_PER_MIN` and the circuit
-breaker (`CIRCUIT_BREAKER_*`) are per-process today. With N Fargate tasks the
-effective limit becomes N×. Back them with ElastiCache Valkey before the
-first service scales past one task. Same for Better Auth's `rateLimits`
+`RATE_LIMIT_CHAT_PER_MIN` and the circuit breaker (`CIRCUIT_BREAKER_*`) are
+per-process today. With N Fargate tasks the effective limit becomes N×. Back
+them with ElastiCache Valkey before the first service scales past one task.
+(`RATE_LIMIT_AGENT_EXEC_PER_MIN` was retired with the agent runtime in ADR-043;
+the ceilings that replaced it are constants at their mount points, because a
+drain rate is a property of the ingress rather than a per-deployment knob.)
+The distributed limiter's counters are already shared — they live in Postgres,
+not in process — but note ADR-082: when that store is unreachable those mounts
+degrade to a per-instance ceiling, so the N× problem returns for the duration
+of a counter-store outage and not before. Same for Better Auth's `rateLimits`
 table usage — note the plural-table gotcha when validating against a
 prod-equivalent env.
+
+**Client-address rollout (ADR-083), two steps in this order.** The application
+believes `X-Oxagen-Client-Ip` only when `TRUST_EDGE_CLIENT_IP_HEADER=true`, and
+that header is only trustworthy once Caddy is SETting it. So: (1) upload and
+reload the Caddy config from `infra/tools/caddy/Caddyfile.alb`; (2) set
+`TRUST_EDGE_CLIENT_IP_HEADER=true` on app, api and mcp. Doing step 2 first is
+the failure mode the flag exists to prevent: the old Caddy config forwards a
+caller-supplied copy of that header unchanged, and it feeds IAM `ip_ranges`
+evaluation.
+
+Step 1 is `infra/tools/install-node-scripts.sh` and nothing else. That file
+carries a `__ALB_SUBNET_CIDRS__` placeholder rather than a literal trust list:
+the script resolves the ALB's subnets from the live load balancer and
+substitutes them, because trusting `private_ranges` on an internet-facing ALB
+lets a caller whose own source is RFC1918 be classified as a proxy and walked
+past. Copying the file to the node by hand ships the placeholder, which is not a
+CIDR — `caddy validate` on the node rejects it and the previous config stays.
+
+`TRUSTED_PROXY_CIDRS` belongs BEFORE step 1 and not after it. Until Caddy is
+reloaded the ALB's own address is still in `X-Forwarded-For`, so a named proxy
+can vouch for the entry beside it; once step 1 lands, Caddy replaces that header
+with the single client address and no proxy entry remains to vouch with, so the
+identity walk returns nothing and the edge header from step 2 is what attributes
+the caller. The window between the two steps is therefore briefly unattributed,
+and it fails closed: IAM `ip_ranges` mandates deny and the pre-authentication IP
+ceilings skip. `TRUSTED_PROXY_HOP_COUNT` is not an alternative — it was deleted
+in #3205 and nothing reads it. ADR-083's "The attribution order, stated once" is
+the canonical statement of all of this, against the branches of
+`extractTrustedClientIp`; this paragraph is a pointer to it and not a second
+source of truth.
 
 ### 4.7 Secrets — amend ADR-004
 ADR-004 chose env vars over a secret manager because there was "no GCP

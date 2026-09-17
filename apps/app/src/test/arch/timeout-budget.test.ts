@@ -718,23 +718,31 @@ const judged = (file: string): string[] => judge(context, file).violations;
 const probe = (name: string): string[] => judged(`${PROBES}/${name}`);
 
 describe("whole-tree timeout budget", () => {
-  it("every whole-tree test in the arch suite declares a named budget", () => {
-    const files = judgedTestFiles();
-    expect(files.length).toBeGreaterThan(0);
-    expect(files.flatMap(judged)).toEqual([]);
-  }, WHOLE_TREE_TIMEOUT_MS);
+  it(
+    "every whole-tree test in the arch suite declares a named budget",
+    () => {
+      const files = judgedTestFiles();
+      expect(files.length).toBeGreaterThan(0);
+      expect(files.flatMap(judged)).toEqual([]);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
 
-  it("finds whole-tree registrations to judge, in more than one file", () => {
-    const perFile = judgedTestFiles().map((file) => ({
-      file,
-      found: judge(context, file).found,
-    }));
-    const carrying = perFile.filter((entry) => entry.found.length > 0);
-    // A checker that matches nothing passes every file; these two floors fail
-    // if the detector stops recognising the suite it is meant to police.
-    expect(carrying.length).toBeGreaterThan(3);
-    expect(perFile.flatMap((entry) => entry.found).length).toBeGreaterThan(8);
-  }, WHOLE_TREE_TIMEOUT_MS);
+  it(
+    "finds whole-tree registrations to judge, in more than one file",
+    () => {
+      const perFile = judgedTestFiles().map((file) => ({
+        file,
+        found: judge(context, file).found,
+      }));
+      const carrying = perFile.filter((entry) => entry.found.length > 0);
+      // A checker that matches nothing passes every file; these two floors fail
+      // if the detector stops recognising the suite it is meant to police.
+      expect(carrying.length).toBeGreaterThan(3);
+      expect(perFile.flatMap((entry) => entry.found).length).toBeGreaterThan(8);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
 
   it("a budget on the it, on a beforeAll and on a helper's caller passes", () => {
     expect(probe("ok.test.ts")).toEqual([]);
