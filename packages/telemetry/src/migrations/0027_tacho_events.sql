@@ -390,8 +390,7 @@ CREATE TABLE IF NOT EXISTS tacho_events (
   unobserved_tail Nullable(Bool),
   completeness_gaps Array(String),
   received_at DateTime64(3, 'UTC'),
-  chain_verified Bool,
-  anthropic_user_email_digest String
+  chain_verified Bool
 )
 ENGINE = ReplacingMergeTree(received_at)
 PARTITION BY toYYYYMM(ts)

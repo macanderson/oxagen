@@ -188,13 +188,20 @@ describe("the collector hashes on the host", () => {
 });
 
 describe("the tacho_events column set", () => {
-  it("lets no producer write the person column", () => {
-    // Server-stamped, like org_id: the stored value is keyed with a secret the
-    // producer does not hold, so a producer-supplied one would be either
-    // forged or reversible.
-    expect(SERVER_STAMPED_COLUMNS).toContain("anthropic_user_email_digest");
-    expect(ENVELOPE_COLUMNS).not.toContain("anthropic_user_email_digest");
-    expect(TACHO_EVENT_COLUMNS).not.toContain("anthropic_user_email_digest");
+  it("has no person column at all, stamped or otherwise", () => {
+    // An earlier round stamped a keyed digest here. That was an oracle: a host
+    // key may ingest and an org Member may read the session back, so a stable
+    // value computed from the producer-chosen `anthropic` block could be
+    // matched against a colleague's row by submitting guesses. The session's
+    // person is `initiating_principal_id`, which this deployment issues.
+    for (const set of [
+      ENVELOPE_COLUMNS,
+      TACHO_EVENT_COLUMNS,
+      SERVER_STAMPED_COLUMNS,
+    ]) {
+      expect(set).not.toContain("anthropic_user_email_digest");
+      expect(set).not.toContain("anthropic_user_email");
+    }
   });
 
   it("has no column that could hold a readable address", () => {

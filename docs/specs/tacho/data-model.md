@@ -49,49 +49,31 @@ Engine `ReplacingMergeTree(received_at)`, `PARTITION BY toYYYYMM(ts)`, `ORDER BY
 | Column | Type | From |
 |---|---|---|
 | `anthropic_user_id_hash` | String | OTel `user.id` |
-| `anthropic_user_email_digest` | String | server-stamped HMAC of OTel `user.email` — see below; never the address, never a bare hash |
 | `anthropic_account_uuid`, `anthropic_account_id` | String | OTel `user.account_uuid`, `user.account_id` |
 | `anthropic_org_uuid` | String | OTel `organization.id` (also transcript `bridge-session.ownerOrganizationUuid`) |
 | `api_key_source` | LC | init `apiKeySource` (`none` \| `ANTHROPIC_API_KEY` \| …) |
 
-**The address itself is never stored, and the stored value is keyed.** Two
-envelope members can carry the person, and neither reaches a store (#3072):
+**Nothing derived from the address is stored, and there is no column for one.**
+Two envelope members can carry the person — `anthropic.user_email_digest`, what
+a collector from this release on sends after hashing on the host, and
+`anthropic.user_email`, the legacy member still accepted so installed
+collectors and WAL entries sealed under `tacho/1.0` keep working. The control
+plane discards both (#3072).
 
-- `anthropic.user_email_digest` — what a collector from this release on sends.
-  The address is hashed on the host (`digestUserEmail`,
-  `packages/tacho/src/digest.ts`), so it never crosses the wire.
-- `anthropic.user_email` — the legacy member, still accepted and still
-  discarded. `anthropicSchema` is strict inside a validator that rejects the
-  whole batch, so removing it would have taken down every batch from a host
-  that had not upgraded and left WAL entries sealed under `tacho/1.0`
-  permanently unsendable.
+Earlier designs hashed the address, then keyed the hash with a server-held
+secret, and stored the result here. Both were wrong, for different reasons. A
+published domain prefix does not make a low-entropy address one-way: whoever
+reads the column guesses a colleague's address, hashes it and compares. Keying
+fixed that and introduced a worse problem — a host key may call
+`ingest_tacho_events` and an org Member may call `get_tacho_session`, so the
+producer could submit the hash of a guessed address, read the keyed result back
+and match it against a colleague's row. The server computed the function on
+demand for chosen inputs, which is a dictionary oracle no matter how strong the
+function is.
 
-The control plane reduces whichever member arrives to the same pre-image and
-stamps `anthropic_user_email_digest` with
-`HMAC-SHA256(TACHO_USER_EMAIL_DIGEST_KEY, domain ‖ NUL ‖ pre-image)`, written
-`hmac-sha256:<64 hex>`
-(`packages/handlers/src/lib/tacho-user-email-digest.ts`). Both spellings give
-one value per person, so a fleet part-way through an upgrade does not split
-someone in two.
-
-Keying is the part that matters. Hashing alone — even domain-separated — is not
-one-way for an address: the domain string is published, and an address carries
-so little entropy that whoever can read this column guesses a colleague's
-address, hashes it and compares. This table has no row policy, which is what
-made the plaintext column reachable by an ordinary org-scoped analytics query
-in the first place. Only a key that reader cannot obtain closes it, and the key
-reaches no tenant, no host and no store. ADR-084 has the reasoning and what
-rotation costs.
-
-The column is therefore **server-stamped**, listed with `org_id`,
-`workspace_id`, `received_at` and `chain_verified` rather than with the
-envelope columns: `flattenEvent` never emits it, and a producer-supplied value
-would be either forged or, lacking the key, reversible.
-
-Rows written before this were not backfilled. A keyed digest cannot be computed
-in a migration without putting the key in a query log, and ClickHouse has no
-HMAC function; both migrations drop the plaintext column and the historical
-rows lose the attribute, which is the stronger outcome for the defect.
+The person is `initiating_principal_id` / `initiating_user_id` on
+`tacho.sessions` — an identity this deployment issues, which a producer cannot
+choose and which needs no secret to stay meaningful. ADR-084 has the reasoning.
 
 ### 2.3 Session, causality, ordering
 | Column | Type | From |
@@ -300,7 +282,7 @@ rows lose the attribute, which is the stronger outcome for the defect.
 Identity: `agent_id`, `agent_principal_id`, `api_key_id`, `created_by_user_id`. Host: `hostname`, `hostname_digest`, `platform`, `os_version`, `arch`, `os_user`, `device_public_key`, `device_key_fingerprint`, `claude_version_at_enroll`, `claude_execpath`, `node_version`, `wrapper_version`, `shell`, `terminal_type_last`. Enrollment: `status` (`active`/`paused`/`suspended`/`revoked`), `enrollment_claims` jsonb, `enrollment_signature`, `expires_at`, `revoked_at`, `revoke_reason`, `managed` bool, `managed_settings_digest`, `user_settings_digest`, `project_settings_digests` jsonb. Policy: `mode`, `bundle_version_served`, `bundle_etag_served`, `deny_generation_org_seen`, `deny_generation_ws_seen`, `last_bundle_fetch_at`. Liveness: `last_seen_at`, `last_ingest_at`, `last_heartbeat_at`, `spool_depth`, `spool_oldest_at`, `hooks_ok`, `hooks_last_checked_at`, `otel_ok`, `daemon_version`, `daemon_uptime_s`. Counters: `sessions_count`, `unobserved_sessions_count`, `incidents_open`. Timestamps.
 
 ### 3.2 `tacho_sessions` (`tses_`)
-Identity: `session_uuid` (unique), `harness_session_id`, `host_enrollment_id`, `agent_id`, `agent_principal_id`, `initiating_principal_id`, `initiating_user_id`, `root_session_id`, `parent_session_id`, `subagent_id`, `subagent_type`, `subagent_description`, `spawn_depth`, `spawn_tool_use_id`. Anthropic observations: `anthropic_user_id_hash`, `anthropic_user_email_digest` (section 2.2 — server-stamped HMAC, never the address), `anthropic_account_uuid`, `anthropic_account_id`, `anthropic_org_uuid`, `api_key_source`. Harness: `runtime`, `harness`, `harness_version`, `wrapper_version`, `entrypoint`, `query_source_initial`, `terminal_type`, `session_kind`, `is_child_session`, `bridge_session_id`, `output_style`, `effort`, `model_initial`, `model_final`, `fast_mode_state`, `fast_mode_disabled_reason`, `permission_mode_initial`, `permission_mode_final`, `permission_mode_changes`, `analytics_disabled`. Lifecycle: `start_type` (`fresh`/`resume`/`fork`/`clear`/`compact`), `start_source`, `end_reason`, `terminal_reason`, `stop_reason_final`, `outcome` (`completed`/`aborted`/`crashed`/`unknown`), `is_error`, `api_error_status`, `started_at`, `first_prompt_at`, `last_event_at`, `ended_at`, `sealed_at`. Place: `cwd`, `project_dir`, `transcript_path`, `git_remote_digest`, `git_branch`, `git_head_sha_start`, `git_head_sha_end`, `git_dirty_start`, `worktree_path`, `worktree_name`, `worktree_branch`, `relocated_cwd`. Inventory (jsonb, from `system.init` and attachments): `tools_available`, `mcp_servers`, `agents_available`, `skills_available`, `slash_commands`, `plugins`, `harness_capabilities`, `instructions_loaded` (`[{file_path, memory_type, load_reason, digest}]`), `settings_sources` (`[{source, path, digest}]`), `hooks_registered` (`[{event, type, matcher, source}]`), `env_snapshot` (secret-denylisted), `memory_paths`. Totals: `num_turns`, `num_prompts`, `num_model_calls`, `num_api_errors`, `num_api_retries`, `num_tool_calls`, `num_tool_errors`, `num_tool_rejections`, `num_tool_asks`, `num_subagents`, `num_compactions`, `num_model_switches`, `num_notifications`, `num_elicitations`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_creation_tokens`, `cache_creation_5m_tokens`, `cache_creation_1h_tokens`, `thinking_tokens`, `web_search_requests`, `web_fetch_requests`, `total_cost_micros`, `cost_basis`, `has_unknown_model_cost`, `duration_ms`, `api_duration_ms`, `api_duration_without_retries_ms`, `tool_duration_ms`, `active_time_s`, `ttft_first_ms`, `lines_added`, `lines_removed`, `files_read`, `files_written`, `files_deleted`, `commands_run`, `network_calls`, `commits`, `pull_requests`, `subagent_stats` jsonb, `permission_denials` jsonb, `models_used` text[]. Policy: `enforcement_tier`, `bundle_mode`, `bundle_version`, `policy_decisions`, `policy_denies`, `elevations_requested`, `elevations_approved`, `elevations_denied`, `elevations_expired`, `tokens_issued`, `tokens_used`. Chain: `seq_count`, `genesis_hash`, `final_hash`, `checkpoint_count`, `last_checkpoint_id`, `chain_verified`, `telemetry_gap_count`, `unobserved_tail`, `completeness_gaps` text[], `replay_grade`, `evidence_manifest_id`. Presentation: `title` (transcript `ai-title`), `last_prompt_digest`. Timestamps.
+Identity: `session_uuid` (unique), `harness_session_id`, `host_enrollment_id`, `agent_id`, `agent_principal_id`, `initiating_principal_id`, `initiating_user_id`, `root_session_id`, `parent_session_id`, `subagent_id`, `subagent_type`, `subagent_description`, `spawn_depth`, `spawn_tool_use_id`. Anthropic observations: `anthropic_user_id_hash`, `anthropic_account_uuid`, `anthropic_account_id`, `anthropic_org_uuid`, `api_key_source`. Harness: `runtime`, `harness`, `harness_version`, `wrapper_version`, `entrypoint`, `query_source_initial`, `terminal_type`, `session_kind`, `is_child_session`, `bridge_session_id`, `output_style`, `effort`, `model_initial`, `model_final`, `fast_mode_state`, `fast_mode_disabled_reason`, `permission_mode_initial`, `permission_mode_final`, `permission_mode_changes`, `analytics_disabled`. Lifecycle: `start_type` (`fresh`/`resume`/`fork`/`clear`/`compact`), `start_source`, `end_reason`, `terminal_reason`, `stop_reason_final`, `outcome` (`completed`/`aborted`/`crashed`/`unknown`), `is_error`, `api_error_status`, `started_at`, `first_prompt_at`, `last_event_at`, `ended_at`, `sealed_at`. Place: `cwd`, `project_dir`, `transcript_path`, `git_remote_digest`, `git_branch`, `git_head_sha_start`, `git_head_sha_end`, `git_dirty_start`, `worktree_path`, `worktree_name`, `worktree_branch`, `relocated_cwd`. Inventory (jsonb, from `system.init` and attachments): `tools_available`, `mcp_servers`, `agents_available`, `skills_available`, `slash_commands`, `plugins`, `harness_capabilities`, `instructions_loaded` (`[{file_path, memory_type, load_reason, digest}]`), `settings_sources` (`[{source, path, digest}]`), `hooks_registered` (`[{event, type, matcher, source}]`), `env_snapshot` (secret-denylisted), `memory_paths`. Totals: `num_turns`, `num_prompts`, `num_model_calls`, `num_api_errors`, `num_api_retries`, `num_tool_calls`, `num_tool_errors`, `num_tool_rejections`, `num_tool_asks`, `num_subagents`, `num_compactions`, `num_model_switches`, `num_notifications`, `num_elicitations`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_creation_tokens`, `cache_creation_5m_tokens`, `cache_creation_1h_tokens`, `thinking_tokens`, `web_search_requests`, `web_fetch_requests`, `total_cost_micros`, `cost_basis`, `has_unknown_model_cost`, `duration_ms`, `api_duration_ms`, `api_duration_without_retries_ms`, `tool_duration_ms`, `active_time_s`, `ttft_first_ms`, `lines_added`, `lines_removed`, `files_read`, `files_written`, `files_deleted`, `commands_run`, `network_calls`, `commits`, `pull_requests`, `subagent_stats` jsonb, `permission_denials` jsonb, `models_used` text[]. Policy: `enforcement_tier`, `bundle_mode`, `bundle_version`, `policy_decisions`, `policy_denies`, `elevations_requested`, `elevations_approved`, `elevations_denied`, `elevations_expired`, `tokens_issued`, `tokens_used`. Chain: `seq_count`, `genesis_hash`, `final_hash`, `checkpoint_count`, `last_checkpoint_id`, `chain_verified`, `telemetry_gap_count`, `unobserved_tail`, `completeness_gaps` text[], `replay_grade`, `evidence_manifest_id`. Presentation: `title` (transcript `ai-title`), `last_prompt_digest`. Timestamps.
 
 ### 3.3 `tacho_session_models`
 `session_id`, `model`, `canonical_model`, `provider`, `cost_basis`, `context_window`, `max_output_tokens`, `requests`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_creation_tokens`, `thinking_tokens`, `web_search_requests`, `cost_micros`, `api_duration_ms`. Unique `(session_id, model)`.

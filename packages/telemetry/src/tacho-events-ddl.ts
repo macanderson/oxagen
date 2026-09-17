@@ -101,10 +101,6 @@ const SERVER_COLUMN_TYPES: Array<[string, string]> = [
   ["workspace_id", "UUID"],
   ["received_at", "DateTime64(3, 'UTC')"],
   ["chain_verified", "Bool"],
-  // Keyed with a secret only the control plane holds, so whoever can read this
-  // table cannot turn it back into an address by guessing one (#3072). Server
-  // territory for the same reason org_id is, hence its place in this list.
-  ["anthropic_user_email_digest", "String"],
 ];
 
 function unwrap(schema: z.ZodTypeAny): z.ZodTypeAny {

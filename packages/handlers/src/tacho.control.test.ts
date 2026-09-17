@@ -114,7 +114,6 @@ function sessionRow(overrides: Record<string, unknown> = {}) {
     chainVerified: true,
     unobservedTail: false,
     title: "probe",
-    anthropicUserEmailDigest: null,
     entrypoint: "sdk-cli",
     terminalType: "ghostty",
     permissionModeInitial: "bypassPermissions",

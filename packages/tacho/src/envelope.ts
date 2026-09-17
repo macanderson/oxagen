@@ -719,10 +719,12 @@ export const hostSchema = z
 /**
  * What the harness reports about the Anthropic account behind the session.
  *
- * Two members can carry the person's address, and NEITHER is ever stored
- * (#3072). The control plane stamps `anthropic_user_email_digest` from a key
- * only it holds and drops both of these on the way in; see
- * `packages/handlers/src/lib/tacho-user-email-digest.ts`.
+ * Two members can carry the person's address, and NEITHER is stored, nor is
+ * anything derived from either (#3072). The control plane drops both on the
+ * way in. A stable value computed from this block would be an oracle: the
+ * producer chooses it, and an org Member can read the session back, so guesses
+ * could be matched against a colleague's row. The session's person is
+ * `initiating_principal_id`, which this deployment issues.
  *
  * `user_email_digest` is what a collector from this release on sends: the
  * address is hashed on the host, so it never crosses the wire.

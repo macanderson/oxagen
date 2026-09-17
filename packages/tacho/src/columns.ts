@@ -112,11 +112,6 @@ export const SERVER_STAMPED_COLUMNS = [
   "workspace_id",
   "received_at",
   "chain_verified",
-  // The person behind the session, keyed with a secret only the control plane
-  // holds (#3072). Stamped here for the same reason org_id is: the producer
-  // must not be able to choose it, and an unkeyed value is reversible by
-  // whoever can read the table. flattenEvent never emits it.
-  "anthropic_user_email_digest",
 ] as const;
 
 export type TachoEventRow = Record<string, unknown>;

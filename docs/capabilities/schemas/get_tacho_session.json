@@ -187,16 +187,6 @@
               }
             ]
           },
-          "anthropicUserEmailDigest": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "entrypoint": {
             "anyOf": [
               {
@@ -441,7 +431,6 @@
           "chainVerified",
           "unobservedTail",
           "title",
-          "anthropicUserEmailDigest",
           "entrypoint",
           "terminalType",
           "permissionModeInitial",

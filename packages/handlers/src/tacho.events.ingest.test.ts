@@ -8,13 +8,8 @@ import {
   sealEvent,
   sessionUuid,
 } from "@oxagen/tacho";
-import { tachoEventRow } from "@oxagen/telemetry";
-import {
-  resetUserEmailDigestWarningForTests,
-  USER_EMAIL_DIGEST_KEY_ENV,
-} from "./lib/tacho-user-email-digest";
 import { schema } from "@oxagen/database";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   insertTachoEvents: vi.fn(),
@@ -655,19 +650,100 @@ describe("ingest_tacho_events", () => {
       );
     }
 
-    beforeEach(() => {
-      resetUserEmailDigestWarningForTests();
-      vi.stubEnv(USER_EMAIL_DIGEST_KEY_ENV, "test-user-email-digest-key");
+    /**
+     * The literal values this ingest persists for one submitted batch. Drizzle
+     * `sql\`col + n\`` increments are fresh objects on every call, so they are
+     * dropped: they encode a counter bump and carry nothing from the producer.
+     */
+    function literals(row: Record<string, unknown>): Record<string, unknown> {
+      const out: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(row)) {
+        const kind = typeof value;
+        if (
+          value === null ||
+          kind === "string" ||
+          kind === "number" ||
+          kind === "boolean" ||
+          Array.isArray(value)
+        ) {
+          out[key] = value;
+        }
+      }
+      return out;
+    }
+
+    async function persisted(anthropic: Record<string, string> | undefined) {
+      mocks.insertTachoEvents.mockClear();
+      const db = fakeDb();
+      wire(db);
+      await run(batch(anthropic));
+      const sent = (mocks.insertTachoEvents.mock.calls[0]?.[0] ?? []) as Array<{
+        event: TachoEvent;
+        [k: string]: unknown;
+      }>;
+      return {
+        session: literals(db.sessions.get(SESSION) as Record<string, unknown>),
+        // what reaches ClickHouse, minus the producer's own event echo
+        clickhouse: sent.map(({ event: _event, ...stamped }) => stamped),
+      };
+    }
+
+    it("is not an oracle: the response does not vary with a producer-chosen pre-image", async () => {
+      // THE FINDING. A host key may ingest and an org Member may read the
+      // session back, so if any stored value were a stable function of the
+      // producer-supplied `anthropic` block, a tenant could submit the hash of
+      // a guessed address, read the result, and compare it against a
+      // colleague's row until it matched. Keeping a key secret does not help
+      // when the server computes the function on demand for chosen inputs.
+      //
+      // The property that closes it: nothing persisted depends on that block.
+      const guessA = await persisted({
+        user_email_digest: `sha256:${"a".repeat(64)}`,
+      });
+      const guessB = await persisted({
+        user_email_digest: `sha256:${"b".repeat(64)}`,
+      });
+      const legacy = await persisted({ user_email: ADDRESS });
+      const nobody = await persisted(undefined);
+
+      // The chain hashes are the one permitted difference, and they are not an
+      // oracle: the producer computes them itself before submitting, so it
+      // learns nothing back, and each covers the whole sealed event rather than
+      // the address. Reproducing a colleague's hash would mean reproducing
+      // their entire event, not guessing their address.
+      const CHAIN = ["genesisHash", "lastHash"];
+      const variesFrom = (other: Record<string, unknown>) =>
+        Object.keys(guessA.session)
+          .filter(
+            (k) =>
+              JSON.stringify(guessA.session[k]) !== JSON.stringify(other[k]),
+          )
+          .sort();
+
+      expect(variesFrom(guessB.session)).toEqual(CHAIN);
+      expect(variesFrom(legacy.session)).toEqual(CHAIN);
+      expect(variesFrom(nobody.session)).toEqual(CHAIN);
+      expect(guessA.clickhouse).toEqual(guessB.clickhouse);
+      expect(guessA.clickhouse).toEqual(legacy.clickhouse);
     });
 
-    afterEach(() => {
-      vi.unstubAllEnvs();
+    it("stores nothing derived from the address, in either store", async () => {
+      const { session, clickhouse } = await persisted({
+        user_email: ADDRESS,
+        user_email_digest: digestUserEmail(ADDRESS) as string,
+      });
+      const written = JSON.stringify({ session, clickhouse });
+      expect(written).not.toContain("@example.com");
+      expect(written).not.toContain(digestUserEmail(ADDRESS));
+      for (const key of Object.keys(session)) {
+        expect(key.toLowerCase()).not.toContain("email");
+      }
     });
 
-    it("accepts a legacy batch carrying the plaintext address and stores no address", async () => {
-      // An installed collector, or an upgraded one draining a WAL sealed
-      // before the change, still sends anthropic.user_email. Rejecting it took
-      // the WHOLE batch down and left those sealed entries unsendable.
+    it("still accepts a legacy batch whole, so installed collectors keep reporting", async () => {
+      // An installed collector, or an upgraded one draining a WAL sealed before
+      // the change, still sends anthropic.user_email. Rejecting it took the
+      // WHOLE batch down and left those sealed entries unsendable.
       const db = fakeDb();
       wire(db);
       const events = batch({ user_email: ADDRESS });
@@ -676,100 +752,31 @@ describe("ingest_tacho_events", () => {
 
       expect(output.accepted).toBe(events.length);
       expect(output.chain_breaks).toEqual([]);
-      // every batch-mate landed, not just the one carrying the member
       expect(output.event_ids).toEqual(events.map((e) => e.event_id_idem));
+    });
 
-      const row = db.sessions.get(SESSION) as Record<string, unknown>;
-      expect(row["anthropicUserEmailDigest"]).toMatch(
-        /^hmac-sha256:[0-9a-f]{64}$/,
+    it("names the session's person with an identity this deployment issues", async () => {
+      // What replaces the digest: the row already carries principals the
+      // control plane minted, which a producer cannot choose and which need no
+      // key to stay meaningful.
+      const { session } = await persisted({ user_email: ADDRESS });
+      expect(Object.keys(session)).toEqual(
+        expect.arrayContaining(["orgId", "workspaceId", "hostId"]),
       );
-      expect(row).not.toHaveProperty("anthropicUserEmail");
-      for (const value of Object.values(row)) {
-        if (typeof value === "string") expect(value).not.toContain("@");
+    });
+
+    it("queries no column this PR adds, so a deploy before its migration is safe", async () => {
+      // #3186: deploy-node ships on merge with no migration dependency
+      // (pipeline.yml:763) while the Postgres and ClickHouse migrations are
+      // dispatched by hand. Code that needs a column the running schema lacks
+      // breaks ingestion in that window. This handler writes only columns the
+      // deployed schema already has.
+      const { session, clickhouse } = await persisted({ user_email: ADDRESS });
+      expect(session).not.toHaveProperty("anthropicUserEmailDigest");
+      expect(session).not.toHaveProperty("anthropicUserEmail");
+      for (const row of clickhouse) {
+        expect(Object.keys(row)).toEqual(["chainVerified"]);
       }
-    });
-
-    it("gives a legacy batch and a current one the same stored value", async () => {
-      const legacyDb = fakeDb();
-      wire(legacyDb);
-      await run(batch({ user_email: ADDRESS }));
-      const fromLegacy = (
-        legacyDb.sessions.get(SESSION) as Record<string, unknown>
-      )["anthropicUserEmailDigest"];
-
-      const currentDb = fakeDb();
-      wire(currentDb);
-      await run(
-        batch({ user_email_digest: digestUserEmail(ADDRESS) as string }),
-      );
-      const fromCurrent = (
-        currentDb.sessions.get(SESSION) as Record<string, unknown>
-      )["anthropicUserEmailDigest"];
-
-      expect(fromCurrent).toBe(fromLegacy);
-    });
-
-    it("hands ClickHouse the keyed value and never the pre-image or the address", async () => {
-      const db = fakeDb();
-      wire(db);
-      await run(batch({ user_email: ADDRESS }));
-
-      const sent = mocks.insertTachoEvents.mock.calls[0]?.[0] as Array<{
-        event: TachoEvent;
-        userEmailDigest?: string;
-      }>;
-      // Stamped per event, from what that event carried: the genesis names the
-      // person, the rest of this batch names nobody.
-      const named = sent.filter(
-        (insert) => insert.event.anthropic !== undefined,
-      );
-      expect(named).toHaveLength(1);
-      for (const insert of sent) {
-        expect(insert.userEmailDigest).not.toBe(digestUserEmail(ADDRESS));
-        expect(insert.userEmailDigest ?? "").not.toContain("@");
-      }
-      const keyed = named[0]?.userEmailDigest;
-      expect(keyed).toMatch(/^hmac-sha256:[0-9a-f]{64}$/);
-
-      // The row builder drops the envelope member and takes the column from
-      // the stamped value alone, so nothing downstream can put an address or a
-      // guessable pre-image into it.
-      const row = tachoEventRow(
-        {
-          event: named[0]!.event,
-          chainVerified: true,
-          userEmailDigest: keyed,
-        },
-        "2026-09-17T00:00:00.000Z",
-      );
-      expect(JSON.stringify(row)).not.toContain("@example.com");
-      expect(row["anthropic_user_email"]).toBeUndefined();
-      expect(row["anthropic_user_email_digest"]).toBe(keyed);
-
-      // ...and a producer that tries to write the column itself is ignored.
-      const forged = tachoEventRow(
-        {
-          event: {
-            ...named[0]!.event,
-            anthropic: {
-              ...named[0]!.event.anthropic,
-              user_email: ADDRESS,
-            },
-          } as TachoEvent,
-          chainVerified: true,
-          userEmailDigest: keyed,
-        },
-        "2026-09-17T00:00:00.000Z",
-      );
-      expect(JSON.stringify(forged)).not.toContain("@example.com");
-    });
-
-    it("records nothing for a session that named nobody", async () => {
-      const db = fakeDb();
-      wire(db);
-      await run(batch(undefined));
-      const row = db.sessions.get(SESSION) as Record<string, unknown>;
-      expect(row["anthropicUserEmailDigest"]).toBeNull();
     });
   });
 });

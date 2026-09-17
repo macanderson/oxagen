@@ -23,7 +23,7 @@ One session's flight-recorder index (`docs/specs/tacho/data-model.md` section 3)
 
 | Field | Type | Description |
 |---|---|---|
-| `session` | object | the full session projection, including `anthropicUserEmailDigest` |
+| `session` | object | the full session projection |
 | `children` | object[] | subagent session summaries |
 | `models` | object[] | per-model usage |
 | `files` | object[] | paths touched with counts and seq range |
@@ -31,14 +31,12 @@ One session's flight-recorder index (`docs/specs/tacho/data-model.md` section 3)
 | `incidents` | object[] | |
 | `checkpointCount` | integer | |
 
-The session projection names the person behind the run as
-`anthropicUserEmailDigest`, an `hmac-sha256:…` value, never an address. The
-control plane stamps it with a key no host, tenant or store reader holds, so
-two sessions with the same value are the same person and nobody reading the
-record can turn it back into an address by guessing one — which a plain hash of
-something as low-entropy as an address would not have prevented (ADR-084,
-`docs/specs/tacho/data-model.md` section 2.2). It is empty for a session that
-named nobody, and for one recorded while the deployment held no key.
+The session projection does not name the person by address, and carries nothing
+derived from one. It carries the principals this deployment issued —
+`agentPrincipalId`, `initiatingPrincipalId`, `initiatingUserId` — which a
+producer cannot choose. An earlier design returned a keyed digest of the
+address here; because a host key may ingest events and an org Member may read
+this output, that made the pair into a dictionary oracle (ADR-084).
 
 ## Honesty
 

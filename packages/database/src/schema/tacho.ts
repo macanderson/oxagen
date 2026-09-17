@@ -235,9 +235,6 @@ export const tachoSessions = tachoSchema.table(
     spawnToolUseId: text("spawn_tool_use_id"),
     // Anthropic-side observations (never used for scoping)
     anthropicUserIdHash: text("anthropic_user_id_hash"),
-    // `sha256:…` of the address, digested on the host before the event is
-    // sent. The readable address is never stored anywhere (#3072).
-    anthropicUserEmailDigest: text("anthropic_user_email_digest"),
     anthropicAccountUuid: text("anthropic_account_uuid"),
     anthropicAccountId: text("anthropic_account_id"),
     anthropicOrgUuid: text("anthropic_org_uuid"),

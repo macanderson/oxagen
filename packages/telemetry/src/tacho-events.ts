@@ -16,14 +16,6 @@ export interface TachoEventInsert {
   event: TachoEvent;
   /** The control plane recomputed the hash and the link to the prior row. */
   chainVerified: boolean;
-  /**
-   * The person behind the session, keyed with a secret only the control plane
-   * holds (#3072). Absent when the event named nobody, or when the deployment
-   * holds no key — in which case the column stays empty and no address is
-   * stored either way. Never taken from the producer: `flattenEvent` does not
-   * emit this column and `WRITABLE_COLUMNS` would drop it if it did.
-   */
-  userEmailDigest?: string;
 }
 
 const WRITABLE_COLUMNS: ReadonlySet<string> = new Set(
@@ -31,10 +23,7 @@ const WRITABLE_COLUMNS: ReadonlySet<string> = new Set(
     .map((column) => column.name)
     .filter(
       (name) =>
-        name !== "org_id" &&
-        name !== "workspace_id" &&
-        name !== "received_at" &&
-        name !== "anthropic_user_email_digest",
+        name !== "org_id" && name !== "workspace_id" && name !== "received_at",
     ),
 );
 
@@ -52,7 +41,6 @@ export function tachoEventRow(
   }
   row["chain_verified"] = insert.chainVerified;
   row["received_at"] = receivedAt;
-  row["anthropic_user_email_digest"] = insert.userEmailDigest ?? "";
   return row;
 }
 

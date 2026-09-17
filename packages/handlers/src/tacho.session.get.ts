@@ -59,7 +59,6 @@ export const tachoSessionGetHandler: CapabilityHandler<
     return {
       session: {
         ...sessionSummary(row, hostPublicId),
-        anthropicUserEmailDigest: row.anthropicUserEmailDigest,
         entrypoint: row.entrypoint,
         terminalType: row.terminalType,
         permissionModeInitial: row.permissionModeInitial,

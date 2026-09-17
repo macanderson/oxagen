@@ -18,7 +18,6 @@ import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest"
 import { schema, withTenantDb } from "@oxagen/database";
 import { type TachoEvent, verifyChain } from "@oxagen/tacho";
 import { insertTachoEvents } from "@oxagen/telemetry";
-import { stampUserEmailDigest } from "./lib/tacho-user-email-digest";
 import { eq, sql } from "drizzle-orm";
 import {
   type TachoHostRow,
@@ -224,7 +223,6 @@ function genesisRow(
     spawnDepth: subagent?.spawn_depth ?? 0,
     spawnToolUseId: subagent?.spawn_tool_use_id ?? null,
     anthropicUserIdHash: anthropic.user_id_hash ?? null,
-    anthropicUserEmailDigest: stampUserEmailDigest(anthropic) ?? null,
     anthropicAccountUuid: anthropic.account_uuid ?? null,
     anthropicAccountId: anthropic.account_id ?? null,
     anthropicOrgUuid: anthropic.org_uuid ?? null,
@@ -577,15 +575,15 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     return { chainBreaks, verified, control };
   });
 
-  // The digest is stamped here and taken from nowhere else: the producer sends
-  // a pre-image (a current collector hashes on the host, a legacy one sends the
-  // address), and the key that turns it into the stored value never leaves this
-  // deployment. Both spellings reduce to one value per person, so a fleet
-  // part-way through an upgrade does not split one person in two (#3072).
+  // Nothing derived from `event.anthropic` is stored. The producer chooses that
+  // block, so any stable value computed from it and readable back would be an
+  // oracle: submit the hash of a guessed address, read the result, compare it
+  // to a colleague's row. The session's person is `initiatingPrincipalId` /
+  // `initiatingUserId`, which this deployment issues rather than the harness
+  // reports (#3072).
   const inserts = input.events.map((event) => ({
     event,
     chainVerified: result.verified.get(event.session_uuid) ?? false,
-    userEmailDigest: stampUserEmailDigest(event.anthropic),
   }));
   try {
     await insertTachoEvents(inserts);
