@@ -20,6 +20,10 @@ import { type TachoEvent, verifyChain } from "@oxagen/tacho";
 import { insertTachoEvents } from "@oxagen/telemetry";
 import { eq, sql } from "drizzle-orm";
 import {
+  type TachoEnforcementTier,
+  resolveIngestedTier,
+} from "./lib/tacho-enforcement-tier";
+import {
   type TachoHostRow,
   controlEnvelope,
   resolveEnrolledHost,
@@ -201,6 +205,7 @@ function genesisRow(
   ctx: { orgId: string; workspaceId: string },
   events: TachoEvent[],
   now: Date,
+  enforcementTier: TachoEnforcementTier,
 ) {
   const first = events[0] as TachoEvent;
   const genesis = events.find((event) => event.kind === "agent_start") ?? first;
@@ -268,9 +273,11 @@ function genesisRow(
     hooksRegistered: body["hooks_registered"] ?? null,
     envSnapshot: body["env_snapshot"] ?? null,
     memoryPaths: body["memory_paths"] ?? null,
-    enforcementTier:
-      first.agent.enforcement_tier ??
-      (host.mode === "enforce" ? "harness" : "observe"),
+    // The control plane's verdict, resolved by the caller from server-owned
+    // state. Never `first.agent.enforcement_tier`: that is the producer's
+    // claim, and a claim of enforcement is the one thing a producer may not
+    // make about itself (`lib/tacho-enforcement-tier.ts`).
+    enforcementTier,
     bundleMode: host.mode,
     genesisHash: first.seq === 0 ? first.hash : null,
     createdAt: now,
@@ -402,11 +409,17 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       reason: string;
     }> = [];
     const verified = new Map<string, boolean>();
+    // The tier the control plane assigns each session in this batch. Keyed by
+    // session so a batch spanning several sessions cannot leak one session's
+    // verdict onto another, and reused to stamp the ClickHouse rows below.
+    const tiers = new Map<string, TachoEnforcementTier>();
     let newSessions = 0;
 
     for (const [sessionUuid, events] of bySession) {
       events.sort((a, b) => a.seq - b.seq);
       const first = events[0] as TachoEvent;
+      const tier = resolveIngestedTier(host.mode, first.agent.enforcement_tier);
+      tiers.set(sessionUuid, tier);
       const last = events[events.length - 1] as TachoEvent;
       const existing = await tx.query.tachoSessions.findFirst({
         where: eq(schema.tachoSessions.sessionUuid, sessionUuid),
@@ -529,7 +542,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           .where(eq(schema.tachoSessions.id, existing.id));
       } else {
         newSessions += 1;
-        const row = genesisRow(host, ctx, events, now);
+        const row = genesisRow(host, ctx, events, now, tier);
         await tx
           .insert(schema.tachoSessions)
           .values({
@@ -573,12 +586,16 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     }
     await touchHost(tx as never, host, input.daemon, now, true);
     const control = await controlEnvelope(tx as never, ctx, host, now);
-    return { chainBreaks, verified, control };
+    return { chainBreaks, verified, control, tiers };
   });
 
   const inserts = input.events.map((event) => ({
     event,
     chainVerified: result.verified.get(event.session_uuid) ?? false,
+    // Stamped, not flattened off the envelope, for the same reason
+    // `chain_verified` is: the producer does not get to grade its own record.
+    // A session the loop above never reached gets the weakest tier there is.
+    enforcementTier: result.tiers.get(event.session_uuid) ?? "observe",
   }));
   try {
     await insertTachoEvents(inserts);

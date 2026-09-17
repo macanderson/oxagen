@@ -6,7 +6,11 @@
  * projected through the generated column list so an untyped caller cannot
  * smuggle a column that does not exist. Tenant labels are absent by
  * construction: chInsert stamps the authenticated ambient scope, and
- * `chain_verified` is the control plane's verdict, never the producer's.
+ * `chain_verified` and `enforcement_tier` are the control plane's verdicts,
+ * never the producer's — the envelope carries an `agent.enforcement_tier`,
+ * but a claim of enforcement is exactly the claim a producer may not make
+ * about itself, so the caller resolves it from server-owned state and it is
+ * overwritten here.
  */
 import { flattenEvent, type TachoEvent } from "@oxagen/tacho";
 import { TACHO_EVENTS_TABLE, tachoEventsColumns } from "./tacho-events-ddl";
@@ -16,6 +20,12 @@ export interface TachoEventInsert {
   event: TachoEvent;
   /** The control plane recomputed the hash and the link to the prior row. */
   chainVerified: boolean;
+  /**
+   * The tier the control plane resolved for this event's session from its own
+   * state. Required, so a new caller has to decide rather than silently
+   * shipping whatever the envelope claimed.
+   */
+  enforcementTier: string;
 }
 
 const WRITABLE_COLUMNS: ReadonlySet<string> = new Set(
@@ -40,6 +50,7 @@ export function tachoEventRow(
     }
   }
   row["chain_verified"] = insert.chainVerified;
+  row["enforcement_tier"] = insert.enforcementTier;
   row["received_at"] = receivedAt;
   return row;
 }

@@ -45,7 +45,8 @@ const CONTEXT: CapabilityContext = {
 };
 const SESSION = sessionUuid(HOST_PUBLIC, "sess-1");
 
-type AgentLabel = Pick<TachoEvent["agent"], "runtime" | "harness">;
+type AgentLabel = Pick<TachoEvent["agent"], "runtime" | "harness"> &
+  Partial<Pick<TachoEvent["agent"], "enforcement_tier">>;
 const CLAUDE_CODE: AgentLabel = {
   runtime: "claude-code",
   harness: "claude-code",
@@ -346,6 +347,113 @@ describe("ingest_tacho_events", () => {
       daemonVersion: "2.1.1",
       hooksOk: true,
       spoolDepth: 3,
+    });
+  });
+
+  describe("the enforcement tier is the control plane's verdict", () => {
+    // `enforcement_tier: "gateway"` is the claim that Oxagen itself served
+    // and could refuse the action (ADR-078 section 5). A batch is a report
+    // from the machine, and every agent on an enrolled host can reach the
+    // ingest endpoint with the host key, so a tier taken off the wire is a
+    // tier the governed agent writes about itself. It seals into a valid
+    // chain because the producer computes the chain.
+    const GATEWAY_CLAIM: AgentLabel = {
+      ...CLAUDE_CODE,
+      enforcement_tier: "gateway",
+    };
+
+    function claimed(label: AgentLabel): TachoEvent[] {
+      let cursor: ChainCursor = GENESIS_CURSOR;
+      const out: TachoEvent[] = [];
+      for (const draft of [
+        unsealed(
+          "agent_start",
+          { session_start_source: "startup" },
+          "hook",
+          label,
+        ),
+        unsealed("turn_start", { prompt_length: 3 }, "hook", label),
+      ]) {
+        const sealed = sealEvent(draft, cursor);
+        cursor = sealed.next;
+        out.push(sealed.event);
+      }
+      return out;
+    }
+
+    async function ingest(events: TachoEvent[]) {
+      return tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events,
+          daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+        },
+        CONTEXT,
+      );
+    }
+
+    it("refuses a producer's gateway claim and records what the host mode implies", async () => {
+      const db = fakeDb();
+      wire(db);
+      const events = claimed(GATEWAY_CLAIM);
+      expect(events[0]?.agent.enforcement_tier).toBe("gateway");
+
+      await ingest(events);
+
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        enforcementTier: "observe",
+      });
+      const inserts = mocks.insertTachoEvents.mock.calls[0]?.[0] as Array<{
+        enforcementTier: string;
+      }>;
+      expect(inserts.every((i) => i.enforcementTier === "observe")).toBe(true);
+    });
+
+    it("still refuses the claim on an enforcing host, recording harness", async () => {
+      const db = fakeDb();
+      (db.hosts[0] as Record<string, unknown>)["mode"] = "enforce";
+      wire(db);
+
+      await ingest(claimed(GATEWAY_CLAIM));
+
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        enforcementTier: "harness",
+      });
+    });
+
+    it("takes an honest downgrade at its word", async () => {
+      const db = fakeDb();
+      (db.hosts[0] as Record<string, unknown>)["mode"] = "enforce";
+      wire(db);
+
+      await ingest(claimed({ ...CLAUDE_CODE, enforcement_tier: "observe" }));
+
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        enforcementTier: "observe",
+      });
+    });
+
+    it("never promotes a session already on the record", async () => {
+      const db = fakeDb();
+      wire(db);
+      await ingest(claimed(CLAUDE_CODE));
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        enforcementTier: "observe",
+      });
+
+      // A second batch on the same session, now claiming gateway. The row
+      // exists, so the update path runs — and it must not carry the column.
+      await ingest(claimed(GATEWAY_CLAIM));
+
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        enforcementTier: "observe",
+      });
+      expect(
+        db.updates.some(
+          (u) => u.table === "sessions" && "enforcementTier" in u.values,
+        ),
+      ).toBe(false);
     });
   });
 

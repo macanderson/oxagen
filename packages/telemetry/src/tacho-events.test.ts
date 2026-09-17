@@ -62,7 +62,7 @@ afterEach(() => {
 describe("insertTachoEvents", () => {
   it("projects the flattened event onto the table's columns and stamps nothing tenant-shaped", () => {
     const row = tachoEventRow(
-      { event: genesis(), chainVerified: true },
+      { event: genesis(), chainVerified: true, enforcementTier: "observe" },
       RECEIVED_AT.toISOString(),
     );
     expect(row).toMatchObject({
@@ -84,7 +84,9 @@ describe("insertTachoEvents", () => {
   it("appends through chInsert with a server-owned received_at and no-ops when empty", async () => {
     await insertTachoEvents([]);
     expect(chInsert).not.toHaveBeenCalled();
-    await insertTachoEvents([{ event: genesis(), chainVerified: false }]);
+    await insertTachoEvents([
+      { event: genesis(), chainVerified: false, enforcementTier: "observe" },
+    ]);
     expect(chInsert).toHaveBeenCalledTimes(1);
     const [table, rows] = chInsert.mock.calls[0] ?? [];
     expect(table).toBe("tacho_events");
@@ -94,11 +96,26 @@ describe("insertTachoEvents", () => {
     });
   });
 
+  it("stamps the caller's enforcement tier over whatever the envelope claimed", () => {
+    const claimed = genesis() as TachoEvent;
+    (claimed.agent as { enforcement_tier?: string }).enforcement_tier =
+      "gateway";
+    const row = tachoEventRow(
+      { event: claimed, chainVerified: true, enforcementTier: "observe" },
+      RECEIVED_AT.toISOString(),
+    );
+    expect(row["enforcement_tier"]).toBe("observe");
+  });
+
   it("drops a column the table does not have even if a caller smuggles it", () => {
     const event = genesis() as TachoEvent & { rogue?: string };
     const flat = { ...event, rogue: "x" };
     const row = tachoEventRow(
-      { event: flat as TachoEvent, chainVerified: true },
+      {
+        event: flat as TachoEvent,
+        chainVerified: true,
+        enforcementTier: "observe",
+      },
       RECEIVED_AT.toISOString(),
     );
     expect(row["rogue"]).toBeUndefined();
