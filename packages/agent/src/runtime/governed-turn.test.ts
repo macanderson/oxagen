@@ -53,6 +53,7 @@ import {
   serializeMutatingTools,
   type TurnLedger,
   type TurnLedgerModelCall,
+  type TurnLedgerModelIntent,
   type TurnLedgerOutcome,
   type TurnLedgerToolCall,
   type TurnLedgerToolIntent,
@@ -420,6 +421,7 @@ describe("runGovernedTurn on the engine", () => {
       budgetGuard: () => "stop",
       engine: client,
       ledger: {
+        modelCallStarted: async () => undefined,
         modelCall: async (record) => {
           modelCalls.push(record);
         },
@@ -467,6 +469,7 @@ describe("runGovernedTurn on the engine", () => {
     const toolCalls: TurnLedgerToolCall[] = [];
     const outcomes: TurnLedgerOutcome[] = [];
     const ledger: TurnLedger = {
+      modelCallStarted: async () => undefined,
       modelCall: async (record) => {
         log.push(`model:${record.requestId}`);
         modelCalls.push(record);
@@ -579,6 +582,7 @@ describe("runGovernedTurn on the engine", () => {
       toolNameMap: { search_nodes: "query_ontology" },
       engine: client,
       ledger: {
+        modelCallStarted: async () => undefined,
         modelCall: async () => undefined,
         toolCallStarted: async (record) => {
           log.push("start");
@@ -627,6 +631,7 @@ describe("runGovernedTurn on the engine", () => {
       },
       engine: client,
       ledger: {
+        modelCallStarted: async () => undefined,
         modelCall: async () => undefined,
         toolCallStarted: async () => {
           throw new Error("ledger is read-only");
@@ -642,6 +647,100 @@ describe("runGovernedTurn on the engine", () => {
     expect(execute).not.toHaveBeenCalled();
     // And the turn does not answer: a receipt that cannot be written cancels
     // the turn and rejects it, the same as every other receipt in this file.
+    expect(outcomes.map((o) => o.status)).toEqual(["aborted"]);
+    await expect(result.finalText).rejects.toThrow("ledger is read-only");
+  });
+
+  it("records the model-call intention before the provider is contacted", async () => {
+    // The mirror of the tool write-ahead above, and for the same reason: the
+    // provider bills for a completion the moment it answers, so a run whose
+    // only model append is the terminal one can be sealed with evidence that
+    // omits a charge the customer has already been metered for.
+    const { client } = setup();
+    const log: string[] = [];
+    const intents: TurnLedgerModelIntent[] = [];
+    const modelCalls: TurnLedgerModelCall[] = [];
+    streamAgentReply.mockReset();
+    streamAgentReply
+      .mockImplementationOnce(() => {
+        log.push("provider");
+        return fakeStream({ text: "", finishReason: "stop" });
+      })
+      .mockImplementation(() => {
+        log.push("provider");
+        return fakeStream({ text: "done", finishReason: "stop" });
+      });
+    const result = await runGovernedTurn({
+      telemetry,
+      model: { modelId: "anthropic/claude-sonnet-4.6" } as never,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {},
+      engine: client,
+      ledger: {
+        modelCallStarted: async (record) => {
+          log.push("start");
+          intents.push(record);
+        },
+        modelCall: async (record) => {
+          log.push("done");
+          modelCalls.push(record);
+        },
+        toolCallStarted: async () => undefined,
+        toolCall: async () => undefined,
+        seal: async () => undefined,
+      },
+    });
+    await drain(result);
+
+    // The intention is durable before the tokens can be incurred.
+    expect(log.slice(0, 3)).toEqual(["start", "provider", "done"]);
+    // One intention per completion, never more: a started event is not a call.
+    expect(intents).toHaveLength(modelCalls.length);
+    // The intention names the frame the completed event names, so the two
+    // join, and carries the CONFIGURED model — the provider has not resolved
+    // one yet. The completed event carries the resolved id, and the pair read
+    // together is what shows a gateway substitution.
+    expect(intents[0]).toMatchObject({
+      seq: modelCalls[0]?.seq,
+      requestId: modelCalls[0]?.requestId,
+      role: "worker",
+      provider: "openrouter",
+      model: "anthropic/claude-sonnet-4.6",
+    });
+    expect(intents[0]).not.toHaveProperty("outcome");
+    expect(intents[0]).not.toHaveProperty("usage");
+  });
+
+  it("never contacts the provider when the model-call intention could not be recorded", async () => {
+    // The write-ahead guarantee only holds if a failed intention stops the
+    // request: otherwise the tokens are spent with nothing durable about them.
+    const { client } = setup();
+    const outcomes: TurnLedgerOutcome[] = [];
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {},
+      engine: client,
+      ledger: {
+        modelCallStarted: async () => {
+          throw new Error("ledger is read-only");
+        },
+        modelCall: async () => undefined,
+        toolCallStarted: async () => undefined,
+        toolCall: async () => undefined,
+        seal: async (outcome) => {
+          outcomes.push(outcome);
+        },
+      },
+    });
+    await drain(result);
+
+    // No completion was ever asked for, which is the guarantee.
+    expect(streamAgentReply).not.toHaveBeenCalled();
     expect(outcomes.map((o) => o.status)).toEqual(["aborted"]);
     await expect(result.finalText).rejects.toThrow("ledger is read-only");
   });
@@ -665,6 +764,7 @@ describe("runGovernedTurn on the engine", () => {
       },
       engine: client,
       ledger: {
+        modelCallStarted: async () => undefined,
         modelCall: async () => undefined,
         toolCallStarted: async () => undefined,
         toolCall: async (record) => {
@@ -700,6 +800,7 @@ describe("runGovernedTurn on the engine", () => {
       },
       engine: client,
       ledger: {
+        modelCallStarted: async () => undefined,
         modelCall: async () => {
           throw new Error("ledger is read-only");
         },
@@ -759,6 +860,7 @@ describe("runGovernedTurn on the engine", () => {
       governance: belt.governance,
       engine: client,
       ledger: {
+        modelCallStarted: async () => undefined,
         modelCall: async () => undefined,
         // The recorder digests the receipt synchronously while building it.
         toolCallStarted: async () => undefined,
@@ -803,6 +905,7 @@ describe("runGovernedTurn on the engine", () => {
       },
       engine: client,
       ledger: {
+        modelCallStarted: async () => undefined,
         modelCall: async () => undefined,
         toolCallStarted: async () => undefined,
         toolCall: (record) => {
@@ -834,6 +937,7 @@ describe("runGovernedTurn on the engine", () => {
       },
       engine: client,
       ledger: {
+        modelCallStarted: async () => undefined,
         modelCall: async () => undefined,
         // Not async: the throw happens before any promise exists.
         toolCallStarted: async () => undefined,
@@ -883,6 +987,7 @@ describe("runGovernedTurn on the engine", () => {
       tools: {},
       engine: flaky,
       ledger: {
+        modelCallStarted: async () => undefined,
         modelCall: async () => undefined,
         toolCallStarted: async () => undefined,
         toolCall: async () => undefined,
