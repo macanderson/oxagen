@@ -260,6 +260,8 @@ import { onboardingFirstFrameGetRoute } from "./routes/v1/onboarding.first_frame
 import { repositoryMainBindRoute } from "./routes/v1/repository.main.bind";
 import { repositoryMainGetRoute } from "./routes/v1/repository.main.get";
 import { repositoryInstallationListRoute } from "./routes/v1/repository.installation.list";
+import { repositoryInstallationCandidatesRoute } from "./routes/v1/repository.installation.candidates";
+import { repositoryInstallationAttachRoute } from "./routes/v1/repository.installation.attach";
 import { tachoHostListRoute } from "./routes/v1/tacho.host.list";
 import { tachoSessionGetRoute } from "./routes/v1/tacho.session.get";
 import { tachoSessionListRoute } from "./routes/v1/tacho.session.list";
@@ -524,6 +526,18 @@ orgScoped.route("/repository/main", repositoryMainGetRoute);
 orgScoped.route(
   "/repository/installation/repositories",
   repositoryInstallationListRoute,
+);
+// The other half of the connect: which installation this workspace acts
+// through. The identity URL the dialog opens always returns a code and never an
+// `installation_id`, so a person whose account already carries the App comes
+// back with nothing attached — these two offer the choice and settle it.
+orgScoped.route(
+  "/repository/installation/candidates",
+  repositoryInstallationCandidatesRoute,
+);
+orgScoped.route(
+  "/repository/installation/attach",
+  repositoryInstallationAttachRoute,
 );
 // Run controls (dispatch_command, list_commands): addressed to runs, agents
 // and the workspace rather than to a host, so they sit beside /runs.

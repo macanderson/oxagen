@@ -100,7 +100,13 @@ export function SidebarNav({
  * without a workspace, exactly as the switcher is, because there would be
  * nothing to settle.
  */
-function WorkspaceSettingsButton({ ws }: { ws: string | null }) {
+function WorkspaceSettingsButton({
+  ws,
+  onNavigate,
+}: {
+  ws: string | null;
+  onNavigate?: () => void;
+}) {
   const t = useTranslations("workspaceSettings");
   const { setWorkspaceSettingsOpen } = useShellState();
   if (ws === null) return null;
@@ -111,6 +117,13 @@ function WorkspaceSettingsButton({ ws }: { ws: string | null }) {
       data-touch-target=""
       aria-haspopup="dialog"
       onClick={() => {
+        // On a phone this header is inside the nav drawer, which is a modal of
+        // its own. Opening the settings dialog without closing it stacks two
+        // modal roots and two scrims, and the drawer is still there when the
+        // dialog closes — so the person lands back in the navigation they left
+        // rather than on the page. The drawer passes its `close` here exactly
+        // as it does to the nav links and the assistant launcher.
+        onNavigate?.();
         setWorkspaceSettingsOpen(true);
       }}
       className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] font-medium text-sidebar-nav-link-fg hover:bg-sidebar-nav-link-hover-bg hover:text-sidebar-nav-link-hover-fg focus-visible:outline-2 focus-visible:outline-ring"
@@ -121,7 +134,14 @@ function WorkspaceSettingsButton({ ws }: { ws: string | null }) {
   );
 }
 
-export function SidebarHeader({ data }: { data: ShellData }) {
+export function SidebarHeader({
+  data,
+  onNavigate,
+}: {
+  data: ShellData;
+  /** Called before the settings dialog opens, so the phone drawer can close itself first. */
+  onNavigate?: () => void;
+}) {
   const { ws } = useSidebarSections(data);
   const tApp = useTranslations("app");
   return (
@@ -135,7 +155,7 @@ export function SidebarHeader({ data }: { data: ShellData }) {
       </SafeLink>
       <OrgSwitcher data={data} />
       <WorkspaceSwitcher data={data} ws={ws} />
-      <WorkspaceSettingsButton ws={ws} />
+      <WorkspaceSettingsButton ws={ws} onNavigate={onNavigate} />
     </div>
   );
 }

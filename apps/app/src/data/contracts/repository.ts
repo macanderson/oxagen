@@ -84,3 +84,42 @@ export type InstallationRepositories = {
    */
   truncated: boolean;
 };
+
+/**
+ * One GitHub App installation this workspace could act through, as
+ * `list_github_installations` reports it.
+ *
+ * The id is here, and it is the only place in this surface an installation id
+ * is. Every row came from `GET /user/installations` answered for this
+ * workspace's own stored authorization — GitHub showing a person their own
+ * installations — and `attach_github_installation` re-asks that same list
+ * before it writes. `WorkspaceRepository` still carries no id for the
+ * installation already attached, because nothing on screen needs it.
+ */
+type GitHubInstallationCandidate = {
+  /** GitHub's numeric installation id as text; what the attach takes. */
+  installationId: string;
+  /** The account the App is installed on, which is what the picker cites. */
+  accountLogin: string;
+  /** `User` or `Organization`; null when GitHub reported none. */
+  accountType: string | null;
+  avatarUrl: string | null;
+  /** `all` or `selected` — whether the App reaches every repository on the account. */
+  repositorySelection: string | null;
+};
+
+/**
+ * The installations the workspace could attach. An empty list is not a
+ * refusal: it is the honest answer for an account that has authorized Oxagen
+ * and installed the App nowhere, and the dialog answers it with the install
+ * door rather than a picker with nothing in it.
+ */
+export type GitHubInstallations = {
+  installations: GitHubInstallationCandidate[];
+};
+
+/** What an attach settled, so the panel can name the account it now acts through. */
+export type AttachedInstallation = {
+  connectionId: string;
+  accountLogin: string | null;
+};

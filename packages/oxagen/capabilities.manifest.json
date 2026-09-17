@@ -3954,6 +3954,40 @@
       }
     },
     {
+      "name": "attach_github_installation",
+      "file": "repository.installation.attach.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "list_github_installations",
+      "file": "repository.installation.candidates.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "list_installation_repositories",
       "file": "repository.installation.list.ts",
       "domain": "repository",

@@ -751,26 +751,38 @@ const GITHUB_CONNECTOR_ID = "github";
 const INSTALLATION_ID_PATTERN = /^[1-9]\d{0,19}$/;
 
 /**
- * What the callback did with the `installation_id` the redirect carried. Three
- * states, not two, because "nothing was supplied" and "something was supplied
- * and refused" are different things to tell the operator: the first is the
- * identity-only leg, which had no installation to attach and owes no
- * acknowledgement; the second is a claim the platform declined, which the
- * dialog should say out loud rather than swallow.
+ * What the callback settled about which installation this workspace acts
+ * through. Five states, because the operator's next click differs in each and
+ * a redirect that flattened them would put the wrong door in front of them.
+ *
+ *   attached    an installation was verified and written.
+ *   refused     one was claimed and declined — say so; do not swallow it.
+ *   choose      the authorizing user reaches several and the platform will not
+ *               guess which one this workspace should act through.
+ *   uninstalled the authorizing user reaches none: the App is installed on no
+ *               account they administer, so the next click is to install it,
+ *               not to authorize again.
+ *   none        nothing was claimed and nothing could be looked up — there is
+ *               no question to answer, so the honest acknowledgement is silence.
  */
-type InstallAttachOutcome = "none" | "attached" | "refused";
+type InstallAttachOutcome =
+  | "none"
+  | "attached"
+  | "refused"
+  | "choose"
+  | "uninstalled";
 
 /**
  * The query the settings redirect appends for each outcome — the whole contract
- * the Workspace settings dialog reads. `connected` means an installation was
- * verified and attached; `failed` means one was claimed and declined; the empty
- * string means no installation was supplied, so there is nothing to
- * acknowledge. The dialog treats anything that is not `connected` as no
- * acknowledgement, which is what makes adding a state here safe.
+ * the Workspace settings dialog reads. The dialog treats anything it does not
+ * recognise as no acknowledgement, which is what makes adding a state here
+ * safe: a new word reaches an old dialog as silence, never as a claim.
  */
 const GITHUB_ACK: Record<InstallAttachOutcome, string> = {
   attached: "&github=connected",
   refused: "&github=failed",
+  choose: "&github=choose",
+  uninstalled: "&github=install",
   none: "",
 };
 
@@ -928,6 +940,95 @@ async function attachVerifiedSettingsInstallation(args: {
     now: args.now,
   });
   return "attached";
+}
+
+/**
+ * Settle a settings-level connect that arrived with NO `installation_id`.
+ *
+ * This is the identity leg, and it is now the leg the dialog opens. It has to
+ * be: `installations/new` only round-trips a `code` and our signed state on the
+ * FIRST install of the App on an account, so with it in the Connect button a
+ * reconnect, and a second workspace connecting to an account that already has
+ * the App, both dead-ended at the callback's no-state branch. The identity URL
+ * (`login/oauth/authorize`) always returns a `code` and echoes the state —
+ * and never returns an `installation_id`.
+ *
+ * So for a first-time user this callback used to end holding a live user token,
+ * with `github.connected` still false and one button on the dialog that would
+ * do the very same thing again. The token is not nothing, though: it is
+ * authority to ask GitHub what this person reaches. `GET /user/installations`
+ * answers, and each answer has its own next click.
+ *
+ *   one   attach it, and the person lands on the repository picker. It came
+ *         from their own authenticated list, so it is verified by
+ *         construction — and it still goes through
+ *         `attachVerifiedSettingsInstallation`, which asks GitHub again. That
+ *         second round trip is deliberate: one gate, taken by every path, is
+ *         worth more than the 200ms, and a gate with an exemption is a gate
+ *         with a way past it.
+ *   many  say so and attach nothing. Which account a workspace acts through is
+ *         a choice with consequences — the repository capabilities mint tokens
+ *         with the platform App's key against whatever is attached — and
+ *         guessing it is exactly the kind of quiet decision this product
+ *         exists not to make. `list_github_installations` offers the choice on
+ *         the dialog and `attach_github_installation` settles it.
+ *   none  the App is installed nowhere they administer. Authorizing again
+ *         would loop; the door they need is `installations/new`, which the
+ *         dialog holds as `manageUrl`.
+ *
+ * A GitHub failure is `none`, not `refused`: nothing was claimed, so there is
+ * nothing to decline, and the dialog re-reads its own state on arrival anyway.
+ */
+async function resolveSettingsInstallationFromUser(args: {
+  orgId: string;
+  workspaceId: string;
+  userAccessToken: string;
+  oauthAccountId: string | null;
+  now: Date;
+}): Promise<InstallAttachOutcome> {
+  let fetched: FetchInstallationsResult;
+  try {
+    fetched = await fetchAllInstallations(args.userAccessToken);
+  } catch (err) {
+    logger.warn(
+      { err: String(err), orgId: args.orgId, workspaceId: args.workspaceId },
+      "github identity callback: could not list the authorizing user's installations — nothing attached",
+    );
+    return "none";
+  }
+  if (!fetched.ok) {
+    logger.warn(
+      {
+        status: fetched.status,
+        orgId: args.orgId,
+        workspaceId: args.workspaceId,
+      },
+      "github identity callback: /user/installations answered non-OK — nothing attached",
+    );
+    return "none";
+  }
+
+  // Keep the platform catalog fresh from the user's authoritative view, exactly
+  // as the /installations listing does. Best-effort: a registry hiccup must
+  // never decide whether a connect completes.
+  await Promise.allSettled(
+    fetched.installations.map(registerInstallationFromApi),
+  );
+
+  if (fetched.installations.length === 0) return "uninstalled";
+  if (fetched.installations.length > 1) return "choose";
+
+  const only = fetched.installations[0];
+  if (!only) return "none";
+
+  return attachVerifiedSettingsInstallation({
+    orgId: args.orgId,
+    workspaceId: args.workspaceId,
+    installationId: String(only.id),
+    userAccessToken: args.userAccessToken,
+    oauthAccountId: args.oauthAccountId,
+    now: args.now,
+  });
 }
 
 /**
@@ -1431,6 +1532,17 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
       orgId,
       workspaceId,
       installationId,
+      userAccessToken,
+      oauthAccountId,
+      now,
+    });
+  } else if (userAccessToken) {
+    // The identity leg: a code came back and an installation id never does.
+    // See resolveSettingsInstallationFromUser — this is where a first-time
+    // connect from an account that already carries the App stops dead-ending.
+    attachOutcome = await resolveSettingsInstallationFromUser({
+      orgId,
+      workspaceId,
       userAccessToken,
       oauthAccountId,
       now,

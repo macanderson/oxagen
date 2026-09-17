@@ -1,0 +1,90 @@
+{
+  "name": "list_github_installations",
+  "domain": "repository",
+  "description": "The GitHub App installations the workspace's stored GitHub authorization can reach, the set attach_github_installation will accept.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "installations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "installationId": {
+              "type": "string"
+            },
+            "accountLogin": {
+              "type": "string",
+              "minLength": 1
+            },
+            "accountType": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "avatarUrl": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uri"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "repositorySelection": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "installationId",
+            "accountLogin",
+            "accountType",
+            "avatarUrl",
+            "repositorySelection"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "installations"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -18,10 +18,14 @@
 // feature owns its own actions (§2 admits no edge between two features), and
 // the two callers refuse differently — the banner stays where it is, the
 // dialog re-reads its panel — so the duplication is the seam, not an accident.
+import { repositoryInstallationAttach } from "@oxagen/oxagen/contracts/repository.installation.attach";
+import { repositoryInstallationCandidates } from "@oxagen/oxagen/contracts/repository.installation.candidates";
 import { repositoryInstallationList } from "@oxagen/oxagen/contracts/repository.installation.list";
 import { repositoryMainBind } from "@oxagen/oxagen/contracts/repository.main.bind";
 import { repositoryMainGet } from "@oxagen/oxagen/contracts/repository.main.get";
 import type {
+  AttachedInstallation,
+  GitHubInstallations,
   InstallationRepositories,
   WorkspaceRepository,
 } from "@/data/contracts/repository";
@@ -122,6 +126,59 @@ export async function bindWorkspaceRepository(
           fullName: result.value.fullName,
           defaultRef: result.value.defaultRef,
           boundAt: result.value.boundAt,
+        },
+      }
+    : result;
+}
+
+/**
+ * The GitHub App installations this workspace could act through.
+ *
+ * Called in the one state that uses it: GitHub is authorized for the org but no
+ * installation is attached to this workspace. That state is reachable and
+ * ordinary — the dialog's Connect action opens GitHub's identity URL, which
+ * always returns a code and never an `installation_id` — so the panel asks
+ * rather than assuming the person has nothing to pick from. A live GitHub call,
+ * like the repository listing, and made for the same reason: the set on screen
+ * has to be the set the write accepts.
+ */
+export async function listGithubInstallations(
+  org: string,
+  ws: string,
+): Promise<ActionResult<GitHubInstallations>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: repositoryInstallationCandidates,
+    input: {},
+    page: "workspaceSettings",
+  });
+  return asActionResult(read);
+}
+
+/**
+ * Make one of those installations the one this workspace acts through.
+ *
+ * The id is named by the caller and checked by the handler against the
+ * workspace's own `/user/installations` before anything is written — an
+ * installation id names an account's source code, and the token the repository
+ * capabilities mint through it carries no caller entitlement. An id the account
+ * cannot reach is `not_found: installation_unreachable`.
+ */
+export async function attachGithubInstallation(
+  org: string,
+  ws: string,
+  installationId: string,
+): Promise<ActionResult<AttachedInstallation>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, repositoryInstallationAttach, {
+    installationId,
+  });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          connectionId: result.value.connectionId,
+          accountLogin: result.value.accountLogin,
         },
       }
     : result;

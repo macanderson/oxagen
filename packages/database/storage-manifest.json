@@ -108,6 +108,15 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "attach_github_installation",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "attach_memory_evidence",
       "reads": [],
@@ -1729,6 +1738,16 @@
     {
       "domain": "spend",
       "name": "list_findings",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "list_github_installations",
       "reads": [],
       "surfaces": [
         "api",
@@ -3373,7 +3392,7 @@
       "writes": []
     }
   ],
-  "contentHash": "c20cdc36f1963ac8030da00a159e51820b12465dd0aa3aa1bccfa23eade7605a",
+  "contentHash": "dc73d8b24584d899f7e2860832926c178b104a38605542e59347059c607f18a9",
   "domains": [
     {
       "name": "agent",

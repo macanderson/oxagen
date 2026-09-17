@@ -232,6 +232,8 @@ import "./contracts/repo.pr.diff";
 import "./contracts/repo.pr.get";
 import "./contracts/repo.resume";
 import "./contracts/repo.sync";
+import "./contracts/repository.installation.attach";
+import "./contracts/repository.installation.candidates";
 import "./contracts/repository.installation.list";
 import "./contracts/repository.main.bind";
 import "./contracts/repository.main.get";

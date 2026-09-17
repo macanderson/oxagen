@@ -43,6 +43,15 @@
       "verifiedAt": "2026-09-17",
       "verifiedBy": "session-7172f7a7-in-app-assistant"
     },
+    "attach_github_installation": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Workspace settings › Main repository — “Use this installation” on the picked GitHub account (features/shell/workspace-settings.tsx, features/shell/workspace-settings-actions.ts)",
+      "testid": "open-workspace-settings",
+      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
+      "verifiedAt": "2026-09-17",
+      "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
+    },
     "authorize_cli": {
       "route": "/cli/authorize",
       "page": "apps/app/src/app/cli/authorize/page.tsx",
@@ -316,6 +325,15 @@
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_github_installations": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Workspace settings › Main repository — the installation picker, shown when GitHub is authorized and no installation is attached to this workspace, invokes list_github_installations (features/shell/workspace-settings.tsx, features/shell/workspace-settings-actions.ts)",
+      "testid": "open-workspace-settings",
+      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
+      "verifiedAt": "2026-09-17",
+      "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
     },
     "list_iam_roles": {
       "route": "/[org]/roles",

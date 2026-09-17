@@ -1602,6 +1602,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .repositoryInstallationListHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "list_github_installations",
+    async () =>
+      (await import("./repository.installation.candidates"))
+        .repositoryInstallationCandidatesHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "attach_github_installation",
+    async () =>
+      (await import("./repository.installation.attach"))
+        .repositoryInstallationAttachHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "create_enrollment_token",
     async () =>
       (await import("./tacho.enrollment_token.create"))

@@ -1,6 +1,7 @@
 // The sentence a refused Workspace settings read or write shows. The kernel
 // seam classified the refusal and put the handler's reason in `code` (§3.2);
-// every reason `get_main_repository`, `list_installation_repositories` and
+// every reason `get_main_repository`, `list_installation_repositories`,
+// `list_github_installations`, `attach_github_installation` and
 // `bind_main_repository` can give has its own sentence, and any other code is
 // printed as recorded rather than collapsed into "something went wrong".
 import { useTranslations } from "next-intl";
@@ -28,6 +29,10 @@ export function useWorkspaceSettingsFailure(): (
             return t("repositoryNotInstalled");
           case "main_repo_bound":
             return t("mainRepoBound");
+          case "github_not_authorized":
+            return t("githubNotAuthorized");
+          case "installation_unreachable":
+            return t("installationUnreachable");
           default:
             return t("refused", { code: failure.code });
         }
