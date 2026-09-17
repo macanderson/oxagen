@@ -28,10 +28,12 @@ describe("capability.registry.get capability", () => {
     });
   });
 
-  it("declares the app layer (UI parity promise)", () => {
-    expect(capabilityRegistryGet.layers).toEqual(
-      expect.arrayContaining(["app"]),
-    );
+  it("no longer declares the app layer: rev1 ships no registry browser (ADR-081)", () => {
+    // The layer is a promise that a human can operate this in apps/app. The
+    // rebuilt app has no capability-registry page, so WL-50 retired the promise
+    // rather than leave check:ui-parity --strict failing on it. Every other
+    // layer and surface is untouched; ADR-081 names the lane that restores it.
+    expect(capabilityRegistryGet.layers).not.toContain("app");
   });
 
   it("requires a non-empty name", () => {

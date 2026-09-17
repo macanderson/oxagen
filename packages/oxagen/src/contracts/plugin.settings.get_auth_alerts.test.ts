@@ -21,10 +21,12 @@ describe("plugin.settings.get_auth_alerts capability", () => {
     });
   });
 
-  it("declares the app layer (UI parity promise)", () => {
+  it("keeps its other layers and drops the app layer (ADR-081)", () => {
     expect(pluginSettingsGetAuthAlerts.layers).toEqual(
-      expect.arrayContaining(["app", "api", "mcp", "docs", "unit"]),
+      expect.arrayContaining(["api", "mcp", "docs", "unit"]),
     );
+    // Rev1 ships no auth-alerts panel; the promise is retired, the capability is not.
+    expect(pluginSettingsGetAuthAlerts.layers).not.toContain("app");
   });
 
   it("takes no input", () => {
