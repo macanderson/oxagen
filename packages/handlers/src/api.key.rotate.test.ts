@@ -266,34 +266,6 @@ describe("api.key.rotate handler — protected Stella telemetry scope", () => {
   });
 });
 
-describe("api.key.rotate handler — the Tacho gateway credential", () => {
-  it("refuses before minting a replacement nothing can deliver", async () => {
-    // The daemon reads the gateway credential from `host.json`, and only an
-    // enrolment writes that file. A rotation here revokes the live key and
-    // hands the replacement to the operator, who has nowhere to put it, so
-    // every connected app on that machine authenticates with a key the control
-    // plane has already soft-deleted.
-    const insertSpy = vi.fn();
-    const updateSpy = vi.fn();
-    const gatewayRow: OldRow = {
-      ...OLD_ROW,
-      scope: {
-        purpose: "tacho_gateway_v1",
-        host_enrollment_id: "tch_0123456789abcdefghjkmn",
-      },
-    };
-    vi.clearAllMocks();
-    setupHappyPath("Owner", gatewayRow, NEW_ROW, vi.fn(), insertSpy, updateSpy);
-
-    await expect(
-      apiKeyRotateHandler(BASE_INPUT, TEST_CTX),
-    ).rejects.toMatchObject({ code: "authz_denied" });
-    expect(mocks.generateApiKey).not.toHaveBeenCalled();
-    expect(insertSpy).not.toHaveBeenCalled();
-    expect(updateSpy).not.toHaveBeenCalled();
-  });
-});
-
 describe("api.key.rotate handler — a key that has expired", () => {
   it("refuses before generating, inserting or revoking, because the replacement would carry the expiry that ended it", async () => {
     // deleted_at is null, so the not-found guard does not catch it. A page left

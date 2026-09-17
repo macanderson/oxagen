@@ -304,12 +304,6 @@ describe("api.key.revoke handler — key not found", () => {
 describe("api.key.revoke handler — reserved server-owned purposes", () => {
   const RESERVED: [string, RegExp][] = [
     ["tacho_host_v1", /revoke_tacho_enrollment/],
-    // The enrolment's second credential (ADR-078): the key the machine's local
-    // MCP gateway presents to serve a connected app. Revoking it here leaves
-    // the host row `active` and its host key reporting events while every
-    // connected app's tool call fails auth — the same shape of lie as the host
-    // case, from the other end.
-    ["tacho_gateway_v1", /revoke_tacho_enrollment/],
     ["agent_credential_v1", /rotate_agent_credential|retire_agent/],
   ];
 

@@ -34,14 +34,6 @@
 //     collector mid-poll stops at once. A generic revoke does only the middle
 //     write, leaving `tacho_hosts.status` reading `active` — the fleet record
 //     claiming a host is live that cannot authenticate. PASSES.
-//   REFUSED — tacho_gateway_v1 → the same path, for the enrolment's second
-//     credential (ADR-078): the key the machine's local MCP gateway presents
-//     to serve tools to a connected app. `revoke_tacho_enrollment` ends the
-//     enrolment's credentials together and marks the host revoked. A generic
-//     revoke of the gateway key alone leaves the host row `active` and its
-//     host key reporting events while every connected app's tool call fails
-//     auth, with nothing on the record saying the credential was ended.
-//     PASSES.
 //   REFUSED — agent_credential_v1 → `rotate_agent_credential` and
 //     `retire_agent` both revoke, and pair it with a fresh mint or with the
 //     agent's retirement in one transaction. Unpaired, the agent row stays live
@@ -189,12 +181,12 @@ export const apiKeyRevokeHandler: CapabilityHandler<
     if (requestsReservedTachoPurpose(existing.scope)) {
       logger.warn(
         { orgId: ctx.orgId, keyPublicId: existing.publicId },
-        "api.key.revoke: rejected — reserved Tacho enrollment purpose",
+        "api.key.revoke: rejected — reserved Tacho host purpose",
       );
       throw new CapabilityError(
         "revoke_api_key",
         "authz_denied",
-        "Forbidden: an enrolled Tacho host's credentials — its host key and its gateway key — are revoked through revoke_tacho_enrollment, which also marks the host revoked and queues the revoke command",
+        "Forbidden: an enrolled Tacho host key is revoked through revoke_tacho_enrollment, which also marks the host revoked and queues the revoke command",
       );
     }
 
