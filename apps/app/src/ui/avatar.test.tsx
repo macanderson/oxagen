@@ -7,43 +7,51 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AVATAR_MAX_LEN, AVATAR_SPEC_PREFIX } from "@oxagen/oxagen/avatar";
 import { afterEach, describe, expect, it } from "vitest";
-import { Avatar, parseAvatarValue } from "./avatar";
+import { Avatar } from "./avatar";
 
 const DESIGNED = 'avatar:v1:{"emoji":"🦊","bg":"#f59e0b","mode":"full"}';
 
 afterEach(cleanup);
 
-describe("parseAvatarValue", () => {
+/**
+ * The parser is not exported — it is an implementation detail of the one
+ * renderer that uses it — so every reading of a stored value is asserted
+ * through what the renderer draws: `image`, `designed` or the `initials`
+ * fallback. That is also the only thing a person ever sees.
+ */
+function drawn(value: string | null | undefined): HTMLElement {
+  cleanup();
+  render(<Avatar value={value} initials="MB" testId="k" />);
+  return screen.getByTestId("k");
+}
+
+describe("reading a stored avatar value", () => {
   // The prefix and the cap are the contract's, re-declared in avatar.tsx so a
   // client bundle does not pull zod in. This is what stops the two drifting.
   it("mirrors the contract's canonical prefix and length cap", () => {
     expect(
-      parseAvatarValue(
-        `${AVATAR_SPEC_PREFIX}{"emoji":"x","bg":"#000000","mode":"full"}`,
-      ).kind,
+      drawn(`${AVATAR_SPEC_PREFIX}{"emoji":"x","bg":"#000000","mode":"full"}`)
+        .dataset.avatar,
     ).toBe("designed");
     expect(
-      parseAvatarValue(`https://e.example/${"a".repeat(AVATAR_MAX_LEN)}`).kind,
-    ).toBe("none");
+      drawn(`https://e.example/${"a".repeat(AVATAR_MAX_LEN)}`).dataset.avatar,
+    ).toBe("initials");
   });
 
   it("reads a designed avatar into its emoji, background and mode", () => {
-    expect(parseAvatarValue(DESIGNED)).toEqual({
-      kind: "designed",
-      emoji: "🦊",
-      bg: "#f59e0b",
-      mode: "full",
-    });
+    const tile = drawn(DESIGNED);
+    expect(tile.dataset.avatar).toBe("designed");
+    expect(tile.textContent).toBe("🦊");
+    expect(tile.style.backgroundColor).toBe("rgb(245, 158, 11)");
   });
 
   it("reads an https URL as an image", () => {
-    expect(parseAvatarValue("https://cdn.example/a.png")).toEqual({
-      kind: "image",
-      url: "https://cdn.example/a.png",
-    });
+    const tile = drawn("https://cdn.example/a.png");
+    expect(tile.dataset.avatar).toBe("image");
+    expect(tile).toHaveAttribute("src", "https://cdn.example/a.png");
   });
 
-  it("degrades every malformed value to none rather than throwing (negative)", () => {
+  it("degrades every malformed value to the initials tile, never throwing (negative)", () => {
     for (const value of [
       null,
       undefined,
@@ -57,8 +65,10 @@ describe("parseAvatarValue", () => {
       'avatar:v1:{"emoji":"🦊","bg":"#f59e0b","mode":"neon"}',
       'avatar:v1:["🦊"]',
       "avatar:v1:null",
-    ])
-      expect(parseAvatarValue(value).kind).toBe("none");
+    ]) {
+      expect(() => drawn(value)).not.toThrow();
+      expect(screen.getByTestId("k").dataset.avatar).toBe("initials");
+    }
   });
 });
 
