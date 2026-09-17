@@ -25,10 +25,40 @@ tenants:
 | 3 | only in a filtering position, decided by bracket depth | `RETURN n, head([{allowed: n.label IN $__scopeLabels}])` |
 | 4 | filtering position, decided by bracket kind | `MATCH (n) WHERE n.orgId = $victimOrgId RETURN n` |
 | 5 | the anchor must bind the seam's own `$orgId` | `MATCH (n) CREATE (m {orgId: $orgId})`; `MATCH (n) RETURN n, ({orgId: $orgId})` |
-| 6 | pattern maps count only in row-selecting clauses | — (this is where the guard stands) |
+| 6 | pattern maps count only in row-selecting clauses | `MATCH (n:GraphNode {orgId: $orgId}) MERGE (audit {allowed: n.label IN $__scopeLabels}) RETURN n` |
+| 7 | a `MERGE` map counts only when nothing before it bound a graph variable | — (this is where the guard stands) |
 
-Six rounds, six real holes, one shape: each version was a more precise lexical
-rule, and each time there was another expression form that satisfied it.
+Seven rounds, seven real holes, one shape: each version was a more precise
+lexical rule, and each time there was another expression form that satisfied it.
+
+Round 7 is the sharpest illustration, because round 6 had already seen it and
+did not recognise it. Round 6 removed `CREATE` from the row-selecting clauses —
+its map stamps a node being made, so it cannot narrow rows already in play — and
+left `MERGE` in, because a `MERGE` map genuinely is a match-or-create predicate
+on the thing it merges. Both readings are correct. What was missed is that they
+are about different variables: `MERGE (n {orgId: $orgId})` constrains `n`, and
+`MERGE (audit {…})` after `MATCH (n …)` constrains `audit` while `n` — the rows
+the query actually exposes — goes unnarrowed. The finding was reported about
+`CREATE`; the property was about clauses whose maps cannot narrow an
+already-bound variable, and `MERGE` is one of those whenever something is
+already bound.
+
+A position-based rule cannot separate those two cases, because the difference is
+whether the variable in the map is bound elsewhere, which is scope and not
+position. So the guard does not try. It admits a `MERGE` map only when **no
+earlier clause has bound a graph variable** — the case where every variable in
+the merged pattern is new and there is nothing else for the map to have failed
+to narrow. `UNWIND` does not count as binding: it draws values from a parameter
+list, not rows from the graph.
+
+The alternative — dropping `MERGE` outright — was measured rather than guessed.
+Against the 63 production scoped-Cypher strings the corpus test collects, it
+rejects **5**: two in `packages/agent/src/dispatch/tool-projection.ts`, one in
+`packages/agent/src/memory/neo4j.ts`, two in
+`packages/ingestion/src/mutations/upsert-entity.ts`. Every one is a first-clause
+upsert that does anchor the tenant, and one of them is the core entity-ingestion
+path, so that option breaks ingestion to close a hole the conditional rule also
+closes. The conditional rule rejects **0 of 63**.
 
 ## The finding
 
@@ -54,14 +84,25 @@ Parsing would have caught five of the six historical holes — all the ones that
 were really misread grammar — and would not have caught the sixth (the parameter
 binding, which is a check *on top of* a parse), nor this one.
 
-Four such queries are asserted as accepted in
+Five such queries are asserted as **accepted** in
+`describe("tenancy guard — KNOWN cross-tenant reads it accepts")` in
 `packages/ontology/src/tenant.scope-guard.test.ts`, so the limitation is a
 recorded property of the seam rather than something the next reviewer
-rediscovers.
+rediscovers. Round 7 changed that list rather than lengthening it: `MATCH (n)
+MERGE (m:GraphNode {orgId: $orgId})` moved out of it and is now rejected, and
+`MERGE (a:GraphNode {orgId: $orgId}) WITH a MATCH (b) RETURN b` took its place —
+the same unanchored-second-MATCH class the first entry already records, reached
+through a `MERGE` anchor instead of a `MATCH` one.
+
+That is the shape to expect from every further round: the accepted list changes
+composition and does not empty. **Round 7 closes one reachable expression form,
+not the class.** #3199 carries the fix that closes the class — the seam
+constructing the scoping instead of validating someone else's.
 
 ### Why the test suite kept saying the guard was sound
 
-Across the six rounds the mutation table reached **0 survivors three times** —
+Across the first six rounds the mutation table reached **0 survivors three
+times** —
 on three different guards, each of which permitted a cross-tenant read. That is
 worth stating as a general caution and not just a fact about this file:
 
@@ -102,12 +143,14 @@ grammar-misreading at the cost of a dependency and substantial surface, and it
 does not change the category: the unsound cases above parse correctly. Worth
 revisiting only as an implementation detail inside (2).
 
-**Keep refining lexically.** Rejected. Six rounds is sufficient evidence about
-the method. A seventh rule would close a seventh case and tell us nothing about
-the eighth.
+**Keep refining lexically.** Rejected as the answer, while round 7 was still
+shipped as a fix. The distinction is the point: a round closes a reachable
+expression form, which is worth doing for a form a reviewer has demonstrated,
+and tells us nothing about the next one. Seven rounds is sufficient evidence
+about the method.
 
 **Strengthen to "every row-selecting clause carries an anchor."** Considered and
-deliberately declined for the interim. It would close two of the four recorded
+deliberately declined for the interim. It would close two of the five recorded
 limitations and is implementable with the machinery already in `graph-scope.ts`.
 It is declined because it is another approximation — it does not close the
 traversal case (`MATCH (a {orgId: $orgId})-[*1..3]-(b)`), it adds surface that

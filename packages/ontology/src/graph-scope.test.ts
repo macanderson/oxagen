@@ -286,6 +286,52 @@ describe("assertScopeMarkers", () => {
     }
   });
 
+  // Round four. `CREATE` was excluded from ROW_SELECTING_CLAUSES because its
+  // map stamps a node being made; `MERGE` was kept, and it has the same hole in
+  // the same shape. `MERGE (audit {allowed: n.label IN $__scopeLabels})` is a
+  // match-or-create predicate on `audit` and says nothing about `n`, which the
+  // MATCH already bound — so the query returns every tenant-local label under a
+  // constrained scope. MERGE now counts only when nothing before it bound a
+  // graph variable, which is the case where there is nothing else to scope.
+  const mergeMaps: Array<[name: string, cypher: string]> = [
+    [
+      "the reported shape: a MERGE map beside an anchored MATCH",
+      "MATCH (n:GraphNode {orgId: $orgId}) MERGE (audit {allowed: n.label IN $__scopeLabels}) RETURN n",
+    ],
+    [
+      "MERGE map on a relationship pattern after a MATCH",
+      "MATCH (a)-[r]->(b) MERGE (x)-[q:AUDIT {ok: type(r) IN $__scopeRelTypes}]->(y) RETURN r",
+    ],
+    [
+      "MERGE map after an OPTIONAL MATCH",
+      "OPTIONAL MATCH (n) MERGE (audit {allowed: n.label IN $__scopeLabels}) RETURN n",
+    ],
+    [
+      "second MERGE map, the first having bound a variable",
+      "MERGE (a:Thing {k: $k}) MERGE (audit {allowed: a.label IN $__scopeLabels}) RETURN a",
+    ],
+  ];
+
+  for (const [name, cypher] of mergeMaps) {
+    it(`treats a MERGE map that narrows nothing already bound as absent: ${name}`, () => {
+      const scope = /RelTypes/.test(cypher)
+        ? withMarkers(false, true)
+        : withMarkers(true, false);
+      expect(() => assertScopeMarkers(cypher, scope)).toThrow(GraphScopeError);
+    });
+  }
+
+  it("still accepts a MERGE map when the MERGE is the first graph clause", () => {
+    // Every variable in the pattern is new and the map constrains all of them,
+    // so there is nothing the allow-list has failed to narrow.
+    expect(() =>
+      assertScopeMarkers(
+        `MERGE (n:GraphNode {orgId: $orgId, ok: n.label IN $${SCOPE_LABELS_PARAM}}) RETURN n`,
+        withMarkers(true, false),
+      ),
+    ).not.toThrow();
+  });
+
   it("treats a prefix-collision marker as absent (word boundary)", () => {
     expect(() =>
       assertScopeMarkers(

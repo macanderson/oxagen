@@ -204,6 +204,74 @@ describe("tenancy guard — maps in clauses that do not select rows", () => {
   }
 });
 
+// A MERGE pattern map is a match-or-create predicate, so it genuinely does
+// constrain the thing it merges: `MERGE (n {orgId: $orgId})` yields an `n`
+// carrying the tenant whichever branch fires. What it constrains is ONLY that
+// thing. Once an earlier clause has bound a graph variable, the map narrows the
+// merged variable and says nothing about the rows already in play — and those
+// are the rows the query exposes.
+//
+// So MERGE counts as filtering under exactly one condition: nothing before it
+// bound a graph variable. That is not a decision about WHICH variable the map
+// scopes — it is the case where there is nothing else to scope. Dropping MERGE
+// outright instead was measured against the repo corpus below and rejected 5 of
+// the 63 production queries (two in tool-projection.ts, one in memory/neo4j.ts,
+// two in ingestion's upsert-entity.ts) — every one a first-clause upsert that
+// does anchor. The conditional rule rejects none of them.
+describe("tenancy guard — a MERGE map after something is already bound", () => {
+  const afterBinding: Array<[name: string, cypher: string]> = [
+    [
+      "MERGE map cannot narrow a variable an earlier MATCH bound",
+      "MATCH (n) MERGE (m:GraphNode {orgId: $orgId})",
+    ],
+    [
+      "…nor one an earlier anchored MATCH left in play",
+      "MATCH (n:GraphNode) MERGE (audit {orgId: $orgId}) RETURN n",
+    ],
+    [
+      "MERGE map after an OPTIONAL MATCH",
+      "OPTIONAL MATCH (n) MERGE (m {orgId: $orgId}) RETURN n",
+    ],
+    [
+      "MERGE map after a CREATE",
+      "CREATE (n:GraphNode) WITH n MERGE (m {orgId: $orgId}) RETURN n",
+    ],
+    [
+      "second MERGE map, the first having bound a variable",
+      "MERGE (a:Thing {key: $k}) MERGE (b {orgId: $orgId}) RETURN a",
+    ],
+  ];
+
+  for (const [name, cypher] of afterBinding) {
+    it(`rejects: ${name}`, async () => {
+      // Discriminating against the shipped guard, which kept MERGE in
+      // ROW_SELECTING_CLAUSES unconditionally and accepted every one of these.
+      await expect(guardAccepts(cypher)).resolves.toBe(false);
+    });
+  }
+
+  const firstClause: Array<[name: string, cypher: string]> = [
+    [
+      "MERGE is the first clause, so its map constrains everything bound",
+      "MERGE (e:Execution {id: $id, orgId: $orgId, workspaceId: $workspaceId})",
+    ],
+    [
+      "UNWIND binds a parameter value, not a graph row",
+      "UNWIND $tools AS tl MERGE (t:Tool {id: tl.id, orgId: $orgId, workspaceId: $workspaceId})",
+    ],
+    [
+      "ON CREATE SET after the anchored MERGE does not retract the anchor",
+      "MERGE (n:GraphNode {orgId: $orgId, publicId: $p}) ON CREATE SET n.createdAt = datetime()",
+    ],
+  ];
+
+  for (const [name, cypher] of firstClause) {
+    it(`accepts: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(true);
+    });
+  }
+});
+
 // ── Recorded limitations ─────────────────────────────────────────────────────
 //
 // These queries ARE ACCEPTED and CAN read across tenants. They are here so the
@@ -239,8 +307,8 @@ describe("tenancy guard — KNOWN cross-tenant reads it accepts", () => {
       "MATCH (a {orgId: $orgId})-[*1..3]-(b) RETURN b",
     ],
     [
-      "an anchored MERGE beside an unanchored MATCH",
-      "MATCH (n) MERGE (m:GraphNode {orgId: $orgId})",
+      "a MERGE that anchors, followed by an unanchored MATCH",
+      "MERGE (a:GraphNode {orgId: $orgId}) WITH a MATCH (b) RETURN b",
     ],
   ];
 

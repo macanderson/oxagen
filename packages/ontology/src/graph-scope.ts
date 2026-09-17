@@ -211,7 +211,36 @@ const PATTERN_INTRODUCERS = new Set(["MATCH", "MERGE", "CREATE"]);
 // is a pattern introducer for bracket-classification purposes — a `(` after it
 // is a node pattern, not a call — but its map only stamps a node being made, so
 // it is absent here.
-const ROW_SELECTING_CLAUSES = new Set(["MATCH", "OPTIONAL", "MERGE"]);
+//
+// `MERGE` is absent for a subtler reason and is readmitted conditionally below.
+// A MERGE pattern map is a match-or-create predicate, so it does constrain the
+// thing it merges — `MERGE (n {orgId: $orgId})` yields an `n` carrying the
+// tenant whichever branch fires. What it constrains is ONLY that thing. In
+//
+//   MATCH (n:GraphNode {orgId: $orgId})
+//   MERGE (audit {allowed: n.label IN $__scopeLabels})
+//   RETURN n
+//
+// the membership expression is the VALUE of `audit.allowed`; it narrows `audit`
+// and says nothing about `n`, which an earlier clause already bound. The rows
+// the query exposes are `n`'s, and every tenant-local label is among them. So
+// `MERGE` is ambiguous in a way `MATCH` is not, and the difference is whether
+// the variable in the map was bound elsewhere — a scope question, not a
+// position one.
+const ROW_SELECTING_CLAUSES = new Set(["MATCH", "OPTIONAL"]);
+
+// Clauses that introduce a GRAPH variable. `UNWIND` is deliberately absent: it
+// binds a value out of a parameter list, so it exposes no graph rows and cannot
+// be the thing a later map fails to narrow. `WITH` is absent for the same
+// reason — it re-projects variables some earlier clause already bound.
+const GRAPH_BINDING_CLAUSES = new Set([
+  "MATCH",
+  "OPTIONAL",
+  "MERGE",
+  "CREATE",
+  "CALL",
+  "FOREACH",
+]);
 
 /**
  * Classify the bracket opening at `openIdx` as a PATTERN bracket or an
@@ -297,6 +326,10 @@ export function keepFilteringPositions(cypher: string): string {
   // One entry per open `{`: true when that brace opened inside a pattern.
   const braceIsPattern: boolean[] = [];
   let clause = "";
+  // True once a clause has introduced a graph variable, and the condition under
+  // which a MERGE map counts as filtering (see below).
+  let boundAGraphVariable = false;
+  let mergeMapFilters = false;
 
   const enclosingIsPattern = () =>
     bracketIsPattern[bracketIsPattern.length - 1] === true;
@@ -307,8 +340,23 @@ export function keepFilteringPositions(cypher: string): string {
   // created while the MATCH still reads every tenant's rows, and
   // `MATCH (n) RETURN n, ({orgId: $orgId})` is a parenthesised map in a
   // projection. Neither narrows anything.
+  //
+  // `MERGE` joins them under ONE condition: nothing before it has bound a graph
+  // variable. That is not an attempt to decide which variable the map scopes —
+  // it is the case where there is nothing else to scope. Every variable in the
+  // merged pattern is then new, the map is a match-or-create predicate over all
+  // of them, and no earlier clause has already put unscoped rows in play. The
+  // moment a MATCH, an earlier MERGE, a CREATE or a CALL has run, the map can
+  // only narrow what this MERGE introduces, so it stops counting.
+  //
+  // This is conservative, not sound, and the seam does not claim otherwise:
+  // `MERGE (a {orgId: $orgId}) MATCH (b) RETURN b` still passes, for the same
+  // reason `MATCH (a {orgId: $orgId}) MATCH (b) RETURN b` does. See ADR-087.
   const keeping = () =>
-    clause === "WHERE" || (inPatternMap() && ROW_SELECTING_CLAUSES.has(clause));
+    clause === "WHERE" ||
+    (inPatternMap() &&
+      (ROW_SELECTING_CLAUSES.has(clause) ||
+        (clause === "MERGE" && mergeMapFilters)));
 
   let i = 0;
   while (i < src.length) {
@@ -320,12 +368,14 @@ export function keepFilteringPositions(cypher: string): string {
     if (/[A-Za-z_]/.test(ch)) {
       let j = i;
       while (j < src.length && /[A-Za-z0-9_]/.test(src[j]!)) j += 1;
-      if (
-        paren === 0 &&
-        bracket === 0 &&
-        CLAUSE_KEYWORDS.has(src.slice(i, j).toUpperCase())
-      ) {
-        clause = src.slice(i, j).toUpperCase();
+      const word = src.slice(i, j).toUpperCase();
+      if (paren === 0 && bracket === 0 && CLAUSE_KEYWORDS.has(word)) {
+        clause = word;
+        // Decided as the clause OPENS, before this MERGE marks the query as
+        // having bound something — otherwise a MERGE would always disqualify
+        // itself.
+        if (word === "MERGE") mergeMapFilters = !boundAGraphVariable;
+        if (GRAPH_BINDING_CLAUSES.has(word)) boundAGraphVariable = true;
       }
       if (keeping()) for (let k = i; k < j; k += 1) out[k] = src[k]!;
       i = j;
