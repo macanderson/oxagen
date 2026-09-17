@@ -26,7 +26,9 @@ tenants:
 | 4 | filtering position, decided by bracket kind | `MATCH (n) WHERE n.orgId = $victimOrgId RETURN n` |
 | 5 | the anchor must bind the seam's own `$orgId` | `MATCH (n) CREATE (m {orgId: $orgId})`; `MATCH (n) RETURN n, ({orgId: $orgId})` |
 | 6 | pattern maps count only in row-selecting clauses | `MATCH (n:GraphNode {orgId: $orgId}) MERGE (audit {allowed: n.label IN $__scopeLabels}) RETURN n` |
-| 7 | a `MERGE` map counts only when nothing before it bound a graph variable | — (this is where the guard stands) |
+| 7 | a `MERGE` map counts only when nothing before it bound a graph variable | `MATCH (n) SET n.x = $where, n.orgId = $orgId` — a parameter named like a clause keyword moves the clause state |
+| 8 | clause keywords recognised only at clause boundaries; the scope guard gets a stricter projection than the tenancy guard | `MATCH (n) RETURN EXISTS { MATCH (m) WHERE m.x = 1 } AS ok, n.orgId = $orgId AS mine, n` |
+| 9 | clause state saved and restored across braces; every token boundary drawn with Cypher's Unicode identifier classes | — (this is where the guard stands) |
 
 Seven rounds, seven real holes, one shape: each version was a more precise
 lexical rule, and each time there was another expression form that satisfied it.
@@ -117,6 +119,90 @@ The cases that actually moved the work forward were never found by mutation.
 Each came from a reader constructing a query that passes. That asymmetry is the
 reason this ADR concludes the dimension is wrong rather than that the rule needs
 another refinement.
+
+### Rounds 8 and 9, and the distinction they force
+
+Rounds 8 and 9 are not more of rounds 1–7, and saying why changes what this ADR
+asks for. **Two different claims are tangled together in this seam, and they
+have different answers.**
+
+**Claim A — lexical.** *The token I matched is the token I think it is, in the
+position I think it is.* Every one of these was a Claim-A failure: `orgId` inside
+a comment or a string (round 1), a map brace misclassified by nesting depth
+(round 3), `(` after a comma read as a node pattern (round 5), `$where` read as
+a clause keyword (round 7), a `WHERE` inside `EXISTS { … }` still in force after
+the closing brace (round 9a), and `$orgIdé` satisfying a `\b`-delimited
+parameter match (round 9b).
+
+Claim A **is decidable by a scanner**, and the set of constructs it must
+understand **is bounded and enumerable**: it is the openCypher lexical grammar —
+comments, the three quoted forms and their escapes, parameters, the Unicode
+identifier classes (`IdentifierStart = ID_Start | Pc`, `IdentifierPart =
+ID_Continue | Sc`), and the bracket/brace nesting that delimits clause scope.
+That is a finite document.
+
+The reason Claim A kept failing anyway is method, not category. The scanner was
+built by **enumerating hazards discovered in review** rather than by
+**implementing the grammar's lexical rules**. Enumerating the dangerous is
+unbounded by construction; implementing a lexer is bounded, because you can hold
+the result against the grammar rather than against the last reviewer. Round 9 is
+the clearest case: `\b` is not a near-miss of Cypher's rule, it is a different
+rule from a different language, and `[A-Za-z0-9_]` in the word scanner was the
+same substitution in a second place. Both were found by a reader, one at a time,
+because nothing in the file was accountable to the grammar.
+
+Round 9 also shows the cost of the substitution precisely. The bare-alias class
+(`RETURN n AS where`) was recorded as unreachable *because Cypher reserves the
+word* — an external fact this seam does not verify. `whereé` is not reserved, the
+database accepts it, and an ASCII word scan handed the seam the keyword `WHERE`
+with the tail left behind. The unreachable class became reachable for the price
+of one accent, and the argument that it was unreachable never mentioned the
+lexer it depended on.
+
+**Claim B — semantic.** *Every row this query reads or writes is inside the
+caller's organisation.* This is the claim the platform actually needs, it is what
+the guard is cited for, and it is **not decidable by any syntactic check,
+scanner or parser** — the argument is unchanged and is in **The finding** above.
+Rounds 2, 6 and the seven residual classes enumerated on `assertScopeMarkers` are
+Claim-B failures, and a perfect Claim-A implementation closes none of them.
+
+**So: can the scanner be made sound?** For Claim B, no, and these two fixes are
+not claimed to be the last of anything — they are two reachable expression forms,
+closed. For Claim A, yes in principle, and not by this file's method. What
+remains open in Claim A after round 9, from the file itself: a bare identifier
+spelled *exactly* like a clause keyword is still decided by the database's
+reserved-word list rather than by this code; `stripLiteralsAndComments` does not
+resolve `\uXXXX` escapes, which is the same family as the `\u0060` finding
+already made against `schema.reconcile.ts` in this PR; and constructs the scanner
+has never heard of (GQL quantified path patterns, `CASE … END`, `FOREACH ( … | … )`)
+carry braces and clause-like words that no rule in the file is written against.
+None of those is a demonstrated bypass today. That is the point: neither was
+`whereé`, the day before it was.
+
+### What follows
+
+This does **not** change the decision below — it strengthens the case for it and
+narrows what any interim work should be.
+
+- Decision (2), the seam constructing the scoping, deletes **both** claims. A
+  query the seam built needs no lexical analysis to be trusted and no semantic
+  analysis to be proved: provenance is decidable, and it is the only option on
+  the table that is.
+- If an interim strengthening is ever wanted, it is **implement the lexer**, not
+  add rule ten. A token stream produced against the openCypher lexical grammar,
+  with clause scope tracked on the bracket/brace stack, replaces a growing list
+  of special cases with something that can be held against a specification. It
+  is bounded work and it would have prevented rounds 1, 3, 5, 7, 9a and 9b as a
+  class rather than one at a time.
+- **Refusing anything outside a known-safe subset** — fail closed on shapes the
+  guard cannot certify — was weighed and is the weakest of the three. The corpus
+  is 63 queries across 16 files, so whitelisting shapes costs roughly what the
+  builder in (2) costs while leaving the guarantee in the wrong place; and a
+  refusal decided by a lexer nobody trusts is still a decision by a lexer nobody
+  trusts.
+
+Neither interim option should be built ahead of (2), and neither was built in
+PR #3193, which closed two demonstrated P1 bypasses and nothing more.
 
 ## Decision
 

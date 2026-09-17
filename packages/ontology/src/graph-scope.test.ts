@@ -542,6 +542,194 @@ describe("assertScopeMarkers — KNOWN-ACCEPTED queries that enforce nothing", (
   });
 });
 
+// ── Expression-subquery clause state ─────────────────────────────────────────
+//
+// A brace is the one delimiter in Cypher that can carry a WHOLE CLAUSE SEQUENCE
+// without opening a paren or a bracket. `clause` was a single global, so the
+// `WHERE` inside `EXISTS { MATCH (m) WHERE m.x = 1 }` survived the closing brace
+// and governed the enclosing projection: everything after it was kept as if it
+// were a predicate, and an ALIASED COLUMN — which filters nothing — was handed
+// to both guards as a real anchor.
+describe("an inner clause does not govern the enclosing expression", () => {
+  const labelScope: GraphScope = { labels: ["Doc"] };
+
+  it("a WHERE inside EXISTS { … } does not make the rest of a RETURN a predicate", () => {
+    // Review's query, verbatim. `n` is completely unscoped; the only mention of
+    // the marker-parameter shape is an alias in the projection.
+    const cypher =
+      "MATCH (n) RETURN EXISTS { MATCH (m) WHERE m.x = 1 } AS ok, n.orgId = $orgId AS mine, n";
+    const kept = keepFilteringPositions(cypher);
+    expect(kept).not.toContain("$orgId");
+    expect(kept).not.toContain("mine");
+    // The subquery's own WHERE is still a real one and still survives.
+    expect(kept).toContain("m.x = 1");
+  });
+
+  it("the same leak for the scope marker is rejected", () => {
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (n) RETURN EXISTS { MATCH (m) WHERE m.x = 1 } AS ok, n.label IN $${SCOPE_LABELS_PARAM} AS allowed, n`,
+        labelScope,
+      ),
+    ).toThrow(GraphScopeError);
+  });
+
+  it("COUNT { … } leaks no differently from EXISTS { … }", () => {
+    const kept = keepFilteringPositions(
+      "MATCH (n) RETURN COUNT { MATCH (m) WHERE m.x = 1 } AS c, n.orgId = $orgId AS mine, n",
+    );
+    expect(kept).not.toContain("$orgId");
+  });
+
+  it("a CALL subquery reverts to the enclosing clause, not the subquery's last one", () => {
+    // NOT a discriminating case, and labelled so rather than left to look like
+    // one: a CALL subquery must end in RETURN, so `clause` left the brace as
+    // RETURN even before the restore and the outer projection was blanked
+    // either way. It pins the restore path for the shape that will keep being
+    // written, next to the EXISTS cases above that DO discriminate.
+    const kept = keepFilteringPositions(
+      "CALL { MATCH (x) WHERE x.y = 1 RETURN x } RETURN x, x.orgId = $orgId AS mine",
+    );
+    expect(kept).not.toContain("$orgId");
+    expect(kept).toContain("x.y = 1");
+  });
+
+  // Discriminating negatives: a guard that gets stricter must not start
+  // refusing correctly-scoped queries that happen to contain an expression
+  // subquery. All four of these anchor properly and must still pass.
+  const stillAccepted: Array<[name: string, cypher: string]> = [
+    [
+      "anchored in a pattern map, with EXISTS { … WHERE … } in the WHERE",
+      "MATCH (n {orgId: $orgId}) WHERE EXISTS { MATCH (m) WHERE m.x = 1 } RETURN n",
+    ],
+    [
+      "anchored in the same WHERE, after the subquery",
+      "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.x = 1 } AND n.orgId = $orgId RETURN n",
+    ],
+    [
+      "anchored in the same WHERE, before the subquery",
+      "MATCH (n) WHERE n.orgId = $orgId AND EXISTS { MATCH (m) WHERE m.x = 1 } RETURN n",
+    ],
+    [
+      "anchored inside a CALL subquery",
+      "CALL { MATCH (n) WHERE n.orgId = $orgId RETURN n } RETURN n",
+    ],
+  ];
+  for (const [name, cypher] of stillAccepted) {
+    it(`still accepts a correctly-scoped query: ${name}`, () => {
+      expect(keepFilteringPositions(cypher)).toContain("$orgId");
+    });
+  }
+
+  it("still accepts a scope marker in a WHERE alongside EXISTS { … WHERE … }", () => {
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.x = 1 } AND n.label IN $${SCOPE_LABELS_PARAM} RETURN n`,
+        labelScope,
+      ),
+    ).not.toThrow();
+  });
+});
+
+// ── Unicode identifier delimiting ────────────────────────────────────────────
+//
+// Cypher spells an unescaped symbolic name with Unicode rules (openCypher:
+// IdentifierPart = ID_Continue | Sc); JavaScript's `\b`, `\w` and
+// `[A-Za-z0-9_]` are ASCII-only. Every place this module drew a token boundary
+// with the ASCII form drew it in the wrong place for a name with one accent in
+// it — and an accented name is an ORDINARY name, which is what makes this
+// reachable where the reserved-word argument said it was not.
+describe("token boundaries follow Cypher's Unicode identifier rules", () => {
+  const labelScope: GraphScope = { labels: ["Doc"] };
+
+  it("a non-ASCII suffix names a DIFFERENT, caller-supplied parameter", () => {
+    // `assertNoReservedParamCollision` reserves the exact name only, so a
+    // caller may pass `__scopeLabelsé` and choose its contents. Under an ASCII
+    // `\b` the marker regex could not tell it from the seam's own parameter.
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (n) WHERE n.label IN $${SCOPE_LABELS_PARAM}é RETURN n`,
+        labelScope,
+      ),
+    ).toThrow(GraphScopeError);
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (n) WHERE type(r) IN $${SCOPE_REL_TYPES_PARAM}é RETURN n`,
+        { relationshipTypes: ["REL"] },
+      ),
+    ).toThrow(GraphScopeError);
+  });
+
+  // A name spelled like a clause keyword plus one more identifier character.
+  // `RETURN n AS where` is rejected by Cypher (reserved word), which is why the
+  // bare-alias class was documented as unreachable. `whereé` is NOT reserved,
+  // the database takes it, and an ASCII word scan handed the seam the keyword
+  // `WHERE` with the tail left behind — manufacturing a predicate region over a
+  // projection, which is what the reserved-word argument said could not happen.
+  // The `$` case is why `\p{Sc}` is in the identifier-part class: `$` continues
+  // a Cypher identifier, so `where$` is one name too.
+  const keywordLookalikes: Array<[name: string, alias: string]> = [
+    ["a combining accent after the keyword", "wheré"],
+    ["a precomposed letter after the keyword", "whereé"],
+    ["a currency symbol after the keyword", "where$"],
+  ];
+  for (const [name, alias] of keywordLookalikes) {
+    it(`is one identifier, not a clause: ${name} (${alias})`, () => {
+      expect(
+        keepFilteringPositions(
+          `MATCH (n) RETURN n AS ${alias}, n.orgId = $orgId AS mine`,
+        ),
+      ).not.toContain("$orgId");
+      expect(() =>
+        assertScopeMarkers(
+          `MATCH (n) RETURN n AS ${alias}, n.label IN $${SCOPE_LABELS_PARAM} AS ok`,
+          labelScope,
+        ),
+      ).toThrow(GraphScopeError);
+    });
+  }
+
+  it("a real clause keyword is still recognised, and a real marker still passes", () => {
+    expect(
+      keepFilteringPositions("MATCH (n) WHERE n.orgId = $orgId RETURN n"),
+    ).toContain("$orgId");
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (n) WHERE n.label IN $${SCOPE_LABELS_PARAM} RETURN n`,
+        labelScope,
+      ),
+    ).not.toThrow();
+  });
+
+  it("a legitimately non-ASCII variable elsewhere in the query is untouched", () => {
+    // Getting stricter must not mean refusing valid Cypher. The marker here is
+    // correct; the query merely also mentions an accented identifier.
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (nøde) WHERE nøde.label IN $${SCOPE_LABELS_PARAM} RETURN nøde`,
+        labelScope,
+      ),
+    ).not.toThrow();
+    expect(
+      keepFilteringPositions(
+        "MATCH (nøde) WHERE nøde.orgId = $orgId RETURN nøde",
+      ),
+    ).toContain("$orgId");
+  });
+
+  it("a parameterized LIMIT fails closed whatever the parameter is named", () => {
+    // `\$\w+` is ASCII-only, so `LIMIT $é` evaded the fail-closed check AND
+    // the literal rewrite, and the seam appended a second LIMIT — a syntax
+    // error at the database instead of the error the author needs to read.
+    expect(() => clampLimits("MATCH (n) RETURN n LIMIT $n", 50)).toThrow(
+      GraphScopeError,
+    );
+    expect(() => clampLimits("MATCH (n) RETURN n LIMIT $é", 50)).toThrow(
+      GraphScopeError,
+    );
+  });
+});
+
 // ── Clause keywords are recognised only at clause boundaries ────────────────
 //
 // The scanner recognised a keyword by nesting depth alone, so a caller-

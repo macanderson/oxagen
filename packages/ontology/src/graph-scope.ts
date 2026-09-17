@@ -69,13 +69,41 @@ export const RESERVED_SCOPE_PARAMS = [
   SCOPE_REL_TYPES_PARAM,
 ] as const;
 
+// ── Cypher identifier delimiting ─────────────────────────────────────────────
+//
+// Cypher spells an unescaped symbolic name with the UNICODE identifier rules —
+// openCypher's `IdentifierStart = ID_Start | Pc` and `IdentifierPart =
+// ID_Continue | Sc`. JavaScript's `\b`, `\w` and `[A-Za-z0-9_]` are ASCII-only,
+// so every guard in this file (and the tenancy guard in ./tenant.ts) that
+// delimited a token with them UNDER-delimited it: `\b` fires between `d` and
+// `é`, so `$__scopeLabelsé` satisfies a `\$__scopeLabels\b` marker while naming
+// a DIFFERENT, caller-supplied parameter — `assertNoReservedParamCollision`
+// reserves the exact name only. The same ASCII blindness split `wheré` into the
+// clause keyword `WHERE` plus a stray character, which let a bare alias
+// (`RETURN n AS wheré`) spoof a clause boundary; `where` itself is reserved in
+// Cypher and cannot, but `wheré` is an ordinary name and can.
+//
+// These classes are the grammar's, not an approximation of it, and every token
+// boundary in this module is drawn with them.
+const ID_START_SRC = "\\p{ID_Start}\\p{Pc}";
+const ID_PART_SRC = "\\p{ID_Continue}\\p{Sc}";
+const ID_START_CHAR = new RegExp(`[${ID_START_SRC}]`, "u");
+const ID_PART_CHAR = new RegExp(`[${ID_PART_SRC}]`, "u");
+/** Lookahead asserting the preceding token ENDS here, by Cypher's rules. */
+const ID_END = `(?![${ID_PART_SRC}])`;
+/** Lookbehind asserting the following token BEGINS here, by Cypher's rules. */
+const ID_BEGIN = `(?<![${ID_PART_SRC}])`;
+
 // Bypass-guard markers. Two conditions, and BOTH are load-bearing.
 //
 // 1) A membership test (`… IN $__scopeLabels`). Both allow-lists are
 //    list-valued, so every legitimate consumption of one is a membership test —
 //    `l IN $__scopeLabels`, `type(r) IN $__scopeRelTypes` — which is what all
-//    five production call sites in packages/handlers write. `\b` after the name
-//    prevents a prefix collision ($__scopeLabelsExtra).
+//    five production call sites in packages/handlers write. The Unicode-aware
+//    `ID_END` after the name prevents a suffix collision — an ASCII `\b` let
+//    `$__scopeLabelsExtra` through unnoticed only for non-ASCII suffixes, but
+//    `$__scopeLabelsé` is exactly as caller-controlled as `$__scopeLabelsExtra`
+//    is, and the guard cannot tell the two apart without the grammar's rule.
 // 2) In a PREDICATE position, checked by running the regex over
 //    `keepPredicatePositions` output rather than the whole query. Condition 1
 //    alone does not survive contact: `RETURN n, n.label IN $__scopeLabels AS
@@ -86,10 +114,13 @@ export const RESERVED_SCOPE_PARAMS = [
 //    with `MERGE (n {allowed: n.label IN $__scopeLabels})`, where the boolean is
 //    a stored property value. A membership test earns its standing from the
 //    boolean it produces, so it counts only where a FALSE can refuse a row.
-const LABELS_MARKER = new RegExp(`\\bIN\\s*\\$${SCOPE_LABELS_PARAM}\\b`, "i");
+const LABELS_MARKER = new RegExp(
+  `${ID_BEGIN}IN\\s*\\$${SCOPE_LABELS_PARAM}${ID_END}`,
+  "iu",
+);
 const REL_TYPES_MARKER = new RegExp(
-  `\\bIN\\s*\\$${SCOPE_REL_TYPES_PARAM}\\b`,
-  "i",
+  `${ID_BEGIN}IN\\s*\\$${SCOPE_REL_TYPES_PARAM}${ID_END}`,
+  "iu",
 );
 
 // ── Write-clause detection (read-mode defense in depth) ──────────────────────
@@ -291,8 +322,16 @@ const GRAPH_BINDING_CLAUSES = new Set([
  * not a lexer. Backtick-escaped names never reach here (`stripLiteralsAndComments`
  * has already emptied them), and Cypher reserves most clause keywords against
  * bare use, but this seam does not depend on that and does not claim it: the
- * class is the same one ADR-082 records, and the answer to it is to construct
+ * class is the same one ADR-087 records, and the answer to it is to construct
  * the scoping rather than validate it.
+ *
+ * What Cypher's reservation DID depend on is that the word is the whole
+ * identifier. `RETURN n AS wheré` is not a reserved word and is accepted by the
+ * database; while the caller of this function tokenized with `[A-Za-z0-9_]` it
+ * arrived here as the bare word `WHERE` with the `é` left behind, so the
+ * unreachable class above became reachable for the price of one accent. The
+ * word scan in `keepPositions` now uses Cypher's own identifier classes, so
+ * `wheré` is one word and is not a clause keyword at all.
  */
 function startsAClause(src: string, start: number, end: number): boolean {
   let before = start - 1;
@@ -332,9 +371,9 @@ function opensPattern(src: string, openIdx: number): boolean {
   if (src[openIdx] === "[") return prev === "-";
 
   if (",-><=|([".includes(prev)) return true;
-  if (/[A-Za-z0-9_]/.test(prev)) {
+  if (ID_PART_CHAR.test(prev)) {
     let j = k;
-    while (j >= 0 && /[A-Za-z0-9_]/.test(src[j]!)) j -= 1;
+    while (j >= 0 && ID_PART_CHAR.test(src[j]!)) j -= 1;
     return PATTERN_INTRODUCERS.has(src.slice(j + 1, k + 1).toUpperCase());
   }
   return false;
@@ -438,6 +477,31 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
   const bracketIsPattern: boolean[] = [];
   // One entry per open `{`: true when that brace opened inside a pattern.
   const braceIsPattern: boolean[] = [];
+  // One entry per open `{`: the clause state in force when that brace opened,
+  // restored when it closes.
+  //
+  // A brace is the one delimiter in Cypher that can contain a WHOLE CLAUSE
+  // SEQUENCE without opening a paren or a bracket: `EXISTS { MATCH (m) WHERE
+  // m.x = 1 }`, `COUNT { … }`, `COLLECT { … }`, `CALL { … }`. `clause` used to
+  // be a single global, so the inner `WHERE` survived the closing brace and
+  // GOVERNED THE ENCLOSING EXPRESSION — the rest of an outer projection was
+  // kept as if it were a predicate:
+  //
+  //   MATCH (n)
+  //   RETURN EXISTS { MATCH (m) WHERE m.x = 1 } AS ok,
+  //          n.orgId = $orgId AS mine, n
+  //
+  // `n` is never scoped; the anchor is an aliased column in a RETURN, which
+  // filters nothing — but the leaked `WHERE` made `keepFilteringPositions` hand
+  // it to the tenancy guard as a real one. The scope guard had the identical
+  // hole with `n.label IN $__scopeLabels AS allowed`.
+  //
+  // Saving and restoring across the brace is the correct reading and not merely
+  // the safe one: an expression subquery's clause sequence is scoped to the
+  // subquery in Cypher, and whatever clause the expression sits in is still in
+  // force after it. It fixes `CALL { … } RETURN …` the same way — the outer
+  // clause reverts to `CALL` rather than inheriting the subquery's last clause.
+  const braceClause: Array<{ clause: string; mergeMapFilters: boolean }> = [];
   let clause = "";
   // True once a clause has introduced a graph variable, and the condition under
   // which a MERGE map counts as filtering (see below).
@@ -479,9 +543,9 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
     // Words: a clause keyword at depth 0 switches the current clause. Depth 0
     // also excludes the inside of a pattern property map, because the pattern's
     // own `(`/`[` is still open around it.
-    if (/[A-Za-z_]/.test(ch)) {
+    if (ID_START_CHAR.test(ch)) {
       let j = i;
-      while (j < src.length && /[A-Za-z0-9_]/.test(src[j]!)) j += 1;
+      while (j < src.length && ID_PART_CHAR.test(src[j]!)) j += 1;
       const word = src.slice(i, j).toUpperCase();
       if (
         paren === 0 &&
@@ -513,8 +577,23 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
     } else if (ch === "]") {
       bracket = Math.max(0, bracket - 1);
       bracketIsPattern.pop();
-    } else if (ch === "{") braceIsPattern.push(enclosingIsPattern());
-    else if (ch === "}") braceIsPattern.pop();
+    } else if (ch === "{") {
+      braceIsPattern.push(enclosingIsPattern());
+      braceClause.push({ clause, mergeMapFilters });
+    } else if (ch === "}") {
+      braceIsPattern.pop();
+      // Restore BEFORE the keeping() test below, so the `}` itself is judged by
+      // the clause that encloses the expression, not by the subquery's last one.
+      const saved = braceClause.pop();
+      if (saved) {
+        clause = saved.clause;
+        mergeMapFilters = saved.mergeMapFilters;
+      }
+      // `boundAGraphVariable` deliberately does NOT restore. It only ever makes
+      // a later MERGE map stop counting, so letting an inner `MATCH` set it is
+      // the conservative direction; unwinding it could resurrect a MERGE map's
+      // standing on the strength of a subquery the scanner did not analyse.
+    }
 
     if (keeping()) out[i] = ch;
     i += 1;
@@ -594,11 +673,23 @@ export function assertReadOnly(cypher: string): void {
  *     `OPTIONAL MATCH` whose failure leaves the row in place with a null.
  *
  * 1–5 are expression-SHAPE questions that a boolean-tree analysis could decide.
- * 6–7 are REACHABILITY, which is the class ADR-082 records as undecidable for
+ * 6–7 are REACHABILITY, which is the class ADR-087 records as undecidable for
  * the tenancy guard by the same argument: a full Cypher parse reports
  * structure, and in each of these the structure is correct. The durable answer
- * for both guards is to CONSTRUCT the scoping rather than validate it (ADR-082,
+ * for both guards is to CONSTRUCT the scoping rather than validate it (ADR-087,
  * #3199). This seam is a lint. It is not the mandate.
+ *
+ * A THIRD CLASS sits UNDER all of these and is worth naming separately, because
+ * it is the one that keeps producing findings and the one that is genuinely
+ * bounded: whether the scanner read its own TOKENS correctly — where a string,
+ * a comment, an identifier, a parameter or a clause begins and ends. That is
+ * the openCypher LEXICAL grammar, it is a finite document, and a scanner can be
+ * held against it. This module has instead been corrected one demonstrated
+ * hazard at a time, which is why `\b` and `[A-Za-z0-9_]` survived in it for
+ * nine rounds while Cypher's identifiers were Unicode the whole time. ADR-087
+ * §"Rounds 8 and 9" separates the two claims and says what closing each costs;
+ * the short version is that a perfect lexer closes none of 1–7, and none of
+ * 1–7 is a reason to keep an approximate one.
  *
  * Nor does it bound WRITES. Under `mode: "extend"`, a marker in a real WHERE
  * still lets a query MERGE or CREATE a node carrying a label outside
@@ -718,7 +809,11 @@ export function clampLimits(cypher: string, maxNodes: number): string {
   if (!Number.isFinite(maxNodes) || maxNodes < 0) return cypher;
   const cap = Math.trunc(maxNodes);
 
-  if (/\bLIMIT\s+\$\w+/i.test(cypher)) {
+  // `\$\w+` was ASCII-only, so `LIMIT $é` slipped past this fail-closed check
+  // AND past the literal rewrite below, and the seam appended a second `LIMIT`
+  // — a Cypher syntax error at the database instead of the GraphScopeError the
+  // author needs to read. Any `$` after LIMIT is a parameter, whatever it names.
+  if (/\bLIMIT\s+\$/i.test(cypher)) {
     throw new GraphScopeError(
       `Cannot enforce maxNodes budget on a parameterized LIMIT; agent-scoped read queries must use a literal LIMIT: ${cypher.slice(0, 80)}`,
     );

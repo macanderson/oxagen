@@ -77,7 +77,31 @@ export type { GraphScope };
 // cross-tenant queries it is KNOWN to accept, so the gap stays visible. The
 // durable answer is to construct the scoping rather than validate it; see
 // docs/adr/ADR-087.
-const SCOPE_GUARD = /\borgId\s*[:=]\s*\$orgId\b/;
+//
+// BOTH ENDS OF THE PATTERN ARE DELIMITED BY CYPHER'S RULES, NOT JAVASCRIPT'S.
+// Condition 4 only holds if `$orgId` really is where the parameter name ENDS,
+// and `orgId` really is where the property name BEGINS. `\b` can decide
+// neither: it is ASCII-only, while a Cypher unescaped symbolic name is Unicode
+// (openCypher: `IdentifierPart = ID_Continue | Sc`). `\b` fires between `d` and
+// `é`, so all three of these satisfied the old pattern:
+//
+//     WHERE n.orgId  = $orgIdé    the seam's own $orgId goes UNUSED; the caller
+//                                 supplies `orgIdé` = another tenant's id
+//     WHERE n.éorgId = $orgId     filters a property that is not the tenant
+//                                 column, against a parameter that is
+//     WHERE $orgId   = $orgId     a tautology, with no property in it at all
+//
+// The first is the one review found. The other two are the same defect read
+// from the other end of the pattern, and a `\b`-shaped fix for one leaves the
+// others standing. `\p{Sc}` belongs in the class on purpose: `$` is a currency
+// symbol, it continues an identifier in Cypher, and excluding it in the
+// LOOKBEHIND is exactly what stops the third case — the parameter `$orgId`
+// being matched as though it were a bare property name.
+const ID_PART = "\\p{ID_Continue}\\p{Sc}";
+const SCOPE_GUARD = new RegExp(
+  `(?<![${ID_PART}])orgId\\s*[:=]\\s*\\$orgId(?![${ID_PART}])`,
+  "u",
+);
 
 /**
  * Return a Neo4j session bound to the active tenant scope. Throws

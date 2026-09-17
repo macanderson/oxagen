@@ -319,6 +319,139 @@ describe("tenancy guard — KNOWN cross-tenant reads it accepts", () => {
   }
 });
 
+// ── Delimiting the anchor by Cypher's rules, not JavaScript's ────────────────
+//
+// The pattern is `orgId <: or => $orgId`, and it is only worth anything if
+// `$orgId` is where the PARAMETER NAME ENDS and `orgId` is where the PROPERTY
+// NAME BEGINS. `\b` decides neither: it is ASCII-only, while a Cypher
+// unescaped symbolic name is Unicode (openCypher: IdentifierPart = ID_Continue
+// | Sc). `\b` fires between `d` and `é`, so one accent defeated the guard from
+// either end.
+//
+// `ROUND_SIX_GUARD` below is the shipped `\b` form. Every case asserts it
+// ACCEPTED what the current guard rejects, which is the mutation check written
+// as an assertion — the same device `OLD_GUARD` performs for the earlier
+// rounds.
+const ROUND_SIX_GUARD = /\borgId\s*[:=]\s*\$orgId\b/;
+
+describe("tenancy guard — the anchor's token boundaries are Cypher's", () => {
+  const bypasses: Array<[name: string, cypher: string, why: string]> = [
+    [
+      "a non-ASCII suffix on the parameter",
+      "MATCH (n) WHERE n.orgId = $orgIdé RETURN n",
+      "the seam's injected $orgId goes unused; the caller supplies `orgIdé` and chooses whose organisation it names",
+    ],
+    [
+      "a CJK suffix on the parameter",
+      "MATCH (n) WHERE n.orgId = $orgId中 RETURN n",
+      "the same defect; `\\b` is ASCII-only for every script, not only Latin-1",
+    ],
+    [
+      "a non-ASCII prefix on the property",
+      "MATCH (n) WHERE n.éorgId = $orgId RETURN n",
+      "filters a property that is not the tenant column against a parameter that is",
+    ],
+    [
+      "no property at all — a tautology",
+      "MATCH (n) WHERE $orgId = $orgId RETURN n",
+      "`$` is a currency symbol and continues an identifier, so the lookbehind is what refuses to read a parameter as a bare property name",
+    ],
+    [
+      "a non-ASCII prefix inside a pattern property map",
+      "MATCH (n {éorgId: $orgId}) RETURN n",
+      "the map form has both ends and both were under-delimited",
+    ],
+  ];
+
+  for (const [name, cypher, why] of bypasses) {
+    it(`rejects: ${name} — ${why}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(false);
+    });
+    it(`is discriminating: the \\b guard accepted ${name}`, () => {
+      expect(ROUND_SIX_GUARD.test(keepFilteringPositions(cypher))).toBe(true);
+    });
+  }
+
+  // Getting stricter must not start refusing valid, correctly-anchored Cypher.
+  const stillAccepted: Array<[name: string, cypher: string]> = [
+    ["the plain WHERE form", "MATCH (n) WHERE n.orgId = $orgId RETURN n"],
+    ["the pattern property map form", "MATCH (n {orgId: $orgId}) RETURN n"],
+    [
+      "an accented identifier elsewhere in the query",
+      "MATCH (nøde) WHERE nøde.orgId = $orgId RETURN nøde",
+    ],
+    [
+      "a second, caller-named parameter that is legitimately non-ASCII",
+      "MATCH (n) WHERE n.orgId = $orgId AND n.navn = $navné RETURN n",
+    ],
+    [
+      "the anchor immediately followed by a closing brace",
+      "MATCH (n {orgId: $orgId}) RETURN n",
+    ],
+    [
+      "the anchor immediately followed by a closing paren",
+      "MATCH (n) WHERE (n.orgId = $orgId) RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of stillAccepted) {
+    it(`still accepts: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(true);
+    });
+  }
+});
+
+// ── An inner clause does not govern the enclosing expression ─────────────────
+//
+// A brace can carry a whole clause sequence without opening a paren or a
+// bracket, and the scanner's `clause` was a single global. The `WHERE` inside
+// `EXISTS { … }` therefore survived the closing brace and made the rest of the
+// outer projection a kept "filtering position", so an ALIASED COLUMN satisfied
+// the tenancy guard for a query that scopes nothing.
+describe("tenancy guard — a clause inside an expression subquery", () => {
+  it("rejects review's query: an aliased anchor after EXISTS { … WHERE … }", async () => {
+    await expect(
+      guardAccepts(
+        "MATCH (n) RETURN EXISTS { MATCH (m) WHERE m.x = 1 } AS ok, n.orgId = $orgId AS mine, n",
+      ),
+    ).resolves.toBe(false);
+  });
+
+  it("is discriminating: the leaked clause made that query pass", () => {
+    // The projection is kept only because the inner WHERE escaped the brace, so
+    // asserting on the projection IS the assertion about the leak.
+    const cypher =
+      "MATCH (n) RETURN EXISTS { MATCH (m) WHERE m.x = 1 } AS ok, n.orgId = $orgId AS mine, n";
+    expect(keepFilteringPositions(cypher)).not.toContain("$orgId");
+    // …and the identical query without the subquery was always rejected, so the
+    // subquery is doing the work rather than some other part of the shape.
+    expect(
+      keepFilteringPositions("MATCH (n) RETURN n.orgId = $orgId AS mine, n"),
+    ).not.toContain("$orgId");
+  });
+
+  const stillAccepted: Array<[name: string, cypher: string]> = [
+    [
+      "anchored in a pattern map, with EXISTS { … WHERE … } in the WHERE",
+      "MATCH (n {orgId: $orgId}) WHERE EXISTS { MATCH (m) WHERE m.x = 1 } RETURN n",
+    ],
+    [
+      "anchored in the same WHERE, after the subquery",
+      "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.x = 1 } AND n.orgId = $orgId RETURN n",
+    ],
+    [
+      "anchored inside a CALL subquery",
+      "CALL { MATCH (n) WHERE n.orgId = $orgId RETURN n } RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of stillAccepted) {
+    it(`still accepts a correctly-scoped query: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(true);
+    });
+  }
+});
+
 describe("tenancy guard — anchored to a parameter the caller controls", () => {
   const notSeamBound: Array<[name: string, cypher: string]> = [
     [
