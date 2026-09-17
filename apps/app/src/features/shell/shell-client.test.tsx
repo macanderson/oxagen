@@ -42,8 +42,11 @@ const nav = vi.hoisted(() => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => nav.pathname,
-  useSearchParams: () => new URLSearchParams(nav.query),
+  usePathname: () => nav.pathname.split("?")[0],
+  // Two conventions meet here: a case that sets `nav.query`, and one that puts
+  // the query on `nav.pathname`. Both are read so neither lane's tests break.
+  useSearchParams: () =>
+    new URLSearchParams(nav.query || (nav.pathname.split("?")[1] ?? "")),
   useRouter: () => ({
     push: nav.push,
     replace: nav.replace,
@@ -132,7 +135,7 @@ function renderShell(data: ShellData) {
 }
 
 describe("the shell on /{org}/{ws}", () => {
-  it("renders the sidebar, top bar and bottom bar, and none of the chrome rev1 drops (negative)", () => {
+  it("renders the sidebar, top bar, bottom bar and the assistant, and none of the chrome rev1 drops (negative)", () => {
     renderShell(shellData());
     expect(
       screen.getByRole("complementary", { name: "Sidebar" }),
@@ -140,11 +143,15 @@ describe("the shell on /{org}/{ws}", () => {
     expect(screen.getByRole("banner", { name: "Top bar" })).toBeInTheDocument();
     expect(screen.getByTestId("mobile-nav")).toBeInTheDocument();
     expect(screen.getByTestId("user-menu-trigger")).toBeInTheDocument();
-    // The bell, the assistant, the Account dialog and nav counts.
+    // The in-app agent is back on its #2968 lane, so the launcher and its
+    // flyout host render — the host always mounted, and `inert` until opened.
+    const launcher = screen.getByTestId("assistant-launcher");
+    expect(launcher).toBeInTheDocument();
+    // What it opens is a dialog, and it says so before it is pressed.
+    expect(launcher).toHaveAttribute("aria-haspopup", "dialog");
+    expect(screen.getByTestId("assistant-flyout")).toHaveAttribute("inert");
+    // The bell and nav counts are still dropped.
     expect(screen.queryByRole("button", { name: /^Notifications/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Assistant" })).toBeNull();
-    expect(screen.queryByTestId("assistant-launcher")).toBeNull();
-    expect(screen.queryByTestId("assistant-flyout")).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByRole("tab")).toBeNull();
     const main = screen.getByRole("navigation", { name: "Main" });

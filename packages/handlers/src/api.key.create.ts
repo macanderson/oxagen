@@ -27,7 +27,7 @@ import {
   requestsReservedTachoGatewayPurpose,
   requestsReservedTachoPurpose,
 } from "./lib/tacho-enrollment";
-import { requestsReservedCliSessionPurpose } from "@oxagen/auth/cli-auth";
+import { requestsReservedCliSessionPurpose } from "@oxagen/oxagen/cli-session";
 import { requestsReservedAgentCredentialPurpose } from "@oxagen/oxagen/agent-credential";
 import { logger } from "./logger";
 

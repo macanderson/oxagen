@@ -5,6 +5,7 @@ import { OxagenWordmark } from "@oxagen/ui";
 import { Settings } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { AssistantLauncher } from "./assistant-launcher";
 import { useId } from "react";
 import {
   isNavItemCurrent,
@@ -149,6 +150,9 @@ export function Sidebar({ data }: { data: ShellData }) {
     >
       <SidebarHeader data={data} />
       <SidebarNav data={data} />
+      <div className="mt-auto px-2.5">
+        <AssistantLauncher />
+      </div>
     </aside>
   );
 }

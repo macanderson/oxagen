@@ -22,6 +22,8 @@ type ShellState = {
   setAccountOpen: (open: boolean) => void;
   workspaceSettingsOpen: boolean;
   setWorkspaceSettingsOpen: (open: boolean) => void;
+  assistantOpen: boolean;
+  setAssistantOpen: (open: boolean) => void;
   theme: Theme;
   setTheme: (theme: Theme) => void;
 };
@@ -52,6 +54,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
@@ -77,6 +80,8 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       setAccountOpen,
       workspaceSettingsOpen,
       setWorkspaceSettingsOpen,
+      assistantOpen,
+      setAssistantOpen,
       theme,
       setTheme,
     }),
@@ -85,6 +90,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       drawerOpen,
       accountOpen,
       workspaceSettingsOpen,
+      assistantOpen,
       theme,
       setTheme,
     ],

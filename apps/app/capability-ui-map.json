@@ -34,6 +34,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "ask_assistant": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Ask the assistant at the foot of the sidebar, and of the phone's nav drawer — the shell's assistant flyout, whose composer invokes ask_assistant inside a workspace (features/shell/assistant-flyout.tsx, features/shell/assistant-actions.ts)",
+      "testid": "assistant-send",
+      "proof": "apps/app/src/features/shell/assistant-flyout.test.tsx",
+      "verifiedAt": "2026-09-17",
+      "verifiedBy": "session-7172f7a7-in-app-assistant"
+    },
     "authorize_cli": {
       "route": "/cli/authorize",
       "page": "apps/app/src/app/cli/authorize/page.tsx",

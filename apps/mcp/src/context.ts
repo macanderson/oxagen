@@ -148,11 +148,15 @@ export async function resolveMcpContext(
     // invocation (buildContext runs per tool call) — the correct semantic for
     // an "api_key.used" access-log event. Fire-and-forget: an audit-pipeline
     // hiccup must never fail-closed a legitimately authenticated request.
-    // actorUserId is null (machine auth carries no user); ip is the resolved
-    // client IP.
+    // `actorUserId` is the resolver's answer, not a constant: a CLI session
+    // key acts for the person who approved `oxagen login` and every other key
+    // acts for nobody. Hard-coding null recorded a person's call as belonging
+    // to nobody while the access decision downstream was made against that
+    // same person — an audit record that disagrees with the decision it is
+    // supposed to evidence. ip is the resolved client IP.
     emitSecurityEvent({
       eventType: "api_key.used",
-      actorUserId: null,
+      actorUserId: resolution.userId,
       orgId: resolution.orgId,
       workspaceId: resolution.workspaceId,
       capability: null,
@@ -162,12 +166,22 @@ export async function resolveMcpContext(
       requestId,
     });
 
+    // The principal is the resolver's, not null. `resolveApiKey` resolves a
+    // CLI session key (`cli_session_v1`) to the person who approved
+    // `oxagen login`, re-checking their org and workspace membership on every
+    // call, and resolves every other key to `userId: null` — so this widens
+    // nothing except the one case it is for. Discarding it made one credential
+    // authorize as two different principals depending on hostname: on
+    // `api.oxagen.sh` `assertCallerRole` read the person's real role, and here
+    // it short-circuited on `!ctx.userId` and, at the non-enterprise tier
+    // where it is the only role gate, let a demoted member keep invoking
+    // Owner/Admin-only capabilities.
     return {
       ok: true,
       ctx: {
         orgId: resolution.orgId,
         workspaceId: resolution.workspaceId,
-        userId: null,
+        userId: resolution.userId,
         apiKeyId: resolution.apiKeyId,
         requestId,
         surface: "mcp",

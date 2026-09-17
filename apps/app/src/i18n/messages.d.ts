@@ -1501,6 +1501,32 @@ type Messages = {
       failed: string;
       avatarPlaceholder: string;
     };
+    assistant: {
+      label: string;
+      launcher: string;
+      launcherHint: string;
+      close: string;
+      thinking: string;
+      recordedAs: string;
+      parked: string;
+      needsWorkspace: string;
+      intro: {
+        title: string;
+        body: string;
+      };
+      composer: {
+        label: string;
+        placeholder: string;
+        send: string;
+      };
+      refused: {
+        denied: string;
+        invalid: string;
+        exhausted: string;
+        parked: string;
+        unavailable: string;
+      };
+    };
   };
   skills: {
     eyebrow: string;
