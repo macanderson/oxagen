@@ -44,11 +44,16 @@ const REGISTRARS: ReadonlySet<string> = new Set([
   "beforeEach",
 ]);
 
-/** The named budgets a whole-tree test may declare; see parse.ts for the readings behind each. */
-const BUDGETS: ReadonlySet<string> = new Set([
-  "WHOLE_TREE_TIMEOUT_MS",
-  "TYPE_CHECKED_TREE_TIMEOUT_MS",
-]);
+/** The whole-tree budget: always admissible, since it is the tighter of the two. */
+const WHOLE_TREE_BUDGET = "WHOLE_TREE_TIMEOUT_MS";
+/**
+ * The type-checked budget, ten times the other. parse.ts justifies it by the
+ * ~5.2k declaration files a type-checked program loads, so it is admissible
+ * only to a callback that builds one. Left interchangeable, the name alone
+ * would hand any whole-tree test a ten-minute budget, and the distinction
+ * between the two constants would be documentation rather than enforcement.
+ */
+const TYPE_CHECKED_BUDGET = "TYPE_CHECKED_TREE_TIMEOUT_MS";
 
 /** The whole production tree, enumerated: `productionFiles()` and `listFiles("src")`. */
 function enumeratesTree(call: ts.CallExpression): boolean {
@@ -95,17 +100,28 @@ function localFunctions(sf: ts.SourceFile): ReadonlyMap<string, ts.Node> {
   return functions;
 }
 
-/** Whether `node` enumerates the whole tree, or calls something in the same file that does. */
-function reachesTree(
+/** `createProgram(…)` or `ts.createProgram(…)`: the type-checked program the larger budget is for. */
+function buildsProgram(call: ts.CallExpression): boolean {
+  const callee = call.expression;
+  if (ts.isIdentifier(callee)) return callee.text === "createProgram";
+  return (
+    ts.isPropertyAccessExpression(callee) &&
+    callee.name.text === "createProgram"
+  );
+}
+
+/** Whether `node` makes a call `wanted` accepts, or calls something in the same file that does. */
+function reaches(
   node: ts.Node,
   functions: ReadonlyMap<string, ts.Node>,
+  wanted: (call: ts.CallExpression) => boolean,
   seen: Set<string> = new Set(),
 ): boolean {
   let found = false;
   const visit = (current: ts.Node): void => {
     if (found) return;
     if (ts.isCallExpression(current)) {
-      if (enumeratesTree(current)) {
+      if (wanted(current)) {
         found = true;
         return;
       }
@@ -114,7 +130,7 @@ function reachesTree(
         const body = functions.get(name);
         if (body !== undefined && !seen.has(name)) {
           seen.add(name);
-          if (reachesTree(body, functions, seen)) {
+          if (reaches(body, functions, wanted, seen)) {
             found = true;
             return;
           }
@@ -206,18 +222,30 @@ function wholeTreeTests(sf: ts.SourceFile): {
         const args = [...node.arguments];
         const at = args.findIndex(isFunctionArgument);
         const callback = at === -1 ? undefined : args[at];
-        if (callback !== undefined && reachesTree(callback, functions)) {
+        if (
+          callback !== undefined &&
+          reaches(callback, functions, enumeratesTree)
+        ) {
           const line = lineOf(sf, node);
           found.push({ registrar, line });
           const timeout = args[at + 1];
+          const where = `${RULE} ${file}:${String(line)} ${registrar}`;
           if (timeout === undefined) {
+            violations.push(`${where} none`);
+          } else if (!ts.isIdentifier(timeout)) {
             violations.push(
-              `${RULE} ${file}:${String(line)} ${registrar} none`,
+              `${where} ${timeout.getText(sf).replace(/\s+/g, " ")}`,
             );
-          } else if (!ts.isIdentifier(timeout) || !BUDGETS.has(timeout.text)) {
-            violations.push(
-              `${RULE} ${file}:${String(line)} ${registrar} ${timeout.getText(sf).replace(/\s+/g, " ")}`,
-            );
+          } else if (
+            timeout.text === TYPE_CHECKED_BUDGET &&
+            !reaches(callback, functions, buildsProgram)
+          ) {
+            violations.push(`${where} ${TYPE_CHECKED_BUDGET} without-program`);
+          } else if (
+            timeout.text !== WHOLE_TREE_BUDGET &&
+            timeout.text !== TYPE_CHECKED_BUDGET
+          ) {
+            violations.push(`${where} ${timeout.text}`);
           }
         }
       }
@@ -300,6 +328,13 @@ describe("whole-tree timeout budget", () => {
     ]);
   });
 
+  it("the two budgets are not interchangeable: ten minutes needs a program", () => {
+    expect(probe("wrong-budget.test.ts")).toEqual([
+      `${RULE} ${PROBES}/wrong-budget.test.ts:10 it TYPE_CHECKED_TREE_TIMEOUT_MS without-program`,
+    ]);
+    expect(probe("program.test.ts")).toEqual([]);
+  });
+
   it("a beforeAll that walks the tree needs one too", () => {
     expect(probe("hook.test.ts")).toEqual([
       `${RULE} ${PROBES}/hook.test.ts:7 beforeAll none`,
@@ -315,7 +350,9 @@ describe("whole-tree timeout budget", () => {
       "magic-number.test.ts",
       "missing.test.ts",
       "ok.test.ts",
+      "program.test.ts",
       "subtree.test.ts",
+      "wrong-budget.test.ts",
     ]);
   });
 
