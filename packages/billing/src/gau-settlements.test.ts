@@ -117,7 +117,7 @@ const {
   settleGauOpen,
   settleGauPaid,
 } = await import("./gau-settlements");
-const { uninvoicedGau } = await import("./gau-bucket");
+const { uninvoicedGau, remainingGau } = await import("./gau-bucket");
 const { logger } = await import("./logger");
 const { assertGauAvailable, GauExhaustedError } = await import("./gau-bucket");
 
@@ -605,6 +605,120 @@ describe("grantGauPurchaseForCheckout", () => {
     await grantGauPurchaseForCheckout(paidSession());
 
     expect(order.slice(0, 2)).toEqual(["commit", "provider"]);
+  });
+
+  // ── The refund that arrived first (ADR-085 §5) ────────────────────────────
+  //
+  // These go through grantGauPurchaseForCheckout itself, not through
+  // reconcilePendingGauReversals directly. That distinction is the whole point:
+  // the reconciliation function was already covered in gau-reversals.test.ts,
+  // and deleting the grant's CALL to it left all of those tests green. A test
+  // that exercises the helper proves the helper; only a test that goes through
+  // the real entry point proves the wiring.
+
+  /** A refund parked against this purchase's PaymentIntent before it existed. */
+  function parkPendingReversal(amountCents = 5_000) {
+    store.reversals.push({
+      id: crypto.randomUUID(),
+      orgId: ORG,
+      settlementId: null,
+      bucketId: null,
+      stripePaymentIntentId: "pi_gau_001",
+      kind: "refund",
+      providerEventId: "ch_gau_001",
+      requestedGau: 0,
+      reversedGau: 0,
+      unrecoveredGau: 0,
+      amountCents,
+      currency: "usd",
+      createdAt: NOW,
+    });
+  }
+
+  it("grants a purchase whose money already came back and leaves no spendable units", async () => {
+    parkPendingReversal();
+
+    await grantGauPurchaseForCheckout(paidSession());
+
+    // The settlement is recorded — the sale happened and the ledger says so.
+    expect(store.settlements).toHaveLength(1);
+    // The units are not spendable. This is the assertion that matters: the
+    // grant added 10,000 and the reconciliation took them back out inside the
+    // same transaction, so the customer never had them.
+    expect(store.buckets).toHaveLength(1);
+    expect(store.buckets[0]).toMatchObject({
+      orgId: ORG,
+      purchasedGau: 0,
+      carriedGau: 0,
+    });
+    expect(remainingGau(store.buckets[0] as never)).toBe(5_000); // the included allowance only
+    // And the parked row is now linked to what it reversed.
+    expect(store.reversals[0]).toMatchObject({
+      settlementId: store.settlements[0]!.id,
+      bucketId: store.buckets[0]!.id,
+      requestedGau: 10_000,
+      reversedGau: 10_000,
+      unrecoveredGau: 0,
+    });
+  });
+
+  it("nets out a partial refund that arrived first, leaving exactly the unrefunded units", async () => {
+    // Half the tax-inclusive charge came back before the purchase landed.
+    parkPendingReversal(2_500);
+
+    await grantGauPurchaseForCheckout(paidSession());
+
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 5_000 });
+    expect(store.reversals[0]).toMatchObject({
+      requestedGau: 5_000,
+      reversedGau: 5_000,
+      unrecoveredGau: 0,
+    });
+  });
+
+  it("grants normally when no refund is waiting", async () => {
+    // The control. Without it the two tests above would also pass against an
+    // implementation that simply never granted anything.
+    await grantGauPurchaseForCheckout(paidSession());
+
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 10_000 });
+    expect(store.reversals).toHaveLength(0);
+  });
+
+  it("a redelivered checkout does not reconcile a second time", async () => {
+    parkPendingReversal();
+
+    await grantGauPurchaseForCheckout(paidSession());
+    await grantGauPurchaseForCheckout(paidSession());
+
+    // The second delivery inserts no settlement and so never reaches
+    // reconciliation; the row is no longer pending either way.
+    expect(store.settlements).toHaveLength(1);
+    expect(store.reversals).toHaveLength(1);
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 0 });
+  });
+
+  it("leaves a pending reversal for a different PaymentIntent alone", async () => {
+    store.reversals.push({
+      id: crypto.randomUUID(),
+      orgId: ORG,
+      settlementId: null,
+      bucketId: null,
+      stripePaymentIntentId: "pi_someone_else",
+      kind: "refund",
+      providerEventId: "ch_other",
+      requestedGau: 0,
+      reversedGau: 0,
+      unrecoveredGau: 0,
+      amountCents: 5_000,
+      currency: "usd",
+      createdAt: NOW,
+    });
+
+    await grantGauPurchaseForCheckout(paidSession());
+
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 10_000 });
+    expect(store.reversals[0]).toMatchObject({ settlementId: null });
   });
 });
 
