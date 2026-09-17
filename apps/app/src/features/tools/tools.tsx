@@ -42,15 +42,27 @@ function canAdministerOrg(ctx: WsCtx): boolean {
  * holding org `member` was offered no control the kernel would have accepted
  * (#3143).
  *
- * Neither role here is the gate. `orgRole` and `wsRole` are read from the
- * membership tables (`org_users.role`, `workspace.workspace_users.role`) while
- * the handler resolves IAM role assignments, so the two can disagree, and this
- * gate is an affordance predicting the kernel's answer rather than a second
- * copy of it. Widening the gate moves the risk from the safe side to the
- * costly one — a control offered to someone the kernel then refuses — and that
- * refusal comes back as `denied` / `org_role_required`, which the page names
- * where the person acted (`action-failure.ts`). The org half of this gate has
- * always carried the same risk on the same terms.
+ * Neither role here is the gate, and the two halves of this one are not equally
+ * trustworthy. `orgRole` and `wsRole` come from the membership tables
+ * (`org_users.role`, `workspace.workspace_users.role`); `assertOrgRole` reads
+ * `iam.principal_role_assignments` for a principal of kind `human`. The org
+ * side agrees by construction — every path that writes `org_users.role` writes
+ * the matching IAM assignment in the same transaction (`org.create.ts`,
+ * `org.member_invite.accept.ts`, `org.member_role.change.ts`). The workspace
+ * side does not: `workspace.workspace_users` is written only by
+ * `workspace-bootstrap.ts`, which records the creator as `owner` and assigns no
+ * IAM role, and nothing in the tree gives a human principal a workspace-scoped
+ * one. So `import_tools`' workspace clause matches nobody today, and this gate
+ * offers a workspace Owner holding org `member` a control the kernel will
+ * refuse with `org_role_required`.
+ *
+ * The gate still reads the contract rather than that gap, because the contract
+ * is the statement of authority and a gate hard-coded to the current absence of
+ * an assignment path would be right by accident and have to be rediscovered
+ * when the path lands. What the gap costs is one refused click, named where the
+ * person acted: `action-failure.ts` gives the import path its own sentence,
+ * which says the workspace Owner is admitted too rather than contradicting the
+ * control they were just offered.
  */
 function canImportTools(ctx: WsCtx): boolean {
   return canAdministerOrg(ctx) || ctx.wsRole === "owner";
