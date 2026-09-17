@@ -236,19 +236,22 @@ function usageOf(program: ts.Program, files: readonly string[]): Usage {
   return { used, violations: violations.sort() };
 }
 
-const SOURCES = productionFiles().filter((file) => file.startsWith("src/"));
 const PROBE_SOURCES = listFiles(PROBES).filter((file) => /\.tsx?$/.test(file));
+// The tree walk and the program share the hook's budget: at module scope they
+// would run during collection, where no timeout governs them (INV-25).
+let sources: string[] = [];
 let program: ts.Program;
 
 beforeAll(() => {
-  program = createProgram([...SOURCES, ...PROBE_SOURCES]);
+  sources = productionFiles().filter((file) => file.startsWith("src/"));
+  program = createProgram([...sources, ...PROBE_SOURCES]);
 }, TYPE_CHECKED_TREE_TIMEOUT_MS);
 
 describe("catalog keys", () => {
   it(
     "every key of messages/*.json is read by a production module",
     () => {
-      const { used, violations } = usageOf(program, SOURCES);
+      const { used, violations } = usageOf(program, sources);
       expect(violations).toEqual([]);
       const keys = leafKeys(loadCatalogs(path.join(APP_DIR, "messages")));
       expect(unusedKeys(keys, [...used, ...REV1_ROUTE_TITLE_KEYS])).toEqual([]);

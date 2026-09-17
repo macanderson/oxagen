@@ -182,7 +182,6 @@ function invocationToolUseId(
   return { ...(raw as Record<string, unknown>), tool_use_id: id };
 }
 
-
 /**
  * Whether a message drained at this boundary actually reaches the agent.
  * Claude Code takes `additionalContext` at SessionStart and at
