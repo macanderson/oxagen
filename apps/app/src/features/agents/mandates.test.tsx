@@ -476,4 +476,56 @@ describe("Agents › Mandates", () => {
     for (const row of within(section).getAllByTestId("agent-mandate"))
       expect(row).not.toHaveAttribute("data-effect");
   });
+
+  // A measure is a figure the gate enforces, and the gate enforces micros. At
+  // the cent, a per-call limit of 5,000 micros — $0.005, a real budget — read
+  // "$0.00", and every distinct limit below a cent collapsed onto that same
+  // string. The accountable reader saw no budget where one exists, and four
+  // different authorities as one.
+  //
+  // The assertions are sub-cent on purpose: a limit of $12.50 renders the same
+  // at either precision and would have let this ship.
+  it("prints a limit below a cent exactly, not rounded to $0.00", async () => {
+    await renderMandates(
+      mandateList([
+        mandateRow({
+          authority: [
+            mandateAuthority({
+              measure: "amount",
+              perCall: {
+                kind: "money",
+                money: { micros: "5000", currency: "USD" },
+              },
+            }),
+            mandateAuthority({
+              measure: "tax",
+              perCall: {
+                kind: "money",
+                money: { micros: "1000", currency: "USD" },
+              },
+            }),
+          ],
+        }),
+      ]),
+    );
+    const cells = within(held())
+      .getByTestId("agent-mandate")
+      .querySelectorAll("td");
+    expect(cells[3]?.textContent).toContain("$0.005");
+    // Two genuinely different limits, two different strings.
+    expect(cells[3]?.textContent).toContain("$0.001");
+    // The flattened form the defect produced, which both limits shared.
+    expect(cells[3]?.textContent).not.toContain("$0.00amount");
+  });
+
+  // The other half of "exact": a figure that lands on the cent gains nothing,
+  // so the ordinary case is not disfigured to fix the sub-cent one.
+  it("leaves a figure that lands on the cent exactly as it was", async () => {
+    await renderMandates(mandateList([mandateRow()]));
+    const cells = within(held())
+      .getByTestId("agent-mandate")
+      .querySelectorAll("td");
+    expect(cells[3]?.textContent).toBe("$250.00amount");
+    expect(cells[4]?.textContent).toContain("$2,000.00");
+  });
 });
