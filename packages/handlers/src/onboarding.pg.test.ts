@@ -60,6 +60,19 @@ import { tachoEnrollmentTokenCreateHandler } from "./tacho.enrollment_token.crea
 import { tachoEventsIngestHandler } from "./tacho.events.ingest";
 import { tachoHostEnrollHandler } from "./tacho.host.enroll";
 
+// Two of this file's tests call organizationCreateHandler directly — the same
+// IAM + workspace bootstrap org.create.pg.test.ts measures at 5367-6505ms on
+// a loaded CI runner (~3.4s idle, MEASURED against local Postgres in this
+// PR). "create_org opens the gate at wrap…" and "the first frame the host
+// ingests unlocks the gate…" measured 3157ms and 2177ms here on an idle
+// machine — already within ~1.8s of vitest's 5000ms default, the same margin
+// that timed out for #3086. Same root cause: role_grants is seeded per-org
+// from the capability catalog, not reused across orgs, so there is no
+// per-test-duplicated global seed to fix here either — the cost is inherent
+// to provisioning a new org's IAM. Matched to org.create.pg.test.ts's budget
+// (not schema.setup.test.ts's) since both exercise the identical path.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+
 const enabled = Boolean(process.env.DATABASE_URL);
 const DAY_MS = 24 * 60 * 60 * 1000;
 

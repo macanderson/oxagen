@@ -3373,7 +3373,7 @@
       "writes": []
     }
   ],
-  "contentHash": "1aab064b9d7dd9c2cf9e50c91c0b91ef026f4a9a6025d6efe5b49a9b7aafc8ef",
+  "contentHash": "c20cdc36f1963ac8030da00a159e51820b12465dd0aa3aa1bccfa23eade7605a",
   "domains": [
     {
       "name": "agent",
@@ -3463,6 +3463,7 @@
         "postgres:billing.credit_ledger",
         "postgres:billing.credit_lots",
         "postgres:billing.gau_buckets",
+        "postgres:billing.gau_reversals",
         "postgres:billing.gau_settlements",
         "postgres:billing.invoices",
         "postgres:billing.org_billing_settings",
@@ -3794,7 +3795,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 129
+      "tableCount": 130
     },
     {
       "domains": [
@@ -9826,6 +9827,97 @@
           "type": "uuid"
         },
         {
+          "name": "settlement_id",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:billing.gau_settlements",
+          "type": "uuid"
+        },
+        {
+          "name": "bucket_id",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:billing.gau_buckets",
+          "type": "uuid"
+        },
+        {
+          "name": "stripe_payment_intent_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "provider_event_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "requested_gau",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "reversed_gau",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "unrecovered_gau",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "amount_cents",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "currency",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "billing",
+      "id": "postgres:billing.gau_reversals",
+      "name": "gau_reversals",
+      "rls": "org_only",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
           "name": "bucket_id",
           "nullable": false,
           "primaryKey": false,
@@ -9879,6 +9971,18 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "stripe_payment_intent_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "charged_cents",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bigint"
         },
         {
           "name": "created_at",
