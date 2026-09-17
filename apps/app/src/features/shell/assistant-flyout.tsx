@@ -166,23 +166,35 @@ const QUERY_RECORD: Readonly<Record<string, readonly string[]>> = {
  */
 const ENTITY_ID_MAX = 256;
 
-/** The record the page is showing: the path segment after the route, or the query value that selects one. */
+/** The first of `keys` the address bar selects something with; a key present but empty is a cleared selection, not a record. */
+function selectedBy(
+  keys: readonly string[],
+  query: Pick<URLSearchParams, "get">,
+): string | undefined {
+  for (const key of keys) {
+    const value = query.get(key);
+    if (value !== null && value !== "") return value;
+  }
+  return undefined;
+}
+
+/**
+ * The record the page is showing. A route keeps it in the path segment after
+ * the route — a run id, an agent key — or, where §1.2 makes a selection a query
+ * value rather than a route of its own, in one of the values `QUERY_RECORD`
+ * names for it. A route does one or the other, so there is no precedence to
+ * settle: the table decides which half of the URL is read.
+ */
 function recordOnPage(
   route: string,
   fromPath: string | undefined,
   query: Pick<URLSearchParams, "get">,
 ): string | null {
-  let found = fromPath;
-  if (found === undefined)
-    for (const key of QUERY_RECORD[route] ?? []) {
-      const value = query.get(key);
-      if (value !== null && value !== "") {
-        found = value;
-        break;
-      }
-    }
-  if (found === undefined || found === "" || found.length > ENTITY_ID_MAX)
-    return null;
+  const keys = QUERY_RECORD[route];
+  const found = keys === undefined ? fromPath : selectedBy(keys, query);
+  // Past the cap `assistantPageContextSchema` puts on `entityId` it is not an
+  // id, and asking without the record beats refusing the turn as invalid.
+  if (found === undefined || found.length > ENTITY_ID_MAX) return null;
   return found;
 }
 

@@ -233,6 +233,21 @@ describe("AssistantFlyout", () => {
     });
   });
 
+  // A key present but empty is a cleared selection — Spend leaves `?finding=`
+  // behind when the finding is closed — so the next key is what is on screen.
+  it("reads past a query value that names nothing to the one that does", async () => {
+    pathname.mockReturnValue(
+      "/acme/core-platform/spend?tab=keys&finding=&drill=key_88",
+    );
+    const { user } = await openFlyout();
+    await ask(user, "explain this");
+
+    expect(askAssistant.mock.calls[0]?.[2]).toMatchObject({
+      route: "spend",
+      entityId: "key_88",
+    });
+  });
+
   // `entityId` is capped at 256 characters by `assistantPageContextSchema`; a
   // longer one is no id, and sending it would refuse the whole turn for being
   // invalid rather than answer the question without it.
@@ -249,8 +264,9 @@ describe("AssistantFlyout", () => {
     });
   });
 
-  // The path still wins where it has one: a run id is a segment, not a query.
-  it("prefers the record in the path over a query value", async () => {
+  // A query value on a route that keeps its record in the path is not the
+  // record: the table decides which half of the URL is read.
+  it("reads the path on a route that keeps its record there, whatever the query says", async () => {
     pathname.mockReturnValue(
       "/acme/core-platform/runs/arun_01k9?finding=not-this",
     );
