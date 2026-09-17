@@ -90,10 +90,21 @@ point in between and after:
 1. Upload and reload the Caddy config that SETS `X-Oxagen-Client-Ip`.
 2. Set `TRUST_EDGE_CLIENT_IP_HEADER=true`.
 
-Between the two, and before either, attribution falls to the identity walk over
-`TRUSTED_PROXY_CIDRS`, and then to the hop count, which is where the deployment
-already was. If the flag is never set, nothing breaks: Caddy rewrites
-`X-Forwarded-For` to a single trusted entry, and a hop count of 1 reads it.
+Between the two, and before either, the hop-count walk decides, which is where
+the deployment already was: Caddy rewrites `X-Forwarded-For` to a single entry
+and a hop count of 1 reads it. If the flag is never set, nothing breaks.
+
+`TRUSTED_PROXY_CIDRS` does NOT belong in that window, and an earlier revision of
+this paragraph wrongly said attribution falls through it "and then to the hop
+count". It does not: once the list is non-empty the identity walk decides alone
+and returns null when no trusted proxy vouched for an entry
+(`packages/oxagen/src/client-ip.ts`), so the hop count is never consulted. Set
+it against the pre-rewrite shape, where the ALB's own address is still in the
+chain to vouch for the client. Once Caddy rewrites the header to the single
+client address there is no proxy entry left to vouch for anything, so the
+identity walk yields nothing and the edge header — step 2 — is what attributes
+the caller. Setting the CIDR list during the window denies every `ip_ranges`
+mandate and skips the pre-auth ceilings until step 2 lands.
 
 ## Alternatives
 

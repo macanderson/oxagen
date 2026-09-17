@@ -222,12 +222,15 @@ believes `X-Oxagen-Client-Ip` only when `TRUST_EDGE_CLIENT_IP_HEADER=true`, and
 that header is only trustworthy once Caddy is SETting it. So: (1) upload and
 reload the Caddy config from `infra/tools/caddy/Caddyfile.alb`; (2) set
 `TRUST_EDGE_CLIENT_IP_HEADER=true` on app, api and mcp. Before either step, and
-between them, attribution falls to the identity walk over `TRUSTED_PROXY_CIDRS`
-and then to the hop count, which is correct at the `TRUSTED_PROXY_HOP_COUNT`
-default of **1**: Caddy replaces `X-Forwarded-For` with a single entry rather
-than appending to it, so the chain reaching the app is one deep. Do not raise it
-to 2 — a chain shorter than the declared depth is refused outright, which yields
-no client address and denies every IAM `ip_ranges` mandate. Doing
+between them, the hop-count walk decides, which is correct at the
+`TRUSTED_PROXY_HOP_COUNT` default of **1**: Caddy replaces `X-Forwarded-For`
+with a single entry rather than appending to it, so the chain reaching the app
+is one deep. Do not raise it to 2 — a chain shorter than the declared depth is
+refused outright, which yields no client address and denies every IAM
+`ip_ranges` mandate. Do not set `TRUSTED_PROXY_CIDRS` during this window either:
+a non-empty list makes the identity walk decide alone, and after the Caddy
+rewrite no proxy entry remains in the header to vouch for the client, so it
+returns nothing. Doing
 step 2 first is the failure mode the flag exists to prevent: the old Caddy
 config forwards a caller-supplied copy of that header unchanged, and it feeds
 IAM `ip_ranges` evaluation.
