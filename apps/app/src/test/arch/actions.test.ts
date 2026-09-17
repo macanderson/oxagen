@@ -305,7 +305,7 @@ describe("server actions", () => {
     () => {
       const modules = productionFiles()
         .map(readSource)
-        .filter((source) => directiveOf(parse(source)) === "use server");
+        .filter((source) => directiveOf(scan(source)) === "use server");
       expect(modules.length).toBeGreaterThan(0);
       expect(modules.flatMap(actionViolations)).toEqual([]);
     },
