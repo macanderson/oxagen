@@ -210,6 +210,12 @@ describe("the forms deliberately outside the set are reported, not counted clean
     expect(r.skips.join(" ")).toContain("cannot read");
   });
 
+  it("reports a factory passed by reference rather than written at the call", () => {
+    const r = check(`vi.mock("@oxagen/database", factoryDefinedElsewhere);`);
+    expect(r.changed).toBe(0);
+    expect(r.skips.join(" ")).toContain("cannot read");
+  });
+
   it("does NOT report a spread of importOriginal, which carries only real seams", () => {
     // ~300 factories in this repo spread `real`. Reporting those would bury the
     // report that matters, and `real` is by construction the thing that leaves

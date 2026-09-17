@@ -112,6 +112,10 @@
  *                                  as a factory return — the five
  *                                  `Object.assign` calls under a database mock
  *                                  are all inside fake query-builder chains.
+ *     vi.mock(spec, factoryFn)     A factory passed by REFERENCE rather than
+ *                                  written at the call. This file's parse holds
+ *                                  none of it. Not decided; REPORTED as a skip.
+ *                                  Does not occur in this repo.
  *
  * The line between the two halves is whether a single file's parse settles it.
  * Everything below it is NAMED in the SKIPPED report rather than counted clean,
@@ -328,6 +332,15 @@ function ownReturnExpressions(factory) {
 function rewritableReturns(factory, sourceFile) {
   const hits = [];
   const skips = [];
+  // `vi.mock("@oxagen/database", factoryDefinedElsewhere)` — the second argument
+  // is a reference, not a literal function, so this file's parse holds none of
+  // the mock. Named, not counted clean. Does not occur in this repo.
+  if (!ts.isFunctionLike(factory)) {
+    skips.push(
+      `a mock factory this check cannot read (${ts.SyntaxKind[factory.kind]}) — it is a reference, not a function written here`,
+    );
+    return { hits, skips };
+  }
   for (const { node, expr, concise } of ownReturnExpressions(factory)) {
     if (!ts.isObjectLiteralExpression(expr)) {
       // Object.assign(…), a conditional, a call — a mock surface this parse
