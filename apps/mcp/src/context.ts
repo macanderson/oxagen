@@ -104,12 +104,24 @@ export function extractBearerToken(
 /**
  * The Tacho daemon chain a local MCP gateway call is being served for.
  *
- * Bounded and character-checked before it is carried anywhere. A chain id is
- * the collector's own session id — `tachod-` plus a uuid — and this value is
- * written to a durable evidence row, so it is accepted only in that shape
- * rather than trusted to be sane because of the credential it arrived with.
- * Anything else reads as absent, which leaves the session on the host's own
- * enforcement tier: the same answer as a host that has never used the gateway.
+ * Bounded and character-checked before it is carried anywhere, because it is
+ * written to a durable evidence row and is not trusted to be sane merely
+ * because of the credential it arrived with. Anything outside the bound reads
+ * as absent, which leaves the session on the host's own enforcement tier: the
+ * same answer as a host that has never used the gateway.
+ *
+ * What the daemon actually sends is `hostRecorder.sessionUuid` — a v5 UUID
+ * derived as `uuidv5(NS_TACHO_SESSION, "<host enrollment id>/tachod-<ulid>")`
+ * (`packages/tacho/src/ids.ts`), NOT the literal `tachod-<ulid>` chain id the
+ * daemon knows it by. The two are easy to confuse and this comment used to say
+ * the wrong one.
+ *
+ * The check below is deliberately a bound and a character class rather than a
+ * uuid pattern. A value that is not a session uuid can never match anything —
+ * ingest looks it up against `tacho.sessions.session_uuid` — so pinning the
+ * shape here would buy no safety, and it would turn any later change to how the
+ * daemon derives its chain uuid into the tier silently vanishing rather than a
+ * visible mismatch.
  */
 function extractGatewaySession(hdrs: HttpHeaders): string | null {
   const raw = firstHeader(hdrs[TACHO_GATEWAY_SESSION_HEADER])?.trim();

@@ -957,9 +957,18 @@ export const tachoGatewayChains = tachoSchema.table(
     hostId: uuid("host_id").notNull(),
     /**
      * The daemon chain the gateway was serving, as the daemon named it on the
-     * request. Text rather than uuid: a chain id is the collector's own
-     * `tachod-*` session id, which `tacho.sessions.session_uuid` also stores
-     * as text.
+     * request: `hostRecorder.sessionUuid`, the v5 uuid derived from the host
+     * enrollment id and the daemon's `tachod-<ulid>` boot id
+     * (`packages/tacho/src/ids.ts`). It is the value ingest matches against
+     * `tacho.sessions.session_uuid`, which is a `uuid` column.
+     *
+     * Text rather than uuid here all the same, and not because the value is
+     * anything but a uuid. It arrives on a request header, and this row is
+     * written inside `machineKeyDenial` — the authorisation path, which must
+     * take a note without ever failing the call it was only observing. A `uuid`
+     * column would turn a malformed header into 22P02 and abort that
+     * transaction; `text` turns it into a row that matches no session, which is
+     * the same outcome as no row at all.
      */
     chainSessionUuid: text("chain_session_uuid").notNull(),
     /**
