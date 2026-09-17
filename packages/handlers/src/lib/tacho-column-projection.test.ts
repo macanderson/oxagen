@@ -74,12 +74,60 @@ function unprojectedReads(path: string): string[] {
   return found;
 }
 
+/** The `{...}` argument of a call, or "" when the call has none. */
+function returningArgument(source: string, at: number): string {
+  const open = source.indexOf("(", at);
+  if (open === -1) return "";
+  let depth = 0;
+  for (let i = open; i < source.length; i += 1) {
+    if (source[i] === "(") depth += 1;
+    else if (source[i] === ")") {
+      depth -= 1;
+      if (depth === 0) return source.slice(open + 1, i).trim();
+    }
+  }
+  return "";
+}
+
+/**
+ * Every write to those tables names what it returns.
+ *
+ * `RETURNING` is a read wearing a write's clothes: a bare `.returning()` asks
+ * for every column the schema declares, so it fails on a pending migration
+ * exactly as an unprojected SELECT does. `mintHostEnrollment` had one, and
+ * enrolling a host would have failed outright for the whole rollout window
+ * (discussion_r4041098517) — found by review after the read paths were
+ * guarded, which is why this is a scan and not a habit.
+ */
+function bareReturning(path: string): string[] {
+  const source = readFileSync(path, "utf8");
+  const found: string[] = [];
+  const pattern = new RegExp(
+    `\\.(insert|update|delete)\\((?:schema\\.)?(${GUARDED.join("|")})\\)`,
+    "g",
+  );
+  for (const match of source.matchAll(pattern)) {
+    const tail = source.slice(match.index, match.index + 4000);
+    const at = tail.indexOf(".returning");
+    if (at === -1) continue;
+    if (returningArgument(tail, at + ".returning".length) !== "") continue;
+    const line = source.slice(0, match.index).split("\n").length;
+    found.push(`${path.slice(SRC.length + 1)}:${line} ${match[0]}`);
+  }
+  return found;
+}
+
 describe("tacho relational reads", () => {
   it("name their columns, so a pending migration cannot break them", () => {
     const files = sourceFiles(SRC);
     // The scan is worthless if it reads nothing; a broken path would pass.
     expect(files.length).toBeGreaterThan(50);
     expect(files.flatMap(unprojectedReads)).toEqual([]);
+  });
+
+  it("name what they RETURN, for the same reason", () => {
+    const files = sourceFiles(SRC);
+    expect(files.flatMap(bareReturning)).toEqual([]);
   });
 
   it("detects an unprojected read", () => {
