@@ -99,6 +99,7 @@ function AccountForm({ data }: { data: ShellData }) {
         <Avatar
           value={avatarUrl === "" ? null : avatarUrl}
           initials={initials(shown)}
+          size="preview"
           testId="account-avatar-preview"
         />
         <div className="min-w-0">

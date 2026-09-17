@@ -95,6 +95,34 @@ describe("Avatar", () => {
     expect(img).toHaveAttribute("alt", "");
   });
 
+  // An emoji does not scale with its tile, so the two call sites -- a 32px
+  // trigger and a 52px editor preview -- need their own glyph steps or the
+  // emoji is lost in the circle at one of them.
+  it("draws each size with its own tile and glyph steps, in lockstep", () => {
+    const { container } = render(
+      <>
+        <Avatar value={DESIGNED} initials="MB" size="trigger" testId="t" />
+        <Avatar value={DESIGNED} initials="MB" size="preview" testId="p" />
+        <Avatar value={null} initials="MB" size="trigger" testId="ti" />
+        <Avatar value={null} initials="MB" size="preview" testId="pi" />
+      </>,
+    );
+    expect(container).toBeTruthy();
+    expect(screen.getByTestId("t").className).toContain("size-8");
+    expect(screen.getByTestId("t").className).toContain("text-base");
+    expect(screen.getByTestId("p").className).toContain("size-13");
+    expect(screen.getByTestId("p").className).toContain("text-2xl");
+    expect(screen.getByTestId("ti").className).toContain("size-8");
+    expect(screen.getByTestId("ti").className).toContain("text-xs");
+    expect(screen.getByTestId("pi").className).toContain("size-13");
+    expect(screen.getByTestId("pi").className).toContain("text-base");
+  });
+
+  it("defaults to the preview size", () => {
+    render(<Avatar value={null} initials="MB" testId="a" />);
+    expect(screen.getByTestId("a").className).toContain("size-13");
+  });
+
   it("falls back to initials when the value names no avatar (negative)", () => {
     render(<Avatar value="not-an-avatar" initials="MB" testId="a" />);
     const tile = screen.getByTestId("a");

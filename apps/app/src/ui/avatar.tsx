@@ -84,26 +84,45 @@ const MODE_FILTER: Record<AvatarMode, string | undefined> = {
 };
 
 /**
- * The avatar beside a name. Decorative in every state — the name it belongs to
- * is always rendered as text next to it — so the image carries an empty alt and
- * the two tiles are hidden from the accessibility tree.
+ * The sizes an avatar is drawn at, each a tile size with its two glyph scales.
+ * They are a table rather than a free-form className because an emoji does not
+ * scale with the tile on its own: a 32px trigger and a 52px editor preview
+ * sharing one font-size leaves the emoji either lost in the circle or spilling
+ * out of it. Initials and emoji get separate steps because two initial letters
+ * need less room than one emoji at the same tile size.
+ */
+const SIZE = {
+  /** The user-menu trigger in the top bar: a small ornament beside nothing. */
+  trigger: { box: "size-8", initials: "text-xs", glyph: "text-base" },
+  /** The Account dialog's preview, beside the name and email it belongs to. */
+  preview: { box: "size-13", initials: "text-base", glyph: "text-2xl" },
+} as const;
+
+export type AvatarSize = keyof typeof SIZE;
+
+/**
+ * The avatar for a person. Decorative in every state — the name it belongs to
+ * is rendered as text beside it, or carried by the trigger's `aria-label` — so
+ * the image has an empty alt and the two tiles are hidden from the
+ * accessibility tree.
  */
 export function Avatar({
   value,
   initials,
-  className = "size-13 text-base",
+  size = "preview",
   testId,
 }: {
   /** The stored value: an https URL, a designed-avatar string, or null. */
   value: string | null;
   /** What the initials tile shows when the value names no avatar. */
   initials: string;
-  /** Size and glyph scale; the shape and layout are fixed. */
-  className?: string;
+  /** Which row of SIZE to draw at; the shape and layout are fixed. */
+  size?: AvatarSize;
   testId?: string;
 }) {
   const spec = parseAvatarValue(value);
-  const box = `flex-none overflow-hidden rounded-full ${className}`;
+  const step = SIZE[size];
+  const box = `flex-none overflow-hidden rounded-full ${step.box}`;
 
   if (spec.kind === "image")
     return (
@@ -126,7 +145,7 @@ export function Avatar({
         data-testid={testId}
         data-avatar="designed"
         style={{ backgroundColor: spec.bg }}
-        className={`grid place-items-center ${box}`}
+        className={`grid place-items-center ${box} ${step.glyph}`}
       >
         <span
           className="leading-none"
@@ -142,7 +161,7 @@ export function Avatar({
       aria-hidden="true"
       data-testid={testId}
       data-avatar="initials"
-      className={`grid place-items-center bg-secondary font-semibold text-secondary-foreground ${box}`}
+      className={`grid place-items-center bg-secondary font-semibold text-secondary-foreground ${box} ${step.initials}`}
     >
       {initials}
     </span>
