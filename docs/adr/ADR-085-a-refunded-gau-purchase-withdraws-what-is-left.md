@@ -291,6 +291,65 @@ GAU one, which is what closes #3189's root cause. A charge that cannot be read
 degrades to `{}` rather than throwing, because a webhook retried for a fault
 that retrying cannot fix is worse than a logged fatal.
 
+### 9. A charge read that fails is not a charge read that answered
+
+§8 resolves a dispute's organisation from the charge, and the first version of
+that read swallowed every failure into `{}`. A 5xx, a timeout or a rate limit
+therefore told the dispute handler the charge has no organisation and bought
+nothing — so the dispute was dropped and the webhook marked processed for ever,
+while a later checkout retry handed out every unit. That is §5's defect exactly,
+reached through a failed read instead of a missing field.
+
+The distinction is between Stripe *answering* and Stripe *failing to answer*.
+`StripeInvalidRequestError` (the id is wrong or the resource is gone) and
+`StripePermissionError` are answers: retrying returns the same thing, and `{}`
+is correct. Everything else — including an error carrying no Stripe type at all,
+such as a transport timeout — is the absence of an answer and propagates.
+
+Throwing *is* the retry. `processStripeEvent` re-dispatches only an event whose
+handler threw, and Stripe's own backoff is a better retry loop than one held
+open inside a webhook handler. Unknown errors default to transient, because an
+extra redelivery costs far less than a dropped dispute.
+
+This also repairs §7's invariant. The charge read happens **outside** the
+advisory lock, and its result decides whether to park — so the guarantee that
+"nothing read outside the lock decides anything" depends on that read being
+both immutable and reliable. Stripe charge metadata is immutable: it is set when
+the PaymentIntent is created and nothing mutates it. It was not reliable, and a
+wrong value reaching the park decision is a violation whether it arrives by
+concurrency or by an outage. The mutable input — *does a settlement exist?* — is
+and always was read inside the lock, which the statement-order tests assert
+directly.
+
+### 10. A partial refund is cumulative, so the key is the amount, not the id
+
+Stripe's `charge.amount_refunded` is the total refunded over the charge's life,
+and a second partial refund redelivers the **same charge id** with a larger
+figure. Keyed on the id alone — as §4 originally settled it, matching the credit
+clawback — that reads as a redelivery and withdraws nothing: the customer gets
+more money back and keeps the units.
+
+§4's reasoning was that the product sells indivisible blocks and offers no
+partial refund, so the only partial refunds are operator goodwill from the
+dashboard. That is true and still not a reason to lose the second one.
+
+The comparison is now on the amount:
+
+- **equal** — a genuine redelivery. No-op.
+- **greater** — new money. Withdraw the difference.
+- **smaller** — a stale delivery arriving out of order. Ignored; units are never
+  given back by a webhook arriving late.
+
+The units for an increase are recomputed for the new **cumulative** total and
+the already-recorded figure subtracted, rather than prorating each delta on its
+own. Proration floors, so summing per-delta figures drifts below what the
+customer was actually refunded; recomputing the whole floors once, and the row
+ends equal to one proration of the cumulative amount however many deliveries
+built it.
+
+A row still pending has no settlement to price against, so an increase only
+records the larger amount and reconciliation prorates the final total once.
+
 ## Consequences
 
 - A purchase made before this change has no `stripe_payment_intent_id` and no

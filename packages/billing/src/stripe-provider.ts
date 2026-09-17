@@ -125,6 +125,25 @@ function stripeChargeToNeutral(c: Stripe.Charge): BillingRefundedCharge {
   };
 }
 
+/**
+ * Whether Stripe has definitively answered that a charge cannot be read, as
+ * opposed to failing to answer.
+ *
+ * Definitive: the id is wrong or the resource is gone
+ * (`StripeInvalidRequestError`), or this key may not see it
+ * (`StripePermissionError`). Retrying returns the same thing.
+ *
+ * Everything else — connection errors, 5xx, rate limits, authentication
+ * faults — is the absence of an answer. Treating absence as "no metadata"
+ * silently converts an outage into a dropped dispute, so those propagate.
+ */
+function isDefinitiveStripeReadFailure(err: unknown): boolean {
+  const type = (err as { type?: unknown } | null)?.type;
+  return (
+    type === "StripeInvalidRequestError" || type === "StripePermissionError"
+  );
+}
+
 /** Micro-dollars in one cent. */
 const MICROS_PER_CENT = 10_000n;
 
@@ -936,14 +955,30 @@ export class StripeProvider implements BillingProvider {
       const charge = await this.client().charges.retrieve(chargeId);
       return (charge.metadata as Record<string, string>) ?? {};
     } catch (err) {
-      // A charge we cannot read is indistinguishable from one with no
-      // metadata for every caller's purpose, and a dispute webhook that throws
-      // here would be retried for a fault that retrying cannot fix.
-      logger.warn(
+      if (isDefinitiveStripeReadFailure(err)) {
+        // Stripe answered: this charge does not exist, or we may not read it.
+        // Retrying cannot change that, and the caller's "no metadata" branch
+        // is the correct one.
+        logger.warn(
+          { chargeId, err: err instanceof Error ? err.message : String(err) },
+          "billing: charge cannot be read; treating as no metadata",
+        );
+        return {};
+      }
+      // A timeout, a 5xx or a rate limit is NOT an answer. Returning `{}` here
+      // would tell the dispute handler the charge has no organisation and
+      // nothing was bought, so the dispute would be dropped and the webhook
+      // marked processed for ever — the exact defect ADR-085 §5 and §8 exist
+      // to prevent, reached through a failed read instead of a missing field.
+      //
+      // Throwing is how this codebase asks for a retry: processStripeEvent
+      // re-dispatches only an event whose handler threw, and Stripe's own
+      // backoff is a better retry loop than one held open inside a webhook.
+      logger.error(
         { chargeId, err: err instanceof Error ? err.message : String(err) },
-        "billing: could not read charge metadata",
+        "billing: charge read failed transiently; failing the webhook so it is retried",
       );
-      return {};
+      throw err;
     }
   }
 

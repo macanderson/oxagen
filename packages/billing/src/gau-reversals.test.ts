@@ -834,3 +834,199 @@ describe("both money paths take the PaymentIntent lock before deciding", () => {
     });
   });
 });
+
+describe("a charge read that fails is not an answer (ADR-085 §9)", () => {
+  it("propagates a transient failure instead of dropping the dispute", async () => {
+    // The whole point: returning {} here would reach the park decision as
+    // "no organisation", and the dispute would be dropped and the webhook
+    // marked processed for ever. Throwing makes processStripeEvent
+    // re-dispatch it.
+    mocks.getChargeMetadata.mockRejectedValue(new Error("ETIMEDOUT"));
+
+    await expect(reverseGauPurchaseForDispute(dispute())).rejects.toThrow(
+      "ETIMEDOUT",
+    );
+    expect(store.reversals).toHaveLength(0);
+  });
+
+  it("a definitive empty answer still declines, because there is nothing to attribute to", async () => {
+    mocks.getChargeMetadata.mockResolvedValue({});
+
+    const result = await reverseGauPurchaseForDispute(dispute());
+
+    expect(result).toBeNull();
+    expect(store.reversals).toHaveLength(0);
+  });
+});
+
+describe("a second partial refund on one charge (ADR-085 §10)", () => {
+  // Stripe's amount_refunded is CUMULATIVE. Keyed on the charge id alone, the
+  // second partial refund reads as a redelivery and withdraws nothing: more
+  // money back, same units kept.
+
+  it("withdraws the delta when the cumulative amount grows", async () => {
+    seedBucket({ purchasedGau: 10_000 });
+    seedCheckoutSettlement();
+
+    // 2,750c of a 5,500c charge → half the units.
+    await reverseGauPurchaseForRefund(
+      refundedCharge({ amountRefundedCents: 2_750 }),
+    );
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 5_000 });
+
+    // The operator refunds the rest. Same charge id, cumulative 5,500c.
+    const second = await reverseGauPurchaseForRefund(
+      refundedCharge({ amountRefundedCents: 5_500 }),
+    );
+
+    expect(second).toMatchObject({
+      applied: true,
+      requestedGau: 10_000,
+      reversedGau: 10_000,
+      unrecoveredGau: 0,
+    });
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 0 });
+    // One row, carrying the cumulative truth rather than two part-rows.
+    expect(store.reversals).toHaveLength(1);
+    expect(store.reversals[0]).toMatchObject({
+      amountCents: 5_500,
+      requestedGau: 10_000,
+      reversedGau: 10_000,
+    });
+  });
+
+  it("an identical redelivery is still a no-op", async () => {
+    seedBucket({ purchasedGau: 10_000 });
+    seedCheckoutSettlement();
+
+    await reverseGauPurchaseForRefund(
+      refundedCharge({ amountRefundedCents: 2_750 }),
+    );
+    const again = await reverseGauPurchaseForRefund(
+      refundedCharge({ amountRefundedCents: 2_750 }),
+    );
+
+    expect(again).toMatchObject({ applied: false });
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 5_000 });
+  });
+
+  it("a smaller amount arriving late is ignored rather than refunding units back", async () => {
+    seedBucket({ purchasedGau: 10_000 });
+    seedCheckoutSettlement();
+
+    await reverseGauPurchaseForRefund(
+      refundedCharge({ amountRefundedCents: 5_500 }),
+    );
+    const stale = await reverseGauPurchaseForRefund(
+      refundedCharge({ amountRefundedCents: 2_750 }),
+    );
+
+    expect(stale).toMatchObject({ applied: false });
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 0 });
+  });
+
+  it("recomputes against the cumulative total rather than summing floored deltas", async () => {
+    // Three refunds of 1,834c each = 5,502c, over the 5,500c charge. Prorating
+    // each on its own floors three times; recomputing the whole floors once.
+    seedBucket({ purchasedGau: 10_000 });
+    seedCheckoutSettlement();
+
+    await reverseGauPurchaseForRefund(
+      refundedCharge({ amountRefundedCents: 1_834 }),
+    );
+    await reverseGauPurchaseForRefund(
+      refundedCharge({ amountRefundedCents: 3_668 }),
+    );
+    await reverseGauPurchaseForRefund(
+      refundedCharge({ amountRefundedCents: 5_502 }),
+    );
+
+    // The cumulative total exceeds the charge, so every unit goes.
+    expect(store.reversals[0]).toMatchObject({ requestedGau: 10_000 });
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 0 });
+  });
+
+  it("a growing refund on a still-pending reversal only records the larger amount", async () => {
+    // No settlement yet, so there is nothing to price against; reconciliation
+    // prorates the final figure once.
+    await reverseGauPurchaseForRefund(
+      refundedCharge({ amountRefundedCents: 2_750 }),
+    );
+    const second = await reverseGauPurchaseForRefund(
+      refundedCharge({ amountRefundedCents: 5_500 }),
+    );
+
+    expect(second).toMatchObject({ pending: true, applied: true });
+    expect(store.reversals).toHaveLength(1);
+    expect(store.reversals[0]).toMatchObject({
+      settlementId: null,
+      amountCents: 5_500,
+      requestedGau: 0,
+    });
+  });
+});
+
+describe("the park decision reads its mutable input inside the lock", () => {
+  // The invariant is "no transaction can commit having added spendable units
+  // without having consulted the parked rows", and it only holds if the state
+  // the decision depends on is read under the lock. Two inputs decide whether
+  // to park:
+  //
+  //   does a settlement exist?   MUTABLE — another transaction creates it.
+  //   is this a gau purchase, and whose?   read from the charge, outside.
+  //
+  // The first must be read inside the lock, and this asserts the statement
+  // order that makes it so. The second is Stripe charge metadata, which is set
+  // when the PaymentIntent is created and never changes — so reading it
+  // outside is safe *provided a failed read cannot masquerade as an answer*,
+  // which is what the ADR-085 §9 tests above enforce.
+
+  it("takes the lock before it looks for the settlement", async () => {
+    seedBucket({ purchasedGau: 10_000 });
+    seedCheckoutSettlement();
+
+    await reverseGauPurchaseForRefund(refundedCharge());
+
+    const lockAt = store.log.findIndex((e) => e.op === "lock");
+    const settlementReadAt = store.log.findIndex(
+      (e) => e.op === "select" && e.table === "settlements",
+    );
+    expect(lockAt).toBeGreaterThanOrEqual(0);
+    expect(settlementReadAt).toBeGreaterThanOrEqual(0);
+    expect(lockAt).toBeLessThan(settlementReadAt);
+  });
+
+  it("takes the lock before it looks for an existing reversal", async () => {
+    seedBucket({ purchasedGau: 10_000 });
+    seedCheckoutSettlement();
+
+    await reverseGauPurchaseForRefund(refundedCharge());
+
+    const lockAt = store.log.findIndex((e) => e.op === "lock");
+    const reversalReadAt = store.log.findIndex(
+      (e) => e.op === "select" && e.table === "reversals",
+    );
+    expect(lockAt).toBeLessThan(reversalReadAt);
+  });
+
+  it("the reconciliation locks before it looks for pending rows", async () => {
+    await reverseGauPurchaseForRefund(refundedCharge());
+    const bucket = seedBucket({ purchasedGau: 10_000 });
+    const settlement = seedCheckoutSettlement();
+    store.log.length = 0;
+    const tx = makeFakeGauTx(store);
+
+    await reconcilePendingGauReversals(tx, {
+      settlement,
+      paymentIntentId: "pi_gau_001",
+      bucket,
+    });
+
+    const lockAt = store.log.findIndex((e) => e.op === "lock");
+    const pendingReadAt = store.log.findIndex(
+      (e) => e.op === "select" && e.table === "reversals",
+    );
+    expect(lockAt).toBe(0);
+    expect(lockAt).toBeLessThan(pendingReadAt);
+  });
+});

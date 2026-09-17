@@ -144,6 +144,129 @@ export function reversibleGau(
   );
 }
 
+type GauReversalRow = typeof schema.gauReversals.$inferSelect;
+
+/**
+ * A second partial refund on a charge this reversal already covers.
+ *
+ * The units are recomputed for the NEW cumulative total and the difference is
+ * withdrawn, rather than prorating each delta on its own: proration floors, so
+ * summing per-delta figures drifts below the total the customer was actually
+ * refunded. Recomputing the whole and subtracting what is already recorded
+ * keeps the row equal to one proration of the cumulative amount however many
+ * deliveries built it.
+ *
+ * A row still pending has no settlement to price against, so it only records
+ * the larger amount; reconciliation prorates the final total once.
+ */
+async function applyCumulativeIncrease(
+  tx: Tx,
+  args: {
+    existing: GauReversalRow;
+    amountCents: number;
+    paymentIntentId: string;
+    now: Date;
+  },
+): Promise<GauReversalResult> {
+  const { existing } = args;
+
+  if (existing.settlementId === null || existing.bucketId === null) {
+    await tx
+      .update(schema.gauReversals)
+      .set({ amountCents: args.amountCents })
+      .where(eq(schema.gauReversals.id, existing.id));
+    return {
+      pending: true,
+      orgId: existing.orgId,
+      settlementId: null,
+      bucketId: null,
+      requestedGau: 0,
+      reversedGau: 0,
+      unrecoveredGau: 0,
+      applied: true,
+    };
+  }
+
+  const settlement = await findPurchaseByPaymentIntent(
+    tx,
+    args.paymentIntentId,
+  );
+  if (!settlement) {
+    // The row claims a settlement that is not there. Nothing safe to price
+    // against, so record the money and leave the units to an operator.
+    logger.error(
+      {
+        reversalId: existing.id,
+        settlementId: existing.settlementId,
+        paymentIntentId: args.paymentIntentId,
+      },
+      "billing: gau reversal references a settlement that cannot be read; units not adjusted",
+    );
+    await tx
+      .update(schema.gauReversals)
+      .set({ amountCents: args.amountCents })
+      .where(eq(schema.gauReversals.id, existing.id));
+    return {
+      pending: false,
+      orgId: existing.orgId,
+      settlementId: existing.settlementId,
+      bucketId: existing.bucketId,
+      requestedGau: existing.requestedGau,
+      reversedGau: existing.reversedGau,
+      unrecoveredGau: existing.unrecoveredGau,
+      applied: false,
+    };
+  }
+
+  const totalRequestedGau = reversibleGau(settlement, args.amountCents);
+  const deltaGau = Math.max(0, totalRequestedGau - existing.requestedGau);
+
+  const rows = await tx
+    .select()
+    .from(schema.gauBuckets)
+    .where(eq(schema.gauBuckets.id, existing.bucketId))
+    .limit(1);
+  const bucket = rows[0];
+  const fromPurchased = bucket ? Math.min(bucket.purchasedGau, deltaGau) : 0;
+  const fromCarried = bucket
+    ? Math.min(bucket.carriedGau, deltaGau - fromPurchased)
+    : 0;
+  const newlyReversed = fromPurchased + fromCarried;
+
+  if (bucket && newlyReversed > 0) {
+    await tx
+      .update(schema.gauBuckets)
+      .set({
+        purchasedGau: bucket.purchasedGau - fromPurchased,
+        carriedGau: bucket.carriedGau - fromCarried,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(schema.gauBuckets.id, bucket.id));
+  }
+
+  const reversedGau = existing.reversedGau + newlyReversed;
+  await tx
+    .update(schema.gauReversals)
+    .set({
+      amountCents: args.amountCents,
+      requestedGau: totalRequestedGau,
+      reversedGau,
+      unrecoveredGau: totalRequestedGau - reversedGau,
+    })
+    .where(eq(schema.gauReversals.id, existing.id));
+
+  return {
+    pending: false,
+    orgId: existing.orgId,
+    settlementId: existing.settlementId,
+    bucketId: existing.bucketId,
+    requestedGau: totalRequestedGau,
+    reversedGau,
+    unrecoveredGau: totalRequestedGau - reversedGau,
+    applied: true,
+  };
+}
+
 interface ApplyGauReversalArgs {
   kind: "refund" | "dispute";
   /** `ch_…` for a refund, `dp_…` for a dispute: half the idempotency key. */
@@ -211,16 +334,31 @@ export async function applyGauReversal(
       ),
     });
     if (existing) {
-      return {
-        pending: existing.settlementId === null,
-        orgId: existing.orgId,
-        settlementId: existing.settlementId,
-        bucketId: existing.bucketId,
-        requestedGau: existing.requestedGau,
-        reversedGau: existing.reversedGau,
-        unrecoveredGau: existing.unrecoveredGau,
-        applied: false,
-      } satisfies GauReversalResult;
+      // Stripe's `amount_refunded` is CUMULATIVE over the charge, so a second
+      // partial refund redelivers the same charge id with a larger figure.
+      // Keyed on the charge alone, that reads as a redelivery and withdraws
+      // nothing: the customer gets more money back and keeps the units it
+      // bought. Compare the amounts instead of the ids — an identical amount
+      // IS a redelivery, a larger one is new money, and a smaller one is a
+      // stale delivery arriving out of order and is ignored.
+      if (args.amountCents <= existing.amountCents) {
+        return {
+          pending: existing.settlementId === null,
+          orgId: existing.orgId,
+          settlementId: existing.settlementId,
+          bucketId: existing.bucketId,
+          requestedGau: existing.requestedGau,
+          reversedGau: existing.reversedGau,
+          unrecoveredGau: existing.unrecoveredGau,
+          applied: false,
+        } satisfies GauReversalResult;
+      }
+      return applyCumulativeIncrease(tx, {
+        existing,
+        amountCents: args.amountCents,
+        paymentIntentId: args.paymentIntentId,
+        now,
+      });
     }
 
     const settlement = await findPurchaseByPaymentIntent(

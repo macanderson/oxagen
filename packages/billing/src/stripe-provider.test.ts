@@ -57,6 +57,9 @@ const stripeMethods = {
   paymentIntents: {
     create: vi.fn(),
   },
+  charges: {
+    retrieve: vi.fn(),
+  },
   checkout: {
     sessions: {
       create: vi.fn(),
@@ -1579,5 +1582,73 @@ describe("StripeProvider", () => {
       const packs = await provider.getCheckoutSessionCreditPacks("cs_test_002");
       expect(packs).toEqual([{ creditsPerUnit: 1000, quantity: 1 }]);
     });
+  });
+});
+
+describe("getChargeMetadata — an outage is not an answer (ADR-085 §9)", () => {
+  let provider: InstanceType<typeof StripeProvider>;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    provider = new StripeProvider();
+  });
+
+  /** Stripe's SDK tags its errors with `type`; that is what classifies them. */
+  function stripeError(type: string, message = "boom"): Error {
+    return Object.assign(new Error(message), { type });
+  }
+
+  it("returns the charge's metadata on a successful read", async () => {
+    stripeMethods.charges.retrieve.mockResolvedValue({
+      id: "ch_1",
+      metadata: { oxagen_kind: "gau_purchase", org_id: "org-1" },
+    });
+
+    await expect(provider.getChargeMetadata("ch_1")).resolves.toEqual({
+      oxagen_kind: "gau_purchase",
+      org_id: "org-1",
+    });
+  });
+
+  it("returns {} when Stripe says the charge does not exist — retrying cannot change that", async () => {
+    stripeMethods.charges.retrieve.mockRejectedValue(
+      stripeError("StripeInvalidRequestError", "No such charge"),
+    );
+
+    await expect(provider.getChargeMetadata("ch_gone")).resolves.toEqual({});
+  });
+
+  it("returns {} when this key may not read the charge", async () => {
+    stripeMethods.charges.retrieve.mockRejectedValue(
+      stripeError("StripePermissionError"),
+    );
+
+    await expect(provider.getChargeMetadata("ch_1")).resolves.toEqual({});
+  });
+
+  // The regression. Each of these used to come back as `{}`, which tells the
+  // dispute handler the charge has no organisation and bought nothing — so the
+  // dispute is dropped and the webhook is marked processed for ever, while a
+  // later checkout retry hands out every unit. An outage must not be
+  // indistinguishable from an answer.
+  it.each([
+    ["StripeConnectionError"],
+    ["StripeAPIError"],
+    ["StripeRateLimitError"],
+    ["StripeAuthenticationError"],
+  ])("throws on %s so the webhook is retried", async (type) => {
+    stripeMethods.charges.retrieve.mockRejectedValue(stripeError(type));
+
+    await expect(provider.getChargeMetadata("ch_1")).rejects.toThrow();
+  });
+
+  it("throws on an error carrying no Stripe type at all", async () => {
+    // A timeout from the transport layer, a DNS failure, an assertion — none
+    // of them are Stripe answering. Unknown defaults to transient, because the
+    // cost of an extra retry is far below the cost of a dropped dispute.
+    stripeMethods.charges.retrieve.mockRejectedValue(new Error("ETIMEDOUT"));
+
+    await expect(provider.getChargeMetadata("ch_1")).rejects.toThrow(
+      "ETIMEDOUT",
+    );
   });
 });
