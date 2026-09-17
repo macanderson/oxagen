@@ -10,23 +10,44 @@ const findFirst = vi.fn();
 /** Every `tacho_hosts` write the gate made, in order. */
 const hostUpdates: Array<Record<string, unknown>> = [];
 
+/** The orgs whose PLANE the host write was opened against, in order. */
+const hostWritePlanes: string[] = [];
+/** Whether the database claims to have `gateway_last_seen_at` yet. */
+let gatewayColumnPresent = true;
+
+const fakeTx = () => ({
+  query: { apiKeys: { findFirst } },
+  update: () => ({
+    set: (values: Record<string, unknown>) => ({
+      where: async () => {
+        hostUpdates.push(values);
+        return [];
+      },
+    }),
+  }),
+});
+
 vi.mock("@oxagen/database", () => ({
   schema: {
     apiKeys: { id: "id", orgId: "org_id", deletedAt: "deleted_at" },
     tachoHosts: { orgId: "org_id", publicId: "public_id" },
   },
-  withSystemDb: (fn: (tx: unknown) => unknown) =>
-    fn({
-      query: { apiKeys: { findFirst } },
-      update: () => ({
-        set: (values: Record<string, unknown>) => ({
-          where: async () => {
-            hostUpdates.push(values);
-            return [];
-          },
-        }),
-      }),
-    }),
+  HOST_GATEWAY_COLUMN: {
+    schema: "tacho",
+    table: "hosts",
+    column: "gateway_last_seen_at",
+  },
+  hasColumn: async () => gatewayColumnPresent,
+  planeKeyFor: async (orgId: string) => `plane-of:${orgId}`,
+  withSystemDb: (fn: (tx: unknown) => unknown) => fn(fakeTx()),
+  // The seam the host write must use. `withSystemDb` always targets the SHARED
+  // plane, and `tacho.hosts` is tenant data, so on a dedicated plane that write
+  // matches nothing and the observation never arrives
+  // (discussion_r4040617216).
+  withOrgPlaneSystemDb: (orgId: string, fn: (tx: unknown) => unknown) => {
+    hostWritePlanes.push(orgId);
+    return fn(fakeTx());
+  },
 }));
 
 const getCapability = vi.fn();
@@ -53,6 +74,8 @@ beforeEach(() => {
   findFirst.mockReset();
   getCapability.mockReset();
   hostUpdates.length = 0;
+  hostWritePlanes.length = 0;
+  gatewayColumnPresent = true;
 });
 
 describe("a person's credential is untouched", () => {
@@ -268,6 +291,33 @@ describe("a served gateway call is recorded where the tier can read it", () => {
     ).toBeUndefined();
     expect(hostUpdates).toHaveLength(1);
     expect(hostUpdates[0]?.["gatewayLastSeenAt"]).toBeInstanceOf(Date);
+    // On the ORGANISATION'S plane. `tacho.hosts` is tenant data, so a write on
+    // the shared plane would match nothing for an org with a dedicated one and
+    // report success (discussion_r4040617216).
+    expect(hostWritePlanes).toEqual([ORG]);
+  });
+
+  it("writes nothing when the migration has not been applied", async () => {
+    // The column arrives with migration 20260917120000, which production
+    // applies by hand after the deploy (#1275). Naming it before then raises
+    // 42703, which aborts the transaction and turns a note into a DENIED
+    // gateway call.
+    gatewayColumnPresent = false;
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_g",
+        capabilityName: "query_ontology",
+      }),
+      // Still allowed: a missing observation is not a reason to refuse a call
+      // the credential is entitled to make.
+    ).toBeUndefined();
+    expect(hostUpdates).toEqual([]);
   });
 
   it("records nothing for a call it REFUSED", async () => {

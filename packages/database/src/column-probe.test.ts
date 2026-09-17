@@ -17,6 +17,8 @@ const SESSIONS: ColumnRef = {
   table: "sessions",
   column: "gateway_observed_at",
 };
+const SHARED = "shared";
+const DEDICATED = "dedicated:9f2c";
 
 /**
  * A transaction that answers `information_schema` from a set of columns it
@@ -55,34 +57,34 @@ describe("hasColumn", () => {
 
   it("reports a column the database has", async () => {
     const tx = fakeTx(["gateway_last_seen_at"]);
-    expect(await hasColumn(tx, HOSTS, 1_000)).toBe(true);
+    expect(await hasColumn(tx, HOSTS, SHARED, 1_000)).toBe(true);
   });
 
   it("reports a column the database does not have yet", async () => {
     const tx = fakeTx([]);
-    expect(await hasColumn(tx, HOSTS, 1_000)).toBe(false);
+    expect(await hasColumn(tx, HOSTS, SHARED, 1_000)).toBe(false);
   });
 
   it("asks once for a positive answer and keeps it", async () => {
     const tx = fakeTx(["gateway_last_seen_at"]);
-    expect(await hasColumn(tx, HOSTS, 1_000)).toBe(true);
-    expect(await hasColumn(tx, HOSTS, 9_000_000)).toBe(true);
+    expect(await hasColumn(tx, HOSTS, SHARED, 1_000)).toBe(true);
+    expect(await hasColumn(tx, HOSTS, SHARED, 9_000_000)).toBe(true);
     // A column that exists does not stop existing, so no clock advances this.
     expect(tx.probes).toBe(1);
   });
 
   it("keeps a negative answer only until the TTL expires", async () => {
     const tx = fakeTx([]);
-    expect(await hasColumn(tx, HOSTS, 1_000)).toBe(false);
+    expect(await hasColumn(tx, HOSTS, SHARED, 1_000)).toBe(false);
     // Inside the window: answered from the cached miss.
-    expect(await hasColumn(tx, HOSTS, 1_000 + NEGATIVE_PROBE_TTL_MS - 1)).toBe(
+    expect(await hasColumn(tx, HOSTS, SHARED, 1_000 + NEGATIVE_PROBE_TTL_MS - 1)).toBe(
       false,
     );
     expect(tx.probes).toBe(1);
     // At the boundary: asked again. This is the regression that mattered —
     // caching the miss for the life of the process meant an instance started
     // before a hand-applied migration never noticed it afterwards.
-    expect(await hasColumn(tx, HOSTS, 1_000 + NEGATIVE_PROBE_TTL_MS)).toBe(
+    expect(await hasColumn(tx, HOSTS, SHARED, 1_000 + NEGATIVE_PROBE_TTL_MS)).toBe(
       false,
     );
     expect(tx.probes).toBe(2);
@@ -90,11 +92,26 @@ describe("hasColumn", () => {
 
   it("sees a migration applied after a negative answer", async () => {
     const before = fakeTx([]);
-    expect(await hasColumn(before, HOSTS, 1_000)).toBe(false);
+    expect(await hasColumn(before, HOSTS, SHARED, 1_000)).toBe(false);
     const after = fakeTx(["gateway_last_seen_at"]);
-    expect(await hasColumn(after, HOSTS, 1_000 + NEGATIVE_PROBE_TTL_MS)).toBe(
+    expect(await hasColumn(after, HOSTS, SHARED, 1_000 + NEGATIVE_PROBE_TTL_MS)).toBe(
       true,
     );
+  });
+
+  it("answers per plane, not per process (ADR-042)", async () => {
+    // One process serves organisations on different physical databases, and a
+    // dedicated plane receives its migrations separately from the shared one.
+    // Keyed by column alone, the shared plane's `true` would be handed to the
+    // dedicated plane, the compatibility projection would be dropped, and the
+    // query this exists to protect would raise 42703.
+    const migrated = fakeTx(["gateway_last_seen_at"]);
+    expect(await hasColumn(migrated, HOSTS, SHARED, 1_000)).toBe(true);
+    const behind = fakeTx([]);
+    expect(await hasColumn(behind, HOSTS, DEDICATED, 1_000)).toBe(false);
+    // The dedicated plane was actually asked rather than answered from the
+    // shared plane's cache entry.
+    expect(behind.probes).toBe(1);
   });
 
   it("answers per column rather than per process", async () => {
@@ -102,8 +119,8 @@ describe("hasColumn", () => {
     // both `ADD COLUMN IF NOT EXISTS`, so a run that fails between them leaves
     // exactly this state. One shared answer would get it wrong.
     const tx = fakeTx(["gateway_last_seen_at"]);
-    expect(await hasColumn(tx, HOSTS, 1_000)).toBe(true);
-    expect(await hasColumn(tx, SESSIONS, 1_000)).toBe(false);
+    expect(await hasColumn(tx, HOSTS, SHARED, 1_000)).toBe(true);
+    expect(await hasColumn(tx, SESSIONS, SHARED, 1_000)).toBe(false);
     expect(tx.probes).toBe(2);
   });
 });

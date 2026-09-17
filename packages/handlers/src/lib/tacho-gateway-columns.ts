@@ -23,9 +23,17 @@
  * The probe itself lives in `@oxagen/database` because `plan-allowance.ts`
  * needed exactly this for migration `20260916120000` and proved the shape,
  * including why it must ask rather than catch 42703 and retry.
+ *
+ * Every caller here is inside `withTenantDb`, so the answer is filed under the
+ * plane that scope resolves to (`ambientPlaneKey`). That is load-bearing on a
+ * deployment with dedicated planes: a dedicated plane is migrated separately
+ * from the shared one, and an answer borrowed across the two would drop the
+ * projection on a database that still lacks the column
+ * (discussion_r4040617223).
  */
 
 import {
+  ambientPlaneKey,
   hasColumn,
   HOST_GATEWAY_COLUMN,
   SESSION_GATEWAY_COLUMN,
@@ -40,13 +48,15 @@ import {
  * a migration that fails between them leaves exactly the half-applied state
  * that an inference would get wrong.
  */
-export function hostGatewayColumnReady(tx: ProbeTx): Promise<boolean> {
-  return hasColumn(tx, HOST_GATEWAY_COLUMN);
+export async function hostGatewayColumnReady(tx: ProbeTx): Promise<boolean> {
+  return hasColumn(tx, HOST_GATEWAY_COLUMN, await ambientPlaneKey());
 }
 
 /** Whether `tacho.sessions.gateway_observed_at` is present. */
-export function sessionGatewayColumnReady(tx: ProbeTx): Promise<boolean> {
-  return hasColumn(tx, SESSION_GATEWAY_COLUMN);
+export async function sessionGatewayColumnReady(
+  tx: ProbeTx,
+): Promise<boolean> {
+  return hasColumn(tx, SESSION_GATEWAY_COLUMN, await ambientPlaneKey());
 }
 
 /**

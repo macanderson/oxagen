@@ -29,6 +29,11 @@
  */
 
 import { sql } from "drizzle-orm";
+import {
+  assertDataPlaneUsable,
+  getScope,
+  resolveDataPlane,
+} from "@oxagen/tenancy";
 import type { Tx } from "./tenant";
 
 /** The least a caller must hand over: something that can run a statement. */
@@ -68,8 +73,43 @@ interface Probed {
 
 const answers = new Map<string, Probed>();
 
-const keyOf = (ref: ColumnRef): string =>
-  `${ref.schema}.${ref.table}.${ref.column}`;
+/**
+ * Which physical Postgres an answer came from (ADR-042).
+ *
+ * The cache MUST be keyed by this and not by the column alone. One process
+ * serves organisations on different planes, and a dedicated plane receives its
+ * migrations separately from the shared one. Keyed by column alone, a positive
+ * probe on the migrated shared plane is kept for the life of the process and
+ * then handed to a dedicated plane that has not been migrated — the projection
+ * is dropped and the very query this exists to protect raises 42703
+ * (discussion_r4040617223).
+ *
+ * `shared` is a stable name for the platform singleton; a dedicated plane is
+ * identified by its config digest, which is what the pool keys its connections
+ * on, so two orgs on the same dedicated plane share an answer and two planes
+ * never do.
+ */
+export async function planeKeyFor(orgId: string): Promise<string> {
+  const plane = await resolveDataPlane(orgId, "postgres");
+  assertDataPlaneUsable(plane);
+  return plane.mode === "shared" ? "shared" : `dedicated:${plane.configDigest}`;
+}
+
+/**
+ * The plane of the organisation whose scope is active, for callers already
+ * inside `withTenantDb`.
+ *
+ * Falls back to `shared` with no scope, which is the plane `withSystemDb`
+ * uses — so the answer is still filed under the database it actually came
+ * from rather than under a guess.
+ */
+export async function ambientPlaneKey(): Promise<string> {
+  const scope = getScope();
+  return scope === undefined ? "shared" : planeKeyFor(scope.orgId);
+}
+
+const keyOf = (planeKey: string, ref: ColumnRef): string =>
+  `${planeKey}\u0000${ref.schema}.${ref.table}.${ref.column}`;
 
 /** Test seam. Resets every per-process answer above. */
 export function resetColumnProbesForTests(): void {
@@ -77,9 +117,14 @@ export function resetColumnProbesForTests(): void {
 }
 
 /**
- * Whether this database has `ref`, asked at most once per process while the
- * answer is yes, and at most once per {@link NEGATIVE_PROBE_TTL_MS} while it
- * is no.
+ * Whether this database has `ref`, asked at most once per process per plane
+ * while the answer is yes, and at most once per {@link NEGATIVE_PROBE_TTL_MS}
+ * while it is no.
+ *
+ * `planeKey` names the physical database `tx` is connected to
+ * ({@link planeKeyFor} / {@link ambientPlaneKey}). It is a parameter rather
+ * than something read off `tx` because a transaction handle does not carry its
+ * plane, and an answer filed under the wrong database is worse than no cache.
  *
  * `nowMs` is a parameter rather than a `Date.now()` read so the TTL boundary
  * is testable without fake timers reaching into this module.
@@ -87,9 +132,10 @@ export function resetColumnProbesForTests(): void {
 export async function hasColumn(
   tx: ProbeTx,
   ref: ColumnRef,
+  planeKey: string,
   nowMs: number = Date.now(),
 ): Promise<boolean> {
-  const key = keyOf(ref);
+  const key = keyOf(planeKey, ref);
   const seen = answers.get(key);
   if (seen?.present === true) return true;
   if (seen !== undefined && nowMs - seen.probedAtMs < NEGATIVE_PROBE_TTL_MS) {

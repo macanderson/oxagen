@@ -8,6 +8,7 @@ export * from "./types";
 export {
   withTenantDb,
   withSystemDb,
+  withOrgPlaneSystemDb,
   setTransactionWorkspaceScope,
   assertRlsConnectionSafe,
   assertRlsEnforcedInProduction,
@@ -42,6 +43,8 @@ export {
 } from "./namespace";
 export {
   hasColumn,
+  planeKeyFor,
+  ambientPlaneKey,
   resetColumnProbesForTests,
   NEGATIVE_PROBE_TTL_MS,
   type ColumnRef,

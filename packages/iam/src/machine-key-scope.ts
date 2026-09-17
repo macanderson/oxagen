@@ -42,7 +42,9 @@
 import {
   hasColumn,
   HOST_GATEWAY_COLUMN,
+  planeKeyFor,
   schema,
+  withOrgPlaneSystemDb,
   withSystemDb,
 } from "@oxagen/database";
 import { getCapability } from "@oxagen/oxagen";
@@ -203,13 +205,20 @@ async function recordGatewayInvocation(
   hostEnrollmentId: string | undefined,
 ): Promise<void> {
   if (!hostEnrollmentId) return;
-  await withSystemDb(async (tx) => {
+  // The ORGANISATION'S plane, not the shared one. `tacho.hosts` is tenant data
+  // — every other path reads it through `withTenantDb` — so on a dedicated
+  // plane a `withSystemDb` update matches no row and reports success, the
+  // observation never arrives, and genuine connected-app sessions stay
+  // classified `observe` for good (discussion_r4040617216). RLS is bypassed
+  // because this runs at authorisation time, before any handler scope exists.
+  const planeKey = await planeKeyFor(orgId);
+  await withOrgPlaneSystemDb(orgId, async (tx) => {
     // Ask before writing. Production applies migrations by hand after the
     // deploy (#1275), so between the two this statement names a column the
     // database does not have; 42703 would abort the transaction and turn a
     // missing observation into a FAILED gateway call, denying traffic this
     // function only meant to take a note about (discussion_r4040352870).
-    if (!(await hasColumn(tx, HOST_GATEWAY_COLUMN))) return;
+    if (!(await hasColumn(tx, HOST_GATEWAY_COLUMN, planeKey))) return;
     await tx
       .update(schema.tachoHosts)
       .set({ gatewayLastSeenAt: new Date() })
