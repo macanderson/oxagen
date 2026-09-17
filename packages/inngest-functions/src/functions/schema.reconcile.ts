@@ -145,6 +145,34 @@ export const PLATFORM_REL_TYPE_PARAMS: Readonly<Record<string, unknown>> = {
 };
 
 /**
+ * Tenant anchoring for the FAR endpoint of a two-endpoint relationship match.
+ *
+ * `publicId` identifies WHICH node. It does not establish WHOSE — they are
+ * different questions, and the endpoint re-identification that defeats
+ * element-id reuse answers only the first. A legacy, imported or BYO graph can
+ * hold an edge from an in-scope `a` to a `b` belonging to another organisation,
+ * or to another workspace of the same organisation; anchoring `a` alone matches
+ * it. `SET r += $props` carries null-valued removals, so what follows is
+ * properties DELETED off another tenant's edge.
+ *
+ * Both halves are load-bearing and neither implies the other: an org check
+ * passes for every workspace in that org, and a workspace id is not unique
+ * across orgs. `graph.stats.ts` and `reference.search.ts` already anchor both
+ * endpoints on exactly this shape — this file was the outlier, not the pattern.
+ *
+ * WHY ONLY THE FAR ENDPOINT IS A CONSTANT, and `a`'s anchor stays written out
+ * at each site: `tenant.scope-guard.test.ts` walks this repository, extracts
+ * every Cypher literal handed to a scoped `.run()`, and asserts the tenancy
+ * guard still accepts it. It reads the STATIC text, so a template hole is
+ * opaque to it — folding `a.orgId = $orgId` into a constant made three real
+ * queries read as binding no tenant at all and turned that corpus test red.
+ * The anchor the corpus checks for therefore stays visible in the query, and
+ * only the new predicate is shared. A DRY win is not worth blinding the test
+ * that exists to catch an unanchored query at authoring time.
+ */
+export const FAR_ENDPOINT_TENANT_FILTER = `b.orgId = $orgId AND b.workspaceId = $workspaceId`;
+
+/**
  * The predicate that keeps schema reconciliation off PLATFORM-OWNED edges.
  *
  * Reconciliation exists to make an organisation's own graph conform to the
@@ -280,6 +308,7 @@ export const NON_SYSTEM_RELATIONSHIP_FILTER = `NOT type(r) IN $${PLATFORM_REL_TY
 export const RELATIONSHIP_WRITE_BACK_CYPHER = `MATCH (a:GraphNode)-[r]->(b:GraphNode)
    WHERE elementId(r) = $relElemId
      AND a.orgId = $orgId AND a.workspaceId = $workspaceId
+     AND ${FAR_ENDPOINT_TENANT_FILTER}
      AND type(r) = $relType
      AND a.publicId = $startId AND b.publicId = $endId
      AND ${NON_SYSTEM_RELATIONSHIP_FILTER}
@@ -724,6 +753,7 @@ export const [schemaReconcile] = createFunction(
             // skips reports a reconcile as incomplete forever.
             `MATCH (a:GraphNode)-[r]->(b:GraphNode)
              WHERE a.orgId = $orgId AND a.workspaceId = $workspaceId
+               AND ${FAR_ENDPOINT_TENANT_FILTER}
                AND type(r) IN $relTypes
                AND ${NON_SYSTEM_RELATIONSHIP_FILTER}
              RETURN count(r) AS total`,
@@ -936,6 +966,7 @@ Return only the derived property key-value pairs in the derivedProps field.`,
             const batchResult = await session.run(
               `MATCH (a:GraphNode)-[r]->(b:GraphNode)
              WHERE a.orgId = $orgId AND a.workspaceId = $workspaceId
+               AND ${FAR_ENDPOINT_TENANT_FILTER}
                AND type(r) IN $relTypes
                AND ${NON_SYSTEM_RELATIONSHIP_FILTER}
              RETURN elementId(r) AS relElemId, type(r) AS relType, properties(r) AS props,

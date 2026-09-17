@@ -6,6 +6,7 @@ import {
   buildRelationshipWriteBackProps,
   NON_SYSTEM_RELATIONSHIP_FILTER,
   parseNodeProps,
+  FAR_ENDPOINT_TENANT_FILTER,
   PLATFORM_REL_TYPE_PARAMS,
   PLATFORM_REL_TYPES_PARAM,
   PLATFORM_RELATIONSHIP_TYPES,
@@ -763,5 +764,133 @@ describe("countOf — a Bolt count is not a JS number", () => {
     expect(countOf("7")).toBe(0);
     expect(countOf(Number.NaN)).toBe(0);
     expect(countOf({ toNumber: () => Number.NaN })).toBe(0);
+  });
+});
+
+// ── publicId says WHICH node, not WHOSE ──────────────────────────────────────
+
+interface Endpoint {
+  orgId: string;
+  workspaceId: string;
+}
+
+const ORG = "org-in-scope";
+const WS = "ws-in-scope";
+
+/**
+ * The near-endpoint anchor as the three queries write it out. It is a literal
+ * here for the same reason it is a literal there — the repo corpus test in
+ * `@oxagen/ontology` reads the static query text and a template hole is opaque
+ * to it — and `every relationship site anchors both endpoints` below asserts
+ * this exact string precedes the shared far-endpoint constant at all three
+ * sites, so evaluating it is evaluating what ships.
+ */
+const NEAR_ENDPOINT_TENANT_FILTER =
+  "a.orgId = $orgId AND a.workspaceId = $workspaceId";
+
+/**
+ * Evaluate the SHIPPED endpoint anchors against one candidate row, the way
+ * Neo4j would. Asserting that a string contains a clause tests the spelling;
+ * this tests the decision, and it is what lets the org predicate and the
+ * workspace predicate be shown to be INDEPENDENTLY load-bearing — a
+ * string-contains test cannot tell a same-org-different-workspace row from a
+ * different-org one.
+ *
+ * An unrecognised conjunct THROWS rather than being skipped, so a later edit
+ * cannot make these assertions vacuous.
+ */
+function anchorAccepts(a: Endpoint, b: Endpoint): boolean {
+  const endpoints: Record<string, Endpoint> = { a, b };
+  const params: Record<string, string> = { orgId: ORG, workspaceId: WS };
+  return `${NEAR_ENDPOINT_TENANT_FILTER} AND ${FAR_ENDPOINT_TENANT_FILTER}`
+    .split(/\bAND\b/)
+    .map((c) => c.trim().replace(/\s+/g, " "))
+    .every((conjunct) => {
+      const m = /^(a|b)\.(orgId|workspaceId) = \$(orgId|workspaceId)$/.exec(
+        conjunct,
+      );
+      if (!m) {
+        throw new Error(
+          `anchorAccepts cannot evaluate "${conjunct}" — teach it the new ` +
+            `clause rather than letting these assertions go vacuous.`,
+        );
+      }
+      return endpoints[m[1]!]![m[2]! as keyof Endpoint] === params[m[3]!];
+    });
+}
+
+describe("a relationship is only in scope when BOTH endpoints are", () => {
+  const inScope: Endpoint = { orgId: ORG, workspaceId: WS };
+
+  it("accepts an edge wholly inside the tenant", () => {
+    expect(anchorAccepts(inScope, inScope)).toBe(true);
+  });
+
+  it("refuses an edge whose far endpoint is another ORGANISATION", () => {
+    // A legacy, imported or BYO graph can hold one. `SET r += $props` carries
+    // null-valued removals, so accepting it deletes another tenant's data.
+    expect(
+      anchorAccepts(inScope, { orgId: "org-other", workspaceId: WS }),
+    ).toBe(false);
+  });
+
+  it("refuses an edge whose far endpoint is another WORKSPACE of the SAME org", () => {
+    // Independently load-bearing: the org predicate passes for every workspace
+    // in that org, so this row is refused only by the workspace predicate. One
+    // test must not be able to cover for both.
+    expect(
+      anchorAccepts(inScope, { orgId: ORG, workspaceId: "ws-other" }),
+    ).toBe(false);
+  });
+
+  it("refuses an edge whose far endpoint shares a workspace id across orgs", () => {
+    // And the mirror: a workspace id is not unique across organisations, so
+    // this row is refused only by the org predicate.
+    expect(
+      anchorAccepts(inScope, { orgId: "org-other", workspaceId: WS }),
+    ).toBe(false);
+  });
+
+  it("refuses a near endpoint out of scope too", () => {
+    expect(
+      anchorAccepts({ orgId: "org-other", workspaceId: WS }, inScope),
+    ).toBe(false);
+    expect(
+      anchorAccepts({ orgId: ORG, workspaceId: "ws-other" }, inScope),
+    ).toBe(false);
+  });
+});
+
+describe("every relationship site anchors both endpoints", () => {
+  const source = readFileSync(
+    new URL("./schema.reconcile.ts", import.meta.url),
+    "utf8",
+  );
+
+  it("pairs the written-out near anchor with the shared far anchor", () => {
+    // Three sites: the count, the batch read, and the write-back. The READ is
+    // the first line of defence — it selects the rows, derives the removals
+    // from them, and puts properties(r) into an LLM prompt — and the write-back
+    // is the second. A guard on one is one the other's next edit steps around.
+    const matches =
+      source.split("MATCH (a:GraphNode)-[r]->(b:GraphNode)").length - 1;
+    expect(matches).toBe(3);
+
+    // Every occurrence of the near anchor is immediately followed by the far
+    // one, which is also what makes `anchorAccepts` above evaluate what ships.
+    const paired = [
+      ...source.matchAll(
+        /a\.orgId = \$orgId AND a\.workspaceId = \$workspaceId\s*\n\s*AND \$\{FAR_ENDPOINT_TENANT_FILTER\}/g,
+      ),
+    ];
+    expect(paired.length).toBe(3);
+
+    const nearOccurrences =
+      source.split("a.orgId = $orgId AND a.workspaceId = $workspaceId").length -
+      1;
+    expect(
+      nearOccurrences,
+      "a near anchor without a far anchor beside it is the defect",
+    ).toBe(3);
   });
 });

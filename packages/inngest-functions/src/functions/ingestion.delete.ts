@@ -138,6 +138,12 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
             MATCH (alias:EntityNode)-[r:ALIAS_OF]->(principal:EntityNode)
             WHERE principal.connectionId = $connectionId
               AND principal.orgId = $orgId
+              // The alias is PROMOTED below -- its identity fields are
+              // overwritten -- so it has to be at least as scoped as the
+              // principal it is replacing. Anchoring one endpoint of a
+              // two-endpoint match leaves the other free, and a legacy or BYO
+              // graph can hold an ALIAS_OF from another organisation's node.
+              AND alias.orgId = $orgId
               AND alias.connectionId <> $connectionId
             WITH principal, alias, r
             ORDER BY r.confidence DESC
@@ -153,6 +159,10 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
             WITH principal, promoted
             MATCH (other:EntityNode)-[old:ALIAS_OF]->(principal)
             WHERE other <> promoted
+              // Same reason: this branch MERGEs a new edge off other and
+              // DELETEs its existing one, so other is written to and must
+              // carry the same tenant as the principal being dissolved.
+              AND other.orgId = $orgId
             MERGE (other)-[newEdge:ALIAS_OF]->(promoted)
               // Rerouting an existing edge, so every property is COPIED rather
               // than re-stamped: a reroute is not a new observation, and a

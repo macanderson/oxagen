@@ -202,6 +202,30 @@ describe("ingestion.delete-connection Inngest function", () => {
       expect(mocks.scopedSessionRun).toHaveBeenCalled();
     });
 
+    it("anchors the free endpoint of every two-endpoint alias match", async () => {
+      // Anchoring one endpoint of a two-endpoint match leaves the other free.
+      // `alias` is PROMOTED (its identity fields are overwritten) and `other`
+      // has an edge MERGEd off it and its existing one DELETEd, so both are
+      // written to and both must carry the principal's tenant. A legacy or BYO
+      // graph can hold an ALIAS_OF from another organisation's node.
+      const step = makeStep();
+
+      await capturedHandler!({
+        event: { data: { ...BASE_EVENT, mode: "data_only" } },
+        step,
+      });
+
+      const promotion = (
+        mocks.scopedSessionRun.mock.calls as Array<[string, unknown]>
+      )
+        .map(([cypher]) => cypher)
+        .find((cypher) => cypher.includes("MERGE (other)-[newEdge:ALIAS_OF]"));
+
+      expect(promotion).toBeDefined();
+      expect(promotion).toContain("alias.orgId = $orgId");
+      expect(promotion).toContain("other.orgId = $orgId");
+    });
+
     it("copies the alias edge wholesale rather than naming its properties", async () => {
       // A reroute moves an EXISTING edge; nothing about it is a new
       // observation. The first version of this copy enumerated nine properties
