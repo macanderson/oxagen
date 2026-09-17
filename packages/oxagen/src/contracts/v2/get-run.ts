@@ -163,7 +163,7 @@ export const getRun = defineTool({
   ],
 
   // `get_execution_trace` says low, `get_tacho_session` says medium. Medium
-  // carries: the run header includes `envSnapshot`, `anthropicUserEmail`,
+  // carries: the run header includes `envSnapshot`, `anthropicUserEmailDigest`,
   // `projectDir` and the command list — the shape of a person's machine.
   agent: {
     requiresApproval: false,

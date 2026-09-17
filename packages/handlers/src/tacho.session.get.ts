@@ -59,7 +59,7 @@ export const tachoSessionGetHandler: CapabilityHandler<
     return {
       session: {
         ...sessionSummary(row, hostPublicId),
-        anthropicUserEmail: row.anthropicUserEmail,
+        anthropicUserEmailDigest: row.anthropicUserEmailDigest,
         entrypoint: row.entrypoint,
         terminalType: row.terminalType,
         permissionModeInitial: row.permissionModeInitial,

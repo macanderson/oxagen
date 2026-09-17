@@ -7,7 +7,7 @@
  * Every attribute is either promoted to a typed member or kept verbatim in
  * `attrs`, so a new upstream attribute is captured the day it appears.
  */
-import { digestJcs, type JsonValue } from "../digest";
+import { digestJcs, digestUserEmail, type JsonValue } from "../digest";
 import type { TachoKind } from "../envelope";
 import { fromUnixNano } from "../timestamp";
 import { digestText } from "./context";
@@ -155,7 +155,8 @@ export interface OtelStandard {
   harness_event_sequence?: number;
   anthropic: {
     user_id_hash?: string;
-    user_email?: string;
+    /** `sha256:…` of `user.email`; the address never leaves the host (#3072). */
+    user_email_digest?: string;
     account_uuid?: string;
     account_id?: string;
     org_uuid?: string;
@@ -195,7 +196,11 @@ function standard(attrs: Attrs, resource: Attrs): OtelStandard {
   std.prompt_id = s(attrs, "prompt.id");
   std.harness_event_sequence = n(attrs, "event.sequence");
   setIf(std.anthropic, "user_id_hash", s(attrs, "user.id"));
-  setIf(std.anthropic, "user_email", s(attrs, "user.email"));
+  setIf(
+    std.anthropic,
+    "user_email_digest",
+    digestUserEmail(s(attrs, "user.email")),
+  );
   setIf(std.anthropic, "account_uuid", s(attrs, "user.account_uuid"));
   setIf(std.anthropic, "account_id", s(attrs, "user.account_id"));
   setIf(std.anthropic, "org_uuid", s(attrs, "organization.id"));
@@ -243,6 +248,9 @@ const LOG_PROMOTED = new Set([
   "event.name",
   "event.timestamp",
   "user.id",
+  // Stays promoted although nothing reads it as a column any more: promoted
+  // keys are the ones held OUT of the leftover `attrs` map, so dropping it
+  // here would put the raw address straight back into a stored column (#3072).
   "user.email",
   "user.account_uuid",
   "user.account_id",

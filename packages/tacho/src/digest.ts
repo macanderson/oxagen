@@ -50,3 +50,32 @@ export function jsonByteLength(value: unknown): number {
 export function isSha256Digest(value: unknown): value is Sha256Digest {
   return typeof value === "string" && SHA256_DIGEST_PATTERN.test(value);
 }
+
+/**
+ * Domain separator for `digestUserEmail`. See that function for why it exists.
+ */
+const USER_EMAIL_DIGEST_DOMAIN = "oxagen:tacho:user_email:v1\0";
+
+/**
+ * The stable, non-reversible stand-in for a person's email address.
+ *
+ * An email address carries very little entropy: a bare `sha256(address)` is a
+ * lookup away from the address itself, because anyone holding a list of
+ * candidate addresses can digest each one and compare. Prefixing a fixed
+ * domain string — the same shape `authorizationFingerprintBucketKey` uses in
+ * `apps/api/src/middleware/distributed-rate-limit.ts` — means a digest written
+ * here matches nothing a generic rainbow table or a digest computed anywhere
+ * else in the platform would produce, while staying stable for one address so
+ * distinct-person counts and per-person joins still work.
+ *
+ * The address is lowercased and trimmed first so the same person digests to
+ * the same value whatever casing the harness reports. An empty or missing
+ * address yields `undefined`, never a digest of the empty string.
+ */
+export function digestUserEmail(
+  email: string | undefined | null,
+): Sha256Digest | undefined {
+  const normalized = (email ?? "").trim().toLowerCase();
+  if (normalized.length === 0) return undefined;
+  return digestBytes(`${USER_EMAIL_DIGEST_DOMAIN}${normalized}`);
+}

@@ -716,10 +716,16 @@ export const hostSchema = z
   })
   .strict();
 
+/**
+ * What the harness reports about the Anthropic account behind the session.
+ * The address itself is never carried: the collector digests it on the host
+ * (`digestUserEmail`) and only `user_email_digest` crosses the wire, so no
+ * store on the control plane ever holds a readable address (#3072).
+ */
 export const anthropicSchema = z
   .object({
     user_id_hash: short.optional(),
-    user_email: short.optional(),
+    user_email_digest: digest.optional(),
     account_uuid: short.optional(),
     account_id: short.optional(),
     org_uuid: short.optional(),

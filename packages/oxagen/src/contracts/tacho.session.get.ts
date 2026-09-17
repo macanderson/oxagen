@@ -79,7 +79,7 @@ export const tachoSessionGet = registerCapability({
   output: z
     .object({
       session: sessionSummarySchema.extend({
-        anthropicUserEmail: z.string().nullable(),
+        anthropicUserEmailDigest: z.string().nullable(),
         entrypoint: z.string().nullable(),
         terminalType: z.string().nullable(),
         permissionModeInitial: z.string().nullable(),

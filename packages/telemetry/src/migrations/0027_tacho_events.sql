@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS tacho_events (
   enforcement_tier LowCardinality(String),
   fleet_id String,
   anthropic_user_id_hash String,
-  anthropic_user_email String,
+  anthropic_user_email_digest String,
   anthropic_account_uuid String,
   anthropic_account_id String,
   anthropic_org_uuid String,

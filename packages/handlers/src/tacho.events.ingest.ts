@@ -223,7 +223,7 @@ function genesisRow(
     spawnDepth: subagent?.spawn_depth ?? 0,
     spawnToolUseId: subagent?.spawn_tool_use_id ?? null,
     anthropicUserIdHash: anthropic.user_id_hash ?? null,
-    anthropicUserEmail: anthropic.user_email ?? null,
+    anthropicUserEmailDigest: anthropic.user_email_digest ?? null,
     anthropicAccountUuid: anthropic.account_uuid ?? null,
     anthropicAccountId: anthropic.account_id ?? null,
     anthropicOrgUuid: anthropic.org_uuid ?? null,
