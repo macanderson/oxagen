@@ -8,6 +8,10 @@
 //     the batch and against the session row's stored head. A break never
 //     rejects the batch (telemetry is fail-open); it is recorded on the row,
 //     stamped on every event as chain_verified = false, and answered back.
+//   - The enforcement tier is resolved from server-owned state and stamped,
+//     never read off the envelope. A batch is a report FROM the machine, so a
+//     tier taken from it is a grade the governed agent writes about itself
+//     (`lib/tacho-enforcement-tier.ts`).
 //
 // What lands: every event in ClickHouse `tacho_events`; the session rows,
 // per-model rollups, files touched, and commands run in Postgres; the host's
