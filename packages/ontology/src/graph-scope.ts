@@ -207,6 +207,12 @@ const CLAUSE_KEYWORDS = new Set([
 // `any(`, `coalesce(`, `count(` — whose braces are expression maps.
 const PATTERN_INTRODUCERS = new Set(["MATCH", "MERGE", "CREATE"]);
 
+// Clauses whose pattern property maps constrain an EXISTING row set. `CREATE`
+// is a pattern introducer for bracket-classification purposes — a `(` after it
+// is a node pattern, not a call — but its map only stamps a node being made, so
+// it is absent here.
+const ROW_SELECTING_CLAUSES = new Set(["MATCH", "OPTIONAL", "MERGE"]);
+
 /**
  * Classify the bracket opening at `openIdx` as a PATTERN bracket or an
  * EXPRESSION bracket.
@@ -295,7 +301,14 @@ export function keepFilteringPositions(cypher: string): string {
   const enclosingIsPattern = () =>
     bracketIsPattern[bracketIsPattern.length - 1] === true;
   const inPatternMap = () => braceIsPattern[braceIsPattern.length - 1] === true;
-  const keeping = () => clause === "WHERE" || inPatternMap();
+  // A pattern property map filters only in a clause that SELECTS EXISTING ROWS.
+  // The two conditions conjoin; pattern-map-ness does not override the clause.
+  // `MATCH (n) CREATE (m {orgId: $orgId})` assigns the tenant to a node being
+  // created while the MATCH still reads every tenant's rows, and
+  // `MATCH (n) RETURN n, ({orgId: $orgId})` is a parenthesised map in a
+  // projection. Neither narrows anything.
+  const keeping = () =>
+    clause === "WHERE" || (inPatternMap() && ROW_SELECTING_CLAUSES.has(clause));
 
   let i = 0;
   while (i < src.length) {

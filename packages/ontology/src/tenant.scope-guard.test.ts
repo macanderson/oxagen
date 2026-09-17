@@ -173,6 +173,84 @@ describe("tenancy guard — the token in a non-filtering clause", () => {
 //
 // Two of these were, until this round, asserted as ACCEPTANCE cases in this
 // file — tests locking in a cross-tenant read.
+// Maps that sit in a clause which creates or projects rows rather than
+// selecting them. Both were accepted until the clause condition and the
+// pattern-map condition were made to CONJOIN instead of the second overriding
+// the first.
+describe("tenancy guard — maps in clauses that do not select rows", () => {
+  const notSelecting: Array<[name: string, cypher: string]> = [
+    [
+      "CREATE map stamps a new node while the MATCH reads every tenant",
+      "MATCH (n) CREATE (m {orgId: $orgId})",
+    ],
+    [
+      "CREATE map with a label",
+      "MATCH (n:GraphNode) CREATE (m:GraphNode {orgId: $orgId, publicId: $p})",
+    ],
+    [
+      "parenthesised map in a RETURN projection",
+      "MATCH (n) RETURN n, ({orgId: $orgId})",
+    ],
+    [
+      "parenthesised map in a WITH projection",
+      "MATCH (n) WITH n, ({orgId: $orgId}) AS m RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of notSelecting) {
+    it(`rejects: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(false);
+    });
+  }
+});
+
+// ── Recorded limitations ─────────────────────────────────────────────────────
+//
+// These queries ARE ACCEPTED and CAN read across tenants. They are here so the
+// gap is a recorded property of the seam rather than something a reviewer
+// rediscovers, and so that anyone tempted to call this guard an enforcement
+// mechanism has to delete a passing test first.
+//
+// Each one contains a genuine anchor: seam-bound `$orgId`, in a filtering
+// position, in a row-selecting clause. The anchor is simply not the only thing
+// the query reads. No refinement of a SYNTACTIC check closes this, and that
+// includes a full Cypher parse — a parser reports structure, and the structure
+// here is correct. What is wrong is reachability, which is a semantic property
+// of the whole query.
+//
+// The real guarantee belongs elsewhere: see the ADR referenced from
+// packages/ontology/src/tenant.ts.
+describe("tenancy guard — KNOWN cross-tenant reads it accepts", () => {
+  const accepted: Array<[name: string, cypher: string]> = [
+    [
+      "a second, unanchored MATCH",
+      "MATCH (a:GraphNode {orgId: $orgId}) MATCH (b:GraphNode) RETURN b",
+    ],
+    [
+      "an unanchored OPTIONAL MATCH",
+      "MATCH (a {orgId: $orgId}) OPTIONAL MATCH (b) RETURN b",
+    ],
+    [
+      "an unanchored UNION branch",
+      "MATCH (a) WHERE a.orgId = $orgId RETURN a UNION MATCH (b) RETURN b",
+    ],
+    [
+      "a traversal leaving the anchored node",
+      "MATCH (a {orgId: $orgId})-[*1..3]-(b) RETURN b",
+    ],
+    [
+      "an anchored MERGE beside an unanchored MATCH",
+      "MATCH (n) MERGE (m:GraphNode {orgId: $orgId})",
+    ],
+  ];
+
+  for (const [name, cypher] of accepted) {
+    it(`accepts (and should not be trusted): ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(true);
+    });
+  }
+});
+
 describe("tenancy guard — anchored to a parameter the caller controls", () => {
   const notSeamBound: Array<[name: string, cypher: string]> = [
     [

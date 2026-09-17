@@ -52,11 +52,27 @@ export type { GraphScope };
 // The reversed comparison (`$orgId = n.orgId`) is not accepted either: no query
 // in the tree writes it, and every accepted shape is another way through.
 //
-// What this still does NOT promise: isolation. A query can anchor one MATCH
-// with $orgId and leave a second MATCH unanchored. The seam establishes that
-// the tenant filter exists, is positioned to filter, and is bound to the
-// caller's own organisation — which is what a lexical check can enforce across
-// every query in the platform.
+// THIS GUARD IS A LINT, NOT AN ENFORCEMENT MECHANISM. It cannot be sound, and
+// the reason is worth stating where the code is rather than in a review thread.
+//
+// It answers a syntactic question — does a seam-bound tenant filter appear in a
+// position that can narrow rows — and the property we actually want is semantic:
+// is every row this query touches inside the caller's organisation. The two come
+// apart, and not at the margins:
+//
+//     MATCH (a:GraphNode {orgId: $orgId}) MATCH (b:GraphNode) RETURN b
+//
+// has a real anchor, seam-bound, in a filtering position, in a row-selecting
+// clause. It satisfies every condition above and returns every tenant's nodes.
+// A full Cypher parse does not close this: a parser reports structure, and this
+// structure is correct. What is wrong is reachability.
+//
+// So the guard catches the common authoring mistake — a query written with no
+// tenant filter at all, or with one that does not bind — and it is defence in
+// depth. `tenant.scope-guard.test.ts` carries a describe block asserting the
+// cross-tenant queries it is KNOWN to accept, so the gap stays visible. The
+// durable answer is to construct the scoping rather than validate it; see
+// docs/adr/ADR-082.
 const SCOPE_GUARD = /\borgId\s*[:=]\s*\$orgId\b/;
 
 /**
