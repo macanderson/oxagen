@@ -7,13 +7,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const findFirst = vi.fn();
+/** Every `tacho_hosts` write the gate made, in order. */
+const hostUpdates: Array<Record<string, unknown>> = [];
 
 vi.mock("@oxagen/database", () => ({
   schema: {
     apiKeys: { id: "id", orgId: "org_id", deletedAt: "deleted_at" },
+    tachoHosts: { orgId: "org_id", publicId: "public_id" },
   },
   withSystemDb: (fn: (tx: unknown) => unknown) =>
-    fn({ query: { apiKeys: { findFirst } } }),
+    fn({
+      query: { apiKeys: { findFirst } },
+      update: () => ({
+        set: (values: Record<string, unknown>) => ({
+          where: async () => {
+            hostUpdates.push(values);
+            return [];
+          },
+        }),
+      }),
+    }),
 }));
 
 const getCapability = vi.fn();
@@ -39,6 +52,7 @@ function keyWithScope(scope: unknown): void {
 beforeEach(() => {
   findFirst.mockReset();
   getCapability.mockReset();
+  hostUpdates.length = 0;
 });
 
 describe("a person's credential is untouched", () => {
@@ -223,6 +237,88 @@ describe("the gateway key", () => {
     });
     expect(denial).toContain("mandate");
     expect(denial).toContain("delete_workspace");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The observation the enforcement tier is derived from
+// ---------------------------------------------------------------------------
+//
+// discussion_r4036718127 (P1). The tier used to be read off an attribute on the
+// submitted batch, which anything holding the local OTLP bearer can set. This
+// is the other thing: the one moment the control plane KNOWS a gateway call
+// happened, because it authenticated a server-minted, per-host credential and
+// is about to serve the call. `tacho.events.ingest` derives `gateway` from the
+// column this writes and from nothing a submitter sends.
+describe("a served gateway call is recorded where the tier can read it", () => {
+  const readOnlyMcp = { surfaces: ["api", "mcp"], mutates: false } as const;
+
+  it("stamps the host on an ALLOWED call", async () => {
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_g",
+        capabilityName: "query_ontology",
+      }),
+    ).toBeUndefined();
+    expect(hostUpdates).toHaveLength(1);
+    expect(hostUpdates[0]?.["gatewayLastSeenAt"]).toBeInstanceOf(Date);
+  });
+
+  it("records nothing for a call it REFUSED", async () => {
+    // A call outside the mandate is not a call Oxagen served, so it is not
+    // evidence that this host serves connected apps. Recording it would let a
+    // refused call raise a tier.
+    getCapability.mockReturnValue({ ...readOnlyMcp, mutates: true });
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_g",
+      capabilityName: "delete_workspace",
+    });
+    expect(hostUpdates).toHaveLength(0);
+  });
+
+  it("records nothing for the HOST key, which serves no connected app", async () => {
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_HOST_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    const allowed = [
+      ...(MACHINE_KEY_CAPABILITIES[TACHO_HOST_PURPOSE] ?? []),
+    ][0];
+    expect(allowed).toBeDefined();
+    await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_h",
+      capabilityName: allowed as string,
+    });
+    expect(hostUpdates).toHaveLength(0);
+  });
+
+  it("records nothing when the scope names no host", async () => {
+    // An observation that cannot be attributed to a host is not evidence about
+    // any session, and guessing which host it belonged to would be worse than
+    // having no record at all.
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({ purpose: TACHO_GATEWAY_PURPOSE });
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_g",
+        capabilityName: "query_ontology",
+      }),
+    ).toBeUndefined();
+    expect(hostUpdates).toHaveLength(0);
   });
 });
 

@@ -145,6 +145,26 @@ export function flattenEvent(event: TachoEvent): TachoEventRow {
     wrapper_version: event.agent.wrapper_version,
     wrapper_attestation: event.agent.attestation,
     fidelity: event.fidelity,
+    /**
+     * The tier the SUBMITTER put on the envelope, not the one the platform
+     * derived, despite the shared spelling.
+     *
+     * `tacho_sessions.enforcement_tier` in Postgres is the derived tier and is
+     * the only one anything decides on: `tacho.events.ingest` computes it from
+     * the host's mode and `tacho_hosts.gateway_last_seen_at`, written where the
+     * control plane authorises a call on the host's own gateway credential.
+     * That is what replay grading, command dispatch, cost rollups and the
+     * export attestation read.
+     *
+     * This column is the raw envelope, projected per event for telemetry, and
+     * nothing branches on it — checked across packages and apps
+     * (discussion_r4036718127). It is kept because what an agent claimed is
+     * worth having beside what Oxagen observed; that difference is signal, not
+     * noise. Anything reading it must treat it as a claim. The name is a
+     * hazard the ClickHouse table predates, and renaming it is a deployed
+     * schema change for the manual store-migrate workflow rather than a line
+     * in a security fix.
+     */
     enforcement_tier: event.agent.enforcement_tier,
     fleet_id: event.agent.fleet_id,
 

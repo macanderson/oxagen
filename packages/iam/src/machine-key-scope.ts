@@ -124,7 +124,18 @@ export interface MachineKeyCheck {
 export type KeyScope =
   | { kind: "missing" }
   | { kind: "personal" }
-  | { kind: "purpose"; purpose: string };
+  | {
+      kind: "purpose";
+      purpose: string;
+      /**
+       * The host this credential was minted for, when its scope names one.
+       * Enrollment writes it (`lib/tacho-host-enroll.ts`) and
+       * `api.key.create` refuses a caller-supplied reserved purpose, so a
+       * purposed key's host id is the server's own record of which host the
+       * credential belongs to.
+       */
+      hostEnrollmentId?: string;
+    };
 
 /**
  * The scope purpose on a key. `withSystemDb` because this runs inside the
@@ -152,9 +163,52 @@ export async function readKeyScope(
   const scope = key.scope;
   if (scope === null || typeof scope !== "object") return { kind: "personal" };
   const purpose = (scope as { purpose?: unknown }).purpose;
-  return typeof purpose === "string"
-    ? { kind: "purpose", purpose }
-    : { kind: "personal" };
+  if (typeof purpose !== "string") return { kind: "personal" };
+  const host = (scope as { host_enrollment_id?: unknown }).host_enrollment_id;
+  return typeof host === "string"
+    ? { kind: "purpose", purpose, hostEnrollmentId: host }
+    : { kind: "purpose", purpose };
+}
+
+/**
+ * Stamp the host's `gateway_last_seen_at` — the server's record that it
+ * authorised a call on this host's gateway credential.
+ *
+ * Separate from the tier it feeds so the two can be reasoned about apart: this
+ * function only ever records what happened, and `tacho.events.ingest` only ever
+ * reads it. Nothing the submitter sends reaches either.
+ *
+ * Why the observation has to be the server's own (discussion_r4036718127, P1).
+ * The tier used to be read off `oxagen.enforcement_tier` on the submitted
+ * batch. `normalizeOtlp` kept unknown attributes verbatim, so anything holding
+ * a host's local OTLP bearer could put that key on an ordinary record; the
+ * daemon sealed it onto a chain that verifies and ingest promoted the session.
+ * The seal proved the record was not altered after collection and nothing at
+ * all about whether the value was true going in — a valid chain over a false
+ * input is byte-for-byte a valid chain. Here the platform is not told: it
+ * authenticated a server-minted, per-host `tacho_gateway_v1` credential and is
+ * about to serve the call itself.
+ *
+ * A key whose scope names no host cannot be attributed to one, and is left
+ * unrecorded rather than guessed at — an unattributable observation is not
+ * evidence about any particular session.
+ */
+async function recordGatewayInvocation(
+  orgId: string,
+  hostEnrollmentId: string | undefined,
+): Promise<void> {
+  if (!hostEnrollmentId) return;
+  await withSystemDb((tx) =>
+    tx
+      .update(schema.tachoHosts)
+      .set({ gatewayLastSeenAt: new Date() })
+      .where(
+        and(
+          eq(schema.tachoHosts.orgId, orgId),
+          eq(schema.tachoHosts.publicId, hostEnrollmentId),
+        ),
+      ),
+  );
 }
 
 /**
@@ -186,9 +240,25 @@ export async function machineKeyDenial(
   const { purpose } = scope;
 
   if (purpose === TACHO_GATEWAY_PURPOSE) {
-    return gatewayMayInvoke(capabilityName)
-      ? undefined
-      : `Forbidden: ${capabilityName} is outside this agent's mandate. A connected app may call read-only, non-sensitive workspace tools through the Oxagen gateway; changing that is a mandate change, made in Oxagen.`;
+    if (!gatewayMayInvoke(capabilityName)) {
+      return `Forbidden: ${capabilityName} is outside this agent's mandate. A connected app may call read-only, non-sensitive workspace tools through the Oxagen gateway; changing that is a mandate change, made in Oxagen.`;
+    }
+    // The observation the enforcement tier is derived from.
+    //
+    // This is the only place the control plane KNOWS a gateway call happened:
+    // it authenticated the credential and is about to serve the call. The tier
+    // used to be read off an attribute on the submitted batch instead, which a
+    // harness can set — OTLP attributes pass through the normalizer verbatim
+    // and the daemon seals whatever it is handed, so the signature proved the
+    // record was not altered after collection and nothing at all about whether
+    // the value was true going in. Ingest now reads this column.
+    //
+    // Awaited rather than fired and forgotten: a call this write did not
+    // record is a call the tier will not reflect, and silently under-reporting
+    // enforcement is the failure this whole path exists to end. It is one
+    // indexed UPDATE by public id.
+    await recordGatewayInvocation(orgId, scope.hostEnrollmentId);
+    return undefined;
   }
 
   const allowed = MACHINE_KEY_CAPABILITIES[purpose];

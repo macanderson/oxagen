@@ -16,7 +16,18 @@
 -- Nullable with no backfill: a host that has never had a gateway call
 -- authorised has no observation, and "no evidence" must read as no evidence
 -- rather than as a default tier.
-ALTER TABLE "tacho"."tacho_hosts"
+-- `"tacho"."hosts"`, not `"tacho"."tacho_hosts"`. The `tacho_` prefix is this
+-- schema's CONSTRAINT and INDEX naming convention, and how Drizzle spells the
+-- binding in TypeScript; it is not part of the SQL table name. See
+-- 20260908120000_tacho_control_plane.sql, which creates `"tacho"."hosts"` and
+-- names its index `tacho_hosts_org_idx`.
+--
+-- This first shipped as `"tacho"."tacho_hosts"`, and the `IF NOT EXISTS` bought
+-- nothing: it guards the COLUMN, while what was missing was the TABLE. A
+-- defensive clause sound over the wrong noun is worse than none — it makes the
+-- statement read as considered and fails just the same.
+-- `pnpm db:atlas-validate` is the cheap check that catches it before CI does.
+ALTER TABLE "tacho"."hosts"
   ADD COLUMN IF NOT EXISTS "gateway_last_seen_at" timestamptz;
 
 -- tacho_sessions.gateway_observed_at — what a `gateway` tier stands on.
@@ -26,5 +37,5 @@ ALTER TABLE "tacho"."tacho_hosts"
 -- anything through the local MCP gateway. A rise is the dangerous shape, so a
 -- risen tier has to be answerable for itself. This column holds the host
 -- observation that raised it, and is null on every other tier.
-ALTER TABLE "tacho"."tacho_sessions"
+ALTER TABLE "tacho"."sessions"
   ADD COLUMN IF NOT EXISTS "gateway_observed_at" timestamptz;
