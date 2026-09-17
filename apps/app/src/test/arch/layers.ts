@@ -93,7 +93,7 @@ const ALLOWED: Record<
     if (isVocabulary(target) || target === "data/ports") return true;
     if (target === "server/viewer" || target === "server/session") return true;
     // `kernelWrite` and `kernelRead`, only from a "use server" module; their
-    // types from anywhere.
+    // types from anywhere. The read half is ADR-087.
     //
     // `kernelRead` is here because a read that must happen ON DEMAND has
     // nowhere else to live. A page or layout read goes through a DataSource
