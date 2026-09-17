@@ -1,6 +1,6 @@
 import { ORG_ONLY_WORKSPACE_ID, type CapabilityHandler } from "@oxagen/oxagen";
 import { routerPolicySet } from "@oxagen/oxagen/contracts/router.policy.set";
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withOrgDb, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
 import { normalizeRoutingMode } from "./lib/routing-policy";
 import { logger } from "./logger";
@@ -39,7 +39,21 @@ export const routerPolicySetHandler: CapabilityHandler<
   // this workspace's row.
   const targetWorkspaceId = scope === "org" ? null : ctx.workspaceId;
 
-  const existing = await withTenantDb((tx) =>
+  // The seam follows the scope, and the two are not interchangeable (ADR-082).
+  //
+  // ORG scope touches the row whose `workspace_id` is NULL, and an org-level
+  // caller carries the org-only sentinel — under which `withTenantDb` refuses
+  // any statement against `workspace.routing_policy`, because the table is
+  // `workspace_nullable` and its policy names the workspace GUC. `withOrgDb`
+  // reads across the organisation and still writes this row, because the
+  // unchanged WITH CHECK admits a row carrying no workspace.
+  //
+  // WORKSPACE scope must keep `withTenantDb`: `withOrgDb` leaves the workspace
+  // GUC empty, so a row naming a workspace fails WITH CHECK with 42501. The
+  // guard above has already refused a workspace scope with no workspace.
+  const run = targetWorkspaceId === null ? withOrgDb : withTenantDb;
+
+  const existing = await run((tx) =>
     tx.query.routingPolicy.findFirst({
       where:
         targetWorkspaceId === null
@@ -62,14 +76,14 @@ export const routerPolicySetHandler: CapabilityHandler<
   };
 
   if (existing) {
-    await withTenantDb((tx) =>
+    await run((tx) =>
       tx
         .update(schema.routingPolicy)
         .set({ ...next, updatedAt: new Date() })
         .where(eq(schema.routingPolicy.id, existing.id)),
     );
   } else {
-    await withTenantDb((tx) =>
+    await run((tx) =>
       tx.insert(schema.routingPolicy).values({
         orgId: ctx.orgId,
         workspaceId: targetWorkspaceId,

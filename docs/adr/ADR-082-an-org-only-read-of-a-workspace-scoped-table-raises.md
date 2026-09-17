@@ -180,6 +180,7 @@ outage, so it converts:
 | `packages/iam/src/org-role.ts` — `resolveActorWorkspaceRoles` | the same | `assertOrgRole` calls it with the sentinel whenever the required set names a workspace role, and an org-only ctx carries the sentinel rather than nothing. `workspace_id = <sentinel>` matches no assignment, which is the right answer, and it is the query that says so |
 | `packages/iam/src/org-role.ts` — `resolveActingUserId` | `auth.api_keys` | **this one was NOT correct.** `standard` under the sentinel answered emptily, so every API-key call on an org-level surface resolved to no principal and was refused `no_principal`. An empty result and an unknown key were the same answer. Fixed by the conversion |
 | `packages/handlers/src/org.member_role.change.ts` | the IAM pair | every predicate already pins `workspace_id IS NULL`, and the rows it writes carry `workspace_id` NULL, which the unchanged WITH CHECK admits |
+| `packages/handlers/src/router.policy.set.ts` — the `org` branch | `workspace.routing_policy` (`workspace_nullable`) | the org-level default row is the one whose `workspace_id` is NULL. The `workspace` branch keeps `withTenantDb`, and must: `withOrgDb` leaves the workspace GUC empty, so a row naming a workspace fails WITH CHECK with 42501. The seam follows the scope, in one expression, and the unit suite asserts each branch does NOT use the other's |
 
 Every one of those tables is on the shared plane under ADR-042 §2, and
 `withOrgDb` resolves the plane anyway, so the ADR-074 obligation to state which
