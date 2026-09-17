@@ -51,6 +51,24 @@ export const hostFileSchema = z
         mcp: z.string().url().optional(),
       })
       .strict(),
+    /**
+     * The MCP endpoint an operator pinned with `TACHO_MCP_ENDPOINT` when this
+     * host enrolled, persisted so the daemon can read it.
+     *
+     * Deliberately NOT a member of `endpoints`: those are the endpoints the
+     * control plane stated in the signed claims, and the claims omit plaintext
+     * endpoints on purpose. This is the host's own local configuration, and it
+     * is kept here for the same reason `port` and `local_token` are — tachod
+     * runs as a background service that `enroll` installs with a deliberately
+     * small environment (`TACHO_HOME`, `CLAUDE_CONFIG_DIR`, `PATH`, `HOME`),
+     * so a variable exported in the enrolling shell never reaches it. Without
+     * this, a local stack's `http://127.0.0.1:4100/mcp` was known only inside
+     * the enroll process: the launched daemon derived `http://localhost:4000/mcp`
+     * from `api_url` and sent every connected-app tool call at the API port.
+     *
+     * Optional, so a host enrolled before this field existed still loads.
+     */
+    mcp_endpoint_override: z.string().url().optional(),
     enrollment: z
       .object({
         claims: enrollmentClaimsSchema,
@@ -110,9 +128,37 @@ export const hostFileSchema = z
 export type HostFile = z.output<typeof hostFileSchema>;
 
 /**
- * The workspace MCP endpoint for this host: the signed claim when the
- * enrollment carried one, then `TACHO_MCP_ENDPOINT` (which is how a local
- * stack points at `127.0.0.1:4100`), then a derivation from `api_url`.
+ * The `TACHO_MCP_ENDPOINT` value worth writing into `host.json`, or undefined.
+ *
+ * The URL parse is not decoration. `mcp_endpoint_override` is declared
+ * `z.string().url()`, `writeHostFile` does not validate and `readHostFile`
+ * does, so persisting whatever the shell happened to export would let one
+ * malformed variable write a `host.json` that every later read rejects — the
+ * host would be bricked by a typo rather than falling back to the endpoint it
+ * would otherwise derive.
+ */
+export function mcpEndpointOverrideFrom(
+  env: Record<string, string | undefined>,
+): string | undefined {
+  const raw = env["TACHO_MCP_ENDPOINT"];
+  if (typeof raw !== "string" || raw.length === 0) return undefined;
+  try {
+    new URL(raw);
+  } catch {
+    return undefined;
+  }
+  return raw;
+}
+
+/**
+ * The workspace MCP endpoint for this host: `TACHO_MCP_ENDPOINT` in the
+ * reading process, then the override this host enrolled with, then the signed
+ * claim, then a derivation from `api_url`.
+ *
+ * The persisted override sits above the claim because it is the same value the
+ * live variable carries — a local stack pointing at `127.0.0.1:4100` — and a
+ * precedence that changed depending on which process asked would make the
+ * daemon and the CLI disagree about where the gateway proxies to.
  *
  * The derivation exists so a host enrolled before ADR-078 keeps working
  * without re-enrolling. It is a last resort, not the design: the endpoint is
@@ -120,11 +166,14 @@ export type HostFile = z.output<typeof hostFileSchema>;
  * API host with `api` swapped for `mcp` must set the claim or the env var.
  */
 export function mcpEndpointFor(
-  host: Pick<HostFile, "api_url" | "endpoints">,
+  host: Pick<HostFile, "api_url" | "endpoints"> &
+    Partial<Pick<HostFile, "mcp_endpoint_override">>,
   env: Record<string, string | undefined> = process.env,
 ): string {
   const override = env["TACHO_MCP_ENDPOINT"];
   if (typeof override === "string" && override.length > 0) return override;
+  const pinned = host.mcp_endpoint_override;
+  if (typeof pinned === "string" && pinned.length > 0) return pinned;
   if (host.endpoints.mcp !== undefined) return host.endpoints.mcp;
   const api = new URL(host.api_url);
   api.hostname = api.hostname.replace(/^api\./, "mcp.");

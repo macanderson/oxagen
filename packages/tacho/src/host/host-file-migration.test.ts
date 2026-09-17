@@ -12,7 +12,12 @@
  * directions.
  */
 import { describe, expect, it } from "vitest";
-import { hostFileSchema, mcpEndpointFor, readHostFile } from "./host-file";
+import {
+  hostFileSchema,
+  mcpEndpointFor,
+  mcpEndpointOverrideFrom,
+  readHostFile,
+} from "./host-file";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -116,6 +121,80 @@ describe("the endpoint resolver", () => {
     expect(
       mcpEndpointFor(host("https://api.oxagen.sh"), { TACHO_MCP_ENDPOINT: "" }),
     ).toBe("https://mcp.oxagen.sh/mcp");
+  });
+
+  // The daemon is a background service. `enroll` installs it with TACHO_HOME,
+  // CLAUDE_CONFIG_DIR, PATH and HOME and nothing else, so TACHO_MCP_ENDPOINT
+  // as exported in the enrolling shell is absent from tachod's environment:
+  // every resolution below happens with an EMPTY env, which is what the daemon
+  // actually has.
+  it("reads the pinned override out of host.json, which is all tachod has", () => {
+    expect(
+      mcpEndpointFor(
+        {
+          ...host("http://localhost:4000"),
+          mcp_endpoint_override: "http://127.0.0.1:4100/mcp",
+        },
+        {},
+      ),
+    ).toBe("http://127.0.0.1:4100/mcp");
+  });
+
+  it("prefers the pinned override to the signed claim, as the live variable does", () => {
+    expect(
+      mcpEndpointFor(
+        {
+          ...host("https://api.oxagen.sh", "https://mcp.example.test/mcp"),
+          mcp_endpoint_override: "http://127.0.0.1:4100/mcp",
+        },
+        {},
+      ),
+    ).toBe("http://127.0.0.1:4100/mcp");
+  });
+
+  it("still lets the live variable win over the pinned one", () => {
+    expect(
+      mcpEndpointFor(
+        {
+          ...host("https://api.oxagen.sh"),
+          mcp_endpoint_override: "http://127.0.0.1:4100/mcp",
+        },
+        { TACHO_MCP_ENDPOINT: "http://127.0.0.1:4199/mcp" },
+      ),
+    ).toBe("http://127.0.0.1:4199/mcp");
+  });
+});
+
+describe("the persisted endpoint override", () => {
+  it("is accepted by the strict schema and survives a round trip", () => {
+    const file = testHostFile(signer, bundle, {
+      mcp_endpoint_override: "http://127.0.0.1:4100/mcp",
+    });
+    expect(
+      hostFileSchema.parse(JSON.parse(JSON.stringify(file)))
+        .mcp_endpoint_override,
+    ).toBe("http://127.0.0.1:4100/mcp");
+  });
+
+  it("is absent from a file written before it existed, which still loads", () => {
+    expect(
+      hostFileSchema.parse(v1File()).mcp_endpoint_override,
+    ).toBeUndefined();
+  });
+
+  it("only takes a URL, so one typo cannot brick every later read", () => {
+    // writeHostFile does not validate and readHostFile does. Persisting
+    // `TACHO_MCP_ENDPOINT=4100` would write a file the next start rejects.
+    expect(
+      mcpEndpointOverrideFrom({ TACHO_MCP_ENDPOINT: "4100" }),
+    ).toBeUndefined();
+    expect(mcpEndpointOverrideFrom({ TACHO_MCP_ENDPOINT: "" })).toBeUndefined();
+    expect(mcpEndpointOverrideFrom({})).toBeUndefined();
+    expect(
+      mcpEndpointOverrideFrom({
+        TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
+      }),
+    ).toBe("http://127.0.0.1:4100/mcp");
   });
 });
 

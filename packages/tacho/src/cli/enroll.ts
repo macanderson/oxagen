@@ -17,6 +17,7 @@ import { mergeStellaHooks, stellaHookPresence } from "../host/stella-writer";
 import {
   HOST_FILE_SCHEMA,
   type HostFile,
+  mcpEndpointOverrideFrom,
   readHostFile,
   writeHostFile,
 } from "../host/host-file";
@@ -243,6 +244,16 @@ export async function enroll(
     }
     harnesses = existing.harnesses as TachoHarness[];
     host = existing;
+    // A re-apply is the place a local override lands on a host that is already
+    // enrolled: the value belongs to this machine, not to the enrollment, so
+    // picking it up here saves a --force re-enrollment just to point tachod at
+    // a local MCP server.
+    const pinned = mcpEndpointOverrideFrom(deps.env);
+    if (pinned !== undefined && pinned !== existing.mcp_endpoint_override) {
+      host = { ...existing, mcp_endpoint_override: pinned };
+      writeHostFile(deps.paths.hostFile, host);
+      deps.out(`      MCP endpoint pinned to ${pinned} (TACHO_MCP_ENDPOINT)`);
+    }
   } else {
     // The hook command and the service unit carry this binary's directory
     // verbatim; refuse before anything is revoked or minted when that
@@ -418,6 +429,17 @@ export async function enroll(
     }
     const port = options.port ?? existing?.port ?? (await deps.findFreePort());
     const now = toProtocolTimestamp(deps.now());
+    const mcpEndpointOverride =
+      mcpEndpointOverrideFrom(deps.env) ?? existing?.mcp_endpoint_override;
+    if (
+      mcpEndpointOverride === undefined &&
+      (deps.env["TACHO_MCP_ENDPOINT"] ?? "") !== ""
+    ) {
+      warnings.push(
+        `TACHO_MCP_ENDPOINT is not a URL (${deps.env["TACHO_MCP_ENDPOINT"] ?? ""}); ignoring it rather than writing a host.json that will not load`,
+      );
+      deps.err(`      ${warnings[warnings.length - 1] ?? ""}`);
+    }
     host = {
       schema: HOST_FILE_SCHEMA,
       host_enrollment_id: response.hostEnrollmentId,
@@ -443,6 +465,14 @@ export async function enroll(
           ? { mcp: response.enrollment.claims.mcp_endpoint }
           : {}),
       },
+      // The service unit tachod runs under carries only TACHO_HOME,
+      // CLAUDE_CONFIG_DIR, PATH and HOME, so TACHO_MCP_ENDPOINT as exported in
+      // this shell would not survive the install. Write it down instead —
+      // beside `port` and `local_token`, the host's other local settings — and
+      // leave the signed claims free of plaintext endpoints.
+      ...(mcpEndpointOverride === undefined
+        ? {}
+        : { mcp_endpoint_override: mcpEndpointOverride }),
       enrollment: {
         claims: response.enrollment.claims,
         signature_hex: response.enrollment.signature_hex,
