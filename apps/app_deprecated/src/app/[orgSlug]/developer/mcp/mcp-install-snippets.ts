@@ -1,3 +1,7 @@
+import {
+  JSON_API_KEY_PLACEHOLDER,
+  SHELL_API_KEY_PLACEHOLDER,
+} from "@oxagen/handlers/system.install.instructions";
 import type { McpTabEntry } from "./mcp-install-tabs";
 
 export const MCP_URL = "https://mcp.oxagen.sh/mcp";
@@ -13,17 +17,26 @@ export const MCP_URL = "https://mcp.oxagen.sh/mcp";
  *   the `mcp-remote` bridge to reach the HTTP endpoint with the bearer header.
  * - Cursor's mcp.json is an `mcpServers` map with `url` + `headers`.
  *
- * Keep in step with packages/handlers/src/system.install.instructions.ts, which
- * serves the same instructions to agents.
+ * THE CREDENTIAL PLACEHOLDER IS NOT ONE STRING. A shell expands
+ * `$OXAGEN_API_KEY`, so the Claude Code snippet names the variable and the
+ * operator never pastes a secret. JSON expands nothing: a config file carrying
+ * `$OXAGEN_API_KEY` sends that literal as the bearer credential and the client
+ * fails to authenticate with no indication why, having followed the
+ * instructions exactly. The JSON clients get `<your-api-key>` and the page
+ * tells the reader to replace it.
+ *
+ * Both strings come from packages/handlers/src/system.install.instructions.ts,
+ * which serves the same instructions to agents. This module used to carry a
+ * comment asking the next author to keep the two in step, and they drifted
+ * anyway — the JSON tabs shipped the shell variable. Two places generating
+ * install instructions that must agree share the strings instead.
  */
-export function buildSnippets(
-  apiKey: string,
-): Array<Omit<McpTabEntry, "highlightedHtml">> {
+export function buildSnippets(): Array<Omit<McpTabEntry, "highlightedHtml">> {
   return [
     {
       key: "claude_code",
       client: "Claude Code",
-      raw: `claude mcp add --transport http oxagen ${MCP_URL} \\\n  --header "Authorization: Bearer ${apiKey}"`,
+      raw: `claude mcp add --transport http oxagen ${MCP_URL} \\\n  --header "Authorization: Bearer ${SHELL_API_KEY_PLACEHOLDER}"`,
     },
     {
       key: "claude_desktop",
@@ -34,7 +47,7 @@ export function buildSnippets(
       "command": "npx",
       "args": ["-y", "mcp-remote", "${MCP_URL}", "--header", "Authorization:\${OXAGEN_AUTH_HEADER}"],
       "env": {
-        "OXAGEN_AUTH_HEADER": "Bearer ${apiKey}"
+        "OXAGEN_AUTH_HEADER": "Bearer ${JSON_API_KEY_PLACEHOLDER}"
       }
     }
   }
@@ -48,7 +61,7 @@ export function buildSnippets(
     "oxagen": {
       "url": "${MCP_URL}",
       "headers": {
-        "Authorization": "Bearer ${apiKey}"
+        "Authorization": "Bearer ${JSON_API_KEY_PLACEHOLDER}"
       }
     }
   }

@@ -82,9 +82,15 @@ function makeRoleResolutionTx(
  *   1. select existing key row
  *   2. update the row
  */
-function makeSoftDeleteTx(
-  existingRow: { id: string; publicId: string } | null,
-) {
+interface ExistingKeyRow {
+  id: string;
+  publicId: string;
+  workspaceId?: string | null;
+  /** The stored jsonb scope. The reserved-purpose guard reads it from here. */
+  scope?: unknown;
+}
+
+function makeSoftDeleteTx(existingRow: ExistingKeyRow | null) {
   let selectCallCount = 0;
   return {
     select: vi.fn().mockImplementation(() => {
@@ -115,9 +121,10 @@ function makeSoftDeleteTx(
  */
 function setupHappyPath(
   roleName = "Owner",
-  existingRow: { id: string; publicId: string } | null = {
+  existingRow: ExistingKeyRow | null = {
     id: "key-uuid-1",
     publicId: "aky_test123",
+    scope: {},
   },
 ) {
   let callCount = 0;
@@ -268,6 +275,160 @@ describe("api.key.revoke handler — key not found", () => {
         e.code === "not_found" &&
         e.reason === "api_key_not_found",
     );
+  });
+});
+
+/**
+ * The generic revoke must refuse a credential whose revocation means more than
+ * soft-deleting the key — and must NOT refuse one that has nowhere else to go.
+ *
+ * The sharp case is `tacho_host_v1`: `revokeHostEnrollment` does three writes
+ * and this handler does one, so letting it through soft-deletes the key while
+ * `tacho_hosts.status` still reads `active` and no revoke command is queued —
+ * the collector is dead and the fleet record says it is live.
+ *
+ * The test each refusal has to pass is that **the path it names achieves what
+ * the refused operation was for**. `cli_session_v1` fails that test and is
+ * therefore NOT refused; the case below pins it, because an earlier revision of
+ * the guard did refuse it and these very tests passed while the hole opened.
+ * Every case here asserted a purpose was refused, so a suite shaped like that
+ * confirms whatever set it is handed. The revocable case is the one that
+ * constrains the set.
+ *
+ * Asserted per purpose rather than in aggregate, and each refusal checks the
+ * message NAMES the owning path: a refusal with no destination is how an
+ * operator ends up reaching for raw SQL. The ordering case matters too — the
+ * refusal happens BEFORE the update, so a refused revoke leaves the row
+ * untouched rather than half-applying.
+ */
+describe("api.key.revoke handler — reserved server-owned purposes", () => {
+  const RESERVED: [string, RegExp][] = [
+    ["tacho_host_v1", /revoke_tacho_enrollment/],
+    ["agent_credential_v1", /rotate_agent_credential|retire_agent/],
+  ];
+
+  /**
+   * One entry per purpose that MUST stay revocable, with why. These are the
+   * cases that constrain the refusal set; the RESERVED cases above only confirm
+   * whatever set they are handed.
+   */
+  const MUST_STAY_REVOCABLE: [string, string][] = [
+    [
+      "cli_session_v1",
+      "oxagen login only mints another key and oxagen logout is local-only, so refusing leaves remove_org_member — which also strips org access — as the only revocation",
+    ],
+    [
+      "stella_operational_telemetry_v1",
+      "no Stella revocation capability exists and enrollment writes nothing but auth.api_keys, so the soft-delete here is the whole job",
+    ],
+  ];
+
+  function setupWithPurpose(purpose: string) {
+    setupHappyPath("Owner", {
+      id: "key-uuid-1",
+      publicId: "aky_test123",
+      scope: { purpose },
+    });
+  }
+
+  it.each(RESERVED)(
+    "refuses a %s key and names the path that owns it",
+    async (purpose, namesPath) => {
+      vi.clearAllMocks();
+      setupWithPurpose(purpose);
+      await expect(
+        apiKeyRevokeHandler(BASE_INPUT, TEST_CTX),
+      ).rejects.toThrowError(namesPath);
+    },
+  );
+
+  it.each(RESERVED)(
+    "refuses a %s key with a CapabilityError, not a plain Error",
+    async (purpose) => {
+      vi.clearAllMocks();
+      setupWithPurpose(purpose);
+      await expect(
+        apiKeyRevokeHandler(BASE_INPUT, TEST_CTX),
+      ).rejects.toBeInstanceOf(CapabilityError);
+    },
+  );
+
+  it("refuses before the update, so the row is left untouched", async () => {
+    vi.clearAllMocks();
+    const tx = makeSoftDeleteTx({
+      id: "key-uuid-1",
+      publicId: "aky_test123",
+      scope: { purpose: "tacho_host_v1" },
+    });
+    let callCount = 0;
+    mocks.withTenantDb.mockImplementation(
+      (fn: (t: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1)
+          return fn(makeRoleResolutionTx("principal-uuid-1", "Owner"));
+        return fn(tx);
+      },
+    );
+
+    await expect(apiKeyRevokeHandler(BASE_INPUT, TEST_CTX)).rejects.toThrow();
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The cases that constrain the refusal set, and the ones whose absence let an
+   * earlier revision of this guard remove two revocation paths in one commit.
+   *
+   * Each asserts the soft-delete ACTUALLY RAN, not merely that nothing threw —
+   * a refusal throws before the update, so `tx.update` is the discriminator.
+   * If a governed revocation path is ever built for one of these purposes, the
+   * corresponding expectation is what has to change, deliberately, with the
+   * handler header updated to name it.
+   */
+  it.each(MUST_STAY_REVOCABLE)("REVOKES a %s key — %s", async (purpose) => {
+    vi.clearAllMocks();
+    const tx = makeSoftDeleteTx({
+      id: "key-uuid-1",
+      publicId: "aky_test123",
+      scope: { purpose },
+    });
+    let callCount = 0;
+    mocks.withTenantDb.mockImplementation(
+      (fn: (t: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1)
+          return fn(makeRoleResolutionTx("principal-uuid-1", "Owner"));
+        return fn(tx);
+      },
+    );
+
+    const result = await apiKeyRevokeHandler(BASE_INPUT, TEST_CTX);
+    expect(result.revoked).toBe(true);
+    expect(tx.update).toHaveBeenCalled();
+  });
+
+  it("revokes an operator key, which carries no reserved purpose", async () => {
+    vi.clearAllMocks();
+    setupHappyPath("Owner", {
+      id: "key-uuid-1",
+      publicId: "aky_test123",
+      scope: { environments: ["prod"] },
+    });
+    const result = await apiKeyRevokeHandler(BASE_INPUT, TEST_CTX);
+    expect(result.revoked).toBe(true);
+  });
+
+  // A key minted before the scope column carried anything. The guards read
+  // `purpose` off the stored scope, so a null scope must not be mistaken for a
+  // reserved one and lock an operator out of revoking their own key.
+  it("revokes a key whose stored scope is null", async () => {
+    vi.clearAllMocks();
+    setupHappyPath("Owner", {
+      id: "key-uuid-1",
+      publicId: "aky_test123",
+      scope: null,
+    });
+    const result = await apiKeyRevokeHandler(BASE_INPUT, TEST_CTX);
+    expect(result.revoked).toBe(true);
   });
 });
 

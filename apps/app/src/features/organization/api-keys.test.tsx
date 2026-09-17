@@ -84,6 +84,7 @@ function wsCtx(orgRole: OrgRole = "owner") {
     workspaceId: "7a000000-0000-4000-8000-0000000000c3",
     wsSlug: "core-platform",
     wsName: "Core platform",
+    wsRole: "member",
   });
 }
 
@@ -343,6 +344,7 @@ describe("the workspace a key names", () => {
       workspaceId: "7a000000-0000-4000-8000-0000000000c4",
       wsSlug: "sunset",
       wsName: "Sunset",
+      wsRole: "member",
     });
     const { source } = orgSource({ apiKeys: readOk([live]) });
     render(
@@ -372,6 +374,7 @@ describe("the workspace a key names", () => {
       workspaceId: "7a000000-0000-4000-8000-0000000000c4",
       wsSlug: "sunset",
       wsName: "Sunset",
+      wsRole: "member",
     });
     const { source } = orgSource({ apiKeys: readOk([live]) });
     const view = render(
