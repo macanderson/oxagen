@@ -151,10 +151,18 @@ function stripeChargeToNeutral(c: Stripe.Charge): BillingRefundedCharge {
 type StripeReadDisposition = "definitive" | "retry";
 
 /**
- * The error types this build's Stripe SDK can tag a thrown error with. The
- * SDK generates this union from its OpenAPI spec, so an upgrade that adds a
- * type widens it — and the `satisfies` below then fails to compile until the
- * new type is classified.
+ * The error types this build's Stripe SDK DECLARES it can tag a thrown error
+ * with. An upgrade that adds a declared type widens this union, and the
+ * `satisfies` below then fails to compile until the new type is classified.
+ *
+ * It is narrower than what the SDK can actually throw, and the gap is the case
+ * the check exists for. In stripe@17.7.0 `generateV1Error`'s DEFAULT branch
+ * constructs `StripeUnknownError` (`cjs/Error.js`), and that name appears
+ * nowhere in `types/Errors.d.ts` — so the compiler cannot see the SDK's own
+ * fallback class. Whatever this union is missing reaches `stripeReadDisposition`
+ * as a string with no entry, which is why the runtime fallback below is doing
+ * real work rather than belt-and-braces: it, not the compiler, is what keeps an
+ * unrecognised error on the retry side.
  */
 type StripeErrorType = Stripe.errors.StripeError["type"];
 
