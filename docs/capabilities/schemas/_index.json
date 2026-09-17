@@ -1,5 +1,5 @@
 {
-  "generatedCount": 315,
+  "generatedCount": 317,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1125,6 +1125,17 @@
       "consumes": []
     },
     {
+      "name": "get_main_repository",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_mandate",
       "domain": "mandate",
       "surfaces": [
@@ -1911,6 +1922,17 @@
     {
       "name": "list_incidents",
       "domain": "tacho",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_installation_repositories",
+      "domain": "repository",
       "surfaces": [
         "api",
         "mcp"
