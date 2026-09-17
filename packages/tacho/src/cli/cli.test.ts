@@ -20,7 +20,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { FetchLike } from "../host/control-client";
 import { readJsonFileIfExists, writeSensitiveFileAtomic } from "../host/fs";
-import { readHostFile, writeHostFile } from "../host/host-file";
+import { mcpEndpointFor, readHostFile, writeHostFile } from "../host/host-file";
 import { oxagenConfigPath, tachoPaths } from "../host/paths";
 import type { Exec, ServiceManager, ServiceSpec } from "../host/service";
 import {
@@ -492,6 +492,95 @@ describe("enroll → status → unenroll", () => {
       ok: true,
       settingsChanged: false,
     });
+  });
+
+  it("writes TACHO_MCP_ENDPOINT into host.json, because the service unit will not carry it", async () => {
+    // The daemon is launched by `deps.serviceManager.install`, whose env block
+    // is TACHO_HOME / CLAUDE_CONFIG_DIR / PATH / HOME and nothing else. A
+    // variable exported in this shell reaches the enroll process and stops
+    // there, so an unpersisted local override left tachod deriving
+    // `http://localhost:4000/mcp` from api_url and aiming every connected-app
+    // tool call at the API port.
+    const d = deps({
+      env: {
+        PATH: "/usr/bin",
+        SHELL: "/bin/zsh",
+        TACHO_HOME: scratchPaths().root,
+        TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
+      },
+    });
+    const result = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "http://localhost:4000",
+      },
+      d,
+    );
+    expect(result.ok).toBe(true);
+    const host = readHostFile(d.paths.hostFile);
+    expect(host?.mcp_endpoint_override).toBe("http://127.0.0.1:4100/mcp");
+    // The service env is deliberately unchanged; the file is what carries it.
+    expect(d.service.installed?.env).not.toHaveProperty("TACHO_MCP_ENDPOINT");
+    // Resolved the way the daemon resolves it: from the file, with no env.
+    expect(mcpEndpointFor(host as NonNullable<typeof host>, {})).toBe(
+      "http://127.0.0.1:4100/mcp",
+    );
+  });
+
+  it("pins the override on a re-apply, and refuses to persist one that is not a URL", async () => {
+    const clean = deps();
+    expect(
+      (
+        await enroll(
+          {
+            token: "tok",
+            org: "acme",
+            workspace: "core",
+            apiUrl: "http://localhost:4000",
+          },
+          clean,
+        )
+      ).ok,
+    ).toBe(true);
+    expect(
+      readHostFile(clean.paths.hostFile)?.mcp_endpoint_override,
+    ).toBeUndefined();
+
+    const reapply = deps({
+      paths: clean.paths,
+      env: { ...clean.env, TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp" },
+    });
+    expect((await enroll({}, reapply)).ok).toBe(true);
+    expect(readHostFile(clean.paths.hostFile)?.mcp_endpoint_override).toBe(
+      "http://127.0.0.1:4100/mcp",
+    );
+
+    // A typo must not write a host.json the next read rejects.
+    const bad = deps({
+      env: {
+        PATH: "/usr/bin",
+        TACHO_HOME: scratchPaths().root,
+        TACHO_MCP_ENDPOINT: "4100",
+      },
+    });
+    const result = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "http://localhost:4000",
+      },
+      bad,
+    );
+    expect(result.ok).toBe(true);
+    expect(result.warnings.some((w) => w.includes("TACHO_MCP_ENDPOINT"))).toBe(
+      true,
+    );
+    expect(
+      readHostFile(bad.paths.hostFile)?.mcp_endpoint_override,
+    ).toBeUndefined();
   });
 
   it("enrolls with a one-time token and no session, recording the tenant the control plane answered", async () => {
