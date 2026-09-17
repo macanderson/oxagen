@@ -38,7 +38,7 @@ export const SIGNED_IN_ROUTES: readonly RouteRow[] = [
 ] as const;
 
 /**
- * Every rev1 surface a browser reaches with no session, in navigation order.
+ * The rows the oracle walks with no session at all.
  *
  * `/cli/complete` is the end of `oxagen login`: the CLI's loopback listener
  * 302s the browser there once it holds its token, and that browser may carry no

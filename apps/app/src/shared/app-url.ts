@@ -1,6 +1,5 @@
 // The app's own public origin. Pure and edge-safe (§2): `NEXT_PUBLIC_*` and
-// `NODE_ENV` are inlined at build, so this reads the same in a Server
-// Component, a client island and `proxy.ts`.
+// `NODE_ENV` are inlined at build, so it reads the same wherever it is called.
 //
 // Next resolves a relative `openGraph` / `twitter` image URL against
 // `metadata.metadataBase`, and with no base it falls back to
