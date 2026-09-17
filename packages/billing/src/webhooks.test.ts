@@ -662,6 +662,7 @@ describe("processStripeEvent", () => {
       amountRefundedCents: 1500,
       currency: "usd",
       orgId: "org-abc",
+      metadata: {},
     };
 
     const event = makeWebhookEvent({
@@ -689,6 +690,7 @@ describe("processStripeEvent", () => {
       metadata: { org_id: "org-abc", credits: "500" },
       subscriptionId: null,
       invoiceId: null,
+      paymentIntentId: null,
     };
 
     const event = makeWebhookEvent({
@@ -724,6 +726,7 @@ describe("processStripeEvent", () => {
       },
       subscriptionId: null,
       invoiceId: "in_gau_001",
+      paymentIntentId: "pi_gau_001",
     };
 
     const event = makeWebhookEvent({

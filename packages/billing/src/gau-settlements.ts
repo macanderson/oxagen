@@ -813,6 +813,10 @@ export async function grantGauPurchaseForCheckout(
         status: "paid",
         stripeCheckoutSessionId: session.id,
         stripeInvoiceId: session.invoiceId,
+        // The purchase's payment identity, recorded here because a later
+        // charge.refunded or charge.dispute.created names the PaymentIntent
+        // and nothing else reaches back to this row (ADR-084).
+        stripePaymentIntentId: session.paymentIntentId,
         settledAt: now,
       })
       .onConflictDoNothing({

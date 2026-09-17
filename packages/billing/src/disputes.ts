@@ -8,6 +8,11 @@ import { and, eq, isNotNull } from "drizzle-orm";
 import { deterministicUuid } from "./internal/deterministic-uuid";
 import { consumeCredits } from "./credits";
 import { CREDIT_REASONS } from "./constants";
+import {
+  reverseGauPurchaseForDispute,
+  reverseGauPurchaseForRefund,
+  type GauReversalResult,
+} from "./gau-reversals";
 import { logger } from "./logger";
 import type { BillingDispute, BillingRefundedCharge } from "./provider";
 
@@ -40,9 +45,13 @@ async function resolveOrgFromDispute(
     if (existingDispute?.orgId) return existingDispute.orgId;
   }
 
-  // When Stripe embeds org_id in charge metadata (our standard), dispute.orgId
-  // is already set at path 1. Both paths above are exhausted here, so leave a
-  // breadcrumb for ops to correlate manually.
+  // Path 1 reads the DISPUTE's own metadata, which Stripe does not copy from
+  // the charge and nothing in this codebase sets, so it resolves only a
+  // dispute an operator has annotated by hand. A GAU block purchase is
+  // resolved before this function runs, off the settlement its PaymentIntent
+  // names (ADR-084); a usage-credit dispute has no such record and reaches
+  // here. Both paths above are exhausted, so leave a breadcrumb for ops to
+  // correlate manually.
 
   if (dispute.paymentIntentId) {
     logger.warn(
@@ -116,10 +125,20 @@ async function resolveOrgFromCharge(
 export async function onDisputeCreated(dispute: BillingDispute): Promise<void> {
   const start = Date.now();
 
+  // A disputed GAU block purchase gave the org units, not usage credits, so
+  // its clawback is a withdrawal from the org's GAU bucket (ADR-084). Run
+  // before the transaction below: the reversal opens its own, and the org it
+  // resolves off the settlement is the only org a dispute can be attributed
+  // to — a Stripe Dispute carries its own metadata, not the charge's, so
+  // resolveOrgFromDispute cannot find one. Null means this dispute is not
+  // against a GAU purchase and the usage-credit clawback is the right one.
+  const gauReversal = await reverseGauPurchaseForDispute(dispute);
+
   await withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (dispute webhook, org resolved from Stripe
     // charge metadata or billing_disputes fallback, no tenant scope).
-    const orgId = await resolveOrgFromDispute(tx, dispute);
+    const orgId =
+      gauReversal?.orgId ?? (await resolveOrgFromDispute(tx, dispute));
     if (!orgId) {
       logger.fatal(
         {
@@ -170,6 +189,18 @@ export async function onDisputeCreated(dispute: BillingDispute): Promise<void> {
         },
         "billing: dispute.created — clawback already applied, skipping",
       );
+      return;
+    }
+
+    if (gauReversal) {
+      // The units are already withdrawn. `clawed_back_cents` stays 0 because
+      // no credits were taken: debiting the usage-credit ledger for a purchase
+      // that never credited it would take money from an unrelated balance.
+      await tx
+        .update(schema.billingDisputes)
+        .set({ status: dispute.status, updatedAt: now })
+        .where(eq(schema.billingDisputes.stripeDisputeId, dispute.id));
+      logGauDispute(start, dispute, gauReversal);
       return;
     }
 
@@ -244,6 +275,27 @@ export async function onDisputeCreated(dispute: BillingDispute): Promise<void> {
   });
 }
 
+function logGauDispute(
+  start: number,
+  dispute: BillingDispute,
+  reversal: GauReversalResult,
+): void {
+  logger.warn(
+    {
+      orgId: reversal.orgId,
+      disputeId: dispute.id,
+      amountCents: dispute.amountCents,
+      settlementId: reversal.settlementId,
+      reversedGau: reversal.reversedGau,
+      unrecoveredGau: reversal.unrecoveredGau,
+      reason: dispute.reason,
+      status: dispute.status,
+      durationMs: Date.now() - start,
+    },
+    "billing: dispute created against a gau purchase — units withdrawn, credits untouched",
+  );
+}
+
 /**
  * Called when a dispute.closed event fires.
  * Updates status and sets resolvedAt.
@@ -294,6 +346,45 @@ export async function onChargeRefunded(
   charge: BillingRefundedCharge,
 ): Promise<void> {
   const start = Date.now();
+
+  // A refunded GAU block purchase gave the org units, not usage credits
+  // (ADR-084). Run before the transaction below: the reversal opens its own.
+  const gauReversal = await reverseGauPurchaseForRefund(charge);
+  if (gauReversal) {
+    logger.warn(
+      {
+        orgId: gauReversal.orgId,
+        chargeId: charge.id,
+        paymentIntentId: charge.paymentIntentId,
+        amountRefundedCents: charge.amountRefundedCents,
+        settlementId: gauReversal.settlementId,
+        reversedGau: gauReversal.reversedGau,
+        unrecoveredGau: gauReversal.unrecoveredGau,
+        durationMs: Date.now() - start,
+      },
+      "billing: charge.refunded against a gau purchase — units withdrawn, credits untouched",
+    );
+    return;
+  }
+
+  if (charge.metadata.oxagen_kind === "gau_purchase") {
+    // The charge says it bought units but no settlement claims its
+    // PaymentIntent: the grant never ran, or it ran before the settlement
+    // recorded the PaymentIntent. Either way the usage-credit clawback below
+    // would debit a balance this charge never credited, so stop here and say
+    // so rather than taking the wrong money.
+    logger.fatal(
+      {
+        alert: "gau_reversal_unmatched",
+        stripeChargeId: charge.id,
+        paymentIntentId: charge.paymentIntentId,
+        amountRefundedCents: charge.amountRefundedCents,
+        orgId: charge.orgId,
+      },
+      "billing: charge.refunded — CRITICAL: refunded gau purchase matches no settlement; units NOT withdrawn — manual intervention required",
+    );
+    return;
+  }
 
   await withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (charge.refunded webhook, org resolved from

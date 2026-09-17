@@ -120,6 +120,7 @@ function makeRefundedCharge(
     amountRefundedCents: 2000,
     currency: "usd",
     orgId: "org-xyz",
+    metadata: {},
     ...overrides,
   };
 }

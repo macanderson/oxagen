@@ -120,6 +120,7 @@ function stripeChargeToNeutral(c: Stripe.Charge): BillingRefundedCharge {
     amountRefundedCents: c.amount_refunded,
     currency: c.currency,
     orgId: (c.metadata?.org_id as string | undefined) ?? null,
+    metadata: (c.metadata as Record<string, string>) ?? {},
   };
 }
 
@@ -252,6 +253,7 @@ function checkoutSessionToNeutral(
     metadata: (sess.metadata as Record<string, string>) ?? {},
     subscriptionId: resolveSubscriptionRef(sess.subscription),
     invoiceId: resolveRef(sess.invoice),
+    paymentIntentId: resolveRef(sess.payment_intent),
   };
 }
 
@@ -909,7 +911,15 @@ export class StripeProvider implements BillingProvider {
       // attached to the customer for the recorder's off-session auto top-up;
       // Checkout tells the customer so.
       payment_method_types: ["card"],
-      payment_intent_data: { setup_future_usage: "off_session" },
+      // The same metadata on the PaymentIntent, which copies it onto the
+      // Charge. A `charge.refunded` reads the charge and nothing else, so
+      // without this the refund cannot name the organisation that was paid —
+      // the credit-pack checkout has carried it since it was written
+      // (createDynamicCreditCheckout above), and this one did not (ADR-084).
+      // It is not sufficient on its own: a Stripe Dispute carries its own
+      // metadata, not the charge's, which is why the grant also records the
+      // PaymentIntent id on the settlement.
+      payment_intent_data: { setup_future_usage: "off_session", metadata },
       success_url: input.successUrl,
       cancel_url: input.cancelUrl,
       automatic_tax: { enabled: taxEnabled },

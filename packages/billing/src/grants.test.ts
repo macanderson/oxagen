@@ -207,6 +207,7 @@ function makeSession(
     paymentStatus: "paid",
     customerId: "cus_test_001",
     metadata: { org_id: "org-abc" },
+    paymentIntentId: "pi_test_001",
     subscriptionId: null,
     invoiceId: null,
     ...overrides,
