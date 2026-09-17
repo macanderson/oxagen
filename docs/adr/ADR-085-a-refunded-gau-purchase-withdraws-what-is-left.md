@@ -181,6 +181,22 @@ delivery that actually inserted the settlement (a redelivery hits
 `ON CONFLICT DO NOTHING` and returns early), and the lookup matches only rows
 still carrying `settlement_id IS NULL`.
 
+**Parking without reconciling would be the same defect wearing a different
+shape**, so the two halves are one decision and are tested as one. The grant
+adds the purchase to the bucket and then settles any parked reversal against
+it, both inside the transaction that inserted the settlement. Ordering within
+that transaction is not observable — the upsert holds the bucket's row lock to
+commit — so "add then withdraw" and "withdraw from the delta" are the same
+thing to every reader; what matters is that no transaction can commit having
+added spendable units without having consulted the parked rows.
+
+The test for this has to go through `grantGauPurchaseForCheckout`, not through
+the reconciliation helper. That is not pedantry: the helper was fully covered
+in isolation while the grant's call to it was not, and deleting that call left
+every one of those tests green. A test that exercises the helper proves the
+helper. Only a test that runs the refund event first, the checkout event
+second, and asserts the account's spendable balance proves the wiring.
+
 One case stays manual: a charge whose metadata says `gau_purchase` but carries
 no `org_id`. There is nothing to attribute a pending row to, and retrying cannot
 conjure metadata that is not on the charge, so it logs a fatal.
