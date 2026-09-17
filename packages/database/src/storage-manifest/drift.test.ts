@@ -10,11 +10,14 @@ import { canonicalJson, contentHashOf } from "./canonical-json";
 // committed schema files) and assert the manifest body they feed changes,
 // which is exactly what --check keys on.
 //
-// NOTE: --check is a script an author can run, not an enforced gate. It is not
-// in `pnpm gate`, `pnpm gate:full`, or any workflow in .github/workflows, so
-// nothing fails when packages/database/storage-manifest.json goes stale. These
-// tests prove the mechanism works; they do not prove the committed file is
-// current.
+// NOTE: --check IS an enforced gate. It runs in `pnpm gate`, in
+// `pnpm gate:full`, and in pipeline.yml's `checks` job, so a stale
+// packages/database/storage-manifest.json fails CI. (This note previously said
+// the opposite on all three counts; it was written before the gate was wired
+// and then read by an author who trusted it, skipped the check, and found out
+// from CI. A comment that says a gate does not exist is worse than no comment.)
+// These tests prove the drift mechanism works; the gate is what proves the
+// committed file is current.
 
 const CH_BASE = `
   CREATE TABLE IF NOT EXISTS token_usage (
