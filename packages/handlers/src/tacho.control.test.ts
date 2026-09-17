@@ -418,6 +418,149 @@ describe("fetch_commands", () => {
     ).rejects.toThrow(/API key required/);
     expect(db.updates).toEqual([]);
   });
+
+  it("records the bundle fields the daemon says it can parse", async () => {
+    // The gate on a new bundle field reads this column, and it has to track
+    // the code the host is *running*: `wrapper_version` and `daemon_version`
+    // both come from `host.json`, which `enroll` writes once and no upgrade
+    // rewrites, so a host that upgrades in place would otherwise never be
+    // recognised as able to parse the field.
+    const db: Fake = {
+      hosts: [host({ bundleFeatures: [] })],
+      sessions: [],
+      commands: [],
+      updates: [],
+      inserts: [],
+    };
+    wire(db);
+    await tachoCommandFetchHandler(
+      {
+        ...FETCH,
+        host_enrollment_id: HOST_PUBLIC,
+        acknowledgements: [],
+        daemon: { bundle_features: ["gateway_tools"] },
+      },
+      MACHINE,
+    );
+    expect(db.updates.find((u) => u.table === "hosts")?.values).toMatchObject({
+      bundleFeatures: ["gateway_tools"],
+    });
+  });
+
+  it("serves the gated bundle on the FIRST poll that advertises, not the next one", async () => {
+    // The advertisement is persisted and the SAME response is built from the
+    // host object the caller already held. If that object is not updated, the
+    // first post-upgrade poll computes its bundle — and this etag — from the
+    // features the host had before it upgraded, and the daemon keeps serving
+    // the unfiltered tool list until some later poll.
+    const etagFor = async (
+      bundleFeatures: string[],
+      advertise: string[] | undefined,
+    ): Promise<string> => {
+      const db: Fake = {
+        hosts: [host({ bundleFeatures })],
+        sessions: [],
+        commands: [],
+        updates: [],
+        inserts: [],
+      };
+      wire(db);
+      const out = await tachoCommandFetchHandler(
+        {
+          ...FETCH,
+          host_enrollment_id: HOST_PUBLIC,
+          acknowledgements: [],
+          daemon: advertise === undefined ? {} : { bundle_features: advertise },
+        },
+        MACHINE,
+      );
+      return out.control.bundle_etag;
+    };
+
+    const already = await etagFor(["gateway_tools"], ["gateway_tools"]);
+    const firstPoll = await etagFor([], ["gateway_tools"]);
+    const neverAdvertised = await etagFor([], undefined);
+
+    // The one that matters: advertising for the first time must land in THIS
+    // response, not the next one.
+    expect(firstPoll).toBe(already);
+    // And this keeps the assertion above from holding vacuously: if the gate
+    // made no difference to the bundle in this fixture — an empty gateway
+    // mandate, say — all three etags would be equal and the check above would
+    // pass while proving nothing.
+    expect(neverAdvertised).not.toBe(already);
+  });
+
+  /** One poll, returning what it wrote to the host row and what it served. */
+  const poll = async (
+    stored: string[],
+    daemon: Record<string, unknown> | undefined,
+  ): Promise<{ values: Record<string, unknown>; etag: string }> => {
+    const db: Fake = {
+      hosts: [host({ bundleFeatures: stored })],
+      sessions: [],
+      commands: [],
+      updates: [],
+      inserts: [],
+    };
+    wire(db);
+    const out = await tachoCommandFetchHandler(
+      {
+        ...FETCH,
+        host_enrollment_id: HOST_PUBLIC,
+        acknowledgements: [],
+        ...(daemon === undefined ? {} : { daemon }),
+      },
+      MACHINE,
+    );
+    return {
+      values: (db.updates.find((u) => u.table === "hosts")?.values ??
+        {}) as Record<string, unknown>,
+      etag: out.control.bundle_etag,
+    };
+  };
+
+  it("leaves the advertisement alone when a poll reports no health at all", async () => {
+    // No `daemon` object is not a statement about the parser — nothing was
+    // reported, so there is nothing to learn and the stored support stands.
+    const { values } = await poll(["gateway_tools"], undefined);
+    expect(values).not.toHaveProperty("bundleFeatures");
+  });
+
+  it("clears support a daemon reports health without, rather than keeping it stale", async () => {
+    // A daemon new enough to name a feature names it on every poll, so a
+    // health report that omits `bundle_features` says its parser predates the
+    // field — an emergency rollback after a feature poll was persisted, or a
+    // current CLI enrolling a host an older daemon then runs. Keeping the
+    // stored value is what strands it: the envelope keeps publishing the etag
+    // of a bundle carrying `gateway_tools`, and the host's `.strict()` parser
+    // rejects every refresh, forever.
+    const { values } = await poll(["gateway_tools"], { hooks_ok: true });
+    expect(values).toMatchObject({ bundleFeatures: [] });
+  });
+
+  it("does not silently upgrade a host that named no features", async () => {
+    // The other direction of the same rule: clearing is not granting.
+    const { values } = await poll([], { hooks_ok: true });
+    expect(values).toMatchObject({ bundleFeatures: [] });
+  });
+
+  it("serves the rolled-back host a parseable bundle on that same poll", async () => {
+    // The assertion the fix is actually for. Writing the cleared column but
+    // building this response from the host object the caller already held
+    // would serve the gated bundle one more time — and there is no later poll
+    // that fixes it, because the host cannot parse the bundle it is being
+    // told to refetch.
+    const rolledBack = await poll(["gateway_tools"], { hooks_ok: true });
+    const neverAdvertised = await poll([], { hooks_ok: true });
+    const stillCurrent = await poll(["gateway_tools"], {
+      bundle_features: ["gateway_tools"],
+    });
+    expect(rolledBack.etag).toBe(neverAdvertised.etag);
+    // Keeps the line above from holding vacuously: the gate has to make a
+    // difference to the bundle in this fixture at all.
+    expect(rolledBack.etag).not.toBe(stillCurrent.etag);
+  });
 });
 
 describe("ackPatch", () => {
