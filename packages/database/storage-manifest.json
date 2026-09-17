@@ -3344,7 +3344,7 @@
       "writes": []
     }
   ],
-  "contentHash": "f1450c91fefddd31ce1e6792c96c639c524e850a38868b263899cb4b6aeae9ce",
+  "contentHash": "fe99c40c24f4e21b1dac4e92009802e163b9b07aadfc51fb67db5880eb3b9fd1",
   "domains": [
     {
       "name": "agent",
@@ -18077,6 +18077,12 @@
           "type": "timestamp with time zone"
         },
         {
+          "name": "gateway_last_seen_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
           "name": "spool_depth",
           "nullable": false,
           "primaryKey": false,
@@ -19547,6 +19553,12 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "gateway_observed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         },
         {
           "name": "bundle_mode",
