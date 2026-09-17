@@ -3,6 +3,7 @@ import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { tachoSessionGet } from "@oxagen/oxagen/contracts/tacho.session.get";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, asc, count, desc, eq } from "drizzle-orm";
+import { sessionReadColumns } from "./lib/tacho-gateway-columns";
 import { hostPublicIds, sessionSummary } from "./tacho.session.list";
 
 export const tachoSessionGetHandler: CapabilityHandler<
@@ -15,6 +16,9 @@ export const tachoSessionGetHandler: CapabilityHandler<
         eq(schema.tachoSessions.orgId, ctx.orgId),
         eq(schema.tachoSessions.workspaceId, ctx.workspaceId),
       ),
+      // Reading a session must not require the gateway column to exist yet
+      // (discussion_r4040558842).
+      columns: await sessionReadColumns(tx),
     });
     if (!row) {
       throw new CapabilityError(
@@ -23,12 +27,16 @@ export const tachoSessionGetHandler: CapabilityHandler<
         "Tacho session not found",
       );
     }
+    // Resolved before the fan-out: `Promise.all` would otherwise start each
+    // probe concurrently, and they answer from one per-process cache anyway.
+    const childColumns = await sessionReadColumns(tx);
     const [children, models, files, commands, incidents, checkpoints] =
       await Promise.all([
         tx.query.tachoSessions.findMany({
           where: eq(schema.tachoSessions.parentSessionUuid, row.sessionUuid),
           orderBy: [asc(schema.tachoSessions.startedAt)],
           limit: 500,
+          columns: childColumns,
         }),
         tx.query.tachoSessionModels.findMany({
           where: eq(schema.tachoSessionModels.sessionId, row.id),

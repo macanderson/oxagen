@@ -140,10 +140,58 @@ function b(attrs: Attrs, key: string): boolean | undefined {
   return undefined;
 }
 
+/**
+ * The namespace Oxagen writes its own control attributes in — the daemon's
+ * `oxagen.enforcement_tier`, `oxagen.connected_app`, `oxagen.mcp_session`,
+ * `oxagen.context_digest`. Reserved: it is how a sealed record says what the
+ * *collector* did, and nothing that arrives over OTLP may write into it.
+ */
+const RESERVED_ATTR_PREFIX = "oxagen.";
+
+/**
+ * Where a submitted attribute in the reserved namespace is kept instead.
+ *
+ * Renamed rather than dropped. Dropping would lose the fact that something
+ * tried, and this is exactly the signal an operator wants to see; and a name
+ * that begins `client_claimed.` cannot be mistaken downstream for a value the
+ * platform derived. The rest of the key is preserved so the claim is still
+ * legible: `oxagen.enforcement_tier` becomes
+ * `client_claimed.oxagen.enforcement_tier`.
+ */
+const CLAIMED_ATTR_PREFIX = "client_claimed.";
+
+/**
+ * Verbatim passthrough is the whole point of `attrs` — a new upstream
+ * attribute is captured the day it appears, without a release — and it was
+ * also the mechanism behind a P1 (discussion_r4036718127).
+ *
+ * Anything that can submit OTLP for an enrolled host could set
+ * `oxagen.enforcement_tier=gateway` on an ordinary record. The attribute
+ * passed through here untouched, the daemon sealed it onto a chain that
+ * verifies, and the control plane read the tier off it — so a governed agent
+ * could make its own client-attested actions appear gateway-enforced, with a
+ * valid seal over the lie. A valid chain over a false input is byte-for-byte a
+ * valid chain: the seal proves the record was not altered after collection,
+ * never that the value was true going in.
+ *
+ * `enforcement_tier` was the instance; the passthrough is the class. So the
+ * fix is here, at the boundary, and it is about the namespace rather than the
+ * key: every `oxagen.*` attribute that arrives from outside is re-keyed as the
+ * claim it is. A future control attribute is covered on the day it is added,
+ * without anyone remembering to come back here.
+ *
+ * This is the near half of a pair. The control plane does not trust the far
+ * half: `tacho.events.ingest` derives the enforcement tier from its own
+ * records and would refuse a forged claim even from a daemon that never ran
+ * this function.
+ */
 function stringify(attrs: Attrs): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(attrs)) {
-    out[key] = typeof value === "string" ? value : JSON.stringify(value);
+    const name = key.startsWith(RESERVED_ATTR_PREFIX)
+      ? `${CLAIMED_ATTR_PREFIX}${key}`
+      : key;
+    out[name] = typeof value === "string" ? value : JSON.stringify(value);
   }
   return out;
 }

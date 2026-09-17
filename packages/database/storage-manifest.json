@@ -18086,6 +18086,12 @@
           "type": "timestamp with time zone"
         },
         {
+          "name": "gateway_last_seen_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
           "name": "spool_depth",
           "nullable": false,
           "primaryKey": false,
@@ -19556,6 +19562,12 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "gateway_observed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         },
         {
           "name": "bundle_mode",
