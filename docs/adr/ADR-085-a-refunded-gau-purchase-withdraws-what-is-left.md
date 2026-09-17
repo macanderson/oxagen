@@ -267,6 +267,22 @@ forced interleaving on two real connections with the lock as the only variable,
 and asserts the unlocked case still reproduces the hazard so the locked case
 cannot quietly stop testing anything.
 
+The interleaving is constructed with an in-process barrier, not with timers. A
+timer-ordered version works on an idle box and is load-dependent everywhere
+else: on a busy runner the window can elapse before the first transaction
+reaches the point the race needs, the interleaving never happens, and the
+*unlocked* variant observes the correct state — passing for the wrong reason,
+which is the failure these tests exist to rule out, occurring in the
+discriminator itself. With a barrier the second transaction proceeds because the
+first has demonstrably arrived.
+
+The locked variants keep a capped wait, because there the peer is blocked on a
+lock this transaction holds and cannot arrive; waiting for it would deadlock.
+That is not a residual timing dependency but the lock doing its job, and those
+assertions hold for either resulting order by design. That the *unlocked* paths
+never reach the cap was verified rather than assumed: with the timer branch made
+to throw, both unlocked tests still pass.
+
 ### 8. A dispute resolves its organisation from the charge
 
 The parking in §5 keyed on the PaymentIntent because it is the one identifier a

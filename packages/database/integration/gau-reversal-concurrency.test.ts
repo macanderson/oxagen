@@ -94,6 +94,45 @@ function pendingReversals(): Promise<number> {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * A one-shot signal between the two connections.
+ *
+ * These tests construct an interleaving, and the first version constructed it
+ * with timers — one transaction slept 100ms while the other slept 200ms. That
+ * works on an idle box and is load-dependent everywhere else: on a busy runner
+ * the window can elapse before the first transaction reaches the point the race
+ * needs, the interleaving never happens, and the UNLOCKED variant observes the
+ * correct final state. It would pass for the wrong reason, which is precisely
+ * what these tests exist to rule out — the discriminator failing the test it
+ * applies to everything else.
+ *
+ * A barrier removes the dependency: the second transaction proceeds because the
+ * first has demonstrably arrived, not because a timer expired.
+ */
+function barrier(): { arrive: () => void; reached: Promise<void> } {
+  let arrive!: () => void;
+  const reached = new Promise<void>((resolve) => {
+    arrive = () => resolve();
+  });
+  return { arrive, reached };
+}
+
+/**
+ * Wait for a barrier, but never for ever.
+ *
+ * In the LOCKED variants the peer is blocked on a Postgres row or advisory lock
+ * held by this transaction, so it cannot arrive — waiting for it would deadlock.
+ * That is not a flaw in the barrier: when the lock does its job the interleaving
+ * is impossible by construction, which is the whole point. The cap lets the lock
+ * take over, and the locked assertions hold for either resulting order by
+ * design. In the UNLOCKED variants the peer always arrives and the cap is never
+ * reached, so those runs carry no timing dependency at all.
+ */
+const LOCK_YIELD_MS = 3_000;
+function waitOrYield(reached: Promise<void>): Promise<unknown> {
+  return Promise.race([reached, sleep(LOCK_YIELD_MS)]);
+}
+
+/**
  * Drives ONE forced interleaving, with the lock as the only variable.
  *
  * The timings pin the order that produces the skew: the refund reads first and
@@ -117,6 +156,10 @@ async function runInterleaved(opts: { lock: boolean }): Promise<void> {
   const maybeLock = async (tx: postgres.TransactionSql) => {
     if (opts.lock) await tx.unsafe(LOCK(PI));
   };
+  // refundParked: the refund has written its pending row and NOT committed.
+  // grantRead:    the grant has run its reconciliation read.
+  const refundParked = barrier();
+  const grantRead = barrier();
 
   const refund = a.begin(async (tx) => {
     await tx.unsafe(`SET LOCAL app.rls_bypass = 'on'`);
@@ -144,12 +187,16 @@ async function runInterleaved(opts: { lock: boolean }): Promise<void> {
          VALUES ('${ORG}', NULL, NULL, '${PI}', 'refund', 'ch_conc', 0, 0, 0, 5500, 'usd')`,
       );
     }
-    await sleep(200);
+    // Parked but uncommitted: the grant's read must happen now, while this row
+    // is invisible to it.
+    refundParked.arrive();
+    await waitOrYield(grantRead.reached);
   });
 
   const grant = b.begin(async (tx) => {
     await tx.unsafe(`SET LOCAL app.rls_bypass = 'on'`);
     await maybeLock(tx);
+    await waitOrYield(refundParked.reached);
     await tx.unsafe(
       `INSERT INTO billing.gau_settlements
          (org_id, bucket_id, kind, seq, quantity_gau, rate_per_gau_micros, currency,
@@ -160,11 +207,11 @@ async function runInterleaved(opts: { lock: boolean }): Promise<void> {
     await tx.unsafe(
       `UPDATE billing.gau_buckets SET purchased_gau = purchased_gau + 10000 WHERE id = '${BUCKET}'`,
     );
-    await sleep(100);
     const pending = (await tx.unsafe(
       `SELECT id FROM billing.gau_reversals
         WHERE stripe_payment_intent_id = '${PI}' AND settlement_id IS NULL`,
     )) as unknown as { id: string }[];
+    grantRead.arrive();
     for (const row of pending) {
       await tx.unsafe(
         `UPDATE billing.gau_reversals
@@ -212,6 +259,11 @@ afterAll(async () => {
  * snapshot erases it. `locked: true` takes the row lock the way the code does.
  */
 async function runBucketRace(opts: { locked: boolean }): Promise<void> {
+  // reversalRead: the reversal has taken its snapshot and NOT written.
+  // purchaseDone: the concurrent purchase has COMMITTED its increment.
+  const reversalRead = barrier();
+  const purchaseDone = barrier();
+
   const reversal = a.begin(async (tx) => {
     await tx.unsafe(`SET LOCAL app.rls_bypass = 'on'`);
     // Both forms read the same counts; only one holds the row while it does.
@@ -225,25 +277,35 @@ async function runBucketRace(opts: { locked: boolean }): Promise<void> {
     const before = Number(
       (rows as unknown as { purchased_gau: string }[])[0]!.purchased_gau,
     );
-    await sleep(200);
+    reversalRead.arrive();
+    // The purchase must land and COMMIT in this gap for the stale write to
+    // erase it. Locked, it cannot: it blocks on the row this transaction
+    // holds, the cap expires, and the lock imposes the order instead.
+    await waitOrYield(purchaseDone.reached);
     // The absolute write from the snapshot read above.
     await tx.unsafe(
       `UPDATE billing.gau_buckets SET purchased_gau = ${before - 2000} WHERE id = '${BUCKET}'`,
     );
   });
 
-  const purchase = b.begin(async (tx) => {
-    await tx.unsafe(`SET LOCAL app.rls_bypass = 'on'`);
-    await sleep(100);
-    // A different purchase on a different PaymentIntent: a relative increment
-    // under the bucket's own row lock, exactly what ensureCurrentBucket issues.
-    await tx.unsafe(
-      `INSERT INTO billing.gau_buckets (id, org_id, period_start, period_end, included_gau, purchased_gau)
-       VALUES ('${BUCKET}', '${ORG}', '2026-09-01Z', '2026-10-01Z', 5000, 5000)
-       ON CONFLICT (org_id, period_start)
-       DO UPDATE SET purchased_gau = billing.gau_buckets.purchased_gau + EXCLUDED.purchased_gau`,
-    );
-  });
+  // Not a bare `b.begin(…)`: the signal has to fire after the COMMIT, so the
+  // reversal's write is genuinely racing a committed increment rather than an
+  // invisible one.
+  const purchase = (async () => {
+    await reversalRead.reached;
+    await b.begin(async (tx) => {
+      await tx.unsafe(`SET LOCAL app.rls_bypass = 'on'`);
+      // A different purchase on a different PaymentIntent: a relative increment
+      // under the bucket's own row lock, exactly what ensureCurrentBucket issues.
+      await tx.unsafe(
+        `INSERT INTO billing.gau_buckets (id, org_id, period_start, period_end, included_gau, purchased_gau)
+         VALUES ('${BUCKET}', '${ORG}', '2026-09-01Z', '2026-10-01Z', 5000, 5000)
+         ON CONFLICT (org_id, period_start)
+         DO UPDATE SET purchased_gau = billing.gau_buckets.purchased_gau + EXCLUDED.purchased_gau`,
+      );
+    });
+    purchaseDone.arrive();
+  })();
 
   await Promise.all([reversal, purchase]);
 }
@@ -304,6 +366,8 @@ describe("a debit alongside a writer of other columns on the same row", () => {
   // read ever moves outside the lock is the unit assertion in
   // gau-reversals.test.ts, which does fail when the `.set()` is widened.
   it("leaves a concurrent overage increment intact, and the CHECK holds", async () => {
+    const reversalRead = barrier();
+    const interimDone = barrier();
     await admin.unsafe(`SET app.rls_bypass = 'on'`);
     await admin.unsafe(
       `UPDATE billing.gau_buckets
@@ -319,7 +383,8 @@ describe("a debit alongside a writer of other columns on the same row", () => {
       const before = Number(
         (rows as unknown as { purchased_gau: string }[])[0]!.purchased_gau,
       );
-      await sleep(200);
+      reversalRead.arrive();
+      await waitOrYield(interimDone.reached);
       // Exactly the columns the reversal owns, and no others.
       await tx.unsafe(
         `UPDATE billing.gau_buckets
@@ -328,17 +393,20 @@ describe("a debit alongside a writer of other columns on the same row", () => {
       );
     });
 
-    const interim = b.begin(async (tx) => {
-      await tx.unsafe(`SET LOCAL app.rls_bypass = 'on'`);
-      await sleep(100);
-      await tx.unsafe(
-        `UPDATE billing.gau_buckets
-            SET overage_invoiced_gau = overage_invoiced_gau + 3000,
-                interim_seq = interim_seq + 1,
-                updated_at = now()
-          WHERE id = '${BUCKET}'`,
-      );
-    });
+    const interim = (async () => {
+      await reversalRead.reached;
+      await b.begin(async (tx) => {
+        await tx.unsafe(`SET LOCAL app.rls_bypass = 'on'`);
+        await tx.unsafe(
+          `UPDATE billing.gau_buckets
+              SET overage_invoiced_gau = overage_invoiced_gau + 3000,
+                  interim_seq = interim_seq + 1,
+                  updated_at = now()
+            WHERE id = '${BUCKET}'`,
+        );
+      });
+      interimDone.arrive();
+    })();
 
     await Promise.all([reversal, interim]);
 
