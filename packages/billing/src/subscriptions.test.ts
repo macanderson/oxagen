@@ -163,6 +163,10 @@ function makeSubscription(
     canceledAt: null,
     trialEnd: null,
     productId: "prod_test",
+    // What the subscription's own price charges — the figure the proration
+    // decision reads, which a catalogue reprice does not move (#3157).
+    priceId: "price_test",
+    unitAmountCents: 19_900,
     seatCount: 1,
     ...overrides,
   };
@@ -502,14 +506,13 @@ describe("previewPlanChange — proration follows price, not tier rank", () => {
   });
 
   it("enterprise → scale previews under 'always_invoice' because the bill rises", async () => {
-    dbMocks.query.plans.findFirst
-      .mockResolvedValueOnce(SCALE_ROW) // target, by slug
-      .mockResolvedValueOnce(ENTERPRISE_ROW); // current, by id
+    dbMocks.query.plans.findFirst.mockResolvedValueOnce(SCALE_ROW); // target, by slug
     dbMocks.query.subscriptions.findFirst.mockResolvedValue({
       stripeSubscriptionId: "sub_test_001",
       stripeCustomerId: "cus_test_001",
       planId: "plan-enterprise-1",
       billingInterval: "month",
+      unitAmountCents: ENTERPRISE_ROW.monthlyCents,
     });
 
     await previewPlanChange("org-abc-123", "scale-v2", "month");
@@ -520,15 +523,52 @@ describe("previewPlanChange — proration follows price, not tier rank", () => {
     );
   });
 
+  it("previews a grandfathered $100 subscriber → $150 plan as an increase, despite a $200 catalogue row", async () => {
+    // The preview is what the customer confirms against, so it has to reach
+    // the same flag changeOrgPlan will apply — including here, where the plan
+    // row has been repriced out from under the subscription (PR #3171 review).
+    // The plan row the subscription points at has been repriced to $200/mo.
+    // Nothing in the preview path may read it — asserted by
+    // tier-price-decoupling.test.ts — which is why it is not stubbed here at
+    // all: if the preview started reading it again, it would read undefined
+    // and this test would fail rather than quietly pass.
+    const TARGET_150 = {
+      id: "plan-mid-1",
+      slug: "mid-v2",
+      tier: "scale",
+      stripePriceIdMonthly: "price_mid_150",
+      stripePriceIdAnnual: null,
+      monthlyCents: 15_000,
+      annualCents: null,
+    };
+    // One plans lookup only: the target, by slug. The preview no longer reads
+    // the current plan row at all — it prices the current side off the
+    // subscription — so queueing a second value would leak into the next test.
+    dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET_150);
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
+      stripeSubscriptionId: "sub_test_001",
+      stripeCustomerId: "cus_test_001",
+      planId: "plan-legacy-1",
+      billingInterval: "month",
+      unitAmountCents: 10_000, // what they actually pay
+    });
+
+    await previewPlanChange("org-abc-123", "mid-v2", "month");
+
+    expect(previewPlanChangeMock).toHaveBeenCalledWith(
+      "sub_test_001",
+      expect.objectContaining({ prorationBehavior: "always_invoice" }),
+    );
+  });
+
   it("scale → enterprise previews under 'none' because the bill falls", async () => {
-    dbMocks.query.plans.findFirst
-      .mockResolvedValueOnce(ENTERPRISE_ROW)
-      .mockResolvedValueOnce(SCALE_ROW);
+    dbMocks.query.plans.findFirst.mockResolvedValueOnce(ENTERPRISE_ROW);
     dbMocks.query.subscriptions.findFirst.mockResolvedValue({
       stripeSubscriptionId: "sub_test_001",
       stripeCustomerId: "cus_test_001",
       planId: "plan-scale-1",
       billingInterval: "month",
+      unitAmountCents: SCALE_ROW.monthlyCents,
     });
 
     await previewPlanChange("org-abc-123", "enterprise-v2", "month");

@@ -49,6 +49,22 @@ export interface BillingSubscription {
   trialEnd: Date | null;
   /** Stripe product id of the first line item; null when none. */
   productId: string | null;
+  /**
+   * Provider price id of the first line item; null when none.
+   *
+   * Prices are immutable at the provider, and a catalogue reprice mints a new
+   * one while existing subscriptions keep the old. So this — not the plan row
+   * the catalogue overwrites — is what identifies the price a given subscriber
+   * is actually on (#3157).
+   */
+  priceId: string | null;
+  /**
+   * What one billing period of that price costs, in cents; null when the line
+   * carries no unit amount (metered or tiered prices). The authoritative
+   * answer to "what does this subscriber pay", as opposed to "what does the
+   * catalogue charge today".
+   */
+  unitAmountCents: number | null;
   seatCount: number;
 }
 

@@ -71,6 +71,19 @@ export const subscriptions = billingSchema.table(
       .references(() => plans.id),
     stripeSubscriptionId: text("stripe_subscription_id").notNull(),
     stripeCustomerId: text("stripe_customer_id").notNull(),
+    /**
+     * The price this subscription is billed on, and what it charges per
+     * period. Provider prices are immutable, so a catalogue reprice mints a
+     * new one and leaves live subscriptions on the old — meaning `plans` says
+     * what the catalogue charges today and these say what THIS subscriber
+     * pays. A proration decision needs the second (#3157).
+     *
+     * Nullable: written by `syncSubscriptionFromStripe`, so a row predating
+     * that sync has neither, and a metered or tiered price has no unit
+     * amount. NULL means "ask the provider", never zero.
+     */
+    stripePriceId: text("stripe_price_id"),
+    unitAmountCents: integer("unit_amount_cents"),
     status: text("status").notNull(),
     // CHECK: billing_interval IN ('month','year') — Stripe only emits these two
     billingInterval: text("billing_interval").notNull(),

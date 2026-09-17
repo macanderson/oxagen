@@ -7,12 +7,22 @@
  * doubled a customer's bill and raised no invoice, while Scale→Enterprise
  * halved it and charged one.
  *
- * Two guards live here:
+ * There is a THIRD value, and it disagrees with both. Provider prices are
+ * immutable, so `tools/scripts/stripe-sync.ts` mints a new price on a reprice
+ * and overwrites the plan row while live subscriptions stay on the price they
+ * were created with. What a given subscriber pays is therefore a property of
+ * their subscription, and the plan row is a proxy for it in exactly the way
+ * the tier rank was a proxy for the plan row — right until a reprice, then
+ * inverted (PR #3171 review).
+ *
+ * Three guards live here:
  *
  *  1. A catalogue check proving the orderings genuinely disagree, so nobody can
  *     re-derive one from the other by inspection and be right by luck.
  *  2. A source scan over `packages/` and `apps/` failing any file that decides
  *     a proration behaviour and reads the tier ordering in the same breath.
+ *  3. A check that the proration path takes its current price from the
+ *     subscription rather than the plan row.
  *
  * The scan is the standing check the DoD asks for: it holds for code that does
  * not exist yet, not just for the two call sites this change fixed.
@@ -90,6 +100,32 @@ describe("plan price order and TIER_ORDER stay separate (#3157)", () => {
     // and costs less. Anything deriving one ordering from the other is wrong
     // about this pair, in both directions.
     expect(enterprise).toBeLessThan(scale as number);
+  });
+
+  it("the proration path reads the current price off the subscription, not the plan row", () => {
+    const src = readFileSync(
+      join(REPO_ROOT, "packages/billing/src/subscriptions.ts"),
+      "utf8",
+    );
+
+    // The subscription's own amount is what the decision consumes…
+    expect(src).toMatch(/unitAmountCents/);
+    expect(src).toMatch(/billedMicrosForSubscription/);
+
+    // …and the plan row the subscription points at is read for the tier label
+    // and the audit line only. Selecting a price off it again is how the
+    // grandfathered inversion comes back, so the current-plan lookups must not
+    // ask for one.
+    const currentPlanLookups = src.match(
+      /tx\.query\.plans\.findFirst\(\{\s*where: eq\(schema\.plans\.id,[\s\S]*?\}\)/g,
+    );
+    // changeOrgPlan keeps one, for the tier label on its log and audit line.
+    // previewPlanChange needs none at all. Whatever the count, not one of them
+    // may select a price.
+    expect(currentPlanLookups).not.toBeNull();
+    for (const lookup of currentPlanLookups!) {
+      expect(lookup).not.toMatch(/monthlyCents|annualCents/);
+    }
   });
 
   it("no source file decides a proration behaviour from the tier ordering", () => {

@@ -4,7 +4,73 @@ import { eq, and, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
 import { getOrgSeatUsage, SeatLimitError } from "./seats";
-import { planPriceDirection, type PlanPriceRow } from "./pricing";
+import {
+  MICRO_USD_PER_CENT,
+  planPriceMicros,
+  type PlanPriceDirection,
+} from "./pricing";
+
+/**
+ * What the org is billed per period on the subscription it holds RIGHT NOW,
+ * in micro-USD, and where the figure came from.
+ *
+ * Not the plan row. `billing.plans` is the catalogue as it stands today, and
+ * provider prices are immutable: `tools/scripts/stripe-sync.ts` mints a new
+ * price on a reprice and overwrites the plan row while every live
+ * subscription stays on the price it was created with. A grandfathered $100
+ * subscriber therefore sits behind a plan row reading $200, and comparing
+ * against the row turns a move to a $150 plan into $200 → $150 — a decrease,
+ * shipped with `proration_behavior: 'none'`, dropping the immediate charge on
+ * a real increase (#3157, PR #3171 review).
+ *
+ * Order of resort:
+ *  1. `subscriptions.unit_amount_cents`, written by
+ *     {@link syncSubscriptionFromStripe} on every `subscription.*` webhook —
+ *     authoritative, and free on this path.
+ *  2. The provider, for a row written before that column existed and not yet
+ *     re-synced. One read, only on those rows, and the set shrinks to nothing
+ *     as webhooks arrive.
+ *  3. Nothing. The caller gets null and settles conservatively rather than
+ *     substituting the catalogue figure, which is the number that inverts.
+ *
+ * This is independent of #3180. Whatever is decided about `-v2` slugs and
+ * whether `stripe-sync.ts` should overwrite a plan row at all, what a given
+ * subscriber pays is still a property of their subscription, not of the
+ * catalogue.
+ */
+async function billedMicrosForSubscription(activeSub: {
+  stripeSubscriptionId: string;
+  unitAmountCents?: number | null;
+}): Promise<{
+  micros: bigint | null;
+  source: "subscription" | "provider" | "none";
+}> {
+  if (typeof activeSub.unitAmountCents === "number") {
+    return {
+      micros: BigInt(activeSub.unitAmountCents) * MICRO_USD_PER_CENT,
+      source: "subscription",
+    };
+  }
+  try {
+    const live = await billingProvider().getSubscription(
+      activeSub.stripeSubscriptionId,
+    );
+    if (typeof live.unitAmountCents === "number") {
+      return {
+        micros: BigInt(live.unitAmountCents) * MICRO_USD_PER_CENT,
+        source: "provider",
+      };
+    }
+  } catch (err) {
+    // Never fail a plan change over this lookup — an unresolved price settles
+    // as always_invoice below, which bills the true difference either way.
+    logger.warn(
+      { stripeSubId: activeSub.stripeSubscriptionId, err },
+      "billing: could not read the subscription's own price from the provider",
+    );
+  }
+  return { micros: null, source: "none" };
+}
 
 /**
  * Proration flag for a plan change, decided from the money and nothing else.
@@ -18,19 +84,31 @@ import { planPriceDirection, type PlanPriceRow } from "./pricing";
  * Scale→Enterprise, where it halves (#3157). Nothing in this file may read a
  * tier rank again.
  *
- * "unknown" — a plan row carrying no price for the interval it is billed on —
- * settles as `always_invoice`, which asks Stripe to compute the true prorated
- * difference and settle it in whichever direction it falls. `none` is the
- * choice that silently drops money, so it is never the fallback.
+ * The `from` side is the subscription's own price, from
+ * {@link billedMicrosForSubscription} — not the plan row, for the reason given
+ * there. The `to` side is the catalogue, which is correct: the target plan is
+ * what a new price would be minted from.
+ *
+ * A side that cannot be priced settles as `always_invoice`, which asks Stripe
+ * to compute the true prorated difference and settle it in whichever direction
+ * it falls. `none` is the choice that silently drops money, so it is never the
+ * fallback.
  */
-function prorationForPlanChange(
-  from: { plan: PlanPriceRow | null | undefined; interval: "month" | "year" },
-  to: { plan: PlanPriceRow | null | undefined; interval: "month" | "year" },
+function prorationFromMicros(
+  fromMicros: bigint | null,
+  toMicros: bigint | null,
 ): {
   prorationBehavior: "always_invoice" | "none";
-  direction: ReturnType<typeof planPriceDirection>;
+  direction: PlanPriceDirection;
 } {
-  const direction = planPriceDirection(from, to);
+  const direction: PlanPriceDirection =
+    fromMicros === null || toMicros === null
+      ? "unknown"
+      : toMicros > fromMicros
+        ? "increase"
+        : toMicros < fromMicros
+          ? "decrease"
+          : "unchanged";
   return {
     prorationBehavior:
       direction === "decrease" || direction === "unchanged"
@@ -106,6 +184,11 @@ export async function syncSubscriptionFromStripe(
       planId,
       stripeSubscriptionId: sub.id,
       stripeCustomerId: sub.customerId,
+      // The price this subscription is actually on, recorded so the proration
+      // decision does not have to read the catalogue's current figure for a
+      // grandfathered subscriber (#3157).
+      stripePriceId: sub.priceId,
+      unitAmountCents: sub.unitAmountCents,
       status: sub.status,
       billingInterval: sub.billingInterval,
       currentPeriodStart: sub.currentPeriodStart,
@@ -123,6 +206,8 @@ export async function syncSubscriptionFromStripe(
         target: schema.subscriptions.stripeSubscriptionId,
         set: {
           planId: row.planId,
+          stripePriceId: row.stripePriceId,
+          unitAmountCents: row.unitAmountCents,
           status: row.status,
           billingInterval: row.billingInterval,
           currentPeriodStart: row.currentPeriodStart,
@@ -379,9 +464,11 @@ export async function setSubscriptionSeats(
  * Change an org's plan to any other plan (any tier → any tier).
  *
  * The direction is decided from the money: the amount the org is billed per
- * period today, at the interval it is billed on, against the amount the target
- * plan bills per period at the interval it is moving to. Tier rank plays no
- * part — see {@link prorationForPlanChange}.
+ * period today — read off the subscription's own price, not the catalogue row
+ * behind it, so a grandfathered subscriber is compared against what they
+ * actually pay — against the amount the target plan bills per period at the
+ * interval it is moving to. Tier rank plays no part. See
+ * {@link billedMicrosForSubscription} and {@link prorationFromMicros}.
  *
  * Bill rises (or cannot be priced): swap the price immediately and invoice the
  *   proration now.
@@ -448,6 +535,9 @@ export async function changeOrgPlan(
           // and each side of the price comparison is priced on its own
           // interval.
           billingInterval: true,
+          // What this subscription is actually billed, which a catalogue
+          // reprice does not move (#3157).
+          unitAmountCents: true,
         },
       }),
     ),
@@ -479,26 +569,23 @@ export async function changeOrgPlan(
     return { checkoutUrl: result.url };
   }
 
-  // Resolve the plan the org is on now, for the price comparison below. Shared
-  // catalog (no RLS) → system.
+  // Resolve the plan the org is on now — for the log line and the audit
+  // trail, NOT for the price comparison. Shared catalog (no RLS) → system.
   const currentPlanRow = await withSystemDb((tx) =>
     tx.query.plans.findFirst({
       where: eq(schema.plans.id, activeSubRow.planId),
-      columns: {
-        slug: true,
-        tier: true,
-        monthlyCents: true,
-        annualCents: true,
-      },
+      columns: { slug: true, tier: true },
     }),
   );
 
-  // Active subscription — swap the price in-place. Proration follows the money.
+  // Active subscription — swap the price in-place. Proration follows the money
+  // the subscriber is actually billed.
   const currentInterval: "month" | "year" =
     activeSubRow.billingInterval === "year" ? "year" : "month";
-  const { prorationBehavior, direction } = prorationForPlanChange(
-    { plan: currentPlanRow, interval: currentInterval },
-    { plan: targetPlan, interval },
+  const billedNow = await billedMicrosForSubscription(activeSubRow);
+  const { prorationBehavior, direction } = prorationFromMicros(
+    billedNow.micros,
+    planPriceMicros(targetPlan, interval),
   );
   const isUpgrade = direction === "increase";
 
@@ -513,6 +600,8 @@ export async function changeOrgPlan(
       currentTier: currentPlanRow?.tier,
       targetTier: targetPlan.tier,
       currentInterval,
+      billedNowMicros: billedNow.micros?.toString() ?? null,
+      billedNowSource: billedNow.source,
       priceDirection: direction,
       isUpgrade,
       prorationBehavior,
@@ -751,9 +840,13 @@ export interface PlanChangePreview {
  *   charge).
  *
  * The direction is the same price comparison {@link changeOrgPlan} makes, from
- * the same helper. It has to be: this preview is the number the customer is
- * shown before they confirm, and a preview computed under one proration flag
- * while the change applies another quotes a price the change will not honour.
+ * the same helpers, against the same subscription price. It has to be: this
+ * preview is the number the customer is shown before they confirm, and a
+ * preview computed under one proration flag while the change applies another
+ * quotes a price the change will not honour. That equally covers the
+ * grandfathered case — a subscriber kept on an old price after a catalogue
+ * reprice must not be previewed against the new catalogue figure and then
+ * billed against their own (#3157).
  */
 export async function previewPlanChange(
   orgId: string,
@@ -789,9 +882,10 @@ export async function previewPlanChange(
           stripeSubscriptionId: true,
           stripeCustomerId: true,
           planId: true,
-          // Priced on the interval the org is billed on today — see
-          // prorationForPlanChange.
+          // Priced on the interval the org is billed on today, at the amount
+          // its own price charges — see billedMicrosForSubscription.
           billingInterval: true,
+          unitAmountCents: true,
         },
       }),
     ),
@@ -891,23 +985,15 @@ export async function previewPlanChange(
   }
 
   // Active subscription — in-place swap preview. Shared catalog (no RLS) → system.
-  const currentPlanRow = await withSystemDb((tx) =>
-    tx.query.plans.findFirst({
-      where: eq(schema.plans.id, activeSub.planId),
-      columns: {
-        slug: true,
-        tier: true,
-        monthlyCents: true,
-        annualCents: true,
-      },
-    }),
-  );
-
+  // No current-plan lookup here. The preview needs what the subscriber is
+  // billed, which the subscription carries, and the plan row behind it would
+  // only reintroduce the catalogue figure this path must not read (#3157).
   const currentInterval: "month" | "year" =
     activeSub.billingInterval === "year" ? "year" : "month";
-  const { prorationBehavior, direction } = prorationForPlanChange(
-    { plan: currentPlanRow, interval: currentInterval },
-    { plan: targetPlan, interval },
+  const billedNow = await billedMicrosForSubscription(activeSub);
+  const { prorationBehavior, direction } = prorationFromMicros(
+    billedNow.micros,
+    planPriceMicros(targetPlan, interval),
   );
   const isUpgrade = direction === "increase";
 
@@ -924,6 +1010,8 @@ export async function previewPlanChange(
       targetPlanSlug,
       interval,
       currentInterval,
+      billedNowMicros: billedNow.micros?.toString() ?? null,
+      billedNowSource: billedNow.source,
       priceDirection: direction,
       isUpgrade,
       amountCents: preview.amountCents,

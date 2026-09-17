@@ -168,6 +168,21 @@ function resolveProductId(sub: Stripe.Subscription): string | null {
   return typeof product === "string" ? product : product.id;
 }
 
+function resolvePriceId(sub: Stripe.Subscription): string | null {
+  return sub.items.data[0]?.price?.id ?? null;
+}
+
+/**
+ * The amount the subscription's own price charges per period. Stripe prices
+ * are immutable, so a grandfathered subscriber's line still carries the old
+ * amount after the catalogue has moved on — which is exactly the figure a
+ * proration decision needs (#3157).
+ */
+function resolveUnitAmountCents(sub: Stripe.Subscription): number | null {
+  const amount = sub.items.data[0]?.price?.unit_amount;
+  return typeof amount === "number" ? amount : null;
+}
+
 function resolveCustomerId(
   ref: string | Stripe.Customer | Stripe.DeletedCustomer,
 ): string {
@@ -297,6 +312,8 @@ function stripeSubscriptionToNeutral(
     canceledAt: sub.canceled_at ? new Date(sub.canceled_at * 1000) : null,
     trialEnd: sub.trial_end ? new Date(sub.trial_end * 1000) : null,
     productId: resolveProductId(sub),
+    priceId: resolvePriceId(sub),
+    unitAmountCents: resolveUnitAmountCents(sub),
     seatCount: sub.items.data[0]?.quantity ?? 1,
   };
 }

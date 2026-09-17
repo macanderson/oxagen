@@ -129,6 +129,7 @@ function makeActiveSub(
     seatCount: number;
     planId: string;
     billingInterval: string;
+    unitAmountCents: number | null;
     plan: { tier: string };
   }> = {},
 ) {
@@ -137,6 +138,11 @@ function makeActiveSub(
     seatCount: 1,
     planId: "plan-build-id",
     billingInterval: "month",
+    // What THIS subscription is billed. Provider prices are immutable, so this
+    // is the figure a proration decision reads — not the catalogue row behind
+    // it, which a reprice moves out from under a grandfathered subscriber
+    // (#3157).
+    unitAmountCents: BUILD_CATALOG.monthlyCents,
     plan: { tier: "build" },
     ...overrides,
   };
@@ -212,7 +218,10 @@ describe("changeOrgPlan", () => {
     );
     stubPlanLookups(SCALE_PLAN, BUILD_PLAN);
     dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({ planId: "plan-build-id" }),
+      makeActiveSub({
+        planId: "plan-build-id",
+        unitAmountCents: BUILD_CATALOG.monthlyCents,
+      }),
     );
 
     const result = await changeOrgPlan("org-abc", "scale", "month");
@@ -229,7 +238,10 @@ describe("changeOrgPlan", () => {
     stubPlanLookups(BUILD_PLAN, SCALE_PLAN);
 
     dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({ planId: "plan-scale-id" }),
+      makeActiveSub({
+        planId: "plan-scale-id",
+        unitAmountCents: SCALE_CATALOG.monthlyCents,
+      }),
     );
 
     const result = await changeOrgPlan("org-abc", "build", "month");
@@ -313,6 +325,7 @@ describe("changeOrgPlan proration direction (#3157)", () => {
       makeActiveSub({
         planId: "plan-enterprise-id",
         billingInterval: "month",
+        unitAmountCents: ENTERPRISE_CATALOG.monthlyCents,
       }),
     );
 
@@ -331,7 +344,11 @@ describe("changeOrgPlan proration direction (#3157)", () => {
 
     stubPlanLookups(ENTERPRISE_PLAN, SCALE_PLAN);
     dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({ planId: "plan-scale-id", billingInterval: "month" }),
+      makeActiveSub({
+        planId: "plan-scale-id",
+        billingInterval: "month",
+        unitAmountCents: SCALE_CATALOG.monthlyCents,
+      }),
     );
 
     const result = await changeOrgPlan("org-abc", "enterprise-v2", "month");
@@ -346,7 +363,11 @@ describe("changeOrgPlan proration direction (#3157)", () => {
   it("same plan, same interval (the bill does not move) → 'none'", async () => {
     stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
     dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({ planId: "plan-scale-id", billingInterval: "month" }),
+      makeActiveSub({
+        planId: "plan-scale-id",
+        billingInterval: "month",
+        unitAmountCents: SCALE_CATALOG.monthlyCents,
+      }),
     );
 
     const result = await changeOrgPlan("org-abc", "scale-v2", "month");
@@ -367,7 +388,11 @@ describe("changeOrgPlan proration direction (#3157)", () => {
 
     stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
     dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({ planId: "plan-scale-id", billingInterval: "month" }),
+      makeActiveSub({
+        planId: "plan-scale-id",
+        billingInterval: "month",
+        unitAmountCents: SCALE_CATALOG.monthlyCents,
+      }),
     );
 
     const result = await changeOrgPlan("org-abc", "scale-v2", "year");
@@ -385,7 +410,11 @@ describe("changeOrgPlan proration direction (#3157)", () => {
 
     stubPlanLookups(BUILD_PLAN, BUILD_PLAN);
     dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({ planId: "plan-build-id", billingInterval: "year" }),
+      makeActiveSub({
+        planId: "plan-build-id",
+        billingInterval: "year",
+        unitAmountCents: BUILD_CATALOG.annualCents,
+      }),
     );
 
     const result = await changeOrgPlan("org-abc", "build-v2", "month");
@@ -413,7 +442,11 @@ describe("changeOrgPlan proration direction (#3157)", () => {
     };
     stubPlanLookups(ENTERPRISE_PLAN, unpricedCurrent);
     dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({ planId: "plan-custom-id", billingInterval: "year" }),
+      makeActiveSub({
+        planId: "plan-custom-id",
+        billingInterval: "year",
+        unitAmountCents: null,
+      }),
     );
 
     await changeOrgPlan("org-abc", "enterprise-v2", "month");
@@ -422,6 +455,156 @@ describe("changeOrgPlan proration direction (#3157)", () => {
       "sub_active_001",
       expect.objectContaining({ prorationBehavior: "always_invoice" }),
     );
+  });
+});
+
+// ── #3157 (PR #3171 review): grandfathered subscribers ──────────────────────
+//
+// Provider prices are immutable. `tools/scripts/stripe-sync.ts` mints a new
+// price on a reprice and overwrites the plan row, leaving every live
+// subscription on the price it was created with. So `billing.plans` says what
+// the catalogue charges TODAY and the subscription says what THIS subscriber
+// pays, and after a reprice those are different numbers. Reading the plan row
+// inverts the direction for exactly those subscribers.
+
+describe("changeOrgPlan — a repriced catalogue does not move what a subscriber pays", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getSubscriptionMock.mockResolvedValue({
+      id: "sub_active_001",
+      customerId: "cus_001",
+      metadata: { org_id: "org-abc" },
+      status: "active",
+      billingInterval: "month",
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(),
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
+      trialEnd: null,
+      productId: "prod_legacy",
+      priceId: "price_legacy_100",
+      unitAmountCents: 10_000,
+      seatCount: 1,
+    });
+    const upsertChain = {
+      onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+    };
+    dbMocks.insert.mockReturnValue({
+      values: vi.fn().mockReturnValue(upsertChain),
+    });
+  });
+
+  /**
+   * The row the subscriber's plan has been repriced to: $200/mo now, while
+   * their own immutable price still charges $100/mo.
+   */
+  const REPRICED_CURRENT_PLAN = {
+    id: "plan-legacy-id",
+    slug: "legacy-v2",
+    tier: "build",
+    stripePriceIdMonthly: "price_legacy_200",
+    stripePriceIdAnnual: null,
+    monthlyCents: 20_000,
+    annualCents: null,
+  };
+  const TARGET_150 = {
+    id: "plan-mid-id",
+    slug: "mid-v2",
+    tier: "scale",
+    stripePriceIdMonthly: "price_mid_150",
+    stripePriceIdAnnual: null,
+    monthlyCents: 15_000,
+    annualCents: null,
+  };
+
+  it("$100 subscriber → $150 plan is an increase, even though the catalogue row now reads $200", async () => {
+    // The inversion this pins: against the plan row it is $200 → $150, a
+    // decrease, shipped with 'none' — no immediate charge on a bill that in
+    // fact rises by $50.
+    expect(REPRICED_CURRENT_PLAN.monthlyCents).toBe(20_000);
+    expect(TARGET_150.monthlyCents).toBe(15_000);
+    expect(TARGET_150.monthlyCents).toBeLessThan(
+      REPRICED_CURRENT_PLAN.monthlyCents,
+    );
+
+    stubPlanLookups(TARGET_150, REPRICED_CURRENT_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({
+        planId: "plan-legacy-id",
+        billingInterval: "month",
+        unitAmountCents: 10_000, // what they actually pay
+      }),
+    );
+
+    await changeOrgPlan("org-abc", "mid-v2", "month");
+
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({ prorationBehavior: "always_invoice" }),
+    );
+  });
+
+  it("$100 subscriber → a $50 plan is a decrease, and the repriced row does not make it one either", async () => {
+    const TARGET_50 = {
+      ...TARGET_150,
+      id: "plan-low-id",
+      slug: "low-v2",
+      monthlyCents: 5_000,
+    };
+    stubPlanLookups(TARGET_50, REPRICED_CURRENT_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({
+        planId: "plan-legacy-id",
+        billingInterval: "month",
+        unitAmountCents: 10_000,
+      }),
+    );
+
+    await changeOrgPlan("org-abc", "low-v2", "month");
+
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({ prorationBehavior: "none" }),
+    );
+  });
+
+  it("a row synced before the column existed falls back to the provider, not to the catalogue", async () => {
+    // getSubscriptionMock reports the real $100 price. Against the $200 plan
+    // row this would read as a decrease; against the provider it is the
+    // increase it is.
+    stubPlanLookups(TARGET_150, REPRICED_CURRENT_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({
+        planId: "plan-legacy-id",
+        billingInterval: "month",
+        unitAmountCents: null, // not yet re-synced
+      }),
+    );
+
+    await changeOrgPlan("org-abc", "mid-v2", "month");
+
+    expect(getSubscriptionMock).toHaveBeenCalledWith("sub_active_001");
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({ prorationBehavior: "always_invoice" }),
+    );
+  });
+
+  it("the persisted amount is used without asking the provider for it", async () => {
+    stubPlanLookups(TARGET_150, REPRICED_CURRENT_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({
+        planId: "plan-legacy-id",
+        billingInterval: "month",
+        unitAmountCents: 10_000,
+      }),
+    );
+
+    await changeOrgPlan("org-abc", "mid-v2", "month");
+
+    // syncSubscriptionFromStripe calls getSubscription once AFTER the swap;
+    // the decision itself must not have added a second read.
+    expect(getSubscriptionMock).toHaveBeenCalledTimes(1);
   });
 });
 

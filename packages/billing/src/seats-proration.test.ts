@@ -138,9 +138,11 @@ function makeActiveSubRow(overrides: Partial<Record<string, unknown>> = {}) {
     stripeCustomerId: "cus_test",
     seatCount: 5,
     planId: "plan-uuid-build",
-    // The interval the org is billed on — the proration decision prices the
-    // current plan on it (#3157).
+    // The interval the org is billed on, and what its own price charges — the
+    // proration decision reads both off the subscription, not the catalogue
+    // row behind it (#3157).
     billingInterval: "month",
+    unitAmountCents: 2000,
     status: "active",
     ...overrides,
   };
@@ -380,6 +382,14 @@ describe("setSubscriptionSeats — direction-aware proration", () => {
 describe("previewPlanChange", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks empties the call log but NOT the mockResolvedValueOnce
+    // queue, and these tests queue one more subscription row than the
+    // active-sub branch consumes (it reads the customer id off the row it
+    // already has). The survivor used to be harmless; now that the proration
+    // direction is read off the subscription row, a leaked row from the
+    // previous test decides the next one. Reset the queues outright.
+    subscriptionsFindFirstMock.mockReset();
+    plansFindFirstMock.mockReset();
     listPaymentMethodsMock.mockResolvedValue([]);
     getDefaultPaymentMethodIdMock.mockResolvedValue(null);
   });
@@ -472,7 +482,9 @@ describe("previewPlanChange", () => {
 
   it("bill falls ($99/mo → $20/mo) — prorationBehavior none, amountCents=0", async () => {
     subscriptionsFindFirstMock
-      .mockResolvedValueOnce(makeActiveSubRow({ planId: "plan-scale" }))
+      .mockResolvedValueOnce(
+        makeActiveSubRow({ planId: "plan-scale", unitAmountCents: 9900 }),
+      )
       .mockResolvedValueOnce({ stripeCustomerId: "cus_001" });
 
     plansFindFirstMock
