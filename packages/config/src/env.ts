@@ -67,13 +67,6 @@ export const baseEnvSchema = z.object({
   //  - RATE_LIMIT_CHAT_PER_MIN:       chat send / stream (/v1/**/chat/*).
   RATE_LIMIT_CHAT_PER_MIN: z.coerce.number().int().positive().default(60),
 
-  // How many proxies sit between a client and apps/api. Each one appends to
-  // x-forwarded-for, so this is how many right-hand entries were written by
-  // something we trust — see extractClientIp in apps/api/src/lib/context.ts.
-  // Default 1: a single ALB in front of the app, which is the deployed shape.
-  // 0 means nothing rewrites the header and no entry in it is usable.
-  TRUSTED_PROXY_HOP_COUNT: z.coerce.number().int().nonnegative().default(1),
-
   // The proxies themselves, as a comma-separated CIDR/address list, and the
   // form that is actually safe. Counting hops trusts the COUNT to be right; a
   // count that is too high selects an entry the caller wrote, because a caller
