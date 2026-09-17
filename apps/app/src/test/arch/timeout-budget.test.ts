@@ -63,8 +63,16 @@ const PROBES = "src/test/arch/probes/timeout-budget";
 
 /**
  * Where each registrar takes its callback; the timeout is the argument after it.
- * Fixed indices rather than "the first argument that is a function": that search
- * returned -1 for `it("scans", scan)` and let the walk through.
+ *
+ * Fixed indices rather than "the first argument that is a function". That search
+ * returned -1 for `it("scans", scan)`, because the callback is an identifier —
+ * and -1 did not fail. It read as an ordinary index, so the rule went on to
+ * evaluate something perfectly true about a different argument and reported
+ * success. A check that cannot find its subject must say so; a sentinel that
+ * looks like an answer lets it pass while examining the wrong node. The fix is
+ * not a better search, it is making "absent" unrepresentable: a registrar this
+ * file does not know is not in the map, and a callback that is not there is
+ * `undefined` rather than the thing at index -1.
  */
 const CALLBACK_AT: ReadonlyMap<string, number> = new Map([
   ["it", 1],
