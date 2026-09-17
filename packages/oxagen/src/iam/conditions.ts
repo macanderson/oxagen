@@ -12,6 +12,15 @@ import { z } from "zod";
 //   - Unknown condition key             → false (fail-closed; never silently ignore)
 //   - Malformed value for a known key   → false (fail-closed)
 //   - clientIp is null + ip condition   → false (fail-closed)
+//
+// That fail-closed line carries more weight than it looks. `clientIp` is null
+// whenever the deployment cannot ATTRIBUTE an address — no proxies named in
+// TRUSTED_PROXY_CIDRS, or a request that did not come through one (see
+// extractClientIp in apps/api/src/lib/context.ts). An IP condition on such a
+// deployment therefore denies rather than matching against whatever address
+// happened to be readable, which used to be the load balancer's own. Denying is
+// the right answer: an allowlist that silently judges the wrong address is not
+// a weaker control, it is a false one.
 //   - Multiple condition keys            → AND  (all must pass)
 //
 // Supported condition keys (v1):
@@ -52,6 +61,11 @@ export interface TimeWindowCondition {
 /**
  * An IPv4/IPv6 CIDR allowlist.
  * The client IP must fall inside at least one listed CIDR.
+ *
+ * Requires the deployment to name its proxies in TRUSTED_PROXY_CIDRS; without
+ * that no client address is attributable and every IP condition denies. The
+ * addresses listed here are the CLIENTS to allow, which is the opposite of that
+ * variable — confusing the two allowlists the proxy and denies the callers.
  */
 export type IpRangesCondition = string[];
 
@@ -447,10 +461,7 @@ function parseCidr(
  *
  * @returns false when clientIp is null, unparseable, or in no matching CIDR.
  */
-export function ipInRanges(
-  clientIp: string | null,
-  cidrs: string[],
-): boolean {
+export function ipInRanges(clientIp: string | null, cidrs: string[]): boolean {
   if (clientIp === null || cidrs.length === 0) return false;
 
   const ipStr = clientIp.trim();

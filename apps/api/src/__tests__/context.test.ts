@@ -3,7 +3,7 @@
  *
  * Covers:
  * - extractClientIp: which x-forwarded-for hop is taken for a given
- *   TRUSTED_PROXY_HOP_COUNT, that a caller-supplied prefix cannot move it,
+ *   TRUSTED_PROXY_CIDRS, that a caller-supplied prefix cannot move it,
  *   x-real-ip fallback, and both absent → null
  * - capabilityContext: requireOrg default true throws 400 when orgId or workspaceId null,
  *   requireOrg false does not throw, requestId fallback is UUID-shaped
@@ -125,13 +125,12 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
     apiKeyId: null,
   };
 
-  const originalHopCount = process.env.TRUSTED_PROXY_HOP_COUNT;
+  const originalCidrs = process.env.TRUSTED_PROXY_CIDRS;
   const originalTrustEdge = process.env.TRUST_EDGE_CLIENT_IP_HEADER;
-  const originalProxyCidrs = process.env.TRUSTED_PROXY_CIDRS;
 
-  /** The hop count is memoized on first read, so set it and drop the cache. */
-  function setTrustedProxyHops(count: string): void {
-    process.env.TRUSTED_PROXY_HOP_COUNT = count;
+  /** The proxy list is memoized on first read, so set it and drop the cache. */
+  function setTrustedProxyCidrs(cidrs: string): void {
+    process.env.TRUSTED_PROXY_CIDRS = cidrs;
     __resetTrustedProxyHopsForTests();
   }
 
@@ -141,33 +140,22 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
     __resetTrustedProxyHopsForTests();
   }
 
-  /** And for the named-proxy list, which takes precedence over the count. */
-  function setTrustedProxyCidrs(cidrs: string): void {
-    process.env.TRUSTED_PROXY_CIDRS = cidrs;
-    __resetTrustedProxyHopsForTests();
-  }
-
   beforeEach(() => {
     // Empty is the default, and a case that names proxies must not change how
     // the next one attributes an address.
     setTrustedProxyCidrs("");
-    setTrustedProxyHops("1");
-    // Default OFF, matching the env default, so every chain case below is
-    // exercised in the state the deployment is actually in before the operator
-    // turns the header on.
+    // Default OFF, matching the env default, so every case below is exercised
+    // in the state the deployment is actually in before the operator turns the
+    // header on.
     setTrustEdgeHeader("false");
   });
 
   afterEach(() => {
-    if (originalHopCount === undefined)
-      delete process.env.TRUSTED_PROXY_HOP_COUNT;
-    else process.env.TRUSTED_PROXY_HOP_COUNT = originalHopCount;
+    if (originalCidrs === undefined) delete process.env.TRUSTED_PROXY_CIDRS;
+    else process.env.TRUSTED_PROXY_CIDRS = originalCidrs;
     if (originalTrustEdge === undefined)
       delete process.env.TRUST_EDGE_CLIENT_IP_HEADER;
     else process.env.TRUST_EDGE_CLIENT_IP_HEADER = originalTrustEdge;
-    if (originalProxyCidrs === undefined)
-      delete process.env.TRUSTED_PROXY_CIDRS;
-    else process.env.TRUSTED_PROXY_CIDRS = originalProxyCidrs;
     __resetTrustedProxyHopsForTests();
   });
 
@@ -178,170 +166,56 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
     return ((await res.json()) as { clientIp: string | null }).clientIp;
   }
 
-  it("returns the single entry a one-hop proxy wrote", async () => {
-    expect(await clientIpFor({ "x-forwarded-for": "10.0.0.1" })).toBe(
-      "10.0.0.1",
-    );
-  });
+  // ── attribution ───────────────────────────────────────────────────────────
 
-  it("takes the rightmost hop, not the caller-supplied leftmost one", async () => {
-    // The bypass: everything left of the trusted proxy's own write is a string
-    // the caller chose.
-    expect(
-      await clientIpFor({
-        "x-forwarded-for": "10.0.0.1, 172.16.0.2, 192.168.0.3",
-      }),
-    ).toBe("192.168.0.3");
-  });
-
-  it("trims whitespace around the chosen hop", async () => {
-    expect(
-      await clientIpFor({ "x-forwarded-for": "  10.0.0.1  ,  172.16.0.2  " }),
-    ).toBe("172.16.0.2");
-  });
-
-  it("skips the extra proxy's own address when two hops are trusted", async () => {
-    // CDN → ALB → app: the CDN appends the client, the ALB appends the CDN.
-    setTrustedProxyHops("2");
-    expect(
-      await clientIpFor({ "x-forwarded-for": "203.0.113.7, 192.0.2.44" }),
-    ).toBe("203.0.113.7");
-  });
-
-  it("a longer spoofed prefix cannot move the chosen hop", async () => {
-    setTrustedProxyHops("2");
-    expect(
-      await clientIpFor({
-        "x-forwarded-for": "10.0.0.1, 10.0.0.2, 203.0.113.7, 192.0.2.44",
-      }),
-    ).toBe("203.0.113.7");
-  });
-
-  it("ignores x-forwarded-for entirely when no proxy is trusted", async () => {
-    // Nothing in front rewrote the header, so every entry is caller-supplied.
-    setTrustedProxyHops("0");
-    expect(
-      await clientIpFor({ "x-forwarded-for": "10.0.0.1, 192.168.0.3" }),
-    ).toBeNull();
-  });
-
-  it("refuses a chain shorter than the declared hop count", async () => {
-    // This used to clamp to the leftmost entry as "better than nothing". It is
-    // worse than nothing: the leftmost entry is whatever the caller sent, so a
-    // deployment whose hop count is too high would hand a caller-supplied
-    // address to the IAM allowlist and to the pre-auth rate-limit ceilings. A
-    // correctly declared depth never produces a short chain.
-    setTrustedProxyHops("3");
-    expect(
-      await clientIpFor({ "x-forwarded-for": "203.0.113.7, 192.0.2.44" }),
-    ).toBeNull();
-  });
-
-  it("refuses a short chain rather than falling through to x-real-ip", async () => {
-    setTrustedProxyHops("3");
-    expect(
-      await clientIpFor({
-        "x-forwarded-for": "203.0.113.7",
-        "x-real-ip": "198.51.100.5",
-      }),
-    ).toBeNull();
-  });
-
-  it("drops empty segments rather than falling through on a leading comma", async () => {
-    expect(
-      await clientIpFor({
-        "x-forwarded-for": " , 10.0.0.2",
-        "x-real-ip": "5.5.5.5",
-      }),
-    ).toBe("10.0.0.2");
-  });
-
-  // ADR-083. Nothing in either deployment shape sets x-real-ip — not the ALB,
-  // not Caddy, not Vercel — so a value under that name came from the caller,
-  // and the only moment this reached for it was when no trusted proxy had
-  // written a chain: precisely the moment nothing had vouched for the request.
-  // Caddy now deletes the header at the edge as well.
-  it("never falls back to x-real-ip", async () => {
-    expect(await clientIpFor({ "x-real-ip": "1.2.3.4" })).toBeNull();
-    expect(
-      await clientIpFor({ "x-forwarded-for": "", "x-real-ip": "1.2.3.4" }),
-    ).toBeNull();
-  });
-
-  it("prefers the address the edge wrote over any chain", async () => {
-    // Caddy sets this with `header_up`, which REPLACES the field, so a copy the
-    // caller sent under the same name never arrives — see ADR-083 and
-    // infra/tools/caddy/Caddyfile.alb. Believed only once the operator has
-    // turned the gate on, which is what this line represents.
-    setTrustEdgeHeader("true");
-    expect(
-      await clientIpFor({
-        "x-oxagen-client-ip": "198.51.100.1",
-        "x-forwarded-for": "203.0.113.9, 192.0.2.5",
-        "x-real-ip": "203.0.113.8",
-      }),
-    ).toBe("198.51.100.1");
-  });
-
-  // The #3183 second P1. Before the Caddy config lands, the OLD Caddyfile has
-  // no rule for x-oxagen-client-ip and forwards a caller's copy unchanged. This
-  // is the IAM path, so a forged value here decides an ip_ranges allowlist.
-  //
-  // The discriminating shape: the forged header names an address a caller would
-  // want allowlisted, and the chain names a different one. A test asserting only
-  // "the edge header wins when present" passes against the code being flagged;
-  // this one asserts the forged value never comes back.
-  it("does not believe a forged edge header before the gate is turned on", async () => {
-    expect(
-      await clientIpFor({ "x-oxagen-client-ip": "198.51.100.1" }),
-    ).toBeNull();
-
-    expect(
-      await clientIpFor({
-        "x-oxagen-client-ip": "198.51.100.1",
-        "x-forwarded-for": "203.0.113.9",
-      }),
-    ).toBe("203.0.113.9");
-  });
-
-  it("returns null when no header names the caller", async () => {
-    expect(await clientIpFor({})).toBeNull();
-  });
-
-  it("returns null when x-real-ip is empty and x-forwarded-for is absent", async () => {
-    expect(await clientIpFor({ "x-real-ip": "" })).toBeNull();
-  });
-
-  // ── attribution by proxy identity ─────────────────────────────────────────
-  // A hop count trusts the COUNT. One that is too high lets a caller pad
-  // x-forwarded-for until the arithmetic lands on a value the caller chose, and
-  // nothing in the request separates that from a correct deeper chain. Naming
-  // the proxies removes the arithmetic: the walk stops on what an entry IS.
-
-  it("stops at the first entry that is not a trusted proxy", async () => {
+  it("returns the entry the trusted proxy wrote", async () => {
     setTrustedProxyCidrs("10.0.0.0/8");
     expect(
       await clientIpFor({ "x-forwarded-for": "203.0.113.7, 10.0.0.5" }),
     ).toBe("203.0.113.7");
   });
 
-  it("is unmoved by a caller padding the header", async () => {
-    setTrustedProxyCidrs("10.0.0.0/8");
-    // The caller prepends an allowlisted-looking address and an extra hop.
-    // Under a hop count that is the bypass; here the walk never reaches it.
+  it("walks past every trusted proxy, however many appended", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8, 172.16.0.0/12");
     expect(
       await clientIpFor({
-        "x-forwarded-for": "198.51.100.1, 10.1.1.1, 203.0.113.7, 10.0.0.5",
+        "x-forwarded-for": "203.0.113.7, 172.16.0.2, 10.0.0.5",
+      }),
+    ).toBe("203.0.113.7");
+  });
+
+  it("trims whitespace around the chosen entry", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(
+      await clientIpFor({ "x-forwarded-for": "  203.0.113.7 ,  10.0.0.5  " }),
+    ).toBe("203.0.113.7");
+  });
+
+  it("drops empty segments rather than mis-walking on a leading comma", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(
+      await clientIpFor({ "x-forwarded-for": " , 203.0.113.7, 10.0.0.5" }),
+    ).toBe("203.0.113.7");
+  });
+
+  // ── the bypasses this replaced a hop count to close ───────────────────────
+
+  it("is unmoved by a caller padding the header", async () => {
+    // Under a hop count this was the bypass: the caller controls the LENGTH, so
+    // a count too high by k lands the arithmetic on an entry the caller wrote.
+    // Here the walk stops on what an entry IS, so the prefix is never reached.
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(
+      await clientIpFor({
+        "x-forwarded-for": "198.51.100.1, 10.9.9.9, 203.0.113.7, 10.0.0.5",
       }),
     ).toBe("203.0.113.7");
   });
 
   it("refuses a chain that never reaches a trusted proxy", async () => {
-    // No named proxy stands to the right of the rightmost entry, so nothing
-    // vouched for it — that is what a request which never passed through the
-    // expected proxy looks like, whether from a typo in the CIDR list, a
-    // network change, or a path that bypasses it. The entry is then whatever
-    // the caller sent.
+    // Nothing vouched for the rightmost entry, so it is whatever the caller
+    // sent — a typo in the CIDR list, a network change, or a path that
+    // bypasses the proxy all look like this.
     setTrustedProxyCidrs("10.0.0.0/8");
     expect(await clientIpFor({ "x-forwarded-for": "203.0.113.7" })).toBeNull();
     expect(
@@ -356,30 +230,98 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
     ).toBeNull();
   });
 
-  it("takes precedence over the hop count when both are set", async () => {
-    // The count alone would pick the rightmost entry, i.e. the proxy itself.
-    setTrustedProxyHops("1");
-    setTrustedProxyCidrs("10.0.0.0/8");
+  // ── no proxies named: attribute nothing ───────────────────────────────────
+
+  it("derives no address at all when no proxies are named", async () => {
+    // The deployment has not said what stands in front of it, so nothing in
+    // the request is vouched for. Returning the readable-but-unvouched-for
+    // address is what made an IP allowlist judge the load balancer.
     expect(
       await clientIpFor({ "x-forwarded-for": "203.0.113.7, 10.0.0.5" }),
-    ).toBe("203.0.113.7");
+    ).toBeNull();
   });
 
-  it("refuses x-real-ip when no proxy is trusted", async () => {
-    // TRUSTED_PROXY_HOP_COUNT = 0 says nothing in front of this process
-    // rewrites forwarding headers, so x-real-ip is as caller-supplied as
-    // x-forwarded-for and worth exactly as little. Believing it let a caller
-    // hand this function any address it liked: enough to satisfy an
-    // `ip_ranges` / `ip_allow` condition it should fail, and enough to mint a
-    // fresh rate-limit bucket per request by rotating the header.
-    setTrustedProxyHops("0");
-    expect(await clientIpFor({ "x-real-ip": "1.2.3.4" })).toBeNull();
+  it("does not consult x-real-ip, which nothing can vouch for", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(await clientIpFor({ "x-real-ip": "203.0.113.7" })).toBeNull();
     expect(
       await clientIpFor({
-        "x-real-ip": "1.2.3.4",
-        "x-forwarded-for": "203.0.113.9",
+        "x-real-ip": "203.0.113.7",
+        "x-forwarded-for": "198.51.100.1",
       }),
     ).toBeNull();
+  });
+
+  // ── the edge header (ADR-083) ─────────────────────────────────────────────
+
+  it("prefers the address the edge wrote over any chain", async () => {
+    // Caddy sets this with `header_up`, which REPLACES the field, so a copy the
+    // caller sent under the same name never arrives — see ADR-083 and
+    // infra/tools/caddy/Caddyfile.alb. Believed only once the operator has
+    // turned the gate on, which is what this line represents.
+    setTrustEdgeHeader("true");
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(
+      await clientIpFor({
+        "x-oxagen-client-ip": "198.51.100.1",
+        "x-forwarded-for": "203.0.113.9, 10.0.0.5",
+        "x-real-ip": "203.0.113.8",
+      }),
+    ).toBe("198.51.100.1");
+  });
+
+  it("attributes by edge header alone once the proxy chain is rewritten", async () => {
+    // The post-rewrite shape: Caddy SETS x-forwarded-for to the single client
+    // address, so no proxy entry remains to vouch for anything and the identity
+    // walk yields nothing. The edge header is what names the caller there —
+    // which is why TRUSTED_PROXY_CIDRS must NOT be set in that shape.
+    setTrustEdgeHeader("true");
+    setTrustedProxyCidrs("");
+    expect(
+      await clientIpFor({
+        "x-oxagen-client-ip": "198.51.100.1",
+        "x-forwarded-for": "198.51.100.1",
+      }),
+    ).toBe("198.51.100.1");
+  });
+
+  // The #3183 second P1. Before the Caddy config lands, the OLD Caddyfile has
+  // no rule for x-oxagen-client-ip and forwards a caller's copy unchanged. This
+  // is the IAM path, so a forged value here decides an ip_ranges allowlist.
+  //
+  // The discriminating shape: the forged header names an address a caller would
+  // want allowlisted, and the chain names a different one. A test asserting only
+  // "the edge header wins when present" passes against the code being flagged;
+  // this one asserts the forged value never comes back.
+  it("does not believe a forged edge header before the gate is turned on", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(
+      await clientIpFor({ "x-oxagen-client-ip": "198.51.100.1" }),
+    ).toBeNull();
+
+    expect(
+      await clientIpFor({
+        "x-oxagen-client-ip": "198.51.100.1",
+        "x-forwarded-for": "203.0.113.9, 10.0.0.5",
+      }),
+    ).toBe("203.0.113.9");
+  });
+
+  it("bounds what the edge header can become downstream", async () => {
+    setTrustEdgeHeader("true");
+    for (const value of [
+      "not-an-ip",
+      "1.2.3.4, 5.6.7.8",
+      " ",
+      "f".repeat(46),
+    ]) {
+      expect(await clientIpFor({ "x-oxagen-client-ip": value })).toBeNull();
+    }
+  });
+
+  it("returns null when no forwarding header is present", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(await clientIpFor({})).toBeNull();
   });
 });
 

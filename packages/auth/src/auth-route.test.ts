@@ -56,10 +56,12 @@ describe("handleAuthRequest", () => {
   });
 
   it("emits auth.sign_in_failed for a refused sign-in, with the proxy-written address", async () => {
-    // 203.0.113.9 is what the caller put in the header; 10.0.0.1 is what the
-    // ALB appended. The record has to name the second one (ADR-083).
+    // 10.0.0.1 is the proxy this deployment names; 203.0.113.9 is the address
+    // it vouched for. The audit record has to name the CLIENT (ADR-083, #3205)
+    // — it used to name the proxy, which made every refused sign-in from behind
+    // that node look like the same one.
     __resetTrustedProxyHopsForTests();
-    vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "1");
+    vi.stubEnv("TRUSTED_PROXY_CIDRS", "10.0.0.0/8");
     const d = deps(401);
     await handleAuthRequest(
       post("/sign-in/email", {
@@ -73,7 +75,7 @@ describe("handleAuthRequest", () => {
         eventType: "auth.sign_in_failed",
         orgId: NO_ORG_SENTINEL,
         outcome: "deny",
-        ip: "10.0.0.1",
+        ip: "203.0.113.9",
         userAgent: "ua",
       }),
     );
@@ -115,7 +117,9 @@ describe("handleAuthRequest without deps", () => {
 describe("clientAddress", () => {
   beforeEach(() => {
     __resetTrustedProxyHopsForTests();
-    vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "2");
+    // The proxies this deployment names. Attribution is by identity alone —
+    // counting hops was deleted in #3205.
+    vi.stubEnv("TRUSTED_PROXY_CIDRS", "10.0.0.0/8, 172.16.0.0/12");
   });
   afterEach(() => {
     __resetTrustedProxyHopsForTests();
@@ -129,7 +133,7 @@ describe("clientAddress", () => {
       clientAddress(
         new Headers({
           "x-oxagen-client-ip": "198.51.100.1",
-          "x-forwarded-for": "203.0.113.9, 192.0.2.5",
+          "x-forwarded-for": "203.0.113.9, 10.0.0.5",
         }),
       ),
     ).toBe("198.51.100.1");
@@ -152,7 +156,7 @@ describe("clientAddress", () => {
       clientAddress(
         new Headers({
           "x-oxagen-client-ip": "198.51.100.1",
-          "x-forwarded-for": "203.0.113.9, 192.0.2.5",
+          "x-forwarded-for": "203.0.113.9, 10.0.0.5",
         }),
       ),
     ).toBe("203.0.113.9");
@@ -165,9 +169,12 @@ describe("clientAddress", () => {
     expect(
       clientAddress(
         new Headers({
-          "x-forwarded-for": "203.0.113.9, 198.51.100.1, 172.31.0.4",
+          "x-forwarded-for": "203.0.113.9, 198.51.100.1, 172.31.0.4, 10.0.0.5",
         }),
       ),
+      // 10.0.0.5 and 172.31.0.4 are both named proxies, so the walk passes
+      // them and stops at 198.51.100.1. Everything left of that — the caller's
+      // 203.0.113.9 — is a prefix it never reaches.
     ).toBe("198.51.100.1");
   });
 

@@ -15,7 +15,8 @@
 --                              resume; previously buried in payload.
 -- host_id becomes nullable: a run recorded outside a host has none.
 -- The command CHECK gains `steer`; the outcome CHECK moves to the §7.4
--- vocabulary with pending → queued and delivered → sent mapped in place.
+-- vocabulary with pending → queued and delivered → sent mapped in place --
+-- the CHECK widening first, so that the rows have somewhere to land.
 
 ALTER TABLE "tacho"."control_commands"
   ALTER COLUMN "host_id" DROP NOT NULL,
@@ -46,15 +47,31 @@ ALTER TABLE "tacho"."control_commands"
   ALTER COLUMN "target_kind" SET NOT NULL,
   ALTER COLUMN "target_id" SET NOT NULL;
 
+-- Drop, remap, then re-add: the old vocabulary and the new one have no value
+-- in common for the rows that exist, so no single statement can hold. The
+-- CHECK in force here is the one 20260908120000 created, admitting only
+-- pending/delivered/applied/expired/failed. Setting a row to 'queued' under it
+-- violates it, and adding the §7.4 CHECK while a row is still 'pending'
+-- violates that one (both 23514) — so the constraint comes off, the rows move,
+-- and it goes back on.
+--
+-- CI applies this directory to an empty database, where both UPDATEs match
+-- nothing and no ordering can show, so the first database to run this with
+-- rows in the table was production: 14 commands, every one of them 'pending'
+-- (2026-09-17).
+ALTER TABLE "tacho"."control_commands"
+  DROP CONSTRAINT "tacho_control_commands_outcome_check";
+
 UPDATE "tacho"."control_commands" SET "outcome" = 'queued' WHERE "outcome" = 'pending';
 UPDATE "tacho"."control_commands" SET "outcome" = 'sent' WHERE "outcome" = 'delivered';
+
+ALTER TABLE "tacho"."control_commands"
+  ADD CONSTRAINT "tacho_control_commands_outcome_check" CHECK ("tacho"."control_commands"."outcome" IN ('draft', 'queued', 'sent', 'received', 'acknowledged', 'applied', 'cancelled', 'expired', 'failed'));
 
 ALTER TABLE "tacho"."control_commands"
   ALTER COLUMN "outcome" SET DEFAULT 'queued',
   DROP CONSTRAINT "tacho_control_commands_command_check",
   ADD CONSTRAINT "tacho_control_commands_command_check" CHECK ("tacho"."control_commands"."command" IN ('pause', 'resume', 'cancel', 'steer', 'message', 'revoke', 'refresh_bundle', 'kill')),
-  DROP CONSTRAINT "tacho_control_commands_outcome_check",
-  ADD CONSTRAINT "tacho_control_commands_outcome_check" CHECK ("tacho"."control_commands"."outcome" IN ('draft', 'queued', 'sent', 'received', 'acknowledged', 'applied', 'cancelled', 'expired', 'failed')),
   ADD CONSTRAINT "tacho_control_commands_target_kind_check" CHECK ("tacho"."control_commands"."target_kind" IN ('host', 'run')),
   ADD CONSTRAINT "tacho_control_commands_requested_mode_check" CHECK ("tacho"."control_commands"."requested_mode" IS NULL OR "tacho"."control_commands"."requested_mode" IN ('next_step', 'interrupt', 'turn_boundary')),
   ADD CONSTRAINT "tacho_control_commands_delivery_mode_check" CHECK ("tacho"."control_commands"."delivery_mode" IS NULL OR "tacho"."control_commands"."delivery_mode" IN ('next_step', 'interrupt', 'turn_boundary'));

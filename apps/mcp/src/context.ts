@@ -86,22 +86,8 @@ export type McpContextResolution =
   | { ok: false; reason: McpAuthFailure };
 
 /**
- * How many proxies sit between the client and this process, resolved from the
- * validated env once and memoized. Read at first request rather than module
- * load, mirroring `trustedProxyHops()` in apps/api/src/lib/context.ts.
- */
-let cachedTrustedProxyHops: number | null = null;
-function trustedProxyHops(): number {
-  if (cachedTrustedProxyHops !== null) return cachedTrustedProxyHops;
-  cachedTrustedProxyHops = requireEnv([
-    "TRUSTED_PROXY_HOP_COUNT",
-  ] as const).TRUSTED_PROXY_HOP_COUNT;
-  return cachedTrustedProxyHops;
-}
-
-/**
  * Whether the edge-written `x-oxagen-client-ip` header is believed, resolved
- * from the validated env once and memoized alongside the hop count. Off by
+ * from the validated env once and memoized. Off by
  * default: the header is only trustworthy once the Caddy config that SETS it is
  * deployed, and that ships through a different pipeline than this code. See
  * packages/oxagen/src/client-ip.ts.
@@ -117,8 +103,9 @@ function trustEdgeHeader(): boolean {
 
 /**
  * The proxies this deployment trusts, by identity rather than by count.
- * Memoized on the same terms as the hop count above, and preferred over it:
- * a count cannot tell an over-declared depth from a real one.
+ * Memoized on the same terms as the flag above. This is the only thing that
+ * can attribute an address off Vercel once the edge header is out of the
+ * picture — counting hops was deleted in #3205.
  */
 let cachedTrustedProxyCidrs: string[] | null = null;
 function trustedProxyCidrs(): string[] {
@@ -130,9 +117,8 @@ function trustedProxyCidrs(): string[] {
   return cachedTrustedProxyCidrs;
 }
 
-/** Test seam: drop the memoized hop count so a case can set a different env. */
+/** Test seam: drop the memoized proxy config so a case can set a different env. */
 export function __resetTrustedProxyHopsForTests(): void {
-  cachedTrustedProxyHops = null;
   cachedTrustEdgeHeader = null;
   cachedTrustedProxyCidrs = null;
 }
@@ -153,7 +139,6 @@ export function __resetTrustedProxyHopsForTests(): void {
  */
 function extractClientIp(hdrs: HttpHeaders): string | null {
   return extractTrustedClientIp((name) => firstHeader(hdrs[name]), {
-    trustedProxyHops: trustedProxyHops(),
     trustedProxyCidrs: trustedProxyCidrs(),
     trustEdgeHeader: trustEdgeHeader(),
     onVercel: process.env.VERCEL === "1",

@@ -10,6 +10,7 @@ import {
   listFiles,
   parse,
   readSource,
+  WHOLE_TREE_TIMEOUT_MS,
   type SourceText,
 } from "./parse";
 
@@ -96,23 +97,31 @@ function portCallerViolations(
 }
 
 describe("port callers", () => {
-  it("every DataSource method has a production caller in src/features or src/app", () => {
-    const callers = callerFiles(listFiles("src")).map(readSource);
-    expect(portsOf(readSource(PORTS_FILE)).methods.length).toBeGreaterThan(0);
-    expect(portCallerViolations(readSource(PORTS_FILE), callers)).toEqual([]);
-  });
+  it(
+    "every DataSource method has a production caller in src/features or src/app",
+    () => {
+      const callers = callerFiles(listFiles("src")).map(readSource);
+      expect(portsOf(readSource(PORTS_FILE)).methods.length).toBeGreaterThan(0);
+      expect(portCallerViolations(readSource(PORTS_FILE), callers)).toEqual([]);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
 
-  it("the pretenant port's callers are exactly the / landing and the CLI consent page (§3.3)", () => {
-    const callers = callerFiles(listFiles("src")).filter((file) =>
-      [...callsIn(readSource(file))].some((call) =>
-        call.startsWith("pretenant."),
-      ),
-    );
-    expect(callers.sort()).toEqual([
-      "src/features/auth/cli-consent.ts",
-      "src/features/shell/landing.ts",
-    ]);
-  });
+  it(
+    "the pretenant port's callers are exactly the / landing and the CLI consent page (§3.3)",
+    () => {
+      const callers = callerFiles(listFiles("src")).filter((file) =>
+        [...callsIn(readSource(file))].some((call) =>
+          call.startsWith("pretenant."),
+        ),
+      );
+      expect(callers.sort()).toEqual([
+        "src/features/auth/cli-consent.ts",
+        "src/features/shell/landing.ts",
+      ]);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
 
   it("a port method with no caller fails; called methods pass", () => {
     expect(

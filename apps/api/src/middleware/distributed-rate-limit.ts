@@ -136,9 +136,9 @@ function trustEdgeHeader(): boolean {
  * `x-forwarded-for` entry and then `x-real-ip`, both caller-written, which let
  * one client mint an unbounded number of buckets by varying a header.
  *
- * `trustedProxyHops: 0` for the same reason as `trustedClientIpBucketKey`: a
- * hop count cannot defend itself on a bucket key, so only the edge header and
- * the named-proxy walk may name a caller here.
+ * Only the edge header and the named-proxy walk can name a caller, the same two
+ * as `trustedClientIpBucketKey` — there is no third, weaker reading left in the
+ * derivation to fall back to.
  *
  * Unlike the pre-authentication ceilings, this one falls back to a shared
  * `ip:unknown` partition rather than skipping. That is safe only because
@@ -150,7 +150,6 @@ function trustEdgeHeader(): boolean {
 function clientIp(c: Context<AppEnv>): string {
   return (
     extractTrustedClientIp((name) => c.req.header(name), {
-      trustedProxyHops: 0,
       trustedProxyCidrs: trustedProxyCidrs(),
       trustEdgeHeader: trustEdgeHeader(),
       onVercel: process.env.VERCEL === "1",
@@ -211,20 +210,19 @@ export function enrolledMachineBucketKey(c: Context<AppEnv>): string {
  * leftmost `x-forwarded-for` entry ended up deciding a mandate while this file
  * had already stopped trusting it.
  *
- * Two declarations can name a caller here, and NEITHER of them is the hop
- * count — `trustedProxyHops: 0` is passed deliberately:
+ * Two declarations can name a caller here, and NEITHER of them is a hop count —
+ * that form is gone from the derivation entirely (#3205):
  *
  *  - the edge header `x-oxagen-client-ip`, once `TRUST_EDGE_CLIENT_IP_HEADER`
  *    says the Caddy config that SETS it is deployed (ADR-083);
  *  - `TRUSTED_PROXY_CIDRS`, which names the proxies so the chain walk stops on
  *    what an entry IS rather than on how many entries there are.
  *
- * A hop count cannot defend itself on a bucket key. One that is too high lets a
- * caller pad `x-forwarded-for` until the arithmetic lands on a value the caller
- * chose, which here means minting a fresh bucket per request and evading the
- * ceiling entirely; nothing readable from the request separates that from a
- * correct deeper chain. So the count is excluded from this seam and kept for
- * the IAM allowlist alone.
+ * A hop count cannot defend itself anywhere, which is why it no longer exists.
+ * One that is too high lets a caller pad `x-forwarded-for` until the arithmetic
+ * lands on a value the caller chose — here, a fresh bucket per request and no
+ * ceiling at all; on the IAM path, an allowlist it should have failed. Nothing
+ * readable from the request separates that from a correct deeper chain.
  *
  * Returning `null` is load-bearing. It means the request cannot be attributed,
  * and the limiter SKIPS — it does not count and it does not deny. The
@@ -239,7 +237,6 @@ export function enrolledMachineBucketKey(c: Context<AppEnv>): string {
  */
 export function trustedClientIpBucketKey(c: Context<AppEnv>): string | null {
   const ip = extractTrustedClientIp((name) => c.req.header(name), {
-    trustedProxyHops: 0,
     trustedProxyCidrs: trustedProxyCidrs(),
     trustEdgeHeader: trustEdgeHeader(),
     onVercel: process.env.VERCEL === "1",

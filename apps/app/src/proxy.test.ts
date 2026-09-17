@@ -22,6 +22,7 @@ describe("isPublicPath", () => {
     "/invite/tok_123",
     "/api/auth/get-session",
     "/cli/authorize",
+    "/cli/complete",
     "/github/setup",
   ])("%s is public", (path) => {
     expect(isPublicPath(path)).toBe(true);
@@ -36,6 +37,7 @@ describe("isPublicPath", () => {
     "/api/mc/acme/core-platform/stream",
     "/new-organization",
     "/cli/authorizex",
+    "/cli/completex",
     "/github/setupx",
   ])("%s is gated", (path) => {
     expect(isPublicPath(path)).toBe(false);
@@ -87,6 +89,16 @@ describe("proxy", () => {
     expect(proxy(request("/acme", "better-auth.session_token=")).status).toBe(
       307,
     );
+  });
+
+  // The CLI's loopback listener 302s the browser here after the token exchange
+  // (apps/cli/src/auth/loopback-login.ts). The browser that finished the flow
+  // may hold no app cookie at all, so a gated /cli/complete ends a successful
+  // production sign-in on /login (#3091).
+  it("lets the CLI completion page through without a session", () => {
+    const res = proxy(request("/cli/complete"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
   });
 
   it("redirects a cookie that is not a session token (negative)", () => {

@@ -113,12 +113,12 @@ describe("pre-authentication bucket keys", () => {
   //
   // Two declarations can name a caller: the proxies named in
   // TRUSTED_PROXY_CIDRS, and the edge header once its gate is on (ADR-083).
-  // A hop count names nobody here, deliberately — see trustedClientIpBucketKey.
+  // Counting hops names nobody anywhere any more: that branch was deleted in
+  // #3205 rather than deprecated.
   it("gives two off-Vercel callers two different buckets", () => {
     vi.stubEnv("VERCEL", "");
     mocks.requireEnv.mockReturnValue({
       TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
-      TRUSTED_PROXY_HOP_COUNT: 1,
     });
 
     // The trailing entry is the named proxy: an address is only attributable
@@ -139,7 +139,6 @@ describe("pre-authentication bucket keys", () => {
     vi.stubEnv("VERCEL", "");
     mocks.requireEnv.mockReturnValue({
       TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
-      TRUSTED_PROXY_HOP_COUNT: 2,
     });
 
     expect(
@@ -162,7 +161,6 @@ describe("pre-authentication bucket keys", () => {
     vi.stubEnv("VERCEL", "");
     mocks.requireEnv.mockReturnValue({
       TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
-      TRUSTED_PROXY_HOP_COUNT: 1,
     });
 
     expect(
@@ -187,7 +185,6 @@ describe("pre-authentication bucket keys", () => {
     vi.stubEnv("VERCEL", "");
     mocks.requireEnv.mockReturnValue({
       TRUSTED_PROXY_CIDRS: "",
-      TRUSTED_PROXY_HOP_COUNT: 1,
     });
 
     expect(
@@ -201,7 +198,6 @@ describe("pre-authentication bucket keys", () => {
     vi.stubEnv("VERCEL", "");
     mocks.requireEnv.mockReturnValue({
       TRUSTED_PROXY_CIDRS: "",
-      TRUSTED_PROXY_HOP_COUNT: 0,
     });
 
     expect(
@@ -249,7 +245,6 @@ describe("pre-authentication bucket keys", () => {
     mocks.requireEnv.mockReturnValue({
       TRUST_EDGE_CLIENT_IP_HEADER: true,
       TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
-      TRUSTED_PROXY_HOP_COUNT: 1,
     });
 
     expect(
@@ -304,7 +299,6 @@ describe("pre-authentication bucket keys", () => {
     mocks.requireEnv.mockReturnValue({
       TRUST_EDGE_CLIENT_IP_HEADER: false,
       TRUSTED_PROXY_CIDRS: "",
-      TRUSTED_PROXY_HOP_COUNT: 1,
     });
 
     expect(

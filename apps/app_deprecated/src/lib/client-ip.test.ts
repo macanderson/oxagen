@@ -13,7 +13,7 @@ function request(headers: Record<string, string>): {
 
 beforeEach(() => {
   __resetTrustedProxyHopsForTests();
-  vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "2");
+  vi.stubEnv("TRUSTED_PROXY_CIDRS", "10.0.0.0/8");
 });
 
 afterEach(() => {
@@ -31,7 +31,7 @@ describe("requestClientIp", () => {
       requestClientIp(
         request({
           "x-oxagen-client-ip": "198.51.100.1",
-          "x-forwarded-for": "203.0.113.9, 192.0.2.5",
+          "x-forwarded-for": "203.0.113.9, 10.0.0.5",
         }),
       ),
     ).toBe("198.51.100.1");
@@ -53,7 +53,7 @@ describe("requestClientIp", () => {
       requestClientIp(
         request({
           "x-oxagen-client-ip": "198.51.100.1",
-          "x-forwarded-for": "203.0.113.9, 192.0.2.5",
+          "x-forwarded-for": "203.0.113.9, 10.0.0.5",
         }),
       ),
     ).toBe("203.0.113.9");
@@ -61,11 +61,14 @@ describe("requestClientIp", () => {
 
   // #3183 P1. This value reaches the IAM ip_ranges condition on the chat
   // stream route, which ALLOWS on a CIDR match; the route took the leftmost
-  // x-forwarded-for entry, which behind the ALB the caller writes.
+  // x-forwarded-for entry, which behind the ALB the caller writes. 10.0.0.5 is
+  // the named proxy; the walk stops at the entry beside it.
   it("ignores a caller-supplied x-forwarded-for prefix", () => {
     expect(
       requestClientIp(
-        request({ "x-forwarded-for": "203.0.113.9, 198.51.100.1, 172.31.0.4" }),
+        request({
+          "x-forwarded-for": "203.0.113.9, 198.51.100.1, 10.0.0.5",
+        }),
       ),
     ).toBe("198.51.100.1");
   });

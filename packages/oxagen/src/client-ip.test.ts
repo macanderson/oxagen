@@ -18,15 +18,17 @@ function reader(headers: Record<string, string>) {
 }
 
 describe("extractTrustedClientIp", () => {
+  const PROXIES = ["10.0.0.0/8"];
+
   it("prefers the edge header and ignores everything a caller can write", () => {
     expect(
       extractTrustedClientIp(
         reader({
           [EDGE_CLIENT_IP_HEADER]: "198.51.100.1",
-          "x-forwarded-for": "203.0.113.9, 192.0.2.5",
+          "x-forwarded-for": "203.0.113.9, 10.0.0.5",
           "x-real-ip": "203.0.113.8",
         }),
-        { trustedProxyHops: 2, trustEdgeHeader: true },
+        { trustedProxyCidrs: PROXIES, trustEdgeHeader: true },
       ),
     ).toBe("198.51.100.1");
   });
@@ -45,19 +47,20 @@ describe("extractTrustedClientIp", () => {
     const forged = "198.51.100.1";
     expect(
       extractTrustedClientIp(reader({ [EDGE_CLIENT_IP_HEADER]: forged }), {
-        trustedProxyHops: 2,
+        trustedProxyCidrs: PROXIES,
       }),
     ).toBeNull();
 
-    // With a chain present the caller does not get to jump the queue either:
-    // the hop-count walk answers, and it lands on what the proxies wrote.
+    // With a vouched-for chain present the caller does not get to jump the
+    // queue either: the identity walk answers, and it lands on what the named
+    // proxy wrote rather than on the header the caller chose.
     expect(
       extractTrustedClientIp(
         reader({
           [EDGE_CLIENT_IP_HEADER]: forged,
-          "x-forwarded-for": "203.0.113.9, 172.31.0.4",
+          "x-forwarded-for": "203.0.113.9, 10.0.0.5",
         }),
-        { trustedProxyHops: 2 },
+        { trustedProxyCidrs: PROXIES },
       ),
     ).toBe("203.0.113.9");
 
@@ -65,7 +68,7 @@ describe("extractTrustedClientIp", () => {
     // is actually replacing the header.
     expect(
       extractTrustedClientIp(reader({ [EDGE_CLIENT_IP_HEADER]: forged }), {
-        trustedProxyHops: 2,
+        trustedProxyCidrs: PROXIES,
         trustEdgeHeader: true,
       }),
     ).toBe(forged);
@@ -76,36 +79,32 @@ describe("extractTrustedClientIp", () => {
     expect(
       extractTrustedClientIp(
         reader({ [EDGE_CLIENT_IP_HEADER]: "198.51.100.1" }),
-        { trustedProxyHops: 0 },
+        {},
       ),
     ).toBeNull();
   });
 
-  // The #3183 P1 regression. Behind the ALB the leftmost x-forwarded-for entry
-  // is whatever the caller typed, and it was reaching IAM ip_ranges.
-  it("ignores a caller-supplied x-forwarded-for prefix", () => {
-    const spoofed = "10.0.0.7, 198.51.100.1, 172.31.0.4";
+  // The post-rewrite shape. Caddy SETS x-forwarded-for to the single client
+  // address, so no proxy entry remains for the identity walk to vouch with and
+  // the edge header is the only thing left that can name the caller. This is
+  // why TRUSTED_PROXY_CIDRS must not be set in that shape — ADR-083.
+  it("attributes by edge header alone once the chain has been rewritten", () => {
     expect(
-      extractTrustedClientIp(reader({ "x-forwarded-for": spoofed }), {
-        trustedProxyHops: 2,
+      extractTrustedClientIp(
+        reader({
+          [EDGE_CLIENT_IP_HEADER]: "198.51.100.1",
+          "x-forwarded-for": "198.51.100.1",
+        }),
+        { trustEdgeHeader: true },
+      ),
+    ).toBe("198.51.100.1");
+    // And with the list set, the walk finds nothing to vouch for the entry —
+    // the failure mode the ADR warns an operator away from.
+    expect(
+      extractTrustedClientIp(reader({ "x-forwarded-for": "198.51.100.1" }), {
+        trustedProxyCidrs: PROXIES,
       }),
-    ).toBe("198.51.100.1");
-  });
-
-  it("is unmoved by extra hops the caller prepends", () => {
-    const hops = { trustedProxyHops: 2 };
-    const real = "198.51.100.1, 172.31.0.4";
-    expect(
-      extractTrustedClientIp(reader({ "x-forwarded-for": real }), hops),
-    ).toBe("198.51.100.1");
-    for (const prefix of ["10.0.0.7", "10.0.0.7, 10.0.0.8, 10.0.0.9"]) {
-      expect(
-        extractTrustedClientIp(
-          reader({ "x-forwarded-for": `${prefix}, ${real}` }),
-          hops,
-        ),
-      ).toBe("198.51.100.1");
-    }
+    ).toBeNull();
   });
 
   // Nothing in either deployment shape sets x-real-ip, so a value under that
@@ -114,69 +113,24 @@ describe("extractTrustedClientIp", () => {
   it("never consults x-real-ip", () => {
     expect(
       extractTrustedClientIp(reader({ "x-real-ip": "198.51.100.1" }), {
-        trustedProxyHops: 2,
+        trustedProxyCidrs: PROXIES,
       }),
     ).toBeNull();
   });
 
-  it("returns null rather than a guess when no trusted proxy wrote a chain", () => {
-    expect(
-      extractTrustedClientIp(reader({ "x-forwarded-for": "203.0.113.9" }), {
-        trustedProxyHops: 0,
-      }),
-    ).toBeNull();
-    expect(
-      extractTrustedClientIp(reader({}), { trustedProxyHops: 2 }),
-    ).toBeNull();
-  });
-
-  // Every other case here fixes hops at 2, so a derivation that hard-coded
-  // "second from the right" would pass them all. This is the one that pins the
-  // arithmetic to the count: the same chain must yield a different entry.
-  it("selects a different entry as the trusted-proxy count changes", () => {
-    const chain = {
-      "x-forwarded-for": "203.0.113.9, 198.51.100.1, 172.31.0.4",
-    };
-    expect(extractTrustedClientIp(reader(chain), { trustedProxyHops: 1 })).toBe(
-      "172.31.0.4",
-    );
-    expect(extractTrustedClientIp(reader(chain), { trustedProxyHops: 2 })).toBe(
-      "198.51.100.1",
-    );
-    expect(extractTrustedClientIp(reader(chain), { trustedProxyHops: 3 })).toBe(
-      "203.0.113.9",
-    );
-    // 0 means nothing in front of this process rewrote the header at all, so
-    // none of it is usable — not even the entry a count would have picked.
-    expect(
-      extractTrustedClientIp(reader(chain), { trustedProxyHops: 0 }),
-    ).toBeNull();
-  });
-
-  it("refuses a chain shorter than the trusted-proxy count", () => {
-    // This used to clamp the index to 0 and return the leftmost entry as "the
-    // oldest thing any trusted proxy could have written". The leftmost entry is
-    // the oldest thing ANYONE could have written — a caller writes it by
-    // sending its own x-forwarded-for — so the clamp turned a misconfigured
-    // count into the exact bypass this walk exists to prevent: a
-    // caller-supplied address handed to the IAM ip_ranges conditions and to the
-    // pre-authentication ceilings, refreshable per request.
-    expect(
-      extractTrustedClientIp(reader({ "x-forwarded-for": "198.51.100.1" }), {
-        trustedProxyHops: 2,
-      }),
-    ).toBeNull();
-    // And it does not fall through to x-real-ip either: a deployment whose
-    // chain story is wrong has no more credibility on the single-header path.
+  // #3205 deleted the hop-count fallback rather than deprecating it. A caller
+  // controls the header's LENGTH, so any count too high by k lets it pad k
+  // entries until the arithmetic lands on a value it chose, and nothing in the
+  // request tells that apart from a correct deeper chain.
+  it("derives nothing at all when no proxies are named", () => {
+    // A chain that a hop count would happily have read an address out of.
     expect(
       extractTrustedClientIp(
-        reader({
-          "x-forwarded-for": "198.51.100.1",
-          "x-real-ip": "203.0.113.9",
-        }),
-        { trustedProxyHops: 2 },
+        reader({ "x-forwarded-for": "203.0.113.9, 198.51.100.1, 172.31.0.4" }),
+        {},
       ),
     ).toBeNull();
+    expect(extractTrustedClientIp(reader({}), {})).toBeNull();
   });
 
   describe("attribution by proxy identity", () => {
@@ -191,7 +145,7 @@ describe("extractTrustedClientIp", () => {
       expect(
         extractTrustedClientIp(
           reader({ "x-forwarded-for": "203.0.113.7, 10.0.0.5" }),
-          { trustedProxyHops: 0, trustedProxyCidrs: cidrs },
+          { trustedProxyCidrs: cidrs },
         ),
       ).toBe("203.0.113.7");
     });
@@ -204,7 +158,7 @@ describe("extractTrustedClientIp", () => {
           reader({
             "x-forwarded-for": "198.51.100.1, 10.1.1.1, 203.0.113.7, 10.0.0.5",
           }),
-          { trustedProxyHops: 0, trustedProxyCidrs: cidrs },
+          { trustedProxyCidrs: cidrs },
         ),
       ).toBe("203.0.113.7");
     });
@@ -216,14 +170,13 @@ describe("extractTrustedClientIp", () => {
       // untrusted one, which is the ordering that looks configured and is not.
       expect(
         extractTrustedClientIp(reader({ "x-forwarded-for": "203.0.113.7" }), {
-          trustedProxyHops: 0,
           trustedProxyCidrs: cidrs,
         }),
       ).toBeNull();
       expect(
         extractTrustedClientIp(
           reader({ "x-forwarded-for": "10.0.0.5, 203.0.113.7" }),
-          { trustedProxyHops: 0, trustedProxyCidrs: cidrs },
+          { trustedProxyCidrs: cidrs },
         ),
       ).toBeNull();
     });
@@ -234,12 +187,11 @@ describe("extractTrustedClientIp", () => {
       expect(
         extractTrustedClientIp(
           reader({ "x-forwarded-for": "10.0.0.4, 10.0.0.5" }),
-          { trustedProxyHops: 0, trustedProxyCidrs: cidrs },
+          { trustedProxyCidrs: cidrs },
         ),
       ).toBeNull();
       expect(
         extractTrustedClientIp(reader({}), {
-          trustedProxyHops: 0,
           trustedProxyCidrs: cidrs,
         }),
       ).toBeNull();
@@ -250,7 +202,7 @@ describe("extractTrustedClientIp", () => {
       expect(
         extractTrustedClientIp(
           reader({ "x-forwarded-for": "203.0.113.7, 10.0.0.5" }),
-          { trustedProxyHops: 1, trustedProxyCidrs: cidrs },
+          { trustedProxyCidrs: cidrs },
         ),
       ).toBe("203.0.113.7");
     });
@@ -262,11 +214,7 @@ describe("extractTrustedClientIp", () => {
             [EDGE_CLIENT_IP_HEADER]: "198.51.100.1",
             "x-forwarded-for": "203.0.113.7, 10.0.0.5",
           }),
-          {
-            trustedProxyHops: 0,
-            trustedProxyCidrs: cidrs,
-            trustEdgeHeader: true,
-          },
+          { trustedProxyCidrs: cidrs, trustEdgeHeader: true },
         ),
       ).toBe("198.51.100.1");
     });
@@ -275,7 +223,7 @@ describe("extractTrustedClientIp", () => {
       expect(
         extractTrustedClientIp(
           reader({ "x-forwarded-for": "not-an-ip, 10.0.0.5" }),
-          { trustedProxyHops: 0, trustedProxyCidrs: cidrs },
+          { trustedProxyCidrs: cidrs },
         ),
       ).toBeNull();
     });
@@ -291,7 +239,7 @@ describe("extractTrustedClientIp", () => {
     // arriving there came from the caller.
     expect(
       extractTrustedClientIp(headers, {
-        trustedProxyHops: 2,
+        trustedProxyCidrs: ["10.0.0.0/8"],
         trustEdgeHeader: true,
         onVercel: true,
       }),
@@ -299,7 +247,11 @@ describe("extractTrustedClientIp", () => {
     expect(
       extractTrustedClientIp(
         reader({ [EDGE_CLIENT_IP_HEADER]: "203.0.113.9" }),
-        { trustedProxyHops: 2, trustEdgeHeader: true, onVercel: true },
+        {
+          trustedProxyCidrs: ["10.0.0.0/8"],
+          trustEdgeHeader: true,
+          onVercel: true,
+        },
       ),
     ).toBeNull();
   });
@@ -314,7 +266,6 @@ describe("extractTrustedClientIp", () => {
     ]) {
       expect(
         extractTrustedClientIp(reader({ [EDGE_CLIENT_IP_HEADER]: value }), {
-          trustedProxyHops: 0,
           trustEdgeHeader: true,
         }),
       ).toBeNull();

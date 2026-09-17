@@ -6,25 +6,14 @@ import { extractTrustedClientIp } from "@oxagen/oxagen/client-ip";
 import type { AppEnv } from "../app";
 
 /**
- * How many proxies sit between the client and this process, resolved from the
- * validated env once and memoized. Wrapped in a function (called at first
- * request, not module load) so importing the app never triggers env access —
- * mirroring `rateLimitBudgets()` in middleware/distributed-rate-limit.ts.
- */
-let cachedTrustedProxyHops: number | null = null;
-function trustedProxyHops(): number {
-  if (cachedTrustedProxyHops !== null) return cachedTrustedProxyHops;
-  const env = requireEnv(["TRUSTED_PROXY_HOP_COUNT"] as const);
-  cachedTrustedProxyHops = env.TRUSTED_PROXY_HOP_COUNT;
-  return cachedTrustedProxyHops;
-}
-
-/**
  * Whether the edge-written `x-oxagen-client-ip` header is believed, resolved
- * from the validated env once and memoized alongside the hop count. Off by
- * default: the header is only trustworthy once the Caddy config that SETS it is
- * deployed, and that ships through a different pipeline than this code. See
- * packages/oxagen/src/client-ip.ts.
+ * from the validated env once and memoized. Read on the first request rather
+ * than at module load so importing the app never triggers env access, mirroring
+ * `rateLimitBudgets()` in middleware/distributed-rate-limit.ts.
+ *
+ * Off by default: the header is only trustworthy once the Caddy config that
+ * SETS it is deployed, and that ships through a different pipeline than this
+ * code. See packages/oxagen/src/client-ip.ts.
  */
 let cachedTrustEdgeHeader: boolean | null = null;
 function trustEdgeHeader(): boolean {
@@ -36,12 +25,11 @@ function trustEdgeHeader(): boolean {
 }
 
 /**
- * The proxies this deployment trusts, by identity rather than by count.
- * Memoized on the same terms as the hop count above.
+ * The proxies this deployment trusts, named by CIDR. Memoized on the same terms
+ * as the flag above.
  *
- * Exported because the pre-authentication rate-limit ceilings enforce ONLY
- * where this is set: a hop count cannot defend itself on a bucket key, so
- * naming the proxies is the declaration that turns those ceilings on.
+ * Exported because the pre-authentication rate-limit ceilings enforce only
+ * where this or the edge header names the caller.
  */
 let cachedTrustedProxyCidrs: string[] | null = null;
 export function trustedProxyCidrs(): string[] {
@@ -54,34 +42,62 @@ export function trustedProxyCidrs(): string[] {
 }
 
 /**
- * The client IP this deployment is willing to authorize on, or null.
+ * The client address, when — and only when — something this deployment itself
+ * wrote vouched for it. `null` otherwise, and `null` means "do not decide
+ * anything with this".
+ *
+ * Two things read it and both are security decisions: the IAM `ip_ranges` /
+ * `ip_allow` conditions (via `clientIp` on the capability context) and the
+ * pre-authentication rate-limit ceilings. Neither can tell a real client
+ * address from a plausible-looking one, so this must not hand them anything it
+ * cannot stand behind.
  *
  * The derivation itself is `extractTrustedClientIp` in
- * `@oxagen/oxagen/client-ip`, shared with apps/app, apps/mcp and the rate
- * limiter so a mandate decision cannot disagree with a bucket key about who the
- * caller is. That file carries the reasoning: which headers are believed in
- * which deployment shape, why the forwarded chain is walked from the right, and
- * why `x-real-ip` is not consulted at all.
+ * `@oxagen/oxagen/client-ip`, shared with apps/app, apps/mcp and the auth route
+ * so a mandate decision cannot disagree with a bucket key about who the caller
+ * is (ADR-083). That file carries the reasoning; the two branches it can take
+ * here are the edge header and the named-proxy walk:
  *
- * This value feeds the IAM `ip_ranges` / `ip_allow` conditions
- * (packages/oxagen/src/iam/conditions.ts), which ALLOW on a CIDR match. It is
- * an authorization signal and never an authentication one.
+ * - `x-oxagen-client-ip`, which Caddy SETS with `header_up` so a caller's copy
+ *   never arrives, and only while TRUST_EDGE_CLIENT_IP_HEADER says the Caddy
+ *   config that sets it is deployed.
+ * - a walk of `x-forwarded-for` from the right while each entry is one of the
+ *   proxies named in TRUSTED_PROXY_CIDRS, stopping at the first that is not,
+ *   and returning it only if a trusted proxy stood to its right. A caller can
+ *   pad the left all it likes; padding only lengthens a prefix the walk never
+ *   reaches, because stopping is decided by what an entry IS rather than by how
+ *   many entries there are.
+ *
+ * WHY NOT A HOP COUNT: counting hops was the previous design and it is gone,
+ * not deprecated (#3205). A count trusts ITSELF to be right, while the caller
+ * controls the header's LENGTH — so a count too high by k lets a caller pad k
+ * entries until the arithmetic lands on a value it chose, which is enough to
+ * satisfy an IP allowlist it should fail. Nothing in the request distinguishes
+ * that from a correct deeper chain, so no care at the call site can rescue it,
+ * and a fallback that silently produces an unvouched-for address is worse than
+ * no address: it turns "this deployment cannot attribute callers" into "this
+ * allowlist is enforced", which is a lie an operator acts on.
+ *
+ * `x-real-ip` is not consulted. It carries no chain, so nothing can vouch for
+ * it; it is exactly as caller-supplied as anything else.
+ *
+ * Returning null is the SAFE direction for both readers. The IAM conditions
+ * already fail closed on a null address, and the rate-limit ceilings skip
+ * rather than pooling every caller into one bucket.
  *
  * Exported so the derivation stays unit-testable at this seam the way
  * `deriveBucketKey` is in middleware/distributed-rate-limit.ts.
  */
 export function extractClientIp(c: Context<AppEnv>): string | null {
   return extractTrustedClientIp((name) => c.req.header(name), {
-    trustedProxyHops: trustedProxyHops(),
     trustedProxyCidrs: trustedProxyCidrs(),
     trustEdgeHeader: trustEdgeHeader(),
     onVercel: process.env.VERCEL === "1",
   });
 }
 
-/** Test seam: drop the memoized hop count so a case can set a different env. */
+/** Test seam: drop the memoized proxy list so a case can set a different env. */
 export function __resetTrustedProxyHopsForTests(): void {
-  cachedTrustedProxyHops = null;
   cachedTrustEdgeHeader = null;
   cachedTrustedProxyCidrs = null;
 }

@@ -383,7 +383,7 @@ describe("extractClientIp (via buildContext clientIp extraction)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __resetTrustedProxyHopsForTests();
-    vi.stubEnv("TRUSTED_PROXY_HOP_COUNT", "2");
+    vi.stubEnv("TRUSTED_PROXY_CIDRS", "10.0.0.0/8");
     vi.mocked(resolveApiKey).mockResolvedValue({
       ok: true,
       orgId: "org-1",
@@ -406,7 +406,7 @@ describe("extractClientIp (via buildContext clientIp extraction)", () => {
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
       "x-oxagen-client-ip": "198.51.100.1",
-      "x-forwarded-for": "203.0.113.9, 192.0.2.5",
+      "x-forwarded-for": "203.0.113.9, 10.0.0.5",
     });
     expect(ctx.clientIp).toBe("198.51.100.1");
   });
@@ -430,7 +430,7 @@ describe("extractClientIp (via buildContext clientIp extraction)", () => {
     const withChain = await buildContext({
       authorization: "Bearer ox_valid",
       "x-oxagen-client-ip": "198.51.100.1",
-      "x-forwarded-for": "203.0.113.9, 172.31.0.4",
+      "x-forwarded-for": "203.0.113.9, 10.0.0.5",
     });
     expect(withChain.clientIp).toBe("203.0.113.9");
   });
@@ -441,7 +441,7 @@ describe("extractClientIp (via buildContext clientIp extraction)", () => {
   it("ignores a caller-supplied x-forwarded-for prefix", async () => {
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
-      "x-forwarded-for": "203.0.113.9, 198.51.100.1, 172.31.0.4",
+      "x-forwarded-for": "203.0.113.9, 198.51.100.1, 10.0.0.5",
     });
     expect(ctx.clientIp).toBe("198.51.100.1");
   });
@@ -462,7 +462,7 @@ describe("extractClientIp (via buildContext clientIp extraction)", () => {
   it("handles x-forwarded-for as an array — uses the first element's chain", async () => {
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
-      "x-forwarded-for": ["198.51.100.1, 172.31.0.4", "irrelevant"],
+      "x-forwarded-for": ["198.51.100.1, 10.0.0.5", "irrelevant"],
     });
     expect(ctx.clientIp).toBe("198.51.100.1");
   });
@@ -520,6 +520,11 @@ describe("buildContext", () => {
   });
 
   it("stamps clientIp from x-forwarded-for onto the context", async () => {
+    // Attribution is by proxy identity, so this block has to name one: without
+    // TRUSTED_PROXY_CIDRS nothing in the header is vouched for and clientIp is
+    // null, which is the honest answer rather than a stamping failure.
+    __resetTrustedProxyHopsForTests();
+    vi.stubEnv("TRUSTED_PROXY_CIDRS", "10.0.0.0/8");
     vi.mocked(resolveApiKey).mockResolvedValue({
       ok: true,
       orgId: "org-1",
@@ -529,9 +534,11 @@ describe("buildContext", () => {
     });
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
-      "x-forwarded-for": "203.0.113.5",
+      "x-forwarded-for": "203.0.113.5, 10.0.0.5",
     });
     expect(ctx.clientIp).toBe("203.0.113.5");
+    __resetTrustedProxyHopsForTests();
+    vi.unstubAllEnvs();
   });
 
   it("throws McpUnauthorizedError with reason 'unauthenticated' when no auth header", async () => {

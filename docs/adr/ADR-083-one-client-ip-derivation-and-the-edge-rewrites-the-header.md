@@ -32,7 +32,7 @@ deciding what an agent may do. Two of the three readers carried a comment
 calling the headers spoofable and used them anyway, which is the shape of the
 bug rather than a mitigation of it.
 
-`apps/api` had already been given a hop-count walk that reads the chain from the
+`apps/api` had at the time been given a hop-count walk that reads the chain from the
 right. That is the correct arithmetic and it did not help the other two, because
 it lived in `apps/api`.
 
@@ -61,12 +61,19 @@ is the bug.
    non-empty. It walks `x-forwarded-for` from the right while each entry is a
    named proxy, stops at the first that is not, and returns that entry only if
    a trusted proxy stood to its right. **Once the list is non-empty this branch
-   returns unconditionally** — including `null`. It does NOT fall through to
-   step 4.
-4. **The hop-count walk** over `TRUSTED_PROXY_HOP_COUNT`, reached only when
-   `TRUSTED_PROXY_CIDRS` is empty. A chain SHORTER than the declared depth is
-   refused outright, never clamped to its leftmost entry. The default is **1**.
-5. Otherwise `null`.
+   returns unconditionally** — including `null`.
+4. Otherwise `null`.
+
+There is no fourth branch, and there was one until #3205: a walk that counted
+hops with `TRUSTED_PROXY_HOP_COUNT`. It is deleted rather than deprecated, and
+the variable is gone from the schema, the registry and `.env.example`. A count
+trusts ITSELF to be right while the caller controls the header's LENGTH, so a
+count too high by k lets a caller pad k entries until the arithmetic lands on a
+value it chose — enough to satisfy an `ip_ranges` allowlist it should fail — and
+nothing readable from the request tells that apart from a correct deeper chain.
+A fallback that silently produces an unvouched-for address is worse than no
+address: it turns "this deployment cannot attribute callers" into "this
+allowlist is enforced", which is a lie an operator acts on.
 
 Two consequences of that order are load-bearing and are the ones the corrections
 kept getting wrong:
@@ -130,9 +137,13 @@ point in between and after:
 1. Upload and reload the Caddy config that SETS `X-Oxagen-Client-Ip`.
 2. Set `TRUST_EDGE_CLIENT_IP_HEADER=true`.
 
-Between the two, and before either, the hop-count walk decides, which is where
-the deployment already was: Caddy rewrites `X-Forwarded-For` to a single entry
-and a hop count of 1 reads it. If the flag is never set, nothing breaks.
+Before step 1 the identity walk over `TRUSTED_PROXY_CIDRS` decides, which is
+where the deployment already was: the ALB's own address is still in the chain,
+so a named proxy can vouch for the entry beside it. After step 1 Caddy has
+rewritten `X-Forwarded-For` to the single client address and no proxy entry
+remains to vouch with, so step 2 is what restores attribution — which is why the
+window between them is the one place this rollout is briefly unattributed, and
+why it fails closed rather than open.
 
 `TRUSTED_PROXY_CIDRS` does NOT belong in that window — see "The attribution
 order, stated once" above for why, and set it only against the pre-rewrite
@@ -171,19 +182,16 @@ logs keep the full chain for anything that later does.
   there is one obvious function to reach for instead.
 - `x-real-ip` is gone as an input. Nothing in either deployment shape set it, so
   nothing legitimate is lost.
-- `TRUSTED_PROXY_HOP_COUNT` defaults to **1**, and a short chain is refused
-  rather than clamped — both stated in "The attribution order, stated once".
-  An earlier revision of this ADR said the default was 2, on the reasoning that
-  the ALB and Caddy both append. That was measured false against `caddy:2`,
-  which REPLACES the chain with its own peer rather than appending, and this
-  deployment's Caddyfile sets a single entry, so the chain reaching the app is
-  one deep either way. Setting 2 on the strength of the old text yields no
-  address at all — a count of 2 against a one-entry chain is a short chain, and
-  a short chain is refused — and every IP-scoped mandate then denies.
-- The hop count is the legacy form and governs only the IAM `ip_ranges`
-  allowlist. It does not enable the pre-authentication IP ceilings; naming your
-  proxies in `TRUSTED_PROXY_CIDRS` does, and the Caddy trust list that makes
-  those proxies knowable is `infra/tools/caddy/Caddyfile.alb`.
+- `TRUSTED_PROXY_HOP_COUNT` no longer exists (#3205) — see "The attribution
+  order, stated once" for why counting hops cannot be made safe. Revisions of
+  this ADR have described that variable as defaulting to 2, then to 1, then as a
+  legacy fallback; all three are now history. Nothing reads it, and setting it
+  does nothing.
+- What makes the named proxies knowable in the first place is the Caddy trust
+  list in `infra/tools/caddy/Caddyfile.alb`, and that list is the ALB's own
+  subnets rather than `private_ranges`: on an internet-facing load balancer,
+  trusting every RFC1918 range trusts the caller whenever the caller is itself
+  RFC1918, and strict mode then walks past it into the prefix the caller wrote.
 - An IP-scoped mandate now denies when the caller cannot be identified. That is
   a behaviour change and the intended one.
 - `TRUST_EDGE_CLIENT_IP_HEADER` is a flag the operator must set, and until it is
@@ -198,12 +206,10 @@ logs keep the full chain for anything that later does.
   stated once". Attribution is still available with the flag off, through
   `TRUSTED_PROXY_CIDRS`, so "ungated" does not mean "unenforced"; it means the
   edge header is one of the two ways in rather than the only one.
-- Those mounts pass `trustedProxyHops: 0`, so a hop count can never name a
-  caller for a bucket key — only the edge header or a named proxy can. A count
-  cannot defend itself here: one that is too high lets a caller pad
-  `x-forwarded-for` until the arithmetic lands on a value it chose, which on a
-  ceiling means a fresh bucket per request. The count remains for the IAM
-  allowlist, which is judged on a different question.
+- Only the edge header or a named proxy can name a caller for a bucket key,
+  because those are the only two branches left anywhere. The reasoning that
+  first excluded a hop count from bucket keys is the reasoning that later
+  deleted it outright in #3205 — a count cannot defend itself on either path.
 - The regression tests for this are the forged-header cases, one per surface, in
   `packages/oxagen/src/client-ip.test.ts`, `apps/api/src/__tests__/context.test.ts`,
   `apps/api/src/middleware/distributed-rate-limit.test.ts`,

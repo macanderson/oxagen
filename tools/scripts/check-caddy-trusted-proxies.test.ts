@@ -54,7 +54,9 @@ describe("trustedProxyDirectives", () => {
     // `static` is the module that holds the list; treating it as a range would
     // make every assertion below scan one token that can never match.
     expect(
-      trustedProxyDirectives("\t\ttrusted_proxies static 10.60.0.0/20 10.60.16.0/20"),
+      trustedProxyDirectives(
+        "\t\ttrusted_proxies static 10.60.0.0/20 10.60.16.0/20",
+      ),
     ).toEqual([["10.60.0.0/20", "10.60.16.0/20"]]);
   });
 
@@ -88,14 +90,16 @@ describe("registryPlaceholder", () => {
       '    placeholder: "10.60.0.0/20",',
       "  },",
       "",
-      "  TRUSTED_PROXY_HOP_COUNT: {",
-      '    placeholder: "1",',
+      "  TRUST_EDGE_CLIENT_IP_HEADER: {",
+      '    placeholder: "false",',
       "  },",
     ].join("\n");
     expect(registryPlaceholder(registry, "TRUSTED_PROXY_CIDRS")).toBe(
       "10.60.0.0/20",
     );
-    expect(registryPlaceholder(registry, "TRUSTED_PROXY_HOP_COUNT")).toBe("1");
+    expect(registryPlaceholder(registry, "TRUST_EDGE_CLIENT_IP_HEADER")).toBe(
+      "false",
+    );
   });
 });
 
@@ -135,7 +139,9 @@ describe("inspect", () => {
       "\t\ttrusted_proxies_strict",
       "\t\t# trusted_proxies_strict",
     );
-    expect(inspect(repo).join("\n")).toContain("trusted_proxies_strict is gone");
+    expect(inspect(repo).join("\n")).toContain(
+      "trusted_proxies_strict is gone",
+    );
   });
 
   it("rejects dropping the trusted_proxies directive altogether", () => {
@@ -151,7 +157,10 @@ describe("inspect", () => {
     // The ALB's ENIs are per-AZ and change as it scales. A literal list looks
     // right the day it is written and goes stale without any signal.
     const repo = healthy();
-    repo.alb = repo.alb.replace(ALB_SUBNETS_PLACEHOLDER, "10.60.0.4 10.60.16.9");
+    repo.alb = repo.alb.replace(
+      ALB_SUBNETS_PLACEHOLDER,
+      "10.60.0.4 10.60.16.9",
+    );
     expect(inspect(repo).join("\n")).toContain(ALB_SUBNETS_PLACEHOLDER);
   });
 

@@ -2243,7 +2243,8 @@
       "name": "list_tacho_hosts",
       "domain": "tacho",
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

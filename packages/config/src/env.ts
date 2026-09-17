@@ -67,33 +67,6 @@ export const baseEnvSchema = z.object({
   //  - RATE_LIMIT_CHAT_PER_MIN:       chat send / stream (/v1/**/chat/*).
   RATE_LIMIT_CHAT_PER_MIN: z.coerce.number().int().positive().default(60),
 
-  // How many proxies sit between a client and our processes. Each one APPENDS
-  // to x-forwarded-for, so this is how many right-hand entries were written by
-  // something we trust — see extractTrustedClientIp in
-  // packages/oxagen/src/client-ip.ts, the one reader of this value.
-  //
-  // Default 1, and the default is a guess that only the IAM allowlist falls
-  // back to. The deployed chain that reaches this process is ONE entry deep,
-  // measured against `caddy:2` rather than assumed: with a plain
-  // `reverse_proxy`, Caddy REPLACES an inbound x-forwarded-for with its own
-  // peer (`XFF="172.17.0.1"`), and with the Caddyfile in this repo it SETS the
-  // header to the single trusted `{client_ip}`. Either way the upstream sees
-  // one entry, so a count of 2 would refuse a chain it calls short and hand the
-  // allowlist nothing.
-  //
-  // A short chain is REFUSED rather than clamped to the leftmost entry — see
-  // extractTrustedClientIp. The leftmost entry is the oldest thing ANYONE could
-  // have written, so clamping turned a wrong count into the exact bypass the
-  // walk exists to prevent. That makes an over-declared count fail closed here
-  // rather than fail open, which is the direction to be wrong in, and it is why
-  // this default is not rounded up "to be safe".
-  //
-  // This count does NOT enable the pre-authentication IP ceilings; naming the
-  // proxies in TRUSTED_PROXY_CIDRS does, and identity wins wherever both are
-  // set. 0 means nothing in front of the process rewrites the header, so no
-  // entry in it is usable.
-  TRUSTED_PROXY_HOP_COUNT: z.coerce.number().int().nonnegative().default(1),
-
   // Whether x-oxagen-client-ip is believed at all. Default FALSE, and the
   // default is the whole point.
   //
@@ -105,14 +78,13 @@ export const baseEnvSchema = z.object({
   // through — and a reader that trusts the header unconditionally would take a
   // forged address into an IAM ip_ranges decision and into pre-authentication
   // rate-limit bucket keys. Absent and attacker-supplied are different states,
-  // and only the first one is covered by falling back to the hop-count walk.
+  // and only the first one is covered by falling through to the next branch.
   //
   // Making the flag default off puts the safe state on the default path: before
-  // the edge is in place the header is ignored entirely and the hop-count walk
-  // decides, which is where this deployment was already. Turning it on is a
-  // deliberate second step the operator takes AFTER uploading and reloading the
-  // Caddy config. Ordering instructions to a human are not a mechanism; a flag
-  // that must be flipped is.
+  // the edge is in place the header is ignored entirely and attribution rests
+  // on TRUSTED_PROXY_CIDRS alone. Turning it on is a deliberate second step the
+  // operator takes AFTER uploading and reloading the Caddy config. Ordering
+  // instructions to a human are not a mechanism; a flag that must be flipped is.
   TRUST_EDGE_CLIENT_IP_HEADER: z
     .union([z.literal("true"), z.literal("false")])
     .optional()

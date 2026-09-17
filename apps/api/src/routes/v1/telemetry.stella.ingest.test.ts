@@ -524,16 +524,18 @@ describe("POST /v1/telemetry/stella/operational", () => {
   });
 
   it("invokes the API capability with tenant scope exclusively from the API key", async () => {
-    // The deployed shape (ADR-083): Caddy writes x-oxagen-client-ip with
-    // `header_up`, which replaces any copy the caller sent, and rewrites
-    // x-forwarded-for to the same single value. The caller-supplied entry here
-    // is what the old leftmost-entry read would have picked.
+    // 10.0.0.1 is the proxy this deployment names; 203.0.113.9 is the address
+    // it vouched for. clientIp is the CLIENT, 203.0.113.9 — it used to be the
+    // proxy, which is what made an IP allowlist judge the load balancer.
     //
-    // The gate is on because this case models the state AFTER the Caddy config
-    // is deployed; with it off the header is ignored entirely, which is the
-    // safe default and is covered in __tests__/context.test.ts.
+    // The request also carries a forged `x-oxagen-client-ip` naming the proxy's
+    // address. The gate is OFF here, which is the default and the state before
+    // the Caddy config that SETS that header is deployed (ADR-083), so it must
+    // not be read at all — if it were, clientIp would come back 10.0.0.1 and a
+    // caller would have chosen the address an ip_ranges allowlist judges.
+    vi.stubEnv("TRUSTED_PROXY_CIDRS", "10.0.0.0/8");
+    vi.stubEnv("TRUST_EDGE_CLIENT_IP_HEADER", "false");
     __resetTrustedProxyHopsForTests();
-    vi.stubEnv("TRUST_EDGE_CLIENT_IP_HEADER", "true");
     const response = await post(VALID_BATCH, {
       authorization: "Bearer ox_test_key",
       "x-oxagen-client-ip": "10.0.0.1",
@@ -553,7 +555,7 @@ describe("POST /v1/telemetry/stella/operational", () => {
         requestId: REQUEST_ID,
         surface: "api",
         messageId: null,
-        clientIp: "10.0.0.1",
+        clientIp: "203.0.113.9",
       },
       { surface: "api" },
     );
