@@ -689,6 +689,34 @@ describe("token boundaries follow Cypher's Unicode identifier rules", () => {
     });
   }
 
+  // Outside the BMP, and the reason this is a THIRD encoding of the same defect
+  // rather than a fourth case of the second. `where\u{1D431}` and
+  // `\u{1D431}where` are each one Cypher identifier (U+1D431 is ID_Start and
+  // ID_Continue), but a JavaScript string index yields one UTF-16 unit, so a
+  // per-character scan sees a lone surrogate, matches no Unicode property, and
+  // splits the name — handing the seam the bare keyword `WHERE` out of both.
+  // Fixing the character CLASSES did not fix this; matching the whole name with
+  // the `u` flag did.
+  const astralLookalikes: Array<[name: string, alias: string]> = [
+    ["an astral letter after the keyword", "where\u{1D431}"],
+    ["an astral letter before the keyword", "\u{1D431}where"],
+  ];
+  for (const [name, alias] of astralLookalikes) {
+    it(`is one identifier, not a clause: ${name} (${alias})`, () => {
+      expect(
+        keepFilteringPositions(
+          `MATCH (n) RETURN n AS ${alias}, n.orgId = $orgId AS mine`,
+        ),
+      ).not.toContain("$orgId");
+      expect(() =>
+        assertScopeMarkers(
+          `MATCH (n) RETURN n AS ${alias}, n.label IN $${SCOPE_LABELS_PARAM} AS ok`,
+          labelScope,
+        ),
+      ).toThrow(GraphScopeError);
+    });
+  }
+
   it("a real clause keyword is still recognised, and a real marker still passes", () => {
     expect(
       keepFilteringPositions("MATCH (n) WHERE n.orgId = $orgId RETURN n"),

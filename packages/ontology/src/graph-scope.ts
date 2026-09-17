@@ -87,12 +87,26 @@ export const RESERVED_SCOPE_PARAMS = [
 // boundary in this module is drawn with them.
 const ID_START_SRC = "\\p{ID_Start}\\p{Pc}";
 const ID_PART_SRC = "\\p{ID_Continue}\\p{Sc}";
-const ID_START_CHAR = new RegExp(`[${ID_START_SRC}]`, "u");
 const ID_PART_CHAR = new RegExp(`[${ID_PART_SRC}]`, "u");
 /** Lookahead asserting the preceding token ENDS here, by Cypher's rules. */
 const ID_END = `(?![${ID_PART_SRC}])`;
 /** Lookbehind asserting the following token BEGINS here, by Cypher's rules. */
 const ID_BEGIN = `(?<![${ID_PART_SRC}])`;
+/**
+ * A WHOLE unescaped symbolic name, matched sticky from a given offset.
+ *
+ * The word scan uses this rather than testing `src[i]` character by character,
+ * and the difference is code points versus UTF-16 units. A JavaScript string
+ * index yields one unit, so an identifier character outside the BMP — every
+ * Mathematical Alphanumeric letter, for one, and `ID_Continue` covers them —
+ * arrives as a lone surrogate that matches no Unicode property, and the scan
+ * SPLITS the name there. That is round nine's defect again in a third
+ * encoding: `where𝐱` and `𝐱where` are each one Cypher identifier, and a
+ * per-unit scan hands the seam the bare keyword `WHERE` out of both. With the
+ * `u` flag the engine reads a full code point at each position, so a sticky
+ * match of the whole name cannot split one, whichever plane it lives in.
+ */
+const IDENTIFIER_AT = new RegExp(`[${ID_START_SRC}][${ID_PART_SRC}]*`, "yu");
 
 // Bypass-guard markers. Two conditions, and BOTH are load-bearing.
 //
@@ -383,6 +397,11 @@ function opensPattern(src: string, openIdx: number): boolean {
   if (src[openIdx] === "[") return prev === "-";
 
   if (",-><=|([".includes(prev)) return true;
+  // Per UTF-16 unit rather than per code point, unlike the word scan, and the
+  // asymmetry is deliberate: a lone surrogate matches no property here, so an
+  // astral-plane name stops the back-scan early and the bracket is classified
+  // as an EXPRESSION. That is the conservative answer — fewer pattern maps kept
+  // — whereas splitting a name in the word scan let a keyword out, which is not.
   if (ID_PART_CHAR.test(prev)) {
     let j = k;
     while (j >= 0 && ID_PART_CHAR.test(src[j]!)) j -= 1;
@@ -555,10 +574,11 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
     // Words: a clause keyword at depth 0 switches the current clause. Depth 0
     // also excludes the inside of a pattern property map, because the pattern's
     // own `(`/`[` is still open around it.
-    if (ID_START_CHAR.test(ch)) {
-      let j = i;
-      while (j < src.length && ID_PART_CHAR.test(src[j]!)) j += 1;
-      const word = src.slice(i, j).toUpperCase();
+    IDENTIFIER_AT.lastIndex = i;
+    const idMatch = IDENTIFIER_AT.exec(src);
+    if (idMatch) {
+      const j = i + idMatch[0].length;
+      const word = idMatch[0].toUpperCase();
       if (
         paren === 0 &&
         bracket === 0 &&
