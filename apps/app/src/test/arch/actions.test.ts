@@ -14,6 +14,7 @@ import {
   productionFiles,
   readSource,
   type SourceText,
+  WHOLE_TREE_TIMEOUT_MS,
 } from "./parse";
 
 const RULE = "actions";
@@ -258,29 +259,30 @@ function actionViolations(source: SourceText): string[] {
 const probe = (name: string): string[] =>
   actionViolations(readSource(`${PROBES}/${name}`));
 
-// Scanned at module scope, like SOURCES in catalog-used.test.ts, rather than
-// inside the `it` below.
-//
-// This reads and TS-parses every production file in the app — the work is the
-// point of the test, and it does not belong inside a 5s per-test budget. On an
-// idle machine the whole file runs in ~2.2s, which looks like ample headroom
-// and is not: CI spawns a worker per test file, and under that contention this
-// one test alone exceeded 5000ms and failed a run whose code was fine
-// (#3178, run 35211928064). A budget with 3x margin on an idle box has no
-// margin on a loaded one.
-//
-// Module scope carries no testTimeout, so the race is gone rather than
-// widened. The assertions stay in the test, where a real violation still
-// reports as a failure of this rule.
-const USE_SERVER_MODULES: SourceText[] = productionFiles()
-  .map(readSource)
-  .filter((source) => directiveOf(parse(source)) === "use server");
-
 describe("server actions", () => {
-  it('every "use server" module under src/ keeps the action contract', () => {
-    expect(USE_SERVER_MODULES.length).toBeGreaterThan(0);
-    expect(USE_SERVER_MODULES.flatMap(actionViolations)).toEqual([]);
-  });
+  // Budgeted, not moved. This reads and TS-parses every production module, so
+  // vitest's 5s default gates the machine rather than the code: it failed run
+  // 35211928064 at 5000ms on a commit that touched only packages/oxagen and
+  // tools/scripts, neither of which this app's tests import, and the run 30
+  // minutes earlier passed. The work is identical each time; what moves is
+  // coverage instrumentation and how much of the runner the rest of the suite
+  // is taking — WHOLE_TREE_TIMEOUT_MS records 7947ms for exactly this shape.
+  //
+  // The budget stays ON the test rather than the scan moving to module scope.
+  // Module scope carries no testTimeout, which does not make the work safe —
+  // it means nothing can ever stop it, so the same contention produces a hung
+  // worker with no diagnostic instead of a failure naming this file and line.
+  it(
+    'every "use server" module under src/ keeps the action contract',
+    () => {
+      const modules = productionFiles()
+        .map(readSource)
+        .filter((source) => directiveOf(parse(source)) === "use server");
+      expect(modules.length).toBeGreaterThan(0);
+      expect(modules.flatMap(actionViolations)).toEqual([]);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
 
   it("ActionResult and never returns, a viewer reached through a helper and a slug from the form pass", () => {
     expect(probe("ok.ts")).toEqual([]);
