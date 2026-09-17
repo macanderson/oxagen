@@ -650,6 +650,30 @@ describe("Tools › write gates", () => {
     });
   });
 
+  // What the tests above do NOT show, and must not be read as showing. They
+  // force `versions: readOk(...)` in order to ask what the gate does given a
+  // successful read. For the one viewer the import branch was widened for —
+  // org `member`, workspace `owner` — the real system never produces that
+  // state: `list_tool_versions` asserts
+  // `{ org: ["Owner","Admin"], workspace: ["Owner","Member","Viewer"] }` and
+  // resolves the workspace half from `iam.principal_role_assignments`, which
+  // holds nothing for a human principal (see the note on `canImportTools`), so
+  // the read is denied and `Registry` answers `ReadFailure` before
+  // `ImportControls` is reached. A suite that only ever hands this viewer an
+  // `ok` read passes on a world where `assertOrgRole` does not exist.
+  it("answers this viewer the denied read, not the import control, because the registry read refuses them first", async () => {
+    await renderTools(
+      {
+        versions: { ok: false, reason: "denied", permission: "tools.read" },
+        killSwitches: board(),
+      },
+      {},
+      viewer("member", "owner"),
+    );
+    expect(screen.getByTestId("tools-denied")).toBeVisible();
+    expect(screen.queryByTestId("tools-import-open")).not.toBeInTheDocument();
+  });
+
   // And the same question asked of the contracts rather than of this file, so
   // that widening a gate past its capability, or narrowing one back below it,
   // fails here instead of in production.
