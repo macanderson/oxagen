@@ -67,11 +67,22 @@
  * ONE CONSEQUENCE WORTH KNOWING. Enterprise is the only tier whose orgs run the
  * full IAM resolver (`check-iam.ts` fast-paths every lower tier). Upgrading
  * therefore switches a security control ON, and an org whose IAM was never
- * seeded would start denying by default. The script refuses to leave that
- * state: it verifies the org has IAM principals and a system-default org Owner
- * (rule 7.5 — the Owner super-user allow that keeps a root principal from being
- * locked out of a capability nobody seeded), and tells you to run
- * `pnpm db:backfill-iam --apply` if not.
+ * seeded would start denying by default with nobody able to reopen it.
+ *
+ * So the IAM check is the FIRST thing this script does per org, before a single
+ * write, and it REFUSES rather than warns: the org must have an active HUMAN
+ * principal holding an org-wide, unexpired assignment to the system-default org
+ * Owner role (rule 7.5 — the Owner super-user allow that keeps a root principal
+ * from being locked out of a capability nobody seeded). An agent or service
+ * principal does not satisfy it; neither does a user-created role merely named
+ * "Owner". An org that fails the check is skipped entirely — no tier, no
+ * settings, no budgets, no credits — and the run exits non-zero naming
+ * `pnpm db:backfill-iam --apply`.
+ *
+ * Both halves of that are deliberate. A check that runs after the write has
+ * already happened is a description, not a control; and a check that any
+ * principal passes would wave through an org whose only principal is the agent
+ * that cannot let anybody back in.
  *
  * Safety:
  *   - Defaults to --dry-run; pass --apply to write.
@@ -106,6 +117,7 @@ import {
   CREDIT_REASONS,
   ENTITLED_SUBSCRIPTION_STATUSES,
 } from "@oxagen/billing";
+import { ORG_OWNER_ROLE_NAME } from "@oxagen/oxagen/iam";
 import { formatError } from "./lib/format-error";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -230,6 +242,132 @@ export function formatCents(cents: bigint): string {
   return `${neg ? "-" : ""}$${whole}.${frac}`;
 }
 
+/**
+ * What the IAM gate reads before anything is written.
+ *
+ * Two numbers rather than one boolean, because the two states they distinguish
+ * need different instructions: an org with no principals at all was never
+ * backfilled, while an org with principals and no human Owner has been
+ * provisioned in a way that would lock its people out the moment enforcement
+ * comes on.
+ */
+export interface IamReadiness {
+  /** Any principal row in the org — human, agent or service. */
+  principals: number;
+  /**
+   * Active HUMAN principals holding an org-wide, unexpired assignment to the
+   * system-default org `Owner` role: rule 7.5's super-user, the one grant that
+   * keeps a root principal out of a default deny on a capability nobody
+   * seeded.
+   *
+   * Every qualifier is load-bearing. An agent principal is not a person and
+   * cannot let anyone back in. A suspended principal resolves to nothing. A
+   * user-created role merely named "Owner" carries `is_system_default = false`
+   * and does NOT inherit super-user rights (`packages/oxagen/src/iam/resolve.ts`
+   * rule 7.5). An expired or soft-deleted assignment is not an assignment.
+   */
+  humanOwners: number;
+}
+
+export interface IamVerdict {
+  ready: boolean;
+  message: string;
+}
+
+/**
+ * Is this org safe to put on the enterprise tier?
+ *
+ * Enterprise is the only tier that runs the full IAM resolver — `check-iam.ts`
+ * fast-paths every lower one — so the upgrade switches a security control ON.
+ * With `defaultEffect: "deny"` the org that has no human Owner does not get a
+ * degraded experience; it gets a locked door, and the people who would
+ * normally reopen it are the ones outside.
+ *
+ * So this is a refusal, not a warning, and {@link main} calls it before the
+ * first write. A warning printed after `plan_type` had already moved left the
+ * org in exactly the state the warning described.
+ */
+export function iamVerdict(readiness: IamReadiness): IamVerdict {
+  if (readiness.humanOwners > 0) {
+    return {
+      ready: true,
+      message: `      iam             : ${readiness.principals} principal(s), ${readiness.humanOwners} active human org Owner(s)`,
+    };
+  }
+  if (readiness.principals === 0) {
+    return {
+      ready: false,
+      message:
+        `      iam             : REFUSED — no IAM principals. Enterprise runs the full IAM resolver (default deny), so this upgrade would lock the org out of its own capabilities.\n` +
+        `                        Run: pnpm db:backfill-iam -- --apply, then re-run this command.`,
+    };
+  }
+  return {
+    ready: false,
+    message:
+      `      iam             : REFUSED — ${readiness.principals} principal(s), but no ACTIVE HUMAN principal holds the system-default org '${ORG_OWNER_ROLE_NAME}' role.\n` +
+      `                        Agent and service principals cannot reopen a door they are locked out of, and rule 7.5's super-user allow is what keeps a root principal out of a default deny.\n` +
+      `                        Run: pnpm db:backfill-iam -- --apply, then re-run this command.`,
+  };
+}
+
+/**
+ * Read {@link IamReadiness} for one org.
+ *
+ * The predicates mirror `packages/iam/src/fetch-authz.ts` and what
+ * `packages/handlers/src/iam-provision.ts` seeds — an org-wide
+ * (`workspace_id IS NULL`) assignment, not soft-deleted, not expired — so a
+ * "ready" here means the resolver really would find the owner at request time.
+ */
+export async function readIamReadiness(
+  d: ReturnType<typeof db>,
+  orgId: string,
+): Promise<IamReadiness> {
+  const [principalCount] = await d
+    .select({ n: count() })
+    .from(schema.principals)
+    .where(eq(schema.principals.orgId, orgId));
+
+  const [ownerCount] = await d
+    .select({ n: count() })
+    .from(schema.principals)
+    .innerJoin(
+      schema.principalRoleAssignments,
+      and(
+        eq(schema.principalRoleAssignments.principalId, schema.principals.id),
+        eq(schema.principalRoleAssignments.orgId, orgId),
+        isNull(schema.principalRoleAssignments.deletedAt),
+        isNull(schema.principalRoleAssignments.workspaceId),
+        or(
+          isNull(schema.principalRoleAssignments.expiresAt),
+          gt(schema.principalRoleAssignments.expiresAt, sql`now()`),
+        ),
+      ),
+    )
+    .innerJoin(
+      schema.roles,
+      and(
+        eq(schema.roles.id, schema.principalRoleAssignments.roleId),
+        eq(schema.roles.orgId, orgId),
+        eq(schema.roles.scopeKind, "org"),
+        eq(schema.roles.name, ORG_OWNER_ROLE_NAME),
+        eq(schema.roles.isSystemDefault, true),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.principals.orgId, orgId),
+        eq(schema.principals.kind, "human"),
+        eq(schema.principals.status, "active"),
+      ),
+    );
+
+  return {
+    principals: Number(principalCount?.n ?? 0),
+    humanOwners: Number(ownerCount?.n ?? 0),
+  };
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────────
 
 function flagValue(args: string[], name: string): string | undefined {
@@ -285,7 +423,13 @@ interface TargetOrg {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-async function main(): Promise<void> {
+/**
+ * Exported for the ordering test in `provision-enterprise-org.test.ts`, which
+ * drives it against a fake database to prove no write is attempted for an org
+ * that fails the IAM gate. The invoked-directly guard at the bottom of this
+ * file is what keeps an import from running it.
+ */
+export async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const DRY_RUN = !args.includes("--apply");
   const SKIP_CONFIRM = args.includes("--yes");
@@ -444,6 +588,32 @@ async function main(): Promise<void> {
     console.log(kleur.bold(`  ▸ ${label}`));
 
     try {
+      // ── 2. IAM readiness — BEFORE anything is written ──────────────────────
+      //
+      // The order is the control. Enterprise is the only tier that runs the
+      // full IAM resolver, so this write turns a security control on, and an
+      // org with no human org Owner starts denying by default with nobody able
+      // to reopen it. This check used to run last, after `plan_type` had
+      // already moved, and it only warned — so the one org it was written for
+      // was left in exactly the state it described, by a run that exited 0.
+      //
+      // Refusing here costs a re-run after `pnpm db:backfill-iam --apply`.
+      // Refusing after the write costs somebody their org.
+      const readiness = await readIamReadiness(d, org.id);
+      const verdict = iamVerdict(readiness);
+      if (!verdict.ready) {
+        failures += 1;
+        console.log(kleur.red(verdict.message));
+        console.log(
+          kleur.red(
+            `      skipped         : nothing written for this organisation.`,
+          ),
+        );
+        console.log();
+        continue;
+      }
+      console.log(verdict.message);
+
       // ── 2a. Does a subscription already answer the tier question? ──────────
       //
       // `resolveOrgTierDetailed` reads the subscription leg FIRST and only then
@@ -712,23 +882,6 @@ async function main(): Promise<void> {
         console.log(
           kleur.green(
             `      credits         : granted ${formatCents(topUp)} → balance ${formatCents(effectiveBalanceCents)}`,
-          ),
-        );
-      }
-
-      // ── 6. IAM readiness (enterprise runs the full resolver) ───────────────
-      const [principal] = await d
-        .select({ id: schema.principals.id })
-        .from(schema.principals)
-        .where(eq(schema.principals.orgId, org.id))
-        .limit(1);
-
-      if (principal) {
-        console.log(`      iam             : principals present`);
-      } else {
-        console.log(
-          kleur.yellow(
-            `      iam             : NO principals — enterprise runs the full IAM resolver. Run: pnpm db:backfill-iam -- --apply`,
           ),
         );
       }

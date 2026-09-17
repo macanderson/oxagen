@@ -1,5 +1,6 @@
 /**
- * Unit tests for provision-enterprise-org's decision helpers.
+ * Unit tests for provision-enterprise-org's decision helpers, and for the one
+ * ordering the script cannot get wrong: the IAM gate runs before any write.
  *
  * The helpers under test are the ones a wrong answer costs money or an outage:
  * `topUpCents` decides how much to grant (over-grant is harmless, under-grant
@@ -11,12 +12,28 @@
  * The module's `main()` is guarded behind an invoked-directly check, so
  * importing it here opens no database connection.
  */
-import { describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+
+/** Swapped per test; `db()` below hands it out. */
+let currentDb: unknown;
+
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...actual,
+    db: () => currentDb,
+    closeDatabase: async () => undefined,
+  };
+});
+
+import { schema } from "@oxagen/database";
 import {
   DEFAULT_ACTIONS_ANNUAL,
   DEFAULT_FLOOR_USD,
   formatCents,
+  iamVerdict,
   isLocalHost,
+  main,
   parseActionsAnnual,
   parseFloorUsd,
   sanitizeUrl,
@@ -172,5 +189,198 @@ describe("isLocalHost", () => {
     "localhost.evil.com:5432",
   ])("treats %o as remote, so --apply must be confirmed", (host) => {
     expect(isLocalHost(host)).toBe(false);
+  });
+});
+
+describe("iamVerdict", () => {
+  it("passes an org with an active human org Owner", () => {
+    const v = iamVerdict({ principals: 4, humanOwners: 1 });
+    expect(v.ready).toBe(true);
+    expect(v.message).toContain("1 active human org Owner");
+  });
+
+  it("refuses an org with no principals, naming the backfill", () => {
+    const v = iamVerdict({ principals: 0, humanOwners: 0 });
+    expect(v.ready).toBe(false);
+    expect(v.message).toContain("REFUSED");
+    expect(v.message).toContain("db:backfill-iam");
+  });
+
+  it("refuses an org whose only principals are agents", () => {
+    // The finding this test exists for: any principal used to pass. An agent
+    // principal with no human Owner behind it cannot reopen a door the
+    // default-deny resolver closes, so it is not readiness.
+    const v = iamVerdict({ principals: 3, humanOwners: 0 });
+    expect(v.ready).toBe(false);
+    expect(v.message).toContain("REFUSED");
+    expect(v.message).toContain("no ACTIVE HUMAN principal");
+    expect(v.message).toContain("Owner");
+  });
+});
+
+// ── The ordering test ────────────────────────────────────────────────────────
+//
+// `main()` against a fake database. The assertion is not what it prints; it is
+// that `update` and `insert` are never reached for an org that fails the gate.
+// A check that ran after the tier write would leave `plan_type = 'enterprise'`
+// behind and exit 0, which is the state the finding describes.
+
+interface Recorded {
+  kind: "update" | "insert";
+  table: unknown;
+}
+
+class FakeQuery {
+  table: unknown;
+  joined = false;
+  constructor(private readonly rows: (q: FakeQuery) => unknown[]) {}
+  from(table: unknown): this {
+    this.table = table;
+    return this;
+  }
+  innerJoin(): this {
+    this.joined = true;
+    return this;
+  }
+  where(): this {
+    return this;
+  }
+  limit(): this {
+    return this;
+  }
+  set(): this {
+    return this;
+  }
+  values(): this {
+    return this;
+  }
+  then(
+    onOk: (value: unknown[]) => unknown,
+    onErr?: (reason: unknown) => unknown,
+  ): Promise<unknown> {
+    try {
+      return Promise.resolve(this.rows(this)).then(onOk, onErr);
+    } catch (error) {
+      return Promise.reject(error).then(onOk, onErr);
+    }
+  }
+}
+
+function fakeDb(options: {
+  writes: Recorded[];
+  principals: number;
+  humanOwners: number;
+  org?: Record<string, unknown>;
+}) {
+  const org = options.org ?? {
+    id: "11111111-1111-4111-8111-111111111111",
+    publicId: "org_test",
+    name: "Acme",
+    slug: "acme",
+    planType: "free",
+    status: "active",
+  };
+  const rows = (q: FakeQuery): unknown[] => {
+    if (q.table === schema.organizations) return [org];
+    if (q.table === schema.principals)
+      return [{ n: q.joined ? options.humanOwners : options.principals }];
+    if (q.table === schema.subscriptions) return [];
+    if (q.table === schema.orgBillingSettings)
+      return [
+        {
+          id: "settings",
+          assistantSpendCapCents: null,
+          dunningState: "active",
+        },
+      ];
+    if (q.table === schema.spendBudgets) return [];
+    // A lot far above the floor, so the credit step grants nothing and the
+    // billing mocks stay out of this test.
+    if (q.table === schema.creditLots) return [{ remaining: 999_999_999_999n }];
+    if (q.table === schema.workspaces) return [{ id: "ws" }];
+    return [];
+  };
+  return {
+    select: () => new FakeQuery(rows),
+    selectDistinct: () => new FakeQuery(rows),
+    // `negotiated_actions_annual` absent: the column probe is not what these
+    // tests are about, and an empty answer keeps the org select narrow.
+    execute: async () => [],
+    update: (table: unknown) => {
+      options.writes.push({ kind: "update", table });
+      return new FakeQuery(() => []);
+    },
+    insert: (table: unknown) => {
+      options.writes.push({ kind: "insert", table });
+      return new FakeQuery(() => []);
+    },
+  };
+}
+
+class ExitError extends Error {
+  constructor(readonly code: number | undefined) {
+    super(`process.exit(${String(code)})`);
+  }
+}
+
+describe("main — the IAM gate runs before any write", () => {
+  const argv = process.argv;
+  const databaseUrl = process.env["DATABASE_URL"];
+  let logged: string[];
+
+  beforeEach(() => {
+    logged = [];
+    process.env["DATABASE_URL"] = "postgres://u:p@localhost:5433/oxagen";
+    process.argv = ["node", "provision", "--org", "acme", "--apply", "--yes"];
+    vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      logged.push(args.map(String).join(" "));
+    });
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new ExitError(code);
+    }) as never);
+  });
+
+  afterEach(() => {
+    process.argv = argv;
+    if (databaseUrl === undefined) delete process.env["DATABASE_URL"];
+    else process.env["DATABASE_URL"] = databaseUrl;
+    vi.restoreAllMocks();
+  });
+
+  async function run(): Promise<number | undefined> {
+    try {
+      await main();
+      return undefined;
+    } catch (error) {
+      if (error instanceof ExitError) return error.code;
+      throw error;
+    }
+  }
+
+  it("writes nothing for an org with no principals, and exits non-zero", async () => {
+    const writes: Recorded[] = [];
+    currentDb = fakeDb({ writes, principals: 0, humanOwners: 0 });
+    expect(await run()).toBe(1);
+    expect(writes).toEqual([]);
+    expect(logged.join("\n")).toContain("REFUSED");
+  });
+
+  it("writes nothing for an org whose principals carry no human org Owner", async () => {
+    // plan_type must NOT have moved. This is the finding: the old check ran
+    // after the tier write and only warned, so the org was left on enterprise
+    // with a default-deny resolver and no owner to reopen it.
+    const writes: Recorded[] = [];
+    currentDb = fakeDb({ writes, principals: 5, humanOwners: 0 });
+    expect(await run()).toBe(1);
+    expect(writes.filter((w) => w.table === schema.organizations)).toEqual([]);
+    expect(writes).toEqual([]);
+  });
+
+  it("upgrades an org that does have one, so the gate is a gate and not a wall", async () => {
+    const writes: Recorded[] = [];
+    currentDb = fakeDb({ writes, principals: 5, humanOwners: 1 });
+    expect(await run()).toBeUndefined();
+    expect(writes.some((w) => w.table === schema.organizations)).toBe(true);
   });
 });

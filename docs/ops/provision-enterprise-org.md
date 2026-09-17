@@ -80,10 +80,20 @@ credit floor still applies either way.
 
 **Enterprise switches a security control ON.** It is the only tier whose orgs run
 the full IAM resolver — `checkIAM` fast-paths every lower tier — so an org whose
-IAM was never seeded would start denying by default. The script reports whether
-the org has IAM principals; if it does not, run `pnpm db:backfill-iam -- --apply`
-first. (The org's system-default Owner is a super-user under rule 7.5, so a
-seeded org's owner cannot be locked out of a capability nobody seeded.)
+IAM was never seeded would start denying by default, with nobody able to reopen
+it.
+
+The IAM check is therefore the first thing the script does for each org, before
+a single write, and it refuses rather than warns. The org must have an active
+**human** principal holding an org-wide, unexpired assignment to the
+system-default org `Owner` role — the super-user under rule 7.5, which is what
+keeps a seeded org's owner out of a default deny on a capability nobody seeded.
+An agent or service principal does not satisfy it, and neither does a
+user-created role merely named `Owner` (`is_system_default = false`).
+
+An org that fails the check is skipped entirely — no tier, no billing settings,
+no budget change, no credits — and the run exits non-zero. Run
+`pnpm db:backfill-iam -- --apply`, then re-run this command.
 
 **Why `plan_type` and not a subscription.** `resolveOrgTierDetailed` reads the
 subscription first and `organizations.plan_type` second. The subscription leg
