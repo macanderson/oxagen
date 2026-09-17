@@ -298,3 +298,41 @@ describe("relationship prune write-back", () => {
     expect(() => buildRelationshipWriteBack([""])).toThrow(/empty/);
   });
 });
+
+// ── The escape the doubling cannot see ───────────────────────────────────────
+//
+// Cypher decodes `\uXXXX` escapes INSIDE a backtick-quoted name, and it does so
+// at PARSE time — after any doubling the builder applied to the string. So the
+// builder and the parser disagree about what a backtick is, and the parser is
+// the one that runs the query. `schema.property.upsert` accepts any non-empty
+// string up to 200 characters, so a key carrying the six ASCII characters
+// ``` is a LEGAL property name that reconciliation can write through the
+// parameterized property map and a later prune then interpolates.
+
+/** The one parser step string-level escaping cannot see. */
+function asNeo4jWouldParse(cypher: string): string {
+  return cypher.replace(/\\u([0-9a-fA-F]{4})/g, (_m, hex: string) =>
+    String.fromCharCode(Number.parseInt(hex, 16)),
+  );
+}
+
+/**
+ * Everything the clause contains that is NOT `REMOVE`, a `r.\`name\`` token or
+ * punctuation between them. A clause whose key stayed inside its quotes leaves
+ * nothing behind; a clause whose key escaped leaves the injected Cypher.
+ */
+function clauseResidue(clause: string): string {
+  return clause
+    .replace(/r\.`(?:[^`]|``)*`/g, "")
+    .replace(/\bREMOVE\b/g, "")
+    .replace(/[\s,]/g, "");
+}
+
+describe("relationship prune write-back — a property key is never query text", () => {
+  const HOSTILE = "a\\u0060 WITH r MATCH (v) DETACH DELETE v //";
+
+  it("leaves no executable residue once the parser decodes the key", () => {
+    const { removeClause } = buildRelationshipWriteBack([HOSTILE]);
+    expect(clauseResidue(asNeo4jWouldParse(removeClause))).toBe("");
+  });
+});
