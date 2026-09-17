@@ -25,9 +25,9 @@
 import { useState } from "react";
 
 /** Designed-avatar colour mode: the glyph in its own colours, or a silhouette. */
-export type AvatarMode = "full" | "mono-light" | "mono-dark";
+type AvatarMode = "full" | "mono-light" | "mono-dark";
 
-export type AvatarValue =
+type AvatarValue =
   | { kind: "image"; url: string }
   | { kind: "designed"; emoji: string; bg: string; mode: AvatarMode }
   | { kind: "none" };
@@ -75,9 +75,7 @@ function designedFrom(json: string): AvatarValue | null {
 }
 
 /** Reads a stored avatar value. Never throws: anything malformed is `none`. */
-export function parseAvatarValue(
-  value: string | null | undefined,
-): AvatarValue {
+function parseAvatarValue(value: string | null | undefined): AvatarValue {
   if (!value || value.length > MAX_LEN) return { kind: "none" };
   if (value.startsWith(DESIGNED_PREFIX))
     return (
@@ -123,8 +121,8 @@ export function Avatar({
   size = "preview",
   testId,
 }: {
-  /** The stored value: an https URL, a designed-avatar string, or null. */
-  value: string | null;
+  /** The stored value: an https URL, a designed-avatar string, or nothing. */
+  value: string | null | undefined;
   /** What the initials tile shows when the value names no avatar. */
   initials: string;
   /** Which row of SIZE to draw at; the shape and layout are fixed. */
