@@ -62,8 +62,79 @@ printf 'DEPLOY_BUCKET=%s\nREGION=%s\nLOG_DRIVER=%s\n' "$BUCKET" "$REGION" "$LOG_
 aws s3 cp "$NODE_ENV_FILE" "s3://$BUCKET/_bin/node.env" --region "$REGION" --only-show-errors
 rm -f "$NODE_ENV_FILE"
 
+# Caddyfile.alb names the proxies it trusts by address range rather than by
+# `private_ranges`, and the range is the ALB's, so it cannot be a literal in a
+# checked-in file: the load balancer's ENIs are per-AZ and come and go as it
+# scales. What IS stable is the set of subnets it is attached to — the ALB only
+# ever gets addresses inside them — so that is what gets substituted, resolved
+# from the live load balancer on every run.
+#
+# Why it matters that this is narrow: `private_ranges` is every RFC1918 block,
+# and this ALB is internet-facing, so a caller reaching it from a private source
+# (a workload in the VPC, a peered network, a VPN client) has its OWN address
+# appended to X-Forwarded-For. Caddy's strict mode skips entries it considers
+# trusted proxies, so under `private_ranges` it skipped the caller and walked
+# into the prefix the caller wrote — handing it `{client_ip}`, and with it the
+# IAM ip_ranges allowlist. The subnets the ALB lives in are public and exclude
+# the private subnets the workloads run in, which is what closes that.
+#
+# Everything here fails the run rather than falling back. There is no safe
+# default for "which proxies are in front of me": every plausible one is wider
+# than the truth, and wider is the defect.
+ALB_NAME="${ALB_NAME:-oxagen-app}"
+render_caddyfile() {
+  local src="$1" out="$2"
+  if ! grep -q '__ALB_SUBNET_CIDRS__' "$src"; then
+    # The old account's Caddyfile terminates TLS itself, so Caddy is the edge
+    # there and its peer IS the client: it declares no trusted proxies and needs
+    # no substitution. Copy it through untouched.
+    cp "$src" "$out"
+    return
+  fi
+
+  local subnet_ids
+  subnet_ids=$(aws elbv2 describe-load-balancers \
+    --region "$REGION" --names "$ALB_NAME" \
+    --query 'LoadBalancers[].AvailabilityZones[].SubnetId' --output text) || {
+    echo "could not describe load balancer '$ALB_NAME' in $REGION" >&2
+    exit 1
+  }
+  if [[ -z "${subnet_ids// /}" ]]; then
+    echo "load balancer '$ALB_NAME' reports no subnets; refusing to render a trusted-proxy list" >&2
+    exit 1
+  fi
+
+  local cidrs
+  # shellcheck disable=SC2086  # subnet_ids is a deliberate word list
+  cidrs=$(aws ec2 describe-subnets \
+    --region "$REGION" --subnet-ids $subnet_ids \
+    --query 'Subnets[].CidrBlock' --output text) || {
+    echo "could not resolve CIDRs for subnets: $subnet_ids" >&2
+    exit 1
+  }
+  cidrs=$(printf '%s' "$cidrs" | tr '\t' ' ' | tr -s ' ')
+  if [[ -z "${cidrs// /}" ]]; then
+    echo "no CIDRs resolved for subnets: $subnet_ids; refusing to render an empty trusted-proxy list" >&2
+    exit 1
+  fi
+
+  echo "==> ALB '$ALB_NAME' trusted proxy ranges: $cidrs"
+  sed "s|__ALB_SUBNET_CIDRS__|$cidrs|" "$src" > "$out"
+
+  # Belt and braces. `caddy validate` on the node would reject the placeholder
+  # too — it is not a CIDR — but that check runs after the object is already in
+  # S3, where the next node replacement would pick it up. Refuse here instead.
+  if grep -q '__ALB_' "$out"; then
+    echo "rendered Caddyfile still contains an unsubstituted placeholder; refusing to upload" >&2
+    exit 1
+  fi
+}
+
 echo "==> uploading tools/caddy/$CADDYFILE -> s3://$BUCKET/_caddy/Caddyfile"
-aws s3 cp "$HERE/caddy/$CADDYFILE" "s3://$BUCKET/_caddy/Caddyfile" \
+CADDYFILE_RENDERED=$(mktemp "${TMPDIR:-/tmp}/oxagen-caddyfile-XXXXXX")
+trap 'rm -f "$CADDYFILE_RENDERED"' EXIT
+render_caddyfile "$HERE/caddy/$CADDYFILE" "$CADDYFILE_RENDERED"
+aws s3 cp "$CADDYFILE_RENDERED" "s3://$BUCKET/_caddy/Caddyfile" \
   --region "$REGION" --only-show-errors
 
 read -r -d '' REMOTE_TEMPLATE <<'REMOTE_EOF' || true

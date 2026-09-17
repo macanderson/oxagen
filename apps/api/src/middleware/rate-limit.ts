@@ -10,9 +10,25 @@ export interface RateLimitOptions {
   keyFn?: (c: Context<AppEnv>) => string;
 }
 
+/**
+ * One key's counts, for the current window and the one immediately before it.
+ *
+ * Two windows rather than one because `hit` is called with the CALLER's
+ * captured clock, and concurrent requests do not complete in the order they
+ * captured it. See the note on out-of-order completion in `hit`.
+ *
+ * Windows are identified by their epoch-aligned START, never by `resetAt`. A
+ * reset time only says the window has not ended yet, which every later window
+ * also satisfies — that was the defect: a request from the old window passed
+ * `now < newBucket.resetAt` and was counted into the new one.
+ */
 interface Bucket {
+  /** Epoch-aligned start of the window `count` belongs to. */
+  windowStart: number;
   count: number;
-  resetAt: number;
+  /** The window before it, retained so a late request lands in its own. */
+  prevWindowStart: number;
+  prevCount: number;
 }
 
 /**
@@ -95,6 +111,15 @@ export interface FixedWindowCounter {
 export function createFixedWindowCounter(windowMs: number): FixedWindowCounter {
   const buckets = new Map<string, Bucket>();
 
+  /** Make room for one more entry, discarding the least recently rolled key. */
+  function evictToCap(): void {
+    while (buckets.size >= MAX_TRACKED_KEYS) {
+      const oldest = buckets.keys().next().value;
+      if (oldest === undefined) break;
+      buckets.delete(oldest);
+    }
+  }
+
   return {
     get size(): number {
       return buckets.size;
@@ -102,24 +127,85 @@ export function createFixedWindowCounter(windowMs: number): FixedWindowCounter {
 
     hit(key: string, at?: number): FixedWindowHit {
       const now = at ?? Date.now();
+      // The window this HIT belongs to, from the caller's captured clock. Every
+      // comparison below is against a window start, never against a reset time.
+      const windowStart = Math.floor(now / windowMs) * windowMs;
       const bucket = buckets.get(key);
-      if (bucket && now < bucket.resetAt) {
-        bucket.count += 1;
-        return { count: bucket.count, resetAt: bucket.resetAt };
+
+      if (bucket) {
+        if (windowStart === bucket.windowStart) {
+          bucket.count += 1;
+          return { count: bucket.count, resetAt: windowStart + windowMs };
+        }
+
+        if (windowStart > bucket.windowStart) {
+          // The window rolled. The one that just ended becomes `prev`, so a
+          // straggler still finishing from it has somewhere to land.
+          //
+          // Delete before setting so the entry moves to the back of the
+          // iteration order — see the note above on eviction.
+          buckets.delete(key);
+          evictToCap();
+          buckets.set(key, {
+            windowStart,
+            count: 1,
+            prevWindowStart: bucket.windowStart,
+            prevCount: bucket.count,
+          });
+          return { count: 1, resetAt: windowStart + windowMs };
+        }
+
+        // Below here the hit is OLDER than the window currently installed —
+        // out-of-order completion, which is the ordinary case and not an edge.
+        // `distributedRateLimiter` captures `now` before awaiting the upsert and
+        // hands it here afterwards, so two requests that straddle a boundary
+        // reach this function in whatever order their store calls finished. If
+        // the newer one finishes first it installs the new window; the older one
+        // then arrives with a timestamp from the window before.
+        //
+        // This used to test `now < bucket.resetAt`, which the older request
+        // satisfies — its timestamp is before the NEW window's reset as surely
+        // as it is before its own. So it incremented the new window: it could be
+        // rejected by a count it was never part of, and it spent an allowance
+        // belonging to the next window, permanently offsetting that window by
+        // one for the caller.
+        if (windowStart === bucket.prevWindowStart) {
+          bucket.prevCount += 1;
+          return { count: bucket.prevCount, resetAt: windowStart + windowMs };
+        }
+
+        if (windowStart > bucket.prevWindowStart) {
+          // Newer than whatever is retained, so it becomes the retained window.
+          // This is the path a straggler takes when the new window was installed
+          // by a first-ever hit for the key, which has no predecessor to keep.
+          // Exactly one previous window is retained however many arrive, which
+          // is what keeps this fix a constant per key rather than a history a
+          // caller could grow.
+          bucket.prevWindowStart = windowStart;
+          bucket.prevCount = 1;
+          return { count: 1, resetAt: windowStart + windowMs };
+        }
+
+        // Older than both windows retained: a request whose store call took
+        // longer than a full window, or one overtaken by a straggler from a
+        // later window. Its own window closed before this hit arrived, so there
+        // is nothing left to enforce for it and nothing it may spend. Report it
+        // alone and leave both live windows untouched — the one thing it must
+        // not do is borrow from a window it was never in.
+        return { count: 1, resetAt: windowStart + windowMs };
       }
 
-      // New key, or this key's window has rolled. Delete before setting so the
-      // entry moves to the back of the iteration order — see the note above.
-      buckets.delete(key);
-      while (buckets.size >= MAX_TRACKED_KEYS) {
-        const oldest = buckets.keys().next().value;
-        if (oldest === undefined) break;
-        buckets.delete(oldest);
-      }
-
-      const resetAt = (Math.floor(now / windowMs) + 1) * windowMs;
-      buckets.set(key, { count: 1, resetAt });
-      return { count: 1, resetAt };
+      // New key.
+      evictToCap();
+      buckets.set(key, {
+        windowStart,
+        count: 1,
+        // No window precedes this key's first, and `-1` matches no window start,
+        // so a late hit cannot be mistaken for one belonging to it.
+        prevWindowStart: -1,
+        prevCount: 0,
+      });
+      return { count: 1, resetAt: windowStart + windowMs };
     },
   };
 }

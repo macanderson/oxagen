@@ -221,19 +221,30 @@ prod-equivalent env.
 believes `X-Oxagen-Client-Ip` only when `TRUST_EDGE_CLIENT_IP_HEADER=true`, and
 that header is only trustworthy once Caddy is SETting it. So: (1) upload and
 reload the Caddy config from `infra/tools/caddy/Caddyfile.alb`; (2) set
-`TRUST_EDGE_CLIENT_IP_HEADER=true` on app, api and mcp. Before either step, and
-between them, the hop-count walk decides, which is correct at the
-`TRUSTED_PROXY_HOP_COUNT` default of **1**: Caddy replaces `X-Forwarded-For`
-with a single entry rather than appending to it, so the chain reaching the app
-is one deep. Do not raise it to 2 — a chain shorter than the declared depth is
-refused outright, which yields no client address and denies every IAM
-`ip_ranges` mandate. Do not set `TRUSTED_PROXY_CIDRS` during this window either:
-a non-empty list makes the identity walk decide alone, and after the Caddy
-rewrite no proxy entry remains in the header to vouch for the client, so it
-returns nothing. Doing
-step 2 first is the failure mode the flag exists to prevent: the old Caddy
-config forwards a caller-supplied copy of that header unchanged, and it feeds
-IAM `ip_ranges` evaluation.
+`TRUST_EDGE_CLIENT_IP_HEADER=true` on app, api and mcp. Doing step 2 first is
+the failure mode the flag exists to prevent: the old Caddy config forwards a
+caller-supplied copy of that header unchanged, and it feeds IAM `ip_ranges`
+evaluation.
+
+Step 1 is `infra/tools/install-node-scripts.sh` and nothing else. That file
+carries a `__ALB_SUBNET_CIDRS__` placeholder rather than a literal trust list:
+the script resolves the ALB's subnets from the live load balancer and
+substitutes them, because trusting `private_ranges` on an internet-facing ALB
+lets a caller whose own source is RFC1918 be classified as a proxy and walked
+past. Copying the file to the node by hand ships the placeholder, which is not a
+CIDR — `caddy validate` on the node rejects it and the previous config stays.
+
+Between the two steps, and before either, the hop-count walk decides, which is
+correct at the `TRUSTED_PROXY_HOP_COUNT` default of **1**: Caddy replaces
+`X-Forwarded-For` with a single entry rather than appending to it, so the chain
+reaching the app is one deep. Do not raise it to 2 — a chain shorter than the
+declared depth is refused outright, which yields no client address and denies
+every IAM `ip_ranges` mandate. Do not set `TRUSTED_PROXY_CIDRS` during this
+window either: a non-empty list makes the identity walk decide alone, and after
+the Caddy rewrite no proxy entry remains to vouch for the client, so it returns
+nothing. ADR-083's "The attribution order, stated once" is the canonical
+statement of all of this, against the branches of `extractTrustedClientIp`; this
+paragraph is a pointer to it and not a second source of truth.
 
 ### 4.7 Secrets — amend ADR-004
 ADR-004 chose env vars over a secret manager because there was "no GCP

@@ -686,6 +686,92 @@ describe("distributedRateLimiter", () => {
     }
   });
 
+  // The case above completes the crossing request BEFORE starting the
+  // new-window ones, so this counter sees its hits in timestamp order and the
+  // out-of-order defect cannot appear. Concurrency does not work that way: each
+  // request captures `now` before awaiting the upsert, and they finish in
+  // whatever order the store returns.
+  //
+  // Here the two are genuinely interleaved — both started, the NEWER one
+  // resolved first — which is the only ordering that exposes it.
+  it("does not charge a request to a window a faster request installed", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-17T12:00:59.999Z"));
+
+      // Each store call parks until its own resolver is called, so the test
+      // decides the completion order rather than the scheduler.
+      const gates: Array<() => void> = [];
+      mocks.withSystemDb.mockImplementation(
+        async (fn: (tx: unknown) => Promise<unknown>) => {
+          await new Promise<void>((resolve) => gates.push(resolve));
+          // Postgres counts each window from 1, so only the shadow can deny.
+          return fn({ execute: vi.fn().mockResolvedValue([{ count: 1 }]) });
+        },
+      );
+
+      // The middleware awaits its bucket-key resolver before capturing `now`,
+      // so a single microtask tick is not enough to be sure a request has
+      // reached the store. Drain until it has, and fail loudly rather than
+      // hanging if it never does.
+      const waitForGates = async (count: number): Promise<void> => {
+        for (let tick = 0; tick < 50 && gates.length < count; tick += 1) {
+          await Promise.resolve();
+        }
+        expect(gates.length).toBe(count);
+      };
+
+      const mw = distributedRateLimiter({
+        keyPrefix: "preauth",
+        max: 1,
+        bucketKey: trustedClientIpBucketKey,
+        storeErrorPolicy: "degrade-to-local",
+      });
+      const next = vi.fn().mockResolvedValue(undefined);
+      const headers = { "x-oxagen-client-ip": "198.51.100.61" };
+
+      // Request A starts in the old window and blocks on the store, holding a
+      // captured `now` of 12:00:59.999.
+      const a = fakeContext({ headers });
+      const aDone = mw(a, next);
+      await waitForGates(1);
+
+      // The minute rolls while A is still in flight. Request B starts in the
+      // NEW window and its store call returns first.
+      vi.setSystemTime(new Date("2026-09-17T12:01:00.001Z"));
+      const b = fakeContext({ headers });
+      const bDone = mw(b, next);
+      await waitForGates(2);
+
+      gates[1]!();
+      await bDone;
+      gates[0]!();
+      await aDone;
+
+      // Each request is the first in its own window, so with max = 1 neither is
+      // denied. Against `now < bucket.resetAt`, A lands in B's window as its
+      // second hit and comes back 429 — rejected by a count it was never part
+      // of, because a boundary happened to fall inside its store call.
+      expect(a.json).not.toHaveBeenCalled();
+      expect(b.json).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalledTimes(2);
+
+      // And the new window has spent B's allowance and only B's: the NEXT
+      // request in it is the one that trips the ceiling. Against the old code A
+      // had already spent it, so this would have been the third denial rather
+      // than the first.
+      gates.length = 0;
+      const c = fakeContext({ headers });
+      const cDone = mw(c, next);
+      await waitForGates(1);
+      gates[0]!();
+      const cRes = (await cDone) as { status: number } | undefined;
+      expect(cRes?.status).toBe(429);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // The headers a client paces against. When the store comes back inside a
   // window the shadow already owns, the shadow is the operative ceiling and the
   // Postgres count is the smaller, irrelevant one. Reporting the smaller number
