@@ -1231,7 +1231,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {

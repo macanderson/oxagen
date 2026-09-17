@@ -64,7 +64,7 @@ export const assistantAsk = registerCapability({
     "Take one turn with the in-app agent: append the message to a conversation, record the turn as a run of its own, drive it on the assistant engine with every completion and tool call answered by Oxagen, and return the reply with the run it was recorded as.",
   mode: "async",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   mutates: true,
   noBillingGate: true,

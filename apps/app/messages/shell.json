@@ -84,6 +84,32 @@
       "denied": "You do not have permission to change this profile.",
       "failed": "That could not be saved. Try again.",
       "avatarPlaceholder": "https://"
+    },
+    "assistant": {
+      "label": "Assistant",
+      "launcher": "Ask the assistant",
+      "launcherHint": "over this workspace",
+      "close": "Close the assistant",
+      "thinking": "Working…",
+      "recordedAs": "recorded as {run}",
+      "parked": "{count, plural, one {# write is waiting on a person} other {# writes are waiting on a person}}. Approve or deny them on Fleet.",
+      "needsWorkspace": "The assistant answers over one workspace. Open a workspace to ask it something.",
+      "intro": {
+        "title": "Ask about this workspace",
+        "body": "The assistant reads this workspace’s runs, agents, spend and knowledge graph. Every turn is recorded as a run of its own."
+      },
+      "composer": {
+        "label": "Ask the assistant",
+        "placeholder": "Ask about a run, an agent, or what this is costing…",
+        "send": "Send"
+      },
+      "refused": {
+        "denied": "You do not have permission to ask the assistant in this workspace.",
+        "invalid": "That question was refused. A question is 1 to 32,000 characters.",
+        "exhausted": "This organization has no budget left for the assistant.",
+        "parked": "That turn is waiting on an approval before it can answer.",
+        "unavailable": "The assistant could not be reached. Try again."
+      }
     }
   }
 }
