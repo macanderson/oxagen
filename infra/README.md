@@ -256,6 +256,64 @@ gets its `package.json` copied without its code. The script recopies any
 bundled package that holds nothing but a manifest — on the Stella site that was
 five packages, not the one that surfaced in the error.
 
+## What alarms, and what each one is for
+
+Every alarm lives in `infra/stacks-new/oxagen/alarms.tf` and sends to the
+`oxagen-alerts` SNS topic. Nothing pages until `alert_email` is set in
+`terraform.tfvars` — until then the alarms record state and drive the
+dashboard, which is better than nothing and is not a notification.
+
+Each one is here because something failed and nothing said so, so the list
+reads as an incident history:
+
+| Alarm | Fires when | The failure it is for |
+|---|---|---|
+| `oxagen-target-5xx` | The node answers real requests with 5xx | 2026-09-08: a node replacement came back with no services on it and passed its health check for two hours |
+| `oxagen-elb-5xx` | The load balancer itself errors | The ALB failing rather than the target |
+| `oxagen-no-healthy-host` | The target group has no healthy target | |
+| `oxagen-node-status-check` | The instance fails its EC2 status checks | |
+| `oxagen-aurora-cpu` | Aurora saturates | |
+| `oxagen-node-disk-{root,data}` | A filesystem is over 80% full | Deploys refuse to unpack under 3 GB free; at 100% SSM cannot reach the box to fix it |
+| `oxagen-node-cpu` | Over 75% CPU for half an hour | 2026-08-25: ClickHouse burned its own system logs for 26 hours |
+| `oxagen-node-cpu-credits` | The burst credit balance runs out | The same runaway, billing silently in `unlimited` mode |
+| `oxagen-node-memory` | Over 90% memory | Two databases and six Node services on 8 GB; the OOM killer takes a database |
+| `oxagen-container-restart-loop` | More than 5 container starts in each of three consecutive 5-minute periods | 2026-09-09 (#2813): a leftover `oxagen-worker` container restarted about 14 times a minute for two days and every alarm above stayed OK |
+
+### The crash-loop alarm has parts outside `alarms.tf`
+
+`oxagen-container-restart-loop` is the only alarm here whose metric does not
+exist until something on the node publishes it, so it is four pieces rather
+than one:
+
+1. `infra/modules/app-node/monitoring.tf` installs a systemd unit that runs
+   `docker events --filter event=start` and appends a line per container start
+   to `/var/log/oxagen-docker-events.log`. It is installed by SSM State Manager,
+   not user data, so adding it does not replace the instance.
+2. The same file's CloudWatch agent config ships that file to
+   `/oxagen-app/docker-events`.
+3. `infra/stacks-new/oxagen/observability.tf` registers that log group in
+   `local.log_group_services`, which is what gives it retention, tags and the S3
+   archive.
+4. `alarms.tf` counts the lines with a metric filter and alarms on the count.
+
+Two things worth knowing before the next incident review:
+
+- **It looks for a level, not a burst.** A deploy starts one container per
+  service and is over inside a single period; a crash loop holds a rate. That is
+  why the threshold is 5 rather than something near the incident's own 70 per
+  period. The cost is that a container restarting slower than about once a
+  minute stays under it. A slow loop is a real failure and this is not the thing
+  that finds it.
+- **Missing data is treated as quiet, not as broken.** A healthy node starts
+  nothing for days, so the metric has no datapoint most of the time and a dead
+  collector looks exactly like a calm one. `Restart=always` on the unit and the
+  daily State Manager re-run are what hold it up; no alarm watches the watcher.
+
+`tools/scripts/check-restart-alarm.mjs` (run by `pnpm check:contracts`) holds
+those four pieces together, because each is joined to the next by a string
+literal in a different file and every way of breaking the chain leaves valid
+Terraform and an alarm that sits at OK forever.
+
 ## Reaching the databases
 
 **This section is `stacks/oxagen-data` — the old account's self-hosted

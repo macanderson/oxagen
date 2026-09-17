@@ -41,7 +41,7 @@ function defaultKeyFn(c: Context<AppEnv>): string {
  *  - `defaultKeyFn` reads `x-forwarded-for` / `x-real-ip`, which any client can
  *    set. A caller who varies that header per request gets a fresh bucket every
  *    time, and each distinct value costs a map entry. Pass an explicit `keyFn`
- *    (see `trustedVercelIpBucketKey` in distributed-rate-limit.ts for the shape
+ *    (see `trustedClientIpBucketKey` in distributed-rate-limit.ts for the shape
  *    of a trustworthy one) on any route where that matters.
  */
 export function rateLimiter(opts: RateLimitOptions): MiddlewareHandler<AppEnv> {

@@ -5,7 +5,7 @@
 import { useTranslations } from "next-intl";
 import type { ActionResult } from "@/server/kernel";
 
-type ActionFailure =Exclude<ActionResult<unknown>, { ok: true }>;
+type ActionFailure = Exclude<ActionResult<unknown>, { ok: true }>;
 
 export function useActionFailure(): (failure: ActionFailure) => string {
   const t = useTranslations("steering.actions.failure");

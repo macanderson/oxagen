@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   bodyColumnType,
+  RETIRED_COLUMNS,
   tachoEventsColumns,
   tachoEventsMigration,
 } from "./tacho-events-ddl";
@@ -29,8 +30,26 @@ describe("tacho_events DDL", () => {
     for (const column of ENVELOPE_COLUMNS) expect(names).toContain(column);
     for (const member of BODY_MEMBER_NAMES) expect(names).toContain(member);
     expect(names.length).toBe(
-      ENVELOPE_COLUMNS.length + BODY_MEMBER_NAMES.length + 4,
+      ENVELOPE_COLUMNS.length +
+        BODY_MEMBER_NAMES.length +
+        RETIRED_COLUMNS.length +
+        4,
     );
+  });
+
+  it("carries every retired column, and no producer set names one", () => {
+    // The point of retiring rather than deleting: the table still has the
+    // column, so a cluster bootstrapped today matches one bootstrapped before
+    // the retirement and a rollback to a release that still sends the field
+    // does not meet an unknown column. Nothing writes it.
+    const names = tachoEventsColumns().map((column) => column.name);
+    expect(RETIRED_COLUMNS.length).toBeGreaterThan(0);
+    for (const { name, after } of RETIRED_COLUMNS) {
+      expect(names).toContain(name);
+      expect(names.indexOf(name)).toBe(names.indexOf(after) + 1);
+      expect(ENVELOPE_COLUMNS).not.toContain(name);
+      expect(BODY_MEMBER_NAMES).not.toContain(name);
+    }
   });
 
   it("derives body column types from the Zod definitions", () => {

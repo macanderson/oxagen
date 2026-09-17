@@ -12,13 +12,8 @@ vi.mock("next/navigation", () => ({ useRouter: () => router }));
 const { parseHostedInvoiceUrl } = await import("@/shared/invoice-url");
 const { parsePullRequestUrl } = await import("@/shared/pull-request-url");
 const { routes } = await import("@/shared/safe-path");
-const {
-  HostedInvoiceLink,
-  PullRequestLink,
-  SafeForm,
-  SafeLink,
-  useNavigate,
-} = await import("./navigation");
+const { HostedInvoiceLink, PullRequestLink, SafeForm, SafeLink, useNavigate } =
+  await import("./navigation");
 
 afterEach(() => {
   cleanup();

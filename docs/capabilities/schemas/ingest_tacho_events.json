@@ -350,6 +350,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -1049,6 +1052,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -1872,6 +1878,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -2500,6 +2509,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -3037,6 +3049,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -3738,6 +3753,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -4343,6 +4361,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -4950,6 +4971,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -5556,6 +5580,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -6161,6 +6188,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -6843,6 +6873,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -7544,6 +7577,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -8243,6 +8279,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -8944,6 +8983,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -9481,6 +9523,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -10182,6 +10227,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -10882,6 +10930,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -11373,6 +11424,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -11874,6 +11928,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -12790,6 +12847,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -13305,6 +13365,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -13819,6 +13882,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -14642,6 +14708,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -15300,6 +15369,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -15887,6 +15959,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -16473,6 +16548,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -17068,6 +17146,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -17756,6 +17837,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -18521,6 +18605,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -19112,6 +19199,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -19705,6 +19795,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -20296,6 +20389,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -20889,6 +20985,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -21481,6 +21580,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -22072,6 +22174,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -22895,6 +23000,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -23486,6 +23594,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -24169,6 +24280,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -24756,6 +24870,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -25342,6 +25459,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -26025,6 +26145,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -26707,6 +26830,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -27317,6 +27443,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -27976,6 +28105,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -28490,6 +28622,9 @@
                     "user_id_hash": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "user_email": {
                       "type": "string",
@@ -29100,6 +29235,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
@@ -29281,6 +29419,13 @@
           "bundle_etag": {
             "type": "string",
             "maxLength": 128
+          },
+          "bundle_features": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            }
           }
         },
         "additionalProperties": false

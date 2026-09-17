@@ -17,6 +17,7 @@ import { mergeStellaHooks, stellaHookPresence } from "../host/stella-writer";
 import {
   HOST_FILE_SCHEMA,
   type HostFile,
+  mcpEndpointOverrideRequestFrom,
   readHostFile,
   writeHostFile,
 } from "../host/host-file";
@@ -202,6 +203,27 @@ function controlErrorReason(body: string): string {
   return reason === "" ? "" : ` — ${reason.slice(0, 200)}`;
 }
 
+/**
+ * The requested `TACHO_MCP_ENDPOINT`, reporting it once when it is unusable.
+ *
+ * Both enrollment paths go through here rather than each judging the variable
+ * for itself. They disagreed before: a fresh enrollment warned on a malformed
+ * value, a re-apply ignored it in silence — and the re-apply path is reached
+ * by an operator repairing a setup that is already wrong, so it is the path
+ * where saying nothing costs most.
+ */
+function requestedMcpEndpoint(
+  deps: CliDeps,
+  warnings: string[],
+): string | undefined {
+  const request = mcpEndpointOverrideRequestFrom(deps.env);
+  if (request.warning !== undefined) {
+    warnings.push(request.warning);
+    deps.err(`      ${request.warning}`);
+  }
+  return request.pinned;
+}
+
 export async function enroll(
   options: EnrollOptions,
   deps: CliDeps,
@@ -244,6 +266,16 @@ export async function enroll(
     }
     harnesses = existing.harnesses as TachoHarness[];
     host = existing;
+    // A re-apply is the place a local override lands on a host that is already
+    // enrolled: the value belongs to this machine, not to the enrollment, so
+    // picking it up here saves a --force re-enrollment just to point tachod at
+    // a local MCP server.
+    const pinned = requestedMcpEndpoint(deps, warnings);
+    if (pinned !== undefined && pinned !== existing.mcp_endpoint_override) {
+      host = { ...existing, mcp_endpoint_override: pinned };
+      writeHostFile(deps.paths.hostFile, host);
+      deps.out(`      MCP endpoint pinned to ${pinned} (TACHO_MCP_ENDPOINT)`);
+    }
   } else {
     // The hook command and the service unit carry this binary's directory
     // verbatim; refuse before anything is revoked or minted when that
@@ -264,7 +296,18 @@ export async function enroll(
     let credentials:
       | { token: string; org: string; workspace: string; apiUrl: string }
       | undefined;
-    const apiUrl = resolveApiUrl(options, deps.env, deps.home);
+    // The control plane this enrollment actually talks to. A harness addition
+    // re-enrolls in place, so it stays on the host's own API unless a flag
+    // names another — the rule the credential resolution just below already
+    // follows. Resolving `OXAGEN_API_URL` (or config.json) for it instead
+    // posted the enrollment to `existing.api_url` while recording whatever
+    // the environment happened to say, so `host.api_url` named a deployment
+    // the host had never enrolled with.
+    const apiUrl = resolveApiUrl(
+      live ? { apiUrl: options.apiUrl ?? existing.api_url } : options,
+      deps.env,
+      deps.home,
+    );
     if (options.enrollmentToken !== undefined) {
       step(1, "Presenting the one-time enrollment token");
     } else {
@@ -423,6 +466,26 @@ export async function enroll(
     }
     const port = options.port ?? existing?.port ?? (await deps.findFreePort());
     const now = toProtocolTimestamp(deps.now());
+    // A pin outranks the signed claim in `mcpEndpointFor`, so it is worth
+    // exactly as much as the deployment it was aimed at. Carrying it to a
+    // different API deployment aimed every connected-app call at a local
+    // server the new control plane knows nothing about — while the enrollment
+    // reported success — so a move drops it and the newly signed claim wins.
+    // A move is the fact to test, and `--force` is not that fact: `reassign`
+    // passes `force: true` for a workspace or harness change that defaults
+    // `apiUrl` to the host's existing one and never leaves the deployment,
+    // and keying the drop on the flag threw away a locally pinned
+    // `127.0.0.1:4100/mcp` on every such reassignment. So the pin survives
+    // every enrollment that re-states this host against the API it already
+    // talks to — a harness addition, a post-revoke recovery, a `--force`
+    // repair — beside the other local settings that survive one (the device
+    // key, the port, the local token), and an exported `TACHO_MCP_ENDPOINT`
+    // still outranks both.
+    const movesDeployment =
+      existing !== undefined && apiUrl !== existing.api_url;
+    const mcpEndpointOverride =
+      requestedMcpEndpoint(deps, warnings) ??
+      (movesDeployment ? undefined : existing?.mcp_endpoint_override);
     host = {
       schema: HOST_FILE_SCHEMA,
       host_enrollment_id: response.hostEnrollmentId,
@@ -448,6 +511,14 @@ export async function enroll(
           ? { mcp: response.enrollment.claims.mcp_endpoint }
           : {}),
       },
+      // The service unit tachod runs under carries only TACHO_HOME,
+      // CLAUDE_CONFIG_DIR, PATH and HOME, so TACHO_MCP_ENDPOINT as exported in
+      // this shell would not survive the install. Write it down instead —
+      // beside `port` and `local_token`, the host's other local settings — and
+      // leave the signed claims free of plaintext endpoints.
+      ...(mcpEndpointOverride === undefined
+        ? {}
+        : { mcp_endpoint_override: mcpEndpointOverride }),
       enrollment: {
         claims: response.enrollment.claims,
         signature_hex: response.enrollment.signature_hex,

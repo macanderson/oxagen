@@ -30,6 +30,45 @@ import {
 } from "../wire";
 import { type DaemonHandle, startDaemon } from "./daemon";
 
+/**
+ * The connect budget a hook gets when the test needs it to REACH the daemon.
+ *
+ * `runTachoHook` defaults to 50ms (hook-client.ts), which is a production
+ * figure: a hook must never block the agent waiting on a socket, so it gives
+ * up fast and decides locally from the cached bundle. A test that asserts the
+ * daemon path is therefore racing that budget, and on a loaded CI runner the
+ * unix-socket connect loses — the hook falls back, `path` is "local", and the
+ * assertion fails on the machine's scheduling rather than on the code. The
+ * nightly full run caught exactly that on 2026-09-17.
+ *
+ * The two cases below that assert the FALLBACK keep the 50ms default on
+ * purpose (the daemon is stopped there); this constant is for the opposite
+ * intent, and being a named constant is what keeps the two legible apart.
+ */
+const DAEMON_CONNECT_MS = 5_000;
+
+/**
+ * Assert the hook reached the daemon, and say WHY when it did not.
+ *
+ * `runTachoHook` turns every failure — connect timeout, response timeout, a
+ * non-200 from the daemon — into the same `path: "local"` with the cause put
+ * in `stderr` and exit code 0, because a hook must never fail the agent. That
+ * is right for production and hostile to a test: a bare
+ * `expect(result.path).toBe("daemon")` reports `expected 'local' to be
+ * 'daemon'` and throws the reason away, which is all the 2026-09-17 nightly
+ * left behind. Carrying stderr into the assertion message costs nothing and
+ * makes the next occurrence self-describing.
+ */
+function expectReachedDaemon(result: {
+  path: string;
+  stderr: string;
+}): void {
+  expect(
+    result.path,
+    `hook fell back to the local path instead of reaching the daemon: ${result.stderr.trim() || "(no stderr)"}`,
+  ).toBe("daemon");
+}
+
 const FIXTURES = join(
   __dirname,
   "..",
@@ -356,8 +395,9 @@ describe("tachod", () => {
           paths,
           env: fixture.env,
           stdin: JSON.stringify(fixture.stdin),
+          connectTimeoutMs: DAEMON_CONNECT_MS,
         });
-        expect(result.path).toBe("daemon");
+        expectReachedDaemon(result);
         expect(result.exitCode).toBe(0);
         if (fixture.name === "09-PreToolUse.json") {
           expect(JSON.parse(result.stdout)).toMatchObject({
@@ -494,6 +534,7 @@ describe("tachod", () => {
       paths,
       env: start.env,
       stdin: JSON.stringify(start.stdin),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
     });
     const sessionUuid = handle.registry.get(String(start.stdin["session_id"]))
       ?.recorder.sessionUuid as string;
@@ -534,6 +575,7 @@ describe("tachod", () => {
       paths,
       env: prompt.env,
       stdin: JSON.stringify(prompt.stdin),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
     });
     expect(JSON.parse(blocked.stdout)).toMatchObject({
       decision: "block",
@@ -552,6 +594,7 @@ describe("tachod", () => {
       paths,
       env: prompt.env,
       stdin: JSON.stringify(prompt.stdin),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
     });
     expect(JSON.parse(resumed.stdout)).toMatchObject({
       hookSpecificOutput: {
@@ -586,6 +629,7 @@ describe("tachod", () => {
       paths,
       env: read.env,
       stdin: JSON.stringify(read.stdin),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
     });
     expect(JSON.parse(denied.stdout)).toMatchObject({
       hookSpecificOutput: {
@@ -616,6 +660,7 @@ describe("tachod", () => {
       paths,
       env: start.env,
       stdin: JSON.stringify(start.stdin),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
     });
     expect(JSON.parse(refused.stdout)).toMatchObject({ continue: false });
   });
@@ -632,6 +677,7 @@ describe("tachod", () => {
       paths,
       env: start.env,
       stdin: JSON.stringify(start.stdin),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
     });
     await handle.stop();
     handles.splice(handles.indexOf(handle), 1);
@@ -733,6 +779,7 @@ describe("tachod", () => {
       paths,
       env: start.env,
       stdin: JSON.stringify(start.stdin),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
     });
     plane.refuseNextIngest(400);
     await handle.tick();
@@ -747,11 +794,71 @@ describe("tachod", () => {
       paths,
       env: prompt.env,
       stdin: JSON.stringify(prompt.stdin),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
     });
     await handle.tick();
     expect(handle.shipper.reachable).toBe(false);
     expect(handle.shipper.lastError).toContain("unreachable");
     plane.setDown(false);
     expect(handle.shipper.ready()).toBe(false);
+  });
+
+  it("backs off the command poll instead of retrying it every tick", async () => {
+    // The regression this guards: `sendAcks` had no gate of its own. Its only
+    // skip condition is "a recent ingest already carried a control envelope",
+    // and an outage makes ingest stale too, so every tick — one per second in
+    // the real daemon — re-attempted the poll. A control plane answering 503
+    // therefore got 60 requests a minute from every enrolled host, forever,
+    // and the host wrote 1770 identical failures into 2000 lines of log. The
+    // daemon must get quieter when the control plane is down, not louder.
+    const plane = fakeControlPlane("etag-backoff");
+    let clock = 1_000_000;
+    const { handle, log } = await boot(plane, scratchPaths(), {
+      now: () => clock,
+    });
+    const pollCount = () =>
+      plane.calls.filter((u) => u.endsWith("/commands")).length;
+
+    plane.setDown(true);
+    await handle.tick();
+    const afterFirstFailure = pollCount();
+    expect(afterFirstFailure).toBeGreaterThan(0);
+
+    // Four more ticks a tenth of a second apart: the daemon is inside its
+    // backoff window and must not touch the control plane again.
+    for (let i = 0; i < 4; i += 1) {
+      clock += 100;
+      await handle.tick();
+    }
+    expect(pollCount()).toBe(afterFirstFailure);
+
+    // Past the first backoff (2s), exactly one more attempt is allowed.
+    clock += 2_500;
+    await handle.tick();
+    expect(pollCount()).toBe(afterFirstFailure + 1);
+    clock += 100;
+    await handle.tick();
+    expect(pollCount()).toBe(afterFirstFailure + 1);
+
+    // The log names the streak and the wait, so a reader can tell one failure
+    // from the eight hundredth and see that the daemon is holding off.
+    const failures = log.filter((l) => l.includes("command poll failed"));
+    expect(failures).toHaveLength(2);
+    expect(failures[0]).toMatch(/1 in a row, retrying in 2s/);
+    expect(failures[1]).toMatch(/2 in a row, retrying in 4s/);
+
+    // Recovery resets the window: the next failure waits the minimum again.
+    plane.setDown(false);
+    clock += 5_000;
+    await handle.tick();
+    expect(log.some((l) => l.includes("command poll recovered"))).toBe(true);
+
+    plane.setDown(true);
+    clock += 100;
+    await handle.tick();
+    const afterRecovery = log.filter((l) => l.includes("command poll failed"));
+    expect(afterRecovery[afterRecovery.length - 1]).toMatch(
+      /1 in a row, retrying in 2s/,
+    );
   });
 });
