@@ -1,7 +1,7 @@
 /**
  * A guard that cannot fail on the shape it exists for is decoration, so both
- * directions are asserted here against synthetic trees: the four policy classes
- * the sentinel narrows, the one it does not, the two forms the defect takes
+ * directions are asserted here against synthetic trees: the three policy classes
+ * the sentinel narrows, the two it does not, the two forms the defect takes
  * (co-located scope, and a sentinel ctx handed across an invoke), and the
  * exemptions that keep a correct file from being reported.
  *
@@ -9,9 +9,16 @@
  * handler register — because the real ones are what the check reads, and a test
  * that stubbed them would only assert that the regexes match themselves.
  */
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   callsTo,
@@ -19,6 +26,7 @@ import {
   findSentinelNarrowedReads,
   parse,
   pinsNullWorkspace,
+  residualPolicyClasses,
   residualTableForms,
   sentinelNames,
   tableResolver,
@@ -27,11 +35,15 @@ import {
 
 const SENTINEL = "00000000-0000-0000-0000-000000000000";
 
+/** The real monorepo root, for the cases that read the real manifest. */
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+
 const MANIFEST = `export const POLICY_MANIFEST = [
   { table: "org.org_users", policyClass: "org_only" },
   { table: "security.security_events", policyClass: "workspace_nullable" },
   { table: "auth.api_keys", policyClass: "standard" },
   { table: "workspace.workspace_users", policyClass: "workspace_only" },
+  { table: "cost.price_entries", policyClass: "org_or_global" },
 ];
 `;
 
@@ -40,13 +52,15 @@ export const orgSchema = pgSchema("org");
 export const securitySchema = pgSchema("security");
 export const authSchema = pgSchema("auth");
 export const workspaceSchema = pgSchema("workspace");
+export const costSchema = pgSchema("cost");
 `;
 
-const TABLES = `import { authSchema, orgSchema, securitySchema, workspaceSchema } from "./_schemas";
+const TABLES = `import { authSchema, costSchema, orgSchema, securitySchema, workspaceSchema } from "./_schemas";
 export const orgUsers = orgSchema.table("org_users", {});
 export const securityEvents = securitySchema.table("security_events", {});
 export const apiKeys = authSchema.table("api_keys", {});
 export const workspaceUsers = workspaceSchema.table("workspace_users", {});
+export const priceEntries = costSchema.table("price_entries", {});
 `;
 
 const roots: string[] = [];
@@ -110,8 +124,22 @@ describe("the classes the sentinel narrows", () => {
     });
   });
 
-  it("passes an org_only table, the one class that ignores the workspace GUC", () => {
+  it("passes an org_only table, which ignores the workspace GUC", () => {
     const root = makeTree({ "apps/app/src/page.ts": colocated("orgUsers") });
+    expect(findSentinelNarrowedReads(root).findings).toEqual([]);
+  });
+
+  // The regression this case exists for. `org_or_global` emits
+  // `org_id IS NULL OR org_id = ORG` and never mentions the workspace GUC, so
+  // the sentinel cannot narrow it — but it was missing from the safe set, and
+  // an org-level read of cost.price_entries failed CI. That is worse than
+  // noise: the remedy the failure message recommends is withSystemDb or a
+  // baseline waiver, so the check was pushing the author toward an RLS bypass
+  // on a read that was already correct.
+  it("passes an org_or_global table, whose USING clause never names the workspace GUC", () => {
+    const root = makeTree({
+      "apps/app/src/page.ts": colocated("priceEntries"),
+    });
     expect(findSentinelNarrowedReads(root).findings).toEqual([]);
   });
 
@@ -120,6 +148,38 @@ describe("the classes the sentinel narrows", () => {
       "apps/app/src/page.ts": colocated("plans"),
     });
     expect(findSentinelNarrowedReads(root).findings).toEqual([]);
+  });
+
+  // The property that keeps the split above maintainable. A class added to
+  // PolicyClass and left out of both sets is treated as narrowing, which fails
+  // closed in CI but is a false positive if the new class ignores the workspace
+  // GUC — exactly how org_or_global was missed. This reads the real union from
+  // the real manifest module rather than a fixture, so adding a sixth class
+  // fails here until someone reads the generator and decides which half it is.
+  it("accounts for every PolicyClass the manifest declares, in exactly one half", () => {
+    const src = readFileSync(
+      join(REPO_ROOT, "packages/database/src/tenant-policy.manifest.ts"),
+      "utf8",
+    );
+    const union = src.slice(
+      src.indexOf("export type PolicyClass ="),
+      src.indexOf(";", src.indexOf("export type PolicyClass =")),
+    );
+    const declared = [...union.matchAll(/"(\w+)"/g)].map((m) => m[1]).sort();
+    expect(declared.length).toBeGreaterThan(0);
+
+    const { safe, narrowing } = residualPolicyClasses();
+    expect([...safe, ...narrowing].sort()).toEqual(declared);
+    expect(safe.filter((c) => narrowing.includes(c))).toEqual([]);
+  });
+
+  // Named rather than counted, because the point of this assertion is that a
+  // class moves between halves only when someone changes the generator.
+  it("puts org_only and org_or_global in the safe half and the rest in the narrowing half", () => {
+    expect(residualPolicyClasses()).toEqual({
+      safe: ["org_only", "org_or_global"],
+      narrowing: ["standard", "workspace_nullable", "workspace_only"],
+    });
   });
 });
 

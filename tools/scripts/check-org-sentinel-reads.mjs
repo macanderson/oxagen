@@ -91,8 +91,54 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..", "..");
 
 const SENTINEL = "00000000-0000-0000-0000-000000000000";
-/** The only policy class that ignores the workspace GUC. */
-const SAFE_CLASS = "org_only";
+
+/**
+ * The policy classes whose USING clause never consults the workspace GUC, and
+ * which the org-only workspace sentinel therefore cannot narrow.
+ *
+ * Derived by reading every branch of `predicates()` in
+ * `tools/scripts/gen-rls-migration.ts`, which is the one place a class becomes
+ * a predicate. All five classes in `PolicyClass`, with the USING clause each
+ * emits (the `app.rls_bypass` disjunct is omitted; it is on every one):
+ *
+ *   org_only          `org_id = ORG`                                    — safe
+ *   org_or_global     `org_id IS NULL OR org_id = ORG`                  — safe
+ *   workspace_nullable`org_id = ORG AND (ws IS NULL OR ws = WS)`        — narrows
+ *   workspace_only    `workspace_id = WS`                               — narrows
+ *   standard          `org_id = ORG AND workspace_id = WS`              — narrows
+ *
+ * `org_or_global` was missing here, and the omission was worse than noise: it
+ * failed CI on a correct org-level read of `cost.price_entries` and told the
+ * author their read was narrowed — pointing them at an RLS bypass or a baseline
+ * waiver, which is the exact move this check exists to prevent. A false
+ * positive that recommends the defect is not a false positive with a small
+ * cost.
+ *
+ * `residualPolicyClasses()` publishes this split and the tests assert every
+ * class appears in exactly one half, so a sixth class cannot be added to the
+ * manifest without this constant being revisited.
+ */
+const SAFE_CLASSES = new Set(["org_only", "org_or_global"]);
+
+/** The classes whose USING clause consults `app.current_workspace_id`. */
+const NARROWING_CLASSES = new Set([
+  "workspace_nullable",
+  "workspace_only",
+  "standard",
+]);
+
+/**
+ * The classes this check knows about, split by whether the sentinel can narrow
+ * them. Exported so the tests can assert it against `PolicyClass` — the one
+ * property that makes the split maintainable rather than a snapshot of one
+ * afternoon's reading of the generator.
+ */
+export function residualPolicyClasses() {
+  return {
+    safe: [...SAFE_CLASSES].sort(),
+    narrowing: [...NARROWING_CLASSES].sort(),
+  };
+}
 
 // ── The manifest: table -> policy class ──────────────────────────────────────
 
@@ -656,7 +702,7 @@ export function offenders(names, tableNames, policyClasses, roots, resolver) {
     // A table with no manifest entry carries no tenant_isolation policy at all
     // (auth.users, org.organizations, billing.plans — platform-global rows), so
     // the sentinel cannot narrow it.
-    if (cls === undefined || cls === SAFE_CLASS) continue;
+    if (cls === undefined || SAFE_CLASSES.has(cls)) continue;
     if (
       cls === "workspace_nullable" &&
       pinsNullWorkspace(name, roots, resolver)

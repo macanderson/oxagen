@@ -429,11 +429,18 @@ and the answer should be written rather than assumed.
 
 ### This check is best-effort, and it does not converge
 
-Eleven failures were found in it during one review cycle. **Every one reported
+Twelve failures were found in it during one review cycle. **Every one reported
 clean rather than erroring**, which is the property that makes a green
 mandatory check worse than no check: it turns "nobody has verified this" into
-"CI says it is fine". They fall on five axes, and the axes are the point —
+"CI says it is fine". They fall on six axes, and the axes are the point —
 above all the split between *reading something wrong* and *never looking*.
+
+One of them, #12, is worse than either. A false positive normally costs time.
+This one **failed CI on a correct org-level read and told its author the read
+was narrowed**, and the remedy the message recommends is `withSystemDb` or a
+baseline waiver — so the check would have pushed someone into an RLS bypass on
+a read that was already right. A gate that recommends the defect it exists to
+prevent is a different category of wrong from a gate that stays quiet.
 
 | # | axis | what it could not do |
 |---|---|---|
@@ -442,6 +449,7 @@ above all the split between *reading something wrong* and *never looking*.
 | 6 | which table a read touches | it matched the literal identifier `schema` |
 | 7, 9, 10 | **whether it looked at all** — coverage, not precision | it read one registry, so `@oxagen/agent`'s 45 handlers were never examined; it discarded a handler's helper for having no transaction of its own; it did not scan for capability names when `invokeOrgCapability` was reached through a wrapper |
 | 11 | **what the seam it recommends stops doing** — coverage | it judges a read on table policy class against seam, and holds no model of what `withTenantDb` was doing *besides* narrowing: the data-plane resolution and `assertDataPlaneUsable` that a conversion to `withSystemDb` silently drops |
+| 12 | **which classes the sentinel can narrow** — precision, and the harmful direction | its safe set held `org_only` alone and omitted `org_or_global`, whose USING clause is `org_id IS NULL OR org_id = ORG` and never names the workspace GUC |
 
 Each was closed. Closing axis 1 took the call-site analysis from regexes to a
 TypeScript parse. Closing axis 3 — resolving `import { schema as db }` and
