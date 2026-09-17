@@ -69,19 +69,20 @@ export const RESERVED_SCOPE_PARAMS = [
   SCOPE_REL_TYPES_PARAM,
 ] as const;
 
-// Bypass-guard markers: the query must USE these in a filtering position when
-// the corresponding dimension is constrained.
+// Bypass-guard markers. Two conditions, and BOTH are load-bearing.
 //
-// `IN` is required, not just the parameter name, for the same reason the
-// tenancy guard in ./tenant.ts requires `orgId` next to `:` or `=`: a name that
-// merely appears somewhere satisfies a presence check without filtering
-// anything. `RETURN $__scopeLabels AS allowed` would have passed the old
-// presence check while the traversal read every label the agent is not allowed
-// to see. Both allow-lists are list-valued, so every legitimate consumption of
-// them is a membership test — `l IN $__scopeLabels`,
-// `type(r) IN $__scopeRelTypes` — which is exactly what all five production
-// call sites in packages/handlers write. `\b` after the name still prevents a
-// prefix collision ($__scopeLabelsExtra).
+// 1) A membership test (`… IN $__scopeLabels`). Both allow-lists are
+//    list-valued, so every legitimate consumption of one is a membership test —
+//    `l IN $__scopeLabels`, `type(r) IN $__scopeRelTypes` — which is what all
+//    five production call sites in packages/handlers write. `\b` after the name
+//    prevents a prefix collision ($__scopeLabelsExtra).
+// 2) In a FILTERING position, checked by running the regex over
+//    `keepFilteringPositions` output rather than the whole query. Condition 1
+//    alone does not survive contact: `RETURN n, n.label IN $__scopeLabels AS
+//    allowed` contains a membership test, satisfies the regex, and returns
+//    every node including the labels the agent may not see, because an aliased
+//    predicate in a projection filters nothing. The relationship marker has the
+//    identical hole with `type(r) IN $__scopeRelTypes AS allowed`.
 const LABELS_MARKER = new RegExp(`\\bIN\\s*\\$${SCOPE_LABELS_PARAM}\\b`, "i");
 const REL_TYPES_MARKER = new RegExp(
   `\\bIN\\s*\\$${SCOPE_REL_TYPES_PARAM}\\b`,
@@ -170,6 +171,119 @@ export function stripLiteralsAndComments(cypher: string): string {
   return out;
 }
 
+// ── Filtering positions ──────────────────────────────────────────────────────
+
+// Clause keywords that begin a new top-level clause. Recognised only at
+// paren/bracket depth 0, so the inner `WHERE` of `any(x IN xs WHERE …)` does not
+// re-open a clause — it stays part of whichever clause encloses it, which is
+// exactly how Cypher scopes it.
+const CLAUSE_KEYWORDS = new Set([
+  "MATCH",
+  "OPTIONAL",
+  "MERGE",
+  "CREATE",
+  "WHERE",
+  "SET",
+  "DELETE",
+  "DETACH",
+  "REMOVE",
+  "RETURN",
+  "WITH",
+  "UNWIND",
+  "ORDER",
+  "SKIP",
+  "LIMIT",
+  "CALL",
+  "YIELD",
+  "FOREACH",
+  "UNION",
+  "ON",
+  "USING",
+  "LOAD",
+]);
+
+/**
+ * Blank every character of `cypher` that is not in a position capable of
+ * CONSTRAINING WHICH ROWS THE QUERY TOUCHES, and return the result. Offsets are
+ * preserved (blanked characters become spaces) so a match's position still maps
+ * back to the original text.
+ *
+ * Two positions survive, and they are the only two ways Cypher narrows a row
+ * set by a property:
+ *
+ *  - a `WHERE` clause, from the keyword until the next top-level clause; and
+ *  - an inline pattern property map — a `{…}` opened inside a node `(…)` or
+ *    relationship `[…]` pattern, which is the `MATCH (n {orgId: $orgId})` /
+ *    `MERGE (n {orgId: $orgId})` form.
+ *
+ * Everything else is blanked, and the three that matter are:
+ *
+ *  - **`SET`.** `MATCH (n) SET n.orgId = $orgId` reads every tenant's nodes and
+ *    reassigns them all to the caller's organisation. A SET target is where a
+ *    value LANDS, never a restriction on which rows were selected. Treating it
+ *    as an anchor is strictly worse than the presence check it replaced, since
+ *    it reads as scoping to anyone skimming.
+ *  - **`RETURN` / `WITH` projections.** `RETURN n, n.orgId = $orgId AS mine`
+ *    evaluates the comparison for every row and discards nothing. An aliased
+ *    predicate is a column, not a filter.
+ *  - **map literals outside a pattern.** `SET n += {orgId: $orgId}` is an
+ *    assignment that happens to be spelled with braces.
+ *
+ * This does not make the seam a query analyser and does not prove isolation: a
+ * query can bind the tenant in a WHERE and still read across tenants elsewhere
+ * (an unanchored second MATCH, a CALL subquery). It establishes that the token
+ * participates in filtering somewhere, which is the bar a lexical seam can hold
+ * and enforce on every query in the platform.
+ */
+export function keepFilteringPositions(cypher: string): string {
+  const src = stripLiteralsAndComments(cypher);
+  const out = new Array<string>(src.length).fill(" ");
+
+  let paren = 0;
+  let bracket = 0;
+  // One entry per open `{`: true when that brace opened inside a pattern.
+  const braceIsPattern: boolean[] = [];
+  let clause = "";
+
+  const inPatternMap = () => braceIsPattern[braceIsPattern.length - 1] === true;
+  const keeping = () => clause === "WHERE" || inPatternMap();
+
+  let i = 0;
+  while (i < src.length) {
+    const ch = src[i]!;
+
+    // Words: a clause keyword at depth 0 switches the current clause. Depth 0
+    // also excludes the inside of a pattern property map, because the pattern's
+    // own `(`/`[` is still open around it.
+    if (/[A-Za-z_]/.test(ch)) {
+      let j = i;
+      while (j < src.length && /[A-Za-z0-9_]/.test(src[j]!)) j += 1;
+      if (
+        paren === 0 &&
+        bracket === 0 &&
+        CLAUSE_KEYWORDS.has(src.slice(i, j).toUpperCase())
+      ) {
+        clause = src.slice(i, j).toUpperCase();
+      }
+      if (keeping()) for (let k = i; k < j; k += 1) out[k] = src[k]!;
+      i = j;
+      continue;
+    }
+
+    if (ch === "(") paren += 1;
+    else if (ch === ")") paren = Math.max(0, paren - 1);
+    else if (ch === "[") bracket += 1;
+    else if (ch === "]") bracket = Math.max(0, bracket - 1);
+    else if (ch === "{") braceIsPattern.push(paren > 0 || bracket > 0);
+    else if (ch === "}") braceIsPattern.pop();
+
+    if (keeping()) out[i] = ch;
+    i += 1;
+  }
+
+  return out.join("");
+}
+
 /**
  * Throw if `cypher` contains a write clause. Called only when the scope's mode
  * is `read`.
@@ -191,14 +305,13 @@ export function assertReadOnly(cypher: string): void {
  * session that constrains labels/rel-types but forgets to reference the filter
  * cannot silently return out-of-scope data.
  *
- * The marker is looked for in the query with literals and comments removed, so
- * a marker mentioned only in a comment or a string does not satisfy the guard,
- * and it must sit in a membership test (`… IN $__scopeLabels`) rather than
- * anywhere at all — it has to be a real predicate. Error messages quote the
- * original text.
+ * The marker is looked for only in the query's FILTERING positions (see
+ * `keepFilteringPositions`), so a marker in a comment, a string, a `RETURN`
+ * projection or an alias does not satisfy the guard — it has to be a membership
+ * test that actually narrows the rows. Error messages quote the original text.
  */
 export function assertScopeMarkers(cypher: string, scope: GraphScope): void {
-  const sanitized = stripLiteralsAndComments(cypher);
+  const sanitized = keepFilteringPositions(cypher);
   if (scope.labels !== undefined && !LABELS_MARKER.test(sanitized)) {
     throw new GraphScopeError(
       `Agent-scoped Cypher constrains labels but does not filter on $${SCOPE_LABELS_PARAM}: ${cypher.slice(0, 80)}`,

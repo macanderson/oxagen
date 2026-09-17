@@ -158,6 +158,37 @@ describe("assertScopeMarkers", () => {
   // Discriminating: each of these mentions the marker where the OLD presence
   // check (`/\$__scopeLabels\b/` anywhere in the sanitized text) accepted it,
   // while nothing is actually filtered by the allow-list.
+  // The reviewer's counterexample, and its relationship twin. Both satisfy the
+  // shipped `IN $__scopeLabels` membership regex and return every node,
+  // including the labels the agent may not see, because an aliased predicate in
+  // a projection narrows nothing.
+  it("treats an aliased membership in a RETURN as absent", () => {
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (n) RETURN n, n.label IN $${SCOPE_LABELS_PARAM} AS allowed`,
+        withMarkers(true, false),
+      ),
+    ).toThrow(GraphScopeError);
+  });
+
+  it("treats an aliased relationship membership in a RETURN as absent", () => {
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (a)-[r]->(b) RETURN r, type(r) IN $${SCOPE_REL_TYPES_PARAM} AS allowed`,
+        withMarkers(false, true),
+      ),
+    ).toThrow(GraphScopeError);
+  });
+
+  it("treats an aliased membership in a WITH as absent", () => {
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (n) WITH n, any(l IN labels(n) WHERE l IN $${SCOPE_LABELS_PARAM}) AS ok RETURN n`,
+        withMarkers(true, false),
+      ),
+    ).toThrow(GraphScopeError);
+  });
+
   it("treats a marker in a RETURN projection as absent (not a filter)", () => {
     expect(() =>
       assertScopeMarkers(

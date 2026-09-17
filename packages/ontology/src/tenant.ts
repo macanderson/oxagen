@@ -12,46 +12,52 @@ import { dedicatedSession } from "./data-plane-driver";
 import {
   applyGraphScope,
   GraphScopeError,
-  stripLiteralsAndComments,
+  keepFilteringPositions,
 } from "./graph-scope";
 import type { GraphScope } from "./graph-scope";
 
 export { GraphScopeError };
 export type { GraphScope };
 
-// A scoped query must bind the tenant on a node (read) or in a MERGE key.
+// A scoped query must bind the tenant in a position that restricts which rows
+// it touches. Three conditions, each closing a hole the one before it left.
 //
-// Two things make this a real guard rather than a spell-check.
+// 1) SANITIZED text. `stripLiteralsAndComments` (shared with the Phase-3 marker
+//    guard in ./graph-scope.ts — one implementation, not two) blanks comments,
+//    string literals and backtick identifiers, so `orgId` named only in a
+//    comment or inside a quoted value cannot satisfy the guard.
+// 2) FILTERING position. `keepFilteringPositions` then blanks everything that
+//    is not a `WHERE` clause or an inline pattern property map. This is the
+//    condition the previous version of this guard lacked, and the gap was not
+//    academic: `/\borgId\s*[:=]/` over the whole query accepted
 //
-// 1) It runs on the SANITIZED text. `stripLiteralsAndComments` (shared with the
-//    Phase-3 marker guard in ./graph-scope.ts — one implementation, not two)
-//    blanks `//` and block comments, string literals and backtick identifiers
-//    first, so `orgId` named only in a comment or inside a quoted value cannot
-//    satisfy it.
-// 2) It requires the token in a FILTERING position — `orgId` immediately
-//    followed by `:` or `=`. That is exactly the two ways Cypher binds a
-//    tenant: a pattern/MERGE key map (`{orgId: $orgId, …}`) and a predicate or
-//    SET target (`n.orgId = $orgId`). Merely mentioning the token — as a RETURN
-//    alias (`RETURN n.name AS orgId`), inside a longer property name
-//    (`notOrgIdReally`), or as a bare word — no longer counts.
+//        MATCH (n) SET n.orgId = $orgId
 //
-// Deliberately NOT accepted, though they would also be scoping: the reversed
-// comparison (`$orgId = n.orgId`) and membership (`orgId IN $orgIds`). No query
-// in the repo uses either, and each extra accepted shape is another way for a
-// query that does not actually scope to slip through. A new query that hits a
-// false reject fails loudly at authoring time with the message below, which
-// names the two accepted forms.
-const SCOPE_GUARD = /\borgId\s*[:=]/;
+//    which selects EVERY tenant's nodes and reassigns them to the caller's
+//    organisation. The old comment here called a SET target a legitimate anchor.
+//    It is the opposite of one — a SET says where a value lands, never which
+//    rows were chosen — so that spelling passed a guard whose whole job was to
+//    stop it.
+// 3) A binding SHAPE within that position: `orgId` against `:` or `=`, or an
+//    `IN` membership, or the reversed comparison. Position alone is not enough
+//    either — `WHERE n.author = $orgId` sits in a WHERE and compares the tenant
+//    value to something that is not the tenant column.
+//
+// What this does NOT promise: isolation. A query can anchor one MATCH and leave
+// a second unanchored. The seam establishes that the tenant participates in
+// filtering, which is what a lexical check can enforce on all 63 production
+// queries without a false reject taking the graph layer down.
+const SCOPE_GUARD = /\borgId\s*[:=]|\borgId\s+IN\b|=\s*[\w$]+\.orgId\b/;
 
 /**
  * Return a Neo4j session bound to the active tenant scope. Throws
  * TenantScopeError immediately if there is no active tenant scope (checked at
  * scopedSession() call time, not lazily inside run()). The returned session's
  * run():
- *  1. Rejects Cypher that does not BIND `orgId` in a pattern/MERGE key
- *     (`{orgId: $orgId}`) or a predicate/SET target (`n.orgId = $orgId`),
- *     checked against the text with comments and string literals stripped
- *     (seam-bypass guard).
+ *  1. Rejects Cypher that does not BIND `orgId` in a FILTERING position — a
+ *     WHERE predicate (`WHERE n.orgId = $orgId`) or an inline pattern property
+ *     (`MATCH (n {orgId: $orgId})`). A SET target, a RETURN projection and an
+ *     aliased expression all fail (seam-bypass guard).
  *  2. Injects `$orgId` and `$workspaceId` into every params object so the
  *     Cypher never has to thread them manually.
  *
@@ -108,12 +114,13 @@ export function scopedSession(scope?: GraphScope): {
 
   return {
     async run(cypher: string, params: Record<string, unknown> = {}) {
-      // Sanitize before testing: a mention of `orgId` in a comment or inside a
-      // string literal must not satisfy the tenancy guard. The error quotes the
-      // ORIGINAL text, which is what the author wrote and has to fix.
-      if (!SCOPE_GUARD.test(stripLiteralsAndComments(cypher))) {
+      // Reduce to filtering positions before testing, so a mention of `orgId`
+      // in a comment, a string literal, a SET target or a RETURN projection
+      // cannot satisfy the tenancy guard. The error quotes the ORIGINAL text,
+      // which is what the author wrote and has to fix.
+      if (!SCOPE_GUARD.test(keepFilteringPositions(cypher))) {
         throw new TenantScopeError(
-          `Cypher over a scoped session must bind the tenant as \`{orgId: $orgId}\` or \`.orgId = $orgId\`: ${cypher.slice(0, 80)}`,
+          `Cypher over a scoped session must bind the tenant in a WHERE predicate (\`WHERE n.orgId = $orgId\`) or an inline pattern property (\`MATCH (n {orgId: $orgId})\`); a SET target or a RETURN projection does not scope anything: ${cypher.slice(0, 80)}`,
         );
       }
       const sess = await ensureSession();

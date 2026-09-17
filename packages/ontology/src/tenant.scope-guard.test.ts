@@ -32,6 +32,7 @@ vi.mock("./client", () => ({ session: () => ({ run, close }) }));
 
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "./tenant";
+import { stripLiteralsAndComments } from "./graph-scope";
 
 const ORG = "00000000-0000-0000-0000-00000000a111";
 const WS = "00000000-0000-0000-0000-00000000b222";
@@ -57,6 +58,14 @@ async function guardAccepts(cypher: string): Promise<boolean> {
  * is the mutation check, expressed as an assertion rather than a manual revert.
  */
 const OLD_GUARD = /\borgId\b/;
+
+/**
+ * The sanitize step the SHIPPED level-2 guard used, so a test can assert that
+ * level 2 accepted the case it is about to watch the current guard reject.
+ */
+function strippedForTest(cypher: string): string {
+  return stripLiteralsAndComments(cypher);
+}
 
 describe("tenancy guard — cases the old guard accepted and the new one rejects", () => {
   // Each entry: a query where `orgId` appears but scopes nothing.
@@ -103,10 +112,52 @@ describe("tenancy guard — cases the old guard accepted and the new one rejects
     await runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
       const s = scopedSession();
       await expect(s.run("MATCH (n:GraphNode) RETURN n")).rejects.toThrow(
-        /\{orgId: \$orgId\}.*\.orgId = \$orgId/,
+        /WHERE n\.orgId = \$orgId.*MATCH \(n \{orgId: \$orgId\}\)/,
       );
     });
   });
+});
+
+// The cases that the SHIPPED level-2 guard (`/\borgId\s*[:=]/` over the whole
+// sanitized query) accepted. A reviewer found the first by reading the guard's
+// own doc comment, which listed a SET target as a legitimate anchor. Each of
+// these is strictly worse than the hole level 2 closed, because each reads as
+// scoping to a human skimming the query.
+describe("tenancy guard — the token in a non-filtering clause", () => {
+  const nonFiltering: Array<[name: string, cypher: string]> = [
+    [
+      "SET target reassigns every tenant's nodes to the caller",
+      "MATCH (n) SET n.orgId = $orgId",
+    ],
+    [
+      "SET target with a label, still an unrestricted MATCH",
+      "MATCH (n:GraphNode) SET n.orgId = $orgId, n.updatedAt = datetime()",
+    ],
+    [
+      "ON CREATE SET on an unanchored MERGE",
+      "MERGE (n:GraphNode {publicId: $p}) ON CREATE SET n.orgId = $orgId",
+    ],
+    [
+      "map-literal assignment outside a pattern",
+      "MATCH (n) SET n += {orgId: $orgId}",
+    ],
+    [
+      "RETURN projection of the comparison",
+      "MATCH (n) RETURN n, n.orgId = $orgId AS mine",
+    ],
+    [
+      "WITH projection of the comparison",
+      "MATCH (n) WITH n, n.orgId = $orgId AS mine RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of nonFiltering) {
+    it(`rejects: ${name}`, async () => {
+      // Discriminating against the SHIPPED guard, not just the original one.
+      expect(/\borgId\s*[:=]/.test(strippedForTest(cypher))).toBe(true);
+      await expect(guardAccepts(cypher)).resolves.toBe(false);
+    });
+  }
 });
 
 describe("tenancy guard — shapes that really do anchor the tenant", () => {
@@ -123,8 +174,31 @@ describe("tenancy guard — shapes that really do anchor the tenant", () => {
       "MERGE key",
       "MERGE (e:Execution {id: $id, orgId: $orgId, workspaceId: $workspaceId})",
     ],
-    ["SET target", "MATCH (n:GraphNode) SET n.orgId = $orgId"],
     ["no whitespace", "MATCH (n:GraphNode) WHERE n.orgId=$orgId RETURN n"],
+    [
+      "SET is fine when the MATCH that feeds it is anchored",
+      "MATCH (n:GraphNode {orgId: $orgId, publicId: $p}) SET n.properties = $props",
+    ],
+    [
+      "SET is fine when a WHERE anchors the rows",
+      "MATCH (n:GraphNode) WHERE n.orgId = $orgId SET n.properties = $props",
+    ],
+    [
+      "relationship pattern property",
+      "MERGE (a)-[r:INVOKED {orgId: $orgId}]->(b) RETURN r",
+    ],
+    [
+      "reversed comparison inside a WHERE",
+      "MATCH (n:GraphNode) WHERE $orgId = n.orgId RETURN n",
+    ],
+    [
+      "membership inside a WHERE",
+      "MATCH (n:GraphNode) WHERE n.orgId IN $orgIds RETURN n",
+    ],
+    [
+      "anchored WHERE with a CALL subquery after it",
+      "MATCH (n:GraphNode) WHERE n.orgId = $orgId CALL { WITH n MATCH (n)-[r]->(m) RETURN count(r) AS c } RETURN n, c",
+    ],
     [
       "extra whitespace",
       "MATCH (n:GraphNode) WHERE n.orgId  =  $orgId RETURN n",
