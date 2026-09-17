@@ -36,6 +36,11 @@ export function AssistantLauncher({
         onNavigate?.();
       }}
       aria-controls={ASSISTANT_PANEL_ID}
+      // What it opens is a dialog — modal where the panel covers the
+      // application, a panel beside the page where it does not — so the
+      // control says so before it is pressed, the way every other control in
+      // the chrome that opens one does.
+      aria-haspopup="dialog"
       aria-expanded={assistantOpen}
       data-touch-target=""
       data-testid="assistant-launcher"

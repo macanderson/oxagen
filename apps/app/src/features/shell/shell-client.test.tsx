@@ -126,7 +126,10 @@ describe("the shell on /{org}/{ws}", () => {
     expect(screen.getByTestId("user-menu-trigger")).toBeInTheDocument();
     // The in-app agent is back on its #2968 lane, so the launcher and its
     // flyout host render — the host always mounted, and `inert` until opened.
-    expect(screen.getByTestId("assistant-launcher")).toBeInTheDocument();
+    const launcher = screen.getByTestId("assistant-launcher");
+    expect(launcher).toBeInTheDocument();
+    // What it opens is a dialog, and it says so before it is pressed.
+    expect(launcher).toHaveAttribute("aria-haspopup", "dialog");
     expect(screen.getByTestId("assistant-flyout")).toHaveAttribute("inert");
     // The bell and nav counts are still dropped.
     expect(screen.queryByRole("button", { name: /^Notifications/ })).toBeNull();

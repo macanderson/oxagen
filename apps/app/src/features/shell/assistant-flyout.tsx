@@ -56,6 +56,22 @@
 // on an unavailable element or fall to the body; every close path — Escape,
 // the close button, the launcher toggling it shut — goes through the one
 // effect below.
+//
+// Below `md` it is `w-full` and covers the application, so there it is a modal
+// dialog and everything outside it goes `inert` while it is open — a Tab past
+// the send button would otherwise walk into invisible top-bar and page
+// controls, and once focus is outside the panel its own Escape handler never
+// hears the key. Above `md` it sits beside the page, which stays usable,
+// because the page is what it is being asked about. The breakpoint is read as
+// a store, so crossing it with the panel open takes and gives back the
+// application.
+//
+// The transcript is the live region. A refusal carries `role="alert"`, which
+// interrupts; an answer is an ordinary paragraph, so `role="log"` on the
+// container reads it out to a person whose focus is still on the composer. The
+// container renders on every pass and only its contents are conditional: a
+// polite region inserted in the same commit as its own text is announced
+// unreliably.
 import { CircleAlert, Send, Sparkles } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -130,7 +146,13 @@ function useCoversTheApp(): boolean {
  */
 function inertOutside(node: HTMLElement): () => void {
   const marked: HTMLElement[] = [];
-  for (let el: HTMLElement | null = node; el !== null; el = el.parentElement) {
+  // Up to and including <body>'s own children, and no further: <head> is a
+  // sibling of <body> and inerting it would mean nothing.
+  for (
+    let el: HTMLElement | null = node;
+    el !== null && el !== document.body;
+    el = el.parentElement
+  ) {
     for (const sibling of Array.from(el.parentElement?.children ?? [])) {
       if (sibling === el || !(sibling instanceof HTMLElement)) continue;
       if (sibling.hasAttribute("inert")) continue;
