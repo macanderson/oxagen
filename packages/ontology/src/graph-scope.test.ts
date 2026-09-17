@@ -789,6 +789,235 @@ describe("a map literal in a filtering position is not a tenant anchor", () => {
   });
 });
 
+// ── Which classifier is asked first ─────────────────────────────────────────
+//
+// Two brace classifiers can both be true at the same `{`, and the ORDER they are
+// consulted in is a decision in its own right — a fifth thing this scanner
+// decides, separate from the four questions it answers.
+//
+// `opensPatternMap` used to be asked first. Cypher 5's inline node predicate
+// then defeated it: the node paren is a pattern, so a `COLLECT { … }` sitting
+// inside it was classified as the pattern's property map, and the WHOLE
+// subquery — projections included — was kept as a filtering position.
+//
+//   MATCH (n WHERE COLLECT { MATCH (m) RETURN m.orgId = $orgId AS mine } <> [])
+//
+// `COLLECT` is non-empty whenever any node exists, so the predicate is true for
+// every row, and the projected comparison supplied the anchor.
+//
+// Review reported `COLLECT` in an inline NODE predicate. Seven shapes did it.
+describe("a subquery is classified before a pattern property map", () => {
+  const labelScope: GraphScope = { labels: ["Doc"] };
+  const bypasses: Array<[name: string, cypher: string]> = [
+    [
+      "COLLECT in an inline node predicate (review's case)",
+      "MATCH (n WHERE COLLECT { MATCH (m) RETURN m.orgId = $orgId AS mine } <> []) RETURN n",
+    ],
+    [
+      "EXISTS in an inline node predicate",
+      "MATCH (n WHERE EXISTS { MATCH (m) RETURN m.orgId = $orgId AS mine }) RETURN n",
+    ],
+    [
+      "COUNT in an inline node predicate",
+      "MATCH (n WHERE COUNT { MATCH (m) RETURN m.orgId = $orgId AS mine } > 0) RETURN n",
+    ],
+    [
+      "COLLECT in an inline RELATIONSHIP predicate",
+      "MATCH (a)-[r WHERE COLLECT { MATCH (m) RETURN m.orgId = $orgId AS mine } <> []]->(b) RETURN a",
+    ],
+    [
+      "COUNT in an inline relationship predicate",
+      "MATCH (a)-[r WHERE COUNT { MATCH (m) RETURN m.orgId = $orgId AS mine } > 0]->(b) RETURN a",
+    ],
+    [
+      "a subquery nested inside another, both inline",
+      "MATCH (n WHERE EXISTS { MATCH (x WHERE COLLECT { MATCH (m) RETURN m.orgId = $orgId AS q } <> []) }) RETURN n",
+    ],
+    [
+      "the same shape under MERGE",
+      "MERGE (n WHERE COLLECT { MATCH (m) RETURN m.orgId = $orgId AS q } <> []) RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of bypasses) {
+    it(`does not keep the subquery as a property map: ${name}`, () => {
+      expect(keepFilteringPositions(cypher)).not.toContain("$orgId");
+    });
+  }
+
+  it("the SCOPE guard was already immune, by round eight's policy split", () => {
+    // `keepPredicatePositions` drops the pattern-map position entirely, so the
+    // mis-classification could never reach the marker guard. Asserted so the
+    // asymmetry is a recorded property rather than a coincidence someone later
+    // "tidies" by re-unifying the two projections.
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (n WHERE COLLECT { MATCH (m) RETURN m.label IN $${SCOPE_LABELS_PARAM} AS ok } <> []) RETURN n`,
+        labelScope,
+      ),
+    ).toThrow(GraphScopeError);
+  });
+
+  // Swapping the two cannot cost a genuine pattern map, and that is a property
+  // of the grammar rather than a hope: a property map is never preceded by
+  // CALL / EXISTS / COUNT / COLLECT, so `opensSubquery` is false at every brace
+  // `opensPatternMap` is meant to claim. These pin it.
+  const stillAnchors: Array<[name: string, cypher: string]> = [
+    ["a node pattern property map", "MATCH (n {orgId: $orgId}) RETURN n"],
+    [
+      "a relationship pattern property map",
+      "MATCH (a)-[r {orgId: $orgId}]->(b) RETURN r",
+    ],
+    [
+      "a pattern map INSIDE an inline-predicate subquery",
+      "MATCH (n WHERE EXISTS { MATCH (m {orgId: $orgId}) }) RETURN n",
+    ],
+    [
+      "a pattern map inside a top-level EXISTS",
+      "MATCH (n) WHERE EXISTS { MATCH (m {orgId: $orgId}) } RETURN n",
+    ],
+    [
+      "a pattern map beside an inline predicate on the same node",
+      "MATCH (n {orgId: $orgId} WHERE n.x > 1) RETURN n",
+    ],
+    [
+      "a property predicate in a WHERE",
+      "MATCH (n) WHERE n.orgId = $orgId RETURN n",
+    ],
+    [
+      "an anchor inside a CALL subquery",
+      "CALL { MATCH (n) WHERE n.orgId = $orgId RETURN n } RETURN n",
+    ],
+    [
+      "a COUNT subquery at top level, anchored in its WHERE",
+      "MATCH (n) WHERE COUNT { MATCH (m) WHERE m.orgId = $orgId } > 0 RETURN n",
+    ],
+  ];
+  for (const [name, cypher] of stillAnchors) {
+    it(`still anchors: ${name}`, () => {
+      expect(keepFilteringPositions(cypher)).toContain("$orgId");
+    });
+  }
+
+  // THE MEASURED COST OF THIS FIX, stated rather than discovered later.
+  //
+  // Clause keywords are recognised only at paren/bracket depth 0, so inside an
+  // inline node predicate the subquery's own `WHERE` never becomes the clause.
+  // Before the swap that did not matter, because the brace was (wrongly) a
+  // pattern map and pattern maps are kept in a row-selecting clause. After it,
+  // the brace is a subquery, nothing keeps it, and an anchor written ONLY in
+  // that inner WHERE is refused.
+  //
+  // That is the fail-closed direction and it costs 0 of the 63 production
+  // queries the corpus test collects. The same query anchored in a pattern map
+  // instead — asserted above — still passes, and so does the same shape written
+  // at top level where the depth is 0.
+  it("refuses an anchor written only inside an inline-predicate subquery's WHERE", () => {
+    expect(
+      keepFilteringPositions(
+        "MATCH (n WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId }) RETURN n",
+      ),
+    ).not.toContain("$orgId");
+    // …while the identical shape at top level is unaffected.
+    expect(
+      keepFilteringPositions(
+        "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId } RETURN n",
+      ),
+    ).toContain("$orgId");
+  });
+});
+
+// ── The precedence relations, enumerated ────────────────────────────────────
+//
+// Round twelve's finding was not that a rule is wrong — both brace classifiers
+// are individually correct. It was that the ORDER they are consulted in is
+// itself a decision, and that decision had never been enumerated. So here it is:
+// every pair of tests in this module that can both match at one position, which
+// is asked first, and the query that tells the two orders apart.
+//
+// Several of these are pinned in their own describe blocks above and are
+// repeated here only so the ORDER is checkable in one place.
+describe("classifier precedence is decided, not incidental", () => {
+  const relations: Array<
+    [id: string, relation: string, cypher: string, anchors: boolean]
+  > = [
+    [
+      "P1",
+      "opensSubquery before opensPatternMap — direct token beats enclosing bracket",
+      "MATCH (n WHERE COLLECT { MATCH (m) RETURN m.orgId = $orgId AS mine } <> []) RETURN n",
+      false,
+    ],
+    [
+      "P2",
+      "opensPatternMap before the 'map' default — a real pattern map still wins",
+      "MATCH (n {orgId: $orgId}) RETURN n",
+      true,
+    ],
+    [
+      "P3",
+      "the clause gate before the preceding character, inside opensPattern",
+      "MATCH (n) WHERE true = ({orgId: $orgId} IS NOT NULL) RETURN n",
+      false,
+    ],
+    [
+      "P4",
+      "the clause gate before the `-[` relationship test",
+      "MATCH (n) WHERE n.x - [{orgId: $orgId}] IS NOT NULL RETURN n",
+      false,
+    ],
+    [
+      "P5",
+      "bracket depth before clause-keyword recognition",
+      "MATCH (n WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId }) RETURN n",
+      false,
+    ],
+    [
+      "P6",
+      "…and the same shape at depth 0, where the clause IS recognised",
+      "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId } RETURN n",
+      true,
+    ],
+    [
+      "P7",
+      "inMapLiteral before both arms of keeping()",
+      "MATCH (n) WHERE {x: COUNT { MATCH (m) WHERE m.orgId = $orgId }} IS NOT NULL RETURN n",
+      false,
+    ],
+    [
+      "P8",
+      "…a subquery not inside a map literal is unaffected",
+      "MATCH (n) WHERE COUNT { MATCH (m) WHERE m.orgId = $orgId } > 0 RETURN n",
+      true,
+    ],
+    [
+      "P9",
+      "the position filter before the anchor shape",
+      "MATCH (n) SET n.orgId = $orgId RETURN n",
+      false,
+    ],
+    [
+      "P10",
+      "brace-kind pop and clause restore before keeping()",
+      "MATCH (n) RETURN EXISTS { MATCH (m) WHERE m.x = 1 } AS ok, n.orgId = $orgId AS mine, n",
+      false,
+    ],
+    [
+      "P11",
+      "…and the map depth unwinds, so a map does not blank its own clause",
+      "MATCH (n) WHERE {a: 1} IS NOT NULL AND n.orgId = $orgId RETURN n",
+      true,
+    ],
+  ];
+
+  for (const [id, relation, cypher, anchors] of relations) {
+    it(`${id}: ${relation}`, () => {
+      const kept = keepFilteringPositions(cypher);
+      if (anchors) expect(kept).toContain("$orgId");
+      else expect(kept).not.toContain("$orgId");
+    });
+  }
+});
+
 // ── A grouping bracket is not a pattern bracket ──────────────────────────────
 //
 // `opensPattern` decided pattern-ness from the single character before the

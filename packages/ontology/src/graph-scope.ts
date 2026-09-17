@@ -761,10 +761,38 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
       bracket = Math.max(0, bracket - 1);
       bracketFrames.pop();
     } else if (ch === "{") {
-      const kind = opensPatternMap()
-        ? "pattern"
-        : opensSubquery(src, i)
-          ? "subquery"
+      // PRECEDENCE, and it is load-bearing in its own right. Both classifiers
+      // can be true at the same `{`, and which is asked FIRST is a fifth thing
+      // this scanner decides — separately from the four questions it answers.
+      //
+      // `opensSubquery` reads the token IMMEDIATELY BEFORE the brace, which is
+      // the grammar speaking directly: `COLLECT {` is a subquery expression and
+      // nothing else. `opensPatternMap` reads the ENCLOSING BRACKET, which says
+      // only that a brace here COULD be a property map — true of the pattern's
+      // own map, and equally true of every other brace that happens to sit
+      // inside the parens. Direct evidence outranks positional evidence, so the
+      // subquery test goes first.
+      //
+      // Asked the other way round, Cypher 5's inline node predicate defeated it:
+      //
+      //   MATCH (n WHERE COLLECT { MATCH (m) RETURN m.orgId = $orgId AS mine }
+      //          <> []) RETURN n
+      //
+      // The node paren is a pattern, so `opensPatternMap` won and the WHOLE
+      // subquery — projections included — was kept as a filtering position. The
+      // projected comparison satisfied the anchor, and `COLLECT` is non-empty
+      // whenever any node exists, so every tenant's `n` came back. `EXISTS`,
+      // `COUNT`, the inline predicate on a RELATIONSHIP pattern, a subquery
+      // nested in another, and the same shape under `MERGE` all did it too.
+      //
+      // Swapping cannot cost a genuine pattern map, and that is a property of
+      // the grammar rather than a hope: a property map is never preceded by
+      // `CALL` / `EXISTS` / `COUNT` / `COLLECT`, so `opensSubquery` is false at
+      // every brace `opensPatternMap` is meant to claim.
+      const kind = opensSubquery(src, i)
+        ? "subquery"
+        : opensPatternMap()
+          ? "pattern"
           : "map";
       braceKinds.push(kind);
       if (kind === "map") mapDepth += 1;

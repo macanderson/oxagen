@@ -401,6 +401,103 @@ describe("tenancy guard — the anchor's token boundaries are Cypher's", () => {
   }
 });
 
+// ── A subquery inside an inline node predicate ──────────────────────────────
+//
+// Cypher 5 lets a node pattern carry its own predicate: `MATCH (n WHERE …)`.
+// The brace of a subquery written there sits inside a PATTERN paren, and the
+// brace classifier consulted the enclosing bracket before the token immediately
+// in front of the brace — so the subquery was kept as if it were the pattern's
+// property map, projections and all.
+//
+// `COLLECT { … }` is non-empty whenever any node exists, so the predicate holds
+// for every row, and the projected comparison supplied the anchor.
+describe("tenancy guard — a subquery inside an inline node predicate", () => {
+  const bypasses: Array<[name: string, cypher: string]> = [
+    [
+      "COLLECT (review's case)",
+      "MATCH (n WHERE COLLECT { MATCH (m) RETURN m.orgId = $orgId AS mine } <> []) RETURN n",
+    ],
+    [
+      "EXISTS",
+      "MATCH (n WHERE EXISTS { MATCH (m) RETURN m.orgId = $orgId AS mine }) RETURN n",
+    ],
+    [
+      "COUNT",
+      "MATCH (n WHERE COUNT { MATCH (m) RETURN m.orgId = $orgId AS mine } > 0) RETURN n",
+    ],
+    [
+      "on a relationship pattern instead of a node",
+      "MATCH (a)-[r WHERE COLLECT { MATCH (m) RETURN m.orgId = $orgId AS mine } <> []]->(b) RETURN a",
+    ],
+    [
+      "nested one subquery deeper",
+      "MATCH (n WHERE EXISTS { MATCH (x WHERE COLLECT { MATCH (m) RETURN m.orgId = $orgId AS q } <> []) }) RETURN n",
+    ],
+    [
+      "under MERGE rather than MATCH",
+      "MERGE (n WHERE COLLECT { MATCH (m) RETURN m.orgId = $orgId AS q } <> []) RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of bypasses) {
+    it(`rejects: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(false);
+    });
+  }
+
+  it("is discriminating: the projection is what carried the anchor", () => {
+    // Every case above puts the token in a RETURN projection, which filters
+    // nothing. The guard regex matches the raw text; only the position rule
+    // refuses it — so asserting on the raw text is the discriminating half.
+    const cypher =
+      "MATCH (n WHERE COLLECT { MATCH (m) RETURN m.orgId = $orgId AS mine } <> []) RETURN n";
+    expect(/[A-Za-z]\.orgId\s*=\s*\$orgId/.test(cypher)).toBe(true);
+    expect(keepFilteringPositions(cypher)).not.toContain("$orgId");
+  });
+
+  const stillAccepted: Array<[name: string, cypher: string]> = [
+    [
+      "a pattern map inside an inline-predicate subquery",
+      "MATCH (n WHERE EXISTS { MATCH (m {orgId: $orgId}) }) RETURN n",
+    ],
+    [
+      "a pattern map beside an inline predicate on the same node",
+      "MATCH (n {orgId: $orgId} WHERE n.x > 1) RETURN n",
+    ],
+    [
+      "a top-level EXISTS with the anchor in its WHERE",
+      "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId } RETURN n",
+    ],
+    [
+      "a top-level COUNT with the anchor in its WHERE",
+      "MATCH (n) WHERE COUNT { MATCH (m) WHERE m.orgId = $orgId } > 0 RETURN n",
+    ],
+    ["a plain node pattern map", "MATCH (n {orgId: $orgId}) RETURN n"],
+    [
+      "a relationship pattern map",
+      "MATCH (a)-[r {orgId: $orgId}]->(b) RETURN r",
+    ],
+  ];
+  for (const [name, cypher] of stillAccepted) {
+    it(`still accepts: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(true);
+    });
+  }
+
+  // The measured cost, at the seam rather than only in the projection helper.
+  // Clause keywords are recognised only at depth 0, so a subquery's own WHERE
+  // inside an inline node predicate never becomes the clause; an anchor written
+  // ONLY there is now refused. Fail-closed, 0 of the 63 corpus queries, and the
+  // pattern-map spelling of the same query (asserted above) still passes.
+  it("refuses an anchor written only inside an inline-predicate subquery's WHERE", async () => {
+    await expect(
+      guardAccepts(
+        "MATCH (n WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId }) RETURN n",
+      ),
+    ).resolves.toBe(false);
+  });
+});
+
 // ── The anchor has to be a property, not a name that reads like one ─────────
 //
 // The guard checked WHERE the token sits and WHAT it binds to, and never that

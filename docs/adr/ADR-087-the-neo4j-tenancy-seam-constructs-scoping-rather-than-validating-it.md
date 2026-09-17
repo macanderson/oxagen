@@ -30,7 +30,8 @@ tenants:
 | 8 | clause keywords recognised only at clause boundaries; the scope guard gets a stricter projection than the tenancy guard | `MATCH (n) RETURN EXISTS { MATCH (m) WHERE m.x = 1 } AS ok, n.orgId = $orgId AS mine, n` |
 | 9 | clause state saved and restored across braces; every token boundary drawn with Cypher's Unicode identifier classes | `MATCH (n) WHERE {orgId: $orgId} IS NOT NULL RETURN n` — an always-true predicate whose map KEY satisfied the anchor |
 | 10 | a brace is classified `pattern` / `subquery` / `map`, and nothing inside a map literal counts | `WITH $orgId AS orgId … WHERE orgId = $orgId`; `WHERE true = ({orgId: $orgId} IS NOT NULL)` |
-| 11 | the anchor must be a property access or a pattern-map key; a bracket opens a pattern only in a graph-pattern clause | — (this is where the guard stands) |
+| 11 | the anchor must be a property access or a pattern-map key; a bracket opens a pattern only in a graph-pattern clause | `MATCH (n WHERE COLLECT { MATCH (m) RETURN m.orgId = $orgId AS mine } <> [])` |
+| 12 | a brace is tested for SUBQUERY before PATTERN MAP | — (this is where the guard stands) |
 
 Seven rounds, seven real holes, one shape: each version was a more precise
 lexical rule, and each time there was another expression form that satisfied it.
@@ -316,6 +317,83 @@ tautology, because `m` is bound to a map rather than to a graph row. Telling the
 two apart needs to know what `m` is BOUND to. That is dataflow: **Claim B**, not a
 missed spelling, and no syntactic rule reaches it. It is asserted as
 known-accepted in `tenant.scope-guard.test.ts`.
+
+### Round 12: the fifth thing the structure decides
+
+Round 11 closed with a prediction, and it is worth quoting because round 12 is
+its confirmation and its correction at once:
+
+> The structure now answers four questions — which clause, which bracket kind,
+> which brace kind, which anchor shape — each by a local rule. Round 11 found a
+> defect in two of the four. There is no evidence the other two are clean.
+
+Round 12 is the third of the four. But the finding is **not** that the brace rule
+is wrong. Both brace classifiers are individually correct: `opensSubquery`
+recognises `COLLECT {`, and `opensPatternMap` recognises a brace after a node
+paren. The defect is the **PRECEDENCE** between them — which is consulted first.
+
+```cypher
+MATCH (n WHERE COLLECT { MATCH (m) RETURN m.orgId = $orgId AS mine } <> [])
+RETURN n
+```
+
+Cypher 5 lets a node pattern carry its own predicate. The subquery's brace then
+sits inside a PATTERN paren, `opensPatternMap` was asked first and won, and the
+whole subquery — projections included — was kept as a filtering position. The
+projected comparison supplied the anchor, and `COLLECT` is non-empty whenever any
+node exists, so the predicate held for every row.
+
+**Precedence is a fifth thing this structure decides, and it was not in the
+enumeration.** Round 11 listed four questions as if they were independent. They
+are ORDERED, and the order is itself a decision that can be wrong while every
+individual rule is right. That is a category the previous eleven rounds never
+named, which is why nothing had ever tested it.
+
+The fix is the one the grammar dictates: `opensSubquery` reads the token
+IMMEDIATELY BEFORE the brace, which is the grammar speaking directly, while
+`opensPatternMap` reads the ENCLOSING BRACKET, which says only that a brace here
+COULD be a property map. Direct evidence outranks positional evidence. And the
+swap cannot cost a genuine pattern map, which is a property of the grammar rather
+than a hope: a property map is never preceded by `CALL` / `EXISTS` / `COUNT` /
+`COLLECT`.
+
+Review reported `COLLECT` in an inline NODE predicate. **Seven shapes did it** —
+`EXISTS` and `COUNT` as well, the inline predicate on a RELATIONSHIP pattern, a
+subquery nested inside another, and the same shape under `MERGE`.
+
+#### The precedence relations, enumerated
+
+Since the category was the finding, the whole category is now written down and
+tested, in `describe("classifier precedence is decided, not incidental")`: every
+pair of tests that can both match at one position, which is asked first, and the
+query that tells the two orders apart. Eleven relations. Only P1 was wrong.
+
+One of them has a cost worth naming. **Bracket depth is checked before
+clause-keyword recognition** (clause keywords are recognised only at depth 0), so
+inside an inline node predicate a subquery's own `WHERE` never becomes the
+clause. Before round 12 that did not matter, because the brace was wrongly a
+pattern map and pattern maps are kept in a row-selecting clause. After the swap,
+an anchor written ONLY in that inner `WHERE` is refused. That is the fail-closed
+direction, it costs **0 of the 63** corpus queries, and both the pattern-map
+spelling of the same query and the top-level spelling still pass. Recognising
+clauses inside a brace nested in a paren would OPEN kept regions, which is the
+dangerous direction, so it is deliberately not done.
+
+#### What this says about the method, again
+
+The security review completed on the same head with **zero** findings; this came
+from the code review. A clean security pass is not evidence about this class.
+
+And the pattern holds: review reports one spelling, enumeration finds seven.
+Rounds 10, 11 and 12 have now gone eleven-for-one, thirteen-for-two and
+seven-for-one. What changes each round is not the yield — it is the CATEGORY
+nobody had enumerated yet: positions in round 10, prefix characters and anchor
+shapes in round 11, and the ORDER OF THE TESTS in round 12. Each was invisible
+from inside the previous round's frame.
+
+That is the strongest available statement of why the answer is construction.
+Every round's enumeration is bounded, and the supply of categories is not — or
+at least, nothing in eleven rounds has given any evidence of its edge.
 
 ### What follows
 
