@@ -69,7 +69,7 @@ export const askAssistant = defineTool({
       from: "assetPublicId",
       source: "add_conversation_attachment",
       to: "attachments",
-      why: "v1 attached one asset per call, so its field was a single `gen_…` id. A turn can name several, so the same element schema is carried by reference as the `attachments` array — the ownership and `status: \"ready\"` contract stays attached to the element, and the key names the list rather than the member.",
+      why: 'v1 attached one asset per call, so its field was a single `gen_…` id. A turn can name several, so the same element schema is carried by reference as the `attachments` array — the ownership and `status: "ready"` contract stays attached to the element, and the key names the list rather than the member.',
     },
   ],
   drops: [

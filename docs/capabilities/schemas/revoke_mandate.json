@@ -1,0 +1,338 @@
+{
+  "name": "revoke_mandate",
+  "domain": "mandate",
+  "description": "Revoke a mandate with a reason. Releases every reservation held by a call that has not dispatched; an already ended mandate is refused.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "mandateId": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      }
+    },
+    "required": [
+      "mandateId",
+      "reason"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "agentId": {
+        "type": "string"
+      },
+      "agentSlug": {
+        "type": "string"
+      },
+      "requestedBy": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "grantedBy": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "roleAtGrant": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "consequenceTags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "limits": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "perCall": {
+              "type": "string"
+            },
+            "perPeriod": {
+              "type": "string"
+            },
+            "period": {
+              "type": "string",
+              "enum": [
+                "daily",
+                "weekly",
+                "monthly"
+              ]
+            },
+            "currencyOrUnit": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32
+            }
+          },
+          "required": [
+            "period",
+            "currencyOrUnit"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "targets": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "allow": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "default": []
+            },
+            "deny": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "default": []
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "approval": {
+        "type": "object",
+        "properties": {
+          "humanAbove": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {}
+          },
+          "alwaysHumanFor": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "approvers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          }
+        },
+        "additionalProperties": false
+      },
+      "purpose": {
+        "type": "string"
+      },
+      "validFrom": {
+        "type": "string"
+      },
+      "validTo": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "active",
+          "expired",
+          "revoked"
+        ]
+      },
+      "revokedBy": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "revokedReason": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "revokedAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "updatedAt": {
+        "type": "string"
+      },
+      "authority": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "measure": {
+              "type": "string"
+            },
+            "currencyOrUnit": {
+              "type": "string"
+            },
+            "period": {
+              "type": "string",
+              "enum": [
+                "daily",
+                "weekly",
+                "monthly"
+              ]
+            },
+            "periodKey": {
+              "type": "string"
+            },
+            "perCall": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "perPeriod": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "settled": {
+              "type": "string"
+            },
+            "reserved": {
+              "type": "string"
+            },
+            "remaining": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "measure",
+            "currencyOrUnit",
+            "period",
+            "periodKey",
+            "perCall",
+            "perPeriod",
+            "settled",
+            "reserved",
+            "remaining"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "id",
+      "agentId",
+      "agentSlug",
+      "requestedBy",
+      "grantedBy",
+      "roleAtGrant",
+      "consequenceTags",
+      "limits",
+      "targets",
+      "tools",
+      "approval",
+      "purpose",
+      "validFrom",
+      "validTo",
+      "status",
+      "revokedBy",
+      "revokedReason",
+      "revokedAt",
+      "createdAt",
+      "updatedAt",
+      "authority"
+    ],
+    "additionalProperties": false
+  }
+}

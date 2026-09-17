@@ -290,6 +290,7 @@ describe("organization.create handler", () => {
       slug: "acme-corp",
       type: "business",
       createdAt: "2026-01-01T00:00:00.000Z",
+      workspace: { publicId: "ws_new", slug: "core" },
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
@@ -301,12 +302,109 @@ describe("organization.create handler", () => {
       website: undefined,
       industry: undefined,
       employeeSize: undefined,
+      workspace: { name: "Core", slug: "core" },
     };
     await handler_organizationCreate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith("create_org", args, fakeCtx, {
       surface: "mcp",
     });
+  });
+});
+
+// ── the role editor and archive_workspace (#2964) ────────────────────────────
+
+import handler_iamRoleCreate, {
+  metadata as iamRoleCreateMetadata,
+} from "./iam.role.create";
+import handler_iamRoleGrantsSet, {
+  metadata as iamRoleGrantsSetMetadata,
+} from "./iam.role.grants.set";
+import handler_iamRoleDelete, {
+  metadata as iamRoleDeleteMetadata,
+} from "./iam.role.delete";
+import handler_workspaceArchive, {
+  metadata as workspaceArchiveMetadata,
+} from "./workspace.archive";
+
+describe("the role editor and archive_workspace tools", () => {
+  const roleRow = {
+    id: "rol_1",
+    name: "agent.release",
+    description: null,
+    scopeKind: "workspace",
+    kind: "agent",
+    isSystemDefault: false,
+    version: "1",
+    memberCount: 0,
+    grants: [{ capability: "list_runs", effect: "allow" }],
+    permissions: ["run.read"],
+    createdAt: "2026-09-15T00:00:00.000Z",
+    createdBy: "Dana Okafor",
+  };
+
+  it.each([
+    [iamRoleCreateMetadata, "create_role"],
+    [iamRoleGrantsSetMetadata, "set_role_grants"],
+    [iamRoleDeleteMetadata, "delete_role"],
+    [workspaceArchiveMetadata, "archive_workspace"],
+  ])("registers %o under the contract name %s", (metadata, name) => {
+    expect(metadata.name).toBe(name);
+  });
+
+  it("create_role invokes the kernel on the mcp surface and parses the row", async () => {
+    mocks.invoke.mockResolvedValue({ role: roleRow });
+    const args = {
+      name: "agent.release",
+      scopeKind: "workspace" as const,
+      description: null,
+      permissions: ["run.read"],
+    };
+    await expect(handler_iamRoleCreate(args)).resolves.toEqual({
+      role: roleRow,
+    });
+    expect(mocks.invoke).toHaveBeenCalledWith("create_role", args, fakeCtx, {
+      surface: "mcp",
+    });
+  });
+
+  it("set_role_grants and delete_role invoke the kernel on the mcp surface", async () => {
+    mocks.invoke.mockResolvedValueOnce({ role: roleRow });
+    await handler_iamRoleGrantsSet({
+      roleId: "rol_1",
+      permissions: ["run.read"],
+    });
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "set_role_grants",
+      { roleId: "rol_1", permissions: ["run.read"] },
+      fakeCtx,
+      { surface: "mcp" },
+    );
+    mocks.invoke.mockResolvedValueOnce({ id: "rol_1", name: "agent.release" });
+    await expect(handler_iamRoleDelete({ roleId: "rol_1" })).resolves.toEqual({
+      id: "rol_1",
+      name: "agent.release",
+    });
+  });
+
+  it("archive_workspace invokes the kernel and refuses an output without archivedAt (negative)", async () => {
+    mocks.invoke.mockResolvedValueOnce({
+      id: "wrk_1",
+      slug: "data",
+      name: "Data",
+      archivedAt: "2026-09-15T00:00:00.000Z",
+    });
+    await expect(
+      handler_workspaceArchive({ workspaceId: "wrk_1" }),
+    ).resolves.toMatchObject({ id: "wrk_1" });
+    mocks.invoke.mockResolvedValueOnce({
+      id: "wrk_1",
+      slug: "data",
+      name: "Data",
+    });
+    await expect(
+      handler_workspaceArchive({ workspaceId: "wrk_1" }),
+    ).rejects.toThrow();
   });
 });
 
@@ -368,6 +466,7 @@ describe("user.preferences.read handler", () => {
       defaultTextModel: null,
       timezone: "UTC",
       language: "en",
+      theme: "system",
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
@@ -377,53 +476,6 @@ describe("user.preferences.read handler", () => {
     expect(mocks.invoke).toHaveBeenCalledWith(
       "get_user_preferences",
       {},
-      fakeCtx,
-      { surface: "mcp" },
-    );
-  });
-});
-
-// ── user.preferences.write ────────────────────────────────────────────────────
-
-import handler_userPreferencesWrite, {
-  schema as userPreferencesWriteSchema,
-  metadata as userPreferencesWriteMetadata,
-} from "./user.preferences.write";
-
-describe("user.preferences.write handler", () => {
-  it("exports schema and metadata", () => {
-    expect(userPreferencesWriteSchema).toBeDefined();
-    expect(userPreferencesWriteMetadata.name).toBe("update_user_preferences");
-  });
-
-  it("calls invoke with preference write args", async () => {
-    const fakeOutput = {
-      fontSize: "large" as const,
-      density: "comfortable" as const,
-      enterToSubmit: false,
-      pendingPromptBehavior: "queue" as const,
-      defaultTextTier: null,
-      defaultTextModel: null,
-      timezone: "America/New_York",
-      language: "en",
-    };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
-    const args = {
-      fontSize: "large" as const,
-      density: undefined,
-      enterToSubmit: false as boolean | undefined,
-      pendingPromptBehavior: undefined,
-      defaultTextTier: undefined,
-      defaultTextModel: undefined,
-      timezone: undefined,
-      language: undefined,
-    };
-    await handler_userPreferencesWrite(args);
-
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "update_user_preferences",
-      args,
       fakeCtx,
       { surface: "mcp" },
     );

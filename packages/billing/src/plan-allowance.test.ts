@@ -5,12 +5,14 @@
  * Mocks the withSystemDb seam using the same shape as tier.test.ts
  * (resolveOrgActionEntitlement's query is the tier resolver's query plus one
  * extra selected column), so the two files' resolution logic cannot silently
- * drift apart without a test noticing.
+ * drift apart without a test noticing. The extra column is
+ * `billing.plans.included_gau_per_month` since WL-27; the annual figure the
+ * rate card prints is twelve of it.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 interface TxState {
-  subRows: { tier: string; includedActionsAnnual: bigint | number | null }[];
+  subRows: { tier: string; includedGauPerMonth: number }[];
   orgRows: {
     planType: string | null;
     negotiatedActionsAnnual?: bigint | number | null;
@@ -87,30 +89,28 @@ describe("resolveOrgActionEntitlement", () => {
   });
 
   it("still queries the database for a real org id", async () => {
-    txState.subRows = [{ tier: "scale", includedActionsAnnual: null }];
+    txState.subRows = [{ tier: "scale", includedGauPerMonth: 300_000 }];
     await resolveOrgActionEntitlement("org-1");
     expect(txState.dbCalls).toBe(1);
   });
 
-  it("a stored subscription figure wins", async () => {
-    txState.subRows = [{ tier: "build", includedActionsAnnual: 400_000 }];
+  it("reports the plan row's monthly allowance as twelve of them (WL-27)", async () => {
+    // billing.plans.included_actions_annual is gone; the annual figure the
+    // rate card prints is the published monthly allowance times twelve, so a
+    // plan change through Stripe moves both on the next read.
+    txState.subRows = [{ tier: "build", includedGauPerMonth: 50_000 }];
     const result = await resolveOrgActionEntitlement("org-1");
-    expect(result).toEqual({ tier: "build", includedActionsAnnual: 400_000 });
-  });
-
-  it("normalises the bigint-mode includedActionsAnnual column to a JS number", async () => {
-    // billing.plans.included_actions_annual is a `bigint`-mode column — the
-    // driver returns a JS bigint, not a number.
-    txState.subRows = [{ tier: "scale", includedActionsAnnual: 1_500_000n }];
-    const result = await resolveOrgActionEntitlement("org-1");
-    expect(result.includedActionsAnnual).toBe(1_500_000);
+    expect(result).toEqual({ tier: "build", includedActionsAnnual: 600_000 });
     expect(typeof result.includedActionsAnnual).toBe("number");
   });
 
-  it("uses the tier default (null includedActionsAnnual) when the subscription carries none", async () => {
-    txState.subRows = [{ tier: "build", includedActionsAnnual: null }];
+  it("reports zero rather than the tier default for a plan row that includes nothing", async () => {
+    // included_gau_per_month is NOT NULL and may be 0. Answering null here
+    // would send resolveActionAllowance to the tier default and hand the org
+    // an allowance its plan does not include.
+    txState.subRows = [{ tier: "build", includedGauPerMonth: 0 }];
     const result = await resolveOrgActionEntitlement("org-1");
-    expect(result).toEqual({ tier: "build", includedActionsAnnual: null });
+    expect(result).toEqual({ tier: "build", includedActionsAnnual: 0 });
   });
 
   it("falls back to the legacy organizations.plan_type leg when no subscription answered", async () => {
@@ -179,7 +179,9 @@ describe("resolveOrgActionEntitlement", () => {
   });
 
   it("does not let the legacy allowance override a plan row a customer is paying for", async () => {
-    txState.subRows = [{ tier: "scale", includedActionsAnnual: 1_500_000n }];
+    // The plan row states a monthly GAU allowance now; the annual figure the
+    // resolver returns is that times twelve (ADR-055 section 2, WL-27).
+    txState.subRows = [{ tier: "scale", includedGauPerMonth: 125_000 }];
     txState.orgRows = [
       { planType: "enterprise", negotiatedActionsAnnual: 99_000_000n },
     ];
@@ -189,7 +191,7 @@ describe("resolveOrgActionEntitlement", () => {
 
   it("falls through to free when the subscription's tier is unrecognised, rather than trusting it", async () => {
     txState.subRows = [
-      { tier: "legacy_unknown_tier", includedActionsAnnual: 999 },
+      { tier: "legacy_unknown_tier", includedGauPerMonth: 999 },
     ];
     txState.orgRows = [{ planType: null }];
     const result = await resolveOrgActionEntitlement("org-1");
@@ -223,13 +225,11 @@ describe("resolveOrgActionEntitlement", () => {
     // enterprise org would have resolved as if unentitled here too, and
     // because the tier gate switches IAM off below enterprise, the mismatch
     // would have switched a security control off for that org.
-    txState.subRows = [
-      { tier: "enterprise", includedActionsAnnual: 10_000_000 },
-    ];
+    txState.subRows = [{ tier: "enterprise", includedGauPerMonth: 1_000_000 }];
     const result = await resolveOrgActionEntitlement("org-1");
     expect(result).toEqual({
       tier: "enterprise",
-      includedActionsAnnual: 10_000_000,
+      includedActionsAnnual: 12_000_000,
     });
   });
 });

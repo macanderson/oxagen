@@ -1,0 +1,20 @@
+{
+  "app": {
+    "name": "Oxagen",
+    "unused": "Nobody reads this"
+  },
+  "unrecorded": {
+    "agents": "Agent identities are not recorded yet.",
+    "run": {
+      "frames_wrapped": "Frames of a wrapped run are not recorded."
+    }
+  },
+  "errors": {
+    "a": "The first error.",
+    "b": "The second error."
+  },
+  "panel": {
+    "title": "Panel",
+    "body": "<b>Body</b>"
+  }
+}

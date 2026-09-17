@@ -1,9 +1,12 @@
 /**
  * billing-settings.ts — per-org billing automation settings.
  *
- * Handles auto-reload preferences and dunning state for each org. The
- * `org_billing_settings` row is created on first access (upsert semantics)
- * so callers never deal with a missing row.
+ * Handles auto-reload preferences and dunning state for each org. Two
+ * readers of the same row: `getOrgBillingSettings` creates a default row on
+ * first access (upsert semantics) for the credits and dunning paths, and
+ * `readOrgBillingSettings` is a plain SELECT for the GAU path (ADR-055 §5),
+ * which answers with the column defaults for an org with no row and never
+ * inserts, so a read never writes.
  */
 
 import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
@@ -29,6 +32,24 @@ export interface OrgBillingSettings {
   suspendedAt: Date | null;
 }
 
+/**
+ * The GAU billing mode and auto top-up preferences (ADR-055 §5). Read by the
+ * gate, the recorder and `get_gau_bucket` through {@link readOrgBillingSettings}.
+ */
+export interface OrgGauBillingSettings {
+  orgId: string;
+  /** The org's Stripe customer, written once by ensureStripeCustomer. */
+  stripeCustomerId: string | null;
+  /** true → invoice billing (never capped); false → prepaid. */
+  approvedForInvoiceBilling: boolean;
+  /** Read only in invoice billing; stored and inert in prepaid. */
+  invoiceGauMax: number;
+  autoTopupEnabled: boolean;
+  /** Blocks charged per auto top-up. */
+  autoTopupBlocks: number;
+  dunningState: "active" | "grace" | "suspended";
+}
+
 // ── Internal defaults ─────────────────────────────────────────────────────────
 
 const DEFAULT_THRESHOLD_CENTS = 500;
@@ -37,6 +58,21 @@ const DEFAULT_LOW_BALANCE_THRESHOLD_CENTS = 500;
 /** ADR-053 §3: $20 a month of platform-paid assistant tokens unless raised. */
 export const DEFAULT_ASSISTANT_SPEND_CAP_CENTS = 2_000;
 const MIN_RELOAD_AMOUNT_CENTS = 100; // $1.00 minimum
+
+/**
+ * The GAU columns' defaults (`packages/database/src/schema/billing.ts`,
+ * org_billing_settings): what an org with no row is on. Prepaid, capped at
+ * 100,000 uninvoiced GAUs should an operator approve invoice billing, auto
+ * top-up on, one block per top-up.
+ */
+const GAU_SETTINGS_DEFAULTS = {
+  stripeCustomerId: null,
+  approvedForInvoiceBilling: false,
+  invoiceGauMax: 100_000,
+  autoTopupEnabled: true,
+  autoTopupBlocks: 1,
+  dunningState: "active",
+} as const satisfies Omit<OrgGauBillingSettings, "orgId">;
 
 // ── Mapping helper ────────────────────────────────────────────────────────────
 
@@ -133,6 +169,187 @@ export async function getOrgBillingSettings(
   );
 
   return rowToSettings(row);
+}
+
+// ── readOrgBillingSettings ────────────────────────────────────────────────────
+
+/**
+ * The org's GAU billing settings: a SELECT, never an INSERT.
+ *
+ * An org with no `org_billing_settings` row answers with the column defaults.
+ * The gate, the recorder and `get_gau_bucket` read through this, so none of
+ * them creates a row; the row appears on the first write that needs it
+ * (`set_auto_topup`, `set_org_billing_terms`, `ensureStripeCustomer`).
+ * Runs inside the caller's tenant scope; `opts.system` routes it through
+ * `withSystemDb` for the callers with none — the close job and the
+ * platform-operator handler — the switch `getOrgBillingSettings` carries.
+ */
+export async function readOrgBillingSettings(
+  orgId: string,
+  opts?: { system?: boolean },
+): Promise<OrgGauBillingSettings> {
+  const runner = opts?.system ? withSystemDb : withTenantDb;
+  const row = await runner((tx) =>
+    tx.query.orgBillingSettings.findFirst({
+      where: eq(schema.orgBillingSettings.orgId, orgId),
+      columns: {
+        stripeCustomerId: true,
+        approvedForInvoiceBilling: true,
+        invoiceGauMax: true,
+        autoTopupEnabled: true,
+        autoTopupBlocks: true,
+        dunningState: true,
+      },
+    }),
+  );
+  if (!row) return { orgId, ...GAU_SETTINGS_DEFAULTS };
+  return {
+    orgId,
+    stripeCustomerId: row.stripeCustomerId,
+    approvedForInvoiceBilling: row.approvedForInvoiceBilling,
+    invoiceGauMax: Number(row.invoiceGauMax),
+    autoTopupEnabled: row.autoTopupEnabled,
+    autoTopupBlocks: Number(row.autoTopupBlocks),
+    dunningState: row.dunningState as OrgGauBillingSettings["dunningState"],
+  };
+}
+
+// ── setAutoTopup ──────────────────────────────────────────────────────────────
+
+/** The two auto-top-up columns, as the customer sets and reads them. */
+export interface AutoTopupSettings {
+  /** Charge the saved card when the GAU bucket runs out. */
+  enabled: boolean;
+  /** Blocks bought per top-up; the column's CHECK is `> 0`. */
+  blocks: number;
+}
+
+/**
+ * Write the org's auto-top-up preference and return it as stored (ADR-055 §5,
+ * `set_auto_topup`).
+ *
+ * An upsert keyed on `org_id`, so an org whose settings row does not exist yet
+ * — every org that has not bought anything, which is most of the orgs that
+ * come here — gets one, and an org that has a row keeps every other column on
+ * it. Runs inside the caller's tenant scope: the capability is scoped, and RLS
+ * is the tenant fence.
+ *
+ * Accepted in either billing mode and with or without a saved card. The
+ * columns exist on every org; the recorder reads them only in prepaid, and
+ * only once a card is on file.
+ */
+export async function setAutoTopup(
+  orgId: string,
+  input: AutoTopupSettings,
+): Promise<AutoTopupSettings> {
+  if (!Number.isInteger(input.blocks) || input.blocks < 1) {
+    throw new Error("billing-settings: auto top-up blocks must be >= 1");
+  }
+  const row = await withTenantDb(async (tx) => {
+    const [saved] = await tx
+      .insert(schema.orgBillingSettings)
+      .values({
+        orgId,
+        autoTopupEnabled: input.enabled,
+        autoTopupBlocks: input.blocks,
+      })
+      .onConflictDoUpdate({
+        target: schema.orgBillingSettings.orgId,
+        set: {
+          autoTopupEnabled: input.enabled,
+          autoTopupBlocks: input.blocks,
+          updatedAt: new Date(),
+        },
+      })
+      .returning({
+        autoTopupEnabled: schema.orgBillingSettings.autoTopupEnabled,
+        autoTopupBlocks: schema.orgBillingSettings.autoTopupBlocks,
+      });
+    return saved ?? null;
+  });
+  if (!row) {
+    throw new Error(
+      `billing-settings: failed to save auto top-up for org ${orgId}`,
+    );
+  }
+  logger.info(
+    { orgId, enabled: row.autoTopupEnabled, blocks: row.autoTopupBlocks },
+    "billing: auto top-up settings updated",
+  );
+  return { enabled: row.autoTopupEnabled, blocks: Number(row.autoTopupBlocks) };
+}
+
+// ── setOrgBillingTerms ────────────────────────────────────────────────────────
+
+/** The two columns only a platform operator sets (ADR-055 §5). */
+export interface OrgBillingTerms {
+  orgId: string;
+  /** true → invoice billing; false → prepaid. */
+  approvedForInvoiceBilling: boolean;
+  /** Uninvoiced-overage ceiling; read only while invoice billing is on. */
+  invoiceGauMax: number;
+}
+
+/**
+ * Write one org's commercial billing terms and return the stored row
+ * (`set_org_billing_terms`).
+ *
+ * Runs on {@link withSystemDb}: the capability is unscoped and the call
+ * carries no tenant, so there is no scope for RLS to read. The row is keyed on
+ * the caller-supplied `orgId`, which the contract constrains to a uuid and the
+ * operator script resolves from an org slug.
+ *
+ * The upsert touches only these two columns; a switch back to prepaid with
+ * uninvoiced overage still open is closed by the caller (WL-31), not here.
+ */
+export async function setOrgBillingTerms(
+  terms: OrgBillingTerms,
+): Promise<OrgBillingTerms> {
+  if (!Number.isInteger(terms.invoiceGauMax) || terms.invoiceGauMax < 1) {
+    throw new Error("billing-settings: invoiceGauMax must be >= 1");
+  }
+  const row = await withSystemDb(async (tx) => {
+    const [saved] = await tx
+      .insert(schema.orgBillingSettings)
+      .values({
+        orgId: terms.orgId,
+        approvedForInvoiceBilling: terms.approvedForInvoiceBilling,
+        invoiceGauMax: terms.invoiceGauMax,
+      })
+      .onConflictDoUpdate({
+        target: schema.orgBillingSettings.orgId,
+        set: {
+          approvedForInvoiceBilling: terms.approvedForInvoiceBilling,
+          invoiceGauMax: terms.invoiceGauMax,
+          updatedAt: new Date(),
+        },
+      })
+      .returning({
+        orgId: schema.orgBillingSettings.orgId,
+        approvedForInvoiceBilling:
+          schema.orgBillingSettings.approvedForInvoiceBilling,
+        invoiceGauMax: schema.orgBillingSettings.invoiceGauMax,
+      });
+    return saved ?? null;
+  });
+  if (!row) {
+    throw new Error(
+      `billing-settings: failed to save billing terms for org ${terms.orgId}`,
+    );
+  }
+  logger.info(
+    {
+      orgId: row.orgId,
+      approvedForInvoiceBilling: row.approvedForInvoiceBilling,
+      invoiceGauMax: row.invoiceGauMax,
+    },
+    "billing: org billing terms updated",
+  );
+  return {
+    orgId: row.orgId,
+    approvedForInvoiceBilling: row.approvedForInvoiceBilling,
+    invoiceGauMax: Number(row.invoiceGauMax),
+  };
 }
 
 // ── updateAutoReloadSettings ──────────────────────────────────────────────────

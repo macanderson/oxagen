@@ -170,12 +170,12 @@ The conversation.archive handler bulk-updates multiple conversations' archivedAt
 <!-- entities: Conversation -->
 <!-- enforced: conversation.delete() -->
 
-The conversation.delete handler soft-deletes multiple conversations by setting deletedAt to now() and deletedByUserId to the current userId. Only conversations matching the tenant scope (orgId, workspaceId, userId) and not already deleted are affected. The handler returns the count of rows affected.
+The conversation.delete handler soft-deletes multiple conversations by setting deletedAt to now() and deletedById to the current userId. Only conversations matching the tenant scope (orgId, workspaceId, userId) and not already deleted are affected. The handler returns the count of rows affected.
 
 #### Scenario: Conversations soft-deleted in bulk
 <!-- test: conversation.delete test("returns deleted count matching rows affected") -->
 - **WHEN** one or more conversationIds are provided and belong to this user
-- **THEN** deletedAt and deletedByUserId are set for all matches and deleted count is returned
+- **THEN** deletedAt and deletedById are set for all matches and deleted count is returned
 
 #### Scenario: No matching rows returns 0
 <!-- test: conversation.delete test("returns 0 when no rows match (already deleted or wrong tenant)") -->

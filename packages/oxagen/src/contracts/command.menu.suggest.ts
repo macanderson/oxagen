@@ -86,7 +86,7 @@ export const commandMenuSuggest = registerCapability({
     "LLM suggestions. Privacy: only entity.summary is sent to the model.",
   mode: "sync",
   surfaces: ["api", "agent"] as const,
-  layers: ["schema", "api", "unit", "docs", "app"],
+  layers: ["schema", "api", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },
   sensitivity: "low",

@@ -1,0 +1,377 @@
+{
+  "name": "get_spend",
+  "domain": "spend",
+  "description": "Read this workspace's spend over a day range, rolled up by operator, agent, model, tool or task from the cost rollup, with every figure in micros and the basis that says who observed it, plus the period total with proven and accepted spend kept apart.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "period": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "additionalProperties": false
+      },
+      "groupBy": {
+        "type": "string",
+        "enum": [
+          "operator",
+          "agent",
+          "model",
+          "tool",
+          "task"
+        ]
+      }
+    },
+    "required": [
+      "period",
+      "groupBy"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "period": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "additionalProperties": false
+      },
+      "groupBy": {
+        "type": "string",
+        "enum": [
+          "operator",
+          "agent",
+          "model",
+          "tool",
+          "task"
+        ]
+      },
+      "total": {
+        "type": "object",
+        "properties": {
+          "cost": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "micros": {
+                    "type": "string"
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "basis": {
+                    "type": "string",
+                    "enum": [
+                      "gateway_observed",
+                      "client_attested",
+                      "mixed",
+                      "estimated"
+                    ]
+                  }
+                },
+                "required": [
+                  "micros",
+                  "currency",
+                  "basis"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "calls": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "runs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "proven": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "micros": {
+                    "type": "string"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "micros",
+                  "currency"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accepted": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "micros": {
+                    "type": "string"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "micros",
+                  "currency"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "productiveRatio": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "cost",
+          "calls",
+          "runs",
+          "proven",
+          "accepted",
+          "productiveRatio"
+        ],
+        "additionalProperties": false
+      },
+      "rows": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "cost": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "micros": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "basis": {
+                      "type": "string",
+                      "enum": [
+                        "gateway_observed",
+                        "client_attested",
+                        "mixed",
+                        "estimated"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "micros",
+                    "currency",
+                    "basis"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "calls": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "runs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "proven": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "micros": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "micros",
+                    "currency"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "accepted": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "micros": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "micros",
+                    "currency"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "productiveRatio": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "key": {
+              "type": "string"
+            },
+            "provider": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tokens": {
+              "type": "object",
+              "properties": {
+                "input_uncached": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cache_read": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cache_write_5m": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cache_write_1h": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "output": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "reasoning": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "input_uncached",
+                "cache_read",
+                "cache_write_5m",
+                "cache_write_1h",
+                "output",
+                "reasoning"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "cost",
+            "calls",
+            "runs",
+            "proven",
+            "accepted",
+            "productiveRatio",
+            "key",
+            "provider",
+            "tokens"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "period",
+      "groupBy",
+      "total",
+      "rows"
+    ],
+    "additionalProperties": false
+  }
+}

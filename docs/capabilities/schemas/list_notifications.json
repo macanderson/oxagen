@@ -58,6 +58,21 @@
                 "security"
               ]
             },
+            "event": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "approval.requested",
+                    "approval.resolved",
+                    "budget.breached"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "title": {
               "type": "string"
             },
@@ -95,6 +110,7 @@
             "id",
             "publicId",
             "kind",
+            "event",
             "title",
             "body",
             "deepLink",

@@ -1,4 +1,4 @@
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { ORG_ONLY_WORKSPACE_ID, type CapabilityHandler } from "@oxagen/oxagen";
 import { routerPolicySet } from "@oxagen/oxagen/contracts/router.policy.set";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
@@ -13,9 +13,22 @@ export const routerPolicySetHandler: CapabilityHandler<
   typeof routerPolicySet
 > = async (input, ctx) => {
   const scope = input.scope ?? "workspace";
-  if (scope === "workspace" && !ctx.workspaceId) {
+  // The nil uuid is the org-only workspace sentinel an organisation-level
+  // surface carries when it has no workspace, and it is truthy, so `!ctx
+  // .workspaceId` alone let it through. The row would then be written with the
+  // sentinel as its workspace_id — WITH CHECK passes, because the row carries
+  // the same value the workspace GUC holds — and the policy would apply to a
+  // workspace that does not exist while looking like a saved workspace policy.
+  // No call site reaches this today (every caller passes a real workspace id,
+  // and routing_policy.workspace_id is elsewhere only ever a filter, see
+  // ./lib/routing-policy.ts), so this is a guard against the next one rather
+  // than a fix for a live path.
+  if (
+    scope === "workspace" &&
+    (!ctx.workspaceId || ctx.workspaceId === ORG_ONLY_WORKSPACE_ID)
+  ) {
     logger.warn(
-      { orgId: ctx.orgId },
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
       "set_routing_policy: rejected — workspace scope with no workspace context",
     );
     throw new Error(

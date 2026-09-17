@@ -130,7 +130,20 @@ function fakeControlPlane(bundleEtag: string) {
     ingested,
     acks,
     calls,
-    queue: (command: DeliveredCommand) => commandQueue.push(command),
+    queue: (
+      command: Omit<
+        DeliveredCommand,
+        "requested_mode" | "delivery_mode" | "degraded_reason" | "reason"
+      > &
+        Partial<DeliveredCommand>,
+    ) =>
+      commandQueue.push({
+        requested_mode: null,
+        delivery_mode: null,
+        degraded_reason: null,
+        reason: null,
+        ...command,
+      }),
     setHostStatus: (status: ControlEnvelope["host_status"]) => {
       hostStatus = status;
     },
@@ -538,12 +551,12 @@ describe("tachod", () => {
     });
     await handle.tick();
     const ackIds = (
-      plane.acks as Array<{ command_id: string; outcome: string }>
-    ).map((a) => `${a.command_id}:${a.outcome}`);
+      plane.acks as Array<{ command_id: string; status: string }>
+    ).map((a) => `${a.command_id}:${a.status}`);
     expect(ackIds).toEqual(
       expect.arrayContaining([
         "cmd_pause:applied",
-        "cmd_msg:delivered",
+        "cmd_msg:received",
         "cmd_msg:applied",
         "cmd_old:expired",
         "cmd_lost:failed",

@@ -138,54 +138,57 @@ export const setModelRoute = defineTool({
   // one call's arguments — the engine cannot dispatch on an argument value.
   mutates: true,
 
-  input: z.object({
-    /**
-     * Which scope the write targets. §4.5 rule 2 makes routes an organization
-     * setting; the workspace row overrides it, and `get_routing_policy`'s
-     * provenance already reported which of the two supplied the live value.
-     */
-    scope: routeScope.default("workspace"),
+  input: z
+    .object({
+      /**
+       * Which scope the write targets. §4.5 rule 2 makes routes an organization
+       * setting; the workspace row overrides it, and `get_routing_policy`'s
+       * provenance already reported which of the two supplied the live value.
+       */
+      scope: routeScope.default("workspace"),
 
-    /**
-     * §4.5's route table. Omit to leave it unchanged; entries are upserted by
-     * tier, so sending one entry changes one tier.
-     */
-    routes: z.array(routeEntry).max(4).optional(),
+      /**
+       * §4.5's route table. Omit to leave it unchanged; entries are upserted by
+       * tier, so sending one entry changes one tier.
+       */
+      routes: z.array(routeEntry).max(4).optional(),
 
-    // Carried nullable-optional: omit = no change, null = clear the setting,
-    // string = set. The three-state shape is why these carry by reference
-    // rather than being re-declared as plain optionals.
-    defaultTextTier: workspaceModelSettingsWrite.input.shape.defaultTextTier,
-    defaultTextModel: workspaceModelSettingsWrite.input.shape.defaultTextModel,
+      // Carried nullable-optional: omit = no change, null = clear the setting,
+      // string = set. The three-state shape is why these carry by reference
+      // rather than being re-declared as plain optionals.
+      defaultTextTier: workspaceModelSettingsWrite.input.shape.defaultTextTier,
+      defaultTextModel:
+        workspaceModelSettingsWrite.input.shape.defaultTextModel,
 
-    /**
-     * The market-router policy, carried by import from
-     * `preview_routing_decision`'s override block — which is where the bounded
-     * versions of these fields live (`successThreshold` is 0–1, `windowDays` is
-     * a positive integer). In v1 they were per-call overrides for a dry run;
-     * here the same shapes are the persisted policy. Each is optional: omit to
-     * leave that tunable unchanged.
-     */
-    mode: routerDecisionPreview.input.shape.mode,
-    successThreshold: routerDecisionPreview.input.shape.successThreshold,
-    minSamples: routerDecisionPreview.input.shape.minSamples,
-    windowDays: routerDecisionPreview.input.shape.windowDays,
-    escalateOnRejection: routerDecisionPreview.input.shape.escalateOnRejection,
+      /**
+       * The market-router policy, carried by import from
+       * `preview_routing_decision`'s override block — which is where the bounded
+       * versions of these fields live (`successThreshold` is 0–1, `windowDays` is
+       * a positive integer). In v1 they were per-call overrides for a dry run;
+       * here the same shapes are the persisted policy. Each is optional: omit to
+       * leave that tunable unchanged.
+       */
+      mode: routerDecisionPreview.input.shape.mode,
+      successThreshold: routerDecisionPreview.input.shape.successThreshold,
+      minSamples: routerDecisionPreview.input.shape.minSamples,
+      windowDays: routerDecisionPreview.input.shape.windowDays,
+      escalateOnRejection:
+        routerDecisionPreview.input.shape.escalateOnRejection,
 
-    /**
-     * New: evaluate and return, write nothing. This is what survives of
-     * `preview_routing_decision` as a tool — the inspector folded into the
-     * setter so "what would this change do?" and "do it" are one contract and
-     * cannot drift apart.
-     */
-    dryRun: z.boolean().default(false),
-    /**
-     * Carried from preview: the prompt the dry run routes. Required when
-     * `dryRun` is set — a dry run with nothing to route has no decision to
-     * report.
-     */
-    samplePrompt: routerDecisionPreview.input.shape.prompt.optional(),
-  })
+      /**
+       * New: evaluate and return, write nothing. This is what survives of
+       * `preview_routing_decision` as a tool — the inspector folded into the
+       * setter so "what would this change do?" and "do it" are one contract and
+       * cannot drift apart.
+       */
+      dryRun: z.boolean().default(false),
+      /**
+       * Carried from preview: the prompt the dry run routes. Required when
+       * `dryRun` is set — a dry run with nothing to route has no decision to
+       * report.
+       */
+      samplePrompt: routerDecisionPreview.input.shape.prompt.optional(),
+    })
     /**
      * The comment above is a requirement, so it is enforced rather than
      * asserted: `dryRun: true` with no prompt to route validates happily and

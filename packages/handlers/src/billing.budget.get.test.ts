@@ -43,7 +43,17 @@ function status(overrides: Record<string, unknown> = {}) {
 }
 
 describe("billingBudgetGetHandler (@oxagen/handlers)", () => {
-  beforeEach(() => mocks.getSpendBudgetStatuses.mockReset());
+  // A block body: a function returned from beforeEach runs as its teardown.
+  beforeEach(() => {
+    mocks.getSpendBudgetStatuses.mockReset();
+  });
+
+  it("fails the call when the spend read fails, answering no spent figure (negative, #3064)", async () => {
+    mocks.getSpendBudgetStatuses.mockRejectedValue(new Error("counter down"));
+    await expect(billingBudgetGetHandler({}, CTX)).rejects.toThrow(
+      "counter down",
+    );
+  });
 
   it("returns an empty budgets array when nothing is configured", async () => {
     mocks.getSpendBudgetStatuses.mockResolvedValue([]);
@@ -57,9 +67,9 @@ describe("billingBudgetGetHandler (@oxagen/handlers)", () => {
     expect(out.budgets).toHaveLength(1);
     const b = out.budgets[0]!;
     expect(b.scope).toBe("org");
-    expect(b.limitUsd).toBe(10);
-    expect(b.spentUsd).toBe(4);
-    expect(b.projectedUsd).toBe(6);
+    expect(b.limit).toEqual({ micros: "10000000", currency: "USD" });
+    expect(b.spent).toEqual({ micros: "4000000", currency: "USD" });
+    expect(b.projected).toEqual({ micros: "6000000", currency: "USD" });
     expect(b.publicId).toBe("bdg_abc");
     expect(b.windowStart).toBe("2026-07-01T00:00:00.000Z");
   });

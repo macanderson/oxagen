@@ -43,7 +43,7 @@ export const connectionPauseHandler: CapabilityHandler<
       .update(schema.sourceConnections)
       .set({
         status: target,
-        updatedByUserId: ctx.userId ?? undefined,
+        updatedById: ctx.userId ?? undefined,
         updatedAt: new Date(),
       })
       .where(eq(schema.sourceConnections.id, existing.id));

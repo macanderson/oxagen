@@ -91,7 +91,7 @@ ORDER BY (org_id, created_at, execution_step_id)
 TTL toDateTime(created_at) + INTERVAL 365 DAY;
 
 -- Agent runtime (docs/specs/agent-runtime/spec.md §6, §9). Separate from
--- Postgres execution.tool_calls (the durable record); this is the
+-- Postgres agent.agent_tool_calls (the durable record); this is the
 -- analytics-side mirror for high-volume agent fanouts.
 CREATE TABLE IF NOT EXISTS tool_invocations (
   invocation_id UUID,

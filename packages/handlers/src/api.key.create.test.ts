@@ -17,6 +17,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
+import { HandlerError } from "@oxagen/oxagen";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
@@ -92,12 +93,34 @@ function makeRoleResolutionTx(
   };
 }
 
-/** Build the insert chain for the api_keys table. */
-function makeInsertTx(rows: unknown[]) {
+/**
+ * Build the write transaction: the workspace lookup the archival guard makes,
+ * then the api_keys insert. `workspace` null stands for a workspace of another
+ * org or none at all; an `archivedAt` stands for one that is wound down.
+ */
+function makeInsertTx(
+  rows: unknown[],
+  workspace: { name: string; archivedAt: Date | null } | null = {
+    name: "Core platform",
+    archivedAt: null,
+  },
+) {
+  const insert = vi.fn().mockReturnValue({
+    values: vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue(rows),
+    }),
+  });
+  // The workspace read takes a row lock; `lock` records the mode it asked for,
+  // so a test can hold the guard to its mechanism and not only its answer.
+  const lock = vi.fn().mockResolvedValue(workspace ? [workspace] : []);
   return {
-    insert: vi.fn().mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue(rows),
+    insert,
+    lock,
+    select: vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          limit: vi.fn().mockReturnValue({ for: lock }),
+        }),
       }),
     }),
   };
@@ -111,6 +134,10 @@ function makeInsertTx(rows: unknown[]) {
 function setupHappyPath(
   roleName = "Owner",
   insertedRows: unknown[] = [INSERTED_ROW],
+  workspace: { name: string; archivedAt: Date | null } | null = {
+    name: "Core platform",
+    archivedAt: null,
+  },
 ) {
   let callCount = 0;
   mocks.withTenantDb.mockImplementation(
@@ -120,8 +147,8 @@ function setupHappyPath(
         // resolveActorRole
         return fn(makeRoleResolutionTx("principal-uuid-1", roleName));
       }
-      // api_keys insert
-      return fn(makeInsertTx(insertedRows));
+      // workspace archival guard, then the api_keys insert
+      return fn(makeInsertTx(insertedRows, workspace));
     },
   );
 }
@@ -407,6 +434,38 @@ describe("api.key.create handler — protected Stella telemetry scope", () => {
     expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
   });
 
+  it("rejects attempts to mint the reserved agent credential purpose", async () => {
+    await expect(
+      apiKeyCreateHandler(
+        {
+          name: "Unauthorized agent credential",
+          scope: {
+            purpose: "agent_credential_v1",
+            agent_id: "agt_0123456789abcdefghjkmn",
+            principal_id: "prn_0123456789abcdefghjkmn",
+          },
+        },
+        TEST_CTX,
+      ),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("rejects attempts to mint the reserved CLI session purpose", async () => {
+    await expect(
+      apiKeyCreateHandler(
+        {
+          name: "Unauthorized CLI session",
+          scope: { purpose: "cli_session_v1" },
+        },
+        TEST_CTX,
+      ),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
   it("continues to allow unrelated arbitrary scope", async () => {
     const result = await apiKeyCreateHandler(
       {
@@ -418,5 +477,100 @@ describe("api.key.create handler — protected Stella telemetry scope", () => {
 
     expect(result.keyId).toBe(INSERTED_ROW.id);
     expect(mocks.emitSecurityEvent).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("api.key.create handler — archived workspace", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // An archived workspace is wound down. Its existing keys keep authenticating
+  // (`resolveApiKey` never consults archival) and the Organization › API keys
+  // page lists them so they can be revoked. Minting a new one there is fresh
+  // machine access introduced after the workspace was closed.
+  it("refuses to mint a key into an archived workspace, and inserts nothing (negative)", async () => {
+    const archivedAt = new Date("2026-09-01T00:00:00.000Z");
+    const insertTx = makeInsertTx([INSERTED_ROW], {
+      name: "Sunset",
+      archivedAt,
+    });
+    let callCount = 0;
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1) {
+          return fn(makeRoleResolutionTx("principal-uuid-1", "Owner"));
+        }
+        return fn(insertTx);
+      },
+    );
+
+    await expect(apiKeyCreateHandler(BASE_INPUT, makeCTX())).rejects.toSatisfy(
+      (e: unknown) =>
+        e instanceof HandlerError &&
+        e.code === "conflict" &&
+        e.reason === "workspace_archived",
+    );
+    // Nothing minted, and no key.created row claiming one was.
+    expect(insertTx.insert).not.toHaveBeenCalled();
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("refuses a workspace this org does not hold, without inserting (negative)", async () => {
+    const insertTx = makeInsertTx([INSERTED_ROW], null);
+    let callCount = 0;
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1) {
+          return fn(makeRoleResolutionTx("principal-uuid-1", "Owner"));
+        }
+        return fn(insertTx);
+      },
+    );
+
+    await expect(apiKeyCreateHandler(BASE_INPUT, makeCTX())).rejects.toSatisfy(
+      (e: unknown) =>
+        e instanceof HandlerError &&
+        e.code === "not_found" &&
+        e.reason === "workspace_not_found",
+    );
+    expect(insertTx.insert).not.toHaveBeenCalled();
+  });
+
+  it("takes a row lock on the workspace, which is what makes the check hold", async () => {
+    // The guard's correctness is not "the check is inside the transaction" —
+    // that only makes the statements atomic with respect to failure. Under
+    // READ COMMITTED an unlocked SELECT snapshots at statement start and
+    // `archive_workspace` can commit before the write, so the check would pass
+    // on precisely the interleaving its comment claims to prevent.
+    //
+    // The lock is the mechanism, so it is what the test pins: a future reader
+    // deleting `.for("update")` as redundant fails here rather than silently
+    // reopening the race.
+    const insertTx = makeInsertTx([INSERTED_ROW]);
+    let callCount = 0;
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1) {
+          return fn(makeRoleResolutionTx("principal-uuid-1", "Owner"));
+        }
+        return fn(insertTx);
+      },
+    );
+
+    await apiKeyCreateHandler(BASE_INPUT, makeCTX());
+    expect(insertTx.lock).toHaveBeenCalledWith("update");
+  });
+
+  it("mints into a live workspace, as before", async () => {
+    setupHappyPath("Owner", [INSERTED_ROW], {
+      name: "Core platform",
+      archivedAt: null,
+    });
+    const result = await apiKeyCreateHandler(BASE_INPUT, makeCTX());
+    expect(result.keyId).toBe(INSERTED_ROW.id);
   });
 });

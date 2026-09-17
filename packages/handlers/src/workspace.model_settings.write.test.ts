@@ -107,7 +107,7 @@ describe("workspaceModelSettingsWriteHandler (@oxagen/handlers)", () => {
 
   // ── empty input ───────────────────────────────────────────────────────────
 
-  it("succeeds with empty input (only updatedByUserId set)", async () => {
+  it("succeeds with empty input (only updatedById set)", async () => {
     const result = await workspaceModelSettingsWriteHandler({}, CTX);
     expect(mocks.updateSet).toHaveBeenCalledTimes(1);
     expect(result.defaultTextTier).toBe("fast");

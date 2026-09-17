@@ -15,6 +15,7 @@
  *  6. removeOrgPaymentMethod — promotes next card to default when removed card was default
  *  7. removeOrgPaymentMethod — throws LastPaymentMethodError when removing last card on active sub
  *  8. isLastPaymentMethodError type guard
+ *  9. readDefaultPaymentMethod — the default row from the mirror, no provider call
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -95,8 +96,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return {
     ...real,
     db: () => dbMocks,
-    withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-    withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
+    // Spies, so a test can assert which runner a read routed through.
+    withTenantDb: vi.fn(async (fn: (tx: typeof dbMocks) => unknown) =>
+      fn(dbMocks),
+    ),
+    withSystemDb: vi.fn(async (fn: (tx: typeof dbMocks) => unknown) =>
+      fn(dbMocks),
+    ),
   };
 });
 
@@ -109,6 +115,7 @@ const {
   removeOrgPaymentMethod,
   LastPaymentMethodError,
   isLastPaymentMethodError,
+  readDefaultPaymentMethod,
 } = await import("./payment-methods");
 
 // ---------------------------------------------------------------------------
@@ -178,6 +185,54 @@ describe("listOrgPaymentMethods", () => {
     _findManyResult = [];
     const result = await listOrgPaymentMethods("org-empty");
     expect(result).toHaveLength(0);
+  });
+});
+
+describe("readDefaultPaymentMethod", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    _findFirstResult = undefined;
+  });
+
+  it("returns the default card's id, brand and last4 from the mirror", async () => {
+    _findFirstResult = makeDbPm({ isDefault: true });
+    const result = await readDefaultPaymentMethod("org-001");
+    expect(result).toEqual({
+      stripePaymentMethodId: "pm_001",
+      brand: "visa",
+      last4: "4242",
+    });
+  });
+
+  it("returns null when the org has saved no default card", async () => {
+    _findFirstResult = undefined;
+    expect(await readDefaultPaymentMethod("org-001")).toBeNull();
+  });
+
+  it("reads inside the caller's tenant scope by default", async () => {
+    const { withSystemDb, withTenantDb } = await import("@oxagen/database");
+    await readDefaultPaymentMethod("org-001");
+    expect(withTenantDb).toHaveBeenCalledOnce();
+    expect(withSystemDb).not.toHaveBeenCalled();
+  });
+
+  it("reads through withSystemDb with { system: true }, for the close job and the operator handler", async () => {
+    const { withSystemDb, withTenantDb } = await import("@oxagen/database");
+    _findFirstResult = makeDbPm({ isDefault: true });
+    const result = await readDefaultPaymentMethod("org-001", { system: true });
+    expect(withSystemDb).toHaveBeenCalledOnce();
+    expect(withTenantDb).not.toHaveBeenCalled();
+    expect(result?.stripePaymentMethodId).toBe("pm_001");
+  });
+
+  it("never calls the provider or creates a customer", async () => {
+    _findFirstResult = makeDbPm({ isDefault: true });
+    await readDefaultPaymentMethod("org-001");
+    expect(listPaymentMethodsMock).not.toHaveBeenCalled();
+    expect(getDefaultPaymentMethodIdMock).not.toHaveBeenCalled();
+    expect(ensureStripeCustomerMock).not.toHaveBeenCalled();
+    expect(insertMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });
 

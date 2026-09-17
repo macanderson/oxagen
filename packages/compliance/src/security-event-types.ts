@@ -64,10 +64,22 @@ export const SECURITY_EVENT_TYPES = [
   // Org lifecycle
   "organization.created",
   "workspace.created",
+  // Archiving a workspace freezes it: it leaves the lists and its slug stays
+  // taken (issue #2964). Emitted by the archive_workspace handler
+  // (packages/handlers/src/workspace.archive.ts).
+  "workspace.archived",
   // Admin / org management
   "org.member_invited",
   "org.member_removed",
   "org.role_changed",
+  // Role definitions (ADR-063). Creating a role, replacing its grants and
+  // deleting it change what every holder may ask for (SOC2 CC6.1). Emitted by
+  // the create_role, set_role_grants and delete_role handlers
+  // (packages/handlers/src/iam.role.{create,grants.set,delete}.ts);
+  // `org.role_changed` above stays the membership event.
+  "iam.role_created",
+  "iam.role_grants_set",
+  "iam.role_deleted",
   // Plugin governance (org-level marketplace administration)
   "plugin.installed",
   "plugin.uninstalled",
@@ -112,6 +124,35 @@ export const SECURITY_EVENT_TYPES = [
   // key writes nothing and is not audited.
   "model_credential.set",
   "model_credential.revoked",
+  // Tool governance (MC spec §6.9, §6.11, ADR-072, #2958). A kill switch
+  // flip is the emergency deny an operator issues against a tool version, a
+  // tool server, a connection, an agent, an operator, a workspace, the
+  // organisation or a consequence class; every flip, on or off, is recorded
+  // with who, why and what it stopped (spec §6.11: "every switch flip is a
+  // security event"). Reclassifying a tool version changes which class
+  // switches and, later, which approval rules reach it, so it is recorded
+  // too. Emitted by packages/handlers/src/kill_switch.set.ts and
+  // tool.classification.set.ts.
+  "tool.kill_switch_flipped",
+  "tool.classification_changed",
+  // Agent identity (MC spec §6.2, ADR-057, #2956). An agent identity is a
+  // principal with a long-lived credential and roles; registering one adds a
+  // machine actor to the organisation, suspending or resuming one changes
+  // whether every run token it holds is honoured at the next call, and
+  // retiring one ends it for good (never deleted: its runs keep their
+  // identity). Each is a logical-access change (SOC2 CC6.1/CC6.3) emitted by
+  // packages/handlers/src/agent.{register,suspend,retire}.ts; the credential
+  // itself is covered by api_key.created / api_key.revoked.
+  "agent.registered",
+  "agent.suspended",
+  "agent.resumed",
+  "agent.retired",
+  // Witness disclosure (MC spec §8.5 invariant 3, ADR-064, #2955). The grain
+  // is how much a worker is told when a witness it cannot see fails; raising
+  // it above L0 hands the worker detail about the oracle, so only an org
+  // Owner or Admin in a signed-in session changes it. Emitted by the
+  // set_disclosure_grain handler (packages/handlers/src/evidence.disclosure_grain.set.ts).
+  "evidence.disclosure_grain_changed",
   // Governed agent runs (docs/specs/run-evidence-ingress/spec.md). These four
   // are INTEGRITY failures, not ordinary denials: each one means some part of
   // the run-evidence chain was contradicted, and none can be produced by
@@ -138,6 +179,26 @@ export const SECURITY_EVENT_TYPES = [
   "agent_run.forged_decision_reference",
   "agent_run.stale_deny_generation",
   "agent_run.finalization_grant_misuse",
+  // Mandates (MC spec §6.9 part 3, ADR-059): the grant, the limits change,
+  // the revocation, the hourly expiry, and a call the gate refused
+  // (no_mandate, target_denied, over_limit) — the spec catalog's
+  // `mandate.exception`. Emitted by packages/handlers/src/mandate.*.ts,
+  // packages/inngest-functions/src/functions/mandate.expiry.ts and
+  // packages/rules/src/mandates.ts.
+  "mandate.granted",
+  "mandate.limits_changed",
+  "mandate.revoked",
+  "mandate.expired",
+  "mandate.exception",
+  // Auto-approval (MC spec §6.9 part 2, ADR-070): a call a decision rule sent
+  // to a person that an auto-approval rule released instead, recorded with
+  // `policy:<rule id>` as its approver. Emitted by
+  // packages/rules/src/auto-approval-path.ts.
+  "approval.auto_approved",
+  // The rules themselves: written, switched off, or deleted. Emitted by
+  // packages/handlers/src/approval_rule.*.ts.
+  "approval_rule.changed",
+  "approval_rule.deleted",
   // Access review
   "access.review_completed",
   "access.member_access_confirmed",
@@ -145,6 +206,9 @@ export const SECURITY_EVENT_TYPES = [
   "privacy.export_requested",
   "privacy.erasure_requested",
   "privacy.org_erasure_requested",
+  // Steering (ADR-061): a Context PR merged and published a record — the
+  // bundle a workspace's agents read changed. Emitted by merge_context_pr.
+  "steering.published",
 ] as const;
 
 // ---------------------------------------------------------------------------

@@ -38,7 +38,6 @@ packages/database/drizzle/.meta
 test-results
 playwright-report
 **/__tests__/screenshots/
-**/e2e/screenshots/
 
 # Editors
 .idea
@@ -196,6 +195,11 @@ Icon?
 # ultraudit harness scratch (audit run state, findings dumps, and a Linear API
 # key) — transient per-run artifacts, one of which holds live credentials
 .ultraudit-*
+
+# tools/scripts/package-for-node.sh output (built in CI; local dry runs leave it behind)
+dist-deploy/
+.deploy-app/
+.deploy-mcp/
 
 # Compiled single-binary sidecars (tools/sea/compile.mjs)
 **/dist-bin/

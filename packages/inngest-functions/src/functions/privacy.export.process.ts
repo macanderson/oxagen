@@ -221,7 +221,7 @@ export const [privacyExportProcess, privacyExportProcessOnFailure] =
               .where(
                 scope === "org"
                   ? eq(schema.apiKeys.orgId, orgId)
-                  : eq(schema.apiKeys.createdByUserId, userId),
+                  : eq(schema.apiKeys.createdById, userId),
               );
             addJsonEntry(collected, "api-keys.json", apiKeyRows);
           });

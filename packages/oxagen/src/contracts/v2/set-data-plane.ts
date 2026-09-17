@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { defineTool } from "./_define";
-import { orgDataPlaneSet, orgDataPlaneSetInputObject } from "../org.data_plane.set";
+import {
+  orgDataPlaneSet,
+  orgDataPlaneSetInputObject,
+} from "../org.data_plane.set";
 import {
   neo4jPlaneConfigSchema,
   postgresPlaneConfigSchema,

@@ -13,6 +13,7 @@ import { mcpSchema } from "./_schemas";
 import {
   auditMixin,
   bytea,
+  citext,
   idMixin,
   orgScopeMixin,
   softDeleteMixin,
@@ -42,8 +43,7 @@ export const mcpRegistries = mcpSchema.table(
   {
     ...idMixin("mreg"),
     ...auditMixin(),
-    orgId: uuid("org_id").notNull(),
-    workspaceId: uuid("workspace_id").notNull(),
+    ...orgScopeMixin(),
     name: text("name").notNull(),
     baseUrl: text("base_url").notNull(),
     enabled: boolean("enabled").notNull().default(true),
@@ -156,6 +156,15 @@ export const mcpServers = mcpSchema.table(
       .notNull()
       .default(sql`'[]'::jsonb`),
     enabled: boolean("enabled").notNull().default(true),
+    // The last import_tools run against this server (MC spec App. A.5
+    // tool_servers.last_import_at / last_import_digest): when, and the
+    // sha256 over the imported versions' checksums, so an unchanged re-import
+    // is visible as one.
+    lastImportAt: timestamp("last_import_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    lastImportDigest: text("last_import_digest"),
   },
   (t) => ({
     orgIdx: index("mcp_servers_org_idx").on(t.orgId, t.workspaceId),
@@ -182,6 +191,10 @@ export const mcpServers = mcpSchema.table(
     transportTypeCheck: check(
       "mcp_servers_transport_type_check",
       sql`${t.transportType} IN ('streamable-http', 'sse', 'stdio')`,
+    ),
+    lastImportCheck: check(
+      "mcp_servers_last_import_check",
+      sql`(${t.lastImportAt} IS NULL) = (${t.lastImportDigest} IS NULL)`,
     ),
     authStrategyCheck: check(
       "mcp_servers_auth_strategy_check",
@@ -383,6 +396,69 @@ export const mcpToolSnapshots = mcpSchema.table(
       t.mcpServerId,
       t.toolName,
       t.capturedAt,
+    ),
+  }),
+);
+
+/**
+ * mcp.credential_grants — the credential broker's log (MC spec §6.8, App. A.5
+ * `tools.credential_grants`, #2958). One row per credential the broker put to
+ * use for a tool server on behalf of a run: which stored credential
+ * (`mcp.credentials`, the connection), which server, the scope the minted
+ * credential could reach, and its lifetime. The secret itself is never stored
+ * here — `scope` describes reach, not material. A row is revoked when its
+ * connection is revoked or a connection kill switch flips on, so "what could
+ * this credential still reach" is answerable from this table alone.
+ *
+ * Scope: orgScopeMixin, a `standard` tenant-owned table in the RLS manifest.
+ */
+export const mcpCredentialGrants = mcpSchema.table(
+  "credential_grants",
+  {
+    ...idMixin("mcgr"),
+    ...orgScopeMixin(),
+    connectionId: uuid("connection_id").notNull(),
+    // The connection's `mcrd_…` public id as it was at mint time: a revoked
+    // connection's row is deleted and the log keeps naming it.
+    connectionPublicId: citext("connection_public_id").notNull(),
+    mcpServerId: uuid("mcp_server_id").notNull(),
+    // The server's `mcs_…` public id and name as they were at mint time. Like
+    // `connection_public_id`: `mcp_server_id` carries no foreign key because
+    // plugin uninstall hard-deletes the server row, and the log has to outlive
+    // it. Read straight off the grant, so an orphaned row reads rather than
+    // throws (`list_credential_grants`).
+    mcpServerPublicId: citext("mcp_server_public_id").notNull(),
+    mcpServerName: text("mcp_server_name").notNull(),
+    // The governed run the credential served; null for a turn outside a run.
+    runId: text("run_id"),
+    // What the minted credential could reach: server endpoint, auth kind and
+    // the downscope method the broker achieved (`none` for a stored secret
+    // used server-side, spec §6.8's last row).
+    scope: jsonb("scope").notNull(),
+    // The provider's own identifier for the token where one exists.
+    providerTokenId: text("provider_token_id"),
+    issuedAt: timestamp("issued_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    orgIdx: index("credential_grants_org_idx").on(t.orgId, t.workspaceId),
+    // The log reads newest first; revocation scans a connection's live grants.
+    issuedIdx: index("credential_grants_issued_idx").on(
+      t.workspaceId,
+      t.issuedAt,
+    ),
+    connectionLiveIdx: index("credential_grants_connection_live_idx")
+      .on(t.connectionId)
+      .where(sql`revoked_at IS NULL`),
+    ttlCheck: check(
+      "credential_grants_ttl_check",
+      sql`${t.expiresAt} > ${t.issuedAt} AND ${t.expiresAt} <= ${t.issuedAt} + interval '1 hour'`,
     ),
   }),
 );

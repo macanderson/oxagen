@@ -112,40 +112,51 @@ beforeEach(() => {
 
 // ── automation.list ───────────────────────────────────────────────────────────
 
-describe("workspace.member.list route", () => {
+describe("workspace.member.list route (list_members)", () => {
   const PATH = "/workspace/member/list";
 
-  it("happy path GET: returns 200 with members", async () => {
-    mocks.invoke.mockResolvedValue([
-      {
-        id: "usr-1",
-        email: "alice@test.com",
-        role: "admin",
-        joined_at: "2026-01-01T00:00:00.000Z",
-      },
-    ]);
+  it("happy path GET: returns 200 with the workspace members", async () => {
+    mocks.invoke.mockResolvedValue({
+      scope: "workspace",
+      members: [
+        {
+          id: "usr_1",
+          name: "Alice",
+          email: "alice@test.com",
+          role: "admin",
+          joinedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    });
 
     const res = await app.fetch(get(PATH));
     expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ scope: "workspace" });
   });
 
-  it("calls invoke with 'list_workspace_members' and surface 'api'", async () => {
+  it("calls invoke with 'list_members' and surface 'api'", async () => {
     await app.fetch(get(PATH));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_workspace_members");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_members");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
-  it("?workspace_id is forwarded to invoke", async () => {
-    await app.fetch(get(`${PATH}?workspace_id=ws-1`));
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.workspace_id).toBe("ws-1");
-  });
-
-  it("no ?workspace_id → workspace_id is undefined in invoke input", async () => {
+  it("no ?scope lists the request's workspace, as this route always has", async () => {
     await app.fetch(get(PATH));
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.workspace_id).toBeUndefined();
+    expect(body.scope).toBe("workspace");
+  });
+
+  it("?scope=org is forwarded to invoke", async () => {
+    await app.fetch(get(`${PATH}?scope=org`));
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.scope).toBe("org");
+  });
+
+  it("a scope outside org | workspace is refused before invoke", async () => {
+    const res = await app.fetch(get(`${PATH}?scope=user`));
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 });
 

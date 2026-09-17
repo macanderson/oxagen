@@ -17,6 +17,9 @@ export const budgetPolicyRead = registerCapability({
   scoped: false,
   agent: { requiresApproval: false, riskLevel: "low", category: "user" },
   sensitivity: "low",
+  // A settings read the in-app agent makes before every turn is never a
+  // governed action (ADR-052 exclusion 2).
+  noBillingGate: true,
   mutates: false,
   defaultEffect: "deny",
   defaultRoles: {

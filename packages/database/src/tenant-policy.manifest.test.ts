@@ -137,27 +137,56 @@ describe("tenant policy manifest", () => {
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
     //
-    // 96 as of billing.spend_counters, cost.price_entries, cost.run_totals and
-    // cost.daily_totals (ADR-060, applied ahead of the WL-52 cutover).
-    // 92 as of billing.governed_action_counters (ADR-052). The preceding note
-    // read "97 as of org.model_credentials" while the assertion said 91, so it
-    // had already drifted from the number it was describing — a count nobody
-    // can check against its own comment is a pin with no ratchet behind it.
-    expect(POLICY_MANIFEST.length).toBe(96);
+    // 110 as of mcp.credential_grants (ADR-072, #2958), which lands on top of
+    // the 109 this branch merged. Those 109 were evidence.witnesses,
+    // evidence.verdicts and evidence.disclosure_policies (ADR-064, #2955)
+    // alongside tools.mandates and tools.mandate_ledger (ADR-059, G2957), both
+    // landing on the 104 that counted org.onboarding_state and
+    // tacho.enrollment_tokens (#2967, ADR-065). So the six tables added since
+    // 104 are, in order: tools.mandates, tools.mandate_ledger,
+    // evidence.witnesses, evidence.verdicts, evidence.disclosure_policies and
+    // mcp.credential_grants. Was 102 as of cost.findings (ADR-062, G2963). Was
+    // 101 as of
+    // agent.context_proposals and agent.context_appends (ADR-061, #2961).
+    // Was 99 as of evidence.run_exports (ADR-058, #2952).
+    // Was 98 as of billing.spend_counters, cost.price_entries, cost.run_totals
+    // and cost.daily_totals (ADR-060, G2962) over WL-27's 94, which dropped
+    // billing.governed_action_counters with the annual meter it counted. Was
+    // 95 as of billing.contract_terms, billing.gau_buckets and
+    // billing.gau_settlements (ADR-055, WL-24), and 92 before those. An
+    // earlier note read "97 as of org.model_credentials" while the assertion
+    // said 91, so it had already drifted from the number it was describing — a
+    // count nobody can check against its own comment is a pin with no ratchet
+    // behind it.
+    expect(POLICY_MANIFEST.length).toBe(110);
   });
 
-  it("covers billing.governed_action_counters as org_only (ADR-052)", () => {
-    // Named as well as counted. The count above catches a table that gains an
-    // org_id without a policy; it cannot catch this one being swapped for a
-    // different table while the total stays the same, and the governed-action
-    // counter is the row a customer's invoice is computed from.
-    const entry = POLICY_MANIFEST.find(
-      (e) => e.table === "billing.governed_action_counters",
-    );
-    expect(entry).toBeDefined();
-    // org_only rather than standard: the allowance and the volume band are both
-    // annual and org-wide, so the table carries no workspace_id to scope by.
-    expect(entry?.policyClass).toBe("org_only");
+  it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {
+    // Named as well as counted, for the same reason as the governed-action
+    // counter below: the contract terms, the month bucket and the settlement
+    // ledger are the rows a customer's GAU invoice is computed from. All three
+    // carry org_id NOT NULL and no workspace_id.
+    for (const t of [
+      "billing.contract_terms",
+      "billing.gau_buckets",
+      "billing.gau_settlements",
+    ]) {
+      const entry = POLICY_MANIFEST.find((e) => e.table === t);
+      expect(entry, t).toBeDefined();
+      expect(entry?.policyClass, t).toBe("org_only");
+    }
+  });
+
+  it("no longer carries billing.governed_action_counters (WL-27)", () => {
+    // The annual counter and its table were dropped with the dollar-denominated
+    // meter they served; billing.gau_buckets is the row a customer's GAU
+    // invoice is computed from now. A policy entry for a table that no longer
+    // exists makes the generated RLS migration name a missing relation.
+    expect(
+      POLICY_MANIFEST.some(
+        (e) => e.table === "billing.governed_action_counters",
+      ),
+    ).toBe(false);
   });
 
   it("covers the run/attempt/authorization foundation (run-evidence-ingress)", () => {

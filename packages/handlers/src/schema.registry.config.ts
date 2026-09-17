@@ -25,7 +25,7 @@ export const schemaRegistryConfigHandler: CapabilityHandler<
         ...(input.conformanceFloor !== undefined
           ? { conformanceFloor: String(input.conformanceFloor) }
           : {}),
-        updatedByUserId: ctx.userId,
+        updatedById: ctx.userId,
       })
       .where(
         and(

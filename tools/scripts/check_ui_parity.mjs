@@ -39,6 +39,7 @@ import { readdirSync, existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { APP_DIR } from "./lib/app-dir.mjs";
 
 const ARGS = new Set(process.argv.slice(2));
 const JSON_MODE = ARGS.has("--json");
@@ -47,9 +48,17 @@ const info = JSON_MODE ? () => {} : (...a) => console.log(...a);
 
 const ROOT = resolve(process.cwd());
 const CAP_DIR = join(ROOT, "packages/oxagen/src/contracts");
-const REGISTRY = join(ROOT, "apps/app/capability-ui-map.json");
-const BASELINE = join(ROOT, "apps/app/capability-ui-parity-baseline.json");
-const APP_SRC = join(ROOT, "apps/app/src");
+const REGISTRY = join(ROOT, APP_DIR, "capability-ui-map.json");
+/**
+ * The rebuilt app's own registry. During the Mission Control rebuild the
+ * gates still point at the deprecated app (lib/app-dir.mjs), but a capability
+ * whose UI now lives in apps/app is bound there, not here — so both are read
+ * and a name the new app binds wins. The cutover batch flips APP_DIR and
+ * deletes the deprecated registry, and this constant becomes REGISTRY.
+ */
+const REBUILT_REGISTRY = join(ROOT, "apps/app", "capability-ui-map.json");
+const BASELINE = join(ROOT, APP_DIR, "capability-ui-parity-baseline.json");
+const APP_SRC = join(ROOT, APP_DIR, "src");
 
 // ── Contract parsing (kept byte-compatible with check_manifest.mjs) ──────────
 function readCapabilities() {
@@ -89,19 +98,27 @@ function readCapabilities() {
 }
 
 // ── Registry ─────────────────────────────────────────────────────────────────
-function readRegistry() {
-  if (!existsSync(REGISTRY)) {
-    console.error(`No UI binding registry at ${REGISTRY}.`);
+function readBindings(file, required) {
+  if (!existsSync(file)) {
+    if (!required) return {};
+    console.error(`No UI binding registry at ${file}.`);
     process.exit(2);
   }
-  let parsed;
   try {
-    parsed = JSON.parse(readFileSync(REGISTRY, "utf8"));
+    return JSON.parse(readFileSync(file, "utf8")).bindings ?? {};
   } catch (e) {
-    console.error(`capability-ui-map.json is not valid JSON: ${e.message}`);
+    console.error(`${file} is not valid JSON: ${e.message}`);
     process.exit(2);
   }
-  return parsed.bindings ?? {};
+}
+
+function readRegistry() {
+  return {
+    ...readBindings(REGISTRY, true),
+    ...(REBUILT_REGISTRY === REGISTRY
+      ? {}
+      : readBindings(REBUILT_REGISTRY, false)),
+  };
 }
 
 // ── Ratchet baseline ──────────────────────────────────────────────────────────

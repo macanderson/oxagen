@@ -1,0 +1,279 @@
+{
+  "name": "list_agents",
+  "domain": "agent",
+  "description": "List the agent identities registered in this workspace with their principal, harness, operator, status, enrollment and credential counts, and the 30-day run, spend and incident figures the stores record.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 50
+      },
+      "cursor": {
+        "type": "string",
+        "maxLength": 256
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "agentKey": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "harness": {
+              "type": "string",
+              "enum": [
+                "stella",
+                "claude-code",
+                "claude-agent-sdk",
+                "custom"
+              ]
+            },
+            "principalId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "operatorId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "unenrolled",
+                "enrolled",
+                "suspended",
+                "retired"
+              ]
+            },
+            "tier": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "beltSize": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "runs30d": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "spend30d": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "micros": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "basis": {
+                      "type": "string",
+                      "enum": [
+                        "gateway_observed",
+                        "client_attested",
+                        "mixed",
+                        "estimated"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "micros",
+                    "currency",
+                    "basis"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "proven30d": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "mandates": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "incidents": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "credentials": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "hosts": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "registeredAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "slug",
+            "name",
+            "agentKey",
+            "harness",
+            "principalId",
+            "operatorId",
+            "status",
+            "tier",
+            "beltSize",
+            "runs30d",
+            "spend30d",
+            "proven30d",
+            "mandates",
+            "incidents",
+            "credentials",
+            "hosts",
+            "registeredAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "nextCursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "totals": {
+        "type": "object",
+        "properties": {
+          "identities": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "enrolled": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "holdingMandate": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tamperIncidents": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "identities",
+          "enrolled",
+          "holdingMandate",
+          "tamperIncidents"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "items",
+      "nextCursor",
+      "totals"
+    ],
+    "additionalProperties": false
+  }
+}

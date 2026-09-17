@@ -228,12 +228,21 @@ Shipped, in the pull request that closes the client and answerer slices:
   `docker-compose.dev.yml`. Stella publishes
   `ghcr.io/macanderson/stella-serve:<version>` on every release.
 
+Shipped with #2968's backend:
+
+- The run-ledger write of the engine's events with their `seq` (§3): every
+  turn is admitted, recorded and sealed as a run (`openAssistantRun`), and
+  `driveTurn` hands each reverse request its frame `seq`.
+- The belt: the engine is declared every governed tool, the provider is shown
+  the pinned belt plus `search_tools` and `load_tools` (#2611).
+- `ask_assistant` as the turn's contract, with `POST /chat/stream` as its
+  streaming adapter; `get_assistant_engine` as the engine-down read.
+
 Left, each its own change:
 
 - A goal-shaped turn (`goal` on the request) for the schema builder and rule
   authoring, so the engine's verify ladder judges the result, with a test in
   which a rule authored across two sources is answered by a graph query.
-- The run-ledger write of the engine's events with their `seq` (§3).
 - Attachments from the engine's own file system, which this host never
   mounts and refuses.
 - Bumping the client's pinned version and the image tag together when a

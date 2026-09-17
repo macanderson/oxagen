@@ -162,7 +162,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 // Import after mocks.
 const {
+  FREE_SIGNUP_CREDITS,
   grantFreeCredits,
+  grantSignupCredits,
   grantPlanCreditsForInvoicePaid,
   grantCreditPackForCheckout,
 } = await import("./grants");
@@ -190,6 +192,7 @@ function makeInvoice(overrides: Partial<BillingInvoice> = {}): BillingInvoice {
     subscriptionId: "sub_test_001",
     orgId: "org-abc",
     billingReason: "subscription_create",
+    gauSettlementId: null,
     lineItems: [],
     ...overrides,
   };
@@ -202,8 +205,10 @@ function makeSession(
     id: "cs_test_001",
     mode: "payment",
     paymentStatus: "paid",
+    customerId: "cus_test_001",
     metadata: { org_id: "org-abc" },
     subscriptionId: null,
+    invoiceId: null,
     ...overrides,
   };
 }
@@ -239,6 +244,69 @@ describe("grantFreeCredits", () => {
 
     expect(dbState.instance!.transaction).not.toHaveBeenCalled();
     // Only the ledger insert (idempotency check) is called; lot/balance are skipped.
+    expect(txMock.insert).toHaveBeenCalledTimes(1);
+    expect(txMock._lotInsertCalled).toBe(false);
+    expect(txMock._balanceUpsertCalled).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — grantSignupCredits (create_org's grant, on the org transaction)
+// ---------------------------------------------------------------------------
+
+describe("grantSignupCredits", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("is $5.00: 500 credits", () => {
+    expect(FREE_SIGNUP_CREDITS).toBe(500n);
+  });
+
+  it("writes the ledger row, a non-expiring free_grant lot of 500 and the balance on the caller's transaction", async () => {
+    const values: unknown[] = [];
+    const tx = {
+      insert: vi.fn(() => ({
+        values: vi.fn((v: unknown) => {
+          values.push(v);
+          return {
+            onConflictDoNothing: () => ({
+              returning: vi.fn().mockResolvedValue([{ id: "ledger-row-1" }]),
+            }),
+            onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+            then: (resolve: (v: undefined) => void) => resolve(undefined),
+          };
+        }),
+      })),
+    };
+
+    const granted = await grantSignupCredits(tx as never, "org-new");
+
+    expect(granted).toBe(true);
+    expect(tx.insert).toHaveBeenCalledTimes(3);
+    expect(values[0]).toMatchObject({
+      orgId: "org-new",
+      deltaCents: 500n,
+      reason: "grant_signup",
+      referenceType: "org",
+      referenceId: "org-new",
+    });
+    expect(values[1]).toMatchObject({
+      orgId: "org-new",
+      source: "free_grant",
+      originalCents: 500n,
+      remainingCents: 500n,
+      expiresAt: null,
+    });
+    expect(values[2]).toMatchObject({ orgId: "org-new", balanceCents: 500n });
+  });
+
+  it("writes nothing more and answers false when the org already holds the grant (negative)", async () => {
+    const txMock = makeTx(true);
+
+    const granted = await grantSignupCredits(txMock as never, "org-abc");
+
+    expect(granted).toBe(false);
     expect(txMock.insert).toHaveBeenCalledTimes(1);
     expect(txMock._lotInsertCalled).toBe(false);
     expect(txMock._balanceUpsertCalled).toBe(false);
@@ -383,6 +451,7 @@ describe("grantPlanCreditsForInvoicePaid", () => {
       makeInvoice({
         subscriptionId: null,
         billingReason: "subscription_create",
+        gauSettlementId: null,
       }),
     );
 

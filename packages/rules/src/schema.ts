@@ -4,6 +4,7 @@
  * a rule set that parses is one the evaluator can judge deterministically.
  */
 import { z } from "zod";
+import { approvalRuleSchema } from "@oxagen/oxagen/approval-rules/schemas";
 import { CONDITION_OPS, type Condition, type RuleSet } from "./types";
 
 const conditionLeafSchema = z
@@ -60,24 +61,41 @@ const decisionRuleSchema = z
   })
   .strict();
 
-export const ruleSetSchema: z.ZodType<RuleSet> = z
+// The input type is `unknown`: the auto-approval clause carries `.default()`s,
+// so what parses in is looser than what comes out, and the output side is what
+// `RuleSet` describes.
+export const ruleSetSchema: z.ZodType<RuleSet, z.ZodTypeDef, unknown> = z
   .object({
-    schema: z.literal("oxagen.decision-rules.v1"),
+    schema: z.enum(["oxagen.decision-rules.v1", "oxagen.decision-rules.v2"]),
     rules: z.array(decisionRuleSchema).max(256),
+    // The v1 reader: a document written before the auto-approval clause
+    // existed parses unchanged and reads as a rule set with no clause.
+    autoApproval: z.array(approvalRuleSchema).max(256).default([]),
   })
   .strict()
   .superRefine((set, issues) => {
-    const seen = new Set<string>();
-    for (const rule of set.rules) {
-      if (seen.has(rule.id)) {
-        issues.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `duplicate rule id "${rule.id}" — ids are the audit citation and must be unique`,
-        });
-      }
-      seen.add(rule.id);
-    }
+    assertUniqueIds(
+      set.rules.map((r) => r.id),
+      issues,
+    );
+    assertUniqueIds(
+      (set.autoApproval ?? []).map((r) => r.id),
+      issues,
+    );
   });
+
+function assertUniqueIds(ids: readonly string[], issues: z.RefinementCtx) {
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (seen.has(id)) {
+      issues.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `duplicate rule id "${id}" — ids are the audit citation and must be unique`,
+      });
+    }
+    seen.add(id);
+  }
+}
 
 /** Parse and validate an authored rule set, throwing zod's error on failure. */
 export function parseRuleSet(raw: unknown): RuleSet {

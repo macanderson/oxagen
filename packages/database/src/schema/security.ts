@@ -60,7 +60,7 @@ export const securityEvents = securitySchema.table(
     // partitioning — the partition key must be included in every unique
     // constraint and primary key. id remains UUIDv4 so it is functionally
     // unique; occurred_at is the partition key. Not using idMixin because
-    // append-only tables must NOT inherit updatedAt / updatedByUserId.
+    // append-only tables must NOT inherit updatedAt / updatedById.
     id: uuid("id").notNull().default(sql`uuid_generate_v4()`),
 
     // When the event actually happened (caller-supplied for accurate
@@ -150,7 +150,7 @@ export const orgSecurityPolicy = securitySchema.table("org_security_policy", {
   // How many hours a member can access the org after MFA is required before
   // they are forced to enroll. 0 = immediate enforcement.
   mfaGraceHours: integer("mfa_grace_hours").notNull().default(48),
-  updatedByUserId: uuid("updated_by_user_id"),
+  updatedById: uuid("updated_by_id"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .defaultNow(),

@@ -141,6 +141,7 @@ function makeInvoice(overrides: Partial<BillingInvoice> = {}): BillingInvoice {
     subscriptionId: "sub_test_001",
     orgId: "org-abc",
     billingReason: "subscription_cycle",
+    gauSettlementId: null,
     lineItems: [],
     ...overrides,
   };
@@ -379,11 +380,33 @@ describe("onInvoicePaymentFailed", () => {
     dbStateHolder.instance = makeDb(state);
 
     await onInvoicePaymentFailed(
-      makeInvoice({ orgId: null, subscriptionId: null }),
+      makeInvoice({ orgId: null, subscriptionId: "sub_unknown" }),
     );
 
     expect(state.insertCalled).toBe(false);
     expect(state.updateSets).toHaveLength(0);
+  });
+
+  it("a declined governed-action invoice (no subscription) does not enter grace", async () => {
+    // A GAU block purchase, auto top-up or interim invoice carries the org in
+    // its metadata and no subscription (ADR-055 §6); its outcome is the
+    // settlement ledger's, never the subscription's dunning state.
+    const state = makeDbState();
+    state.settingsRow = { id: "settings-uuid-1", dunningState: "active" };
+    dbStateHolder.instance = makeDb(state);
+
+    await onInvoicePaymentFailed(
+      makeInvoice({
+        orgId: "org-abc",
+        subscriptionId: null,
+        billingReason: "manual",
+        gauSettlementId: null,
+      }),
+    );
+
+    expect(state.insertCalled).toBe(false);
+    expect(state.updateSets).toHaveLength(0);
+    expect(notifyOrgManagersMock).not.toHaveBeenCalled();
   });
 
   it("calls notifyOrgManagers after the grace state is written (not inside the tx)", async () => {
@@ -466,7 +489,7 @@ describe("onInvoicePaymentFailed", () => {
     dbStateHolder.instance = makeDb(state);
 
     await onInvoicePaymentFailed(
-      makeInvoice({ orgId: null, subscriptionId: null }),
+      makeInvoice({ orgId: null, subscriptionId: "sub_unknown" }),
     );
 
     expect(notifyOrgManagersMock).not.toHaveBeenCalled();
@@ -506,6 +529,46 @@ describe("onInvoiceRecovered", () => {
     await onInvoiceRecovered(makeInvoice({ orgId: "org-abc" }));
 
     expect(state.updateSets).toHaveLength(0);
+  });
+
+  it("leaves a suspended org suspended when a governed-action purchase invoice is paid", async () => {
+    // The paid invoice is a GAU block purchase: org in metadata, no
+    // subscription. The overdue subscription invoice is still unpaid.
+    const state = makeDbState();
+    state.settingsRow = { id: "settings-uuid-1", dunningState: "suspended" };
+    dbStateHolder.instance = makeDb(state);
+
+    await onInvoiceRecovered(
+      makeInvoice({
+        orgId: "org-abc",
+        status: "paid",
+        subscriptionId: null,
+        billingReason: "manual",
+        gauSettlementId: null,
+      }),
+    );
+
+    expect(state.updateSets).toHaveLength(0);
+    expect(
+      dbStateHolder.instance.query.orgBillingSettings.findFirst,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("a paid subscription invoice still recovers a suspended org", async () => {
+    const state = makeDbState();
+    state.settingsRow = { id: "settings-uuid-1", dunningState: "suspended" };
+    dbStateHolder.instance = makeDb(state);
+
+    await onInvoiceRecovered(
+      makeInvoice({
+        orgId: "org-abc",
+        status: "paid",
+        subscriptionId: "sub_test_001",
+      }),
+    );
+
+    expect(state.updateSets).toHaveLength(1);
+    expect(state.updateSets[0]?.dunningState).toBe("active");
   });
 });
 

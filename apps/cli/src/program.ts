@@ -174,6 +174,62 @@ export function buildProgram(): Command {
       },
     );
 
+  // ── context: a steering proposal on a lineage (propose_record) ──────────────
+
+  const contextCmd = program
+    .command("context")
+    .description("Steering: record a proposal on a lineage");
+  contextCmd
+    .command("propose")
+    .description(
+      "Record a proposal (the record it should become, why); its Context PR is opened and merged from Mission Control",
+    )
+    .requiredOption(
+      "--lineage <id>",
+      "The lineage id (the file stem under .oxagen/rules/)",
+    )
+    .requiredOption(
+      "--kind <kind>",
+      "rule | constraint | procedure | fact | memory | preference",
+    )
+    .requiredOption("--force <force>", "must | should | may | info")
+    .requiredOption("--scope <scope>", "workspace | repository")
+    .requiredOption("--statement <text>", "The single-sentence claim")
+    .requiredOption("--rationale <text>", "Why the record should be published")
+    .option("--effect <effect>", "require | forbid — a constraint only")
+    .option("--json", "Output JSON")
+    .action(
+      async (opts: {
+        lineage: string;
+        kind: string;
+        force: string;
+        scope: string;
+        statement: string;
+        rationale: string;
+        effect?: string;
+        json?: boolean;
+      }) => {
+        const { contextPropose } = await import("./commands/context.js");
+        await contextPropose(opts);
+      },
+    );
+  // ── run: the recorded run (export_run) ──────────────────────────────────────
+
+  const runCmd = program
+    .command("run")
+    .description("The recorded run: export its signed evidence bundle");
+  runCmd
+    .command("export")
+    .description(
+      "Queue the signed, offline-verifiable evidence bundle for a sealed run — Owner/Admin only",
+    )
+    .argument("<run-id>", "The run's public id (arun_… or tse_…)")
+    .option("--json", "Output JSON")
+    .action(async (runId: string, opts: { json?: boolean }) => {
+      const { runExport } = await import("./commands/run.js");
+      await runExport(runId, opts);
+    });
+
   // ── trace: one agent run as a span tree ─────────────────────────────────────
 
   program
@@ -825,6 +881,63 @@ export function buildProgram(): Command {
     .command("agent")
     .description("Govern the workspace's registered agents");
 
+  // ── agent identity: register_agent / get_agent / revoke_tacho_enrollment (MC spec §14.1) ──
+
+  agent
+    .command("register")
+    .description(
+      "Register an agent identity and print its credential once — Owner/Admin only",
+    )
+    .requiredOption("--slug <slug>", "Lowercase words joined by hyphens")
+    .requiredOption("--name <name>", "Display name")
+    .requiredOption(
+      "--harness <harness>",
+      "stella | claude-code | claude-agent-sdk | custom",
+    )
+    .option("--description <text>", "What the agent is for")
+    .option("--validity-days <n>", "Credential lifetime in days (1–365)")
+    .option("--json", "Output JSON")
+    .action(
+      async (opts: {
+        slug?: string;
+        name?: string;
+        harness?: string;
+        description?: string;
+        validityDays?: string;
+        json?: boolean;
+      }) => {
+        const { agentRegister } = await import("./commands/agent.js");
+        await agentRegister(opts);
+      },
+    );
+  agent
+    .command("status <agent>")
+    .description(
+      "Identity, credentials, roles, hosts and the definition of record for one agent (id or slug)",
+    )
+    .option("--json", "Output JSON")
+    .action(async (agent: string, opts: { json?: boolean }) => {
+      const { agentStatus } = await import("./commands/agent.js");
+      await agentStatus(agent, opts);
+    });
+  agent
+    .command("unenroll <agent>")
+    .description(
+      "Revoke the agent's live host enrollments (or one host with --host) — Owner/Admin only",
+    )
+    .option("--host <tch_id>", "Only this host")
+    .option("--reason <text>", "Recorded on the host and in the revoke command")
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        agent: string,
+        opts: { host?: string; reason?: string; json?: boolean },
+      ) => {
+        const { agentUnenroll } = await import("./commands/agent.js");
+        await agentUnenroll(agent, opts);
+      },
+    );
+
   const agentEnv = agent
     .command("env")
     .description("Bind an agent to an environment");
@@ -876,6 +989,43 @@ export function buildProgram(): Command {
       const { handleAgentEnvList } = await import("./commands/agent-env.js");
       await handleAgentEnvList(agentHandle, opts);
     });
+
+  // ── agent enroll: this machine becomes a registered agent's host (#2967) ────
+  //
+  // The scripted path of the register flow (MC spec §14.1): the one-time
+  // enrollment token from the Agents page or `create_enrollment_token` is the
+  // credential, so no `oxagen login` is needed. The work is the same
+  // `@oxagen/tacho/cli` routine `oxagen tacho enroll` runs.
+  agent
+    .command("enroll")
+    .description(
+      "Enroll this machine as a registered agent's host with a one-time enrollment token: device key, host credential, tachod service, harness hooks",
+    )
+    .requiredOption(
+      "--token <token>",
+      "The single-use enrollment token (oxe_1time_…), shown once at registration",
+    )
+    .option(
+      "--harness <list>",
+      "Harnesses to hook: claude-code, codex, or claude-code,codex",
+    )
+    .option("--port <n>", "Loopback port for tachod", (v: string) => Number(v))
+    .option("--no-service", "Do not install the user service")
+    .option("--force", "Enroll again even if already enrolled")
+    .action(
+      async (opts: {
+        token: string;
+        harness?: string;
+        port?: number;
+        service?: boolean;
+        force?: boolean;
+      }) => {
+        const { handleAgentEnroll } = await import(
+          "./commands/agent-enroll.js"
+        );
+        if (!(await handleAgentEnroll(opts))) process.exitCode = 1;
+      },
+    );
 
   // ── env: workspace environments ─────────────────────────────────────────────
 
