@@ -246,6 +246,32 @@ matches the provider within one round-trip.</p>
       that fails leaves it standing for the next attempt. It is deliberately absent from
       <code>syncSubscriptionFromStripe</code>'s conflict <code>SET</code>, so a provider sync cannot erase an intent
       whose work is unfinished. It is an identity, not an amount: the rule above still holds.</li>
+  <li><strong>Only this preview's prorations are summed.</strong> <code>proration === true</code> selects every
+      proration on the upcoming invoice, including ones this change did not create — a seat decrease recorded earlier
+      under <code>create_prorations</code> leaves a pending credit sitting there. Summed together, a large enough
+      pending credit makes a real upgrade read as nonpositive, the caller ships <code>none</code>, and the upgrade
+      charge is dropped: the same inversion as the tier rank and the catalogue row, one level further in. Stripe
+      stamps <code>period.start</code> of each proration it creates with the <code>proration_date</code> the preview
+      was anchored at, so that anchor is what separates this change's lines from the rest of the invoice.
+      <em>The preview is the money; which part of it answers the question is a separate question.</em>
+      Three cases are distinguished on purpose: no proration lines at all is a true zero; lines carrying the anchor
+      are summed (and may legitimately net to zero); lines present with none carrying the anchor cannot be
+      attributed and raise <code>ProrationAttributionError</code> rather than a fabricated zero — the
+      <code>?? 0</code> lesson one layer down. The invoice <code>total</code> used for interval changes is
+      deliberately unfiltered: the invoice the anchor reset raises really does collect everything on it.</li>
+  <li><strong>The credit grant is decided by the allowance delta, never by the invoice.</strong> Whether the customer
+      owes money and whether their included allowance went up are different questions.
+      <code>grantProratedPlanUpgradeCredits</code> is delta-guarded on
+      <code>includedCreditCents</code> and idempotent on (org, target plan, period), so every completed swap is
+      offered to it and it declines the ones that earn nothing. Gating it on the previewed direction meant a preview
+      that could not be taken — <code>direction: "unknown"</code>, which answers neither question — charged the
+      customer for a real upgrade and withheld the credits.</li>
+  <li><strong>The already-applied guard asks the provider, not our record of it.</strong>
+      <code>subscriptions.stripe_price_id</code> is written by <code>syncSubscriptionFromStripe</code>, which runs
+      <em>after</em> the provider mutation — so it is blind to the one failure the guard exists for, a swap that
+      reached Stripe whose response was lost. The active price is read from the provider; the local column is the
+      fallback only when the provider will not answer (in which case the swap could not be issued either), and when
+      the two disagree the stale row is resynced rather than left wrong.</li>
   <li>The entitlement tier ordering (<code>TIER_ORDER</code> / <code>meetsMinimumTier</code>) answers a different
       question — <em>does this plan include that feature</em> — and is never read as a price direction. The two
       disagree in the live catalogue: Enterprise outranks Scale on features and costs half as much, so deciding

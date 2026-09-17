@@ -175,6 +175,44 @@ describe("plan price order and TIER_ORDER stay separate (#3157)", () => {
     expect(provider).not.toMatch(/amountCents: l\.amount,/);
   });
 
+  it("the previewed proration is isolated to the anchor this preview was taken at", () => {
+    const provider = readFileSync(
+      join(REPO_ROOT, "packages/billing/src/stripe-provider.ts"),
+      "utf8",
+    );
+    // `proration === true` alone selects everything pending on the upcoming
+    // invoice, so an unrelated credit can cancel a real upgrade and drop the
+    // charge. The proration_date the preview was anchored at is what makes a
+    // line this change's.
+    expect(provider).toMatch(/l\.period\?\.start === prorationDate/);
+    // …and an invoice whose prorations all belong to something else must not
+    // be summed to zero, which reads as "this change is free".
+    expect(provider).toMatch(/ProrationAttributionError/);
+  });
+
+  it("the credit grant is not gated on the invoice direction", () => {
+    const subs = readFileSync(
+      join(REPO_ROOT, "packages/billing/src/subscriptions.ts"),
+      "utf8",
+    );
+    // Whether money is owed and whether the allowance went up are different
+    // questions. `direction` answers the first; the grant's own delta guard
+    // answers the second, and a preview that failed answers neither.
+    expect(subs).not.toMatch(/if \(isUpgrade\) \{[\s\S]{0,200}grantProrated/);
+    expect(subs).toMatch(/grantProratedPlanUpgradeCredits\(/);
+  });
+
+  it("the already-applied guard reads the provider's active price, not the synced column", () => {
+    const subs = readFileSync(
+      join(REPO_ROOT, "packages/billing/src/subscriptions.ts"),
+      "utf8",
+    );
+    // The local column is written by the sync that runs after the mutation,
+    // so it cannot see a swap whose response was lost.
+    expect(subs).toMatch(/resolveActivePriceId\(/);
+    expect(subs).not.toMatch(/activeSubRow\.stripePriceId === newPriceId/);
+  });
+
   it("no source file decides a proration behaviour from the tier ordering", () => {
     const files = SCAN_ROOTS.flatMap((root) =>
       sourceFiles(join(REPO_ROOT, root)),
