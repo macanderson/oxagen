@@ -180,10 +180,15 @@ export function databaseMockCalls(sourceFile) {
  * The STATIC name a member of an object literal binds, or null when it binds
  * none that a parse can read.
  *
- * `{ withOrgDb: f }`, `{ "withOrgDb": f }`, `` { `withOrgDb`: f } ``,
- * `{ ["withOrgDb"]: f }`, `{ withOrgDb }`, `{ withOrgDb() {} }` and
+ * `{ withOrgDb: f }`, `{ "withOrgDb": f }`, `{ ["withOrgDb"]: f }`,
+ * ``{ [`withOrgDb`]: f }``, `{ withOrgDb }`, `{ withOrgDb() {} }` and
  * `{ get withOrgDb() {} }` all bind the same name and are all read here. A set
  * accessor binds no readable value and is deliberately excluded (see the header).
+ *
+ * A bare template key is not a form — ``{ `withOrgDb`: f }`` parses as a tagged
+ * template, not a property. The `NoSubstitutionTemplateLiteral` branch below is
+ * there because TypeScript's `PropertyName` union carries the node kind, not
+ * because an object literal can be written that way.
  */
 function staticName(member) {
   if (ts.isShorthandPropertyAssignment(member)) return member.name.text;
@@ -215,9 +220,10 @@ function staticName(member) {
 /** True when `expr` is `importOriginal(…)` or `await importOriginal(…)`. */
 function isImportOriginalCall(expr) {
   let e = expr;
-  if (ts.isAwaitExpression(e)) e = e.expression;
-  while (ts.isParenthesizedExpression(e)) e = e.expression;
-  if (ts.isAwaitExpression(e)) e = e.expression;
+  // `(await importOriginal())`, `await (importOriginal())`, either nesting.
+  while (ts.isAwaitExpression(e) || ts.isParenthesizedExpression(e)) {
+    e = e.expression;
+  }
   if (!ts.isCallExpression(e)) return false;
   const callee = e.expression;
   return ts.isIdentifier(callee) && callee.text === "importOriginal";
