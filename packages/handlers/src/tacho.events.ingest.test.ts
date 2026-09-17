@@ -681,7 +681,12 @@ function wire(db: FakeDb): void {
                   }
                 }
                 const rows = accepted ? [{ id: "new" }] : [];
-                return Object.assign(Promise.resolve(rows), {
+                // Awaited WITHOUT `.returning()`, postgres-js yields no rows at
+                // all — even for an insert that succeeded. Modelled, because a
+                // fixture that handed back rows anyway would let a statement
+                // that forgot its RETURNING read as working, which is exactly
+                // how one shipped.
+                return Object.assign(Promise.resolve([]), {
                   returning: async () => rows,
                 });
               },

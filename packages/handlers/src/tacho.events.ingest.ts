@@ -1203,7 +1203,15 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           // retried. The retry reads the row and takes the existing-session
           // path, which has the real values and its own guards — which is
           // where a decision about an existing row belongs.
-          .onConflictDoNothing();
+          .onConflictDoNothing()
+          // RETURNING, or there is nothing to read. An INSERT without it yields
+          // no rows through postgres-js even when it inserted, so `written`
+          // would be empty for EVERY new session — each one refused, rolled
+          // back, and retried for ever. Named rather than bare, like every
+          // other RETURNING in this file: a bare one asks for every column the
+          // schema declares and fails on a pending migration
+          // (`tacho-column-projection.test.ts`).
+          .returning({ id: schema.tachoSessions.id });
         // `DO NOTHING` returns a row only when it inserted one, so the two
         // questions have one answer here.
         accepted = written.length > 0;
