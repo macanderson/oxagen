@@ -233,8 +233,15 @@ more than it is:
   introduces.
 - **Tables with no `tenant_isolation` policy** — `auth.users`,
   `org.organizations`, `billing.plans` and the rest of the platform-global rows.
-  RLS is not what isolates them. `manifest-coverage.test.ts` is what keeps a
-  table that *should* be policied from being one of these.
+  RLS is not what isolates them. This is the one way the refusal could report a
+  false clean, so it is worth saying exactly what stops it:
+  `manifest-coverage.test.ts` reads `information_schema` on a real migrated
+  Postgres and fails when a table carrying `org_id` — or `workspace_id` without
+  `org_id` — is absent from `POLICY_MANIFEST`, when a manifest table lacks
+  `FORCE ROW LEVEL SECURITY`, or when it carries no `tenant_isolation` policy.
+  Both of its allowlists are empty today, and an entry can only be added by
+  hand with a written reason. So a new tenant table cannot fall outside the
+  refusal quietly; someone has to write down that it should.
 - **Neo4j and ClickHouse.** Their scoping is a separate seam, and neither reads
   this GUC.
 - **A read at a REAL workspace scope that should have been org-wide.** The
