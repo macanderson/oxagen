@@ -1858,6 +1858,8 @@ type Messages = {
       lead: string;
       categories: string;
       allCategories: string;
+      categoriesNote: string;
+      allOnPage: string;
       unclassified: string;
       noTags: string;
       emptyCategory: string;
@@ -1918,6 +1920,7 @@ type Messages = {
         foundry: string;
       };
       facts: {
+        id: string;
         capability: string;
         source: string;
         gate: string;
@@ -1937,6 +1940,8 @@ type Messages = {
         consequenceTags: string;
         tagsHint: string;
         dataClasses: string;
+        dataClassesHint: string;
+        dataClassesPlaceholder: string;
         reason: string;
         reasonHint: string;
         confirm: string;

@@ -177,6 +177,9 @@ describe("ToolDialog", () => {
     const dialog = within(await screen.findByTestId("tool-dialog"));
     expect(dialog.getByText("mcp.stripe.create_payment")).toBeInTheDocument();
     expect(dialog.getByText("MCP server")).toBeInTheDocument();
+    // The `tlv_…` a tool-version kill switch names: the switch dialog asks for
+    // it, so the registry has to be somewhere a person can read it off.
+    expect(dialog.getByText("tlv_01k5a1")).toBeInTheDocument();
     expect(
       dialog.getByText("a1b2c3d4e5f60718293a4b5c6d7e8f90"),
     ).toBeInTheDocument();
@@ -227,13 +230,42 @@ describe("ToolDialog", () => {
           sideEffect: "irreversible",
           egress: "third_party",
           consequenceTags: ["moves_money", "changes_access"],
-          dataClasses: ["payment"],
+          // The round trip: the data classes were not touched, so they come
+          // back byte for byte — the multiword one included.
+          dataClasses: ["customer financial data", "payment"],
           measures: financial().classification?.measures,
           reason: "Narrowed after the audit.",
         },
       );
     });
     expect(router.replace).toHaveBeenCalledWith(TOOLS);
+  });
+
+  it("keeps a multiword data class whole when the person edits it", async () => {
+    setToolClassification.mockResolvedValue({
+      ok: true,
+      value: { classifiedAt: "2026-09-16T09:00:00.000Z" },
+    });
+    withIntl(
+      <ToolDialog at={at} version={financial()} canClassify>
+        <span>Create payment</span>
+      </ToolDialog>,
+    );
+    fireEvent.click(screen.getByText("Create payment"));
+    await screen.findByTestId("tool-dialog");
+    // One class per line, so a class may contain spaces and commas.
+    fill("Data classes", "customer financial data\npayment, refunds\n\n");
+    fill("Reason", "The refund path was added.");
+    fireEvent.submit(formOf(screen.getByText("Reclassify this version")));
+    await waitFor(() => {
+      expect(setToolClassification).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        expect.objectContaining({
+          dataClasses: ["customer financial data", "payment, refunds"],
+        }),
+      );
+    });
   });
 
   it("names a refusal on the form", async () => {

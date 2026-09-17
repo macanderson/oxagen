@@ -195,6 +195,37 @@ describe("Tools › registry", () => {
     );
   });
 
+  it("calls the category chips this page's when a later page exists", async () => {
+    await renderTools({
+      versions: readOk(toolVersionPage({ nextCursor: "c2" })),
+      killSwitches: board(),
+    });
+    const chips = screen.getByRole("navigation", {
+      name: "Filter by consequence tag",
+    });
+    // `list_tool_versions` offers no facet aggregate, so the tally is a tally
+    // of what was read and says so rather than standing in for the registry.
+    expect(within(chips).getByText("All on this page")).toBeInTheDocument();
+    expect(
+      element(
+        document.querySelector('[data-state="facets-partial"]'),
+        "facet note",
+      ),
+    ).toHaveTextContent("this page of the registry");
+  });
+
+  it("calls the chips the registry's when the page is the whole registry", async () => {
+    await renderTools({
+      versions: readOk(toolVersionPage({ nextCursor: null })),
+      killSwitches: board(),
+    });
+    const chips = screen.getByRole("navigation", {
+      name: "Filter by consequence tag",
+    });
+    expect(within(chips).getByText("All")).toBeInTheDocument();
+    expect(document.querySelector('[data-state="facets-partial"]')).toBeNull();
+  });
+
   it("says the registry is empty, with the import action, when nothing is registered", async () => {
     await renderTools({
       versions: readOk(toolVersionPage({ items: [], nextCursor: null })),

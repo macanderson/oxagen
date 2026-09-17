@@ -77,7 +77,15 @@ function ToolName({
   );
 }
 
-/** Every consequence tag the classified versions on this page carry, with its count. */
+/**
+ * Every consequence tag the classified versions on this page carry, with its
+ * count.
+ *
+ * On this page and no further: `list_tool_versions` returns a page and a
+ * cursor, and offers no facet aggregate, so these counts are counts of what
+ * was read. When a later page exists the chips say so rather than presenting a
+ * page's tally as the registry's.
+ */
 function categoryCounts(
   items: readonly ToolVersion[],
 ): readonly { tag: string; count: number }[] {
@@ -100,11 +108,14 @@ function CategoryChips({
   names,
   category,
   items,
+  complete,
 }: {
   at: ToolsAt;
   names: ToolNameStyle;
   category: string | null;
   items: readonly ToolVersion[];
+  /** False while a later page exists: the tags and counts are this page's. */
+  complete: boolean;
 }) {
   const t = useTranslations("tools.registry");
   const locale = useLocale();
@@ -117,7 +128,7 @@ function CategoryChips({
         aria-current={category === null ? "page" : undefined}
         className={chip}
       >
-        {t("allCategories")}
+        {complete ? t("allCategories") : t("allOnPage")}
         <span className="text-xs tabular-nums">
           {formatCount(items.length, locale)}
         </span>
@@ -322,6 +333,7 @@ export function Registry({
           names={names}
           category={category}
           items={items}
+          complete={nextCursor === null}
         />
         <NamesToggle at={at} names={names} category={category} />
       </div>
@@ -354,6 +366,14 @@ export function Registry({
             />
           ))}
         </Table>
+      )}
+      {nextCursor === null ? null : (
+        <p
+          data-state="facets-partial"
+          className="max-w-prose text-xs text-muted-foreground"
+        >
+          {t("categoriesNote")}
+        </p>
       )}
       <CursorPager
         nextCursor={nextCursor}

@@ -40,7 +40,9 @@ export function toolVersionListOutput(
               currencyPath: "$.currency",
             },
           },
-          dataClasses: ["payment"],
+          // Free text, and deliberately multiword: a data class is not a
+          // token, and a form that splits on whitespace destroys this one.
+          dataClasses: ["customer financial data", "payment"],
         },
         classifiedAt: "2026-09-01T09:00:00.000Z",
         schemaOrigin: "imported",

@@ -130,6 +130,27 @@ export function versionLabel(version: ToolVersion): string {
   return `${version.slug}@${String(version.version)}`;
 }
 
+/**
+ * A newline-separated list as the values the contract wants, in order, each
+ * line trimmed and blank lines dropped.
+ *
+ * Data classes are free text — `z.string().min(1).max(64)`, so `customer
+ * financial data` is one class — and cannot go through `splitTags`, which
+ * splits on whitespace and would turn that one class into three the next time
+ * anyone saved the form for any reason. One value per line is the one
+ * separator a data class cannot itself contain.
+ *
+ * No de-duplication: the contract permits a repeat here (only consequence tags
+ * are refined to appear once), and dropping one would edit a record the person
+ * did not ask to change.
+ */
+export function splitLines(raw: string): string[] {
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+}
+
 /** A comma- or whitespace-separated list as the tags the contract wants, each once. */
 export function splitTags(raw: string): string[] {
   return [

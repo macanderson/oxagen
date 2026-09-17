@@ -24,7 +24,13 @@ import { routes } from "@/shared/safe-path";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { setToolClassification } from "./actions";
 import { Chip, Fact, Facts, useDate } from "./parts";
-import { splitTags, textValue, type ToolsAt, versionLabel } from "./view";
+import {
+  splitLines,
+  splitTags,
+  textValue,
+  type ToolsAt,
+  versionLabel,
+} from "./view";
 
 const RISK_GRADES = ToolRiskGrade.options;
 const SIDE_EFFECTS = ToolSideEffect.options;
@@ -112,7 +118,9 @@ function ClassificationForm({
           version.classification?.egress ?? "local",
         ),
         consequenceTags: splitTags(read("consequenceTags")),
-        dataClasses: splitTags(read("dataClasses")),
+        // One class per line, never split on whitespace: a data class is free
+        // text and `customer financial data` is one class, not three.
+        dataClasses: splitLines(read("dataClasses")),
         measures: version.classification?.measures ?? [],
         reason: read("reason"),
       });
@@ -180,12 +188,17 @@ function ClassificationForm({
         >
           {t("classify.dataClasses")}
         </label>
-        <input
+        <textarea
           id="dataClasses"
           name="dataClasses"
-          defaultValue={(version.classification?.dataClasses ?? []).join(" ")}
+          rows={3}
+          defaultValue={(version.classification?.dataClasses ?? []).join("\n")}
+          placeholder={t("classify.dataClassesPlaceholder")}
           className={`${inputBase} ${mono}`}
         />
+        <p className="text-xs text-muted-foreground">
+          {t("classify.dataClassesHint")}
+        </p>
       </div>
       <div className="flex min-w-0 flex-col gap-1.5">
         <label htmlFor="reason" className="text-sm font-medium text-foreground">
@@ -256,6 +269,12 @@ export function ToolDialog({
             </p>
           )}
           <Facts>
+            <Fact name="id" term={t("facts.id")}>
+              {/* The `tlv_…` a tool-version kill switch names (spec §6.11). It
+                  is printed because the switch dialog asks for it and this is
+                  the one place the registry can hand it over. */}
+              <span className={`${mono} break-all`}>{version.id}</span>
+            </Fact>
             <Fact name="capability" term={t("facts.capability")}>
               <span className={mono}>{version.capability}</span>
             </Fact>

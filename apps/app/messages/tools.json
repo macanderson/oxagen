@@ -32,6 +32,8 @@
       "lead": "Access reaches the version. A server shipping a new version does not silently widen a belt.",
       "categories": "Filter by consequence tag",
       "allCategories": "All",
+      "categoriesNote": "These tags and counts are this page of the registry. A tag carried only by a version on a later page appears once you reach that page.",
+      "allOnPage": "All on this page",
       "unclassified": "Unclassified",
       "noTags": "No tag",
       "emptyCategory": "No tool version on this page carries that tag.",
@@ -92,6 +94,7 @@
         "foundry": "Foundry"
       },
       "facts": {
+        "id": "Version id",
         "capability": "Governed as",
         "source": "Source",
         "gate": "Gate today",
@@ -111,6 +114,8 @@
         "consequenceTags": "Consequence tags",
         "tagsHint": "Space- or comma-separated, snake_case. The starter set is moves_money, destroys_data, alters_production, communicates_externally, changes_access, changes_entitlement; a tag of your own that fits the pattern is accepted.",
         "dataClasses": "Data classes",
+        "dataClassesHint": "One per line. A data class is free text up to 64 characters, so it may contain spaces: customer financial data is one class, not three.",
+        "dataClassesPlaceholder": "customer financial data",
         "reason": "Reason",
         "reasonHint": "Recorded on the version. The security event carries the actor and the capability, not the reason.",
         "confirm": "Reclassify this version",
