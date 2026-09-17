@@ -13,8 +13,49 @@ import {
   parse,
   productionFiles,
   readSource,
+  WHOLE_TREE_TIMEOUT_MS,
   type SourceText,
 } from "./parse";
+
+/**
+ * A source file parsed WITHOUT parent pointers, for the directive scan only.
+ *
+ * Selecting the `"use server"` modules means reading the first statement of all
+ * 293 production files, and `parse` sets `setParentNodes`, which the scan does
+ * not need — only `actionViolations` does, on the 11 that survive. Strictly
+ * less work for the same answer, which is the whole of the argument.
+ *
+ * Deliberately NOT claiming a speedup. An earlier revision of this comment
+ * cited 460ms with parent pointers against 191ms without, from a single pair
+ * run back to back in one process. The first run is cold: repeating the pair
+ * five times gives 426/138, 134/88, 120/93, 107/86, 98/68, so that figure
+ * measured JIT warm-up as much as the flag, and on another machine the same
+ * comparison moved the wrong way on two of four arch tests. At this scale the
+ * noise dominates. A single measurement is a reading, not a result.
+ *
+ * A substring pre-filter on the raw text was tried first and withdrawn — on
+ * exactness, not on speed. It is a heuristic in the one direction that
+ * matters: too many files selected is harmless, because `directiveOf` rejects
+ * them, but a module carrying the directive whose raw text lacks the literal
+ * would be skipped SILENTLY and this test would go blind rather than fail.
+ * Counting the two sets proves they agree on today's tree and nothing more.
+ *
+ * That hazard is real but not exploitable, and the reason is worth leaving
+ * here: `directiveOf` compares `statement.expression.text`, the COOKED string,
+ * so a unicode-escaped space inside the literal satisfies it while the raw
+ * source does not contain the substring. ECMAScript defines a directive
+ * prologue by raw source characters and the bundler follows that, so such a
+ * module is not a server module at runtime either. `directiveOf` is the one
+ * out of step, not the pre-filter.
+ */
+const scan = (source: SourceText): ts.SourceFile =>
+  ts.createSourceFile(
+    source.file,
+    source.text,
+    ts.ScriptTarget.Latest,
+    false,
+    source.file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
 
 const RULE = "actions";
 const PROBES = "src/test/arch/probes/actions";
@@ -259,13 +300,17 @@ const probe = (name: string): string[] =>
   actionViolations(readSource(`${PROBES}/${name}`));
 
 describe("server actions", () => {
-  it('every "use server" module under src/ keeps the action contract', () => {
-    const modules = productionFiles()
-      .map(readSource)
-      .filter((source) => directiveOf(parse(source)) === "use server");
-    expect(modules.length).toBeGreaterThan(0);
-    expect(modules.flatMap(actionViolations)).toEqual([]);
-  });
+  it(
+    'every "use server" module under src/ keeps the action contract',
+    () => {
+      const modules = productionFiles()
+        .map(readSource)
+        .filter((source) => directiveOf(scan(source)) === "use server");
+      expect(modules.length).toBeGreaterThan(0);
+      expect(modules.flatMap(actionViolations)).toEqual([]);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
 
   it("ActionResult and never returns, a viewer reached through a helper and a slug from the form pass", () => {
     expect(probe("ok.ts")).toEqual([]);

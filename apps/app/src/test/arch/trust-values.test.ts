@@ -10,6 +10,7 @@ import {
   parse,
   productionFiles,
   readSource,
+  WHOLE_TREE_TIMEOUT_MS,
   type SourceText,
 } from "./parse";
 
@@ -90,15 +91,19 @@ const probe = (name: string): string[] =>
   trustValueViolations(readSource(`${PROBES}/${name}`));
 
 describe("trust values", () => {
-  it("no mapper under src/data/live/mappers states a basis or tier as a literal", () => {
-    const files = productionFiles().filter((file) =>
-      file.startsWith(MAPPERS_DIR),
-    );
-    expect(files.length).toBeGreaterThan(0);
-    expect(
-      files.flatMap((file) => trustValueViolations(readSource(file))),
-    ).toEqual([]);
-  });
+  it(
+    "no mapper under src/data/live/mappers states a basis or tier as a literal",
+    () => {
+      const files = productionFiles().filter((file) =>
+        file.startsWith(MAPPERS_DIR),
+      );
+      expect(files.length).toBeGreaterThan(0);
+      expect(
+        files.flatMap((file) => trustValueViolations(readSource(file))),
+      ).toEqual([]);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
 
   it("a contract field, a null fallback and a literal under another name pass", () => {
     expect(probe("ok.ts")).toEqual([]);

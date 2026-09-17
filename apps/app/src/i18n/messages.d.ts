@@ -18,6 +18,7 @@ type Messages = {
     newOrganization: string;
     register: string;
     cliAuthorize: string;
+    cliComplete: string;
     fleet: string;
     run: string;
     agents: string;
@@ -734,6 +735,10 @@ type Messages = {
         notPermitted: string;
         notFound: string;
         failed: string;
+      };
+      complete: {
+        title: string;
+        body: string;
       };
     };
   };

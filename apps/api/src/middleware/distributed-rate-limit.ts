@@ -152,9 +152,9 @@ export function enrolledMachineBucketKey(c: Context<AppEnv>): string {
  *
  * So: derive a real client address. `extractClientIp` (lib/context.ts) already
  * does the hardened version of this — it walks the forwarded-for chain from the
- * RIGHT by TRUSTED_PROXY_HOP_COUNT, so entries a caller prepends itself can
- * never move the entry it picks, and it is the same derivation the IAM
- * `ip_ranges` / `ip_allow` conditions are judged on.
+ * RIGHT through the proxies named in TRUSTED_PROXY_CIDRS, so entries a caller
+ * prepends itself can never move the entry it picks, and it is the same
+ * derivation the IAM `ip_ranges` / `ip_allow` conditions are judged on.
  *
  * Returning `null` is deliberate and load-bearing: it means this deployment has
  * no trusted proxy chain to read, so there is no per-client bucket to enforce,
