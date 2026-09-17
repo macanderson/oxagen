@@ -39,6 +39,26 @@ export const TACHO_ENFORCEMENT_TIER_ATTR = "oxagen.enforcement_tier" as const;
 export const TACHO_GATEWAY_TIER = "gateway" as const;
 
 /**
+ * The request header the local MCP gateway names its own chain on.
+ *
+ * A gateway call is forwarded to the control plane over the daemon's gateway
+ * credential. The control plane knows from that credential which HOST it is
+ * serving, and until #3221 nothing told it which of the host's chains — so
+ * ingest read the correlation off the submitted batch instead, where anything
+ * able to submit one could set it.
+ *
+ * This header is that correlation, sent by the party whose credential is being
+ * authenticated. It is NOT identity: the org, the workspace and the host all
+ * come from the key's own scope and this value is never allowed to influence
+ * them. It answers one question the key cannot — which chain the caller was
+ * serving — and the control plane files it beside its own record of the call.
+ *
+ * Lower-case because HTTP header names are case-insensitive and every reader
+ * in this repo indexes a lower-cased map.
+ */
+export const TACHO_GATEWAY_SESSION_HEADER = "x-tacho-gateway-session" as const;
+
+/**
  * A bundle field this host's parser understands, named on the wire so the
  * control plane can withhold fields the host would choke on.
  *

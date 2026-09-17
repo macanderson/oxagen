@@ -40,7 +40,6 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { PROOF_OBSERVED_KIND } from "@oxagen/run-evidence";
 import {
-  TACHO_ENFORCEMENT_TIER_ATTR,
   TACHO_GATEWAY_TIER,
   type TachoEvent,
   verifyChain,
@@ -51,10 +50,13 @@ import {
   type TachoEventInsert,
 } from "@oxagen/telemetry";
 import { recordSpend } from "@oxagen/billing";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { unlockOnboardingGate } from "./lib/onboarding";
-import { sessionGatewayColumnReady } from "./lib/tacho-gateway-columns";
+import {
+  gatewayInvocationColumnReady,
+  sessionGatewayColumnReady,
+} from "./lib/tacho-gateway-columns";
 import { eventClient } from "./event-client";
 import { recordProofFrames } from "./lib/proof";
 import {
@@ -242,35 +244,79 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
 }
 
 /**
- * Which chain of the batch the daemon filed a gateway call on.
+ * Which of this host's chains the control plane actually served a gateway call
+ * for, and when it last did — read from its own records, never from the batch.
  *
- * **This is correlation, never authority.** It answers *which* session a
- * gateway call belongs to, and it is asked only after the control plane has
- * already established from its own records that a gateway call happened at all
- * (`gatewayObservationFor`). On its own it decides nothing, because everything
- * in a submitted batch is client-attested: `normalizeOtlp` used to keep unknown
- * attributes verbatim, so any process holding the local OTLP bearer could put
- * this key on an ordinary record and have the daemon seal it onto a valid
- * chain. `otel.ts` now quarantines the whole `oxagen.` namespace on the way in,
- * which is the belt; the server observation is the braces, and the braces are
- * what hold.
+ * ## What this replaces
  *
- * `recordGatewayCall` puts `oxagen.enforcement_tier: "gateway"` in the event
- * `attrs`; the daemon's host recorder sets no identity tier, so the envelope
- * field is empty for these (#3161, discussion_r4033641270).
+ * The correlation used to be `carriesGatewayCall(events)`: does some event in
+ * the batch carry `oxagen.enforcement_tier: "gateway"`. That answered the right
+ * question with the wrong authority. The server observation
+ * (`hosts.gateway_last_seen_at`) established only that the host had served a
+ * gateway call at some point — one timestamp with no session on it — so the
+ * batch chose which session it landed on, and whoever can submit a batch
+ * chooses the batch. Once a host had served ONE legitimate gateway call the
+ * timestamp was a reusable value: an existing session passed whenever the
+ * observation was newer than its `createdAt`, and a newly invented session
+ * passed unconditionally, because nothing predates a session being opened by
+ * the same batch (#3221, discussion_r4036718127, discussion_r4040352859).
  *
- * The key and value come from `@oxagen/tacho`'s wire module, which is also
- * where the daemon takes them from. This attribute is a contract between two
- * packages with nothing else joining them, so a literal at each end could be
- * renamed on one side without breaking a build or a test — it would simply
- * stop matching, and gateway calls would go on being filed as `observe` with
- * nothing to show for it. That is the silence this whole path exists to end.
+ * Now both halves come from `tacho.gateway_invocations`, written where
+ * `machineKeyDenial` authenticated the host's `tacho_gateway_v1` credential and
+ * ruled on the call. A batch submitter cannot cause a row there: it would need
+ * the gateway credential, which never leaves the daemon. So a forged
+ * `oxagen.enforcement_tier` on a host with a real observation now names a chain
+ * the table has never heard of, and the session stays on the host's own mode.
+ *
+ * ## Why the latest, and why not consumed
+ *
+ * The newest invocation per chain is what the lifetime bound is applied to: a
+ * chain that has served gateway calls for a week should not be judged on the
+ * first one. Rows are never consumed on match. Consuming would let a forged
+ * batch that arrived first burn a real observation belonging to the session
+ * that earned it — trading this defect for a worse one, which is exactly why
+ * #3178 declined to narrow the window instead of fixing the correlation.
+ *
+ * ## The empty answer
+ *
+ * `undefined` is returned without touching the database whenever a promotion is
+ * impossible anyway — no host observation, or the table not migrated yet. That
+ * is not an optimisation: querying a table that does not exist raises 42P01,
+ * which aborts the transaction exactly as 42703 does, and would take out
+ * ingestion for every host during the deploy-before-migrate window (#1275).
  */
-export function carriesGatewayCall(events: TachoEvent[]): boolean {
-  return events.some(
-    (event) =>
-      event.attrs?.[TACHO_ENFORCEMENT_TIER_ATTR] === TACHO_GATEWAY_TIER,
-  );
+async function gatewayInvocationsFor(
+  tx: Tx,
+  host: GatewayObservable & { id: string },
+  chains: string[],
+  invocationTable: boolean,
+): Promise<Map<string, Date>> {
+  const answers = new Map<string, Date>();
+  if (!invocationTable) return answers;
+  if (gatewayObservationFor(host) === null) return answers;
+  if (chains.length === 0) return answers;
+  const rows = await tx
+    .select({
+      chain: schema.tachoGatewayInvocations.chainSessionUuid,
+      at: sql<Date>`max(${schema.tachoGatewayInvocations.createdAt})`,
+    })
+    .from(schema.tachoGatewayInvocations)
+    .where(
+      and(
+        eq(schema.tachoGatewayInvocations.hostId, host.id),
+        inArray(schema.tachoGatewayInvocations.chainSessionUuid, chains),
+      ),
+    )
+    .groupBy(schema.tachoGatewayInvocations.chainSessionUuid);
+  for (const row of rows) {
+    // `max()` comes back as a Date from the driver, but a string from some
+    // pooled paths; normalise rather than trust, because the value is compared
+    // against a session's `createdAt` and a string comparison would silently
+    // read as "always after".
+    const at = row.at instanceof Date ? row.at : new Date(row.at);
+    if (!isNaN(at.getTime())) answers.set(row.chain, at);
+  }
+  return answers;
 }
 
 /** The bits of the host row the tier is derived from. Nothing else may be. */
@@ -320,27 +366,31 @@ export function gatewayObservationFor(host: GatewayObservable): Date | null {
  *
  *  1. The control plane authorised a call on this host's gateway credential.
  *     Its own record, unreachable from any submission.
- *  2. The observation does not predate the session. `sinceAt` is the session
- *     row's server-clock `createdAt`; a gateway call Oxagen served before this
- *     chain existed cannot be what enforced anything on it. `null` for a
- *     session being opened by this very batch, where nothing predates it.
- *  3. The batch files a gateway call on *this* chain, which says which session
- *     of the host's the observation belongs to (`carriesGatewayCall`).
+ *  2. The call was served for *this* chain. `invocationAt` is the newest
+ *     `tacho.gateway_invocations` row matching the session's uuid, written
+ *     where the gateway credential was authenticated — so the correlation is
+ *     the server's too, not the batch's (#3221). Null means the table has no
+ *     record of this chain, which is the answer for every chain nobody's
+ *     gateway ever served, including one invented by a forged batch.
+ *  3. That call does not predate the session. `sinceAt` is the session row's
+ *     server-clock `createdAt`; a gateway call Oxagen served before this chain
+ *     existed cannot be what enforced anything on it. `null` for a session
+ *     being opened by this very batch, where nothing predates it.
  *
  * Otherwise the host's own mode decides, which is server-owned already: the
  * operator sets it in Oxagen and the daemon is told, not asked.
  *
- * ## Why ANY event rather than ALL, on condition 3
+ * ## What is no longer read
  *
- * The first version of this required every event in the batch to agree, which
- * read as conservative and was in fact the bug (discussion_r4034318913). A
- * gateway call is sealed onto the daemon's own `tachod-*` chain, whose genesis
- * is the daemon's `agent_start` — so the batch is mixed by construction and
- * unanimity always fell back to the host's observe/harness mode. Nothing was
- * ever labelled `gateway`.
+ * `oxagen.enforcement_tier` on the batch. The daemon still writes it, because
+ * it is true of the EVENT — that call really did come through the gateway, and
+ * an operator reading the stream wants to see which ones did. It is not true of
+ * the SESSION in any way the control plane can check, and a value that decides
+ * a signed tier has to be one the control plane established itself.
+ * `tacho-gateway-attribute.test.ts` fails if any handler reads it back.
  */
 export function enforcementTierOf(
-  events: TachoEvent[],
+  invocationAt: Date | null,
   host: GatewayObservable,
   sinceAt: Date | null,
   // Whether `tacho.sessions.gateway_observed_at` exists yet.
@@ -361,9 +411,13 @@ export function enforcementTierOf(
   const observed = gatewayObservationFor(host);
   if (
     evidenceColumn &&
+    // The host has served a gateway call at all. Redundant with the
+    // invocation row by construction — the same function writes both — and
+    // kept as a belt, because the two are written by separate statements and a
+    // deployment can be mid-migration on one and not the other.
     observed !== null &&
-    (sinceAt == null || observed.getTime() >= sinceAt.getTime()) &&
-    carriesGatewayCall(events)
+    invocationAt !== null &&
+    (sinceAt == null || invocationAt.getTime() >= sinceAt.getTime())
   )
     return TACHO_GATEWAY_TIER;
   return host.mode === "enforce" ? "harness" : "observe";
@@ -405,6 +459,11 @@ function genesisRow(
   // migration every new session would fail to open — for a field that is null
   // on all but the gateway tier (discussion_r4040352870).
   sessionGatewayColumn: boolean,
+  // The newest gateway call the control plane served for THIS chain, or null
+  // when it has served none. A session opening with one already recorded is
+  // ordinary: the daemon chain is named on the gateway call, and the chain's
+  // first batch is routinely flushed after it (#3221).
+  invocationAt: Date | null,
 ) {
   const first = events[0] as TachoEvent;
   const genesis = events.find((event) => event.kind === "agent_start") ?? first;
@@ -413,9 +472,18 @@ function genesisRow(
   const anthropic = genesis.anthropic ?? {};
   const subagent = genesis.subagent;
   const ingestedAt = new Date(first.ts);
-  // `null`: this row is the session's creation, so there is no earlier
-  // lifetime for the host's observation to predate.
-  const tier = enforcementTierOf(events, host, null, sessionGatewayColumn);
+  // `null` for `sinceAt`: this row is the session's creation, so there is no
+  // earlier lifetime for the observation to predate. That used to be the whole
+  // hole — with no lifetime bound, an invented session passed condition 2
+  // unconditionally. It is safe now because what has to be true is no longer
+  // "some event says gateway" but "this host's gateway credential was
+  // authenticated while serving THIS chain", which an invented chain fails.
+  const tier = enforcementTierOf(
+    invocationAt,
+    host,
+    null,
+    sessionGatewayColumn,
+  );
   return {
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
@@ -484,8 +552,7 @@ function genesisRow(
     // the row: a `gateway` session points at the observation that made it one.
     ...(sessionGatewayColumn
       ? {
-          gatewayObservedAt:
-            tier === TACHO_GATEWAY_TIER ? gatewayObservationFor(host) : null,
+          gatewayObservedAt: tier === TACHO_GATEWAY_TIER ? invocationAt : null,
         }
       : {}),
     bundleMode: host.mode,
@@ -678,6 +745,17 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     // per-process and cached, and a batch cannot straddle a migration it holds
     // a transaction across.
     const sessionGatewayColumn = await sessionGatewayColumnReady(tx);
+    // Which of this batch's chains the control plane's own records say it
+    // served a gateway call for (#3221). One grouped read for the whole batch,
+    // and skipped entirely when no promotion is possible — including while
+    // `tacho.gateway_invocations` is still an unapplied migration, where
+    // naming the table would raise 42P01 and abort the transaction.
+    const gatewayInvocations = await gatewayInvocationsFor(
+      tx,
+      host,
+      [...bySession.keys()],
+      await gatewayInvocationColumnReady(tx),
+    );
 
     for (const [sessionUuid, events] of bySession) {
       events.sort((a, b) => a.seq - b.seq);
@@ -778,8 +856,9 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       // seal. A sealed session's tier is final: its replay grade was computed
       // from it and signed into the attestation, and a value that moves
       // underneath a signature is the escalation, not the mislabel.
+      const invocationAt = gatewayInvocations.get(sessionUuid) ?? null;
       const derivedTier = enforcementTierOf(
-        events,
+        invocationAt,
         host,
         existing?.createdAt ?? null,
         sessionGatewayColumn,
@@ -888,14 +967,16 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         // therefore never reached the row: the existing-session branch applies
         // this patch and nothing else.
         //
-        // What changed (discussion_r4036718127, P1): the condition used to be
-        // `carriesGatewayCall(events)` on its own — an attribute in the batch,
-        // which a process holding the local OTLP bearer can set on an ordinary
-        // record. That made a later submission able to promote an existing
-        // observe session retroactively, and exports then signed the tier.
-        // `promoteToGateway` is the same rise gated on the control plane's own
-        // observation, bounded to the session's lifetime, and refused outright
-        // once the session is sealed.
+        // What changed. The condition was once `carriesGatewayCall(events)` on
+        // its own — an attribute in the batch, which a process holding the
+        // local OTLP bearer can set on an ordinary record — so a later
+        // submission could promote an existing observe session retroactively,
+        // and exports then signed the tier. #3178 gated that rise on the
+        // control plane's own host observation; #3221 replaced the remaining
+        // client-attested half, which said WHICH session, with a server record
+        // of the chain the gateway was serving. Both halves are now Oxagen's
+        // own, still bounded to the session's lifetime and still refused
+        // outright once the session is sealed.
         //
         // Monotonic still. Once a chain has served a connected app that fact
         // does not stop being true, so a later batch of daemon bookkeeping must
@@ -909,7 +990,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
               // host column: that coupling holds today and is invisible to
               // anyone changing either half.
               ...(sessionGatewayColumn
-                ? { gatewayObservedAt: gatewayObservationFor(host) }
+                ? { gatewayObservedAt: invocationAt }
                 : {}),
             }
           : {}),
@@ -934,6 +1015,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           events,
           now,
           sessionGatewayColumn,
+          invocationAt,
         );
         await tx
           .insert(schema.tachoSessions)

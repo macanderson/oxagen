@@ -3353,7 +3353,7 @@
       "writes": []
     }
   ],
-  "contentHash": "4518328a02a995494870939c99553fc95d7d2f68e93125e10df627be7f0a7fc9",
+  "contentHash": "92ed03cb564ca104ae28b1377f47737b74e2aeecdd6fc85344f0232c325a85e3",
   "domains": [
     {
       "name": "agent",
@@ -3689,6 +3689,7 @@
         "postgres:tacho.checkpoints",
         "postgres:tacho.control_commands",
         "postgres:tacho.enrollment_tokens",
+        "postgres:tacho.gateway_invocations",
         "postgres:tacho.hosts",
         "postgres:tacho.incidents",
         "postgres:tacho.session_commands",
@@ -3774,7 +3775,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 129
+      "tableCount": 130
     },
     {
       "domains": [
@@ -17800,6 +17801,75 @@
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "host_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "chain_session_uuid",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "capability_name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "outcome",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "tacho",
+      "id": "postgres:tacho.gateway_invocations",
+      "name": "gateway_invocations",
+      "store": "postgres",
+      "tenantScoped": false
     },
     {
       "columns": [

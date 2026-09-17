@@ -624,6 +624,12 @@ export async function startDaemon(
         workspaceSlug: host.workspace_slug,
         apiKey: gatewayKey,
         hostEnrollmentId: host.host_enrollment_id,
+        // The chain this call will be sealed onto, named on the request so
+        // the control plane's record of it points at a specific session
+        // rather than at the host alone (#3221). Read here, from the same
+        // recorder `recordGatewayCall` seals with, so the two cannot name
+        // different chains.
+        chainSessionUuid: hostRecorder.sessionUuid,
       };
     },
     endpoint: mcpEndpointFor(host),

@@ -27,9 +27,20 @@
  *
  * SECURITY: tenant identity (orgId / workspaceId / userId / apiKeyId) is NEVER
  * read from client-controlled identity headers (`x-oxagen-org-id` & friends).
- * It is derived solely from the validated credential. Only `x-request-id` is
- * read from headers -- a trace-correlation id, not a security boundary -- and it
- * falls back to a fresh UUID when absent.
+ * It is derived solely from the validated credential. Two headers are read and
+ * neither is a security boundary: `x-request-id`, a trace-correlation id that
+ * falls back to a fresh UUID when absent, and `x-tacho-gateway-session`, the
+ * Tacho daemon chain a local MCP gateway is serving (#3221).
+ *
+ * The second is worth being explicit about, because it is a header that ends
+ * up in a durable record. It names the CALLER'S OWN chain and nothing else —
+ * it cannot widen a scope, select an org, workspace or host, or reach any
+ * authorisation decision. `machineKeyDenial` records it only when the key it
+ * arrived with has scope purpose `tacho_gateway_v1`, and files it against the
+ * host that key is bound to; on every other credential it is carried and never
+ * read. So the value is attested by whoever holds the gateway credential, which
+ * is the daemon, which is exactly the party whose gateway use is being
+ * recorded.
  *
  * `buildContext` is the single auth entrypoint for xmcp tools: each tool calls
  * `await buildContext(headers())`. It throws `McpUnauthorizedError` on any auth
@@ -37,6 +48,11 @@
  */
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { resolveApiKey } from "@oxagen/auth";
+// Through `@oxagen/oxagen`, which re-exports the leaf package's wire
+// constants, rather than adding `@oxagen/tacho` to this app's dependencies —
+// the header name is the contract, and it is still spelled in exactly one
+// place.
+import { TACHO_GATEWAY_SESSION_HEADER } from "@oxagen/oxagen/tacho/schemas";
 import { emitSecurityEvent } from "@oxagen/database/security";
 
 /** xmcp's headers() helper returns this shape (array when a header repeats). */
@@ -79,6 +95,22 @@ export function extractBearerToken(
   return token.length > 0 ? token : null;
 }
 
+/**
+ * The Tacho daemon chain a local MCP gateway call is being served for.
+ *
+ * Bounded and character-checked before it is carried anywhere. A chain id is
+ * the collector's own session id — `tachod-` plus a uuid — and this value is
+ * written to a durable evidence row, so it is accepted only in that shape
+ * rather than trusted to be sane because of the credential it arrived with.
+ * Anything else reads as absent, which leaves the session on the host's own
+ * enforcement tier: the same answer as a host that has never used the gateway.
+ */
+function extractGatewaySession(hdrs: HttpHeaders): string | null {
+  const raw = firstHeader(hdrs[TACHO_GATEWAY_SESSION_HEADER])?.trim();
+  if (raw === undefined || raw.length === 0 || raw.length > 128) return null;
+  return /^[A-Za-z0-9_.:-]+$/.test(raw) ? raw : null;
+}
+
 export type McpContextResolution =
   | { ok: true; ctx: CapabilityContext }
   | { ok: false; reason: McpAuthFailure };
@@ -114,6 +146,7 @@ export async function resolveMcpContext(
   authHeader: string | undefined,
   requestId: string,
   clientIp: string | null = null,
+  gatewaySessionUuid: string | null = null,
 ): Promise<McpContextResolution> {
   const token = extractBearerToken(authHeader);
   if (!token) return { ok: false, reason: "unauthenticated" };
@@ -173,6 +206,7 @@ export async function resolveMcpContext(
         surface: "mcp",
         messageId: null,
         clientIp,
+        gatewaySessionUuid,
       },
     };
   }
@@ -206,8 +240,14 @@ export async function buildContext(
   const authHeader = firstHeader(hdrs["authorization"]);
   const requestId = firstHeader(hdrs["x-request-id"]) ?? crypto.randomUUID();
   const clientIp = extractClientIp(hdrs);
+  const gatewaySessionUuid = extractGatewaySession(hdrs);
 
-  const resolution = await resolveMcpContext(authHeader, requestId, clientIp);
+  const resolution = await resolveMcpContext(
+    authHeader,
+    requestId,
+    clientIp,
+    gatewaySessionUuid,
+  );
   if (!resolution.ok) throw new McpUnauthorizedError(resolution.reason);
   return resolution.ctx;
 }

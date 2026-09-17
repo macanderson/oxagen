@@ -51,6 +51,12 @@ export function bootstrapIAMRuntime(): void {
       orgId: args.ctx.orgId,
       apiKeyId: args.ctx.apiKeyId,
       capabilityName: args.capability,
+      // The daemon chain a local MCP gateway call is being served for (#3221).
+      // Carried for every caller and read back only for a `tacho_gateway_v1`
+      // key, which is the only credential whose use it can attest anything
+      // about. It reaches no authorisation decision — the denial below is
+      // computed from the key's own scope, exactly as before.
+      gatewaySessionUuid: args.ctx.gatewaySessionUuid ?? null,
     });
     if (machineDenial !== undefined) {
       return {

@@ -66,7 +66,6 @@ vi.mock("./event-client", () => ({
 import { digestBytes } from "@oxagen/tacho";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
 import {
-  carriesGatewayCall,
   enforcementTierOf,
   foldDelta,
   tachoEventsIngestHandler,
@@ -296,6 +295,12 @@ interface FakeDb {
   commands: Array<Record<string, unknown>>;
   controlCommands: Array<Record<string, unknown>>;
   updates: Array<{ table: string; values: Record<string, unknown> }>;
+  /**
+   * `tacho.gateway_invocations` — the control plane's own record of which
+   * chain it was serving when it authorised a gateway call (#3221). Empty by
+   * default, which is the honest state: no chain has been served.
+   */
+  gatewayInvocations: Array<{ chainSessionUuid: string; createdAt: Date }>;
   /** The workspace's latest retention policy row; none by default. */
   retentionPolicy:
     | { mode: string; retainedContentClasses: string[] }
@@ -352,21 +357,31 @@ function fakeDb(): FakeDb {
       },
     ],
     updates: [],
+    gatewayInvocations: [],
     retentionPolicy: undefined,
   };
 }
 
 /**
- * The control plane's own record that this host served a gateway call:
- * `machineKeyDenial` stamps it when it authorises a call presenting the host's
- * `tacho_gateway_v1` credential. Without it no batch can reach the `gateway`
- * tier, whatever the batch says.
+ * The control plane's own record that it served a gateway call for this host,
+ * ON THIS CHAIN.
+ *
+ * `machineKeyDenial` writes both halves in one place when it authorises a call
+ * presenting the host's `tacho_gateway_v1` credential: the host timestamp, and
+ * a `tacho.gateway_invocations` row naming the daemon chain the caller was
+ * serving. The helper writes both for the same reason — a fixture that set
+ * only the timestamp would be describing a state the writer cannot produce.
+ *
+ * Without both, no batch can reach the `gateway` tier, whatever the batch
+ * says.
  */
 function watchedGatewayHost(
   db: FakeDb,
   at = new Date("2026-09-08T09:00:00.000Z"),
+  chain = SESSION,
 ): void {
   (db.hosts[0] as Record<string, unknown>)["gatewayLastSeenAt"] = at;
+  db.gatewayInvocations.push({ chainSessionUuid: chain, createdAt: at });
 }
 
 function tableName(table: unknown): string {
@@ -439,6 +454,31 @@ function wire(db: FakeDb): void {
             findFirst: async () => db.retentionPolicy,
           },
         },
+        // The one grouped read `gatewayInvocationsFor` makes: this host's
+        // invocations for the chains the batch names, newest per chain.
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              groupBy: async () => {
+                // Every row this fixture holds, newest per chain. The real
+                // statement narrows by host id and by the chains the batch
+                // names; neither narrowing is modelled, because `inArray`
+                // does not bind its list as a `Param` and a fake that
+                // pretended to read it would be asserting its own guess. The
+                // fixture holds one host's rows, and the handler looks each
+                // chain up by name — so a chain nobody served is still a
+                // miss, which is the property these tests are about.
+                const newest = new Map<string, Date>();
+                for (const row of db.gatewayInvocations) {
+                  const seen = newest.get(row.chainSessionUuid);
+                  if (seen === undefined || row.createdAt > seen)
+                    newest.set(row.chainSessionUuid, row.createdAt);
+                }
+                return [...newest].map(([chain, at]) => ({ chain, at }));
+              },
+            }),
+          }),
+        }),
         insert: (table: unknown) => ({
           values: (values: Record<string, unknown>) => {
             const name = tableName(table);
@@ -1807,116 +1847,71 @@ describe("proof.observed frames (ADR-064)", () => {
 });
 
 describe("enforcementTierOf", () => {
-  const event = (
-    over: Record<string, unknown> = {},
-  ): Parameters<typeof enforcementTierOf>[0][number] =>
-    ({
-      agent: {},
-      attrs: {},
-      ...over,
-    }) as never;
-
   const AT = new Date("2026-09-08T10:00:00.000Z");
   /** A host whose gateway credential the control plane has seen authorised. */
   const watched = (mode: string) => ({ mode, gatewayLastSeenAt: AT });
   /** A host that has never had a gateway call authorised. */
   const unwatched = (mode: string) => ({ mode, gatewayLastSeenAt: null });
 
-  it("ignores the tier the envelope declares", () => {
-    // The envelope field is as submitted as the attribute. It used to win
-    // outright (discussion_r4036718127, P1).
-    expect(
-      enforcementTierOf(
-        [event({ agent: { enforcement_tier: "gateway" } })],
-        unwatched("observe"),
-        null,
-        true,
-      ),
-    ).toBe("observe");
+  it("labels a chain the control plane served a gateway call for", () => {
+    // recordGatewayCall seals the call onto the daemon's own tachod-* chain
+    // and the host recorder sets no identity tier, so these calls used to be
+    // filed under the HOST's mode -- the wrong enforcement semantics for the
+    // one kind of call Oxagen saw directly (#3161, discussion_r4033641270).
+    expect(enforcementTierOf(AT, watched("observe"), null, true)).toBe(
+      "gateway",
+    );
   });
 
-  it("recognises a gateway batch the recorder did not label", () => {
-    // recordGatewayCall puts the tier in attrs, and the daemon's host recorder
-    // sets no identity tier, so these calls used to be filed under the HOST's
-    // mode -- the wrong enforcement semantics for the one kind of call Oxagen
-    // saw directly (#3161, discussion_r4033641270).
-    expect(
-      enforcementTierOf(
-        [
-          event({ attrs: { "oxagen.enforcement_tier": "gateway" } }),
-          event({ attrs: { "oxagen.enforcement_tier": "gateway" } }),
-        ],
-        watched("observe"),
-        null,
-        true,
-      ),
-    ).toBe("gateway");
+  it("refuses a chain the control plane has no record of serving", () => {
+    // THE finding (#3221). The host really did serve a gateway call — the
+    // observation on the host row is real — but this chain is not one the
+    // gateway credential was ever authenticated for. Under the old rule the
+    // batch answered that question itself, by carrying
+    // `oxagen.enforcement_tier`, so any submitter could point a real
+    // observation at any session. Now the answer comes from
+    // `tacho.gateway_invocations` and a chain nobody's gateway served has no
+    // row there, whatever the batch says about it.
+    expect(enforcementTierOf(null, watched("observe"), null, true)).toBe(
+      "observe",
+    );
+    expect(enforcementTierOf(null, watched("enforce"), null, true)).toBe(
+      "harness",
+    );
   });
 
-  it("labels a MIXED batch gateway", () => {
-    // The case the first version got wrong (discussion_r4034318913). A gateway
-    // call is sealed onto the daemon's own tachod-* chain, whose genesis is the
-    // daemon's agent_start — so the batch is mixed by construction, and
-    // requiring every event to agree meant nothing was ever labelled gateway.
-    expect(
-      enforcementTierOf(
-        [event({ attrs: { "oxagen.enforcement_tier": "gateway" } }), event()],
-        watched("enforce"),
-        null,
-        true,
-      ),
-    ).toBe("gateway");
+  it("refuses an invocation on a host with no observation at all", () => {
+    // The belt. The two records are written by the same function but by
+    // separate statements, and a deployment can be mid-migration on one and
+    // not the other; disagreement is not evidence.
+    expect(enforcementTierOf(AT, unwatched("observe"), null, true)).toBe(
+      "observe",
+    );
   });
 
-  it("refuses the batch's word on a host the server never watched serve one", () => {
-    // The attack. Same batch as the case above, on a host with no observation.
-    expect(
-      enforcementTierOf(
-        [event({ attrs: { "oxagen.enforcement_tier": "gateway" } }), event()],
-        unwatched("observe"),
-        null,
-        true,
-      ),
-    ).toBe("observe");
-  });
-
-  it("will not raise a session the observation predates", () => {
+  it("will not raise a session the invocation predates", () => {
     // A gateway call Oxagen served before this chain existed is not evidence
-    // about it. This is what stops a stale observation reaching back.
+    // about it. This is what stops a stale record reaching back.
     expect(
       enforcementTierOf(
-        [event({ attrs: { "oxagen.enforcement_tier": "gateway" } })],
+        AT,
         watched("observe"),
         new Date(AT.getTime() + 1),
         true,
       ),
     ).toBe("observe");
-    expect(
-      enforcementTierOf(
-        [event({ attrs: { "oxagen.enforcement_tier": "gateway" } })],
-        watched("observe"),
-        AT,
-        true,
-      ),
-    ).toBe("gateway");
-  });
-
-  it("leaves a chain that carries no gateway call alone", () => {
-    // A wrapped agent's chain never carries one, so promotion cannot reach it
-    // even on a host the server HAS watched serve gateway calls.
-    expect(
-      enforcementTierOf([event(), event()], watched("enforce"), null, true),
-    ).toBe("harness");
+    expect(enforcementTierOf(AT, watched("observe"), AT, true)).toBe("gateway");
   });
 
   it("falls back to the host mode when nothing says otherwise", () => {
-    expect(enforcementTierOf([event()], unwatched("observe"), null, true)).toBe(
+    expect(enforcementTierOf(null, unwatched("observe"), null, true)).toBe(
       "observe",
     );
-    expect(enforcementTierOf([event()], unwatched("enforce"), null, true)).toBe(
+    expect(enforcementTierOf(null, unwatched("enforce"), null, true)).toBe(
       "harness",
     );
   });
+
   it("refuses gateway when there is nowhere to record the evidence", () => {
     // Migration 20260917140000 adds the host column and the session column in
     // two statements, so a run that fails between them leaves a database that
@@ -1924,48 +1919,15 @@ describe("enforcementTierOf", () => {
     // (discussion_r4040750815). The tier is monotonic, so a session sealed in
     // that window would carry `gateway` with a null observation for good.
     //
-    // Same batch and same watched host as the case that returns `gateway`
-    // above — only the evidence column differs, which is what makes this
-    // discriminating.
-    expect(
-      enforcementTierOf(
-        [event({ attrs: { "oxagen.enforcement_tier": "gateway" } }), event()],
-        watched("enforce"),
-        null,
-        false,
-      ),
-    ).toBe("harness");
-    expect(
-      enforcementTierOf(
-        [event({ attrs: { "oxagen.enforcement_tier": "gateway" } }), event()],
-        watched("observe"),
-        null,
-        false,
-      ),
-    ).toBe("observe");
-  });
-});
-
-describe("carriesGatewayCall", () => {
-  const ev = (attrs: Record<string, string> = {}) =>
-    ({ agent: {}, attrs }) as never;
-
-  it("is what the existing-chain update keys on", () => {
-    // The promotion has to be applied on every batch, not computed at insert:
-    // the daemon chain's genesis row is written when the daemon starts, long
-    // before any connected app calls anything, and the existing-session branch
-    // applies only `common`. See the comment beside `common` in the handler.
-    expect(
-      carriesGatewayCall([ev(), ev({ "oxagen.enforcement_tier": "gateway" })]),
-    ).toBe(true);
-    expect(carriesGatewayCall([ev(), ev()])).toBe(false);
-    expect(carriesGatewayCall([])).toBe(false);
-  });
-
-  it("ignores a tier attr that is not the gateway's", () => {
-    expect(
-      carriesGatewayCall([ev({ "oxagen.enforcement_tier": "harness" })]),
-    ).toBe(false);
+    // Same invocation and same watched host as the case that returns
+    // `gateway` above — only the evidence column differs, which is what makes
+    // this discriminating.
+    expect(enforcementTierOf(AT, watched("enforce"), null, false)).toBe(
+      "harness",
+    );
+    expect(enforcementTierOf(AT, watched("observe"), null, false)).toBe(
+      "observe",
+    );
   });
 });
 
@@ -2220,6 +2182,73 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
     for (const update of db.updates.filter((u) => u.table === "sessions")) {
       expect(update.values).not.toHaveProperty("enforcementTier");
     }
+  });
+
+  it("refuses a forged batch on a host that HAS served a real gateway call", async () => {
+    // #3221, and the case every test above this one missed. The earlier fix
+    // required a server observation, which bounded the attack to hosts that
+    // genuinely use the gateway — but once a host had served ONE legitimate
+    // call, the observation was a single reusable timestamp with no session on
+    // it, and the batch chose which session it landed on by carrying
+    // `oxagen.enforcement_tier`. A holder of the host's control-plane key
+    // could point real evidence at any chain.
+    //
+    // Discriminating by construction: the host's observation is real, the
+    // gateway invocation is real, and the ONLY thing wrong is that the
+    // invocation names a different chain than the batch does. Against the old
+    // `carriesGatewayCall` correlation this batch promotes; against the server
+    // record it cannot.
+    const db = fakeDb();
+    watchedGatewayHost(db, new Date("2026-09-08T09:00:00.000Z"), "tachod-real");
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "observe",
+      createdAt: new Date("2026-09-08T08:00:00.000Z"),
+      sealedAt: null,
+    });
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: gatewayBatch(),
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+
+    expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("observe");
+    for (const update of db.updates.filter((u) => u.table === "sessions")) {
+      expect(update.values["enforcementTier"]).not.toBe("gateway");
+    }
+  });
+
+  it("refuses a session INVENTED by the forged batch", async () => {
+    // The unconditional half of the same hole. `genesisRow` passes no
+    // lifetime, because nothing predates a session being opened by this very
+    // batch — so a newly invented chain sailed past the "observation does not
+    // predate the session" bound with nothing to stop it. It is stopped now by
+    // the correlation rather than by the bound: an invented chain has no
+    // invocation row.
+    const db = fakeDb();
+    watchedGatewayHost(db, new Date("2026-09-08T09:00:00.000Z"), "tachod-real");
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: gatewayBatch(),
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+
+    expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("observe");
+    expect(db.sessions.get(SESSION)?.["gatewayObservedAt"]).toBe(null);
   });
 
   it("does not reach back to a session the observation predates", async () => {

@@ -14,9 +14,22 @@ const hostUpdates: Array<Record<string, unknown>> = [];
 const hostWritePlanes: string[] = [];
 /** Whether the database claims to have `gateway_last_seen_at` yet. */
 let gatewayColumnPresent = true;
+/** Whether it claims to have `tacho.gateway_invocations` yet (#3221). */
+let invocationTablePresent = true;
+/** Every `tacho.gateway_invocations` row the gate wrote, in order. */
+const invocationInserts: Array<Record<string, unknown>> = [];
+/** The host row the gate reads, or undefined for a host it cannot find. */
+let hostRow: Record<string, unknown> | undefined = {
+  id: "host-uuid",
+  orgId: "11111111-1111-4111-8111-111111111111",
+  workspaceId: "22222222-2222-4222-8222-222222222222",
+};
 
 const fakeTx = () => ({
-  query: { apiKeys: { findFirst } },
+  query: {
+    apiKeys: { findFirst },
+    tachoHosts: { findFirst: async () => hostRow },
+  },
   update: () => ({
     set: (values: Record<string, unknown>) => ({
       where: async () => {
@@ -25,19 +38,35 @@ const fakeTx = () => ({
       },
     }),
   }),
+  insert: () => ({
+    values: async (values: Record<string, unknown>) => {
+      invocationInserts.push(values);
+      return [];
+    },
+  }),
 });
 
 vi.mock("@oxagen/database", () => ({
   schema: {
     apiKeys: { id: "id", orgId: "org_id", deletedAt: "deleted_at" },
-    tachoHosts: { orgId: "org_id", publicId: "public_id" },
+    tachoHosts: { id: "id", orgId: "org_id", publicId: "public_id" },
+    tachoGatewayInvocations: { hostId: "host_id" },
   },
   HOST_GATEWAY_COLUMN: {
     schema: "tacho",
     table: "hosts",
     column: "gateway_last_seen_at",
   },
-  hasColumn: async () => gatewayColumnPresent,
+  GATEWAY_INVOCATION_COLUMN: {
+    schema: "tacho",
+    table: "gateway_invocations",
+    column: "chain_session_uuid",
+  },
+  // Per column, not one answer for both. The host column and the invocations
+  // table ship in DIFFERENT migrations, so either can be the one still pending
+  // and a shared answer would describe a state no deployment is ever in.
+  hasColumn: async (_tx: unknown, ref: { table: string }) =>
+    ref.table === "hosts" ? gatewayColumnPresent : invocationTablePresent,
   planeKeyFor: async (orgId: string) => `plane-of:${orgId}`,
   withSystemDb: (fn: (tx: unknown) => unknown) => fn(fakeTx()),
   // The seam the host write must use. `withSystemDb` always targets the SHARED
@@ -80,7 +109,14 @@ beforeEach(() => {
   getCapability.mockReset();
   hostUpdates.length = 0;
   hostWritePlanes.length = 0;
+  invocationInserts.length = 0;
   gatewayColumnPresent = true;
+  invocationTablePresent = true;
+  hostRow = {
+    id: "host-uuid",
+    orgId: ORG,
+    workspaceId: "22222222-2222-4222-8222-222222222222",
+  };
   listCapabilities.mockReset();
   listCapabilities.mockReturnValue([]);
 });
@@ -353,6 +389,133 @@ describe("a served gateway call is recorded where the tier can read it", () => {
     expect(hostUpdates).toHaveLength(1);
     expect(hostUpdates[0]?.["gatewayLastSeenAt"]).toBeInstanceOf(Date);
     expect(hostWritePlanes).toEqual([ORG]);
+  });
+
+  it("files the CHAIN the gateway named, not just the host (#3221)", async () => {
+    // The correlation. The host timestamp says a gateway call happened; this
+    // row says which of the host's chains it happened for. Without it the
+    // answer came from an attribute on the submitted batch, so a holder of the
+    // host's control-plane key could point a real observation at any session.
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_g",
+      capabilityName: "query_ontology",
+      gatewaySessionUuid: "tachod-abc",
+    });
+    expect(invocationInserts).toHaveLength(1);
+    expect(invocationInserts[0]).toMatchObject({
+      chainSessionUuid: "tachod-abc",
+      capabilityName: "query_ontology",
+      outcome: "allowed",
+      // From the HOST ROW, resolved through the key's own scope — never from
+      // anything the caller sent.
+      hostId: "host-uuid",
+      orgId: ORG,
+    });
+  });
+
+  it("files a refusal as an invocation too", async () => {
+    getCapability.mockReturnValue({ ...readOnlyMcp, mutates: true });
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    const denial = await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_g",
+      capabilityName: "delete_workspace",
+      gatewaySessionUuid: "tachod-abc",
+    });
+    expect(denial).toMatch(/outside this agent's mandate/);
+    expect(invocationInserts[0]).toMatchObject({ outcome: "refused" });
+  });
+
+  it("files no invocation when the caller named no chain", async () => {
+    // A daemon too old to send the header. A row naming no chain is not
+    // evidence about any session, so none is written and the host timestamp
+    // stands alone — which leaves the session on the host's own mode rather
+    // than promoting it on a correlation nobody made.
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_g",
+      capabilityName: "query_ontology",
+    });
+    expect(hostUpdates).toHaveLength(1);
+    expect(invocationInserts).toEqual([]);
+  });
+
+  it("files no invocation while its migration is pending", async () => {
+    // `tacho.gateway_invocations` arrives in its own migration, applied by
+    // hand after the deploy (#1275). Naming an absent TABLE raises 42P01,
+    // which aborts the transaction exactly as a missing column does — and the
+    // host stamp, whose own migration HAS landed, must still be written.
+    invocationTablePresent = false;
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_g",
+        capabilityName: "query_ontology",
+        gatewaySessionUuid: "tachod-abc",
+      }),
+    ).toBeUndefined();
+    expect(hostUpdates).toHaveLength(1);
+    expect(invocationInserts).toEqual([]);
+  });
+
+  it("writes nothing for a host the key's scope names but the org lacks", async () => {
+    // The enrollment was deleted between minting the key and this call. There
+    // is no host to attribute the invocation to, and inventing one would file
+    // evidence against a row that is not there.
+    hostRow = undefined;
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_g",
+      capabilityName: "query_ontology",
+      gatewaySessionUuid: "tachod-abc",
+    });
+    expect(hostUpdates).toEqual([]);
+    expect(invocationInserts).toEqual([]);
+  });
+
+  it("ignores a chain named on a credential that is not a gateway", async () => {
+    // The header is carried for every caller and read back for exactly one
+    // purpose. A chain id attested by a credential whose use it says nothing
+    // about is not evidence, and must not become a row.
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_HOST_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    const allowed = [
+      ...(MACHINE_KEY_CAPABILITIES[TACHO_HOST_PURPOSE] ?? []),
+    ][0];
+    await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_h",
+      capabilityName: allowed as string,
+      gatewaySessionUuid: "tachod-abc",
+    });
+    expect(invocationInserts).toEqual([]);
   });
 
   it("records nothing for the HOST key, which serves no connected app", async () => {

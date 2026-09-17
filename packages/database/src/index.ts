@@ -57,4 +57,8 @@ export {
   type ColumnRef,
   type ProbeTx,
 } from "./column-probe";
-export { HOST_GATEWAY_COLUMN, SESSION_GATEWAY_COLUMN } from "./schema/tacho";
+export {
+  GATEWAY_INVOCATION_COLUMN,
+  HOST_GATEWAY_COLUMN,
+  SESSION_GATEWAY_COLUMN,
+} from "./schema/tacho";

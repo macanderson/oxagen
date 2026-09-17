@@ -48,6 +48,7 @@
  * outright.
  */
 import {
+  GATEWAY_INVOCATION_COLUMN,
   hasColumn,
   HOST_GATEWAY_COLUMN,
   planeKeyFor,
@@ -160,6 +161,16 @@ export interface MachineKeyCheck {
   orgId: string;
   apiKeyId: string | null | undefined;
   capabilityName: string;
+  /**
+   * The Tacho daemon chain a local MCP gateway is serving, as it named the
+   * chain on the request (#3221).
+   *
+   * Read back only when the key's scope purpose is `tacho_gateway_v1`. On any
+   * other credential it is carried here and dropped, because a value that
+   * attests a gateway call means nothing on a credential that is not one.
+   * It never reaches the denial decision — see `machineKeyDenial`.
+   */
+  gatewaySessionUuid?: string | null;
 }
 
 /**
@@ -250,6 +261,9 @@ export async function readKeyScope(
 async function recordGatewayInvocation(
   orgId: string,
   hostEnrollmentId: string | undefined,
+  chainSessionUuid: string | null,
+  capabilityName: string,
+  outcome: "allowed" | "refused",
 ): Promise<void> {
   if (!hostEnrollmentId) return;
   // The ORGANISATION'S plane, not the shared one. `tacho.hosts` is tenant data
@@ -261,20 +275,60 @@ async function recordGatewayInvocation(
   const planeKey = await planeKeyFor(orgId);
   await withOrgPlaneSystemDb(orgId, async (tx) => {
     // Ask before writing. Production applies migrations by hand after the
-    // deploy (#1275), so between the two this statement names a column the
-    // database does not have; 42703 would abort the transaction and turn a
-    // missing observation into a FAILED gateway call, denying traffic this
-    // function only meant to take a note about (discussion_r4040352870).
-    if (!(await hasColumn(tx, HOST_GATEWAY_COLUMN, planeKey))) return;
-    await tx
-      .update(schema.tachoHosts)
-      .set({ gatewayLastSeenAt: new Date() })
-      .where(
-        and(
-          eq(schema.tachoHosts.orgId, orgId),
-          eq(schema.tachoHosts.publicId, hostEnrollmentId),
-        ),
-      );
+    // deploy (#1275), so between the two these statements name a column — and
+    // a whole TABLE — the database does not have; 42703 and 42P01 both abort
+    // the transaction, which would turn a missing observation into a FAILED
+    // gateway call, denying traffic this function only meant to take a note
+    // about (discussion_r4040352870). Probed separately rather than inferred
+    // from one another: they ship in different migrations and either can be
+    // the one still pending.
+    const hostColumn = await hasColumn(tx, HOST_GATEWAY_COLUMN, planeKey);
+    const invocations = await hasColumn(
+      tx,
+      GATEWAY_INVOCATION_COLUMN,
+      planeKey,
+    );
+    if (!hostColumn && !invocations) return;
+
+    // The host row, read once and by the server's own attribution: the public
+    // id comes from the KEY'S scope, never from the request. An invocation
+    // filed against a host the caller named would be the defect this whole
+    // path exists to close, one layer down.
+    const host = await tx.query.tachoHosts.findFirst({
+      where: and(
+        eq(schema.tachoHosts.orgId, orgId),
+        eq(schema.tachoHosts.publicId, hostEnrollmentId),
+      ),
+      // Named, so a column the pending migration adds cannot join this read
+      // and raise 42703 for a column it does not want
+      // (discussion_r4040558842's failure, in this package).
+      columns: { id: true, orgId: true, workspaceId: true },
+    });
+    if (host === undefined) return;
+
+    if (hostColumn) {
+      await tx
+        .update(schema.tachoHosts)
+        .set({ gatewayLastSeenAt: new Date() })
+        .where(eq(schema.tachoHosts.id, host.id));
+    }
+
+    // The correlation (#3221). Without a chain id there is nothing to
+    // correlate, and a row naming no chain is not evidence about any session —
+    // so none is written, and the host observation above stands alone exactly
+    // as it did before. That is the honest degradation: a daemon too old to
+    // send the header keeps its sessions on the host's own mode rather than
+    // being promoted on a correlation nobody made.
+    if (invocations && chainSessionUuid !== null) {
+      await tx.insert(schema.tachoGatewayInvocations).values({
+        orgId: host.orgId,
+        workspaceId: host.workspaceId,
+        hostId: host.id,
+        chainSessionUuid,
+        capabilityName,
+        outcome,
+      });
+    }
   });
 }
 
@@ -335,8 +389,22 @@ export async function machineKeyDenial(
     // record is a call the tier will not reflect, and silently under-reporting
     // enforcement is the failure this whole path exists to end. It is one
     // indexed UPDATE by public id.
-    await recordGatewayInvocation(orgId, scope.hostEnrollmentId);
-    if (!gatewayMayInvoke(capabilityName)) {
+    //
+    // The mandate is evaluated first so the record can say how the call was
+    // ruled on, and it is a pure function of the capability — no I/O, nothing
+    // that can fail between deciding and recording.
+    const permitted = gatewayMayInvoke(capabilityName);
+    await recordGatewayInvocation(
+      orgId,
+      scope.hostEnrollmentId,
+      // The chain the caller named, which is what makes this record about a
+      // SESSION rather than only about a host (#3221). Read only here, on the
+      // one credential whose authentication it can attest anything about.
+      check.gatewaySessionUuid ?? null,
+      capabilityName,
+      permitted ? "allowed" : "refused",
+    );
+    if (!permitted) {
       return `Forbidden: ${capabilityName} is outside this agent's mandate. A connected app may call read-only, non-sensitive workspace tools through the Oxagen gateway; changing that is a mandate change, made in Oxagen.`;
     }
     return undefined;
