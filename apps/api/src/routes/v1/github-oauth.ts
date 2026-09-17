@@ -737,6 +737,123 @@ githubOauthRoute.get("/status", async (c) => {
   });
 });
 
+/** The connector id of a workspace's GitHub source connection. */
+const GITHUB_CONNECTOR_ID = "github";
+
+/**
+ * A GitHub installation id this route is willing to persist onto a connection:
+ * a plain positive integer, which is exactly the shape `installationIdOf`
+ * (packages/handlers/src/repository.github-connection.ts) accepts when the
+ * repository capabilities read it back. Anything else would create a row every
+ * reader silently skips — a connection that looks attached and is not — so the
+ * settings leg logs and drops it instead of writing it.
+ */
+const INSTALLATION_ID_PATTERN = /^[1-9]\d{0,19}$/;
+
+/**
+ * Attach a settings-level GitHub App install to the workspace's GitHub source
+ * connection, creating that connection when the workspace has none.
+ *
+ * Why this exists: `get_main_repository`, `bind_main_repository` and
+ * `list_installation_repositories` all read the workspace's installation out of
+ * `ingestion.source_connections` through one shared resolver
+ * (`resolveWorkspaceGithubInstallation`). The platform catalog the callback
+ * writes a few lines above — `ingestion.github_installations` — is a different,
+ * org-less table that no capability reads. So without this, a settings-level
+ * install (`connectionId: null`) landed the operator back on the dialog that
+ * sent them to GitHub with `connected: false` still showing and nothing to
+ * click: the install completed and the product could not see it.
+ *
+ * Scoped by BOTH ids from the HMAC-verified state, on the system seam because a
+ * public OAuth redirect runs in no tenant scope. The select matches the
+ * resolver's predicate exactly (org + workspace + connector + not soft-deleted)
+ * so the row written is the row the readers read; picking by any narrower rule
+ * would risk writing one row while they resolve another. Ordering is newest
+ * first purely so a workspace carrying several legacy wizard connections gets a
+ * deterministic answer.
+ */
+async function attachWorkspaceGithubInstallation(args: {
+  orgId: string;
+  workspaceId: string;
+  installationId: string;
+  oauthAccountId: string | null;
+  now: Date;
+}): Promise<void> {
+  const { orgId, workspaceId, installationId, oauthAccountId, now } = args;
+
+  await withSystemDb(async (tx) => {
+    const existing = await tx
+      .select({
+        id: schema.sourceConnections.id,
+        deliveryConfig: schema.sourceConnections.deliveryConfig,
+      })
+      .from(schema.sourceConnections)
+      .where(
+        and(
+          eq(schema.sourceConnections.orgId, orgId),
+          eq(schema.sourceConnections.workspaceId, workspaceId),
+          eq(schema.sourceConnections.connectorId, GITHUB_CONNECTOR_ID),
+          isNull(schema.sourceConnections.deletedAt),
+        ),
+      )
+      .orderBy(desc(schema.sourceConnections.createdAt))
+      .limit(1);
+
+    const row = existing[0];
+    if (row) {
+      // Merge, never replace: a connection the legacy wizard already configured
+      // carries operational keys (owner/repo/defaultBranch, syncDepthDays) the
+      // resync path reads. Status is left alone on purpose — a workspace that
+      // has already bound a repository is `connected`, and re-installing the App
+      // is not a reason to demote it.
+      await tx
+        .update(schema.sourceConnections)
+        .set({
+          deliveryConfig: {
+            ...((row.deliveryConfig as Record<string, unknown> | null) ?? {}),
+            installationId,
+          },
+          ...(oauthAccountId ? { oauthAccountId } : {}),
+          updatedAt: now,
+        })
+        .where(eq(schema.sourceConnections.id, row.id));
+      return;
+    }
+
+    await tx.insert(schema.sourceConnections).values({
+      orgId,
+      workspaceId,
+      connectorId: GITHUB_CONNECTOR_ID,
+      displayName: "GitHub",
+      // The pair `connection.create` would record for a github connection: the
+      // install leg runs the App's authorization-code grant ("Request user
+      // authorization (OAuth) during installation"), and the connector declares
+      // webhook delivery (packages/ingestion/src/connectors/github).
+      authScheme: "oauth2_authorization_code",
+      deliveryMethod: "webhook",
+      deliveryConfig: { installationId },
+      // `pending_setup`, not `connected`. The installation exists but nothing is
+      // bound through it yet, and `status = 'connected'` is precisely what the
+      // ingestion poll scheduler claims
+      // (`source_connections_poll_due_partial_idx`), so marking it connected
+      // here would enrol a workspace with no record-type mappings into the sync
+      // loop. `bind_main_repository` promotes it to `connected` when it binds a
+      // repository, and all three repository reads match on the installation id
+      // rather than the status — so `pending_setup` blocks nothing the dialog
+      // needs while keeping an unbound install out of the poller.
+      status: "pending_setup",
+      ...(oauthAccountId ? { oauthAccountId } : {}),
+      createdAt: now,
+      updatedAt: now,
+      // No `created_by_id`. This is the public OAuth redirect: its security
+      // boundary is the state HMAC, not an HTTP session, so there is no acting
+      // user in context. The column is nullable (ADR-077) and a fabricated id
+      // would be worse than an honest null — the install is evidenced by the
+      // signed state and the `github_installations` catalog row.
+    });
+  });
+}
+
 // ── Public OAuth callback route ───────────────────────────────────────────────
 
 /**
@@ -749,8 +866,11 @@ githubOauthRoute.get("/status", async (c) => {
  *   1. Decode + verify the state HMAC (rejects tampered/expired state).
  *   2. Exchange the code for an access token via GitHub.
  *   3. Encrypt + store the tokens in ingestion.oauth_accounts.
- *   4. Link the oauth_account to the source_connection row.
- *   5. Redirect user back to the app's knowledge/sources page.
+ *   4. Attach the installation to the workspace's GitHub source connection —
+ *      the legacy wizard's own connection, or, for a settings-level connect,
+ *      the workspace's one GitHub connection, created here if it has none.
+ *   5. Redirect the user back to the surface the connect started from: the
+ *      Workspace settings dialog, or the legacy knowledge/sources wizard.
  */
 export const githubOauthCallbackRoute = new Hono<AppEnv>();
 
@@ -1029,13 +1149,23 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
     );
   }
 
-  // When the connect started from a source_connection (the legacy in-wizard
-  // flow), link the oauth_account (when obtained) and record the GitHub App
-  // installation id onto the connection, resetting to pending_setup (the user
-  // still picks repos). installationId is merged into deliveryConfig so the
-  // wizard can pre-select the just-installed org, without clobbering existing
-  // config keys. The settings connect has no connection, so this is skipped —
-  // the org's OAuth token (stored above) is all the settings surface needs.
+  // Attach the install to the workspace, by whichever of the two routes it came
+  // in on.
+  //
+  // Legacy in-wizard flow (`conn` resolved from the state's connectionId): link
+  // the oauth_account (when obtained) and record the GitHub App installation id
+  // onto that connection, resetting to pending_setup (the user still picks
+  // repos). installationId is merged into deliveryConfig so the wizard can
+  // pre-select the just-installed org, without clobbering existing config keys.
+  //
+  // Settings-level connect (no connectionId — 1 workspace = 1 app install):
+  // there is no connection yet and one is still required, because the three
+  // repository capabilities behind the Workspace settings dialog read the
+  // workspace's installation out of `ingestion.source_connections`. The org's
+  // OAuth token stored above is NOT all that surface needs — that was true of
+  // the deprecated settings page, which read the org token through
+  // /connections/github/status, and false since #2967. See
+  // attachWorkspaceGithubInstallation for the whole argument.
   if (conn) {
     const mergedDeliveryConfig =
       installationId != null
@@ -1058,6 +1188,24 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
         })
         .where(eq(schema.sourceConnections.id, conn.id)),
     );
+  } else if (installationId != null) {
+    if (INSTALLATION_ID_PATTERN.test(installationId)) {
+      await attachWorkspaceGithubInstallation({
+        orgId,
+        workspaceId,
+        installationId,
+        oauthAccountId,
+        now,
+      });
+    } else {
+      // Not fatal: the redirect below still lands the operator on the dialog,
+      // which will honestly report not-connected rather than pretending an
+      // unreadable id is an installation.
+      logger.warn(
+        { orgId, workspaceId, installationId },
+        "github install callback: settings-level install carried a malformed installation_id — not attached to the workspace connection",
+      );
+    }
   }
 
   // Determine org and workspace slugs from the state-encoded IDs.

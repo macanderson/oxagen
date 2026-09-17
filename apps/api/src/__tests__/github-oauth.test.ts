@@ -245,6 +245,77 @@ function makeTxChain(rows: unknown[]) {
 type TxLike = ReturnType<typeof makeTxChain>;
 type DbFn = (fn: (tx: TxLike) => Promise<unknown>) => Promise<unknown>;
 
+/**
+ * A tx that records what the settings-level install attach did: the predicate
+ * its github-connection lookup ran, and the INSERT values or UPDATE set it
+ * followed with. `selectRows` is what that lookup answers — `[]` for a
+ * workspace with no GitHub connection yet.
+ */
+function makeCapturingTx(selectRows: unknown[]) {
+  const captured: {
+    selectWhere?: unknown;
+    insertValues?: Record<string, unknown>;
+    updateSet?: Record<string, unknown>;
+  } = {};
+
+  const selectChain = {
+    from: vi.fn(),
+    where: vi.fn(),
+    orderBy: vi.fn(),
+    limit: vi.fn().mockResolvedValue(selectRows),
+  };
+  selectChain.from.mockReturnValue(selectChain);
+  selectChain.where.mockImplementation((arg: unknown) => {
+    captured.selectWhere = arg;
+    return selectChain;
+  });
+  selectChain.orderBy.mockReturnValue(selectChain);
+
+  const insertChain = {
+    values: vi.fn((arg: Record<string, unknown>) => {
+      captured.insertValues = arg;
+      return insertChain;
+    }),
+  };
+
+  const updateChain: {
+    set: ReturnType<typeof vi.fn>;
+    where: ReturnType<typeof vi.fn>;
+  } = {
+    set: vi.fn(),
+    where: vi.fn().mockResolvedValue(undefined),
+  };
+  updateChain.set.mockImplementation((arg: Record<string, unknown>) => {
+    captured.updateSet = arg;
+    return updateChain;
+  });
+
+  const tx = {
+    select: vi.fn().mockReturnValue(selectChain),
+    insert: vi.fn().mockReturnValue(insertChain),
+    update: vi.fn().mockReturnValue(updateChain),
+    execute: vi.fn().mockResolvedValue([]),
+  };
+  return { tx: tx as unknown as TxLike, captured };
+}
+
+/**
+ * Every bound parameter value in a Drizzle condition, walked through
+ * `queryChunks` only — the table/column objects hanging off a chunk are
+ * circular, so a general deep walk would not terminate.
+ */
+function boundParams(node: unknown, out: unknown[] = []): unknown[] {
+  if (node === null || typeof node !== "object") return out;
+  const record = node as Record<string, unknown>;
+  const chunks = record["queryChunks"];
+  if (Array.isArray(chunks)) {
+    for (const chunk of chunks) boundParams(chunk, out);
+    return out;
+  }
+  if ("value" in record && "encoder" in record) out.push(record["value"]);
+  return out;
+}
+
 /** Build a valid state string (base64url JSON + "." + HMAC). */
 function buildValidState(
   overrides: Partial<{
@@ -807,11 +878,14 @@ describe("GET /oauth/github/callback", () => {
         json: async () => ({ id: 7, login: "owner" }),
       });
 
-    // No connection lookup (connectionId is null). withSystemDb order:
-    // oauth upsert, org slug, ws slug. There is NO connection UPDATE.
+    // No connection lookup up front (connectionId is null). withSystemDb order:
+    // oauth upsert, the settings-level install attach, org slug, ws slug.
     mocks.withSystemDb
       .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
         fn(makeTxChain([{ id: "oauth-settings" }]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([]) as TxLike),
       )
       .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
         fn(makeTxChain([{ slug: "my-org" }]) as TxLike),
@@ -907,6 +981,185 @@ describe("GET /oauth/github/callback", () => {
       installationId: "142003699",
     });
     expect(updateSetArg?.oauthAccountId).toBe("oauth-1");
+  });
+
+  // ── settings-level install → the workspace's GitHub source connection ──────
+  //
+  // `get_main_repository`, `bind_main_repository` and
+  // `list_installation_repositories` all read the workspace's installation out
+  // of `ingestion.source_connections`. Before these, a settings-level install
+  // wrote only the platform catalog (`ingestion.github_installations`), which
+  // none of them read — so the dialog that sent the operator to GitHub still
+  // reported `connected: false` when they came back, and the feature was a dead
+  // loop.
+
+  /** Queue the redirect's two slug lookups, which close every callback leg. */
+  function queueSlugLookups() {
+    mocks.withSystemDb
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([{ slug: "my-org" }]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([{ slug: "my-ws" }]) as TxLike),
+      );
+  }
+
+  /** Queue the withSystemDb sequence for a code-less settings install. */
+  function queueSettingsAttach(attachTx: TxLike) {
+    // No code → no oauth upsert. Order: the attach, then org slug, ws slug.
+    mocks.withSystemDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+      fn(attachTx),
+    );
+    queueSlugLookups();
+  }
+
+  it("settings install: CREATES the workspace github connection carrying the installationId", async () => {
+    const { tx, captured } = makeCapturingTx([]);
+    queueSettingsAttach(tx);
+
+    const res = await makeCallbackReq({
+      state: buildValidState({ connectionId: null, returnTo: "settings" }),
+      installation_id: "142003699",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    // This is the row resolveWorkspaceGithubInstallation reads.
+    expect(captured.insertValues).toMatchObject({
+      orgId: "org-id-test",
+      workspaceId: "ws-id-test",
+      connectorId: "github",
+      deliveryConfig: { installationId: "142003699" },
+    });
+    // pending_setup, not connected: the install exists but nothing is bound
+    // through it, and `connected` is what the ingestion poll scheduler claims.
+    expect(captured.insertValues?.["status"]).toBe("pending_setup");
+    // No acting user on a public OAuth redirect — an honest absence, not a
+    // fabricated id (ADR-077 attribution columns are nullable).
+    expect(captured.insertValues?.["createdById"]).toBeUndefined();
+    expect(captured.updateSet).toBeUndefined();
+  });
+
+  it("settings install: UPDATES an existing github connection, merging installationId and preserving other deliveryConfig keys", async () => {
+    const { tx, captured } = makeCapturingTx([
+      {
+        id: "uuid-existing-gh",
+        deliveryConfig: { syncDepthDays: 90, owner: "acme", repo: "widgets" },
+      },
+    ]);
+    queueSettingsAttach(tx);
+
+    const res = await makeCallbackReq({
+      state: buildValidState({ connectionId: null, returnTo: "settings" }),
+      installation_id: "555",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    expect(captured.updateSet?.["deliveryConfig"]).toEqual({
+      syncDepthDays: 90,
+      owner: "acme",
+      repo: "widgets",
+      installationId: "555",
+    });
+    // Status untouched: a workspace that already bound a repository is
+    // `connected`, and re-installing the App is no reason to demote it.
+    expect(captured.updateSet).not.toHaveProperty("status");
+    expect(captured.insertValues).toBeUndefined();
+  });
+
+  it("settings install: links the oauth_account onto the connection when a code was exchanged", async () => {
+    mocks.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: "ghs_settings",
+          token_type: "Bearer",
+          scope: "repo",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 7, login: "owner" }),
+      });
+
+    const { tx, captured } = makeCapturingTx([]);
+    // With a code, the oauth upsert runs first.
+    mocks.withSystemDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+      fn(makeTxChain([{ id: "uuid-oauth-settings" }]) as TxLike),
+    );
+    queueSettingsAttach(tx);
+
+    const res = await makeCallbackReq({
+      code: "auth-code",
+      state: buildValidState({ connectionId: null, returnTo: "settings" }),
+      installation_id: "777",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    expect(captured.insertValues?.["oauthAccountId"]).toBe(
+      "uuid-oauth-settings",
+    );
+  });
+
+  it("settings install: the connection lookup is scoped by BOTH the state's orgId and workspaceId", async () => {
+    const { tx, captured } = makeCapturingTx([]);
+    queueSettingsAttach(tx);
+
+    const res = await makeCallbackReq({
+      state: buildValidState({
+        orgId: "org-mine",
+        workspaceId: "ws-mine",
+        connectionId: null,
+        returnTo: "settings",
+      }),
+      installation_id: "142003699",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    const params = boundParams(captured.selectWhere);
+    // Both ids from the signed state, plus the connector — so another
+    // workspace's (or another org's) github connection is never the row this
+    // writes to.
+    expect(params).toContain("org-mine");
+    expect(params).toContain("ws-mine");
+    expect(params).toContain("github");
+  });
+
+  it("settings install: a malformed installation_id is not written at all", async () => {
+    // The repository resolver only accepts a plain positive integer, so writing
+    // anything else would leave a connection every reader silently skips — a
+    // connection that looks attached and is not. Only the two slug lookups run.
+    queueSlugLookups();
+
+    const res = await makeCallbackReq({
+      state: buildValidState({ connectionId: null, returnTo: "settings" }),
+      installation_id: "not-a-number",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location") ?? "").toBe(
+      `${APP_URL}/my-org/my-ws?settings=repository&github=connected`,
+    );
+    expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);
+  });
+
+  it("settings install with no installation_id at all touches no connection", async () => {
+    // The identity-only leg (OAuth without an install) has nothing to attach,
+    // so only the two slug lookups run.
+    queueSlugLookups();
+
+    const res = await makeCallbackReq({
+      state: buildValidState({ connectionId: null, returnTo: "settings" }),
+    });
+
+    expect(res.status).toBe(302);
+    expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);
   });
 });
 
