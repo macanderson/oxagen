@@ -22,6 +22,7 @@ import { type Read, readError, readOk } from "@/data/read";
 import type { WsCtx as WsCtxType, WsRole } from "@/server/viewer";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import type { GrantEffect } from "@oxagen/oxagen";
 import { killSwitchSet } from "@oxagen/oxagen/contracts/kill_switch.set";
 import { toolClassificationSet } from "@oxagen/oxagen/contracts/tool.classification.set";
 import { toolImport } from "@oxagen/oxagen/contracts/tool.import";
@@ -584,7 +585,15 @@ function enforceablyGrants(
   contract: ToolsWriteContract,
   ctx: WsCtxType,
 ): boolean {
-  return Object.entries(contract.defaultRoles.org)
+  // Widened to the declared type before reading. All three of these contracts
+  // happen to say `allow` for every role they name, so TypeScript infers a
+  // literal type where `effect === "allow"` is statically true and
+  // `no-unnecessary-condition` rejects the comparison. The filter is not
+  // redundant — `GrantEffect` admits `deny`, and a contract that later denies a
+  // role must not be read as granting it — so the type is relaxed rather than
+  // the check removed.
+  const org: Partial<Record<string, GrantEffect>> = contract.defaultRoles.org;
+  return Object.entries(org)
     .filter(([, effect]) => effect === "allow")
     .map(([role]) => role.toLowerCase())
     .includes(ctx.orgRole);
