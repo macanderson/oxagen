@@ -14,11 +14,14 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverTrigger, PopoverPopup } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-// Type-only import — erased at compile time. @oxagen/billing's package.json
-// only exposes one "." export mapping to its full index.ts barrel (Stripe
-// client, DB-backed webhooks, etc.), so importing a VALUE from it here would
-// pull that server-only surface into the client bundle. The mode copy below
-// is therefore mirrored as a literal (see comment on BUDGET_MODES).
+// Type-only import — erased at compile time. @oxagen/billing's "." export maps
+// to its full index.ts barrel (Stripe client, DB-backed webhooks, the dunning
+// and receipt mailers), so importing a VALUE from the barrel here would pull
+// that server-only surface into the client bundle and the Next build would
+// fail to resolve `tls` / `net`. The package does expose leaf subpaths that
+// are safe to take a value from (`@oxagen/billing/pricing`,
+// `@oxagen/billing/rate-card`); `turn-budget.ts` has no such subpath yet, so
+// the mode copy below is mirrored as a literal (see comment on BUDGET_MODES).
 import type { TurnBudgetMode } from "@oxagen/billing";
 import { saveBudgetDefaultAction } from "./budget-actions";
 import type { WorkspaceBudgetGovernance } from "./model-state";

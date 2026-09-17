@@ -137,7 +137,7 @@ describe("BillingUpgradeInline", () => {
     // catalog landed, so every upgrade from chat asked for a plan that does
     // not exist. Assert against SUBSCRIPTION_PLANS rather than a literal so
     // the next slug bump cannot re-open it.
-    const { SUBSCRIPTION_PLANS } = await import("@oxagen/billing");
+    const { SUBSCRIPTION_PLANS } = await import("@oxagen/billing/pricing");
     const { changePlanAction } = await import(
       "@/app/[orgSlug]/billing/actions"
     );
@@ -163,7 +163,7 @@ describe("BillingUpgradeInline", () => {
     // The card advertised $20 / $99 / $500 while the Stripe catalogue the app
     // checks out against held the v1 GAU prices, so it showed one number and
     // Checkout charged another.
-    const { SUBSCRIPTION_PLANS } = await import("@oxagen/billing");
+    const { SUBSCRIPTION_PLANS } = await import("@oxagen/billing/pricing");
     const { changePlanAction } = await import(
       "@/app/[orgSlug]/billing/actions"
     );

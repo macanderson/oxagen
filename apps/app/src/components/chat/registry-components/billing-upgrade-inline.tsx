@@ -3,7 +3,15 @@
 import * as React from "react";
 import { CreditCard, CheckCircle2, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SUBSCRIPTION_PLANS } from "@oxagen/billing";
+// Deep subpath, not the "." barrel. `@oxagen/billing`'s index re-exports the
+// Stripe client, the dunning/receipt mailers and the DB-backed webhook surface,
+// so importing a VALUE from the barrel in a client component drags `postgres`
+// and `nodemailer` into the browser graph and the Next build fails to resolve
+// `tls` / `net` / `dns`. `src/pricing.ts` is a leaf — its only import is
+// `@oxagen/config/env`, which is zod and nothing else — so the catalogue can be
+// read here directly instead of being mirrored as a literal (which is the drift
+// this card is being fixed for).
+import { SUBSCRIPTION_PLANS } from "@oxagen/billing/pricing";
 import { changePlanAction } from "@/app/[orgSlug]/billing/actions";
 import { cn } from "@/lib/utils";
 
