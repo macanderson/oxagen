@@ -255,6 +255,13 @@
                 ],
                 "additionalProperties": false
               },
+              "gateway_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 256
+                }
+              },
               "signature": {
                 "type": "object",
                 "properties": {
