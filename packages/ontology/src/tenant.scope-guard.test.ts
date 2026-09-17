@@ -431,6 +431,95 @@ describe("tenancy guard — shapes that really do anchor the tenant", () => {
   }
 });
 
+// A clause keyword recognised by nesting depth alone is a keyword a CALLER can
+// spell. `$where` opened a WHERE clause from inside a SET, which made the rest
+// of the SET target a kept "filtering position" — so a query that reassigns
+// every tenant's nodes to the caller satisfied the tenancy guard. Four
+// spellings, one class: the word is lexically an identifier and the scanner
+// read it as a clause.
+describe("tenancy guard — a name spelled like a clause keyword", () => {
+  const spoofs: Array<[name: string, cypher: string]> = [
+    [
+      "a parameter named $where",
+      "MATCH (n) SET n.x = $where, n.orgId = $orgId",
+    ],
+    ["a property key .where", "MATCH (n) SET n.where = 1, n.orgId = $orgId"],
+    [
+      "a property key with spaces around the dot",
+      "MATCH (n) SET n . where = 1, n.orgId = $orgId",
+    ],
+    ["a label :Where", "MATCH (n) SET n:Where, n.orgId = $orgId"],
+    ["a map key {where: …}", "MATCH (n) SET n += {where: 1, orgId: $orgId}"],
+  ];
+
+  for (const [name, cypher] of spoofs) {
+    it(`rejects the write bypass opened by ${name}`, async () => {
+      // Discriminating: the naive guard accepts every one of these, and each
+      // is a WRITE whose SET target would land on every tenant's nodes.
+      expect(OLD_GUARD.test(strippedForTest(cypher))).toBe(true);
+      await expect(guardAccepts(cypher)).resolves.toBe(false);
+    });
+  }
+
+  // Class coverage rather than discriminating cases: the rule is about the
+  // token before the word, not about WHERE, so it is exercised on other
+  // keywords too. Both were already rejected before this fix, for an unrelated
+  // reason — neither `OPTIONAL` nor `MERGE` opens a keeping region outside a
+  // pattern map — so they are asserted without the OLD_GUARD claim.
+  const sameClass: Array<[name: string, cypher: string]> = [
+    [
+      "a parameter named after a different clause keyword",
+      "MATCH (n) SET n.x = $optional, n.orgId = $orgId",
+    ],
+    [
+      "a procedure segment named .merge",
+      "CALL apoc.merge.node(['X'], {orgId: $orgId}) YIELD node RETURN node",
+    ],
+  ];
+
+  for (const [name, cypher] of sameClass) {
+    it(`treats ${name} as an identifier, not a clause`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(false);
+    });
+  }
+});
+
+// The other half of the rule: a disqualified word is an ORDINARY IDENTIFIER, so
+// `clause` is left alone rather than cleared. Clearing it would be the mirror
+// defect — a property key named `.set` would close the WHERE out from under a
+// legitimate anchor, and a false reject takes down every read on that path.
+describe("tenancy guard — a keyword-shaped name does not break a real clause", () => {
+  const accepted: Array<[name: string, cypher: string]> = [
+    [
+      "a property key spelled like a clause keyword, inside the WHERE",
+      "MATCH (n) WHERE n.set = 1 AND n.orgId = $orgId RETURN n",
+    ],
+    [
+      "a parameter spelled like a clause keyword, inside the WHERE",
+      "MATCH (n) WHERE n.x = $limit AND n.orgId = $orgId RETURN n",
+    ],
+    [
+      "a CALL subquery's inner clauses are still clauses",
+      "MATCH (a) WHERE a.orgId = $orgId CALL { WITH a MATCH (b) WHERE b.id = a.id RETURN b } RETURN b",
+    ],
+    [
+      "the ANN shape: WHERE after `YIELD node AS n, score`",
+      `CALL db.index.vector.queryNodes('i', $k, $v) YIELD node AS n, score
+       WHERE n.orgId = $orgId RETURN n LIMIT 10`,
+    ],
+    [
+      "a pattern-map anchor after UNWIND … AS tl",
+      "UNWIND $tools AS tl MERGE (t:Tool {id: tl.id, orgId: $orgId}) RETURN t",
+    ],
+  ];
+
+  for (const [name, cypher] of accepted) {
+    it(`still accepts ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(true);
+    });
+  }
+});
+
 // ── the repo corpus ──────────────────────────────────────────────────────────
 
 /** Walk up from this file until the pnpm workspace root. */

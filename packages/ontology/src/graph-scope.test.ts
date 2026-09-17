@@ -542,6 +542,71 @@ describe("assertScopeMarkers — KNOWN-ACCEPTED queries that enforce nothing", (
   });
 });
 
+// ── Clause keywords are recognised only at clause boundaries ────────────────
+//
+// The scanner recognised a keyword by nesting depth alone, so a caller-
+// controlled name spelled like one moved the clause state. Both guards read the
+// same clause state, so the spoof reached both: for tenancy it opened a kept
+// region over a SET target (a tenant-wide write bypass, asserted end to end in
+// tenant.scope-guard.test.ts); here it manufactures a "WHERE" for a marker that
+// is nowhere near one.
+describe("clause keywords are recognised only at clause boundaries", () => {
+  const labelScope: GraphScope = { labels: ["Doc"] };
+
+  it("a spoofed clause does not put a scope marker in a predicate position", () => {
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (n) SET n.x = $where, n.ok = n.label IN $${SCOPE_LABELS_PARAM} RETURN n`,
+        labelScope,
+      ),
+    ).toThrow(GraphScopeError);
+  });
+
+  const disqualified: Array<[name: string, cypher: string]> = [
+    ["$ — a parameter name", "MATCH (n) SET n.x = $where, n.orgId = $orgId"],
+    ["· — a property key", "MATCH (n) SET n.where = 1, n.orgId = $orgId"],
+    [": — a label", "MATCH (n) SET n:Where, n.orgId = $orgId"],
+    ["trailing : — a map key", "MATCH (n) SET n += {where: 1, orgId: $orgId}"],
+  ];
+
+  for (const [name, cypher] of disqualified) {
+    it(`keeps nothing when the clause is spoofed by ${name}`, () => {
+      // Every character is blanked: no clause ever opened a keeping region.
+      expect(keepFilteringPositions(cypher).trim()).toBe("");
+      expect(keepPredicatePositions(cypher).trim()).toBe("");
+    });
+  }
+
+  it("leaves the clause alone rather than clearing it", () => {
+    // A disqualified word is an ordinary identifier, so the WHERE it sits
+    // inside continues. Clearing the clause instead would be the mirror defect.
+    const kept = keepFilteringPositions(
+      "MATCH (n) WHERE n.set = 1 AND n.orgId = $orgId RETURN n",
+    );
+    expect(kept).toContain("n.orgId = $orgId");
+    expect(kept).not.toContain("RETURN");
+  });
+
+  it("still recognises a real clause after an identifier token", () => {
+    // The finding's phrasing would also disqualify a keyword preceded by an
+    // identifier. Measured against the tree, that rejects 4 of the 63 corpus
+    // queries and 1 of the 4 marker sites — every `YIELD node AS n, score
+    // WHERE …` shape — so the rule stops at tokens that can only introduce an
+    // identifier: `$`, `.`, `:` before, and `:` after.
+    const kept = keepFilteringPositions(
+      "CALL db.index.vector.queryNodes('i', $k, $v) YIELD node AS n, score WHERE n.orgId = $orgId RETURN n",
+    );
+    expect(kept).toContain("n.orgId = $orgId");
+  });
+
+  it("still recognises a CALL subquery's inner clauses", () => {
+    const kept = keepFilteringPositions(
+      "MATCH (a) CALL { WITH a MATCH (b) WHERE b.orgId = $orgId RETURN b } RETURN b",
+    );
+    expect(kept).toContain("b.orgId = $orgId");
+  });
+});
+
 describe("assertNoReservedParamCollision", () => {
   it("passes clean params", () => {
     expect(() => assertNoReservedParamCollision({ foo: 1 })).not.toThrow();

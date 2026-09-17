@@ -246,6 +246,65 @@ const GRAPH_BINDING_CLAUSES = new Set([
 ]);
 
 /**
+ * True when the word spanning `[start, end)` sits where a CLAUSE can begin, and
+ * false when it is an ordinary identifier that happens to be SPELLED like a
+ * clause keyword.
+ *
+ * Without this, the scanner recognised a keyword by nesting depth alone, and a
+ * caller-controlled name spoofed the clause state:
+ *
+ *   MATCH (n) SET n.x = $where, n.orgId = $orgId
+ *
+ * `$where` switched `clause` to `WHERE`, which made the rest of the SET target
+ * a kept "filtering position", and `n.orgId = $orgId` — a WRITE that reassigns
+ * every tenant's nodes to the caller — satisfied the tenancy guard. Three more
+ * spellings of the same class did the same thing: `SET n.where = 1, …` (a
+ * property key), `SET n:Where, …` (a label), and `SET n += {where: 1, orgId:
+ * $orgId}` (a map key).
+ *
+ * WHICH PRECEDING TOKENS DISQUALIFY A KEYWORD, and why each one can only ever
+ * introduce an identifier (whitespace is skipped — Cypher allows `n . where`):
+ *
+ *  - `$` — a PARAMETER name. No clause begins after a sigil.
+ *  - `.` — a PROPERTY key, or a namespaced procedure segment. This also fixes
+ *    `CALL apoc.merge.node(…)`, where `merge` used to open a MERGE clause.
+ *  - `:` — a LABEL (`SET n:Where`), a relationship type, or a map VALUE
+ *    (`{k: where}`). A clause never begins after a colon.
+ *
+ * AND ONE FOLLOWING TOKEN:
+ *
+ *  - `:` — the word is a MAP KEY (`{where: 1}`) or a variable being labelled.
+ *    No Cypher clause keyword is ever followed by a colon, so this decides the
+ *    map-key case without having to tell a map brace from a `CALL { … }`
+ *    subquery brace — which matters, because a subquery's inner `MATCH` /
+ *    `WHERE` must keep being recognised.
+ *
+ * A disqualified word is treated as an ORDINARY IDENTIFIER: `clause` is left
+ * exactly as it was. That is the correct reading, not merely the safe one — no
+ * clause boundary occurred, so the clause genuinely continues — and it is why
+ * `WHERE n.set = 1 AND n.orgId = $orgId` keeps its anchor instead of having the
+ * property key `.set` close the WHERE out from under it.
+ *
+ * WHAT IT STILL CANNOT DECIDE. A BARE identifier spelled like a clause keyword
+ * and not marked by any of these tokens — `RETURN n AS where` — is
+ * indistinguishable from a clause start without a grammar, which is a parse and
+ * not a lexer. Backtick-escaped names never reach here (`stripLiteralsAndComments`
+ * has already emptied them), and Cypher reserves most clause keywords against
+ * bare use, but this seam does not depend on that and does not claim it: the
+ * class is the same one ADR-082 records, and the answer to it is to construct
+ * the scoping rather than validate it.
+ */
+function startsAClause(src: string, start: number, end: number): boolean {
+  let before = start - 1;
+  while (before >= 0 && /\s/.test(src[before]!)) before -= 1;
+  if (before >= 0 && "$.:".includes(src[before]!)) return false;
+
+  let after = end;
+  while (after < src.length && /\s/.test(src[after]!)) after += 1;
+  return src[after] !== ":";
+}
+
+/**
  * Classify the bracket opening at `openIdx` as a PATTERN bracket or an
  * EXPRESSION bracket.
  *
@@ -424,7 +483,12 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
       let j = i;
       while (j < src.length && /[A-Za-z0-9_]/.test(src[j]!)) j += 1;
       const word = src.slice(i, j).toUpperCase();
-      if (paren === 0 && bracket === 0 && CLAUSE_KEYWORDS.has(word)) {
+      if (
+        paren === 0 &&
+        bracket === 0 &&
+        CLAUSE_KEYWORDS.has(word) &&
+        startsAClause(src, i, j)
+      ) {
         clause = word;
         // Decided as the clause OPENS, before this MERGE marks the query as
         // having bound something — otherwise a MERGE would always disqualify
