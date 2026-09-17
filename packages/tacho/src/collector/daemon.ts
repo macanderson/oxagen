@@ -39,6 +39,8 @@ import { Wal } from "../host/wal";
 import { ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
 import {
+  TACHO_ENFORCEMENT_TIER_ATTR,
+  TACHO_GATEWAY_TIER,
   type CommandAcknowledgement,
   type ControlEnvelope,
   type DaemonHealth,
@@ -593,7 +595,7 @@ export async function startDaemon(
           attrs: {
             "oxagen.connected_app": call.client,
             "oxagen.mcp_session": call.sessionId,
-            "oxagen.enforcement_tier": "gateway",
+            [TACHO_ENFORCEMENT_TIER_ATTR]: TACHO_GATEWAY_TIER,
           },
         },
       ),

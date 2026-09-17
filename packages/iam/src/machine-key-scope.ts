@@ -47,8 +47,14 @@
  * denied every capability, which broke `oxagen login`'s org/workspace picker
  * outright.
  */
-import { CLI_SESSION_SCOPE_PURPOSE } from "@oxagen/auth/cli-auth";
-import { schema, withSystemDb } from "@oxagen/database";
+import {
+  hasColumn,
+  HOST_GATEWAY_COLUMN,
+  planeKeyFor,
+  schema,
+  withOrgPlaneSystemDb,
+  withSystemDb,
+} from "@oxagen/database";
 import { getCapability, listCapabilities } from "@oxagen/oxagen";
 import { and, eq, isNull } from "drizzle-orm";
 
@@ -157,15 +163,46 @@ export interface MachineKeyCheck {
 }
 
 /**
- * The scope purpose on a key, or undefined when it has none (a person's key)
- * or the key cannot be read. `withSystemDb` because this runs inside the
+ * What reading a key's scope found.
+ *
+ * `missing` and `personal` are kept apart on purpose. They used to be the same
+ * `undefined`, and that conflation was a hole: `resolveApiKey` and this gate
+ * are two separate reads, so a key soft-deleted between them — which is exactly
+ * what revocation does — vanished here and was read as a key that simply has no
+ * purpose, i.e. a person's key acting for its creator. On a non-enterprise org
+ * `checkIAM`'s tier fast-path then allows the capability outright, so a host key
+ * racing its own revocation got one unrestricted invocation outside its mandate.
+ *
+ * A row this gate cannot see is not a row it may reason about.
+ */
+export type KeyScope =
+  | { kind: "missing" }
+  | { kind: "personal" }
+  | {
+      kind: "purpose";
+      purpose: string;
+      /**
+       * The host this credential was minted for, when its scope names one.
+       * Enrollment writes it (`lib/tacho-host-enroll.ts`) and
+       * `api.key.create` refuses a caller-supplied reserved purpose, so a
+       * purposed key's host id is the server's own record of which host the
+       * credential belongs to.
+       */
+      hostEnrollmentId?: string;
+    };
+
+/**
+ * The scope purpose on a key. `withSystemDb` because this runs inside the
  * kernel's IAM adapter, which is identity resolution: the answer decides
  * whether the caller may touch the tenant at all.
+ *
+ * `withSystemDb` also means RLS is not what hides a row here: a key absent from
+ * this read is deleted, expired out of the org, or never existed.
  */
-async function purposeOf(
+export async function readKeyScope(
   orgId: string,
   apiKeyId: string,
-): Promise<string | undefined> {
+): Promise<KeyScope> {
   const key = await withSystemDb((tx) =>
     tx.query.apiKeys.findFirst({
       where: and(
@@ -176,10 +213,69 @@ async function purposeOf(
       columns: { scope: true },
     }),
   );
-  const scope = key?.scope;
-  if (scope === null || typeof scope !== "object") return undefined;
+  if (key === undefined) return { kind: "missing" };
+  const scope = key.scope;
+  if (scope === null || typeof scope !== "object") return { kind: "personal" };
   const purpose = (scope as { purpose?: unknown }).purpose;
-  return typeof purpose === "string" ? purpose : undefined;
+  if (typeof purpose !== "string") return { kind: "personal" };
+  const host = (scope as { host_enrollment_id?: unknown }).host_enrollment_id;
+  return typeof host === "string"
+    ? { kind: "purpose", purpose, hostEnrollmentId: host }
+    : { kind: "purpose", purpose };
+}
+
+/**
+ * Stamp the host's `gateway_last_seen_at` — the server's record that it
+ * authorised a call on this host's gateway credential.
+ *
+ * Separate from the tier it feeds so the two can be reasoned about apart: this
+ * function only ever records what happened, and `tacho.events.ingest` only ever
+ * reads it. Nothing the submitter sends reaches either.
+ *
+ * Why the observation has to be the server's own (discussion_r4036718127, P1).
+ * The tier used to be read off `oxagen.enforcement_tier` on the submitted
+ * batch. `normalizeOtlp` kept unknown attributes verbatim, so anything holding
+ * a host's local OTLP bearer could put that key on an ordinary record; the
+ * daemon sealed it onto a chain that verifies and ingest promoted the session.
+ * The seal proved the record was not altered after collection and nothing at
+ * all about whether the value was true going in — a valid chain over a false
+ * input is byte-for-byte a valid chain. Here the platform is not told: it
+ * authenticated a server-minted, per-host `tacho_gateway_v1` credential and is
+ * about to serve the call itself.
+ *
+ * A key whose scope names no host cannot be attributed to one, and is left
+ * unrecorded rather than guessed at — an unattributable observation is not
+ * evidence about any particular session.
+ */
+async function recordGatewayInvocation(
+  orgId: string,
+  hostEnrollmentId: string | undefined,
+): Promise<void> {
+  if (!hostEnrollmentId) return;
+  // The ORGANISATION'S plane, not the shared one. `tacho.hosts` is tenant data
+  // — every other path reads it through `withTenantDb` — so on a dedicated
+  // plane a `withSystemDb` update matches no row and reports success, the
+  // observation never arrives, and genuine connected-app sessions stay
+  // classified `observe` for good (discussion_r4040617216). RLS is bypassed
+  // because this runs at authorisation time, before any handler scope exists.
+  const planeKey = await planeKeyFor(orgId);
+  await withOrgPlaneSystemDb(orgId, async (tx) => {
+    // Ask before writing. Production applies migrations by hand after the
+    // deploy (#1275), so between the two this statement names a column the
+    // database does not have; 42703 would abort the transaction and turn a
+    // missing observation into a FAILED gateway call, denying traffic this
+    // function only meant to take a note about (discussion_r4040352870).
+    if (!(await hasColumn(tx, HOST_GATEWAY_COLUMN, planeKey))) return;
+    await tx
+      .update(schema.tachoHosts)
+      .set({ gatewayLastSeenAt: new Date() })
+      .where(
+        and(
+          eq(schema.tachoHosts.orgId, orgId),
+          eq(schema.tachoHosts.publicId, hostEnrollmentId),
+        ),
+      );
+  });
 }
 
 /**
@@ -196,18 +292,54 @@ export async function machineKeyDenial(
   const { apiKeyId, orgId, capabilityName } = check;
   if (!apiKeyId || !orgId) return undefined;
 
-  const purpose = await purposeOf(orgId, apiKeyId);
+  const scope = await readKeyScope(orgId, apiKeyId);
+
+  // The key is gone between `resolveApiKey` and here — a revocation landing
+  // mid-request is the ordinary way that happens. Deny rather than fall through
+  // to the personal-key path, which on a non-enterprise org allows everything.
+  if (scope.kind === "missing") {
+    return `Forbidden: this credential is no longer valid, so it may not invoke ${capabilityName}.`;
+  }
+
   // No purpose: a person's key, acting for its creator. Unchanged.
-  if (purpose === undefined) return undefined;
-  // A CLI session key also acts for a person (its creator, re-checked for
-  // membership on every call by resolveApiKey) — it is not a machine
-  // credential, so it is not subject to a machine mandate.
-  if (purpose === CLI_SESSION_SCOPE_PURPOSE) return undefined;
+  if (scope.kind === "personal") return undefined;
+
+  const { purpose } = scope;
 
   if (purpose === TACHO_GATEWAY_PURPOSE) {
-    return gatewayMayInvoke(capabilityName)
-      ? undefined
-      : `Forbidden: ${capabilityName} is outside this agent's mandate. A connected app may call read-only, non-sensitive workspace tools through the Oxagen gateway; changing that is a mandate change, made in Oxagen.`;
+    // The observation the enforcement tier is derived from.
+    //
+    // This is the only place the control plane KNOWS a gateway call happened:
+    // it authenticated the credential and is deciding the call. The tier used
+    // to be read off an attribute on the submitted batch instead, which a
+    // harness can set — OTLP attributes pass through the normalizer verbatim
+    // and the daemon seals whatever it is handed, so the signature proved the
+    // record was not altered after collection and nothing at all about whether
+    // the value was true going in. Ingest now reads this column.
+    //
+    // Recorded BEFORE the mandate check, so a refusal is recorded too
+    // (discussion_r4040685657). An earlier version stamped only the allowed
+    // path, reasoning that a refused call is not a call Oxagen served and must
+    // not raise a tier. That guarded the wrong thing. What must not raise a
+    // tier is a CLIENT-ATTESTED claim; this is the server's own record that it
+    // authenticated this host's gateway credential and ruled on the request.
+    // A refusal is not weaker evidence of enforcement than a success — it is
+    // the strongest there is, the case where Oxagen actually stopped
+    // something, and it is exactly what the operator needs the session to be
+    // able to show. Leaving it out meant a connected app whose first call was
+    // outside the mandate produced a `-32002` the daemon filed as a gateway
+    // `policy_decision` while the chain stayed `observe`, so the evidence
+    // could not report the prevention that was the whole point.
+    //
+    // Awaited rather than fired and forgotten: a call this write did not
+    // record is a call the tier will not reflect, and silently under-reporting
+    // enforcement is the failure this whole path exists to end. It is one
+    // indexed UPDATE by public id.
+    await recordGatewayInvocation(orgId, scope.hostEnrollmentId);
+    if (!gatewayMayInvoke(capabilityName)) {
+      return `Forbidden: ${capabilityName} is outside this agent's mandate. A connected app may call read-only, non-sensitive workspace tools through the Oxagen gateway; changing that is a mandate change, made in Oxagen.`;
+    }
+    return undefined;
   }
 
   const allowed = MACHINE_KEY_CAPABILITIES[purpose];
