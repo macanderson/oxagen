@@ -77,8 +77,7 @@
         "third_party": "third party"
       },
       "financial": {
-        "yes": "Moves money",
-        "no": "—"
+        "yes": "Moves money"
       },
       "origin": {
         "declared": "Declared",

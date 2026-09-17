@@ -1904,7 +1904,6 @@ type Messages = {
       };
       financial: {
         yes: string;
-        no: string;
       };
       origin: {
         declared: string;
