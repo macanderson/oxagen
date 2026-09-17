@@ -532,23 +532,31 @@ describe("schemaReconcile Inngest handler", () => {
       },
     ]);
 
+    // The batch read returns the endpoint publicIds the write-back
+    // re-identifies against — an element id is only unique within one
+    // transaction, and the read and the write are separate ones.
     const relRecord = {
       get: (key: string): unknown => {
         const map: Record<string, unknown> = {
           relElemId: "elem-1",
           relType: "RELATES_TO",
           props: { weight: 0.9, extra: "off-schema" }, // extra should be pruned
+          startId: "node-a",
+          endId: "node-b",
         };
         return map[key];
       },
     };
 
-    // count rels(1), batch 1 rel, SET r += (prune), batch 2 end
+    // count rels(1), batch 1 rel, SET r += (prune), batch 2 end.
+    // The write-back returns `count(r) AS written`, and the counters are only
+    // incremented for what it says it matched — so this response has to model
+    // the count, not an empty result.
     mocks.sessionRun.mockImplementation(
       makeSessionRunSequence([
         { records: [makeCountRecord(1)] }, // count rels (no labels → no node count)
         { records: [relRecord] }, // batch 1
-        { records: [] }, // SET r +=
+        { records: [makeCountRecord(1)] }, // SET r += … RETURN count(r) AS written
         { records: [] }, // batch 2 end
       ]),
     );
@@ -561,6 +569,87 @@ describe("schemaReconcile Inngest handler", () => {
     const r = result as Record<string, unknown>;
     expect(r.prunedRelationships).toBe(1);
     expect(r.updatedRelationships).toBe(1);
+
+    // And the write really did carry the re-identification parameters.
+    const writeCall = (
+      mocks.sessionRun.mock.calls as Array<[string, Record<string, unknown>]>
+    ).find(([cypher]) => cypher.includes("SET r += $props"));
+    expect(writeCall?.[1]).toMatchObject({
+      relElemId: "elem-1",
+      relType: "RELATES_TO",
+      startId: "node-a",
+      endId: "node-b",
+    });
+  });
+
+  it("counts nothing when the write-back matches nothing", async () => {
+    // The relationship the batch read saw is gone, or its element id now names
+    // a different one, so the re-identified write matches zero rows. Before the
+    // counters were gated on that count they would both have read 1 — the job
+    // reporting a prune it did not perform, which is the whole failure this
+    // path guards against.
+    const { tx, m } = makeTx();
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
+
+    m.schemaVersionsFindFirst.mockResolvedValue({
+      id: "ver-1",
+      versionNumber: 1,
+    });
+    m.schemasFindMany.mockResolvedValue([{ id: "s-1", name: "mySchema" }]);
+    m.schemaActivationsFindMany.mockResolvedValue([]);
+    m.nodeLabelsFindMany.mockResolvedValue([]);
+    m.relTypesFindMany.mockResolvedValue([{ id: "rt-1", name: "RELATES_TO" }]);
+    m.propertiesFindMany.mockResolvedValue([
+      {
+        id: "p-1",
+        nodeLabelId: null,
+        relationshipTypeId: "rt-1",
+        key: "weight",
+        dataType: "number",
+        required: false,
+        description: null,
+      },
+    ]);
+
+    const relRecord = {
+      get: (key: string): unknown => {
+        const map: Record<string, unknown> = {
+          relElemId: "elem-1",
+          relType: "RELATES_TO",
+          props: { weight: 0.9, extra: "off-schema" },
+          startId: "node-a",
+          endId: "node-b",
+        };
+        return map[key];
+      },
+    };
+
+    mocks.sessionRun.mockImplementation(
+      makeSessionRunSequence([
+        { records: [makeCountRecord(1)] }, // count rels
+        { records: [relRecord] }, // batch 1
+        { records: [makeCountRecord(0)] }, // the write matched nothing
+        { records: [] }, // batch 2 end
+      ]),
+    );
+
+    const result = await capturedHandler!({
+      event: { data: { ...BASE_EVENT_DATA, prune: true } },
+      step: makeStep(),
+    });
+
+    const r = result as Record<string, unknown>;
+    expect(r.prunedRelationships).toBe(0);
+    expect(r.updatedRelationships).toBe(0);
+    // It is still PROCESSED — the row was read and considered — and the refusal
+    // is logged rather than swallowed.
+    expect(r.processedRelationships).toBe(1);
+    expect(mocks.logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ relElemId: "elem-1", relType: "RELATES_TO" }),
+      expect.stringContaining("no longer matches the row that was read"),
+    );
   });
 
   it("returns 0 processedNodes when labelNames is empty (no node reconcile)", async () => {
