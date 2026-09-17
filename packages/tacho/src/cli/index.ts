@@ -2,6 +2,7 @@ export * from "./deps";
 export * from "./detect";
 export * from "./enroll";
 export * from "./export";
+export * from "./mcp-stdio";
 export * from "./reassign";
 export * from "./status";
 export * from "./unenroll";

@@ -33,6 +33,13 @@ export const hostFileSchema = z
         ingest: z.string().url(),
         bundle: z.string().url(),
         commands: z.string().url(),
+        /**
+         * The workspace MCP endpoint the local gateway proxies to (ADR-078).
+         * Optional: a host enrolled before the gateway existed has no such
+         * claim, and `mcpEndpointFor` derives one so the file still loads
+         * and the host still works.
+         */
+        mcp: z.string().url().optional(),
       })
       .strict(),
     enrollment: z
@@ -70,6 +77,21 @@ export const hostFileSchema = z
     daemon_command: z.array(z.string()).min(1),
     /** Env values the settings merge displaced, restored by `unenroll`. */
     displaced_env: z.record(z.string(), z.string()).default({}),
+    /**
+     * argv for the MCP stdio shim, written into a connected app's config
+     * (ADR-078). Optional: a host enrolled before the connected tier existed
+     * has none, and it is only needed when a connected harness is enrolled.
+     */
+    mcp_stdio_command: z.array(z.string()).min(1).optional(),
+    /**
+     * MCP servers the merge displaced from our key in a connected app's
+     * config, per harness, restored by `unenroll`. The `mcpServers` map is
+     * keyed by name, so unlike a hook a colliding entry cannot simply sit
+     * beside ours; this is the `displaced_env` of the connected tier.
+     */
+    displaced_mcp_servers: z
+      .record(z.string(), z.record(z.string(), z.unknown()))
+      .default({}),
     enrolled_at: z.string(),
     expires_at: z.string(),
     revoked_at: z.string().nullable().default(null),
@@ -77,6 +99,30 @@ export const hostFileSchema = z
   .strict();
 
 export type HostFile = z.output<typeof hostFileSchema>;
+
+/**
+ * The workspace MCP endpoint for this host: the signed claim when the
+ * enrollment carried one, then `TACHO_MCP_ENDPOINT` (which is how a local
+ * stack points at `127.0.0.1:4100`), then a derivation from `api_url`.
+ *
+ * The derivation exists so a host enrolled before ADR-078 keeps working
+ * without re-enrolling. It is a last resort, not the design: the endpoint is
+ * a fact the control plane states, and a deployment whose MCP host is not its
+ * API host with `api` swapped for `mcp` must set the claim or the env var.
+ */
+export function mcpEndpointFor(
+  host: Pick<HostFile, "api_url" | "endpoints">,
+  env: Record<string, string | undefined> = process.env,
+): string {
+  const override = env["TACHO_MCP_ENDPOINT"];
+  if (typeof override === "string" && override.length > 0) return override;
+  if (host.endpoints.mcp !== undefined) return host.endpoints.mcp;
+  const api = new URL(host.api_url);
+  api.hostname = api.hostname.replace(/^api\./, "mcp.");
+  api.pathname = "/mcp";
+  api.search = "";
+  return api.toString().replace(/\/$/, "");
+}
 
 export function readHostFile(path: string): HostFile | undefined {
   const raw = readJsonFileIfExists(path);

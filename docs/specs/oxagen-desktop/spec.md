@@ -2,11 +2,12 @@
 
 | | |
 |---|---|
-| **Status** | Rev 1, built and verified on macOS; Linux and Windows bundles not yet run |
-| **Date** | 2026-09-13 |
+| **Status** | Rev 2, built and verified on macOS; Linux and Windows bundles not yet run |
+| **Date** | 2026-09-16 (rev 2: the connected tier); 2026-09-13 (rev 1) |
 | **Owner** | Mac Anderson |
 | **Source** | `docs/specs/oxagen-desktop` on branch `worktree-oxagen-installer`; Tacho 2.1.1 |
 | **Ships as** | macOS **.dmg**; Linux **.deb / .rpm / .AppImage**; Windows **.msi / .exe** |
+| **Rev 2** | The app stops being a wrapper installer for coding agents and becomes the control plane for the AI apps on a machine, developer or not. ADR-078 settles the two enforcement tiers it now spans: **wrapped** apps run an Oxagen hook and **connected** apps are served their toolbelt through a local MCP gateway, and neither dominates the other (§13). Claude Desktop is the first connected app. PATH linking stops being on by default on a machine with no coding agent on it. |
 | **Summary** | The Oxagen app puts a machine under Oxagen control: on first launch it links the `oxagen` CLI and the Tacho wrapper onto the operator's PATH, then signs the machine in to an organization, enrolls it against a workspace, and gives the operator one window to see the connection, move the host to another workspace or org, add or drop a wrapper for Claude Code, Codex, or Stella, sign out, and unenroll. A custom agent wraps too, by calling `tacho hook --agent <name>` around its own steps; the app shows it once it does. |
 
 
@@ -247,3 +248,129 @@ Not verified here: an end-to-end enroll against a live control plane from inside
 | `tools/sea/compile.mjs` | bundle → single executable |
 | `.github/workflows/desktop.yml` | the four-target release matrix |
 | `apps/cli/src/commands/tacho.ts` | `oxagen tacho reassign`, `--harness` on enroll |
+
+
+## 13. Rev 2: the connected tier
+
+Rev 1 wrapped coding agents. Every harness it supported had a hook surface, so
+Tacho installed a `PreToolUse` command hook and from then on saw every action
+the agent took. The AI applications a non-developer actually runs have no hook
+surface at all. They have an MCP client config.
+
+ADR-078 settles what Oxagen does about that, and the part of it this spec is
+bound by is that **the two tiers do not rank against each other**:
+
+| Product word | `enforcement_tier` | Apps | Mechanism |
+|---|---|---|---|
+| **Wrapped** | `harness` | Claude Code, Codex, Stella, any agent calling `tacho hook --agent` | a `PreToolUse` command hook |
+| **Connected** | `gateway` | Claude Desktop | an Oxagen MCP server in the app's client config |
+
+Wrapped is **broader and weaker**: it sees every action, including the
+harness's own Bash and Edit, but the hook runs in a process Oxagen does not
+own, so the record is `client_attested`. Connected is **narrower and
+stronger**: Oxagen sees only what routes through its gateway, but the kernel
+evaluates and refuses those calls on the server. A surface that puts them on
+one axis — a coverage meter, "fully" versus "partially" governed — is wrong in
+both directions, and is banned in the panel, in `apps/app`, in the CLI and in
+the docs.
+
+### 13.1 The local MCP gateway
+
+The collector daemon's loopback listener gains `POST /mcp`. Any MCP client on
+the machine connects to `http://127.0.0.1:<port>/mcp` and gets the workspace's
+toolbelt without ever holding an Oxagen credential — the gateway holds it, and
+the app is the credential. A non-developer will not paste a token into a JSON
+file, and asking them to would put it on the least protected surface on the
+machine.
+
+The gateway is a **proxy, not a second materialiser**. `@oxagen/tacho` is a
+leaf package with no `@oxagen/*` runtime dependency, so it forwards the
+JSON-RPC envelope to the workspace MCP endpoint with the host's own API key —
+already an Oxagen API key bound to the enrolling org and workspace. One tool
+materialiser, one RBAC evaluation, one entitlement gate, one meter, all of them
+the ones that already exist on the control plane. ADR-043 holds with no
+exception: the gateway serves tools and records evidence, and never runs a
+turn, calls a model or spawns a worker.
+
+On top of the forward it adds three things: attribution, which is refused
+rather than defaulted when the machine has no usable enrollment; the mandate's
+tool ceiling, where an overflowing `tools/list` fails with a message naming the
+model, the limit and the count; and evidence, sealed on the daemon's own chain
+with `enforcement_tier: "gateway"`. Calls land on the daemon chain rather than
+a session chain because a connected app has no agent session — no prompt, no
+model, no turn — and inventing one would put a step in the ledger that nobody
+took.
+
+**Security.** The listener was previously reached only by things Oxagen
+installed; it is now reachable by any MCP client, which makes DNS rebinding
+worth doing. So `Host` must name a loopback address and `Origin`, when present,
+must be a loopback origin — checked before the bearer and on **every** route,
+including `/health`, `/status` and `/sessions`, which were exposed the same way
+in rev 1. The Unix socket is exempt: no browser can address one.
+
+### 13.2 Claude Desktop, and what has no config surface
+
+Verified 2026-09-16 against the MCP quickstart and Anthropic's own docs:
+
+| | Claude Desktop |
+|---|---|
+| Config | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS); `%APPDATA%\Claude\claude_desktop_config.json` (Windows) |
+| Linux | **no path** — Anthropic ships no Linux build. The writer returns undefined and enroll says the app is unavailable on this platform rather than writing a file nothing reads |
+| Transport | **stdio only.** No `type`/`transport`/`url` member is documented for this file; remote servers are added through Settings → Connectors in the app, which no third party can write to. So `tacho mcp-stdio` ships — a thin stdin/stdout pump to the loopback gateway that duplicates no decision |
+| Restart | required, and documented as such. The app says so in plain words rather than writing the file and leaving the user to wonder |
+
+**Cowork and ChatGPT desktop have no writer, because neither has a config
+surface to write.** Anthropic's Cowork is a feature inside Claude rather than a
+separate app, and as of 2026-09-16 is being merged into the Claude chat
+interface; it inherits Claude Desktop's config. ChatGPT's MCP is
+remote-HTTPS-only through Developer Mode in the UI, with no local file a third
+party can write. (`~/.codex/config.toml` belongs to Codex, a different product,
+which this app already wraps through hooks.) Stubbing either would have
+enrolled a harness that could never report.
+
+### 13.3 What the connected tier cannot do
+
+A connected app's config is a file the user owns. Nothing stops them adding a
+second MCP server beside ours, and a tool served by that server never touches
+Oxagen. Every connected surface therefore reports the count and the names of
+the other MCP servers in that app — in `tacho enroll`, in `tacho status`, and
+in the panel — because the size of the gap is a fact the operator is entitled
+to.
+
+**Closing it is not a code change in this repository, and as of 2026-09-16 it
+is not fully closable at all.** Anthropic's enterprise controls
+(`com.anthropic.claudefordesktop` on macOS, `HKLM:\SOFTWARE\Policies\Claude`
+on Windows) carry `isLocalDevMcpEnabled` and its siblings, which are **on/off
+switches for local MCP as a whole, not a named-server allowlist**. The one real
+allowlist Anthropic ships governs the Desktop Extension (`.mcpb`) registry, not
+hand-written entries in `claude_desktop_config.json`. So an administrator can
+turn local MCP off entirely or leave it on; they cannot say "only Oxagen's".
+The product says that rather than implying a control it does not have.
+
+### 13.4 First run for someone who does not use a terminal
+
+PATH linking, the shell-profile block and the CLI sidecars are no longer on by
+default. The launch-time link now follows the machine: on where a coding agent
+is already installed (`claude`, `codex` or `stella` in a well-known install
+directory), off otherwise. It remains a *default* — an explicit `autoLinkCli`
+in `desktop.json` wins in both directions, so "Remove links" stays removed on a
+developer's machine and "Link into PATH" stays linked on anyone else's. The
+`autoLinkCli` mechanism and `desktop.json` are otherwise untouched.
+
+`tacho detect` reports connected apps alongside wrapped ones, found on disk
+rather than on PATH (a GUI bundle answers no `--version` and is on nobody's
+PATH), each with its tier and a line on what that tier records.
+
+### 13.5 The panel and the fleet
+
+The Wrapped agents panel becomes **AI apps on this machine**. Every row carries
+its tier and two lines — what it records and what it does not — and a connected
+row can never render as a wrapped one: it has no hooks, no version, no
+sessions, and its refused calls are reported as the mandate being enforced
+rather than as ill health. A collector that is down makes a connected row
+*down*, harder than for a wrapped agent, because the gateway lives inside the
+collector while a wrapped agent's hook still decides from the cached bundle.
+
+`apps/app` gains **Fleet** at `/{orgSlug}/{workspaceSlug}/fleet`, the app
+surface for `list_tacho_hosts`, which now returns a `tiers` map alongside
+`harnesses` and reaches the API, MCP, CLI (`oxagen tacho hosts`) and the app.

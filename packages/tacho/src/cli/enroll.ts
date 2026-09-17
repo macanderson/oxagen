@@ -4,6 +4,11 @@
  */
 import { existsSync } from "node:fs";
 import { verifyBundle } from "../host/bundle";
+import {
+  CLAUDE_DESKTOP_RESTART_NOTE,
+  claudeDesktopPresence,
+  mergeClaudeDesktopConfig,
+} from "../host/claude-desktop-writer";
 import { codexHookPresence, mergeCodexHooks } from "../host/codex-writer";
 import { ControlError } from "../host/control-client";
 import { loadOrCreateDeviceKey } from "../host/device-key";
@@ -372,6 +377,8 @@ export async function enroll(
       hook_command: deps.runtime.hookCommand,
       daemon_command: deps.runtime.daemonCommand,
       displaced_env: {},
+      displaced_mcp_servers: {},
+      mcp_stdio_command: deps.runtime.mcpStdioCommand,
       enrolled_at: now,
       expires_at: response.expiresAt,
       revoked_at: null,
@@ -485,6 +492,68 @@ export async function enroll(
         );
       } else {
         deps.out("      already present; nothing to change");
+      }
+    }
+    if (harnesses.includes("claude-desktop")) {
+      // The connected tier (ADR-078). No hooks: Claude Desktop has no hook
+      // surface, so what is written is one MCP server entry pointing at the
+      // collector's loopback gateway, and what Oxagen can govern is the
+      // toolbelt it serves through it.
+      const path = deps.paths.claudeDesktopConfig;
+      if (path === undefined) {
+        warnings.push(
+          "Claude Desktop is not written on this platform: Anthropic ships no build for it, so there is no config for Oxagen to write",
+        );
+        deps.out("      Claude Desktop: not available on this platform");
+      } else {
+        deps.out(`      Claude Desktop: ${path}`);
+        const merged = mergeClaudeDesktopConfig(
+          deps.readClaudeDesktopConfig(),
+          {
+            enrollmentId: host.host_enrollment_id,
+            port: host.port,
+            localToken: host.local_token,
+            shimCommand: deps.runtime.mcpStdioCommand[0] as string,
+            shimArgs: deps.runtime.mcpStdioCommand.slice(1, -1),
+            ...(deps.env["TACHO_HOME"] !== undefined
+              ? { tachoHome: deps.env["TACHO_HOME"] }
+              : {}),
+          },
+        );
+        if (merged.changed) {
+          deps.writeClaudeDesktopConfig(merged.config);
+          if (Object.keys(merged.displaced).length > 0) {
+            host = {
+              ...host,
+              displaced_mcp_servers: {
+                ...host.displaced_mcp_servers,
+                "claude-desktop": merged.displaced as Record<
+                  string,
+                  Record<string, unknown>
+                >,
+              },
+            };
+            writeHostFile(deps.paths.hostFile, host);
+            warnings.push(
+              "an MCP server already used the name `oxagen` in Claude Desktop; it was moved aside and unenroll restores it",
+            );
+          }
+          deps.out(`      ${CLAUDE_DESKTOP_RESTART_NOTE}`);
+        } else {
+          deps.out("      already present; nothing to change");
+        }
+        const presence = claudeDesktopPresence(
+          deps.readClaudeDesktopConfig(),
+          host.host_enrollment_id,
+        );
+        if (presence.otherServers > 0) {
+          // ADR-078 §3: the operator is entitled to the size of the gap. A
+          // tool served by another MCP server never reaches Oxagen, and no
+          // code here can change that.
+          deps.out(
+            `      ${presence.otherServers} other MCP server${presence.otherServers === 1 ? "" : "s"} in this app (${presence.otherServerNames.join(", ")}); Oxagen does not see what they serve`,
+          );
+        }
       }
     }
     if (options.managed === true) {

@@ -3,16 +3,98 @@
  * sidecar, as pure functions of UI state. Kept apart from the React tree so
  * the mapping is testable without a webview.
  */
-export type Harness = "claude-code" | "codex" | "stella";
+export type Harness = "claude-code" | "codex" | "stella" | "claude-desktop";
 
 export const HARNESS_LABEL: Record<Harness, string> = {
   "claude-code": "Claude Code",
   codex: "Codex",
   stella: "Stella",
+  "claude-desktop": "Claude Desktop",
 };
 
-/** Every harness the app knows how to wrap, in display order. */
-export const HARNESSES: Harness[] = ["claude-code", "codex", "stella"];
+/** Every app the machine can put under Oxagen, in display order. */
+export const HARNESSES: Harness[] = [
+  "claude-code",
+  "codex",
+  "stella",
+  "claude-desktop",
+];
+
+/**
+ * Which enforcement tier each app can reach (ADR-078). Mirrors
+ * `TACHO_HARNESS_TIERS` in `packages/tacho/src/wire.ts`; the desktop app
+ * reads files the CLIs write and shares no runtime code with them, so the
+ * list is written twice and `commands.test.ts` is where the two meet.
+ *
+ * `harness` is **wrapped**: a PreToolUse hook sees every action, including
+ * the agent's own commands and file edits, but runs in a process Oxagen does
+ * not own, so the record is what the agent reported.
+ *
+ * `gateway` is **connected**: no hook exists, so Oxagen sees only the calls
+ * routed through its MCP gateway — and refuses those on the server.
+ *
+ * Neither is the better one. A row that reads as "more governed" or "less
+ * governed" is wrong in both directions.
+ */
+export type Tier = "harness" | "gateway";
+
+export const HARNESS_TIER: Record<Harness, Tier> = {
+  "claude-code": "harness",
+  codex: "harness",
+  stella: "harness",
+  "claude-desktop": "gateway",
+};
+
+/** The word for each tier on screen. */
+export const TIER_LABEL: Record<Tier, string> = {
+  harness: "Wrapped",
+  gateway: "Connected",
+};
+
+/** What each tier records, in the app's own words. */
+export const TIER_RECORDS: Record<Tier, string> = {
+  harness:
+    "Every action this agent takes, including the commands it runs and the files it changes.",
+  gateway: "The Oxagen tools this app calls, and the ones it was refused.",
+};
+
+/** What each tier does not record. Never omitted: this is the honesty rule. */
+export const TIER_OMITS: Record<Tier, string> = {
+  harness:
+    "Oxagen does not run this agent, so the record is what the agent reported. Remove its hooks and it stops reporting.",
+  gateway:
+    "Not your prompts, not the model's replies, and nothing this app does through any other tool.",
+};
+
+/** Whether a harness is wrapped through a hook. */
+export function isWrapped(harness: Harness): boolean {
+  return HARNESS_TIER[harness] === "harness";
+}
+
+/**
+ * The subset of a selection that `tacho verify` can actually run.
+ *
+ * `verify` drives one headless turn and waits for the hook chain it seals, so
+ * it has nothing to do for a connected app — a GUI bundle with no headless
+ * mode and no hook — and returns `ok: false` saying exactly that. Handing it
+ * one anyway turned the wizard's "record a first run" step into a red
+ * "failed · claude-desktop is a connected app" for the whole flow, and on a
+ * machine where Claude Desktop is the only registered app that was the only
+ * line the operator ever saw: a failure report for something that cannot
+ * succeed and did not go wrong.
+ *
+ * A connected app is not dropped from the screen — it is registered and the
+ * operator should see it — only from the list of things a first run is
+ * attempted on. It reports the first time they use it.
+ */
+export function verifiable(harnesses: readonly Harness[]): Harness[] {
+  return harnesses.filter(isWrapped);
+}
+
+/** Whether a harness is connected through the local MCP gateway. */
+export function isConnected(harness: Harness): boolean {
+  return HARNESS_TIER[harness] === "gateway";
+}
 
 export interface HostTarget {
   org_slug: string;

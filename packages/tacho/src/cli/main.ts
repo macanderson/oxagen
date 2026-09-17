@@ -10,6 +10,7 @@ import { defaultCliDeps, isNativeBuild } from "./deps";
 import { detect } from "./detect";
 import { enroll, parseHarnesses } from "./enroll";
 import { exportCommand } from "./export";
+import { runMcpStdio } from "./mcp-stdio";
 import { reassign } from "./reassign";
 import { status } from "./status";
 import { unenroll } from "./unenroll";
@@ -24,6 +25,26 @@ export function buildTachoProgram(): Command {
       "Tacho: put this machine's agent sessions (Claude Code, Codex, Stella, custom agents) under Oxagen control",
     )
     .version(deps.wrapperVersion);
+
+  program
+    .command("mcp-stdio")
+    .description(
+      "Serve this machine's Oxagen toolbelt to a connected app over stdio (written into the app's MCP config by `tacho enroll`; not meant to be run by hand)",
+    )
+    .option(
+      "--enrollment <id>",
+      "The enrollment this config entry was written for",
+    )
+    .option("--port <n>", "The collector's loopback port", (v) => Number(v))
+    .action(async (options: { enrollment?: string; port?: number }) => {
+      process.exitCode = await runMcpStdio(options, {
+        stdin: process.stdin,
+        stdout: process.stdout,
+        stderr: process.stderr,
+        env: process.env,
+        fetch: globalThis.fetch,
+      });
+    });
 
   program
     .command("enroll")

@@ -8,6 +8,7 @@
  */
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { claudeDesktopConfigPath } from "./claude-desktop-writer";
 
 export interface TachoPaths {
   /** `~/.config/oxagen/tacho` unless `TACHO_HOME` overrides it. */
@@ -44,6 +45,12 @@ export interface TachoPaths {
   /** Stella's legacy user settings (`$STELLA_HOME/settings.json`). */
   stellaSettingsJson: string;
   /**
+   * Claude Desktop's MCP client config, or undefined on a platform Anthropic
+   * ships no build for — Linux, as of 2026-09-16. See
+   * `claude-desktop-writer.ts` for the paths and the date they were verified.
+   */
+  claudeDesktopConfig: string | undefined;
+  /**
    * The wrapper script the Windows scheduled task runs (sets the env, then
    * starts `tachod`). Unused on macOS and Linux, where the unit carries env.
    */
@@ -53,6 +60,7 @@ export interface TachoPaths {
 export function tachoPaths(
   env: Record<string, string | undefined> = process.env,
   home: string = homedir(),
+  platform: NodeJS.Platform = process.platform,
 ): TachoPaths {
   const root = env["TACHO_HOME"] ?? join(home, ".config", "oxagen", "tacho");
   const claudeConfigDir = env["CLAUDE_CONFIG_DIR"] ?? join(home, ".claude");
@@ -75,6 +83,7 @@ export function tachoPaths(
     stellaToml: join(stellaHome, "stella.toml"),
     stellaSettingsJson: join(stellaHome, "settings.json"),
     daemonLauncher: join(root, "tachod.cmd"),
+    claudeDesktopConfig: claudeDesktopConfigPath(platform, home, env),
   };
 }
 

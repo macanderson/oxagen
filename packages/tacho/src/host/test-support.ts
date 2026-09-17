@@ -71,7 +71,18 @@ export function unsignedBundle(
   };
 }
 
-export function scratchPaths(): TachoPaths {
+/**
+ * A path set rooted entirely in a fresh scratch directory.
+ *
+ * `platform` defaults to `"darwin"` rather than to `process.platform` because
+ * the whole job of this helper is a path set that does not depend on the host
+ * running the test. `tachoPaths` derives one field from the platform —
+ * `claudeDesktopConfig`, which is undefined where Claude Desktop has no build
+ * — and letting that one field read the real OS while every other field came
+ * from the scratch dir made tests pass on macOS and fail on Linux CI. A test
+ * that wants the no-build behaviour passes `"linux"` explicitly.
+ */
+export function scratchPaths(platform: NodeJS.Platform = "darwin"): TachoPaths {
   const root = mkdtempSync(join(tmpdir(), "tacho-"));
   return tachoPaths(
     {
@@ -81,6 +92,7 @@ export function scratchPaths(): TachoPaths {
       STELLA_HOME: join(root, "stella"),
     },
     root,
+    platform,
   );
 }
 
@@ -146,6 +158,7 @@ export function testHostFile(
     hook_command: "node /opt/tacho/tacho-hook.mjs",
     daemon_command: ["node", "/opt/tacho/tachod.mjs"],
     displaced_env: {},
+    displaced_mcp_servers: {},
     enrolled_at: "2026-09-10T00:00:00.000Z",
     expires_at: "2027-03-09T00:00:00.000Z",
     revoked_at: null,

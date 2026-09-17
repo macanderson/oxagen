@@ -11,7 +11,9 @@
  * idempotently for one that already went through.
  */
 import { existsSync, rmSync, unlinkSync } from "node:fs";
+import { stripClaudeDesktopConfig } from "../host/claude-desktop-writer";
 import { stripCodexHooks } from "../host/codex-writer";
+import type { McpServerEntry } from "../host/mcp-config-writer";
 import { type HostFile, readHostFile, writeHostFile } from "../host/host-file";
 import { stripTachoSettings } from "../host/settings-writer";
 import { stripStellaHooks } from "../host/stella-writer";
@@ -121,13 +123,20 @@ export async function revokeAndMark(
  * wrote to, without removing the hooks from it.
  */
 export function stripEnrollmentHooks(
-  host: Pick<HostFile, "host_enrollment_id" | "displaced_env"> | undefined,
+  host:
+    | Pick<
+        HostFile,
+        "host_enrollment_id" | "displaced_env" | "displaced_mcp_servers"
+      >
+    | undefined,
   deps: CliDeps,
 ): {
   settingsChanged: boolean;
   codexChanged: boolean;
   /** The Stella files Tacho's hooks were removed from. */
   stellaChanged: string[];
+  /** Claude Desktop's config, when our MCP server entry was removed from it. */
+  claudeDesktopChanged?: string;
 } {
   const stripped = stripTachoSettings(
     deps.readSettings(),
@@ -157,7 +166,34 @@ export function stripEnrollmentHooks(
       stellaChanged.push(file.path);
     }
   }
-  return { settingsChanged: stripped.changed, codexChanged, stellaChanged };
+  // The connected tier (ADR-078). Removes exactly the entry enroll wrote and
+  // puts back whatever it displaced; every other MCP server the user has is
+  // left alone, including one that took our key after we wrote ours.
+  let claudeDesktopChanged: string | undefined;
+  const desktopPath = deps.paths.claudeDesktopConfig;
+  if (desktopPath !== undefined) {
+    const current = deps.readClaudeDesktopConfig();
+    if (current !== undefined) {
+      const desktopStripped = stripClaudeDesktopConfig(
+        current,
+        host?.host_enrollment_id,
+        (host?.displaced_mcp_servers?.["claude-desktop"] ?? {}) as Record<
+          string,
+          McpServerEntry
+        >,
+      );
+      if (desktopStripped.changed) {
+        deps.writeClaudeDesktopConfig(desktopStripped.config);
+        claudeDesktopChanged = desktopPath;
+      }
+    }
+  }
+  return {
+    settingsChanged: stripped.changed,
+    codexChanged,
+    stellaChanged,
+    claudeDesktopChanged,
+  };
 }
 
 export async function unenroll(
@@ -179,6 +215,12 @@ export async function unenroll(
   }
   for (const path of stripped.stellaChanged) {
     deps.out(`      removed from ${path} too`);
+  }
+  if (stripped.claudeDesktopChanged !== undefined) {
+    deps.out(`      removed from ${stripped.claudeDesktopChanged} too`);
+    deps.out(
+      "      Quit Claude Desktop and open it again for the change to take effect",
+    );
   }
 
   deps.out(`[2/4] Stopping the ${deps.serviceManager.kind} service`);

@@ -10,6 +10,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:http";
@@ -31,6 +32,7 @@ import {
 } from "../host/test-support";
 import { Wal } from "../host/wal";
 import { minimalSession } from "../test-helpers";
+import { TACHO_TIER_SUMMARY } from "../wire";
 import type { EnrollmentResponse } from "../wire";
 import { CODEX_HOOK_EVENTS, codexHookPresence } from "../host/codex-writer";
 import {
@@ -194,29 +196,47 @@ function deps(overrides: Partial<CliDeps> = {}): CliDeps & {
     osVersion: "25.6.0",
     arch: "arm64",
     nodeVersion: "v26.5.0",
+    // Mirrors the real `deps()` in deps.ts: every file below carries
+    // TACHO_LOCAL_TOKEN, so all of them take writeSensitiveFileAtomic's 0600
+    // default. Passing 0o644 here would let the harness disagree with the thing
+    // it stands in for.
     readSettings: () => readJsonFileIfExists(paths.claudeSettings),
     writeSettings: (document) =>
       writeSensitiveFileAtomic(
         paths.claudeSettings,
         JSON.stringify(document, null, 2),
-        0o644,
       ),
     readCodexHooks: () => readJsonFileIfExists(paths.codexHooks),
     writeCodexHooks: (document) =>
       writeSensitiveFileAtomic(
         paths.codexHooks,
         JSON.stringify(document, null, 2),
-        0o644,
       ),
     readStellaHooks: (format) => readStellaHooksFile(paths, format),
     writeStellaHooks: (file) =>
-      writeSensitiveFileAtomic(file.path, file.text ?? "", 0o644),
+      writeSensitiveFileAtomic(file.path, file.text ?? ""),
     claude: () => ({ path: "/usr/local/bin/claude", version: "2.1.263" }),
     codex: () => ({ path: "/usr/local/bin/codex", version: "0.104.0" }),
     stella: () => ({ path: "/usr/local/bin/stella", version: "0.9.423" }),
+    claudeDesktop: () => ({
+      installed: true,
+      path: "/Applications/Claude.app",
+    }),
+    readClaudeDesktopConfig: () =>
+      paths.claudeDesktopConfig === undefined
+        ? undefined
+        : readJsonFileIfExists(paths.claudeDesktopConfig),
+    writeClaudeDesktopConfig: (document) => {
+      if (paths.claudeDesktopConfig === undefined) return;
+      writeSensitiveFileAtomic(
+        paths.claudeDesktopConfig,
+        JSON.stringify(document, null, 2),
+      );
+    },
     runtime: {
       hookCommand: "node /opt/tacho/tacho-hook.mjs",
       daemonCommand: ["node", "/opt/tacho/tachod.mjs"],
+      mcpStdioCommand: ["node", "/opt/tacho/tacho.mjs", "mcp-stdio"],
       binDir: "/opt/tacho",
     },
     daemonGet: async (path) => {
@@ -1365,9 +1385,18 @@ describe("export and verify", () => {
       ["claude-code", true, false],
       ["codex", true, false],
       ["stella", true, false],
+      // The connected tier (ADR-078): a GUI app, detected on disk rather
+      // than on PATH, and reported with its tier so no surface has to guess.
+      ["claude-desktop", true, false],
+    ]);
+    expect(fresh.harnesses.map((h) => h.tier)).toEqual([
+      "harness",
+      "harness",
+      "harness",
+      "gateway",
     ]);
     expect(d.lines.join("\n")).toContain(
-      "Claude Code  2.1.263 at /usr/local/bin/claude",
+      "Claude Code      2.1.263 at /usr/local/bin/claude",
     );
     const signer = bundleSigner();
     writeHostFile(
@@ -1396,6 +1425,13 @@ describe("export and verify", () => {
           path: "/usr/local/bin/stella",
           version: "0.9.423",
           enrolled: false,
+        },
+        {
+          harness: "claude-desktop",
+          label: "Claude Desktop",
+          installed: true,
+          enrolled: false,
+          tier: "gateway",
         },
       ],
     });
@@ -1492,6 +1528,34 @@ describe("export and verify", () => {
 });
 
 describe("defaultCliDeps", () => {
+  it("writes every TACHO_LOCAL_TOKEN-bearing config at 0600, not 0644", () => {
+    // All four of these embed the loopback bearer, which is what lets a process
+    // reach the daemon and, through the gateway, the enrolled host's Oxagen API
+    // key. At 0644 any other OS account on a shared machine could read it out.
+    // Asserted on the real deps, not on the harness above, because the harness
+    // is a copy and a copy is what drifted.
+    const home = mkdtempSync(join(tmpdir(), "tacho-mode-"));
+    const env = {
+      TACHO_HOME: join(home, "tacho"),
+      CODEX_HOME: join(home, "codex"),
+      STELLA_HOME: join(home, "stella"),
+    };
+    const d = defaultCliDeps({ env, home, platform: "darwin" });
+    d.writeSettings({ hooks: {} });
+    d.writeCodexHooks({ hooks: {} });
+    d.writeClaudeDesktopConfig({ mcpServers: {} });
+    const written = [
+      d.paths.claudeSettings,
+      d.paths.codexHooks,
+      d.paths.claudeDesktopConfig,
+    ];
+    for (const file of written) {
+      expect(file).toBeDefined();
+      expect(statSync(file as string).mode & 0o777).toBe(0o600);
+    }
+    rmSync(home, { recursive: true, force: true });
+  });
+
   it("binds the ports to a scratch home: settings and hooks files, harness lookups, the service manager and the local port", async () => {
     const home = mkdtempSync(join(tmpdir(), "tacho-home-"));
     const env = {
@@ -1511,7 +1575,11 @@ describe("defaultCliDeps", () => {
         return { status: 0, stdout: "tool 9.8.7\n", stderr: "" };
       },
     });
-    expect(d.paths).toEqual(tachoPaths(env, home));
+    // The platform has to travel here too. `tachoPaths` resolves the Claude
+    // Desktop config from it (there is none on Linux), so an expectation that
+    // omits it asserts the host OS's answer against a deps object built for
+    // another one -- the same disagreement `defaultCliDeps` itself had.
+    expect(d.paths).toEqual(tachoPaths(env, home, "linux"));
     expect(d.home).toBe(home);
     expect(d.platform).toBe("linux");
     expect(d.serviceManager.kind).toBe("systemd");
@@ -1686,6 +1754,8 @@ describe("stella", () => {
       path: "/usr/local/bin/stella",
       version: "0.9.423",
       enrolled: true,
+      tier: "harness",
+      tierSummary: TACHO_TIER_SUMMARY.harness,
     });
 
     await unenroll({ token: "tok" }, d);

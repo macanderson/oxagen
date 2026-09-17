@@ -11,9 +11,12 @@ import {
   type ServerResponse,
 } from "node:http";
 import { chmodSync, existsSync, unlinkSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import type { TachoHarness } from "../wire";
 import type { ExportFormat } from "./exporters";
 import type { HookReplay } from "./hook-handler";
+import { GUARD_MESSAGES, guardLoopbackRequest } from "./loopback-guard";
+import type { GatewayHttpResponse } from "./mcp-gateway";
 
 export interface HookEnvelope {
   payload: unknown;
@@ -38,6 +41,16 @@ export interface CollectorApi {
   status: () => Record<string, unknown>;
   sessions: () => Array<Record<string, unknown>>;
   exportSession: (key: string, format: ExportFormat) => string | undefined;
+  /**
+   * The local MCP gateway (ADR-078). Absent on a daemon built without one,
+   * in which case `/mcp` is a 404 like any other unknown route.
+   */
+  mcp?: (
+    body: unknown,
+    context: { sessionId: string; enrollmentId?: string },
+  ) => Promise<GatewayHttpResponse>;
+  /** Drop a gateway session's state when its connection closes. */
+  mcpClose?: (sessionId: string) => void;
 }
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
@@ -60,7 +73,24 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-function send(res: ServerResponse, status: number, body: unknown): void {
+function send(
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  headers: Record<string, string> = {},
+): void {
+  // `undefined` is a real answer, not a missing one. An MCP notification
+  // (`notifications/initialized`, which every client sends straight after the
+  // handshake) is acknowledged upstream with 202 and an empty body, which
+  // `readRpcBody` reports as `undefined` — and `JSON.stringify(undefined)` is
+  // `undefined`, not a string, so `Buffer.byteLength` threw and the outer catch
+  // turned a successful acknowledgement into a 500. A body-less response gets a
+  // body-less reply, with no Content-Type to describe a body that is not there.
+  if (body === undefined) {
+    res.writeHead(status, { "Content-Length": 0, ...headers });
+    res.end();
+    return;
+  }
   const text = typeof body === "string" ? body : JSON.stringify(body);
   res.writeHead(status, {
     "Content-Type":
@@ -68,6 +98,7 @@ function send(res: ServerResponse, status: number, body: unknown): void {
         ? "text/plain; charset=utf-8"
         : "application/json",
     "Content-Length": Buffer.byteLength(text),
+    ...headers,
   });
   res.end(text);
 }
@@ -84,13 +115,43 @@ function authorized(req: IncomingMessage, token: string): boolean {
   return diff === 0;
 }
 
+export interface RequestHandlerOptions {
+  /**
+   * The loopback port this handler answers on. Set for the TCP listener,
+   * which is reachable by anything on the machine including a page in the
+   * user's browser, and therefore gets the DNS-rebinding guard. Left unset
+   * for the Unix socket: it is mode 0600 and no browser can address it, so
+   * there is nothing for the guard to refuse and the `Host` header Node
+   * synthesises for a socket request would fail it.
+   */
+  guardPort?: number;
+}
+
 export function createRequestHandler(
   api: CollectorApi,
   log: (line: string) => void,
+  options: RequestHandlerOptions = {},
 ): (req: IncomingMessage, res: ServerResponse) => void {
   return (req, res) => {
     void (async () => {
       const url = new URL(req.url ?? "/", "http://tachod.local");
+      if (options.guardPort !== undefined) {
+        const verdict = guardLoopbackRequest(
+          {
+            host: req.headers.host,
+            origin: req.headers.origin as string | undefined,
+          },
+          options.guardPort,
+        );
+        if (!verdict.ok) {
+          const reason = verdict.reason ?? "host";
+          log(
+            `refused ${req.method ?? "?"} ${url.pathname}: ${reason} header (host=${String(req.headers.host)}, origin=${String(req.headers.origin)})`,
+          );
+          send(res, 403, { error: GUARD_MESSAGES[reason] });
+          return;
+        }
+      }
       if (!authorized(req, api.localToken)) {
         send(res, 401, { error: "local bearer required" });
         return;
@@ -121,6 +182,13 @@ export function createRequestHandler(
           else send(res, 200, text);
           return;
         }
+        if (req.method === "DELETE" && /^\/mcp(?:\/[^/]+)?$/.test(path)) {
+          const presented = req.headers["mcp-session-id"];
+          if (typeof presented === "string" && presented.length > 0)
+            api.mcpClose?.(presented);
+          send(res, 204, "");
+          return;
+        }
         if (req.method !== "POST") {
           send(res, 405, { error: "method not allowed" });
           return;
@@ -143,6 +211,31 @@ export function createRequestHandler(
         }
         if (path.startsWith("/hook/")) {
           send(res, 403, { error: "hook for another enrollment" });
+          return;
+        }
+        const mcpMatch = /^\/mcp(?:\/([^/]+))?$/.exec(path);
+        if (mcpMatch !== null) {
+          if (api.mcp === undefined) {
+            send(res, 404, { error: "no local MCP gateway on this daemon" });
+            return;
+          }
+          // A streamable-HTTP client is given a session id on `initialize`
+          // and echoes it from then on. The id scopes the evidence chain, so
+          // it is minted here rather than taken from the client: a client
+          // that chose its own could write into another app's chain.
+          const presented = req.headers["mcp-session-id"];
+          const sessionId =
+            typeof presented === "string" && presented.length > 0
+              ? presented
+              : `mcp_${randomBytes(12).toString("hex")}`;
+          const scoped = mcpMatch[1];
+          const answer = await api.mcp(parsed, {
+            sessionId,
+            ...(scoped === undefined ? {} : { enrollmentId: scoped }),
+          });
+          send(res, answer.status, answer.body, {
+            "Mcp-Session-Id": sessionId,
+          });
           return;
         }
         const otlp = /^\/v1\/(logs|metrics|traces)$/.exec(path);
@@ -182,14 +275,13 @@ export function createCollectorServer(
   api: CollectorApi,
   log: (line: string) => void = () => undefined,
 ): CollectorServer {
-  const handler = createRequestHandler(api, log);
   const servers: Server[] = [];
   return {
     listen: async (options) => {
       let port: number | undefined;
       if (options.socketPath !== undefined) {
         if (existsSync(options.socketPath)) unlinkSync(options.socketPath);
-        const unix = createServer(handler);
+        const unix = createServer(createRequestHandler(api, log));
         servers.push(unix);
         await new Promise<void>((resolve, reject) => {
           unix.once("error", reject);
@@ -201,7 +293,13 @@ export function createCollectorServer(
         chmodSync(options.socketPath, 0o600);
       }
       if (options.port !== undefined) {
-        const tcp = createServer(handler);
+        // The guard needs the port it will actually answer on. `listen(0)`
+        // picks one, so the handler reads it from the server after binding
+        // rather than from the requested option.
+        let boundPort = options.port;
+        const tcp = createServer((req, res) =>
+          createRequestHandler(api, log, { guardPort: boundPort })(req, res),
+        );
         servers.push(tcp);
         await new Promise<void>((resolve, reject) => {
           tcp.once("error", reject);
@@ -215,6 +313,7 @@ export function createCollectorServer(
           typeof address === "object" && address !== null
             ? address.port
             : options.port;
+        boundPort = port;
       }
       return { port };
     },

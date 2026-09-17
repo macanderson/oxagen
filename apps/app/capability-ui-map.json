@@ -1,9 +1,9 @@
 {
-  "$doc": "UI Capability Parity registry — the single source of truth binding every capability that is operable in the Next.js app (apps/app) to the concrete UI that invokes it. Law: a capability that declares the \"app\" layer in its contract MUST have a binding here whose `page` exists and renders without an error page; and any capability the app actually invokes MUST be declared + bound here. Enforced by `pnpm check:ui-parity` (tools/scripts/check_ui_parity.mjs). Do NOT hand-wave an entry — every binding must carry a runtime proof (screenshot committed under verifications/<session>/, or an e2e spec) captured against a working page.",
+  "$doc": "UI Capability Parity registry \u2014 the single source of truth binding every capability that is operable in the Next.js app (apps/app) to the concrete UI that invokes it. Law: a capability that declares the \"app\" layer in its contract MUST have a binding here whose `page` exists and renders without an error page; and any capability the app actually invokes MUST be declared + bound here. Enforced by `pnpm check:ui-parity` (tools/scripts/check_ui_parity.mjs). Do NOT hand-wave an entry \u2014 every binding must carry a runtime proof (screenshot committed under verifications/<session>/, or an e2e spec) captured against a working page.",
   "$binding_shape": {
     "route": "URL path pattern the human navigates to, e.g. /[orgSlug]/[workspaceSlug]/workbench/tools/mcp",
     "page": "repo-relative page.tsx (or route.ts) that renders/handles the surface",
-    "entry": "the concrete UI affordance that invokes the capability (form submit, button, toggle) — human-readable",
+    "entry": "the concrete UI affordance that invokes the capability (form submit, button, toggle) \u2014 human-readable",
     "testid": "optional data-testid on the entry-point element, for e2e assertion",
     "proof": "path to the runtime proof: verifications/<session>/<name>.png OR an apps/app/e2e/<slug>.spec.ts",
     "verifiedAt": "YYYY-MM-DD the proof was captured against a working page",
@@ -13,7 +13,7 @@
     "assign_agent_role": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/page.tsx",
-      "entry": "Agent Builder → Access step role picker; selection persists on Save draft/Publish (assignAgentRoleAction → assign_agent_role)",
+      "entry": "Agent Builder \u2192 Access step role picker; selection persists on Save draft/Publish (assignAgentRoleAction \u2192 assign_agent_role)",
       "testid": "agent-role-picker",
       "proof": "apps/app/e2e/agent-rbac-builder.spec.ts",
       "verifiedAt": "2026-07-21",
@@ -22,7 +22,7 @@
     "revoke_agent_role": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/page.tsx",
-      "entry": "Agent Builder → Access step: changing the role revokes the previously-held role after the new assign lands (assignAgentRoleAction → revoke_agent_role)",
+      "entry": "Agent Builder \u2192 Access step: changing the role revokes the previously-held role after the new assign lands (assignAgentRoleAction \u2192 revoke_agent_role)",
       "testid": "agent-role-picker",
       "proof": "apps/app/e2e/agent-rbac-builder.spec.ts",
       "verifiedAt": "2026-07-21",
@@ -31,7 +31,7 @@
     "list_agent_roles": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/agents",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/page.tsx",
-      "entry": "Agents list role badge per card (getAssignedAgentRoles → list_agent_roles); also seeds the builder's Access step current-role state",
+      "entry": "Agents list role badge per card (getAssignedAgentRoles \u2192 list_agent_roles); also seeds the builder's Access step current-role state",
       "testid": "agent-role-*",
       "proof": "apps/app/e2e/agent-rbac-builder.spec.ts",
       "verifiedAt": "2026-07-21",
@@ -40,7 +40,7 @@
     "get_agent_role": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/page.tsx",
-      "entry": "Agent Builder edit-mode load refreshes the assigned role's grant preview for the Review step's effective-scope panel (getAgentRolePreview → get_agent_role)",
+      "entry": "Agent Builder edit-mode load refreshes the assigned role's grant preview for the Review step's effective-scope panel (getAgentRolePreview \u2192 get_agent_role)",
       "testid": "effective-scope-panel",
       "proof": "apps/app/e2e/agent-rbac-builder.spec.ts",
       "verifiedAt": "2026-07-21",
@@ -58,7 +58,7 @@
     "install_integration": {
       "route": "/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]/page.tsx",
-      "entry": "ConnectorConfigForm \"Connect\" submit → POST /integrations",
+      "entry": "ConnectorConfigForm \"Connect\" submit \u2192 POST /integrations",
       "testid": null,
       "proof": "apps/app/e2e/connector-setup-wizard.spec.ts",
       "verifiedAt": "2026-07-10",
@@ -67,7 +67,7 @@
     "configure_integration": {
       "route": "/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]/page.tsx",
-      "entry": "ConnectorConfigForm \"Save changes\" submit (mode=\"configure\") → PATCH /integrations/:id/configure",
+      "entry": "ConnectorConfigForm \"Save changes\" submit (mode=\"configure\") \u2192 PATCH /integrations/:id/configure",
       "testid": null,
       "proof": "apps/app/e2e/connector-setup-wizard.spec.ts",
       "verifiedAt": "2026-07-10",
@@ -76,7 +76,7 @@
     "search_references": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/_shared/conversation-page.tsx",
-      "entry": "Composer @-mention picker (type '@' → pick a reference type → scoped search) and mention-chip hover hydration → POST /api/reference-search → invoke(\"search_references\")",
+      "entry": "Composer @-mention picker (type '@' \u2192 pick a reference type \u2192 scoped search) and mention-chip hover hydration \u2192 POST /api/reference-search \u2192 invoke(\"search_references\")",
       "testid": "mention-menu",
       "proof": "apps/app/e2e/chat-mentions.spec.ts",
       "verifiedAt": "2026-07-09",
@@ -85,7 +85,7 @@
     "install_skill": {
       "route": "/[orgSlug]/[workspaceSlug]/marketplace/agent-tools",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/agent-tools/page.tsx",
-      "entry": "\"Install\" on an agent_skill marketplace row → installPlugin",
+      "entry": "\"Install\" on an agent_skill marketplace row \u2192 installPlugin",
       "testid": null,
       "proof": null,
       "verifiedAt": null,
@@ -94,7 +94,7 @@
     "install_plugin": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/mcp",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/mcp/page.tsx",
-      "entry": "\"Install\" on a catalog search row (McpCatalogSearch → installPlugin); also marketplace agent-tools browse",
+      "entry": "\"Install\" on a catalog search row (McpCatalogSearch \u2192 installPlugin); also marketplace agent-tools browse",
       "testid": "mcp-catalog-install-*",
       "proof": "apps/app/e2e/mcp-servers-authenticate.spec.ts",
       "verifiedAt": "2026-07-08",
@@ -103,7 +103,7 @@
     "set_plugin_secret": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/mcp",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/mcp/page.tsx",
-      "entry": "\"Enter API key\" / \"Update API key\" on a secret-auth MCP server row (McpServerList → SecretDialog → setMcpServerSecret → invoke(\"set_plugin_secret\"))",
+      "entry": "\"Enter API key\" / \"Update API key\" on a secret-auth MCP server row (McpServerList \u2192 SecretDialog \u2192 setMcpServerSecret \u2192 invoke(\"set_plugin_secret\"))",
       "testid": "mcp-server-set-secret-*",
       "proof": "apps/app/e2e/mcp-servers-authenticate.spec.ts",
       "verifiedAt": "2026-07-11",
@@ -148,7 +148,7 @@
     "list_conversations": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/_shared/conversation-page.tsx",
-      "entry": "Conversation history nav — initial list, Load more, Archived expander",
+      "entry": "Conversation history nav \u2014 initial list, Load more, Archived expander",
       "testid": null,
       "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
       "verifiedAt": "2026-07-12",
@@ -157,7 +157,7 @@
     "rename_conversation": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-item.tsx",
-      "entry": "Row ⋯ menu → Rename → RenameDialog submit",
+      "entry": "Row \u22ef menu \u2192 Rename \u2192 RenameDialog submit",
       "testid": null,
       "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
       "verifiedAt": "2026-07-12",
@@ -166,7 +166,7 @@
     "archive_conversation": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-item.tsx",
-      "entry": "Row ⋯ menu → Archive/Unarchive",
+      "entry": "Row \u22ef menu \u2192 Archive/Unarchive",
       "testid": null,
       "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
       "verifiedAt": "2026-07-12",
@@ -175,7 +175,7 @@
     "delete_conversation": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-item.tsx",
-      "entry": "Row ⋯ menu → Delete → DeleteConfirmDialog",
+      "entry": "Row \u22ef menu \u2192 Delete \u2192 DeleteConfirmDialog",
       "testid": null,
       "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
       "verifiedAt": "2026-07-12",
@@ -184,7 +184,7 @@
     "purge_conversations": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/conversations/conversation-list.tsx",
-      "entry": "Archived section → \"Delete all\" → DeleteConfirmDialog",
+      "entry": "Archived section \u2192 \"Delete all\" \u2192 DeleteConfirmDialog",
       "testid": null,
       "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
       "verifiedAt": "2026-07-12",
@@ -193,7 +193,7 @@
     "list_notifications": {
       "route": "/[orgSlug]/[workspaceSlug]/* (shell)",
       "page": "apps/app/src/components/shell/notifications-bell.tsx",
-      "entry": "Bell icon → Sheet drawer loads feed",
+      "entry": "Bell icon \u2192 Sheet drawer loads feed",
       "testid": null,
       "proof": null,
       "verifiedAt": null,
@@ -229,7 +229,7 @@
     "get_model_settings": {
       "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/page.tsx",
-      "entry": "Agent Defaults → Models sub-tab: models-form.tsx reads server-fetched settings",
+      "entry": "Agent Defaults \u2192 Models sub-tab: models-form.tsx reads server-fetched settings",
       "testid": null,
       "proof": "apps/app/e2e/settings-consolidation.spec.ts",
       "verifiedAt": null,
@@ -238,7 +238,7 @@
     "update_model_settings": {
       "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/models-action.ts",
-      "entry": "Agent Defaults → Models sub-tab \"Save changes\" → updateWorkspaceModelsAction",
+      "entry": "Agent Defaults \u2192 Models sub-tab \"Save changes\" \u2192 updateWorkspaceModelsAction",
       "testid": null,
       "proof": "apps/app/e2e/settings-consolidation.spec.ts",
       "verifiedAt": null,
@@ -247,7 +247,7 @@
     "get_budget_policy": {
       "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/page.tsx",
-      "entry": "Agent Defaults → Budget sub-tab: budget-form.tsx reads server-fetched policy",
+      "entry": "Agent Defaults \u2192 Budget sub-tab: budget-form.tsx reads server-fetched policy",
       "testid": null,
       "proof": "apps/app/e2e/settings-consolidation.spec.ts",
       "verifiedAt": null,
@@ -256,7 +256,7 @@
     "update_budget_policy": {
       "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/budget-action.ts",
-      "entry": "Agent Defaults → Budget sub-tab \"Save changes\" → updateWorkspaceBudgetAction",
+      "entry": "Agent Defaults \u2192 Budget sub-tab \"Save changes\" \u2192 updateWorkspaceBudgetAction",
       "testid": null,
       "proof": "apps/app/e2e/settings-consolidation.spec.ts",
       "verifiedAt": null,
@@ -265,7 +265,7 @@
     "get_spend_budget": {
       "route": "/[orgSlug]/[workspaceSlug]/settings/spend-budgets",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/spend-budgets/page.tsx",
-      "entry": "Spend Budgets page load → getSpendBudgetsAction fetches both org + workspace ceiling status, rendered by SpendBudgetsPanel",
+      "entry": "Spend Budgets page load \u2192 getSpendBudgetsAction fetches both org + workspace ceiling status, rendered by SpendBudgetsPanel",
       "testid": "spend-budgets-panel",
       "proof": "apps/app/e2e/spend-budgets.spec.ts",
       "verifiedAt": null,
@@ -274,7 +274,7 @@
     "set_spend_budget": {
       "route": "/[orgSlug]/[workspaceSlug]/settings/spend-budgets",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/spend-budgets/scope-budget-card.tsx",
-      "entry": "Spend Budgets → per-scope card \"Set a ceiling\" / \"Edit ceiling\" form \"Save ceiling\" submit → setSpendBudgetAction",
+      "entry": "Spend Budgets \u2192 per-scope card \"Set a ceiling\" / \"Edit ceiling\" form \"Save ceiling\" submit \u2192 setSpendBudgetAction",
       "testid": "spend-budget-workspace-save",
       "proof": "apps/app/e2e/spend-budgets.spec.ts",
       "verifiedAt": null,
@@ -283,7 +283,7 @@
     "get_workspace_user_preferences": {
       "route": "/[orgSlug]/[workspaceSlug]/sessions",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/_shared/conversation-page.tsx",
-      "entry": "Sessions chat page load — seeds the agent picker's default-assistant star and the session model/budget defaults (userWorkspacePreferencesReadHandler → get_workspace_user_preferences)",
+      "entry": "Sessions chat page load \u2014 seeds the agent picker's default-assistant star and the session model/budget defaults (userWorkspacePreferencesReadHandler \u2192 get_workspace_user_preferences)",
       "testid": "agent-picker-default-star",
       "proof": "apps/app/e2e/chat-agent-picker.spec.ts",
       "verifiedAt": "2026-09-07",
@@ -292,7 +292,7 @@
     "update_workspace_user_preferences": {
       "route": "/[orgSlug]/[workspaceSlug]/sessions",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/_shared/agent-prefs-actions.ts",
-      "entry": "Agent picker → default-assistant star toggle (setDefaultAgentAction → update_workspace_user_preferences)",
+      "entry": "Agent picker \u2192 default-assistant star toggle (setDefaultAgentAction \u2192 update_workspace_user_preferences)",
       "testid": "agent-picker-default-star",
       "proof": "apps/app/e2e/chat-agent-picker.spec.ts",
       "verifiedAt": "2026-09-07",
@@ -301,7 +301,7 @@
     "update_user_budget": {
       "route": "/[orgSlug]/[workspaceSlug]/ask (chat composer)",
       "page": "apps/app/src/components/chat/budget-actions.ts",
-      "entry": "\"Save as default\" in BudgetControl popover → saveBudgetDefaultAction",
+      "entry": "\"Save as default\" in BudgetControl popover \u2192 saveBudgetDefaultAction",
       "testid": null,
       "proof": null,
       "verifiedAt": null,
@@ -310,7 +310,7 @@
     "remove_org_member": {
       "route": "/[orgSlug]/members",
       "page": "apps/app/src/app/[orgSlug]/members/page.tsx",
-      "entry": "MembersPanel → RemoveMemberDialog confirm → removeMemberAction",
+      "entry": "MembersPanel \u2192 RemoveMemberDialog confirm \u2192 removeMemberAction",
       "testid": null,
       "proof": null,
       "verifiedAt": null,
@@ -319,7 +319,7 @@
     "change_member_role": {
       "route": "/[orgSlug]/members",
       "page": "apps/app/src/app/[orgSlug]/members/page.tsx",
-      "entry": "MembersPanel → RoleSelector → changeMemberRoleAction",
+      "entry": "MembersPanel \u2192 RoleSelector \u2192 changeMemberRoleAction",
       "testid": null,
       "proof": null,
       "verifiedAt": null,
@@ -328,7 +328,7 @@
     "create_api_key": {
       "route": "/[orgSlug]/developer/tokens",
       "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
-      "entry": "TokensPanel → CreateKeyDialog form → createApiKeyAction",
+      "entry": "TokensPanel \u2192 CreateKeyDialog form \u2192 createApiKeyAction",
       "testid": null,
       "proof": "apps/app/e2e/developer-tokens.spec.ts",
       "verifiedAt": "2026-07-12",
@@ -337,7 +337,7 @@
     "revoke_api_key": {
       "route": "/[orgSlug]/developer/tokens",
       "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
-      "entry": "ActiveKeyRow Revoke/Confirm → revokeApiKeyAction",
+      "entry": "ActiveKeyRow Revoke/Confirm \u2192 revokeApiKeyAction",
       "testid": null,
       "proof": "apps/app/e2e/developer-tokens.spec.ts",
       "verifiedAt": "2026-07-12",
@@ -346,7 +346,7 @@
     "rotate_api_key": {
       "route": "/[orgSlug]/developer/tokens",
       "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
-      "entry": "ActiveKeyRow Rotate → rotateApiKeyAction",
+      "entry": "ActiveKeyRow Rotate \u2192 rotateApiKeyAction",
       "testid": null,
       "proof": "apps/app/e2e/developer-tokens.spec.ts",
       "verifiedAt": "2026-07-12",
@@ -355,7 +355,7 @@
     "list_connections": {
       "route": "/[orgSlug]/[workspaceSlug]/knowledge/sources",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/sources/connections-section.tsx",
-      "entry": "ConnectionsSection RSC invoke(connection.list) → KnowledgeConnectionsClient",
+      "entry": "ConnectionsSection RSC invoke(connection.list) \u2192 KnowledgeConnectionsClient",
       "testid": "connection-row-{publicId}",
       "proof": "apps/app/e2e/knowledge-connect-wizard.spec.ts",
       "verifiedAt": "2026-07-12",
@@ -382,7 +382,7 @@
     "get_citation_stats": {
       "route": "/[orgSlug]/[workspaceSlug]/knowledge/citations",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/citations/page.tsx",
-      "entry": "CitationsDashboardSection RSC invoke(get_citation_stats) → CitationsDashboard",
+      "entry": "CitationsDashboardSection RSC invoke(get_citation_stats) \u2192 CitationsDashboard",
       "testid": null,
       "proof": "apps/app/e2e/knowledge-citations.spec.ts",
       "verifiedAt": null,
@@ -391,7 +391,7 @@
     "get_agent_def": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/page.tsx",
-      "entry": "EditAgentPage RSC → getAgent() → AgentBuilder edit mode",
+      "entry": "EditAgentPage RSC \u2192 getAgent() \u2192 AgentBuilder edit mode",
       "testid": null,
       "proof": null,
       "verifiedAt": null,
@@ -400,7 +400,7 @@
     "write_memory": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/chat/message-footer.tsx",
-      "entry": "\"Save as Memory\" under assistant messages → saveAsMemoryAction",
+      "entry": "\"Save as Memory\" under assistant messages \u2192 saveAsMemoryAction",
       "testid": null,
       "proof": null,
       "verifiedAt": null,
@@ -409,7 +409,7 @@
     "dismiss_memory_promotion": {
       "route": "/[orgSlug]/[workspaceSlug]/knowledge/memory",
       "page": "apps/app/src/components/knowledge/memories/memory-promotion-queue.tsx",
-      "entry": "\"Dismiss\" on a promotion candidate (queue + inline suggested-to-promote panel) → dismissPromotionAction",
+      "entry": "\"Dismiss\" on a promotion candidate (queue + inline suggested-to-promote panel) \u2192 dismissPromotionAction",
       "testid": null,
       "proof": "apps/app/e2e/memories-management.spec.ts",
       "verifiedAt": null,
@@ -418,7 +418,7 @@
     "demote_memory": {
       "route": "/[orgSlug]/[workspaceSlug]/knowledge/memory",
       "page": "apps/app/src/components/knowledge/memories/memories-client.tsx",
-      "entry": "\"Demote\" in the memory detail sheet (RULE/FACT) → demoteMemoryAction",
+      "entry": "\"Demote\" in the memory detail sheet (RULE/FACT) \u2192 demoteMemoryAction",
       "testid": null,
       "proof": "apps/app/e2e/memories-management.spec.ts",
       "verifiedAt": null,
@@ -427,7 +427,7 @@
     "suggest_promotion_rationales": {
       "route": "/[orgSlug]/[workspaceSlug]/knowledge/memory",
       "page": "apps/app/src/components/knowledge/memories/rationale-picker.tsx",
-      "entry": "RationalePicker select, opened from any promote/demote flow → suggestRationalesAction",
+      "entry": "RationalePicker select, opened from any promote/demote flow \u2192 suggestRationalesAction",
       "testid": null,
       "proof": "apps/app/e2e/memories-management.spec.ts",
       "verifiedAt": null,
@@ -445,7 +445,7 @@
     "bind_agent_environment": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/environments-actions.ts",
-      "entry": "AgentEnvironmentsCard \"Bind\" / \"Make primary\" → bindAgentEnvironmentAction",
+      "entry": "AgentEnvironmentsCard \"Bind\" / \"Make primary\" \u2192 bindAgentEnvironmentAction",
       "testid": "agent-bind-submit",
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",
       "verifiedAt": "2026-07-08",
@@ -454,7 +454,7 @@
     "unbind_agent_environment": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/environments-actions.ts",
-      "entry": "AgentEnvironmentsCard \"Unbind\" per row → unbindAgentEnvironmentAction",
+      "entry": "AgentEnvironmentsCard \"Unbind\" per row \u2192 unbindAgentEnvironmentAction",
       "testid": "agent-binding-unbind-production",
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",
       "verifiedAt": "2026-07-08",
@@ -481,7 +481,7 @@
     "delete_secret_key": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/environments",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/environments/actions.ts",
-      "entry": "\"Delete\" per row in SecretsSection → deleteKeyAction",
+      "entry": "\"Delete\" per row in SecretsSection \u2192 deleteKeyAction",
       "testid": null,
       "proof": "apps/app/e2e/sandbox-templates.spec.ts",
       "verifiedAt": "2026-07-08",
@@ -526,7 +526,7 @@
     "set_auth_alerts": {
       "route": "/[orgSlug]/governance/policies",
       "page": "apps/app/src/app/[orgSlug]/governance/policies/page.tsx",
-      "entry": "MCP auth alerts panel \"Save\" submit → saveAuthAlertsAction → set_auth_alerts",
+      "entry": "MCP auth alerts panel \"Save\" submit \u2192 saveAuthAlertsAction \u2192 set_auth_alerts",
       "testid": "auth-alerts-save",
       "proof": "apps/app/e2e/governance.spec.ts",
       "verifiedAt": "2026-07-12",
@@ -535,7 +535,7 @@
     "query_audit_log": {
       "route": "/[orgSlug]/governance",
       "page": "apps/app/src/app/[orgSlug]/governance/page.tsx",
-      "entry": "Governance hub \"Recent denied invocations\" panel + Audit events tile (the only governance page that invokes query_audit_log — capabilities/policies invoke list_capability_registry/get_capability_registry/list_iam_roles/get_auth_alerts instead)",
+      "entry": "Governance hub \"Recent denied invocations\" panel + Audit events tile (the only governance page that invokes query_audit_log \u2014 capabilities/policies invoke list_capability_registry/get_capability_registry/list_iam_roles/get_auth_alerts instead)",
       "testid": "denied-feed",
       "proof": "apps/app/e2e/governance-hub.spec.ts",
       "verifiedAt": "2026-07-12",
@@ -553,7 +553,7 @@
     "get_action_usage": {
       "route": "/[orgSlug]/billing/governed-actions",
       "page": "apps/app/src/app/[orgSlug]/billing/governed-actions/page.tsx",
-      "entry": "Governed actions tab → 'This entitlement year' panel; page load invokes get_action_usage via loadActionUsage (data.ts). ?breakdown=1 requests the per-capability rows.",
+      "entry": "Governed actions tab \u2192 'This entitlement year' panel; page load invokes get_action_usage via loadActionUsage (data.ts). ?breakdown=1 requests the per-capability rows.",
       "testid": "model-tokens-zero-row",
       "proof": "apps/app/e2e/billing-governed-actions.spec.ts",
       "verifiedAt": "2026-09-11",
@@ -562,7 +562,7 @@
     "get_rate_card": {
       "route": "/[orgSlug]/billing/governed-actions",
       "page": "apps/app/src/app/[orgSlug]/billing/governed-actions/page.tsx",
-      "entry": "Governed actions tab → 'Rate card' panel (volume bands, per-tier allowances, retention price, the zero model-token row); page load invokes get_rate_card via loadRateCard (data.ts).",
+      "entry": "Governed actions tab \u2192 'Rate card' panel (volume bands, per-tier allowances, retention price, the zero model-token row); page load invokes get_rate_card via loadRateCard (data.ts).",
       "testid": "rate-card-model-tokens",
       "proof": "apps/app/e2e/billing-governed-actions.spec.ts",
       "verifiedAt": "2026-09-11",
@@ -571,7 +571,7 @@
     "preview_action_cost": {
       "route": "/[orgSlug]/billing/governed-actions",
       "page": "apps/app/src/app/[orgSlug]/billing/governed-actions/page.tsx",
-      "entry": "Governed actions tab → 'Estimate your cost' form; Calculate submits previewActionCostAction (actions.ts) → preview_action_cost and renders the assumptions with the quote.",
+      "entry": "Governed actions tab \u2192 'Estimate your cost' form; Calculate submits previewActionCostAction (actions.ts) \u2192 preview_action_cost and renders the assumptions with the quote.",
       "testid": "calc-submit",
       "proof": "apps/app/e2e/billing-governed-actions.spec.ts",
       "verifiedAt": "2026-09-11",
@@ -580,11 +580,20 @@
     "get_evidence_retention": {
       "route": "/[orgSlug]/billing/governed-actions",
       "page": "apps/app/src/app/[orgSlug]/billing/governed-actions/page.tsx",
-      "entry": "Governed actions tab → 'Evidence retention' panel (included window, opt-in state, per-GB-month price, retention charged); page load invokes get_evidence_retention via loadEvidenceRetention (data.ts).",
+      "entry": "Governed actions tab \u2192 'Evidence retention' panel (included window, opt-in state, per-GB-month price, retention charged); page load invokes get_evidence_retention via loadEvidenceRetention (data.ts).",
       "testid": "retention-opt-in-off",
       "proof": "apps/app/e2e/billing-governed-actions.spec.ts",
       "verifiedAt": "2026-09-11",
       "verifiedBy": "session-51ff1c81-governed-action-meter"
+    },
+    "list_tacho_hosts": {
+      "route": "/[orgSlug]/[workspaceSlug]/fleet",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/fleet/page.tsx",
+      "entry": "Fleet page: the server component calls listFleetAction on load, which invokes list_tacho_hosts and renders one row per machine with the enforcement tier of each app on it (ADR-078)",
+      "testid": "fleet-page",
+      "proof": "apps/app/e2e/fleet.spec.ts",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-cdf1766d-desktop-control-plane"
     }
   }
 }
