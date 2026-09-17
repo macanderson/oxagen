@@ -28,7 +28,8 @@ tenants:
 | 6 | pattern maps count only in row-selecting clauses | `MATCH (n:GraphNode {orgId: $orgId}) MERGE (audit {allowed: n.label IN $__scopeLabels}) RETURN n` |
 | 7 | a `MERGE` map counts only when nothing before it bound a graph variable | `MATCH (n) SET n.x = $where, n.orgId = $orgId` — a parameter named like a clause keyword moves the clause state |
 | 8 | clause keywords recognised only at clause boundaries; the scope guard gets a stricter projection than the tenancy guard | `MATCH (n) RETURN EXISTS { MATCH (m) WHERE m.x = 1 } AS ok, n.orgId = $orgId AS mine, n` |
-| 9 | clause state saved and restored across braces; every token boundary drawn with Cypher's Unicode identifier classes | — (this is where the guard stands) |
+| 9 | clause state saved and restored across braces; every token boundary drawn with Cypher's Unicode identifier classes | `MATCH (n) WHERE {orgId: $orgId} IS NOT NULL RETURN n` — an always-true predicate whose map KEY satisfied the anchor |
+| 10 | a brace is classified `pattern` / `subquery` / `map`, and nothing inside a map literal counts | — (this is where the guard stands) |
 
 Seven rounds, seven real holes, one shape: each version was a more precise
 lexical rule, and each time there was another expression form that satisfied it.
@@ -190,6 +191,43 @@ aimed at the demonstrated example (an accented letter) and the defect was about
 the grammar (a code point), so a third encoding of it survived the fix meant to
 close the class. It was found by auditing the fix rather than by review, which is
 the only reason it is closed in the same PR instead of being round ten.
+
+### Round 10, and the first round found by enumeration rather than by example
+
+Round 10 is a Claim-A failure like 9, and it is the first one where the response
+was to **enumerate the positions from the grammar** instead of closing the
+encoding that was reported.
+
+`keepFilteringPositions` keeps a `WHERE` clause whole. A map literal written
+inside one therefore handed the guard its key:
+
+```cypher
+MATCH (n) WHERE {orgId: $orgId} IS NOT NULL RETURN n
+```
+
+The predicate is a non-null test on a map that is always non-null, so it returns
+every tenant's nodes, and `orgId: $orgId` in a kept `WHERE` satisfied the anchor.
+Review demonstrated that one. Listing where `orgId` and `$orgId` can sit adjacent
+without constraining the matched variable found **eleven**, every one accepted:
+bare in a `WHERE`, parenthesised, as a function argument, inside a list literal,
+produced by a list comprehension, compared against a property, as a map
+PROJECTION (`n{…}`), inside a `CASE`, inside a subquery's own `WHERE`, as a map
+VALUE holding the whole comparison, and nested one level inside a genuine pattern
+map. The scope-marker guard had the identical hole.
+
+All eleven are one rule, and the rule is about what ENCLOSES the brace, which is
+why a regex could never have reached it: `{orgId: $orgId}` and
+`(n {orgId: $orgId})` differ in nothing else. Cypher gives a brace exactly three
+meanings — a pattern property map, a subquery (`CALL`, `EXISTS`, `COUNT`,
+`COLLECT`, and no others), and a map literal — so the scanner now classifies each
+`{` as one of the three on the bracket stack it already maintained, and nothing
+inside a map literal counts for either guard. The list of subquery introducers is
+closed because the grammar closes it; a fifth would be a language change rather
+than another hazard someone happened to find.
+
+This is what the ADR's recommendation looks like in practice, at the scale of one
+rule. Eleven encodings, ten of them never reported, closed in one round by asking
+the grammar what a brace can mean instead of asking the reviewer what they tried.
 
 ### What follows
 

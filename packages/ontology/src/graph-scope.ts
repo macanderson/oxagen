@@ -267,6 +267,14 @@ const CLAUSE_KEYWORDS = new Set([
 // `any(`, `coalesce(`, `count(` — whose braces are expression maps.
 const PATTERN_INTRODUCERS = new Set(["MATCH", "MERGE", "CREATE"]);
 
+// Words after which a `{` opens a CLAUSE SEQUENCE rather than a map. Cypher has
+// exactly four: the `CALL { … }` subquery clause and the three subquery
+// EXPRESSIONS. Enumerated from the grammar rather than from the last query a
+// reviewer wrote, which is the distinction ADR-087 turns on — this list is
+// closed because the grammar closes it, and a fifth entry would be a language
+// change rather than another hazard someone happened to find.
+const SUBQUERY_INTRODUCERS = new Set(["CALL", "EXISTS", "COUNT", "COLLECT"]);
+
 // Clauses whose pattern property maps constrain an EXISTING row set. `CREATE`
 // is a pattern introducer for bracket-classification purposes — a `(` after it
 // is a node pattern, not a call — but its map only stamps a node being made, so
@@ -410,6 +418,44 @@ function opensPattern(src: string, openIdx: number): boolean {
   return false;
 }
 
+/**
+ * True when the `{` at `openIdx` opens a SUBQUERY — a clause sequence — rather
+ * than a map literal.
+ *
+ * `CALL { … }`, `EXISTS { … }`, `COUNT { … }` and `COLLECT { … }` are the only
+ * four, and the word immediately before the brace is what says so. The one
+ * complication is the scoped-subquery form `CALL (n) { … }` (Neo4j 5.23), where
+ * the preceding character is `)`; the balanced walk back to that `(` and then to
+ * the word before it is what keeps a legitimately anchored scoped subquery from
+ * being read as a map literal and blanked.
+ */
+function opensSubquery(src: string, openIdx: number): boolean {
+  let k = openIdx - 1;
+  while (k >= 0 && /\s/.test(src[k]!)) k -= 1;
+  if (k < 0) return false;
+
+  if (src[k] === ")") {
+    let depth = 0;
+    while (k >= 0) {
+      if (src[k] === ")") depth += 1;
+      else if (src[k] === "(") {
+        depth -= 1;
+        if (depth === 0) break;
+      }
+      k -= 1;
+    }
+    if (k < 0) return false;
+    k -= 1;
+    while (k >= 0 && /\s/.test(src[k]!)) k -= 1;
+    if (k < 0) return false;
+  }
+
+  if (!ID_PART_CHAR.test(src[k]!)) return false;
+  let j = k;
+  while (j >= 0 && ID_PART_CHAR.test(src[j]!)) j -= 1;
+  return SUBQUERY_INTRODUCERS.has(src.slice(j + 1, k + 1).toUpperCase());
+}
+
 // ── Position policy ──────────────────────────────────────────────────────────
 //
 // Two guards consume these projections, and they ask DIFFERENT questions. That
@@ -505,9 +551,42 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
   // One entry per open `(` / `[`: true when THAT bracket opened a pattern. The
   // stack is what makes `{…}` classification exact — the innermost enclosing
   // bracket decides, so a map inside a call inside a pattern is still a call's.
-  const bracketIsPattern: boolean[] = [];
-  // One entry per open `{`: true when that brace opened inside a pattern.
-  const braceIsPattern: boolean[] = [];
+  const bracketFrames: Array<{ isPattern: boolean; braceDepth: number }> = [];
+  // One entry per open `{`: which of Cypher's THREE brace meanings it is.
+  //
+  //  - `"pattern"` — an inline pattern property map, `MATCH (n {orgId: $orgId})`.
+  //    A real anchor for the tenancy guard, and the only brace whose contents
+  //    constrain the variable the enclosing pattern binds.
+  //  - `"subquery"` — a clause sequence: `CALL { … }`, `EXISTS { … }`,
+  //    `COUNT { … }`, `COLLECT { … }`. Clause tracking applies INSIDE it, and
+  //    the clause in force outside is restored when it closes.
+  //  - `"map"` — a map literal or map projection. An expression VALUE, and
+  //    nothing inside it constrains anything.
+  //
+  // The third is the round-ten correction. A `WHERE` clause was kept whole, so
+  // a map literal written inside one handed the tenancy guard its key:
+  //
+  //     MATCH (n) WHERE {orgId: $orgId} IS NOT NULL RETURN n
+  //
+  // The predicate is a non-null map and is therefore always true; every tenant's
+  // nodes come back, and `orgId: $orgId` sitting in a kept `WHERE` satisfied the
+  // guard. `{orgId: $orgId}` and `(n {orgId: $orgId})` differ only in what
+  // ENCLOSES the brace, which is why this is decided on the bracket stack and
+  // not by the regex — the regex cannot see an enclosing context at all.
+  //
+  // Eleven encodings of it were found by enumerating the positions a map can
+  // occupy rather than by waiting for each to be demonstrated: bare in a WHERE,
+  // parenthesised, as a function argument, inside a list, produced by a list
+  // comprehension, compared against a property, as a map PROJECTION (`n{…}`),
+  // inside a CASE, inside a subquery's WHERE, as a map VALUE holding the whole
+  // comparison, and nested one level inside a genuine pattern map. All eleven
+  // are one rule: a brace that is not a pattern and not a subquery is a value,
+  // and a value constrains nothing.
+  const braceKinds: Array<"pattern" | "subquery" | "map"> = [];
+  // (How many `"map"` frames are open is tracked in `mapDepth` below: a map
+  // nested anywhere inside another map is still inside a value, so the DEPTH
+  // decides and not the innermost frame.)
+  //
   // One entry per open `{`: the clause state in force when that brace opened,
   // restored when it closes.
   //
@@ -533,15 +612,29 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
   // force after it. It fixes `CALL { … } RETURN …` the same way — the outer
   // clause reverts to `CALL` rather than inheriting the subquery's last clause.
   const braceClause: Array<{ clause: string; mergeMapFilters: boolean }> = [];
+  let mapDepth = 0;
   let clause = "";
   // True once a clause has introduced a graph variable, and the condition under
   // which a MERGE map counts as filtering (see below).
   let boundAGraphVariable = false;
   let mergeMapFilters = false;
 
-  const enclosingIsPattern = () =>
-    bracketIsPattern[bracketIsPattern.length - 1] === true;
-  const inPatternMap = () => braceIsPattern[braceIsPattern.length - 1] === true;
+  const enclosingBracket = () => bracketFrames[bracketFrames.length - 1];
+  // A `{` is a pattern property map only when the bracket that encloses it is a
+  // pattern AND no brace has been opened inside that bracket yet. The second
+  // half is what stops `MATCH (n {meta: {orgId: $orgId}})`: the node paren is
+  // still the nearest enclosing BRACKET at the inner brace, so bracket kind
+  // alone would read a map nested in a pattern map as another pattern map.
+  const opensPatternMap = () => {
+    const encl = enclosingBracket();
+    return (
+      encl !== undefined &&
+      encl.isPattern &&
+      encl.braceDepth === braceKinds.length
+    );
+  };
+  const inPatternMap = () => braceKinds[braceKinds.length - 1] === "pattern";
+  const inMapLiteral = () => mapDepth > 0;
   // A pattern property map filters only in a clause that SELECTS EXISTING ROWS.
   // The two conditions conjoin; pattern-map-ness does not override the clause.
   // `MATCH (n) CREATE (m {orgId: $orgId})` assigns the tenant to a node being
@@ -560,12 +653,18 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
   // This is conservative, not sound, and the seam does not claim otherwise:
   // `MERGE (a {orgId: $orgId}) MATCH (b) RETURN b` still passes, for the same
   // reason `MATCH (a {orgId: $orgId}) MATCH (b) RETURN b` does. See ADR-087.
+  //
+  // `inMapLiteral()` gates BOTH arms, and it is the outermost condition because
+  // it is the strongest: inside a map literal there is no position that
+  // constrains anything, whatever clause encloses it and whichever guard is
+  // asking.
   const keeping = () =>
-    clause === "WHERE" ||
-    (policy === "filtering" &&
-      inPatternMap() &&
-      (ROW_SELECTING_CLAUSES.has(clause) ||
-        (clause === "MERGE" && mergeMapFilters)));
+    !inMapLiteral() &&
+    (clause === "WHERE" ||
+      (policy === "filtering" &&
+        inPatternMap() &&
+        (ROW_SELECTING_CLAUSES.has(clause) ||
+          (clause === "MERGE" && mergeMapFilters))));
 
   let i = 0;
   while (i < src.length) {
@@ -599,21 +698,33 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
 
     if (ch === "(") {
       paren += 1;
-      bracketIsPattern.push(opensPattern(src, i));
+      bracketFrames.push({
+        isPattern: opensPattern(src, i),
+        braceDepth: braceKinds.length,
+      });
     } else if (ch === ")") {
       paren = Math.max(0, paren - 1);
-      bracketIsPattern.pop();
+      bracketFrames.pop();
     } else if (ch === "[") {
       bracket += 1;
-      bracketIsPattern.push(opensPattern(src, i));
+      bracketFrames.push({
+        isPattern: opensPattern(src, i),
+        braceDepth: braceKinds.length,
+      });
     } else if (ch === "]") {
       bracket = Math.max(0, bracket - 1);
-      bracketIsPattern.pop();
+      bracketFrames.pop();
     } else if (ch === "{") {
-      braceIsPattern.push(enclosingIsPattern());
+      const kind = opensPatternMap()
+        ? "pattern"
+        : opensSubquery(src, i)
+          ? "subquery"
+          : "map";
+      braceKinds.push(kind);
+      if (kind === "map") mapDepth += 1;
       braceClause.push({ clause, mergeMapFilters });
     } else if (ch === "}") {
-      braceIsPattern.pop();
+      if (braceKinds.pop() === "map") mapDepth = Math.max(0, mapDepth - 1);
       // Restore BEFORE the keeping() test below, so the `}` itself is judged by
       // the clause that encloses the expression, not by the subquery's last one.
       const saved = braceClause.pop();

@@ -631,6 +631,130 @@ describe("an inner clause does not govern the enclosing expression", () => {
   });
 });
 
+// ── A map literal is a value, not a filter ───────────────────────────────────
+//
+// A `WHERE` clause is kept whole, so a map literal written inside one handed the
+// tenancy guard its key. `MATCH (n) WHERE {orgId: $orgId} IS NOT NULL RETURN n`
+// is an always-true predicate over every tenant's nodes, and `orgId: $orgId`
+// sitting in a kept `WHERE` satisfied the guard.
+//
+// The cases below are an ENUMERATION of the positions a map can occupy, not the
+// one encoding review demonstrated. Review reported the first; the other ten
+// came from listing where `orgId` and `$orgId` can sit adjacent without
+// constraining the matched variable, and every one of them was accepted.
+describe("a map literal in a filtering position is not a tenant anchor", () => {
+  const labelScope: GraphScope = { labels: ["Doc"] };
+  const encodings: Array<[name: string, cypher: string]> = [
+    [
+      "bare in a WHERE (review's case)",
+      "MATCH (n) WHERE {orgId: $orgId} IS NOT NULL RETURN n",
+    ],
+    ["parenthesised", "MATCH (n) WHERE ({orgId: $orgId}) IS NOT NULL RETURN n"],
+    [
+      "as a function argument",
+      "MATCH (n) WHERE size(keys({orgId: $orgId})) > 0 RETURN n",
+    ],
+    [
+      "inside a list literal",
+      "MATCH (n) WHERE [{orgId: $orgId}] IS NOT NULL RETURN n",
+    ],
+    [
+      "produced by a list comprehension",
+      "MATCH (n) WHERE [x IN [1] | {orgId: $orgId}] IS NOT NULL RETURN n",
+    ],
+    [
+      "compared against a property",
+      "MATCH (n) WHERE n.meta = {orgId: $orgId} RETURN n",
+    ],
+    [
+      "as a map PROJECTION",
+      "MATCH (n) WHERE n{orgId: $orgId} IS NOT NULL RETURN n",
+    ],
+    [
+      "inside a CASE expression",
+      "MATCH (n) WHERE CASE WHEN true THEN {orgId: $orgId} ELSE null END IS NOT NULL RETURN n",
+    ],
+    [
+      "inside a subquery's own WHERE",
+      "MATCH (n) WHERE EXISTS { MATCH (m) WHERE {orgId: $orgId} IS NOT NULL } RETURN n",
+    ],
+    [
+      "holding the whole comparison as a VALUE",
+      "MATCH (n) WHERE {k: n.orgId = $orgId} IS NOT NULL RETURN n",
+    ],
+    [
+      "nested one level inside a genuine pattern map",
+      "MATCH (n {meta: {orgId: $orgId}}) RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of encodings) {
+    it(`is not an anchor: ${name}`, () => {
+      expect(keepFilteringPositions(cypher)).not.toContain("$orgId");
+    });
+  }
+
+  it("the scope marker has the identical hole, and it closes the same way", () => {
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (n) WHERE {allowed: n.label IN $${SCOPE_LABELS_PARAM}} IS NOT NULL RETURN n`,
+        labelScope,
+      ),
+    ).toThrow(GraphScopeError);
+  });
+
+  // The three brace meanings, each asserted on a query that must still pass.
+  // `{orgId: $orgId}` and `(n {orgId: $orgId})` differ only in what ENCLOSES the
+  // brace, so getting stricter about one must not refuse the other.
+  const stillAccepted: Array<[name: string, cypher: string]> = [
+    ["a node pattern property map", "MATCH (n {orgId: $orgId}) RETURN n"],
+    [
+      "a relationship pattern property map",
+      "MATCH (a)-[r {orgId: $orgId}]->(b) RETURN r",
+    ],
+    [
+      "a pattern map inside an EXISTS subquery",
+      "MATCH (n) WHERE EXISTS { MATCH (m {orgId: $orgId}) } RETURN n",
+    ],
+    [
+      "a property predicate in a WHERE",
+      "MATCH (n) WHERE n.orgId = $orgId RETURN n",
+    ],
+    [
+      "a property predicate parenthesised in a WHERE",
+      "MATCH (n) WHERE (n.orgId = $orgId) RETURN n",
+    ],
+    [
+      "a property predicate inside a CALL subquery",
+      "CALL { MATCH (n) WHERE n.orgId = $orgId RETURN n } RETURN n",
+    ],
+    [
+      "a property predicate inside a SCOPED CALL subquery",
+      "MATCH (n) CALL (n) { MATCH (m) WHERE m.orgId = $orgId RETURN m } RETURN m",
+    ],
+    [
+      "a property predicate beside an EXISTS subquery",
+      "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.x = 1 } AND n.orgId = $orgId RETURN n",
+    ],
+  ];
+  for (const [name, cypher] of stillAccepted) {
+    it(`still anchors: ${name}`, () => {
+      expect(keepFilteringPositions(cypher)).toContain("$orgId");
+    });
+  }
+
+  it("a COUNT subquery is a subquery brace, not a map", () => {
+    // Discriminates the "subquery" classification from "map": if COUNT were
+    // read as a map literal its whole body would be blanked, including a real
+    // inner WHERE.
+    expect(
+      keepFilteringPositions(
+        "MATCH (n) WHERE COUNT { MATCH (m) WHERE m.orgId = $orgId } > 0 RETURN n",
+      ),
+    ).toContain("$orgId");
+  });
+});
+
 // ── Unicode identifier delimiting ────────────────────────────────────────────
 //
 // Cypher spells an unescaped symbolic name with Unicode rules (openCypher:

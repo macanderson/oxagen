@@ -401,6 +401,78 @@ describe("tenancy guard — the anchor's token boundaries are Cypher's", () => {
   }
 });
 
+// ── A map literal is a value, not a filter ──────────────────────────────────
+//
+// `keepFilteringPositions` keeps a `WHERE` clause whole, so a map literal
+// written inside one handed this guard its key. The predicate below is an
+// always-true non-null test and returns every tenant's nodes.
+//
+// Review reported the first of these. The rest came from enumerating the
+// positions a map can occupy, and every one was accepted — which is why the
+// enumeration is in the suite rather than the single reported case.
+describe("tenancy guard — a map literal is not a tenant anchor", () => {
+  const encodings: Array<[name: string, cypher: string]> = [
+    [
+      "bare in a WHERE (review's case)",
+      "MATCH (n) WHERE {orgId: $orgId} IS NOT NULL RETURN n",
+    ],
+    [
+      "as a function argument",
+      "MATCH (n) WHERE size(keys({orgId: $orgId})) > 0 RETURN n",
+    ],
+    [
+      "as a map PROJECTION",
+      "MATCH (n) WHERE n{orgId: $orgId} IS NOT NULL RETURN n",
+    ],
+    [
+      "holding the whole comparison as a VALUE",
+      "MATCH (n) WHERE {k: n.orgId = $orgId} IS NOT NULL RETURN n",
+    ],
+    [
+      "nested one level inside a genuine pattern map",
+      "MATCH (n {meta: {orgId: $orgId}}) RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of encodings) {
+    it(`rejects: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(false);
+    });
+    it(`is discriminating: the pre-round-ten projection kept it: ${name}`, () => {
+      // The guard REGEX is unchanged by this round — what changed is the
+      // projection it runs over. So the discriminating assertion is that the
+      // shipped regex matches the raw text, i.e. only the position rule refuses
+      // it now.
+      expect(/orgId\s*[:=]\s*\$orgId/.test(cypher)).toBe(true);
+    });
+  }
+
+  const stillAccepted: Array<[name: string, cypher: string]> = [
+    ["a node pattern property map", "MATCH (n {orgId: $orgId}) RETURN n"],
+    [
+      "a relationship pattern property map",
+      "MATCH (a)-[r {orgId: $orgId}]->(b) RETURN r",
+    ],
+    [
+      "a property predicate in a WHERE",
+      "MATCH (n) WHERE n.orgId = $orgId RETURN n",
+    ],
+    [
+      "a pattern map inside an EXISTS subquery",
+      "MATCH (n) WHERE EXISTS { MATCH (m {orgId: $orgId}) } RETURN n",
+    ],
+    [
+      "a property predicate inside a SCOPED CALL subquery",
+      "MATCH (n) CALL (n) { MATCH (m) WHERE m.orgId = $orgId RETURN m } RETURN m",
+    ],
+  ];
+  for (const [name, cypher] of stillAccepted) {
+    it(`still accepts: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(true);
+    });
+  }
+});
+
 // ── An inner clause does not govern the enclosing expression ─────────────────
 //
 // A brace can carry a whole clause sequence without opening a paren or a
