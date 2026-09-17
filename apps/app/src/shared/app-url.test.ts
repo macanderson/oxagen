@@ -3,7 +3,7 @@
 // override in production must not read as localhost, which is the shape of the
 // defect this module closes (#3091).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getAppBaseUrl, getMetadataBase } from "./app-url";
+import { getMetadataBase } from "./app-url";
 
 const ENV = { ...process.env };
 
@@ -15,29 +15,32 @@ afterEach(() => {
   process.env = { ...ENV };
 });
 
-describe("getAppBaseUrl", () => {
+/** The origin `getMetadataBase` resolved, without the URL normaliser's trailing slash. */
+const origin = (): string => getMetadataBase().href.replace(/\/$/, "");
+
+describe("the origin getMetadataBase resolves", () => {
   it("takes an explicit override over the environment default", () => {
     process.env.NEXT_PUBLIC_APP_URL = "https://app.staging.oxagen.sh";
-    expect(getAppBaseUrl()).toBe("https://app.staging.oxagen.sh");
+    expect(origin()).toBe("https://app.staging.oxagen.sh");
   });
 
   it("strips trailing slashes from the override", () => {
     process.env.NEXT_PUBLIC_APP_URL = "https://app.oxagen.sh///";
-    expect(getAppBaseUrl()).toBe("https://app.oxagen.sh");
+    expect(origin()).toBe("https://app.oxagen.sh");
   });
 
   it("ignores an override that is blank or whitespace (negative)", () => {
     process.env.NEXT_PUBLIC_APP_URL = "   ";
-    expect(getAppBaseUrl()).toBe("https://app.oxagen.sh");
+    expect(origin()).toBe("https://app.oxagen.sh");
   });
 
   it("falls back to the production origin, not localhost, when nothing is set", () => {
-    expect(getAppBaseUrl()).toBe("https://app.oxagen.sh");
+    expect(origin()).toBe("https://app.oxagen.sh");
   });
 
   it("falls back to the dev server only under NODE_ENV=development", () => {
     vi.stubEnv("NODE_ENV", "development");
-    expect(getAppBaseUrl()).toBe("http://localhost:3000");
+    expect(origin()).toBe("http://localhost:3000");
   });
 });
 

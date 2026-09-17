@@ -12,14 +12,16 @@ const PROD_APP_URL = "https://app.oxagen.sh";
 const DEV_APP_URL = "http://localhost:3000";
 
 /**
- * The app origin, with any trailing slash stripped.
+ * The app origin, with any trailing slash stripped. Internal: `getMetadataBase`
+ * is the one thing that needs it, and an exported second spelling of the origin
+ * is a second place for it to drift.
  *
  * Resolution order:
  *   1. `NEXT_PUBLIC_APP_URL` — an explicit override wins in any environment.
  *   2. `NODE_ENV === "development"` → the local dev server on :3000.
  *   3. otherwise (production, preview, test) → `https://app.oxagen.sh`.
  */
-export function getAppBaseUrl(): string {
+function appBaseUrl(): string {
   const override = process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (override !== undefined && override !== "")
     return override.replace(/\/+$/, "");
@@ -35,7 +37,7 @@ export function getAppBaseUrl(): string {
  */
 export function getMetadataBase(): URL {
   try {
-    return new URL(getAppBaseUrl());
+    return new URL(appBaseUrl());
   } catch {
     return new URL(
       process.env.NODE_ENV === "development" ? DEV_APP_URL : PROD_APP_URL,

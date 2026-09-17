@@ -29,12 +29,16 @@ describe("root layout metadata", () => {
   it("resolves the social image against NEXT_PUBLIC_APP_URL, not localhost", async () => {
     process.env.NEXT_PUBLIC_APP_URL = "https://app.oxagen.sh";
     const { metadataBase, openGraph, twitter } = await generateMetadata();
+    const social = "/social/og-image-dark-1200x630.png";
     expect(String(metadataBase)).toBe("https://app.oxagen.sh/");
-    const [image] = openGraph?.images as [{ url: string }];
-    expect(new URL(image.url, String(metadataBase)).href).toBe(
-      "https://app.oxagen.sh/social/og-image-dark-1200x630.png",
+    // The card declares the path relative; the base is what makes it absolute,
+    // so both halves are asserted — a base with nothing to resolve, or a card
+    // with no base, each fails one of them.
+    expect(JSON.stringify(openGraph?.images)).toContain(social);
+    expect(twitter?.images).toEqual([social]);
+    expect(new URL(social, String(metadataBase)).href).toBe(
+      `https://app.oxagen.sh${social}`,
     );
-    expect(twitter?.images).toEqual(["/social/og-image-dark-1200x630.png"]);
   });
 
   it("does not advertise localhost when the origin is unset (negative)", async () => {
