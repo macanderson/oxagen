@@ -186,7 +186,30 @@ export function decideLedgerAction(facts: {
   hasOtherTables: boolean;
   ledgerComment: string;
   appliedCount: number;
-}): { action: "bootstrap" | "proceed" | "refuse"; reason: string } {
+}): {
+  action: "bootstrap" | "proceed" | "refuse";
+  reason: string;
+  /**
+   * An origin to write onto an ALREADY-EXISTING ledger before anything
+   * fallible runs, or null.
+   *
+   * A ledger this call creates is stamped by the CREATE itself. A ledger that
+   * predates the stamp is not, because `CREATE TABLE IF NOT EXISTS` never
+   * rewrites a comment — the same property that stops an origin being revised
+   * by a run that can no longer observe what it describes. That is right for a
+   * ledger that HAS an origin and wrong for one that never got one: the origin
+   * stays unwritten, and a crash inside schema.sql then converts a database we
+   * can decide today into one we must refuse tomorrow (#3192 r4036387110).
+   *
+   * So a legacy ledger is backfilled at the one moment its origin is still
+   * knowable. It is only knowable in one state — empty, with nothing else in
+   * the database, so nothing has ever succeeded and "fresh" is the only
+   * history that fits. A populated legacy ledger is deliberately NOT stamped:
+   * its origin is unknowable and also irrelevant, since rows keep it decidable
+   * for ever, and inventing an origin is worse than having none.
+   */
+  backfillOrigin: string | null;
+} {
   const { hasLedgerTable, hasOtherTables, ledgerComment, appliedCount } = facts;
 
   // This call is about to create the ledger, so right now — and only right
@@ -194,9 +217,14 @@ export function decideLedgerAction(facts: {
   // deployment that reached that state through prior successful migrate()
   // runs under replay-everything semantics; nothing at all is a new database.
   if (!hasLedgerTable) {
+    // The CREATE below stamps this one, so nothing to backfill.
     return hasOtherTables
-      ? { action: "bootstrap", reason: "tables present, no ledger yet" }
-      : { action: "proceed", reason: "empty database" };
+      ? {
+          action: "bootstrap",
+          reason: "tables present, no ledger yet",
+          backfillOrigin: null,
+        }
+      : { action: "proceed", reason: "empty database", backfillOrigin: null };
   }
 
   // The ledger exists and remembers what it was born from.
@@ -205,13 +233,21 @@ export function decideLedgerAction(facts: {
     // already applied, so the first run simply died before recording it. This
     // is the case that would otherwise replay 0021's DROP.
     return appliedCount === 0
-      ? { action: "bootstrap", reason: "pre-ledger origin, backlog unrecorded" }
-      : { action: "proceed", reason: "pre-ledger origin, backlog recorded" };
+      ? {
+          action: "bootstrap",
+          reason: "pre-ledger origin, backlog unrecorded",
+          backfillOrigin: null,
+        }
+      : {
+          action: "proceed",
+          reason: "pre-ledger origin, backlog recorded",
+          backfillOrigin: null,
+        };
   }
   if (ledgerComment === LEDGER_ORIGIN_FRESH) {
     // Born empty, so there is no backlog to record and never was. Whatever the
     // ledger lists is what has run.
-    return { action: "proceed", reason: "fresh origin" };
+    return { action: "proceed", reason: "fresh origin", backfillOrigin: null };
   }
 
   // No origin: a ledger created by a version of this file that did not write
@@ -220,7 +256,11 @@ export function decideLedgerAction(facts: {
     // It has applied things, so it is in use and its rows are the truth. A
     // bootstrap here would be recording a backlog that this ledger has already
     // accounted for.
-    return { action: "proceed", reason: "pre-comment ledger, in use" };
+    return {
+      action: "proceed",
+      reason: "pre-comment ledger, in use",
+      backfillOrigin: null,
+    };
   }
   if (hasOtherTables) {
     // The one genuinely undecidable state, and the only one that can still
@@ -228,17 +268,26 @@ export function decideLedgerAction(facts: {
     return {
       action: "refuse",
       reason: "pre-comment ledger, empty, tables present",
+      backfillOrigin: null,
     };
   }
   // A pre-comment ledger, empty, in a database with nothing else in it. Both
   // histories agree here: nothing has ever succeeded, so everything must run.
-  return { action: "proceed", reason: "pre-comment ledger, empty database" };
+  // Knowable exactly here, and only here. Stamp it now so a crash inside
+  // schema.sql cannot turn this decidable database into a refusing one.
+  return {
+    action: "proceed",
+    reason: "pre-comment ledger, empty database",
+    backfillOrigin: LEDGER_ORIGIN_FRESH,
+  };
 }
 
 /** The operator-facing text for a `refuse`. */
 export function ambiguousLedgerMessage(
   database = "the target database",
 ): string {
+  const stamp = (origin: string) =>
+    `ALTER TABLE ${LEDGER_TABLE} MODIFY COMMENT '${origin}';`;
   return [
     `ClickHouse migrations stopped: ${LEDGER_TABLE} in ${database} carries no origin and has no rows.`,
     "",
@@ -266,18 +315,30 @@ export function ambiguousLedgerMessage(
     "                 'memory_changes','schema_conformance_events',",
     "                 'stella_operational_events');",
     "",
-    `  none of them  -> case (a). Drop the empty ledger and re-run:`,
-    `                   DROP TABLE ${LEDGER_TABLE};`,
-    `  all of them   -> case (b). Stamp the origin and re-run:`,
-    `                   ALTER TABLE ${LEDGER_TABLE}`,
-    `                     MODIFY COMMENT '${LEDGER_ORIGIN_PRE_LEDGER}';`,
+    "Then STAMP THE ORIGIN and re-run. Do not drop the ledger: the partially",
+    "created schema.sql tables stay behind, so the next run would see tables",
+    "with no ledger, read that as a pre-ledger deployment, and record the",
+    "backlog without running it — which is case (a)'s data loss, reached by",
+    "the instructions meant to escape it.",
     "",
-    "  a partial set -> schema.sql died midway. Prefer case (b)'s stamp: it",
-    "                   records the backlog without running it, and the files",
-    "                   after the cutover still execute normally.",
+    "  none of them  -> case (a). Nothing has run, so run everything:",
+    `                   ${stamp(LEDGER_ORIGIN_FRESH)}`,
     "",
-    "A ledger created from this version on records its own origin, so this",
-    "cannot happen again to a database that has not already reached this state.",
+    "  all of them   -> case (b). The backlog is applied; record, do not run:",
+    `                   ${stamp(LEDGER_ORIGIN_PRE_LEDGER)}`,
+    "",
+    "  a partial set -> stamp FRESH, as in (a). Every migration file is",
+    "                   individually idempotent, so re-running them is safe",
+    "                   except that 0021 drops and recreates",
+    "                   schema_conformance_events, costing at most its 90-day",
+    "                   window of best-effort telemetry. Stamping pre-ledger",
+    "                   instead would silently leave the missing tables absent",
+    "                   for good, and a recoverable loss beats a permanent one.",
+    "",
+    "A ledger created from this version on records its own origin, and a legacy",
+    "ledger is stamped automatically while its origin is still knowable, so",
+    "this cannot happen again to a database that has not already reached this",
+    "state.",
   ].join("\n");
 }
 
@@ -420,6 +481,30 @@ async function migrateOnce(): Promise<void> {
     ledgerComment: snapshot.ledgerComment,
     appliedCount: applied.size,
   });
+
+  if (decision.backfillOrigin !== null) {
+    // Before schema.sql, because the whole point is that a failure there must
+    // not find this ledger still originless.
+    //
+    // A failure to write the comment is warned about and not rethrown. The
+    // stamp narrows a FUTURE ambiguity; this run's decision is already made
+    // and correct without it. Failing the migration because a comment could
+    // not be written would turn a working deployment into a broken one to
+    // prevent a state that deployment is not in.
+    try {
+      await ch.command({
+        query: `ALTER TABLE ${LEDGER_TABLE} MODIFY COMMENT '${decision.backfillOrigin}'`,
+      });
+    } catch (err) {
+      process.stderr.write(
+        JSON.stringify({
+          level: "warn",
+          msg: `could not stamp the origin on a pre-existing ${LEDGER_TABLE}; migrations continue, but a failure during this run may leave this database undecidable (see AmbiguousLedgerOriginError)`,
+          err: err instanceof Error ? err.message : String(err),
+        }) + "\n",
+      );
+    }
+  }
 
   if (decision.action === "refuse") {
     // Both readings of this state lose something — tables in one direction,

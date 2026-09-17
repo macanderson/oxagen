@@ -689,6 +689,64 @@ describe("migrate() — applied-migrations ledger (#2632)", () => {
     expect(recordedFilenames()).toEqual(["0001_a.sql", "0002_b.sql"]);
   });
 
+  it("writes the origin onto a legacy ledger BEFORE schema.sql can fail (#3192 r4036387110)", async () => {
+    // Without this, CREATE TABLE IF NOT EXISTS leaves the legacy comment blank
+    // — the same property that protects a recorded origin — so the ledger never
+    // acquires one, and the next crash inside schema.sql turns a database we
+    // can decide today into one we must refuse tomorrow.
+    readdirSyncMock.mockReturnValue(["0001_a.sql"]);
+    chQueryMock.mockImplementation(async (opts: { query: string }) => {
+      if (opts.query.includes("system.tables"))
+        return jsonResult([{ ledger: "1", c: "0", ledger_comment: "" }]);
+      return jsonResult([]);
+    });
+
+    await migrate();
+
+    const queries = chCommandMock.mock.calls.map(
+      (c) => (c[0] as { query: string }).query,
+    );
+    const stampAt = queries.findIndex((q) =>
+      q.includes(`MODIFY COMMENT '${ORIGIN_FRESH}'`),
+    );
+    // schema.sql's OWN statement, not the ledger CREATE that precedes it — a
+    // looser matcher here finds `CREATE TABLE IF NOT EXISTS _migrations` at
+    // index 0 and the assertion passes or fails for the wrong reason.
+    const schemaAt = queries.findIndex((q) => q.includes("EXISTS t ("));
+    expect(stampAt).toBeGreaterThanOrEqual(0);
+    // Ordering is the whole point: a stamp written after schema.sql would not
+    // survive the failure it exists to protect against.
+    expect(stampAt).toBeLessThan(schemaAt);
+  });
+
+  it("continues when the origin stamp cannot be written", async () => {
+    // The stamp narrows a FUTURE ambiguity; this run is already decided
+    // correctly without it. Failing the migration over a comment would turn a
+    // working deployment into a broken one.
+    readdirSyncMock.mockReturnValue(["0001_a.sql"]);
+    readFileSyncMock.mockImplementation((p: unknown) =>
+      String(p).endsWith("0001_a.sql")
+        ? "ALTER TABLE t ADD COLUMN a String;"
+        : SCHEMA_SQL,
+    );
+    chQueryMock.mockImplementation(async (opts: { query: string }) => {
+      if (opts.query.includes("system.tables"))
+        return jsonResult([{ ledger: "1", c: "0", ledger_comment: "" }]);
+      return jsonResult([]);
+    });
+    chCommandMock.mockImplementation(async (opts: { query: string }) => {
+      if (opts.query.includes("MODIFY COMMENT"))
+        throw new Error("MODIFY COMMENT unsupported");
+    });
+
+    await expect(migrate()).resolves.toBeUndefined();
+
+    const queries = chCommandMock.mock.calls.map(
+      (c) => (c[0] as { query: string }).query,
+    );
+    expect(queries.some((q) => q.includes("ADD COLUMN a"))).toBe(true);
+  });
+
   it("refuses rather than guess when a pre-comment ledger is empty and tables exist", async () => {
     // The one undecidable state, and the only one that can still occur: a
     // ledger created before the origin stamp, holding nothing, in a database
@@ -961,6 +1019,72 @@ describe("decideLedgerAction", () => {
           appliedCount: 0,
         }).action,
       ).toBe("proceed");
+    });
+  });
+
+  describe("transitions into the design, not only its resting states", () => {
+    // #3192 r4036387110 and r4036387103. The design is safe once every ledger
+    // carries an origin. Getting there is its own state machine, taken once per
+    // database, by someone who cannot retry it cleanly.
+
+    it("stamps a legacy ledger while its origin is still knowable", () => {
+      // Empty, commentless, nothing else in the database: nothing has ever
+      // succeeded, so "fresh" is the only history that fits. Writing it now is
+      // what stops a crash inside schema.sql making this database undecidable.
+      const d = facts({
+        hasLedgerTable: true,
+        hasOtherTables: false,
+        ledgerComment: "",
+        appliedCount: 0,
+      });
+      expect(d.action).toBe("proceed");
+      expect(d.backfillOrigin).toBe(ORIGIN_FRESH);
+    });
+
+    it("does not invent an origin for a legacy ledger that is in use", () => {
+      // Its origin is unknowable AND irrelevant: rows keep it decidable for
+      // ever. Stamping a guess here would be worse than leaving it blank.
+      const d = facts({
+        hasLedgerTable: true,
+        hasOtherTables: true,
+        ledgerComment: "",
+        appliedCount: 27,
+      });
+      expect(d.action).toBe("proceed");
+      expect(d.backfillOrigin).toBeNull();
+    });
+
+    it("does not stamp the state it refuses", () => {
+      // The residue is undecidable, so there is nothing truthful to write.
+      const d = facts({
+        hasLedgerTable: true,
+        hasOtherTables: true,
+        ledgerComment: "",
+        appliedCount: 0,
+      });
+      expect(d.action).toBe("refuse");
+      expect(d.backfillOrigin).toBeNull();
+    });
+
+    it("never backfills a ledger this run is about to create", () => {
+      // The CREATE stamps it; a second write would be redundant and could
+      // disagree with it.
+      for (const hasOtherTables of [true, false]) {
+        expect(
+          facts({ hasLedgerTable: false, hasOtherTables }).backfillOrigin,
+        ).toBeNull();
+      }
+    });
+
+    it("never backfills over an origin that is already recorded", () => {
+      for (const ledgerComment of [ORIGIN_FRESH, ORIGIN_PRE_LEDGER]) {
+        for (const appliedCount of [0, 27]) {
+          expect(
+            facts({ hasLedgerTable: true, ledgerComment, appliedCount })
+              .backfillOrigin,
+          ).toBeNull();
+        }
+      }
     });
   });
 
