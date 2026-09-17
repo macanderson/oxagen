@@ -273,6 +273,7 @@
     "actions": {
       "failure": {
         "orgRoleRequired": "This needs an organization Owner or Admin. Nothing was changed.",
+        "importRoleRequired": "This needs an organization Owner or Admin, or this workspace's Owner. Nothing was changed.",
         "noPrincipal": "This session carries no person to record the action against. Nothing was changed.",
         "serverNotFound": "No registered tool server has that id in this workspace.",
         "versionNotFound": "No tool version has that id in this workspace.",

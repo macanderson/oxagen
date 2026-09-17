@@ -148,8 +148,11 @@ describe("ImportControls", () => {
     fireEvent.click(screen.getByTestId("tools-import-open"));
     fill("Server", "mcs_01k5s1");
     fireEvent.submit(formOf(screen.getByText("Import")));
+    // The import sentence names the workspace Owner too, because the page now
+    // offers that person the control and a refusal naming only org roles would
+    // contradict the control they were just given (#3143).
     expect(await screen.findByTestId("tools-import-failure")).toHaveTextContent(
-      "This needs an organization Owner or Admin.",
+      "This needs an organization Owner or Admin, or this workspace's Owner. Nothing was changed.",
     );
     expect(router.replace).not.toHaveBeenCalled();
   });
@@ -556,6 +559,30 @@ describe("useActionFailure", () => {
   ] as const)("names %j", (failure, expected) => {
     const hook = renderHook(() => useActionFailure(), { wrapper: intl });
     expect(hook.result.current(failure)).toContain(expected);
+    hook.unmount();
+  });
+
+  // One reason, two sentences, because the three writes do not want the same
+  // roles. Both are asserted in one test so that collapsing them back into a
+  // single sentence fails here rather than leaving one caller quietly wrong.
+  it.each([
+    [
+      "org" as const,
+      "This needs an organization Owner or Admin. Nothing was changed.",
+    ],
+    [
+      "import" as const,
+      "This needs an organization Owner or Admin, or this workspace's Owner. Nothing was changed.",
+    ],
+  ])("names org_role_required for a %s write", (kind, expected) => {
+    const hook = renderHook(() => useActionFailure(kind), { wrapper: intl });
+    expect(
+      hook.result.current({
+        ok: false,
+        reason: "denied",
+        code: "org_role_required",
+      }),
+    ).toBe(expected);
     hook.unmount();
   });
 });

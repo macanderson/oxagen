@@ -20,7 +20,7 @@ import { splitTags, textValue, type ToolsAt } from "./view";
 
 export function ImportControls({ at }: { at: ToolsAt }) {
   const t = useTranslations("tools.import");
-  const failureText = useActionFailure();
+  const failureText = useActionFailure("import");
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
