@@ -7,6 +7,7 @@
       "about": "The main repository is where this workspace keeps .oxagen/ — its published steering records, the promotion ledger, and every agent definition. A workspace has one, and until it is bound the workspace is provisional: runs are still recorded and spend still counts, but steering and agent definitions stay off.",
       "loading": "Reading this workspace's main repository…",
       "connected": "Returned from GitHub. The installation is attached to this workspace.",
+      "installRefused": "Returned from GitHub, but that installation could not be verified, so nothing was attached. Install the App again from this workspace and approve it on the account that owns the repository.",
       "install": {
         "heading": "Oxagen reaches a repository through its GitHub App",
         "body": "No installation is attached to this workspace yet, so there is nothing to pick from. Install the App on the account that owns the repository and grant it access to that repository; GitHub sends you back here when it is done.",

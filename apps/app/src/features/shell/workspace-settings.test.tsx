@@ -720,5 +720,39 @@ describe("the return leg from GitHub", () => {
     Shell();
     expect(await screen.findByTestId("workspace-settings-dialog")).toBeTruthy();
     expect(screen.queryByTestId("workspace-github-connected")).toBeNull();
+    expect(screen.queryByTestId("workspace-github-failed")).toBeNull();
+  });
+
+  // `github=failed` is the API's third outcome: an installation was claimed and
+  // declined, because the person who authorized could not be shown to reach it.
+  // The panel draws the install door again either way, so without a sentence
+  // here they would be looking at the button they just pressed with nothing
+  // saying why they are back at it.
+  it("says so when the install was declined, and never claims it connected", async () => {
+    nav.query = "settings=repository&github=failed";
+    readWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: notConnected,
+    });
+    Shell();
+
+    expect(await screen.findByTestId("workspace-settings-dialog")).toBeTruthy();
+    expect(screen.getByTestId("workspace-github-failed")).toBeTruthy();
+    expect(screen.queryByTestId("workspace-github-connected")).toBeNull();
+    // The install door is still the thing to press, so it is still drawn.
+    expect(
+      await screen.findByTestId("workspace-repository-install"),
+    ).toBeTruthy();
+    expect(nav.replace).toHaveBeenCalledWith("/acme/core-platform");
+  });
+
+  // Anything the dialog does not recognise degrades to no acknowledgement. The
+  // one outcome worse than silence is announcing a connection that never happened.
+  it("acknowledges nothing for an unknown github value (negative)", async () => {
+    nav.query = "settings=repository&github=something-else";
+    Shell();
+    expect(await screen.findByTestId("workspace-settings-dialog")).toBeTruthy();
+    expect(screen.queryByTestId("workspace-github-connected")).toBeNull();
+    expect(screen.queryByTestId("workspace-github-failed")).toBeNull();
   });
 });

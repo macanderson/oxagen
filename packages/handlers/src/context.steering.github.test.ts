@@ -1,6 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import type { GitHubClient } from "@oxagen/github";
-import { createSteeringGitHub } from "./context.steering.github";
+
+const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
+
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  const __dbMock = { ...real, withTenantDb: mocks.withTenantDb };
+  return { ...__dbMock, withOrgDb: __dbMock.withTenantDb };
+});
+
+import {
+  createSteeringGitHub,
+  readGitHubConnection,
+} from "./context.steering.github";
 
 const SCOPE = { orgId: "org", workspaceId: "ws" };
 
@@ -273,5 +285,83 @@ describe("the GitHub seam", () => {
         "main",
       ),
     ).rejects.toThrow("no client for o/r");
+  });
+});
+
+/**
+ * Which repository the seam resolves as the workspace's main repo.
+ *
+ * `bind_main_repository` writes a binding head and a binding version; the
+ * settings-path connection it binds through carries only the installation id
+ * the install callback attached, never an owner/repo. A read that looked only
+ * at `delivery_config` answered null right after a successful bind, and every
+ * Context PR behaved as though no repository were connected.
+ */
+describe("the workspace's main repository", () => {
+  const SELECT_SCOPE = { orgId: "org", workspaceId: "ws" };
+
+  /**
+   * The binding read joins (heads → bindings → connections); the legacy read
+   * does not join at all, so the chain each takes is what tells them apart.
+   */
+  function db(opts: { bound?: unknown[]; connections?: unknown[] }): void {
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          select: () => ({
+            from: () => ({
+              innerJoin: () => ({
+                innerJoin: () => ({
+                  where: () => ({ limit: async () => opts.bound ?? [] }),
+                }),
+              }),
+              where: () => ({ limit: async () => opts.connections ?? [] }),
+            }),
+          }),
+        }),
+    );
+  }
+
+  it("resolves the repository the bind recorded, on a connection that names none", async () => {
+    db({
+      bound: [{ owner: "Acme", repo: "Widgets" }],
+      connections: [{ deliveryConfig: { installationId: "555" } }],
+    });
+    await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toEqual({
+      owner: "Acme",
+      repo: "Widgets",
+    });
+  });
+
+  it("prefers the binding over a legacy connection's ingestion sync target", async () => {
+    db({
+      bound: [{ owner: "Acme", repo: "Widgets" }],
+      connections: [{ deliveryConfig: { owner: "a-intel", repo: "platform" } }],
+    });
+    await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toEqual({
+      owner: "Acme",
+      repo: "Widgets",
+    });
+  });
+
+  it("falls back to the legacy sources wizard's connection when no binding exists", async () => {
+    db({
+      bound: [],
+      connections: [{ deliveryConfig: { owner: "a-intel", repo: "platform" } }],
+    });
+    await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toEqual({
+      owner: "a-intel",
+      repo: "platform",
+    });
+  });
+
+  it("answers null when neither a binding nor a configured connection names a repository", async () => {
+    db({
+      bound: [],
+      connections: [{ deliveryConfig: { installationId: "5" } }],
+    });
+    await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toBeNull();
+    db({ bound: [], connections: [] });
+    await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toBeNull();
   });
 });

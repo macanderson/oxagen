@@ -75,17 +75,33 @@ const prose = "text-sm leading-relaxed text-muted-foreground";
  * re-open a panel the person has closed. Read in its own component because
  * `useSearchParams` needs a Suspense boundary around whatever reads it.
  */
+/** What the install leg came back saying; null when it said nothing. */
+type InstallAcknowledgement = "connected" | "failed" | null;
+
 function SettingsQuery({
   onRequested,
 }: {
-  onRequested: (acknowledgeConnected: boolean) => void;
+  onRequested: (acknowledgement: InstallAcknowledgement) => void;
 }) {
   const params = useSearchParams();
   const pathname = usePathname();
   const navigate = useNavigate();
   useEffect(() => {
     if (params.get("settings") !== "repository") return;
-    onRequested(params.get("github") === "connected");
+    // Three outcomes, matching GITHUB_ACK in the API's callback: `connected`
+    // when an installation was verified and attached, `failed` when one was
+    // claimed and declined, and nothing at all on the identity-only leg that
+    // had no installation to attach. Any value this does not know becomes
+    // null — no acknowledgement is the only safe default, since the one thing
+    // worse than saying nothing is announcing a connection that did not happen.
+    const github = params.get("github");
+    onRequested(
+      github === "connected"
+        ? "connected"
+        : github === "failed"
+          ? "failed"
+          : null,
+    );
     // Back to the path with no settings query. `replace` also re-renders the
     // server tree, which is wanted here: the workspace just gained an
     // installation, and the provisional banner behind the dialog is stale.
@@ -98,11 +114,12 @@ export function WorkspaceSettingsDialog({ data }: { data: ShellData }) {
   const t = useTranslations("workspaceSettings");
   const { workspaceSettingsOpen, setWorkspaceSettingsOpen } = useShellState();
   const { ws } = useSidebarSections(data);
-  const [connectedJustNow, setConnectedJustNow] = useState(false);
+  const [acknowledgement, setAcknowledgement] =
+    useState<InstallAcknowledgement>(null);
 
   const onRequested = useCallback(
-    (acknowledgeConnected: boolean) => {
-      setConnectedJustNow(acknowledgeConnected);
+    (outcome: InstallAcknowledgement) => {
+      setAcknowledgement(outcome);
       setWorkspaceSettingsOpen(true);
     },
     [setWorkspaceSettingsOpen],
@@ -127,7 +144,7 @@ export function WorkspaceSettingsDialog({ data }: { data: ShellData }) {
           org={data.org.slug}
           ws={ws}
           open={workspaceSettingsOpen}
-          connectedJustNow={connectedJustNow}
+          acknowledgement={acknowledgement}
         />
       </SheetDialog>
     </>
@@ -138,12 +155,12 @@ function MainRepositoryPanel({
   org,
   ws,
   open,
-  connectedJustNow,
+  acknowledgement,
 }: {
   org: string;
   ws: string;
   open: boolean;
-  connectedJustNow: boolean;
+  acknowledgement: InstallAcknowledgement;
 }) {
   const t = useTranslations("workspaceSettings.mainRepository");
   const failureText = useWorkspaceSettingsFailure();
@@ -220,13 +237,25 @@ function MainRepositoryPanel({
         {t("heading")}
       </h3>
       <p className={`mt-1.5 ${prose}`}>{t("about")}</p>
-      {connectedJustNow ? (
+      {acknowledgement === "connected" ? (
         <p
           role="status"
           data-testid="workspace-github-connected"
           className="mt-3 text-sm text-foreground"
         >
           {t("connected")}
+        </p>
+      ) : acknowledgement === "failed" ? (
+        // A declined install is said out loud. The panel below will draw the
+        // install door again, and without this the person would be looking at
+        // the same button they just pressed with nothing explaining why they
+        // are back at it.
+        <p
+          role="status"
+          data-testid="workspace-github-failed"
+          className="mt-3 text-sm text-foreground"
+        >
+          {t("installRefused")}
         </p>
       ) : null}
       <div className="mt-4">

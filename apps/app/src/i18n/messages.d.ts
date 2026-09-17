@@ -2398,6 +2398,7 @@ type Messages = {
       about: string;
       loading: string;
       connected: string;
+      installRefused: string;
       install: {
         heading: string;
         body: string;
