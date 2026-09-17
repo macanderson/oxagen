@@ -4,6 +4,7 @@ import type { TachoHostListOutput } from "@oxagen/oxagen/contracts/tacho.host.li
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, desc, eq, lt, or } from "drizzle-orm";
 import { TACHO_HARNESS_TIERS } from "@oxagen/tacho";
+import { hostReadColumns } from "./lib/tacho-gateway-columns";
 
 type HostRow = typeof schema.tachoHosts.$inferSelect;
 
@@ -88,7 +89,7 @@ export const tachoHostListHandler: CapabilityHandler<
   typeof tachoHostList
 > = async (input, ctx) => {
   const after = decodeCursor(input.cursor);
-  const rows = await withTenantDb((tx) =>
+  const rows = await withTenantDb(async (tx) =>
     tx.query.tachoHosts.findMany({
       where: and(
         eq(schema.tachoHosts.orgId, ctx.orgId),
@@ -106,6 +107,9 @@ export const tachoHostListHandler: CapabilityHandler<
       ),
       orderBy: [desc(schema.tachoHosts.createdAt), desc(schema.tachoHosts.id)],
       limit: input.limit + 1,
+      // The host list does not show the gateway observation. It must not go
+      // dark for the window in which the column is not there yet.
+      columns: await hostReadColumns(tx),
     }),
   );
   const page = rows.slice(0, input.limit);
