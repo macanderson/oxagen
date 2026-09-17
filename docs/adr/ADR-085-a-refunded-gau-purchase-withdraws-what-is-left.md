@@ -142,6 +142,68 @@ change the metadata was absent and the fall-through was unreachable; making the
 charge resolvable would otherwise have made a GAU refund start debiting usage
 credits, which is a worse failure than the one being fixed.
 
+### 5. A refund that arrives before its purchase is parked, not dropped
+
+Stripe does not order webhook deliveries, and `processStripeEvent` re-dispatches
+only an event whose handler **threw** — a handler that returns marks the event
+processed and it is never seen again. So a `charge.refunded` that finds no
+settlement and returns is a refund that is gone, while the retried
+`checkout.session.completed` goes on to grant the full purchase. That is the
+same money-loss this record exists to prevent, reached by the opposite ordering,
+and it does not need exotic delivery: a grant that failed once for any reason is
+retried later, and the refund can land in between.
+
+Two fixes were open.
+
+**Throw, so Stripe retries.** Cheap, and it matches the webhook processor's own
+documented contract. But it is a timing bet against Stripe's roughly three-day
+retry budget: a grant delayed past it still loses the money, and a genuinely
+unmatched charge retries for three days and is dropped anyway.
+
+**Park the reversal and let the grant reconcile it.** Chosen. A timing bet
+cannot be the durable answer to a money-loss path (SCR-002); the invariant is
+that *the grant checks whether the money came back before it hands out units*.
+
+An unmatched refund writes a `gau_reversals` row with `settlement_id` and
+`bucket_id` NULL, keyed on the PaymentIntent — the one identifier a refund, a
+dispute and a Checkout Session all carry. `grantGauPurchaseForCheckout` settles
+any such row in the **same transaction** that grants, so the units are never
+spendable in between. The two nullable links carry a CHECK that they are null
+together: a row is pending or settled, never half of each.
+
+The idempotency key moves from `(settlement_id, provider_event_id)` to
+`(stripe_payment_intent_id, provider_event_id)`. One PaymentIntent charges one
+Checkout Session, so for a row that has found its settlement this is the same
+key by another name; it simply also holds before the settlement exists.
+
+Reconciliation is idempotent twice over: the grant reaches it only on the
+delivery that actually inserted the settlement (a redelivery hits
+`ON CONFLICT DO NOTHING` and returns early), and the lookup matches only rows
+still carrying `settlement_id IS NULL`.
+
+One case stays manual: a charge whose metadata says `gau_purchase` but carries
+no `org_id`. There is nothing to attribute a pending row to, and retrying cannot
+conjure metadata that is not on the charge, so it logs a fatal.
+
+### 6. A partial reversal prorates against what was paid, tax included
+
+`quantity_gau * rate_per_gau_micros` reconstructs the **subtotal**. Stripe's
+`amount_refunded` includes refunded tax. Prorating one against the other
+over-withdraws by exactly the tax rate — half of a 5,500-cent tax-inclusive
+charge is 2,750 cents, which against a 5,000-cent subtotal reads as 55% of the
+units instead of 50%.
+
+The error is invisible on a full refund, because the amount then exceeds the
+subtotal and saturates at the whole quantity. Only a partial refund shows it,
+and it compounds with the clamp in §3: the surplus units are not there to take,
+so the shortfall is recorded as `unrecovered_gau` — a figure that looks like
+spend but is arithmetic.
+
+The settlement therefore records `charged_cents` from the Checkout Session's
+`amount_total`, and that is the denominator. A settlement written before the
+column existed falls back to the subtotal, which is exact for an untaxed
+purchase and is the best figure available for a taxed one.
+
 ## Consequences
 
 - A purchase made before this change has no `stripe_payment_intent_id` and no
