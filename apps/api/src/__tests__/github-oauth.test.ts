@@ -1221,6 +1221,242 @@ describe("GET /oauth/github/callback", () => {
     expect(location).not.toContain("github=");
   });
 
+  // ── the identity leg: a code, and never an installation_id ────────────────
+  //
+  // The dialog's Connect action opens `login/oauth/authorize`, because
+  // `installations/new` only round-trips a code and our signed state on the
+  // FIRST install of the App on an account — with it, a reconnect and a second
+  // workspace connecting to an already-installed account both dead-ended at the
+  // callback's no-state branch. The identity URL fixed that and brought its own
+  // gap: it ALWAYS returns a code and NEVER an installation_id. So a first-time
+  // user authorized, came back with a token stored, `github.connected` still
+  // false, and one button that would do the same thing again.
+  //
+  // What the callback holds after that exchange is authority to ask GitHub what
+  // this person reaches. These are the three answers.
+
+  /**
+   * The GitHub calls an identity-leg connect makes: the token exchange, the
+   * `/user` lookup, and the `/user/installations` page this leg now reads to
+   * find out what the authorizing user reaches.
+   */
+  function queueIdentityFetches(reachable: readonly number[]) {
+    mocks.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: "ghs_identity",
+          token_type: "Bearer",
+          scope: "repo",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 7, login: "owner" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          total_count: reachable.length,
+          installations: reachable.map((id) => ({
+            id,
+            account: { login: "acme", type: "Organization", avatar_url: "" },
+            repository_selection: "all",
+            app_slug: APP_SLUG,
+          })),
+        }),
+      });
+  }
+
+  /** The identity-leg request itself: a code, a settings state, no installation_id. */
+  function identityCallback() {
+    return makeCallbackReq({
+      code: "auth-code",
+      state: buildValidState({ connectionId: null, returnTo: "settings" }),
+    });
+  }
+
+  it("identity leg with ONE reachable installation attaches it and lands on the picker", async () => {
+    // The first-time case this whole change exists for. The attach still goes
+    // through the same verification gate, which asks /user/installations a
+    // second time — one gate taken by every path beats a gate with an exemption.
+    queueIdentityFetches([424242]);
+    mocks.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        total_count: 1,
+        installations: [{ id: 424242, account: { login: "acme" } }],
+      }),
+    });
+    const { tx, captured } = makeCapturingTx([]);
+    queueOauthUpsert();
+    queueSettingsAttach(tx);
+
+    const res = await identityCallback();
+
+    expect(res.status).toBe(302);
+    expect(captured.insertValues).toMatchObject({
+      deliveryConfig: { installationId: "424242" },
+    });
+    expect(res.headers.get("location") ?? "").toBe(
+      `${APP_URL}/my-org/my-ws?settings=repository&github=connected`,
+    );
+  });
+
+  it("identity leg with SEVERAL reachable installations attaches none and asks", async () => {
+    // Which account a workspace acts through is a choice with consequences —
+    // the repository capabilities mint tokens with the platform App's key
+    // against whatever is attached — so the platform does not guess it.
+    queueIdentityFetches([111, 222]);
+    const { tx, captured } = makeCapturingTx([]);
+    queueOauthUpsert();
+    // No attach tx is queued: if the route writes anything it consumes the slug
+    // lookups' chain and the location assertion below fails.
+    queueSlugLookups();
+
+    const res = await identityCallback();
+
+    expect(res.status).toBe(302);
+    expect(captured.insertValues).toBeUndefined();
+    expect(tx.insert).not.toHaveBeenCalled();
+    expect(tx.update).not.toHaveBeenCalled();
+    expect(res.headers.get("location") ?? "").toBe(
+      `${APP_URL}/my-org/my-ws?settings=repository&github=choose`,
+    );
+  });
+
+  it("identity leg with NO reachable installation points at the install door", async () => {
+    // Authorizing again would loop forever: the App is installed on no account
+    // this person administers, so the next click is installations/new.
+    queueIdentityFetches([]);
+    const { tx } = makeCapturingTx([]);
+    queueOauthUpsert();
+    queueSlugLookups();
+
+    const res = await identityCallback();
+
+    expect(res.status).toBe(302);
+    expect(tx.insert).not.toHaveBeenCalled();
+    expect(res.headers.get("location") ?? "").toBe(
+      `${APP_URL}/my-org/my-ws?settings=repository&github=install`,
+    );
+  });
+
+  it("identity leg attaches nothing when the verification gate refuses the one it found", async () => {
+    // Belt and braces: the id came from the user's own list, so this cannot
+    // normally happen — and if the second ask disagrees, the answer is still no.
+    queueIdentityFetches([424242]);
+    mocks.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ total_count: 0, installations: [] }),
+    });
+    const { tx } = makeCapturingTx([]);
+    queueOauthUpsert();
+    queueSlugLookups();
+
+    const res = await identityCallback();
+
+    expect(tx.insert).not.toHaveBeenCalled();
+    expect(res.headers.get("location") ?? "").toBe(
+      `${APP_URL}/my-org/my-ws?settings=repository&github=failed`,
+    );
+  });
+
+  it("identity leg says nothing at all when GitHub would not answer (negative)", async () => {
+    // Nothing was claimed, so there is nothing to decline. The dialog re-reads
+    // its own state on arrival and draws both doors.
+    mocks.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: "ghs_identity" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 7, login: "owner" }),
+      })
+      .mockResolvedValueOnce({ ok: false, status: 502, json: async () => ({}) });
+    const { tx } = makeCapturingTx([]);
+    queueOauthUpsert();
+    queueSlugLookups();
+
+    const res = await identityCallback();
+
+    expect(tx.insert).not.toHaveBeenCalled();
+    const location = res.headers.get("location") ?? "";
+    expect(location).toBe(`${APP_URL}/my-org/my-ws?settings=repository`);
+    expect(location).not.toContain("github=");
+  });
+
+  it("identity leg survives a listing that threw, attaching nothing (negative)", async () => {
+    mocks.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: "ghs_identity" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 7, login: "owner" }),
+      })
+      .mockRejectedValueOnce(new Error("network"));
+    const { tx } = makeCapturingTx([]);
+    queueOauthUpsert();
+    queueSlugLookups();
+
+    const res = await identityCallback();
+
+    expect(res.status).toBe(302);
+    expect(tx.insert).not.toHaveBeenCalled();
+    expect(res.headers.get("location") ?? "").toBe(
+      `${APP_URL}/my-org/my-ws?settings=repository`,
+    );
+  });
+
+  // The legacy wizard leg is untouched by this: it carries a connectionId, so
+  // it never reaches the identity branch, whatever GitHub lists.
+  it("the legacy wizard leg never lists installations of its own (negative)", async () => {
+    mocks.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: "ghs_wizard" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 7, login: "owner" }),
+      });
+    mocks.withSystemDb
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([{ id: "uuid-conn-1" }]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([{ id: "uuid-oauth-1" }]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([]) as TxLike),
+      );
+    queueSlugLookups();
+
+    const res = await makeCallbackReq({
+      code: "auth-code",
+      state: buildValidState(),
+    });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location") ?? "").toContain("/knowledge/sources");
+    // Exactly two GitHub calls: the exchange and the /user lookup. No listing.
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
+
   // ── the installation_id is a claim, and the claim is checked ───────────────
   //
   // `installation_id` is a query parameter on a PUBLIC endpoint. The state HMAC
