@@ -53,9 +53,21 @@ export function extractClientIp(c: Context<AppEnv>): string | null {
       .map((hop) => hop.trim())
       .filter((hop) => hop.length > 0);
     // A chain shorter than the trusted-proxy count means a proxy did not append
-    // what this deployment says it does; the leftmost entry is then the oldest
-    // thing any trusted proxy could have written.
-    const candidate = chain[Math.max(0, chain.length - hops)];
+    // what this deployment says it does, so NOTHING here is attributable.
+    //
+    // This used to clamp the index to 0 and return the leftmost entry, on the
+    // reasoning that it was "the oldest thing any trusted proxy could have
+    // written". That reasoning is wrong: the leftmost entry is the oldest thing
+    // ANYONE could have written, and a caller writes it by sending its own
+    // x-forwarded-for. So the clamp turned a misconfiguration into the exact
+    // bypass this walk exists to prevent — a caller-supplied address handed to
+    // the IAM ip_ranges / ip_allow conditions and to the pre-auth rate-limit
+    // ceilings, refreshable per request by rotating the header. Refuse instead:
+    // with a correctly declared depth the chain is never short, so this only
+    // fires on a deployment whose count is wrong, and failing closed is the
+    // documented direction for that.
+    if (chain.length < hops) return null;
+    const candidate = chain[chain.length - hops];
     if (candidate) return candidate;
   }
   // x-real-ip is set by a single reverse proxy and carries no chain to walk.

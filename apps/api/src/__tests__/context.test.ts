@@ -198,13 +198,26 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
     ).toBeNull();
   });
 
-  it("falls back to the leftmost entry when the chain is shorter than the count", async () => {
-    // A proxy did not append what this deployment says it does; the oldest
-    // entry is the best candidate left, and better than nothing.
+  it("refuses a chain shorter than the declared hop count", async () => {
+    // This used to clamp to the leftmost entry as "better than nothing". It is
+    // worse than nothing: the leftmost entry is whatever the caller sent, so a
+    // deployment whose hop count is too high would hand a caller-supplied
+    // address to the IAM allowlist and to the pre-auth rate-limit ceilings. A
+    // correctly declared depth never produces a short chain.
     setTrustedProxyHops("3");
     expect(
       await clientIpFor({ "x-forwarded-for": "203.0.113.7, 192.0.2.44" }),
-    ).toBe("203.0.113.7");
+    ).toBeNull();
+  });
+
+  it("refuses a short chain rather than falling through to x-real-ip", async () => {
+    setTrustedProxyHops("3");
+    expect(
+      await clientIpFor({
+        "x-forwarded-for": "203.0.113.7",
+        "x-real-ip": "198.51.100.5",
+      }),
+    ).toBeNull();
   });
 
   it("drops empty segments rather than falling through on a leading comma", async () => {
