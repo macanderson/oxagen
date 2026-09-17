@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  applyGrace,
   applySupersession,
   classifyRuns,
   verdictOf,
@@ -162,5 +163,62 @@ describe("verdictOf with supersession applied", () => {
 
   it("is pending when a superseded gap sits beside a run still going", () => {
     expect(verdictOf([s("in_flight"), s("superseded")])).toBe("pending");
+  });
+});
+
+describe("applyGrace", () => {
+  const MINUTE = 60 * 1000;
+  const GRACE = 10 * MINUTE;
+  const s = (state: string, ageMs?: number) => ({ sha: "abc", state, ageMs });
+
+  it("spares a commit whose run has not appeared yet", () => {
+    // The measured race on #3125: commit at 05:47:32Z, run created 05:47:35Z,
+    // guard filed `no run at all` at 05:47:39Z — four seconds after the run
+    // it could not see already existed.
+    expect(applyGrace([s("none", 7 * 1000)], GRACE)[0]?.state).toBe(
+      "too_young",
+    );
+  });
+
+  it("judges a commit older than the grace normally", () => {
+    // Past the grace a real gap is a real gap. Losing this would make the
+    // guard permanently silent, which is worse than the noise it replaces.
+    expect(applyGrace([s("none", 11 * MINUTE)], GRACE)[0]?.state).toBe("none");
+  });
+
+  it("treats the boundary itself as old enough to judge", () => {
+    expect(applyGrace([s("none", GRACE)], GRACE)[0]?.state).toBe("none");
+  });
+
+  it("does not grace a commit whose age is unknown", () => {
+    // An unparseable date is not a young commit. Guessing would silence the
+    // guard on exactly the commits it could not date.
+    expect(applyGrace([s("none", undefined)], GRACE)[0]?.state).toBe("none");
+  });
+
+  it("leaves every state but `none` alone", () => {
+    // A commit with a visible run has an answer coming and needs no grace.
+    for (const state of ["concluded", "in_flight", "superseded"]) {
+      expect(applyGrace([s(state, 1000)], GRACE)[0]?.state).toBe(state);
+    }
+  });
+
+  it("does not mutate its argument", () => {
+    const states = [s("none", 1000)];
+    applyGrace(states, GRACE);
+    expect(states[0]?.state).toBe("none");
+  });
+});
+
+describe("verdictOf with a too-young commit", () => {
+  const s = (state: string) => ({ sha: "abc", state });
+
+  it("is pending, so it neither announces nor closes", () => {
+    expect(verdictOf([s("too_young")])).toBe("pending");
+    expect(verdictOf([s("concluded"), s("too_young")])).toBe("pending");
+  });
+
+  it("does not soften a real gap sitting beside it", () => {
+    expect(verdictOf([s("too_young"), s("none")])).toBe("unverified");
   });
 });
