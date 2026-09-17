@@ -89,11 +89,12 @@ describe("resolveSidebarMode", () => {
 // 2. getSidebarConfig — item counts per mode
 //
 // Spec:
-//   workspace: 9 items (Overview, Sessions, Fleet, Knowledge | Agents, Tools,
-//       Environments | Marketplace, Settings)
+//   workspace: 9 items (Overview, Sessions, Knowledge | Agents, Tools,
+//       Environments, Fleet | Marketplace, Settings)
 //     — Fleet (ADR-078) is the machines reporting to the workspace and the
-//       enforcement tier of each app on them; it is a primary destination
-//       rather than an Agents child because a host is not an agent.
+//       enforcement tier of each app on them. It is declared after
+//       Environments so that the mobile bottom bar's first-four cut still
+//       lands on Overview / Sessions / Knowledge / Agents (#3163).
 //     — the "Agents" group (group: "tools") holds the three fleet destinations
 //       (Agents, Tools, Environments) as first-class items — there is
 //       deliberately NO secondary nav. Marketplace + Settings are pinned to the
@@ -111,8 +112,7 @@ describe("getSidebarConfig item counts", () => {
     // ADR-043 excised the runtime surfaces (Sandboxes, Repos, Evals,
     // Automations) — what remains is the governance observatory. ADR-078 added
     // Fleet: the machines reporting in, and the enforcement tier of each app
-    // on them. A host is not an agent, so it sits in the primary group rather
-    // than under Agents.
+    // on them.
     expect(config.items).toHaveLength(9);
   });
 
@@ -172,7 +172,6 @@ describe("getSidebarConfig item counts", () => {
     expect(ids).toEqual([
       "overview",
       "sessions",
-      "fleet",
       "knowledge",
       "agents",
       "tools",
