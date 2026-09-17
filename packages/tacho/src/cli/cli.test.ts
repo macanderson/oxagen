@@ -644,12 +644,16 @@ describe("enroll → status → unenroll", () => {
     });
     const result = await enroll({}, typo);
     expect(result.ok).toBe(true);
-    // The warning names the value that was ignored, not just the variable.
-    expect(result.warnings.some((w) => w.includes("4100"))).toBe(true);
-    expect(result.warnings.some((w) => w.includes("TACHO_MCP_ENDPOINT"))).toBe(
-      true,
+    // The warning names the value that was ignored, not just the variable —
+    // "TACHO_MCP_ENDPOINT was ignored" does not tell an operator which of the
+    // two endpoints in play they are now talking to.
+    const warning = result.warnings.find((w) =>
+      w.includes("TACHO_MCP_ENDPOINT"),
     );
-    expect(typo.errors.join("\n")).toContain("TACHO_MCP_ENDPOINT");
+    expect(warning).toBeDefined();
+    expect(warning).toContain("(4100)");
+    // And it reaches the terminal, not just the returned array.
+    expect(typo.errors.join("\n")).toContain("(4100)");
     // And the effective endpoint is exactly what it was.
     const after = readHostFile(typo.paths.hostFile);
     expect(after?.mcp_endpoint_override).toBe("http://127.0.0.1:4100/mcp");
