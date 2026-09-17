@@ -19,6 +19,25 @@ export const TACHO_COMMANDS_SCHEMA = "tacho.commands.v2" as const;
 export const TACHO_ENROLLMENT_CLAIMS_SCHEMA =
   "oxagen.tacho.host-enrollment.v1" as const;
 
+/**
+ * The event attribute that marks a call as having come through the local MCP
+ * gateway, and the value that says so.
+ *
+ * A wire constant rather than a literal at each end. The daemon writes this
+ * attribute when it records a connected app's tool call; the control plane's
+ * ingest reads it to file the call under the `gateway` enforcement tier. The
+ * two live in different packages, and the only thing joining them is the
+ * spelling of this key — so a rename on one side alone would not break a
+ * build or a test. It would just stop matching, and every gateway call would
+ * go on being filed as `observe` or `harness` with nothing to show for it.
+ *
+ * That silence is the same failure this attribute was added to fix
+ * (discussion_r4034318913, where gateway attribution never reached the row).
+ * Naming it once makes the rename a type error instead.
+ */
+export const TACHO_ENFORCEMENT_TIER_ATTR = "oxagen.enforcement_tier" as const;
+export const TACHO_GATEWAY_TIER = "gateway" as const;
+
 export const hostEnrollmentIdSchema = z
   .string()
   .regex(/^tch_[a-z0-9]{22}$/, "a host enrollment public id");

@@ -39,7 +39,12 @@ import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest"
 import { schema, withTenantDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { PROOF_OBSERVED_KIND } from "@oxagen/run-evidence";
-import { type TachoEvent, verifyChain } from "@oxagen/tacho";
+import {
+  TACHO_ENFORCEMENT_TIER_ATTR,
+  TACHO_GATEWAY_TIER,
+  type TachoEvent,
+  verifyChain,
+} from "@oxagen/tacho";
 import {
   insertTachoEvents,
   selectTachoEvents,
@@ -241,10 +246,18 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
  * `recordGatewayCall` puts `oxagen.enforcement_tier: "gateway"` in the event
  * `attrs`; the daemon's host recorder sets no identity tier, so the envelope
  * field is empty for these (#3161, discussion_r4033641270).
+ *
+ * The key and value come from `@oxagen/tacho`'s wire module, which is also
+ * where the daemon takes them from. This attribute is a contract between two
+ * packages with nothing else joining them, so a literal at each end could be
+ * renamed on one side without breaking a build or a test — it would simply
+ * stop matching, and gateway calls would go on being filed as `observe` with
+ * nothing to show for it. That is the silence this whole path exists to end.
  */
 export function carriesGatewayCall(events: TachoEvent[]): boolean {
   return events.some(
-    (event) => event.attrs?.["oxagen.enforcement_tier"] === "gateway",
+    (event) =>
+      event.attrs?.[TACHO_ENFORCEMENT_TIER_ATTR] === TACHO_GATEWAY_TIER,
   );
 }
 
@@ -273,7 +286,7 @@ export function enforcementTierOf(
 ): string {
   const declared = events[0]?.agent.enforcement_tier;
   if (declared) return declared;
-  if (carriesGatewayCall(events)) return "gateway";
+  if (carriesGatewayCall(events)) return TACHO_GATEWAY_TIER;
   return hostMode === "enforce" ? "harness" : "observe";
 }
 
@@ -747,7 +760,9 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         // Monotonic on purpose. Once a chain has served a connected app that
         // fact does not stop being true, so a later batch of daemon bookkeeping
         // must not demote it back to the host's mode.
-        ...(carriesGatewayCall(events) ? { enforcementTier: "gateway" } : {}),
+        ...(carriesGatewayCall(events)
+          ? { enforcementTier: TACHO_GATEWAY_TIER }
+          : {}),
         updatedAt: now,
         ...terminalColumns,
         ...increments,
