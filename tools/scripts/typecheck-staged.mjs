@@ -104,7 +104,25 @@ for (const [tsconfig, absFiles] of groups) {
     tempPath,
     JSON.stringify({
       extends: "./tsconfig.json",
-      compilerOptions: { noEmit: true },
+      // `declaration` off, always. This hook typechecks; it never emits. With
+      // `declaration: true` (tsconfig.base sets it, and only some packages
+      // override it) tsc additionally reports declaration-emit PORTABILITY
+      // diagnostics — chiefly TS2883, "the inferred type of X cannot be named
+      // without a reference to <some type> ... A type annotation is necessary."
+      // Whether a type is nameable depends on what else is in the program, and
+      // this config narrows the program to the staged files, so the same source
+      // that is clean under the package's real `include` reports TS2883 here.
+      // A merge stages every incoming file, which is how one ordinary merge
+      // commit produced ~40 of these against apps/app_deprecated while
+      // `turbo run typecheck --filter=@oxagen/app-deprecated` was green — a
+      // hook that fails open, because the way past it is `--no-verify`, which
+      // skips the format, lint and atlas checks too. Declaration portability
+      // is a property of the real build and CI typechecks the real build.
+      compilerOptions: {
+        noEmit: true,
+        declaration: false,
+        declarationMap: false,
+      },
       files: absFiles.map((f) => relative(pkgDir, f)),
       // Load only ambient declaration files (next-env.d.ts, src/types/*.d.ts,
       // etc.) on top of `files` — NOT the whole source tree. Carries the global
