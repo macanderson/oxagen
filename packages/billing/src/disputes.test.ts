@@ -27,6 +27,30 @@ vi.mock("./credits", () => ({
   consumeCredits: consumeCreditsMock,
 }));
 
+// The GAU reversal seam. Null is the default and means "not a GAU purchase",
+// which is what every pre-existing test in this file relies on: the
+// usage-credit clawback still runs for a charge that bought credits.
+const reverseGauForRefundMock = vi.fn().mockResolvedValue(null);
+const reverseGauForDisputeMock = vi.fn().mockResolvedValue(null);
+vi.mock("./gau-reversals", () => ({
+  reverseGauPurchaseForRefund: reverseGauForRefundMock,
+  reverseGauPurchaseForDispute: reverseGauForDisputeMock,
+}));
+
+/** What applyGauReversal returns when the event was against a GAU purchase. */
+function gauReversed(overrides: Record<string, unknown> = {}) {
+  return {
+    orgId: "org-gau",
+    settlementId: "settle-1",
+    bucketId: "bucket-1",
+    requestedGau: 10_000,
+    reversedGau: 10_000,
+    unrecoveredGau: 0,
+    applied: true,
+    ...overrides,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // DB mock
 // ---------------------------------------------------------------------------
@@ -132,6 +156,8 @@ function makeRefundedCharge(
 describe("onDisputeCreated", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    reverseGauForRefundMock.mockResolvedValue(null);
+    reverseGauForDisputeMock.mockResolvedValue(null);
     consumeCreditsMock.mockResolvedValue({
       chargedCents: 500n,
       shortfallCents: 0n,
@@ -275,6 +301,8 @@ describe("onDisputeClosed", () => {
 describe("onChargeRefunded", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    reverseGauForRefundMock.mockResolvedValue(null);
+    reverseGauForDisputeMock.mockResolvedValue(null);
     consumeCreditsMock.mockResolvedValue({
       chargedCents: 2000n,
       shortfallCents: 0n,
@@ -379,5 +407,102 @@ describe("onChargeRefunded", () => {
     );
 
     expect(consumeCreditsMock).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The GAU dispatch (ADR-084)
+// ---------------------------------------------------------------------------
+
+describe("a refund or dispute against a GAU block purchase", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    reverseGauForRefundMock.mockResolvedValue(null);
+    reverseGauForDisputeMock.mockResolvedValue(null);
+    consumeCreditsMock.mockResolvedValue({
+      chargedCents: 2000n,
+      shortfallCents: 0n,
+      balanceCents: 0n,
+    });
+  });
+
+  it("charge.refunded withdraws units and never debits the usage-credit ledger", async () => {
+    const state = makeState();
+    dbHolder.instance = makeDb(state);
+    reverseGauForRefundMock.mockResolvedValue(gauReversed());
+
+    await onChargeRefunded(
+      makeRefundedCharge({
+        metadata: { oxagen_kind: "gau_purchase", org_id: "org-gau" },
+      }),
+    );
+
+    expect(reverseGauForRefundMock).toHaveBeenCalledOnce();
+    // The point of the dispatch: a block purchase credited no usage credits,
+    // so clawing them back would take money from an unrelated balance.
+    expect(consumeCreditsMock).not.toHaveBeenCalled();
+  });
+
+  it("charge.refunded for a charge that says it bought units but matches no settlement stops rather than debiting credits", async () => {
+    const state = makeState();
+    dbHolder.instance = makeDb(state);
+    reverseGauForRefundMock.mockResolvedValue(null);
+
+    await expect(
+      onChargeRefunded(
+        makeRefundedCharge({
+          orgId: "org-xyz",
+          metadata: { oxagen_kind: "gau_purchase", org_id: "org-xyz" },
+        }),
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(consumeCreditsMock).not.toHaveBeenCalled();
+  });
+
+  it("charge.refunded for an ordinary credit purchase still claws back credits", async () => {
+    const state = makeState();
+    dbHolder.instance = makeDb(state);
+
+    await onChargeRefunded(
+      makeRefundedCharge({
+        orgId: "org-xyz",
+        metadata: { oxagen_kind: "usage_credits" },
+      }),
+    );
+
+    expect(reverseGauForRefundMock).toHaveBeenCalledOnce();
+    expect(consumeCreditsMock).toHaveBeenCalledOnce();
+  });
+
+  it("dispute.created records the dispute row against the org the settlement names and leaves credits alone", async () => {
+    const state = makeState();
+    dbHolder.instance = makeDb(state);
+    reverseGauForDisputeMock.mockResolvedValue(gauReversed());
+
+    // A Stripe Dispute carries its own metadata, not the charge's, so the
+    // dispute reaches the handler with no org at all. The settlement is the
+    // only thing that can name one.
+    await onDisputeCreated(makeDispute({ orgId: null }));
+
+    expect(state.insertCalled).toBe(true);
+    expect(consumeCreditsMock).not.toHaveBeenCalled();
+    // clawed_back_cents is not written: no credits were taken.
+    expect(state.updateSets).not.toContainEqual(
+      expect.objectContaining({ clawedBackCents: expect.anything() }),
+    );
+    expect(state.updateSets).toContainEqual(
+      expect.objectContaining({ status: "needs_response" }),
+    );
+  });
+
+  it("dispute.created against an ordinary charge still claws back credits", async () => {
+    const state = makeState();
+    dbHolder.instance = makeDb(state);
+
+    await onDisputeCreated(makeDispute({ orgId: "org-abc" }));
+
+    expect(reverseGauForDisputeMock).toHaveBeenCalledOnce();
+    expect(consumeCreditsMock).toHaveBeenCalledOnce();
   });
 });

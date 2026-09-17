@@ -1101,7 +1101,7 @@ describe("StripeProvider", () => {
         metadata,
         invoice_creation: { enabled: true, invoice_data: { metadata } },
         payment_method_types: ["card"],
-        payment_intent_data: { setup_future_usage: "off_session" },
+        payment_intent_data: { setup_future_usage: "off_session", metadata },
         success_url: "https://app.example.com/acme/billing?checkout=success",
         cancel_url: "https://app.example.com/acme/billing?checkout=cancel",
         automatic_tax: { enabled: false },
@@ -1127,6 +1127,88 @@ describe("StripeProvider", () => {
       await expect(provider.createGauCheckout(input)).rejects.toThrow(
         "checkout URL",
       );
+    });
+
+    /** The webhook envelope Stripe delivers, as parseWebhookEvent sees it. */
+    function gauEvent(type: string, data: unknown): unknown {
+      return {
+        id: "evt_gau_001",
+        api_version: "2025-02-24.acacia",
+        type,
+        data: { object: data },
+      };
+    }
+
+    // The half of ADR-084 that makes the other half reachable: a refund reads
+    // the CHARGE and nothing else, so unless the session puts the purchase
+    // identity on payment_intent_data, `charge.refunded` cannot name the
+    // organisation that was paid. These two tests walk the real path —
+    // session params → the charge Stripe builds from them → parseWebhookEvent
+    // — rather than asserting that a metadata key is present.
+    it("puts the purchase identity where a charge can carry it: a charge built from the session's payment_intent_data resolves to the org", async () => {
+      stripeMethods.checkout.sessions.create.mockResolvedValue(
+        makeStripeCheckoutSession(),
+      );
+      await provider.createGauCheckout(input);
+      const params = stripeMethods.checkout.sessions.create.mock
+        .calls[0]![0] as {
+        metadata: Record<string, string>;
+        payment_intent_data: { metadata?: Record<string, string> };
+      };
+
+      // Stripe copies a PaymentIntent's metadata onto the Charge it creates;
+      // the session's own metadata never reaches the charge. So the charge a
+      // later refund reads is built from payment_intent_data alone.
+      stripeMethods.webhooks.constructEvent.mockReturnValue(
+        gauEvent("charge.refunded", {
+          id: "ch_gau_001",
+          payment_intent: "pi_gau_001",
+          amount_refunded: 5_000,
+          currency: "usd",
+          metadata: params.payment_intent_data.metadata,
+        }),
+      );
+      const event = provider.parseWebhookEvent("raw_body", "sig_gau_refund");
+
+      expect(event.refundedCharge?.orgId).toBe("org-1");
+      expect(event.refundedCharge?.metadata.oxagen_kind).toBe("gau_purchase");
+      expect(event.refundedCharge?.paymentIntentId).toBe("pi_gau_001");
+    });
+
+    it("session metadata alone does not reach the charge — the same charge built without payment_intent_data resolves to no org", () => {
+      // The pre-ADR-084 shape, kept as the control: if this ever starts
+      // resolving, the test above has stopped proving anything.
+      stripeMethods.webhooks.constructEvent.mockReturnValue(
+        gauEvent("charge.refunded", {
+          id: "ch_gau_001",
+          payment_intent: "pi_gau_001",
+          amount_refunded: 5_000,
+          currency: "usd",
+          metadata: {},
+        }),
+      );
+      const event = provider.parseWebhookEvent("raw_body", "sig_gau_refund_2");
+
+      expect(event.refundedCharge?.orgId).toBeNull();
+      expect(event.refundedCharge?.metadata).toEqual({});
+    });
+
+    it("exposes the session's PaymentIntent, which is what the grant records for a dispute to find", () => {
+      stripeMethods.webhooks.constructEvent.mockReturnValue(
+        gauEvent("checkout.session.completed", {
+          id: "cs_gau_001",
+          mode: "payment",
+          payment_status: "paid",
+          customer: "cus_test_001",
+          metadata,
+          subscription: null,
+          invoice: "in_gau_001",
+          payment_intent: "pi_gau_001",
+        }),
+      );
+      const event = provider.parseWebhookEvent("raw_body", "sig_gau_session");
+
+      expect(event.checkoutSession?.paymentIntentId).toBe("pi_gau_001");
     });
   });
 
