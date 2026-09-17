@@ -161,6 +161,16 @@ export interface MachineKeyCheck {
   orgId: string;
   apiKeyId: string | null | undefined;
   capabilityName: string;
+  /**
+   * The person this credential resolved to, if the surface kept it.
+   *
+   * Required for the `cli_session_v1` exemption below and for nothing else.
+   * The exemption is sound only because `resolveApiKey` resolved the key to
+   * its creator and re-checked their membership; a surface that threw that
+   * identity away has not earned it. Passing the value in rather than
+   * assuming it means the claim is checked at the point it is relied on.
+   */
+  userId: string | null | undefined;
 }
 
 /**
@@ -290,7 +300,7 @@ async function recordGatewayInvocation(
 export async function machineKeyDenial(
   check: MachineKeyCheck,
 ): Promise<string | undefined> {
-  const { apiKeyId, orgId, capabilityName } = check;
+  const { apiKeyId, orgId, capabilityName, userId } = check;
   if (!apiKeyId || !orgId) return undefined;
 
   const scope = await readKeyScope(orgId, apiKeyId);
@@ -313,12 +323,27 @@ export async function machineKeyDenial(
   // this branch it reaches the unrecognised-purpose denial below and is
   // refused EVERY capability, which breaks `oxagen login` outright.
   //
-  // This exemption has now been lost to a merge twice: #3222 added it, and
-  // #3178 — branched before #3222 landed — took its own older copy of this
-  // file whole and reverted it. The test file kept its unused
-  // CLI_SESSION_SCOPE_PURPOSE import, so nothing went red. The regression
-  // test in machine-key-scope.test.ts is what makes a third loss fail loudly.
-  if (purpose === CLI_SESSION_SCOPE_PURPOSE) return undefined;
+  // The exemption is CONDITIONAL ON THE CALLER ACTUALLY CARRYING THAT PERSON,
+  // because the reasoning above is a claim about identity and the claim has to
+  // be true where it is used (discussion_r4041282083, P1). `apps/api` keeps
+  // `resolution.userId`; `apps/mcp/src/context.ts` hard-codes `userId: null`
+  // and discards it. On that surface an unconditional exemption is an
+  // escalation, not a restoration: the key passes this gate, the
+  // non-enterprise tier fast-path allows it, and `assertCallerRole` sees no
+  // user and skips the role check — so a plain member reaches Owner/Admin-only
+  // capabilities like `reveal_secret`. Denying instead is fail-closed and
+  // costs only MCP access for CLI keys, which is already broken today.
+  //
+  // This exemption has been lost to a merge twice: #3222 added it, and #3178 —
+  // branched before #3222 landed — took its own older copy of this file whole
+  // and reverted it. The test file kept its unused CLI_SESSION_SCOPE_PURPOSE
+  // import, so nothing went red. The tests in machine-key-scope.test.ts make a
+  // third loss, and any future surface that drops the creator, fail loudly.
+  if (purpose === CLI_SESSION_SCOPE_PURPOSE) {
+    return userId
+      ? undefined
+      : `Forbidden: a CLI session key acts for the person who created it, and this surface resolved no such person, so it may not invoke ${capabilityName}.`;
+  }
 
   if (purpose === TACHO_GATEWAY_PURPOSE) {
     // The observation the enforcement tier is derived from.

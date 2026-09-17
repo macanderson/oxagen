@@ -51,6 +51,9 @@ export function bootstrapIAMRuntime(): void {
       orgId: args.ctx.orgId,
       apiKeyId: args.ctx.apiKeyId,
       capabilityName: args.capability,
+      // The CLI-session exemption needs the resolved person; a surface that
+      // dropped them gets a refusal rather than the exemption.
+      userId: args.ctx.userId,
     });
     if (machineDenial !== undefined) {
       return {
