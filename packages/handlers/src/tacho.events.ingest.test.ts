@@ -398,6 +398,12 @@ function wire(db: FakeDb): void {
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
+        // The gateway-column probe asks `information_schema` before the
+        // handler reads or writes a column migration 20260917140000 adds. This
+        // fixture answers "applied", which is the state every case here is
+        // about; the half-applied and not-yet-applied states are covered as
+        // unit cases on `enforcementTierOf` and `hasColumn`.
+        execute: async () => [{ "?column?": 1 }],
         query: {
           apiKeys: {
             findFirst: async () => ({
@@ -1824,6 +1830,7 @@ describe("enforcementTierOf", () => {
         [event({ agent: { enforcement_tier: "gateway" } })],
         unwatched("observe"),
         null,
+        true,
       ),
     ).toBe("observe");
   });
@@ -1841,6 +1848,7 @@ describe("enforcementTierOf", () => {
         ],
         watched("observe"),
         null,
+        true,
       ),
     ).toBe("gateway");
   });
@@ -1855,6 +1863,7 @@ describe("enforcementTierOf", () => {
         [event({ attrs: { "oxagen.enforcement_tier": "gateway" } }), event()],
         watched("enforce"),
         null,
+        true,
       ),
     ).toBe("gateway");
   });
@@ -1866,6 +1875,7 @@ describe("enforcementTierOf", () => {
         [event({ attrs: { "oxagen.enforcement_tier": "gateway" } }), event()],
         unwatched("observe"),
         null,
+        true,
       ),
     ).toBe("observe");
   });
@@ -1878,6 +1888,7 @@ describe("enforcementTierOf", () => {
         [event({ attrs: { "oxagen.enforcement_tier": "gateway" } })],
         watched("observe"),
         new Date(AT.getTime() + 1),
+        true,
       ),
     ).toBe("observe");
     expect(
@@ -1885,6 +1896,7 @@ describe("enforcementTierOf", () => {
         [event({ attrs: { "oxagen.enforcement_tier": "gateway" } })],
         watched("observe"),
         AT,
+        true,
       ),
     ).toBe("gateway");
   });
@@ -1893,17 +1905,44 @@ describe("enforcementTierOf", () => {
     // A wrapped agent's chain never carries one, so promotion cannot reach it
     // even on a host the server HAS watched serve gateway calls.
     expect(
-      enforcementTierOf([event(), event()], watched("enforce"), null),
+      enforcementTierOf([event(), event()], watched("enforce"), null, true),
     ).toBe("harness");
   });
 
   it("falls back to the host mode when nothing says otherwise", () => {
-    expect(enforcementTierOf([event()], unwatched("observe"), null)).toBe(
+    expect(enforcementTierOf([event()], unwatched("observe"), null, true)).toBe(
       "observe",
     );
-    expect(enforcementTierOf([event()], unwatched("enforce"), null)).toBe(
+    expect(enforcementTierOf([event()], unwatched("enforce"), null, true)).toBe(
       "harness",
     );
+  });
+  it("refuses gateway when there is nowhere to record the evidence", () => {
+    // Migration 20260917140000 adds the host column and the session column in
+    // two statements, so a run that fails between them leaves a database that
+    // can DERIVE the tier and cannot RECORD what justifies it
+    // (discussion_r4040750815). The tier is monotonic, so a session sealed in
+    // that window would carry `gateway` with a null observation for good.
+    //
+    // Same batch and same watched host as the case that returns `gateway`
+    // above — only the evidence column differs, which is what makes this
+    // discriminating.
+    expect(
+      enforcementTierOf(
+        [event({ attrs: { "oxagen.enforcement_tier": "gateway" } }), event()],
+        watched("enforce"),
+        null,
+        false,
+      ),
+    ).toBe("harness");
+    expect(
+      enforcementTierOf(
+        [event({ attrs: { "oxagen.enforcement_tier": "gateway" } }), event()],
+        watched("observe"),
+        null,
+        false,
+      ),
+    ).toBe("observe");
   });
 });
 

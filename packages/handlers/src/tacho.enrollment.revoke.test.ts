@@ -101,6 +101,10 @@ function fakeDb(
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
+        // The gateway-column probe asks `information_schema` before a read
+        // that names a column migration 20260917140000 adds. "Applied" is the
+        // state these cases are about.
+        execute: async () => [{ "?column?": 1 }],
         query: { tachoHosts: { findFirst: async () => host } },
         update: (table: unknown) => ({
           set: () => ({

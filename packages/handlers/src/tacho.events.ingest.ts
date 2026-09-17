@@ -343,9 +343,24 @@ export function enforcementTierOf(
   events: TachoEvent[],
   host: GatewayObservable,
   sinceAt: Date | null,
+  // Whether `tacho.sessions.gateway_observed_at` exists yet.
+  //
+  // `gateway` is never assigned without somewhere to write the observation
+  // that justifies it (discussion_r4040750815). Migration 20260917140000 adds
+  // the host column and the session column in two statements, so a run that
+  // fails between them leaves a database that can derive the tier and cannot
+  // record its evidence — and the tier is monotonic, so a session sealed in
+  // that window would carry `gateway` with a null observation for good, with
+  // no later batch able to repair it.
+  //
+  // Falling back to the host's own mode is the conservative answer and it is
+  // self-correcting: the probe re-asks once a minute, and a session that was
+  // not sealed meanwhile is promoted by the next batch, evidence and all.
+  evidenceColumn: boolean,
 ): string {
   const observed = gatewayObservationFor(host);
   if (
+    evidenceColumn &&
     observed !== null &&
     (sinceAt == null || observed.getTime() >= sinceAt.getTime()) &&
     carriesGatewayCall(events)
@@ -400,7 +415,7 @@ function genesisRow(
   const ingestedAt = new Date(first.ts);
   // `null`: this row is the session's creation, so there is no earlier
   // lifetime for the host's observation to predate.
-  const tier = enforcementTierOf(events, host, null);
+  const tier = enforcementTierOf(events, host, null, sessionGatewayColumn);
   return {
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
@@ -767,6 +782,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         events,
         host,
         existing?.createdAt ?? null,
+        sessionGatewayColumn,
       );
       const promoteToGateway =
         existing !== undefined &&

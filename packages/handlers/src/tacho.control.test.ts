@@ -176,6 +176,10 @@ function wire(db: Fake, apiKey: Record<string, unknown> = HOST_KEY): void {
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
+        // The gateway-column probe asks `information_schema` before a read
+        // that names a column migration 20260917140000 adds. "Applied" is the
+        // state these cases are about.
+        execute: async () => [{ "?column?": 1 }],
         query: {
           apiKeys: { findFirst: async () => apiKey },
           tachoHosts: {
