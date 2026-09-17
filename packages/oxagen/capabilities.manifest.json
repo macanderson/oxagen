@@ -3964,7 +3964,7 @@
       "layers": {
         "schema": true,
         "api": true,
-        "unit": false,
+        "unit": true,
         "docs": true,
         "app": true
       }
@@ -3982,7 +3982,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true,
         "app": true
       }
