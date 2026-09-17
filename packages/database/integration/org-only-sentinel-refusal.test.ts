@@ -1,5 +1,5 @@
 /**
- * The org-only workspace sentinel refuses rather than hides (#3132, ADR-075).
+ * The org-only workspace sentinel refuses rather than hides (#3132, ADR-082).
  *
  * An organisation-level surface has no workspace, so it enters the kernel with
  * `ORG_ONLY_WORKSPACE_ID` — the nil uuid — as its scope's workspace. Until this

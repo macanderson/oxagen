@@ -1,7 +1,8 @@
 // Shared `no-restricted-imports` config that bans the raw data-store seam
 // clients outside their owning packages. Every tenant data access must go
 // through a scope-aware wrapper so Row-Level Security stays load-bearing:
-//   - Postgres:   withTenantDb (scoped) / withSystemDb (explicit, audited bypass)
+//   - Postgres:   withTenantDb (scoped) / withOrgDb (organisation-wide read,
+//                 RLS still on, ADR-075) / withSystemDb (explicit, audited bypass)
 //   - Neo4j:      scopedSession()
 //   - ClickHouse: chInsert / chSelect
 // Imported by both the root config (non-Next packages + apps/api, apps/mcp) and
@@ -17,15 +18,16 @@ export const tenancySeamRestrictedImports = {
       name: "@oxagen/database",
       importNames: ["db"],
       message:
-        "Raw db() bypasses tenant RLS scoping. Use withTenantDb (scoped) or " +
-        "withSystemDb (explicit, audited bypass) from @oxagen/database. (OXA-1515)",
+        "Raw db() bypasses tenant RLS scoping. Use withTenantDb (scoped), " +
+        "withOrgDb (organisation-wide read, RLS still on) or withSystemDb " +
+        "(explicit, audited bypass) from @oxagen/database. (OXA-1515)",
     },
     {
       name: "@oxagen/database/client",
       importNames: ["db"],
       message:
-        "Raw db() bypasses tenant RLS scoping. Use withTenantDb / withSystemDb " +
-        "from @oxagen/database. (OXA-1515)",
+        "Raw db() bypasses tenant RLS scoping. Use withTenantDb / withOrgDb / " +
+        "withSystemDb from @oxagen/database. (OXA-1515)",
     },
     {
       // `driver` is banned alongside `session`: driver().session() hands back

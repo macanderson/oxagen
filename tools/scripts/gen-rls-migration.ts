@@ -50,7 +50,7 @@ const WS = `nullif(current_setting('app.current_workspace_id', true), '')::uuid`
 const BYPASS = `current_setting('app.rls_bypass', true) = 'on'`;
 /**
  * The organisation-wide READ mode, set by `withOrgDb` and by nothing else
- * (ADR-075). It appears in USING and NEVER in WITH CHECK: a read may span the
+ * (ADR-082). It appears in USING and NEVER in WITH CHECK: a read may span the
  * organisation's workspaces, a write may not — `withOrgDb` widens what you can
  * see, never what you can land, so a row still has to name the workspace whose
  * scope the writer is in.
@@ -60,7 +60,7 @@ const BYPASS = `current_setting('app.rls_bypass', true) = 'on'`;
  * workspace". Do not rely on that ordering to avoid the uuid cast: Postgres
  * folds stable functions during selectivity estimation, so `WS` is evaluated
  * at PLAN time whatever the disjunct in front of it says. That is the property
- * the org-only refusal is built on (ADR-075) and the reason `withOrgDb` leaves
+ * the org-only refusal is built on (ADR-082) and the reason `withOrgDb` leaves
  * the workspace GUC empty rather than at the org-only marker.
  */
 const ORG_WIDE = `current_setting('app.org_wide', true) = 'on'`;
@@ -192,7 +192,7 @@ CREATE POLICY tenant_isolation ON ${table}
 -- when TENANT_RLS_ENFORCEMENT_ENABLED=false) disables filtering; tenant
 -- sessions get app.current_org_id / app.current_workspace_id via withTenantDb.
 --
--- Org-wide-aware (ADR-075): app.org_wide='on', set by withOrgDb and nothing
+-- Org-wide-aware (ADR-082): app.org_wide='on', set by withOrgDb and nothing
 -- else, widens the READ of an org-scoped table to every workspace in the
 -- organisation while the org fence still holds. It is absent from WITH CHECK,
 -- so writes stay pinned to the workspace in scope, and absent from

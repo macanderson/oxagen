@@ -100,7 +100,7 @@ describe("withTenantDb", () => {
   });
 });
 
-describe("the org-only workspace GUC (#3132, ADR-075)", () => {
+describe("the org-only workspace GUC (#3132, ADR-082)", () => {
   // The seam is the one place the translation happens, and the whole refusal
   // rests on the value NOT being a uuid. A test that only checked "the GUC is
   // set" would pass on the nil uuid that caused the defect.

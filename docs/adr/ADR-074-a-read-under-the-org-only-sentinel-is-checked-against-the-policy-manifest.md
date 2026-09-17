@@ -1,6 +1,22 @@
 # ADR-074: A read under the org-only workspace sentinel is checked against the policy manifest
 
-- **Status:** Accepted
+- **Status:** Accepted; **decision 3 superseded by
+  [ADR-082](./ADR-082-an-org-only-read-of-a-workspace-scoped-table-raises.md)**
+  (2026-09-17). The enforcement this ADR chose — `pnpm
+  check:org-sentinel-reads` — did not converge, which is what the section
+  "This check is best-effort, and it does not converge" below says in its own
+  words, and the script, its baseline and its CI step are deleted. The
+  enforcement moved into Postgres: an org-only scope now sets
+  `app.current_workspace_id` to a value that is not a uuid, so a policy that
+  casts it RAISES at plan time rather than narrowing. That is the move the
+  "Where the enforcement belongs" section below recommends and the
+  "Refusing at the database" alternative sets aside; ADR-082 is the record of
+  taking it, of the `withOrgDb` seam that made it possible, and of what the
+  runtime mechanism does and does not cover. **The check's job — enumerating
+  the call sites so the refusal could be turned on — is finished.**
+  Everything else here stands: the Context is the record of what the defect
+  cost, and "The two things RLS was also doing" is still the reason a
+  conversion off `withTenantDb` is never just a seam swap.
 - **Date:** 2026-09-16
 - **Owners:** platform, app
 - **Related:** ADR-068 (one org-only workspace sentinel, shared by every
@@ -570,7 +586,16 @@ ones. Those call sites have to be converted first.
 permanent gate but as the instrument that enumerates the call sites so the
 runtime refusal can be turned on — and then it becomes redundant, which is the
 right end for it. Tracked as #3132, whose definition of done includes deleting
-this script and its baseline. That is also why closing the coverage hole
+this script and its baseline.
+
+**That is what happened.** #3132 landed the refusal and deleted the script,
+its baseline and its CI step; ADR-082 records it. One thing the enumeration
+turned up that this section did not anticipate: the refusal is raised while
+the statement is PLANNED, because Postgres folds stable functions during
+selectivity estimation. So it does not depend on a hidden row being scanned —
+an empty table raises, a `LIMIT` that would have stopped early raises, and
+`app.rls_bypass = 'on'` does not suppress it. The last of those is why
+`withOrgDb` leaves the workspace GUC empty rather than at the marker. That is also why closing the coverage hole
 mattered more than the precision gaps: the agent package's call sites were
 invisible, so a conversion driven by this inventory would have missed all 45. Until that lands it is worth keeping, because a net with a
 known mesh catches more than no net. It should not be read as proof that the
