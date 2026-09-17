@@ -16,6 +16,34 @@
  * the real schema, and the two SQL expressions a WHERE carries —
  * `gauRemainingSql()` and `gauUninvoicedSql()` — are evaluated by their
  * documented meaning (the uninvoiced one unfloored, as the SQL is).
+ *
+ * ── Before you add a test against this seam, read this ──────────────────────
+ *
+ * A fake that does not refuse what the real thing refuses is not a test
+ * double. It is a second implementation with different rules, and every gap
+ * between the two is a test that passes for the wrong reason.
+ *
+ * That is not hypothetical here. Three gaps have been found in this file, each
+ * of which had been letting a wrong implementation pass:
+ *
+ *   1. It did not enforce the tables' CHECK constraints. An implementation
+ *      that skipped the reversal clamp stored `purchased_gau = -5000` and went
+ *      green; Postgres refuses it outright with
+ *      `gau_buckets_counts_non_negative` and would have failed the webhook on
+ *      every redelivery. `assertChecks` now mirrors the constraints.
+ *   2. A bare `await tx.insert(...).values(...)` did nothing. Drizzle executes
+ *      it; the fake returned a builder object, so a row the code really writes
+ *      never appeared in the store — which reads as "the code did not write
+ *      it" in a test that checks, and as a pass in every test that does not.
+ *   3. `select().from().where()` resolved only on `.limit()`. Drizzle runs the
+ *      query at every stage, so an unlimited read awaited the chain object and
+ *      the caller got something that was not an array.
+ *
+ * The pattern is one-directional: each gap made the fake *more permissive*
+ * than Postgres, never less. So when you add a statement shape here, ask what
+ * the database would reject that this would accept — and prefer throwing on
+ * anything unmodelled (as `evalSet` and the arbiter checks already do) over
+ * guessing, because a guess is indistinguishable from a pass.
  */
 
 import { getTableColumns, is, Param, StringChunk, type SQL } from "drizzle-orm";
