@@ -4,118 +4,86 @@ import { eq, and, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
 import { getOrgSeatUsage, SeatLimitError } from "./seats";
-import {
-  MICRO_USD_PER_CENT,
-  planPriceMicros,
-  type PlanPriceDirection,
-} from "./pricing";
+import type { BillingProrationPreview } from "./provider";
 
-/**
- * What the org is billed per period on the subscription it holds RIGHT NOW,
- * in micro-USD, and where the figure came from.
- *
- * Not the plan row. `billing.plans` is the catalogue as it stands today, and
- * provider prices are immutable: `tools/scripts/stripe-sync.ts` mints a new
- * price on a reprice and overwrites the plan row while every live
- * subscription stays on the price it was created with. A grandfathered $100
- * subscriber therefore sits behind a plan row reading $200, and comparing
- * against the row turns a move to a $150 plan into $200 → $150 — a decrease,
- * shipped with `proration_behavior: 'none'`, dropping the immediate charge on
- * a real increase (#3157, PR #3171 review).
- *
- * Order of resort:
- *  1. `subscriptions.unit_amount_cents`, written by
- *     {@link syncSubscriptionFromStripe} on every `subscription.*` webhook —
- *     authoritative, and free on this path.
- *  2. The provider, for a row written before that column existed and not yet
- *     re-synced. One read, only on those rows, and the set shrinks to nothing
- *     as webhooks arrive.
- *  3. Nothing. The caller gets null and settles conservatively rather than
- *     substituting the catalogue figure, which is the number that inverts.
- *
- * This is independent of #3180. Whatever is decided about `-v2` slugs and
- * whether `stripe-sync.ts` should overwrite a plan row at all, what a given
- * subscriber pays is still a property of their subscription, not of the
- * catalogue.
- */
-async function billedMicrosForSubscription(activeSub: {
-  stripeSubscriptionId: string;
-  unitAmountCents?: number | null;
-}): Promise<{
-  micros: bigint | null;
-  source: "subscription" | "provider" | "none";
-}> {
-  if (typeof activeSub.unitAmountCents === "number") {
-    return {
-      micros: BigInt(activeSub.unitAmountCents) * MICRO_USD_PER_CENT,
-      source: "subscription",
-    };
-  }
-  try {
-    const live = await billingProvider().getSubscription(
-      activeSub.stripeSubscriptionId,
-    );
-    if (typeof live.unitAmountCents === "number") {
-      return {
-        micros: BigInt(live.unitAmountCents) * MICRO_USD_PER_CENT,
-        source: "provider",
-      };
-    }
-  } catch (err) {
-    // Never fail a plan change over this lookup — an unresolved price settles
-    // as always_invoice below, which bills the true difference either way.
-    logger.warn(
-      { stripeSubId: activeSub.stripeSubscriptionId, err },
-      "billing: could not read the subscription's own price from the provider",
-    );
-  }
-  return { micros: null, source: "none" };
+/** Which way the money moves across a plan change, and what the swap owes now. */
+export interface PlanChangeDirection {
+  prorationBehavior: "always_invoice" | "none";
+  direction: "increase" | "decrease" | "unchanged" | "unknown";
+  /** Net proration in cents, discounts included; null when unresolved. */
+  amountCents: number | null;
+  /** The previewed invoice itself; null when the preview could not be taken. */
+  preview: BillingProrationPreview | null;
 }
 
 /**
- * Proration flag for a plan change, decided from the money and nothing else.
+ * Which way a plan change moves the money, measured by previewing the invoice
+ * the change would raise.
  *
- * THIS ANSWERS: *is the org about to be billed more?* The feature ordering in
- * `entitlements.ts` (`TIER_ORDER` / `meetsMinimumTier`) answers a different
- * question — *does this plan include that feature?* — and the two orderings do
- * not agree in the live catalogue: Enterprise outranks Scale on features and
- * costs half as much. Deciding proration from the feature rank raised no
- * invoice on Enterprise→Scale, where the bill doubles, and charged one on
- * Scale→Enterprise, where it halves (#3157). Nothing in this file may read a
- * tier rank again.
+ * WHY A PREVIEW AND NOT A FIELD. Three times this decision has been made from
+ * something that stands in for the money, and three times the stand-in has
+ * inverted:
  *
- * The `from` side is the subscription's own price, from
- * {@link billedMicrosForSubscription} — not the plan row, for the reason given
- * there. The `to` side is the catalogue, which is correct: the target plan is
- * what a new price would be minted from.
+ *  1. The entitlement tier rank was a proxy for price — until Enterprise was
+ *     priced below Scale (#3157).
+ *  2. The `billing.plans` row was a proxy for what the subscriber pays — until
+ *     a reprice left grandfathered subscribers on an older, immutable price.
+ *  3. `price.unit_amount` was a proxy for what the subscriber pays — until a
+ *     discount. `allow_promotion_codes` is set on both checkout paths, so a
+ *     $200 price discounted to $100 moving to an undiscounted $150 read as a
+ *     decrease and dropped the charge, exactly as the first two did.
  *
- * A side that cannot be priced settles as `always_invoice`, which asks Stripe
- * to compute the true prorated difference and settle it in whichever direction
- * it falls. `none` is the choice that silently drops money, so it is never the
- * fallback.
+ * Each fix replaced a proxy with a closer proxy, and each closer proxy had its
+ * own inversion. The preview is not a closer proxy; it is the money. Stripe
+ * computes the prorated credit for unused time on the old price and the
+ * prorated charge for the new one, applies the customer's discounts, and
+ * returns the net. Positive means the change bills more. There is no fourth
+ * field to be wrong about.
+ *
+ * The preview runs under `create_prorations`, which produces the same
+ * proration lines `always_invoice` would and issues no invoice, so asking the
+ * question does not charge anybody. `none` is not usable here: it produces no
+ * proration lines at all, so it cannot answer what it is being asked.
+ *
+ * A preview that cannot be obtained settles as `always_invoice`. That asks
+ * Stripe to compute the true difference and settle it in whichever direction
+ * it falls — a credit if the bill went down. `none` is the branch that
+ * silently drops money, so it is never the fallback.
+ *
+ * The entitlement ordering in `entitlements.ts` (`TIER_ORDER` /
+ * `meetsMinimumTier`) answers a different question — *does this plan include
+ * that feature?* — and is never read here.
  */
-function prorationFromMicros(
-  fromMicros: bigint | null,
-  toMicros: bigint | null,
-): {
-  prorationBehavior: "always_invoice" | "none";
-  direction: PlanPriceDirection;
-} {
-  const direction: PlanPriceDirection =
-    fromMicros === null || toMicros === null
-      ? "unknown"
-      : toMicros > fromMicros
-        ? "increase"
-        : toMicros < fromMicros
-          ? "decrease"
-          : "unchanged";
-  return {
-    prorationBehavior:
-      direction === "decrease" || direction === "unchanged"
-        ? "none"
-        : "always_invoice",
-    direction,
-  };
+async function planChangeDirection(
+  stripeSubscriptionId: string,
+  newPriceId: string,
+): Promise<PlanChangeDirection> {
+  try {
+    const preview = await billingProvider().previewPlanChange(
+      stripeSubscriptionId,
+      { newPriceId, prorationBehavior: "create_prorations" },
+    );
+    const amountCents = preview.amountCents;
+    const direction =
+      amountCents > 0 ? "increase" : amountCents < 0 ? "decrease" : "unchanged";
+    return {
+      prorationBehavior: direction === "increase" ? "always_invoice" : "none",
+      direction,
+      amountCents,
+      preview,
+    };
+  } catch (err) {
+    logger.warn(
+      { stripeSubId: stripeSubscriptionId, newPriceId, err },
+      "billing: plan-change preview failed — settling as always_invoice so the true difference is billed either way",
+    );
+    return {
+      prorationBehavior: "always_invoice",
+      direction: "unknown",
+      amountCents: null,
+      preview: null,
+    };
+  }
 }
 
 /**
@@ -184,11 +152,11 @@ export async function syncSubscriptionFromStripe(
       planId,
       stripeSubscriptionId: sub.id,
       stripeCustomerId: sub.customerId,
-      // The price this subscription is actually on, recorded so the proration
-      // decision does not have to read the catalogue's current figure for a
-      // grandfathered subscriber (#3157).
+      // WHICH price this subscription is on. An identity, not an amount —
+      // it recognises a subscription already sitting on the price being asked
+      // for. The proration direction is measured by previewing the invoice
+      // (#3157), never by comparing a stored figure.
       stripePriceId: sub.priceId,
-      unitAmountCents: sub.unitAmountCents,
       status: sub.status,
       billingInterval: sub.billingInterval,
       currentPeriodStart: sub.currentPeriodStart,
@@ -207,7 +175,6 @@ export async function syncSubscriptionFromStripe(
         set: {
           planId: row.planId,
           stripePriceId: row.stripePriceId,
-          unitAmountCents: row.unitAmountCents,
           status: row.status,
           billingInterval: row.billingInterval,
           currentPeriodStart: row.currentPeriodStart,
@@ -463,12 +430,10 @@ export async function setSubscriptionSeats(
 /**
  * Change an org's plan to any other plan (any tier → any tier).
  *
- * The direction is decided from the money: the amount the org is billed per
- * period today — read off the subscription's own price, not the catalogue row
- * behind it, so a grandfathered subscriber is compared against what they
- * actually pay — against the amount the target plan bills per period at the
- * interval it is moving to. Tier rank plays no part. See
- * {@link billedMicrosForSubscription} and {@link prorationFromMicros}.
+ * The direction is decided by previewing the invoice the change would raise
+ * and reading its sign — the actual money, discounts included, rather than any
+ * stored or catalogued figure standing in for it. See
+ * {@link planChangeDirection} for why every such stand-in has inverted.
  *
  * Bill rises (or cannot be priced): swap the price immediately and invoice the
  *   proration now.
@@ -535,9 +500,8 @@ export async function changeOrgPlan(
           // and each side of the price comparison is priced on its own
           // interval.
           billingInterval: true,
-          // What this subscription is actually billed, which a catalogue
-          // reprice does not move (#3157).
-          unitAmountCents: true,
+          // Recognises a retry that lands on a subscription already swapped.
+          stripePriceId: true,
         },
       }),
     ),
@@ -578,15 +542,29 @@ export async function changeOrgPlan(
     }),
   );
 
+  // Already on the price being asked for — the swap has happened. This is the
+  // retry of a call whose response was lost: the provider applied the change
+  // and `syncSubscriptionFromStripe` recorded it, so re-issuing the update
+  // would compare a subscription against its own current price, read
+  // "unchanged", and send `none` where the first attempt sent
+  // `always_invoice`. Stripe rejects a reused idempotency key whose parameters
+  // changed rather than replaying the cached success, and the app action does
+  // not pass a requestId, so the key is identical across the two attempts.
+  // Returning here makes the retry the no-op it should be.
+  if (activeSubRow.stripePriceId && activeSubRow.stripePriceId === newPriceId) {
+    logger.info(
+      { orgId, targetPlanSlug, interval, newPriceId },
+      "billing: changeOrgPlan — subscription is already on the target price, nothing to swap",
+    );
+    return null;
+  }
+
   // Active subscription — swap the price in-place. Proration follows the money
-  // the subscriber is actually billed.
+  // the change will actually move.
   const currentInterval: "month" | "year" =
     activeSubRow.billingInterval === "year" ? "year" : "month";
-  const billedNow = await billedMicrosForSubscription(activeSubRow);
-  const { prorationBehavior, direction } = prorationFromMicros(
-    billedNow.micros,
-    planPriceMicros(targetPlan, interval),
-  );
+  const { prorationBehavior, direction, amountCents } =
+    await planChangeDirection(activeSubRow.stripeSubscriptionId, newPriceId);
   const isUpgrade = direction === "increase";
 
   // Use activeSubRow from now on (renamed to avoid confusion).
@@ -600,8 +578,7 @@ export async function changeOrgPlan(
       currentTier: currentPlanRow?.tier,
       targetTier: targetPlan.tier,
       currentInterval,
-      billedNowMicros: billedNow.micros?.toString() ?? null,
-      billedNowSource: billedNow.source,
+      previewedProrationCents: amountCents,
       priceDirection: direction,
       isUpgrade,
       prorationBehavior,
@@ -882,10 +859,7 @@ export async function previewPlanChange(
           stripeSubscriptionId: true,
           stripeCustomerId: true,
           planId: true,
-          // Priced on the interval the org is billed on today, at the amount
-          // its own price charges — see billedMicrosForSubscription.
           billingInterval: true,
-          unitAmountCents: true,
         },
       }),
     ),
@@ -990,17 +964,19 @@ export async function previewPlanChange(
   // only reintroduce the catalogue figure this path must not read (#3157).
   const currentInterval: "month" | "year" =
     activeSub.billingInterval === "year" ? "year" : "month";
-  const billedNow = await billedMicrosForSubscription(activeSub);
-  const { prorationBehavior, direction } = prorationFromMicros(
-    billedNow.micros,
-    planPriceMicros(targetPlan, interval),
-  );
+  // One preview answers both questions: which way the money moves, and how
+  // much of it moves now. Taken exactly as changeOrgPlan takes it, because a
+  // preview computed from one measure while the change bills against another
+  // quotes a price the change will not honour (#3157).
+  const { prorationBehavior, direction, amountCents, preview } =
+    await planChangeDirection(activeSub.stripeSubscriptionId, newPriceId);
   const isUpgrade = direction === "increase";
 
-  const preview = await billingProvider().previewPlanChange(
-    activeSub.stripeSubscriptionId,
-    { newPriceId, prorationBehavior },
-  );
+  // What the customer is actually asked for now. A change that does not raise
+  // the bill ships `none`, which writes no proration line, so nothing is owed
+  // at the moment of the swap however large the previewed credit was.
+  const chargedNowCents =
+    prorationBehavior === "always_invoice" ? (amountCents ?? 0) : 0;
 
   const card = await resolveDefaultCard(activeSub.stripeCustomerId);
 
@@ -1010,11 +986,10 @@ export async function previewPlanChange(
       targetPlanSlug,
       interval,
       currentInterval,
-      billedNowMicros: billedNow.micros?.toString() ?? null,
-      billedNowSource: billedNow.source,
+      previewedProrationCents: amountCents,
       priceDirection: direction,
       isUpgrade,
-      amountCents: preview.amountCents,
+      amountCents: chargedNowCents,
       requiresCheckout: false,
       durationMs: Date.now() - start,
     },
@@ -1024,11 +999,11 @@ export async function previewPlanChange(
   return {
     targetPlanSlug,
     interval,
-    amountCents: preview.amountCents,
-    isCharge: preview.isCharge,
-    currency: preview.currency,
+    amountCents: chargedNowCents,
+    isCharge: chargedNowCents > 0,
+    currency: preview?.currency ?? "usd",
     card,
-    prorationDate: preview.prorationDate,
+    prorationDate: preview?.prorationDate ?? Math.floor(Date.now() / 1000),
     requiresCheckout: false,
   };
 }

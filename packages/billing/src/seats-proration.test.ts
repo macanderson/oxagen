@@ -138,11 +138,10 @@ function makeActiveSubRow(overrides: Partial<Record<string, unknown>> = {}) {
     stripeCustomerId: "cus_test",
     seatCount: 5,
     planId: "plan-uuid-build",
-    // The interval the org is billed on, and what its own price charges — the
-    // proration decision reads both off the subscription, not the catalogue
-    // row behind it (#3157).
+    // The interval the org is billed on, and WHICH price it sits on. The
+    // proration direction comes from the previewed invoice (#3157).
     billingInterval: "month",
-    unitAmountCents: 2000,
+    stripePriceId: "price_build_mo",
     status: "active",
     ...overrides,
   };
@@ -436,7 +435,7 @@ describe("previewPlanChange", () => {
     expect(result.amountCents).toBe(20000);
   });
 
-  it("bill rises ($20/mo → $99/mo) — requiresCheckout=false, provider preview used", async () => {
+  it("bill rises — requiresCheckout=false, the previewed charge is quoted", async () => {
     // First call (active sub check), second call (current plan lookup),
     // third call (resolveCustomerId).
     subscriptionsFindFirstMock
@@ -453,14 +452,7 @@ describe("previewPlanChange", () => {
         monthlyCents: 9900,
         annualCents: 99000,
       })
-      // Current plan, priced: the proration flag is a price comparison, so the
-      // current row has to carry a price for it to compare against.
-      .mockResolvedValueOnce({
-        slug: "build-v2",
-        tier: "build",
-        monthlyCents: 2000,
-        annualCents: 20000,
-      });
+      .mockResolvedValueOnce({ slug: "build-v2", tier: "build" });
 
     previewPlanChangeMock.mockResolvedValue(
       makeProrationPreview({ amountCents: 7500, isCharge: true }),
@@ -472,18 +464,22 @@ describe("previewPlanChange", () => {
     expect(result.amountCents).toBe(7500);
     expect(result.isCharge).toBe(true);
 
-    // Bill rises → always_invoice.
+    // Measured under create_prorations — the flag that yields the proration
+    // lines without raising an invoice. The decision is the sign it returns.
     const callArgs = previewPlanChangeMock.mock.calls[0] as [
       string,
       { newPriceId: string; prorationBehavior: string },
     ];
-    expect(callArgs[1].prorationBehavior).toBe("always_invoice");
+    expect(callArgs[1].prorationBehavior).toBe("create_prorations");
   });
 
-  it("bill falls ($99/mo → $20/mo) — prorationBehavior none, amountCents=0", async () => {
+  it("bill falls — prorationBehavior none, amountCents=0", async () => {
     subscriptionsFindFirstMock
       .mockResolvedValueOnce(
-        makeActiveSubRow({ planId: "plan-scale", unitAmountCents: 9900 }),
+        makeActiveSubRow({
+          planId: "plan-scale",
+          stripePriceId: "price_scale_mo",
+        }),
       )
       .mockResolvedValueOnce({ stripeCustomerId: "cus_001" });
 
@@ -496,25 +492,19 @@ describe("previewPlanChange", () => {
         monthlyCents: 2000,
         annualCents: null,
       })
-      .mockResolvedValueOnce({
-        slug: "scale-v2",
-        tier: "scale",
-        monthlyCents: 9900,
-        annualCents: 99000,
-      }); // current plan
+      .mockResolvedValueOnce({ slug: "scale-v2", tier: "scale" }); // current plan
 
+    // A real credit, which a downgrade never raises: the swap ships `none`.
     previewPlanChangeMock.mockResolvedValue(
-      makeProrationPreview({ amountCents: 0, isCharge: false }),
+      makeProrationPreview({ amountCents: -7_900, isCharge: false }),
     );
 
     const result = await previewPlanChange("org-001", "build-v2", "month");
 
     expect(result.requiresCheckout).toBe(false);
-    const callArgs = previewPlanChangeMock.mock.calls[0] as [
-      string,
-      { newPriceId: string; prorationBehavior: string },
-    ];
-    expect(callArgs[1].prorationBehavior).toBe("none");
+    // Quoted as zero, because zero is what the change will move.
+    expect(result.amountCents).toBe(0);
+    expect(result.isCharge).toBe(false);
   });
 
   it("throws when target plan slug is not found", async () => {

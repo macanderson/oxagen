@@ -52,19 +52,12 @@ export interface BillingSubscription {
   /**
    * Provider price id of the first line item; null when none.
    *
-   * Prices are immutable at the provider, and a catalogue reprice mints a new
-   * one while existing subscriptions keep the old. So this — not the plan row
-   * the catalogue overwrites — is what identifies the price a given subscriber
-   * is actually on (#3157).
+   * An identity, not an amount: it says WHICH price this subscription is on,
+   * never what it costs. A plan change compares money by previewing the
+   * invoice (#3157); this is used only to recognise a subscription that is
+   * already on the price being asked for.
    */
   priceId: string | null;
-  /**
-   * What one billing period of that price costs, in cents; null when the line
-   * carries no unit amount (metered or tiered prices). The authoritative
-   * answer to "what does this subscriber pay", as opposed to "what does the
-   * catalogue charge today".
-   */
-  unitAmountCents: number | null;
   seatCount: number;
 }
 

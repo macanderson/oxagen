@@ -28,7 +28,8 @@ import type { PlanTier } from "@oxagen/oxagen/types";
  * the immutable audit log), and below Scale on price — $500/mo against $999/mo
  * in `pricing.ts`. Reading this rank as a price direction under-billed every
  * Enterprise→Scale plan change and over-billed every Scale→Enterprise one
- * (#3157). Money questions go to `planPriceDirection` in `pricing.ts`.
+ * (#3157). Money questions are answered by previewing the invoice the change
+ * would raise — see `planChangeDirection` in `subscriptions.ts`.
  */
 const TIER_ORDER: Record<PlanTier, number> = {
   free: 0,

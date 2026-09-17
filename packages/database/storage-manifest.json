@@ -2521,7 +2521,7 @@
       "writes": []
     }
   ],
-  "contentHash": "19a04dd4343c2a8d6cd0c952b962624e14638cb0dd0faa89c7ef01511b96c85e",
+  "contentHash": "5c5d664dd557cbffff410481858048542d621bc426b4ee8a5a3da5fa6a74ac3e",
   "domains": [
     {
       "name": "agent",
@@ -8886,12 +8886,6 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
-        },
-        {
-          "name": "unit_amount_cents",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "integer"
         },
         {
           "name": "status",

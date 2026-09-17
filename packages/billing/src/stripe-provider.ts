@@ -58,6 +58,15 @@ function automaticTaxEnabled(): boolean {
  * Reduce a previewed invoice down to the net proration of the simulated change.
  * Sums only the proration line items (the deltas Stripe would invoice now or
  * credit), so the caller can show "you'll be charged $X" / "we'll credit $X".
+ *
+ * NET OF DISCOUNTS. A line's `amount` is what the price lists, before any
+ * coupon or promotion code; what the customer actually owes for that line is
+ * `amount` minus its `discount_amounts`. Summing the gross figure overstates
+ * the quote for every discounted subscriber — and since this number is also
+ * what decides the proration direction (#3157), a gross sum would call a
+ * discounted increase a decrease and drop the charge. `allow_promotion_codes`
+ * is set on both checkout paths, so discounted subscriptions are a state we
+ * deliberately create.
  */
 function summarizeProration(
   preview: Stripe.Invoice,
@@ -65,11 +74,17 @@ function summarizeProration(
 ): BillingProrationPreview {
   const prorationLines = (preview.lines?.data ?? [])
     .filter((l) => l.proration === true)
-    .map((l) => ({
-      description: l.description ?? "",
-      amountCents: l.amount,
-      proration: true,
-    }));
+    .map((l) => {
+      const discounted = (l.discount_amounts ?? []).reduce(
+        (sum, d) => sum + d.amount,
+        0,
+      );
+      return {
+        description: l.description ?? "",
+        amountCents: l.amount - discounted,
+        proration: true,
+      };
+    });
   const amountCents = prorationLines.reduce((sum, l) => sum + l.amountCents, 0);
   return {
     amountCents,
@@ -170,17 +185,6 @@ function resolveProductId(sub: Stripe.Subscription): string | null {
 
 function resolvePriceId(sub: Stripe.Subscription): string | null {
   return sub.items.data[0]?.price?.id ?? null;
-}
-
-/**
- * The amount the subscription's own price charges per period. Stripe prices
- * are immutable, so a grandfathered subscriber's line still carries the old
- * amount after the catalogue has moved on — which is exactly the figure a
- * proration decision needs (#3157).
- */
-function resolveUnitAmountCents(sub: Stripe.Subscription): number | null {
-  const amount = sub.items.data[0]?.price?.unit_amount;
-  return typeof amount === "number" ? amount : null;
 }
 
 function resolveCustomerId(
@@ -313,7 +317,6 @@ function stripeSubscriptionToNeutral(
     trialEnd: sub.trial_end ? new Date(sub.trial_end * 1000) : null,
     productId: resolveProductId(sub),
     priceId: resolvePriceId(sub),
-    unitAmountCents: resolveUnitAmountCents(sub),
     seatCount: sub.items.data[0]?.quantity ?? 1,
   };
 }

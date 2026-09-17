@@ -163,10 +163,8 @@ function makeSubscription(
     canceledAt: null,
     trialEnd: null,
     productId: "prod_test",
-    // What the subscription's own price charges — the figure the proration
-    // decision reads, which a catalogue reprice does not move (#3157).
+    // WHICH price it sits on. An identity, not an amount (#3157).
     priceId: "price_test",
-    unitAmountCents: 19_900,
     seatCount: 1,
     ...overrides,
   };
@@ -475,108 +473,95 @@ describe("previewPlanChange — annual price misconfiguration", () => {
 // reach the same proration flag changeOrgPlan will apply. Both read the price.
 // ---------------------------------------------------------------------------
 
-describe("previewPlanChange — proration follows price, not tier rank", () => {
-  const ENTERPRISE_ROW = {
-    id: "plan-enterprise-1",
-    slug: "enterprise-v2",
-    tier: "enterprise",
-    stripePriceIdMonthly: "price_enterprise_month",
-    stripePriceIdAnnual: "price_enterprise_year",
-    monthlyCents: 50_000, // $500/mo
-    annualCents: 500_000,
-  };
-  const SCALE_ROW = {
-    id: "plan-scale-1",
-    slug: "scale-v2",
+describe("previewPlanChange — the quote and the change agree (#3157)", () => {
+  const TARGET = {
+    id: "plan-mid-1",
+    slug: "mid-v2",
     tier: "scale",
-    stripePriceIdMonthly: "price_scale_month",
-    stripePriceIdAnnual: "price_scale_year",
-    monthlyCents: 99_900, // $999/mo
-    annualCents: 999_000,
+    stripePriceIdMonthly: "price_mid_150",
+    stripePriceIdAnnual: null,
+    monthlyCents: 15_000,
+    annualCents: null,
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("quotes the previewed charge when the bill rises, under the flag the change will apply", async () => {
     previewPlanChangeMock.mockResolvedValue({
-      amountCents: 49_900,
+      amountCents: 5_000,
       isCharge: true,
       currency: "usd",
       prorationDate: 1_700_000_000,
+      lines: [],
     });
-  });
-
-  it("enterprise → scale previews under 'always_invoice' because the bill rises", async () => {
-    dbMocks.query.plans.findFirst.mockResolvedValueOnce(SCALE_ROW); // target, by slug
-    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
-      stripeSubscriptionId: "sub_test_001",
-      stripeCustomerId: "cus_test_001",
-      planId: "plan-enterprise-1",
-      billingInterval: "month",
-      unitAmountCents: ENTERPRISE_ROW.monthlyCents,
-    });
-
-    await previewPlanChange("org-abc-123", "scale-v2", "month");
-
-    expect(previewPlanChangeMock).toHaveBeenCalledWith(
-      "sub_test_001",
-      expect.objectContaining({ prorationBehavior: "always_invoice" }),
-    );
-  });
-
-  it("previews a grandfathered $100 subscriber → $150 plan as an increase, despite a $200 catalogue row", async () => {
-    // The preview is what the customer confirms against, so it has to reach
-    // the same flag changeOrgPlan will apply — including here, where the plan
-    // row has been repriced out from under the subscription (PR #3171 review).
-    // The plan row the subscription points at has been repriced to $200/mo.
-    // Nothing in the preview path may read it — asserted by
-    // tier-price-decoupling.test.ts — which is why it is not stubbed here at
-    // all: if the preview started reading it again, it would read undefined
-    // and this test would fail rather than quietly pass.
-    const TARGET_150 = {
-      id: "plan-mid-1",
-      slug: "mid-v2",
-      tier: "scale",
-      stripePriceIdMonthly: "price_mid_150",
-      stripePriceIdAnnual: null,
-      monthlyCents: 15_000,
-      annualCents: null,
-    };
-    // One plans lookup only: the target, by slug. The preview no longer reads
-    // the current plan row at all — it prices the current side off the
-    // subscription — so queueing a second value would leak into the next test.
-    dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET_150);
+    dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);
     dbMocks.query.subscriptions.findFirst.mockResolvedValue({
       stripeSubscriptionId: "sub_test_001",
       stripeCustomerId: "cus_test_001",
       planId: "plan-legacy-1",
       billingInterval: "month",
-      unitAmountCents: 10_000, // what they actually pay
+      stripePriceId: "price_list_200",
     });
 
-    await previewPlanChange("org-abc-123", "mid-v2", "month");
+    const result = await previewPlanChange("org-abc-123", "mid-v2", "month");
 
     expect(previewPlanChangeMock).toHaveBeenCalledWith(
       "sub_test_001",
-      expect.objectContaining({ prorationBehavior: "always_invoice" }),
+      expect.objectContaining({ prorationBehavior: "create_prorations" }),
     );
+    expect(result.amountCents).toBe(5_000);
+    expect(result.isCharge).toBe(true);
   });
 
-  it("scale → enterprise previews under 'none' because the bill falls", async () => {
-    dbMocks.query.plans.findFirst.mockResolvedValueOnce(ENTERPRISE_ROW);
+  it("quotes zero when the bill falls, because the change writes no proration line", async () => {
+    // The previewed credit is real, and `none` means it is never raised. A
+    // quote of -$499 would promise the customer money the swap will not move.
+    previewPlanChangeMock.mockResolvedValue({
+      amountCents: -49_900,
+      isCharge: false,
+      currency: "usd",
+      prorationDate: 1_700_000_000,
+      lines: [],
+    });
+    dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);
     dbMocks.query.subscriptions.findFirst.mockResolvedValue({
       stripeSubscriptionId: "sub_test_001",
       stripeCustomerId: "cus_test_001",
       planId: "plan-scale-1",
       billingInterval: "month",
-      unitAmountCents: SCALE_ROW.monthlyCents,
+      stripePriceId: "price_scale_m",
     });
 
-    await previewPlanChange("org-abc-123", "enterprise-v2", "month");
+    const result = await previewPlanChange("org-abc-123", "mid-v2", "month");
 
-    expect(previewPlanChangeMock).toHaveBeenCalledWith(
-      "sub_test_001",
-      expect.objectContaining({ prorationBehavior: "none" }),
-    );
+    expect(result.amountCents).toBe(0);
+    expect(result.isCharge).toBe(false);
+  });
+
+  it("a discounted subscriber is quoted the discounted proration", async () => {
+    // Same P1 case as the swap path: the list prices read as a decrease, the
+    // invoice is +$50, and the quote has to be the invoice.
+    previewPlanChangeMock.mockResolvedValue({
+      amountCents: 5_000,
+      isCharge: true,
+      currency: "usd",
+      prorationDate: 1_700_000_000,
+      lines: [],
+    });
+    dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
+      stripeSubscriptionId: "sub_test_001",
+      stripeCustomerId: "cus_test_001",
+      planId: "plan-list200-1",
+      billingInterval: "month",
+      stripePriceId: "price_list_200",
+    });
+
+    const result = await previewPlanChange("org-abc-123", "mid-v2", "month");
+
+    expect(result.amountCents).toBe(5_000);
   });
 });
 

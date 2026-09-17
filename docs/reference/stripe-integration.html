@@ -193,38 +193,47 @@ matches the provider within one round-trip.</p>
 <ul>
   <li><strong>No active subscription</strong> (free) → returns a Stripe <em>Checkout</em> URL; caller redirects.</li>
   <li><strong>Active subscription</strong> → swaps the price in place (no second subscription). The direction is
-      decided from the <em>money</em>, and the two sides come from different places.
+      decided by <strong>previewing the invoice the change would raise</strong> and reading its sign —
+      <code>invoices.createPreview</code> under <code>proration_behavior: create_prorations</code>, which produces
+      the same proration lines <code>always_invoice</code> would and issues no invoice, so asking the question
+      charges nobody. Stripe computes the prorated credit for unused time on the old price, the prorated charge for
+      the new one, and applies the customer's discounts; the net is the answer. Positive →
+      <code>always_invoice</code> (charge the proration now) <em>and</em> a prorated grant of the new plan's extra
+      included credits (<code>grantProratedPlanUpgradeCredits</code>). Zero or negative → <code>none</code>
+      (keeps access until renewal, no proration line). A preview that cannot be taken settles as
+      <code>always_invoice</code>, never <code>none</code> — an invoice raised the wrong way is a credit the
+      customer can see and we can refund; a charge never raised is simply gone.</li>
+  <li><strong>Why a preview and not a price field.</strong> Three figures have stood in for "what this subscriber
+      pays", and all three inverted (#3157):
       <ul>
-        <li><strong>What the org is billed today</strong> comes from the subscription:
-            <code>billing.subscriptions.unit_amount_cents</code>, written by
-            <code>syncSubscriptionFromStripe</code> on every <code>subscription.*</code> webhook, priced at the
-            interval that subscription is billed on. A row written before that column existed falls back to a
-            single provider read of the subscription. <strong>Not <code>billing.plans</code></strong>: provider
-            prices are immutable, so a reprice mints a new price and overwrites the plan row while every live
-            subscription stays on the price it was created with — the catalogue row stops describing a
-            grandfathered subscriber the moment the catalogue moves, and reading it there turns a rise in the
-            bill into a fall (#3157).</li>
-        <li><strong>What the target plan bills</strong> comes from <code>billing.plans</code> (with the
-            <code>SUBSCRIPTION_PLANS</code> catalogue as the fallback), at the interval being moved to. The
-            catalogue is the right source on this side: a move to that plan is billed at the price it publishes
-            now.</li>
+        <li>the entitlement tier rank — until Enterprise was priced below Scale;</li>
+        <li>the <code>billing.plans</code> row — until a reprice left grandfathered subscribers on an older,
+            immutable price while the catalogue row moved;</li>
+        <li><code>price.unit_amount</code> — until a discount. <code>allow_promotion_codes</code> is set on both
+            checkout paths, so a $200 price discounted to $100 moving to an undiscounted $150 read as a decrease
+            and dropped the charge.</li>
       </ul>
-      Both are compared in integral micro-USD.
-      Bill rises → <code>always_invoice</code> (charge the proration now) <em>and</em> a prorated grant of the new
-      plan's extra included credits (<code>grantProratedPlanUpgradeCredits</code>). Bill falls or holds →
-      <code>none</code> (keeps access until renewal, no proration line). A current price that resolves from
-      neither source settles as <code>always_invoice</code>, never <code>none</code> — an invoice can be
-      credited back, a charge that was never raised is simply lost.</li>
+      Each fix replaced a stand-in with a closer stand-in, and each closer one had its own inversion. The preview is
+      not a closer stand-in; it is the money. <strong>Do not reintroduce a stored or catalogued amount here</strong>
+      — <code>billing.subscriptions</code> deliberately records <code>stripe_price_id</code> (which price, an
+      identity) and no amount, so there is nothing to decide from.</li>
+  <li><strong>A retried change is a no-op.</strong> If the subscription is already on the target price id, the swap
+      already happened and the call returns without touching the provider. Re-deciding would compare the
+      subscription against its own current price, read no movement, and send <code>none</code> where the first
+      attempt sent <code>always_invoice</code> — under the same idempotency key
+      (<code>subscription + target price + optional requestId</code>), which Stripe rejects rather than replaying.</li>
   <li>The entitlement tier ordering (<code>TIER_ORDER</code> / <code>meetsMinimumTier</code>) answers a different
       question — <em>does this plan include that feature</em> — and is never read as a price direction. The two
       disagree in the live catalogue: Enterprise outranks Scale on features and costs half as much, so deciding
       proration from the rank under-billed every Enterprise→Scale move and over-billed every Scale→Enterprise
       one (#3157).</li>
 </ul>
-<p><code>previewPlanChange</code> simulates the change first (see Seats — same <code>invoices.createPreview</code> mechanism),
-so the UI shows the prorated charge + card before committing. It reads the current price from the same place
-<code>changeOrgPlan</code> does — the subscription, not the plan row — because a preview computed against one
-figure while the change bills against another quotes a price the change will not honour.</p>
+<p><code>previewPlanChange</code> takes the same preview <code>changeOrgPlan</code> takes, so the quote and the
+change cannot disagree. It reports what the customer will actually be asked for <em>now</em>: the previewed
+proration when the bill rises, and <strong>zero</strong> when it falls or holds — because that swap ships
+<code>none</code>, which writes no proration line, so nothing is owed at the moment of the change however large the
+previewed credit was. An org with no active subscription has no invoice to preview; its quote is the full catalogue
+price for the interval, which is the one place <code>billing.plans</code> figures are read on this path.</p>
 <p>Cancel / reactivate set <code>cancel_at_period_end</code> (access continues to period end; reversible).</p>
 
 <!-- ───────────────────────── SEATS ───────────────────────── -->
@@ -249,6 +258,9 @@ On confirm ─▶ setSeatsAction ─▶ subscriptions.setSubscriptionSeats(orgId
   <li>All mutating Stripe calls carry an <strong>idempotency key</strong> (e.g. <code>seats:&lt;sub&gt;:&lt;n&gt;</code>,
       <code>plan_change:&lt;sub&gt;:&lt;price&gt;:&lt;10s-bucket&gt;</code>) so a double-submit can't double-invoice.</li>
 </ul>
+<p class="small">Proration line items are summed <strong>net of discounts</strong> (<code>amount</code> minus the
+line's <code>discount_amounts</code>); <code>amount</code> alone is what the price lists, which overstates the
+charge for every discounted subscriber.</p>
 <p class="small">The exact charge figure comes from summing the <code>proration</code> line items of
 <code>stripe.invoices.createPreview({ subscription, subscription_details:{ items, proration_behavior, proration_date } })</code>.</p>
 

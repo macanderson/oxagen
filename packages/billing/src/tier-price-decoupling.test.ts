@@ -102,30 +102,77 @@ describe("plan price order and TIER_ORDER stay separate (#3157)", () => {
     expect(enterprise).toBeLessThan(scale as number);
   });
 
-  it("the proration path reads the current price off the subscription, not the plan row", () => {
+  it("the proration direction is measured from a previewed invoice, not from any price field", () => {
     const src = readFileSync(
       join(REPO_ROOT, "packages/billing/src/subscriptions.ts"),
       "utf8",
     );
 
-    // The subscription's own amount is what the decision consumes…
-    expect(src).toMatch(/unitAmountCents/);
-    expect(src).toMatch(/billedMicrosForSubscription/);
+    // The measurement: a preview, taken under create_prorations so that asking
+    // the question raises no invoice.
+    expect(src).toMatch(/planChangeDirection/);
+    expect(src).toMatch(/previewPlanChange\(/);
+    expect(src).toMatch(/create_prorations/);
 
-    // …and the plan row the subscription points at is read for the tier label
-    // and the audit line only. Selecting a price off it again is how the
-    // grandfathered inversion comes back, so the current-plan lookups must not
-    // ask for one.
-    const currentPlanLookups = src.match(
-      /tx\.query\.plans\.findFirst\(\{\s*where: eq\(schema\.plans\.id,[\s\S]*?\}\)/g,
+    // No amount reaches the decision. Whatever a caller has lying around, the
+    // helper takes a subscription and a target price id and asks the provider
+    // — so there is nothing to pass in that could be the wrong number.
+    const signature = src.slice(
+      src.indexOf("async function planChangeDirection("),
+      src.indexOf("): Promise<PlanChangeDirection>"),
     );
-    // changeOrgPlan keeps one, for the tier label on its log and audit line.
-    // previewPlanChange needs none at all. Whatever the count, not one of them
-    // may select a price.
-    expect(currentPlanLookups).not.toBeNull();
-    for (const lookup of currentPlanLookups!) {
-      expect(lookup).not.toMatch(/monthlyCents|annualCents/);
+    expect(signature.length).toBeGreaterThan(0);
+    expect(signature).not.toMatch(/Cents|micros|Micros/);
+
+    // And none of the stand-ins that have each inverted in turn. Every one was,
+    // at the time, "exactly the figure a proration decision needs"; each was
+    // wrong for a case nobody had hit yet.
+    expect(src).not.toMatch(/unitAmountCents/);
+    expect(src).not.toMatch(/planPriceMicros|planPriceDirection/);
+
+    // `monthlyCents` survives in this file for one honest reason: an org with
+    // no subscription has no invoice to preview, so its checkout quote is the
+    // catalogue price. It must not appear in either in-place swap path, which
+    // is where a figure would become a decision.
+    for (const marker of [
+      "// Active subscription \u2014 swap the price in-place",
+      "// Active subscription \u2014 in-place swap preview",
+    ]) {
+      const from = src.indexOf(marker);
+      expect(from).toBeGreaterThan(-1);
+      const region = src.slice(from, from + 2_000);
+      expect(region).not.toMatch(/monthlyCents|annualCents/);
     }
+  });
+
+  it("no price field is persisted on the subscription for something to decide from", () => {
+    const schema = readFileSync(
+      join(REPO_ROOT, "packages/database/src/schema/billing.ts"),
+      "utf8",
+    );
+    const subsTable = schema.slice(
+      schema.indexOf("export const subscriptions"),
+      schema.indexOf("export const paymentMethods"),
+    );
+    expect(subsTable.length).toBeGreaterThan(0);
+    // An identity is fine — it says WHICH price, and cannot be wrong about a
+    // number it does not carry. An amount is what invites the next inversion.
+    expect(subsTable).toMatch(/stripe_price_id/);
+    expect(subsTable).not.toMatch(
+      /unit_amount_cents|monthly_cents|amount_cents/,
+    );
+  });
+
+  it("the previewed proration is netted of discounts", () => {
+    const provider = readFileSync(
+      join(REPO_ROOT, "packages/billing/src/stripe-provider.ts"),
+      "utf8",
+    );
+    // A line's `amount` is pre-discount; `discount_amounts` is what comes off
+    // it. Summing the gross figure is how a discounted increase reads as a
+    // decrease, and it also overstates the customer's quote.
+    expect(provider).toMatch(/discount_amounts/);
+    expect(provider).not.toMatch(/amountCents: l\.amount,/);
   });
 
   it("no source file decides a proration behaviour from the tier ordering", () => {
