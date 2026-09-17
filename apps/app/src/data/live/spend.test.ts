@@ -32,6 +32,7 @@ const ctx = unsafeMint(WsCtx, {
   workspaceId: "7b000000-0000-4000-8000-000000000001",
   wsSlug: "core-platform",
   wsName: "Core platform",
+  wsRole: "member",
 });
 
 const period = { from: "2026-09-01", to: "2026-09-15" };
