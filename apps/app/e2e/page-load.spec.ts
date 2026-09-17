@@ -6,29 +6,53 @@
 // redirect to /login all answer 200 with a DIFFERENT title, so a row cannot pass
 // by rendering the wrong thing. The console check is the second half: a page that
 // renders its title while throwing in a client component is not a page that works.
-import { expect, test } from "@playwright/test";
-import { expectedTitle, SIGNED_IN_ROUTES } from "./routes";
+import { expect, type Page, test } from "@playwright/test";
+import {
+  ANONYMOUS_ROUTES,
+  expectedTitle,
+  type RouteRow,
+  SIGNED_IN_ROUTES,
+} from "./routes";
+
+async function loadsAndTitlesItself(page: Page, row: RouteRow): Promise<void> {
+  const errors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  page.on("pageerror", (error) => errors.push(String(error)));
+
+  const response = await page.goto(row.path, { waitUntil: "domcontentloaded" });
+  expect(response?.status(), `${row.path} must answer 200`).toBe(200);
+
+  // The surface must not bounce to the sign-in page: that would be a 200 with
+  // the login title, which the title assertion below also catches, but this
+  // names the failure.
+  expect(new URL(page.url()).pathname, `${row.path} must not redirect`).toBe(
+    row.path,
+  );
+  await expect(page).toHaveTitle(expectedTitle(row), { timeout: 15_000 });
+  expect(errors, `${row.path} logged console errors`).toEqual([]);
+}
 
 for (const row of SIGNED_IN_ROUTES) {
   test(`${row.path} loads and titles itself ${row.titleKey}`, async ({
     page,
   }) => {
-    const errors: string[] = [];
-    page.on("console", (message) => {
-      if (message.type() === "error") errors.push(message.text());
-    });
-    page.on("pageerror", (error) => errors.push(String(error)));
-
-    const response = await page.goto(row.path, { waitUntil: "domcontentloaded" });
-    expect(response?.status(), `${row.path} must answer 200`).toBe(200);
-
-    // The signed-in surfaces must not bounce to the sign-in page: that would be
-    // a 200 with the login title, which the title assertion below also catches,
-    // but this names the failure.
-    expect(new URL(page.url()).pathname, `${row.path} must not redirect`).toBe(
-      row.path,
-    );
-    await expect(page).toHaveTitle(expectedTitle(row), { timeout: 15_000 });
-    expect(errors, `${row.path} logged console errors`).toEqual([]);
+    await loadsAndTitlesItself(page, row);
   });
 }
+
+// A fresh context, no saved storage state: these rows must render for a browser
+// that holds no session at all, which is the browser the CLI sends to
+// /cli/complete.
+test.describe("anonymous", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  for (const row of ANONYMOUS_ROUTES) {
+    test(`${row.path} loads and titles itself ${row.titleKey} with no session`, async ({
+      page,
+    }) => {
+      await loadsAndTitlesItself(page, row);
+    });
+  }
+});

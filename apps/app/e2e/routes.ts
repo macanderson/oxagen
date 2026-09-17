@@ -37,6 +37,18 @@ export const SIGNED_IN_ROUTES: readonly RouteRow[] = [
   { path: `/${org}/audit`, titleKey: "audit" },
 ] as const;
 
+/**
+ * Every rev1 surface a browser reaches with no session, in navigation order.
+ *
+ * `/cli/complete` is the end of `oxagen login`: the CLI's loopback listener
+ * 302s the browser there once it holds its token, and that browser may carry no
+ * app cookie at all. A row here is walked in a fresh context, so it fails on
+ * the redirect to /login that a gated route produces (#3091).
+ */
+export const ANONYMOUS_ROUTES: readonly RouteRow[] = [
+  { path: "/cli/complete", titleKey: "cliComplete" },
+] as const;
+
 /** The document title a row must produce, per the root layout's template. */
 export function expectedTitle(row: RouteRow): string {
   return `${pages.pages[row.titleKey]} · ${pages.app.name}`;
