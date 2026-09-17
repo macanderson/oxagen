@@ -215,7 +215,7 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
     ).toBe("10.0.0.2");
   });
 
-  // ADR-080. Nothing in either deployment shape sets x-real-ip — not the ALB,
+  // ADR-083. Nothing in either deployment shape sets x-real-ip — not the ALB,
   // not Caddy, not Vercel — so a value under that name came from the caller,
   // and the only moment this reached for it was when no trusted proxy had
   // written a chain: precisely the moment nothing had vouched for the request.
@@ -229,7 +229,7 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
 
   it("prefers the address the edge wrote over any chain", async () => {
     // Caddy sets this with `header_up`, which REPLACES the field, so a copy the
-    // caller sent under the same name never arrives — see ADR-080 and
+    // caller sent under the same name never arrives — see ADR-083 and
     // infra/tools/caddy/Caddyfile.alb.
     expect(
       await clientIpFor({

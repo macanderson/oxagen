@@ -1,9 +1,9 @@
-# ADR-080: One client-IP derivation, and the edge rewrites the header it is not allowed to trust
+# ADR-083: One client-IP derivation, and the edge rewrites the header it is not allowed to trust
 
 - **Status:** Accepted
 - **Date:** 2026-09-17
 - **Owners:** platform
-- **Related:** PR #3183 review finding (P1), ADR-079,
+- **Related:** PR #3183 review finding (P1), ADR-082,
   `packages/oxagen/src/client-ip.ts`, `infra/tools/caddy/Caddyfile.alb`,
   `packages/oxagen/src/iam/conditions.ts`
 

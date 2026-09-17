@@ -243,7 +243,7 @@ describe("distributedRateLimiter", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  // ADR-079. The four pre-auth mounts used to answer 503 here, which is what
+  // ADR-082. The four pre-auth mounts used to answer 503 here, which is what
   // took Tacho and Stella intake offline in #3167.
   it("serves the request from the per-instance limiter when the counter store is unavailable", async () => {
     mocks.withSystemDb.mockRejectedValue(new Error("db unavailable"));
@@ -312,7 +312,7 @@ describe("distributedRateLimiter", () => {
   // some down the failure path. While only the failures were counted locally, a
   // caller could spend `max` through Postgres and another `max` through the
   // degraded counter inside one window — 2 x max exactly when the store is
-  // least reliable, which is not the bound ADR-079 states.
+  // least reliable, which is not the bound ADR-082 states.
   it("does not hand a second full allowance out when the store flaps mid-window", async () => {
     let storeUp = true;
     mocks.withSystemDb.mockImplementation(

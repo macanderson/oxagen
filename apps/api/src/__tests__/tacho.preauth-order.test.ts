@@ -13,7 +13,7 @@
  * a status code. The first version of this test read the ordering off a 503:
  * with the counter store failing, the fail-closed limiter denied, so an
  * unauthenticated 503 proved the limiter ran first. That tied the proof of one
- * invariant to an unrelated policy — ADR-079 then replaced `failClosed` with
+ * invariant to an unrelated policy — ADR-082 then replaced `failClosed` with
  * `degrade-to-local`, no store error denies any more, and the test failed while
  * the ordering it was guarding was still correct.
  *
@@ -134,7 +134,7 @@ describe("/v1/tacho/* pre-authentication ceilings", () => {
   });
 
   it("still counts when the store is unreachable, rather than skipping the ceiling", async () => {
-    // ADR-079: a store error degrades to the per-instance limiter. The request
+    // ADR-082: a store error degrades to the per-instance limiter. The request
     // proceeds, so the only evidence the ceiling ran is that it was consulted.
     vi.clearAllMocks();
     mocks.withSystemDb.mockRejectedValue(

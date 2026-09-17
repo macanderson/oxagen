@@ -1,4 +1,4 @@
-# ADR-079: A rate limiter that cannot reach its counters degrades rather than denies
+# ADR-082: A rate limiter that cannot reach its counters degrades rather than denies
 
 - **Status:** Accepted
 - **Date:** 2026-09-17

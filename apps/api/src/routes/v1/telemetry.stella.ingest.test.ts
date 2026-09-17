@@ -383,7 +383,7 @@ describe("POST /v1/telemetry/stella/operational", () => {
     },
   );
 
-  // ADR-079: the pre-auth ceilings degrade to the per-instance limiter rather
+  // ADR-082: the pre-auth ceilings degrade to the per-instance limiter rather
   // than answering 503. #3167 is the outage the old policy caused — every
   // enrolled host got a 503 on every request for as long as the counter
   // statement was broken.
@@ -458,7 +458,7 @@ describe("POST /v1/telemetry/stella/operational", () => {
   });
 
   it("invokes the API capability with tenant scope exclusively from the API key", async () => {
-    // The deployed shape (ADR-080): Caddy writes x-oxagen-client-ip with
+    // The deployed shape (ADR-083): Caddy writes x-oxagen-client-ip with
     // `header_up`, which replaces any copy the caller sent, and rewrites
     // x-forwarded-for to the same single value. The caller-supplied entry here
     // is what the old leftmost-entry read would have picked.
