@@ -305,6 +305,35 @@ describe("processStripeEvent", () => {
     expect(syncSubscriptionMock).not.toHaveBeenCalled();
   });
 
+  // The other half of the retry contract, and the half nothing asserted.
+  // The test above proves that an event with no `processed_at` is
+  // re-dispatched; this one proves a throwing handler is what LEAVES it
+  // unset. Both halves matter to ADR-085 §9: a charge read that fails
+  // propagates precisely so the event is redelivered and the dispute parks on
+  // the second delivery. If a throw were swallowed here, or recorded
+  // `processedAt` alongside the error, the classifier's choice to throw would
+  // buy nothing and the units would still be granted.
+  it("a throwing dispatch records the error, does NOT mark processed, and rethrows", async () => {
+    dbState.instance = makeDb([{ id: "row-uuid-throw" }]);
+    syncSubscriptionMock.mockRejectedValueOnce(new Error("stripe is down"));
+
+    const event = makeWebhookEvent({ providerEventId: "evt_throw_001" });
+
+    // Rethrown, so the route answers non-2xx and Stripe redelivers.
+    await expect(processStripeEvent(event)).rejects.toThrow("stripe is down");
+
+    // The processing row is written with the error and NO processedAt. The
+    // `set` of the upsert is what a redelivery would collide with, and it
+    // must not carry a processedAt either.
+    const chain = dbState.instance!._processingInsertChain;
+    expect(chain.onConflictDoUpdate).toHaveBeenCalledOnce();
+    const [{ set }] = chain.onConflictDoUpdate.mock.calls[0] as [
+      { set: Record<string, unknown> },
+    ];
+    expect(set).toHaveProperty("processingError", "stripe is down");
+    expect(set).not.toHaveProperty("processedAt");
+  });
+
   it("retry after a failed dispatch — conflict + no processed row → re-dispatches → 'applied'", async () => {
     dbState.instance = makeDb([], {
       existingEventId: "evt-row-2",
