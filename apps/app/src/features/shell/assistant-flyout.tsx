@@ -29,10 +29,9 @@
 // place. "org/ws" names a place: A → B → A puts the same string back, so a
 // comparison on it cannot tell "still the turn I started" from "back where I
 // started", and a slow A turn would land in the transcript the return to A had
-// just cleared. The reset bumps a generation instead, and each turn also
-// carries the value of the monotonic turn counter it was started with — so the
-// newest turn owns the reply, the run and the conversation id, and an older
-// one in flight beside it is discarded rather than racing it.
+// just cleared. The reset bumps a generation instead — a return included — and
+// a turn compares the generation it was asked on, so its reply, its run and
+// its conversation id reach only the transcript that asked for them.
 //
 // Each answer names the run it was recorded as, as a link to that run's page.
 // `list_runs` excludes the `chat` and `api-chat` surfaces — the assistant is
