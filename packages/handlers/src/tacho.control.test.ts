@@ -444,6 +444,50 @@ describe("fetch_commands", () => {
     });
   });
 
+  it("serves the gated bundle on the FIRST poll that advertises, not the next one", async () => {
+    // The advertisement is persisted and the SAME response is built from the
+    // host object the caller already held. If that object is not updated, the
+    // first post-upgrade poll computes its bundle — and this etag — from the
+    // features the host had before it upgraded, and the daemon keeps serving
+    // the unfiltered tool list until some later poll.
+    const etagFor = async (
+      bundleFeatures: string[],
+      advertise: string[] | undefined,
+    ): Promise<string> => {
+      const db: Fake = {
+        hosts: [host({ bundleFeatures })],
+        sessions: [],
+        commands: [],
+        updates: [],
+        inserts: [],
+      };
+      wire(db);
+      const out = await tachoCommandFetchHandler(
+        {
+          ...FETCH,
+          host_enrollment_id: HOST_PUBLIC,
+          acknowledgements: [],
+          daemon: advertise === undefined ? {} : { bundle_features: advertise },
+        },
+        MACHINE,
+      );
+      return out.control.bundle_etag;
+    };
+
+    const already = await etagFor(["gateway_tools"], ["gateway_tools"]);
+    const firstPoll = await etagFor([], ["gateway_tools"]);
+    const neverAdvertised = await etagFor([], undefined);
+
+    // The one that matters: advertising for the first time must land in THIS
+    // response, not the next one.
+    expect(firstPoll).toBe(already);
+    // And this keeps the assertion above from holding vacuously: if the gate
+    // made no difference to the bundle in this fixture — an empty gateway
+    // mandate, say — all three etags would be equal and the check above would
+    // pass while proving nothing.
+    expect(neverAdvertised).not.toBe(already);
+  });
+
   it("leaves the advertisement alone when a poll carries none", async () => {
     // A daemon too old to advertise must not have its record overwritten with
     // an empty list on every poll, and must not be silently upgraded either.

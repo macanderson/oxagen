@@ -436,7 +436,7 @@ export async function touchHost(
     | undefined,
   now: Date,
   ingest: boolean,
-): Promise<void> {
+): Promise<TachoHostRow> {
   const values: Record<string, unknown> = {
     lastSeenAt: now,
     lastHeartbeatAt: now,
@@ -462,6 +462,13 @@ export async function touchHost(
     .update(schema.tachoHosts)
     .set(values)
     .where(eq(schema.tachoHosts.id, host.id));
+  // The caller builds this poll's control envelope from the host it holds, and
+  // `bundleFeatures` decides which mandate that envelope carries. Persisting
+  // the advertisement without handing it back would leave the first poll after
+  // an upgrade computing its bundle — and its etag — from the features the host
+  // had BEFORE it upgraded, so an upgraded daemon would keep serving the
+  // unfiltered tool list until some later poll.
+  return { ...host, ...values } as TachoHostRow;
 }
 
 /** `sql` re-export so handlers can express counter increments without importing drizzle themselves. */

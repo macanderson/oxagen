@@ -829,8 +829,8 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         );
       }
     }
-    await touchHost(tx as never, host, input.daemon, now, true);
-    const control = await controlEnvelope(tx as never, ctx, host, now);
+    const seen = await touchHost(tx as never, host, input.daemon, now, true);
+    const control = await controlEnvelope(tx as never, ctx, seen, now);
     return {
       chainBreaks,
       verified,
