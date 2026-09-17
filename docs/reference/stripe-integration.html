@@ -280,7 +280,17 @@ matches the provider within one round-trip.</p>
       pending credit makes a real upgrade read as nonpositive, the caller ships <code>none</code>, and the upgrade
       charge is dropped: the same inversion as the tier rank and the catalogue row, one level further in. Stripe
       stamps <code>period.start</code> of each proration it creates with the <code>proration_date</code> the preview
-      was anchored at, so that anchor is what separates this change's lines from the rest of the invoice.
+      was anchored at, so that anchor is what separates this change's lines from the rest of the invoice —
+      <strong>once it has been established that the anchor is ours alone.</strong> <code>proration_date</code> is Unix
+      SECONDS, so a change committed in the same second as a preview stamps its proration with the same
+      <code>period.start</code>, and timestamp equality is not ownership. Nothing in the payload settles it either:
+      <code>type</code> names the line's source rather than the request that made it, <code>subscription_item</code>
+      is the same item for both, and <code>proration_details.credited_items</code> exists only on credit lines. So
+      the adapter takes a baseline preview first — the invoice as it stands, with no change simulated — and refuses
+      with <code>AmbiguousProrationAnchorError</code> if a proration already sits at that second, rather than
+      guessing at a field that might mean ownership. Both preview paths do this, because both derive their anchor
+      the same way. A refusal on a same-second collision is recoverable; summing a stranger's credit makes a real
+      upgrade read nonpositive, ships <code>none</code>, and the charge is never raised.
       <em>The preview is the money; which part of it answers the question is a separate question.</em>
       Three cases are distinguished on purpose: no proration lines at all is a true zero; lines carrying the anchor
       are summed (and may legitimately net to zero); lines present with none carrying the anchor cannot be

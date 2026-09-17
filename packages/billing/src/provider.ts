@@ -144,6 +144,41 @@ export class ProrationAttributionError extends Error {
   }
 }
 
+/**
+ * Raised when this change's money cannot be told apart from money already
+ * pending on the invoice, because something else already occupies the anchor.
+ *
+ * `proration_date` is Unix SECONDS and both preview paths derive it from
+ * `Date.now()`, so a change committed in the same second as this preview
+ * produces a proration whose `period.start` is identical to ours. Timestamp
+ * equality is therefore not ownership, and at one-second granularity the
+ * collision is structural rather than unlucky.
+ *
+ * Nothing in the payload settles it: `type` names the line's SOURCE, not the
+ * request that produced it; `subscription_item` is the same item for both; and
+ * `proration_details.credited_items` exists only on credit lines. So the
+ * ambiguity is detected by OBSERVATION — a baseline preview of the invoice
+ * without this change — rather than by guessing at a field, which would be one
+ * more stand-in for a fact nobody recorded.
+ *
+ * Refusing is the recoverable direction. The next attempt gets a fresh anchor a
+ * second later; a stranger's credit summed into an upgrade makes a real charge
+ * read nonpositive, ships `none`, and is never raised at all (#3157, PR #3171
+ * review).
+ */
+export class AmbiguousProrationAnchorError extends Error {
+  readonly code = "PRORATION_ANCHOR_AMBIGUOUS" as const;
+  constructor(
+    readonly prorationDate: number,
+    readonly pendingLineCount: number,
+  ) {
+    super(
+      `The invoice already carries ${pendingLineCount} proration line(s) anchored at ${prorationDate}; this change's cost cannot be told apart from them.`,
+    );
+    this.name = "AmbiguousProrationAnchorError";
+  }
+}
+
 export interface BillingProrationPreview {
   /**
    * Net proration amount in cents for THIS change. Positive = the customer

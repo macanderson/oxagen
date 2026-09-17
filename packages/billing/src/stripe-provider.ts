@@ -44,7 +44,10 @@ import type {
   BillingWebhookEvent,
   BillingWebhookEventType,
 } from "./provider";
-import { ProrationAttributionError } from "./provider";
+import {
+  AmbiguousProrationAnchorError,
+  ProrationAttributionError,
+} from "./provider";
 
 /** Wrap an optional Stripe idempotency key into request options. */
 function idempotency(
@@ -104,11 +107,26 @@ function automaticTaxEnabled(): boolean {
 function summarizeProration(
   preview: Stripe.Invoice,
   prorationDate: number,
+  /**
+   * How many prorations already sat at this anchor BEFORE the change was
+   * simulated, observed from a baseline preview. Anything above zero means the
+   * anchor is shared and ownership cannot be decided — see
+   * {@link AmbiguousProrationAnchorError}.
+   */
+  pendingAtAnchor: number,
 ): BillingProrationPreview {
+  // Somebody else's change already occupies this second, so the lines carrying
+  // our anchor are not all ours and nothing in the payload says which are.
+  // Refuse rather than sum a stranger's credit into this change's direction.
+  if (pendingAtAnchor > 0) {
+    throw new AmbiguousProrationAnchorError(prorationDate, pendingAtAnchor);
+  }
   const allProrations = (preview.lines?.data ?? []).filter(
     (l) => l.proration === true,
   );
-  // The anchor this preview was taken at is what makes a line ours.
+  // The anchor this preview was taken at is what makes a line ours — sound
+  // only because the check above has established that no pre-existing
+  // proration shares it.
   const ownProrations = allProrations.filter(
     (l) => l.period?.start === prorationDate,
   );
@@ -427,6 +445,33 @@ function stripeInvoiceToNeutral(invoice: Stripe.Invoice): BillingInvoice {
   };
 }
 
+/**
+ * How many prorations already sit at `prorationDate` on this subscription's
+ * upcoming invoice, BEFORE any change is simulated.
+ *
+ * This is the whole ownership test. `proration_date` is Unix seconds, so a
+ * change committed in the same second as a preview stamps its proration with
+ * our anchor and is indistinguishable from ours by timestamp. Rather than
+ * guess at a payload field that might mean ownership, ask what was already
+ * there: a preview with no `subscription_details` is the invoice as it stands.
+ *
+ * Read-only, and it issues nothing — the same call the change preview makes,
+ * without the change. It costs one round trip per quote, which is the trade
+ * this PR has taken every time the cheap answer turned out to be the wrong one.
+ */
+async function prorationsAlreadyAtAnchor(
+  stripe: Stripe,
+  subscriptionId: string,
+  prorationDate: number,
+): Promise<number> {
+  const baseline = await stripe.invoices.createPreview({
+    subscription: subscriptionId,
+  });
+  return (baseline.lines?.data ?? []).filter(
+    (l) => l.proration === true && l.period?.start === prorationDate,
+  ).length;
+}
+
 function stripeSubscriptionToNeutral(
   sub: Stripe.Subscription,
 ): BillingSubscription {
@@ -614,6 +659,11 @@ export class StripeProvider implements BillingProvider {
     const item = sub.items.data[0];
     if (!item) throw new Error("subscription has no items");
     const prorationDate = Math.floor(Date.now() / 1000);
+    const pendingAtAnchor = await prorationsAlreadyAtAnchor(
+      stripe,
+      subscriptionId,
+      prorationDate,
+    );
     const preview = await stripe.invoices.createPreview({
       subscription: subscriptionId,
       subscription_details: {
@@ -622,7 +672,7 @@ export class StripeProvider implements BillingProvider {
         proration_date: prorationDate,
       },
     });
-    return summarizeProration(preview, prorationDate);
+    return summarizeProration(preview, prorationDate, pendingAtAnchor);
   }
 
   async previewPlanChange(
@@ -634,6 +684,11 @@ export class StripeProvider implements BillingProvider {
     const item = sub.items.data[0];
     if (!item) throw new Error("subscription has no items");
     const prorationDate = Math.floor(Date.now() / 1000);
+    const pendingAtAnchor = await prorationsAlreadyAtAnchor(
+      stripe,
+      subscriptionId,
+      prorationDate,
+    );
     const preview = await stripe.invoices.createPreview({
       subscription: subscriptionId,
       subscription_details: {
@@ -642,7 +697,7 @@ export class StripeProvider implements BillingProvider {
         proration_date: prorationDate,
       },
     });
-    return summarizeProration(preview, prorationDate);
+    return summarizeProration(preview, prorationDate, pendingAtAnchor);
   }
 
   // ── Payment methods ───────────────────────────────────────────────────────────
