@@ -20,12 +20,19 @@
 // dialog: the actions declare these types as their return, and the compiler
 // does the checking the parse would have done.
 //
+// Only the two records an action returns are exported. The three that compose
+// them — MainRepository, GitHubInstallation, InstallationRepository — stay
+// local: a consumer of `WorkspaceRepository` reaches its parts through it and
+// needs no separate import, and `knip --production --strict` (CI's `checks`
+// job) fails an exported type nothing imports. Export one only when a caller
+// actually names it.
+//
 // A URL is a plain string here. Narrowing it to a linkable value is
 // `parseGitHubUrl` in `@/shared/github-url`, which this layer may not import
 // (§2: a view model imports only other view models), so the dialog narrows it
 // at render, the way the Steering page narrows a pull request URL.
 
-export type MainRepository = {
+type MainRepository = {
   bindingId: string;
   owner: string;
   name: string;
@@ -37,7 +44,7 @@ export type MainRepository = {
   boundAt: string;
 };
 
-export type GitHubInstallation = {
+type GitHubInstallation = {
   /**
    * An installation is attached to this workspace's GitHub connection. False
    * is exactly the state in which `bind_main_repository` refuses with
@@ -56,7 +63,7 @@ export type WorkspaceRepository = {
   github: GitHubInstallation;
 };
 
-export type InstallationRepository = {
+type InstallationRepository = {
   /** GitHub's numeric repository id as text; survives renames and transfers. */
   id: string;
   owner: string;
