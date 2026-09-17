@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Textarea } from "./textarea";
 import { Label } from "./label";
@@ -12,7 +13,9 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {
-  render: (args) => <Textarea {...args} className="max-w-sm" />,
+  render: (args: ComponentProps<typeof Textarea>) => (
+    <Textarea {...args} className="max-w-sm" />
+  ),
 };
 
 export const WithLabel: Story = {

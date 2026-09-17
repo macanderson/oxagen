@@ -55,6 +55,20 @@ export const hostSummarySchema = z
     status: tachoHostStatusSchema,
     mode: tachoBundleModeSchema,
     harnesses: z.array(z.string()),
+    /**
+     * The enforcement tier each of this host's harnesses reaches (ADR-078),
+     * using the `enforcement_tier` vocabulary the session record already
+     * speaks. `harness` is a *wrapped* app: a PreToolUse hook sees every
+     * action it takes, but runs in a process Oxagen does not own, so the
+     * record is what the agent reported. `gateway` is a *connected* app: no
+     * hook exists, so Oxagen sees only the calls routed through its MCP
+     * gateway — and refuses those on the server.
+     *
+     * Neither tier dominates the other, and a surface that renders them on
+     * one axis is wrong in both directions. Carried per harness rather than
+     * per host because one machine normally has both.
+     */
+    tiers: z.record(z.string(), z.enum(["gateway", "harness"])),
     claudeVersionAtEnroll: z.string().nullable(),
     wrapperVersion: z.string().nullable(),
     managed: z.boolean(),

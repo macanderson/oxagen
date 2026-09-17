@@ -14,7 +14,10 @@ import {
 import type { TachoEnrollmentCreateOutput } from "@oxagen/oxagen/contracts/tacho.enrollment.create";
 import { digestBytes } from "@oxagen/tacho";
 import { generateApiKey } from "./api-key-authz";
-import { TACHO_HOST_SCOPE_PURPOSE } from "./tacho-enrollment";
+import {
+  TACHO_GATEWAY_SCOPE_PURPOSE,
+  TACHO_HOST_SCOPE_PURPOSE,
+} from "./tacho-enrollment";
 import { signTachoEnrollment } from "./tacho-enrollment-signing";
 import { type BundleSigner } from "./tacho-bundle-signing";
 import {
@@ -33,6 +36,20 @@ const ISSUER = "oxagen";
 const AUDIENCE = "tacho-collector";
 const CREDENTIAL_ENV = "TACHO_HOST_API_KEY";
 const DEFAULT_ENDPOINT = "https://api.oxagen.sh/v1/tacho";
+/**
+ * Where this deployment's workspace MCP endpoint lives, for the claim the
+ * host's local gateway dials. Unset means the claim omits it and the host
+ * falls back to its own derivation from `api_url`.
+ */
+const MCP_ENDPOINT_ENV = "TACHO_MCP_ENDPOINT";
+
+/** The signed MCP endpoint, or undefined when this deployment names none. */
+function resolveMcpEndpoint(): string | undefined {
+  const raw = process.env[MCP_ENDPOINT_ENV];
+  return typeof raw === "string" && raw.startsWith("https://")
+    ? raw
+    : undefined;
+}
 
 /** The machine endpoint bases this deployment serves. HTTPS only. */
 export function resolveAllowedEndpoints(): string[] {
@@ -123,6 +140,9 @@ interface MintedHostEnrollment {
   hostEnrollmentId: string;
   apiKeyPublicId: string;
   rawKey: string;
+  /** The second credential, for the host's local MCP gateway (ADR-078). */
+  gatewayApiKeyPublicId: string;
+  gatewayRawKey: string;
   expiresAt: Date;
   denyGeneration: DenyGeneration;
   retention: Awaited<ReturnType<typeof readWorkspaceRetention>>;
@@ -143,6 +163,13 @@ export async function mintHostEnrollment(
   );
   const hostEnrollmentId = `tch_${cryptoRandom(22)}`;
   const { rawKey, keyPrefix, keyHash } = generateApiKey();
+  // A second credential, for the local MCP gateway (ADR-078). It is separate
+  // from the host key on purpose: the host key reports events and fetches its
+  // mandate, and the gateway serves tools to a connected app. Those are
+  // different jobs with different blast radii, and one credential doing both
+  // is what let a connected app inherit the host's authority. The purpose on
+  // each is what `machineKeyDenial` constrains them by.
+  const gatewayKey = generateApiKey();
   const fingerprint = deviceKeyFingerprint(facts.devicePublicKey);
 
   const [key] = await tx
@@ -169,6 +196,33 @@ export async function mintHostEnrollment(
     throw new Error("Internal error: failed to create the Tacho host API key");
   }
 
+  const [gateway] = await tx
+    .insert(schema.apiKeys)
+    .values({
+      orgId: args.orgId,
+      workspaceId: args.workspaceId,
+      keyPrefix: gatewayKey.keyPrefix,
+      keyHash: gatewayKey.keyHash,
+      name: `tacho gateway ${facts.hostname}`,
+      scope: {
+        purpose: TACHO_GATEWAY_SCOPE_PURPOSE,
+        host_enrollment_id: hostEnrollmentId,
+      },
+      expiresAt,
+      createdById: args.userId,
+      updatedById: args.userId,
+    })
+    .returning({
+      id: schema.apiKeys.id,
+      publicId: schema.apiKeys.publicId,
+    });
+  if (!gateway) {
+    throw new Error(
+      "Internal error: failed to create the Tacho gateway API key",
+    );
+  }
+
+  const mcpEndpoint = resolveMcpEndpoint();
   const claims: EnrollmentClaims = {
     schema: TACHO_ENROLLMENT_CLAIMS_SCHEMA,
     issuer: ISSUER,
@@ -180,6 +234,10 @@ export async function mintHostEnrollment(
     ingest_endpoint: `${signing.endpointBase}/events`,
     bundle_endpoint: `${signing.endpointBase}/bundle`,
     commands_endpoint: `${signing.endpointBase}/commands`,
+    // Signed rather than derived: the host would otherwise guess it by
+    // swapping `api.` for `mcp.` in api_url, which is wrong for any
+    // deployment whose MCP host is not named that way.
+    ...(mcpEndpoint === undefined ? {} : { mcp_endpoint: mcpEndpoint }),
     credential_env: CREDENTIAL_ENV,
     device_key_fingerprint: fingerprint,
     harnesses: facts.harnesses,
@@ -235,6 +293,8 @@ export async function mintHostEnrollment(
     hostEnrollmentId,
     apiKeyPublicId: key.publicId,
     rawKey,
+    gatewayApiKeyPublicId: gateway.publicId,
+    gatewayRawKey: gatewayKey.rawKey,
     expiresAt,
     denyGeneration,
     retention,
@@ -261,6 +321,8 @@ export function enrollmentDocument(
     agentKey: minted.host.agentKey,
     apiKeyPublicId: minted.apiKeyPublicId,
     apiKey: minted.rawKey,
+    gatewayApiKeyPublicId: minted.gatewayApiKeyPublicId,
+    gatewayApiKey: minted.gatewayRawKey,
     enrollment: {
       claims: minted.host.enrollmentClaims as EnrollmentClaims,
       signature_hex: minted.host.enrollmentSignature,

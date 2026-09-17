@@ -28,6 +28,7 @@ import {
   type KernelAccessRequestCreatorFn,
 } from "@oxagen/oxagen/kernel";
 import { checkIAM } from "./check-iam";
+import { machineKeyDenial } from "./machine-key-scope";
 import { createAccessRequest } from "./access-request";
 
 /**
@@ -40,6 +41,26 @@ import { createAccessRequest } from "./access-request";
  */
 export function bootstrapIAMRuntime(): void {
   const kernelIAMAdapter: KernelIAMCheckFn = async (args) => {
+    // A machine-bound key may invoke only what its purpose is for. This runs
+    // BEFORE checkIAM on purpose: checkIAM's tier fast-path allows every
+    // non-enterprise org outright, and an API-key principal passes every role
+    // gate (it has no org_users row to read), so this is the only thing
+    // standing between a narrow machine credential and the whole capability
+    // surface. See machine-key-scope.ts for what that cost before.
+    const machineDenial = await machineKeyDenial({
+      orgId: args.ctx.orgId,
+      apiKeyId: args.ctx.apiKeyId,
+      capabilityName: args.capability,
+    });
+    if (machineDenial !== undefined) {
+      return {
+        outcome: "deny",
+        reason: machineDenial,
+        principal: null,
+        decision: null,
+      };
+    }
+
     const { result, principal, decision } = await checkIAM({
       ...args,
       // Agent RBAC spec §3.4: the discriminator that keeps the non-enterprise

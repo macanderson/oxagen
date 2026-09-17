@@ -4,10 +4,16 @@
  */
 import { existsSync } from "node:fs";
 import { verifyBundle } from "../host/bundle";
+import {
+  CLAUDE_DESKTOP_RESTART_NOTE,
+  claudeDesktopPresence,
+  mergeClaudeDesktopConfig,
+} from "../host/claude-desktop-writer";
 import { codexHookPresence, mergeCodexHooks } from "../host/codex-writer";
 import { ControlError } from "../host/control-client";
 import { loadOrCreateDeviceKey } from "../host/device-key";
 import { ensureDir } from "../host/fs";
+import { mergeStellaHooks, stellaHookPresence } from "../host/stella-writer";
 import {
   HOST_FILE_SCHEMA,
   type HostFile,
@@ -22,6 +28,7 @@ import {
 import { toProtocolTimestamp } from "../timestamp";
 import {
   enrollmentResponseSchema,
+  TACHO_HARNESS_LABELS,
   type TachoHarness,
   tachoHarnessSchema,
   type TokenEnrollmentResponse,
@@ -56,7 +63,8 @@ export interface EnrollOptions extends CredentialOptions {
 }
 
 /**
- * Parse a `--harness` flag (`claude-code`, `codex`, or a comma list). An
+ * Parse a `--harness` flag (`claude-code`, `codex`, `stella`, or a comma
+ * list). An
  * unknown name is a one-line error naming the choices, not a ZodError
  * (whose message is the JSON issues array) — both CLIs print it verbatim.
  */
@@ -101,6 +109,13 @@ function versionWithin(
   };
   const v = parts(version);
   return cmp(v, parts(range.min)) >= 0 && cmp(v, parts(range.max)) <= 0;
+}
+
+/** "Claude Code", "Claude Code and Codex", "Claude Code, Codex and Stella". */
+function listLabels(harnesses: readonly TachoHarness[]): string {
+  const labels = harnesses.map((harness) => TACHO_HARNESS_LABELS[harness]);
+  if (labels.length <= 1) return labels.join("");
+  return `${labels.slice(0, -1).join(", ")} and ${labels.at(-1) ?? ""}`;
 }
 
 async function postEnrollment(
@@ -313,6 +328,7 @@ export async function enroll(
 
     const claude = deps.claude();
     const codex = harnesses.includes("codex") ? deps.codex() : {};
+    const stella = harnesses.includes("stella") ? deps.stella() : {};
     step(
       3,
       credentials
@@ -413,10 +429,19 @@ export async function enroll(
       api_url: apiUrl,
       api_key: response.apiKey,
       api_key_public_id: response.apiKeyPublicId,
+      ...(response.gatewayApiKey !== undefined
+        ? { gateway_api_key: response.gatewayApiKey }
+        : {}),
+      ...(response.gatewayApiKeyPublicId !== undefined
+        ? { gateway_api_key_public_id: response.gatewayApiKeyPublicId }
+        : {}),
       endpoints: {
         ingest: response.enrollment.claims.ingest_endpoint,
         bundle: response.enrollment.claims.bundle_endpoint,
         commands: response.enrollment.claims.commands_endpoint,
+        ...(response.enrollment.claims.mcp_endpoint !== undefined
+          ? { mcp: response.enrollment.claims.mcp_endpoint }
+          : {}),
       },
       enrollment: {
         claims: response.enrollment.claims,
@@ -444,10 +469,22 @@ export async function enroll(
             codex_execpath: codex.path ?? null,
           }
         : {}),
+      ...(harnesses.includes("stella")
+        ? {
+            stella_version: stella.version ?? null,
+            stella_execpath: stella.path ?? null,
+          }
+        : {}),
       wrapper_version: deps.wrapperVersion,
       hook_command: deps.runtime.hookCommand,
       daemon_command: deps.runtime.daemonCommand,
-      displaced_env: {},
+      // Carried across a re-enrollment, not reset. These are the operator's
+      // own values that a previous enroll moved aside; `unenroll` is what
+      // puts them back, and a `--force` re-enroll that blanked them would
+      // strand an env value and an MCP server nobody could restore.
+      displaced_env: existing?.displaced_env ?? {},
+      displaced_mcp_servers: existing?.displaced_mcp_servers ?? {},
+      mcp_stdio_command: deps.runtime.mcpStdioCommand,
       enrolled_at: now,
       expires_at: response.expiresAt,
       revoked_at: null,
@@ -545,6 +582,86 @@ export async function enroll(
         deps.out("      already present; nothing to change");
       }
     }
+    if (harnesses.includes("stella")) {
+      const file = deps.readStellaHooks();
+      deps.out(`      Stella: ${file.path}`);
+      const merged = mergeStellaHooks(file, hookConfig);
+      if (!merged.ok) {
+        // Nothing is written: a stella.toml Stella cannot parse would stop
+        // every Stella session, which is worse than an unhooked one.
+        warnings.push(`Stella hooks not written: ${merged.error}`);
+        deps.out("      not written (see the warning below)");
+      } else if (merged.changed) {
+        deps.writeStellaHooks(merged.file);
+        deps.out(
+          `      hooks written for ${stellaHookPresence(merged.file, host.host_enrollment_id).present.length} events (${file.format === "toml" ? "a managed block at the end of stella.toml; the rest of the file is untouched" : "command hooks in settings.json"}; Stella has no SessionEnd, so tachod seals a session when the stella process exits)`,
+        );
+      } else {
+        deps.out("      already present; nothing to change");
+      }
+    }
+    if (harnesses.includes("claude-desktop")) {
+      // The connected tier (ADR-078). No hooks: Claude Desktop has no hook
+      // surface, so what is written is one MCP server entry pointing at the
+      // collector's loopback gateway, and what Oxagen can govern is the
+      // toolbelt it serves through it.
+      const path = deps.paths.claudeDesktopConfig;
+      if (path === undefined) {
+        warnings.push(
+          "Claude Desktop is not written on this platform: Anthropic ships no build for it, so there is no config for Oxagen to write",
+        );
+        deps.out("      Claude Desktop: not available on this platform");
+      } else {
+        deps.out(`      Claude Desktop: ${path}`);
+        const merged = mergeClaudeDesktopConfig(
+          deps.readClaudeDesktopConfig(),
+          {
+            enrollmentId: host.host_enrollment_id,
+            port: host.port,
+            localToken: host.local_token,
+            shimCommand: deps.runtime.mcpStdioCommand[0] as string,
+            shimArgs: deps.runtime.mcpStdioCommand.slice(1, -1),
+            ...(deps.env["TACHO_HOME"] !== undefined
+              ? { tachoHome: deps.env["TACHO_HOME"] }
+              : {}),
+          },
+        );
+        if (merged.changed) {
+          deps.writeClaudeDesktopConfig(merged.config);
+          if (Object.keys(merged.displaced).length > 0) {
+            host = {
+              ...host,
+              displaced_mcp_servers: {
+                ...host.displaced_mcp_servers,
+                "claude-desktop": merged.displaced as Record<
+                  string,
+                  Record<string, unknown>
+                >,
+              },
+            };
+            writeHostFile(deps.paths.hostFile, host);
+            warnings.push(
+              "an MCP server already used the name `oxagen` in Claude Desktop; it was moved aside and unenroll restores it",
+            );
+          }
+          deps.out(`      ${CLAUDE_DESKTOP_RESTART_NOTE}`);
+        } else {
+          deps.out("      already present; nothing to change");
+        }
+        const presence = claudeDesktopPresence(
+          deps.readClaudeDesktopConfig(),
+          host.host_enrollment_id,
+        );
+        if (presence.otherServers > 0) {
+          // ADR-078 §3: the operator is entitled to the size of the gap. A
+          // tool served by another MCP server never reaches Oxagen, and no
+          // code here can change that.
+          deps.out(
+            `      ${presence.otherServers} other MCP server${presence.otherServers === 1 ? "" : "s"} in this app (${presence.otherServerNames.join(", ")}); Oxagen does not see what they serve`,
+          );
+        }
+      }
+    }
     if (options.managed === true) {
       managedSettings = renderManagedSettings(hookConfig);
       deps.out(
@@ -555,20 +672,24 @@ export async function enroll(
   }
 
   step(6, "Verifying");
-  const claude = deps.claude();
-  if (claude.path === undefined) {
-    warnings.push(
-      "`claude` is not on PATH; hooks will apply once it is installed",
-    );
-  } else if (
-    claude.version !== undefined &&
-    !versionWithin(claude.version, TESTED_CLAUDE_RANGE)
-  ) {
-    warnings.push(
-      `Claude Code ${claude.version} is outside the tested range ${TESTED_CLAUDE_RANGE.min}..${TESTED_CLAUDE_RANGE.max}`,
-    );
-  } else {
-    deps.out(`      claude ${claude.version ?? "?"} at ${claude.path}`);
+  // Only the harnesses this host hooks: a Codex- or Stella-only host has no
+  // reason to hear that `claude` is missing.
+  if (harnesses.includes("claude-code")) {
+    const claude = deps.claude();
+    if (claude.path === undefined) {
+      warnings.push(
+        "`claude` is not on PATH; hooks will apply once it is installed",
+      );
+    } else if (
+      claude.version !== undefined &&
+      !versionWithin(claude.version, TESTED_CLAUDE_RANGE)
+    ) {
+      warnings.push(
+        `Claude Code ${claude.version} is outside the tested range ${TESTED_CLAUDE_RANGE.min}..${TESTED_CLAUDE_RANGE.max}`,
+      );
+    } else {
+      deps.out(`      claude ${claude.version ?? "?"} at ${claude.path}`);
+    }
   }
   if (harnesses.includes("codex")) {
     const codex = deps.codex();
@@ -577,6 +698,14 @@ export async function enroll(
         "`codex` is not on PATH; hooks will apply once it is installed",
       );
     else deps.out(`      codex ${codex.version ?? "?"} at ${codex.path}`);
+  }
+  if (harnesses.includes("stella")) {
+    const stella = deps.stella();
+    if (stella.path === undefined)
+      warnings.push(
+        "`stella` is not on PATH; hooks will apply once it is installed",
+      );
+    else deps.out(`      stella ${stella.version ?? "?"} at ${stella.path}`);
   }
   if (options.service !== false) {
     let healthy = false;
@@ -602,7 +731,7 @@ export async function enroll(
     warnings.push("device key missing after enrollment");
   for (const warning of warnings) deps.err(`warning: ${warning}`);
   deps.out(
-    `Done. This machine reports to Oxagen as ${host.agent_key}; every ${harnesses.map((h) => (h === "codex" ? "Codex" : "Claude Code")).join(" and ")} session from now on is recorded${host.bundle.mode === "enforce" ? " and gated" : " (observe mode)"}.`,
+    `Done. This machine reports to Oxagen as ${host.agent_key}; every ${listLabels(harnesses)} session from now on is recorded${host.bundle.mode === "enforce" ? " and gated" : " (observe mode)"}.`,
   );
   return {
     ok: true,

@@ -8,7 +8,12 @@
  * conclusion here.
  */
 import { describe, expect, it } from "vitest";
-import { classifyRuns, verdictOf } from "./check-main-verified.mjs";
+import {
+  applyGrace,
+  applySupersession,
+  classifyRuns,
+  verdictOf,
+} from "./check-main-verified.mjs";
 
 describe("classifyRuns", () => {
   it("counts a concluded run", () => {
@@ -69,5 +74,151 @@ describe("verdictOf", () => {
     // A commit with no run at all is the finding; one still running is not a
     // reason to soften it.
     expect(verdictOf([s("in_flight"), s("none")])).toBe("unverified");
+  });
+});
+
+/**
+ * The guard is a `.mjs` with no declaration file, so everything it returns
+ * arrives as `any`. Naming the shape here is what makes these assertions
+ * actually check something under `noImplicitAny`.
+ */
+type CommitState = { sha: string; state: string };
+
+describe("applySupersession", () => {
+  const s = (sha: string, state: string): CommitState => ({ sha, state });
+
+  it("leaves a window with no gaps alone", () => {
+    const states = [s("head", "concluded"), s("older", "concluded")];
+    expect(applySupersession(states)).toEqual(states);
+  });
+
+  it("supersedes a gap that a later commit answered", () => {
+    // The #3125 shape: HEAD ran, an older commit never did and never will.
+    expect(
+      applySupersession([s("head", "concluded"), s("d3e5ebef", "none")]),
+    ).toEqual([s("head", "concluded"), s("d3e5ebef", "superseded")]);
+  });
+
+  it("never supersedes HEAD", () => {
+    // Nothing is later than HEAD, so a gap there is the live blindness case
+    // and must stay the finding however healthy the history below it looks.
+    expect(
+      applySupersession([s("head", "none"), s("older", "concluded")]),
+    ).toEqual([s("head", "none"), s("older", "concluded")]);
+  });
+
+  it("does not let an in-flight run supersede anything", () => {
+    // Same reason `pending` closes nothing: a run still going is not an answer.
+    expect(
+      applySupersession([s("head", "in_flight"), s("older", "none")]),
+    ).toEqual([s("head", "in_flight"), s("older", "none")]);
+  });
+
+  it("supersedes every gap below the newest conclusion, not just the next one", () => {
+    // The #2730 shape after recovery: a burst of unrun commits, then one that
+    // ran. All of them are history nothing can answer.
+    expect(
+      applySupersession([
+        s("a", "concluded"),
+        s("b", "none"),
+        s("c", "none"),
+        s("d", "none"),
+      ]).map((x: CommitState) => x.state),
+    ).toEqual(["concluded", "superseded", "superseded", "superseded"]);
+  });
+
+  it("does not supersede a gap that is newer than the only conclusion", () => {
+    // Ordering is newest-first, so index 2 concluding says nothing about the
+    // gap at index 1 above it. Getting this backwards would silence the guard.
+    expect(
+      applySupersession([
+        s("head", "concluded"),
+        s("gap", "none"),
+        s("old", "concluded"),
+      ]).map((x: CommitState) => x.state),
+    ).toEqual(["concluded", "superseded", "concluded"]);
+  });
+
+  it("does not mutate its argument", () => {
+    const states = [s("head", "concluded"), s("older", "none")];
+    applySupersession(states);
+    expect(states[1]?.state).toBe("none");
+  });
+});
+
+describe("verdictOf with supersession applied", () => {
+  const s = (state: string) => ({ sha: "abc", state });
+
+  it("is verified when the only gaps are superseded", () => {
+    // This is what finally closes an open main-unverified issue instead of
+    // re-commenting on it forever (#3125).
+    expect(verdictOf([s("concluded"), s("superseded")])).toBe("verified");
+  });
+
+  it("still reports unverified when a real gap remains beside a superseded one", () => {
+    expect(verdictOf([s("none"), s("concluded"), s("superseded")])).toBe(
+      "unverified",
+    );
+  });
+
+  it("is pending when a superseded gap sits beside a run still going", () => {
+    expect(verdictOf([s("in_flight"), s("superseded")])).toBe("pending");
+  });
+});
+
+describe("applyGrace", () => {
+  const MINUTE = 60 * 1000;
+  const GRACE = 10 * MINUTE;
+  const s = (state: string, ageMs?: number) => ({ sha: "abc", state, ageMs });
+
+  it("spares a commit whose run has not appeared yet", () => {
+    // The measured race on #3125: commit at 05:47:32Z, run created 05:47:35Z,
+    // guard filed `no run at all` at 05:47:39Z — four seconds after the run
+    // it could not see already existed.
+    expect(applyGrace([s("none", 7 * 1000)], GRACE)[0]?.state).toBe(
+      "too_young",
+    );
+  });
+
+  it("judges a commit older than the grace normally", () => {
+    // Past the grace a real gap is a real gap. Losing this would make the
+    // guard permanently silent, which is worse than the noise it replaces.
+    expect(applyGrace([s("none", 11 * MINUTE)], GRACE)[0]?.state).toBe("none");
+  });
+
+  it("treats the boundary itself as old enough to judge", () => {
+    expect(applyGrace([s("none", GRACE)], GRACE)[0]?.state).toBe("none");
+  });
+
+  it("does not grace a commit whose age is unknown", () => {
+    // An unparseable date is not a young commit. Guessing would silence the
+    // guard on exactly the commits it could not date.
+    expect(applyGrace([s("none", undefined)], GRACE)[0]?.state).toBe("none");
+  });
+
+  it("leaves every state but `none` alone", () => {
+    // A commit with a visible run has an answer coming and needs no grace.
+    for (const state of ["concluded", "in_flight", "superseded"]) {
+      expect(applyGrace([s(state, 1000)], GRACE)[0]?.state).toBe(state);
+    }
+  });
+
+  it("does not mutate its argument", () => {
+    const states = [s("none", 1000)];
+    applyGrace(states, GRACE);
+    expect(states[0]?.state).toBe("none");
+  });
+});
+
+describe("verdictOf with a too-young commit", () => {
+  const s = (state: string) => ({ sha: "abc", state });
+
+  it("is pending, so it neither announces nor closes", () => {
+    expect(verdictOf([s("too_young")])).toBe("pending");
+    expect(verdictOf([s("concluded"), s("too_young")])).toBe("pending");
+  });
+
+  it("does not soften a real gap sitting beside it", () => {
+    expect(verdictOf([s("too_young"), s("none")])).toBe("unverified");
   });
 });

@@ -4,7 +4,7 @@
 - **Date:** 2026-09-16
 - **Owners:** platform, app
 - **Related:** ADR-068 (the org-only workspace sentinel is shared),
-  ADR-067/#3063 (a key acts for its creator), issue #2964,
+  ADR-079/#3063 (a key acts for its creator), issue #2964,
   `packages/database/src/schema/auth.ts` (`auth.api_keys`),
   `packages/database/src/tenant-policy.manifest.ts`,
   `packages/auth/src/resolvers/api-key.ts`,

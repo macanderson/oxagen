@@ -77,6 +77,19 @@ Owned intelligence (training a model per customer on proven runs) is the phase-t
 - Workflows and playbooks. Automations. Chat as a product interface.
 - Connectors beyond the three named. A connector SDK ships in v1 so partners can add more.
 
+**Out of scope means out of the surfaces, not out of the tree.** Everything named
+in §2.2 is de-registered for v1: its contract loses the layers and surfaces that
+offered it, its route stops being reachable, and its page stops being routed.
+None of it is deleted. The contract, the handler, the API route, the MCP tool,
+the page, the components and the packages behind them stay on disk, keep
+compiling and keep their tests. `DEREGISTERED.md` at the repository root is the
+register of what has come off the surfaces and where its code still lives, and
+`pnpm check:deregistered` fails the build if one of those paths disappears. A
+scope decision is a statement about what we sell this release; it is not a
+judgement that the code was wrong, and deleting on it would convert a reversible
+call into an irreversible one. The only path from de-registered to deleted is an
+ADR under `docs/adr/` that names the files.
+
 ### 2.3 Non-goals stated so they stay out
 
 - No second permission system. IAM decides what is allowed. Every other part only attributes, meaning it records which agent or person an action belongs to without deciding permission.
@@ -2140,7 +2153,7 @@ How the four grants combine for this role: every GitHub tool is allowed for read
 
 ## Appendix E. The agent tools that survive
 
-The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: **97 agent tools** (78 of them in the wedge), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is dropped, and the drop is listed by family at the end. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.
+The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: **97 agent tools** (78 of them in the wedge), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is **de-registered**, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses `app` from its `layers[]`, loses the `api` / `mcp` / `cli` entries in its `surfaces[]`, or loses its registration in `packages/handlers/src/register.ts`. It does **not** mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; `DEREGISTERED.md` at the repository root records each one with its file paths, and `pnpm check:deregistered` fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under `docs/adr/` that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.
 
 **Organization and workspace (11)**
 
@@ -2296,11 +2309,15 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 | `mark_notification` | mark_notification | |
 | `get_install_instructions` | get_install_instructions | per harness |
 
-**Dropped, by family** (everything not named above): `environment.*` and `bind/unbind_agent_environment` (no runtime); `plugin.*`, `browse_plugin_catalog`, `add/remove_plugin_registry`, `install_plugins_bulk`, `sync_plugin_catalog`, `get_catalog_plugin`, `get_plugin_schema`, `validate_plugin_schema`, `list_plugin_registries`, `list_plugin_versions`, `set_plugin_enabled` (no marketplace in v1; sources and tool servers replace it); `prompt.settings.*` (steering replaces prompt settings); `import_env_secrets`, `export_secrets`, `reveal_secret` (secrets are connections and are never revealed); `parse_memory_import`, `commit_memory_import` (records are appended, not imported); `get_pr`, `get_pr_diff`, `list_branches`, `get_ci_status`, `read_file` (the graph and the GitHub events hold these; agents read code through their own harness); `upload_asset` (no content); `get_org_settings`, `get_workspace_settings`, `get_environment`, `get_connection`, `get_connection_mappings`, `get_memory_policy`, `get_prompt_settings`, `get_routing_policy` (reads folded into the objects above); everything in the test fixtures.
+**De-registered, by family** (everything not named above, all of it kept in the tree per the preamble and `DEREGISTERED.md`): `environment.*` and `bind/unbind_agent_environment` (no runtime); `plugin.*`, `browse_plugin_catalog`, `add/remove_plugin_registry`, `install_plugins_bulk`, `sync_plugin_catalog`, `get_catalog_plugin`, `get_plugin_schema`, `validate_plugin_schema`, `list_plugin_registries`, `list_plugin_versions`, `set_plugin_enabled` (no marketplace in v1; sources and tool servers replace it); `prompt.settings.*` (steering replaces prompt settings); `import_env_secrets`, `export_secrets`, `reveal_secret` (secrets are connections and are never revealed); `parse_memory_import`, `commit_memory_import` (records are appended, not imported); `get_pr`, `get_pr_diff`, `list_branches`, `get_ci_status`, `read_file` (the graph and the GitHub events hold these; agents read code through their own harness); `upload_asset` (no content); `get_org_settings`, `get_workspace_settings`, `get_environment`, `get_connection`, `get_connection_mappings`, `get_memory_policy`, `get_prompt_settings`, `get_routing_policy` (reads folded into the objects above); everything in the test fixtures.
+
+Two notes on that list. `read_file` has no registered contract on `main` — the only match is a test fixture in `packages/oxagen/src/contracts/tool.declaration.publish.test.ts` — so there is nothing to de-register and nothing to preserve. And the three plugin credential tools (`set_plugin_secret`, `revoke_plugin_credential`, `reauth_plugin_credential`) are absorbed into `set_connection` and `delete_connection` rather than dropped outright: the behaviour survives under the connection vocabulary, and only the plugin-shaped entry points come off the surfaces.
 
 Count: 11 + 10 + 14 + 17 + 13 + 9 + 9 + 7 + 6 = **96** for the full product. The wedge ships 78: the 96 minus the eighteen marked new in the toolbelt, compliance, wrapping, and knowledge families that land from M2 onward and in Series A. Nothing is added back without a row in this appendix.
 
 ## Appendix F. The pages that survive
+
+"Survive" here means *stays routed*. The ten pages below are what a user can reach in rev1. The other sixty page files are de-registered, not deleted: each keeps its route only as a redirect, and its `page.tsx`, its components and its `actions.ts` stay in the tree. `DEREGISTERED.md` §3 and §5 name the ones whose capability also came off the surfaces (marketplace, workbench environments); the rest are pages whose capability lives on inside the page that absorbed it.
 
 The current web app has 70 page files. Ten remain: seven at workspace scope, three at organization scope. Sign-in flows (login, signup, password reset, two-factor, verify, accept an invite, create the first organization) are not screens and are not counted; there are seven of them and they stay as they are. Onboarding is not a page: it is the in-app agent's first run inside the workspace.
 
@@ -2317,5 +2334,5 @@ The current web app has 70 page files. Ten remain: seven at workspace scope, thr
 | 9 | **Billing** | `/{org}/billing` | `billing`, `billing/subscription`, `billing/invoices` | plan, run allowance, meters, invoices (linked to Stripe) |
 | 10 | **Audit** | `/{org}/audit` | `security`, `security/audit`, `security/compliance`, `security/mfa`, `security/trust`, `governance`, `access` | audit events, incidents, receipts search, legal holds, exports, key rotation, assurance suite results |
 
-Account pages (`account`, `account/profile`, `account/preferences`, `account/privacy`, `account/security`) collapse into one **Account** dialog reachable from the user menu; it is a dialog, not a page. `cli/authorize` and `github/setup` are callback endpoints, not pages, and stay. Every other route in today's list redirects to the page that absorbed it for one release, then is removed.
+Account pages (`account`, `account/profile`, `account/preferences`, `account/privacy`, `account/security`) collapse into one **Account** dialog reachable from the user menu; it is a dialog, not a page. `cli/authorize` and `github/setup` are callback endpoints, not pages, and stay. Every other route in today's list redirects to the page that absorbed it. After one release the **redirect** is removed, not the page file — an unrouted page costs a compile and a test run, and keeping it is what lets a later release put a capability back without rebuilding its screen. Deleting any of these page files takes an ADR that names them (§2.2, `DEREGISTERED.md` §12).
 

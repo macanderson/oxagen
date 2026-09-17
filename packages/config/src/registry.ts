@@ -837,6 +837,14 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "rather than issuing an enrollment no install could verify.",
     secret: true,
     clientExposed: false,
+    // Deliberately unclaimed, unlike its Tacho counterpart. `valueOrigin:
+    // "generate"` means the env-manager deploy path mints a fresh value for
+    // every key in the catalog and never returns it
+    // (tools/env-manager/src/server.ts), and a Stella install verifies
+    // enrollment documents against an out-of-band copy of this exact secret —
+    // so claiming it for a service would rotate the fleet's copy away on the
+    // next deploy. Giving create_stella_enrollment a deployed secret needs a
+    // distribution story first.
     services: [],
     requiredIn: [],
     valueOrigin: "generate",
@@ -850,6 +858,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "Defaults to the public endpoint; plaintext entries are dropped.",
     secret: false,
     clientExposed: false,
+    // Unclaimed while STELLA_ENROLLMENT_SIGNING_SECRET is: deploying the
+    // endpoint list alone would not make create_stella_enrollment work.
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
@@ -864,7 +874,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "distributed out of band. Unset means the capability refuses to enrol a host.",
     secret: true,
     clientExposed: false,
-    services: [],
+    services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "",
@@ -879,7 +889,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "bundle so its verifier runs offline. Unset means enrollment, bundle and export refuse.",
     secret: true,
     clientExposed: false,
-    services: [],
+    services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "",
@@ -893,10 +903,38 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "the public endpoint; plaintext entries are dropped.",
     secret: false,
     clientExposed: false,
-    services: [],
+    services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "https://api.oxagen.sh/v1/tacho",
+  },
+  TACHO_LOCAL_TOKEN: {
+    group: "Inngest",
+    description:
+      "The per-install bearer the Tacho collector's loopback listener requires. Written into " +
+      "each wrapped harness's settings and into a connected app's MCP config by `tacho enroll`, " +
+      "and read back by the hook and the `tacho mcp-stdio` shim. Never set by hand and never " +
+      "a deployment value: it is minted per machine at enrollment and lives in host.json.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "",
+  },
+  TACHO_MCP_ENDPOINT: {
+    group: "Inngest",
+    description:
+      "Overrides the workspace MCP endpoint the Tacho collector's local gateway proxies to " +
+      "(ADR-078). Read on the host, not the server: it is how a local stack points the " +
+      "gateway at 127.0.0.1:4100 instead of the deployment's MCP host. Unset, the gateway " +
+      "uses the endpoints.mcp claim from the enrollment, then derives one from api_url.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "http://127.0.0.1:4100/mcp",
   },
   OXAGEN_CONTEXT_ORG: {
     group: "Context provider",
@@ -1488,6 +1526,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
 
   // ── CLI / tooling ────────────────────────────────────────────────────────────
+  OXAGEN_CLI_DEBUG: {
+    group: "CLI",
+    description:
+      "Set to 1 or true to write the CLI's debug log to ~/.oxagen/logs " +
+      "(apps/cli/src/lib/debug-log.ts). Developer tooling, never set on a " +
+      "deployed service.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_API_TOKEN: {
     group: "CLI",
     description:
@@ -1861,6 +1911,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "Operator scripts",
     description:
       "How many recent commits on main check-main-verified.mjs asks about. Defaults to 10.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "10",
+  },
+  MAIN_VERIFIED_GRACE_MINUTES: {
+    group: "Operator scripts",
+    description:
+      "How long after a commit lands check-main-verified.mjs refuses to conclude it has no run. The workflow races the registration of the run it looks for. Defaults to 10.",
     secret: false,
     clientExposed: false,
     services: [],

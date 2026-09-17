@@ -445,6 +445,11 @@ async function upsertPlans(
       ratePerGauMicros: plan.gauTerms.ratePerGauMicros,
       blockSizeGau: plan.gauTerms.blockSizeGau,
       includedGauPerMonth: plan.gauTerms.includedGauPerMonth,
+      // `billing.plans.included_actions_annual` is NOT NULL DEFAULT 25000 — the
+      // FREE allowance. Omitting it here priced every paid plan this script
+      // created at one fifteenth of Scale's allowance and billed governed-action
+      // overage from action 25,001, on the PRIMARY meter under ADR-052.
+      includedActionsAnnual: BigInt(plan.includedActionsAnnual),
       features: plan.features,
       isPublic: true,
     };
@@ -473,6 +478,7 @@ async function upsertPlans(
           ratePerGauMicros: row.ratePerGauMicros,
           blockSizeGau: row.blockSizeGau,
           includedGauPerMonth: row.includedGauPerMonth,
+          includedActionsAnnual: row.includedActionsAnnual,
           features: row.features,
           updatedAt: new Date(),
         },

@@ -9,4 +9,5 @@ export * from "./paths";
 export * from "./process-scan";
 export * from "./service";
 export * from "./settings-writer";
+export * from "./stella-writer";
 export * from "./wal";

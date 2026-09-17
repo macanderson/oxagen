@@ -71,7 +71,7 @@ SWE-agent made that argument explicitly. Yang and colleagues built a custom agen
 
 OpenHands generalised the same idea into an open platform where agents write code, drive a command line, and browse the web inside a sandbox, with benchmark harnesses built in.[^6] It is worth naming because it changed how results get produced: the platform is now a shared dependency of many reported numbers.
 
-Then Agentless pushed the other way. Xia and colleagues dropped tool use and autonomous decision-making entirely in favour of three fixed phases, localise, repair, and validate, and resolved 32.00% of SWE-bench Lite at roughly $0.70 per issue, beating every open-source agent available at the time on both score and cost.[^7] That result should change how you read a leaderboard. A large part of what looked like agentic capability was retrieval and localisation, and a deterministic pipeline could do it cheaper.
+Then Agentless pushed the other way. Xia and colleagues dropped tool use and autonomous decision-making entirely in favour of three fixed phases, localise, repair, and validate, and resolved 32.00% of SWE-bench Lite at roughly $0.70 per issue, beating every open-source agent available at the time on both score and cost.[^7] That result should change how you read a leaderboard. A large part of what looked like agent capability was retrieval and localisation, and a deterministic pipeline could do it cheaper.
 
 <Flow
   title="Agentless: three fixed phases, no autonomous tool use"
@@ -119,7 +119,7 @@ The honest summary: SWE-bench measures whether a system can turn an issue descri
 
 ## Where this meets Oxagen
 
-Oxagen does not run coding agents, and it does not publish a benchmark score. It governs agents and records what they did. Two of its five jobs are relevant here. Rating is built on verified outcomes rather than self-reported success, which is the same discipline as refusing to accept a resolve rate at face value. Metering turns observed usage into a cost per governed action, which is the per-outcome number a leaderboard leaves out. The evidence a governed agent emits is what a rating can honestly be built from.
+Oxagen does not run coding agents, and it does not publish a benchmark score. It is the control plane for the agents you run, and it records what they did. Two parts of that are relevant here. The record keeps outcomes that something outside the agent checked, rather than self-reported success, which is the same discipline as refusing to accept a resolve rate at face value. The meter prices every governed action, which is the per-outcome number a leaderboard leaves out. The record a governed agent leaves behind is what an honest judgment of that agent can be built from.
 
 [^1]: Jimenez, C. E., Yang, J., Wettig, A., Yao, S., Pei, K., Press, O., & Narasimhan, K. (2023). *SWE-bench: Can Language Models Resolve Real-World GitHub Issues?* ICLR 2024. https://arxiv.org/abs/2310.06770
 [^2]: OpenAI (2024). *Introducing SWE-bench Verified.* OpenAI, 13 August 2024. https://openai.com/index/introducing-swe-bench-verified/

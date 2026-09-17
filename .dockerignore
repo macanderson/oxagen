@@ -1,4 +1,4 @@
-# Keeps the build context for packages/agent-worker/Dockerfile (and any later
+# Keeps the build context for .github/docker/ci/Dockerfile (and any later
 # image built from the repo root) down to source. Everything here is either
 # regenerated inside the image (node_modules via pnpm install) or has no
 # business in one (VCS state, local env, build output, caches).

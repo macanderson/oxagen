@@ -549,6 +549,15 @@
       "proof": "apps/app_deprecated/e2e/billing-usage-breakdown.spec.ts",
       "verifiedAt": "2026-07-12",
       "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    },
+    "list_tacho_hosts": {
+      "route": "/[orgSlug]/[workspaceSlug]/fleet",
+      "page": "apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/fleet/page.tsx",
+      "entry": "Fleet page: the server component calls listFleetAction on load, which invokes list_tacho_hosts and renders one row per machine with the enforcement tier of each app on it (ADR-078)",
+      "testid": "fleet-page",
+      "proof": "apps/app_deprecated/e2e/fleet.spec.ts",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-cdf1766d-desktop-control-plane"
     }
   }
 }

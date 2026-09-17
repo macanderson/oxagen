@@ -3,6 +3,7 @@ import {
   apiLayerSatisfied,
   buildApiRouteIndex,
   manifestContentChanged,
+  buildUiProofIndex,
 } from "./check_manifest.mjs";
 
 describe("buildApiRouteIndex", () => {
@@ -160,5 +161,41 @@ describe("manifestContentChanged", () => {
   it("reports a missing or unparseable file as changed", () => {
     expect(manifestContentChanged("", manifest)).toBe(true);
     expect(manifestContentChanged("{ not json", manifest)).toBe(true);
+describe("buildUiProofIndex", () => {
+  it("reads the e2e proofs out of the bindings, not off the top level", () => {
+    // The map's real shape: `$doc` and `$binding_shape` sit beside `bindings`,
+    // and reading the top level finds no capability at all.
+    const index = buildUiProofIndex({
+      $doc: "notes",
+      $binding_shape: { route: "…" },
+      bindings: {
+        list_tacho_hosts: {
+          route: "/[orgSlug]/[workspaceSlug]/fleet",
+          proof: "apps/app/e2e/fleet.spec.ts",
+        },
+        uninstall_plugin: { route: "/x" },
+      },
+    });
+    expect(index.get("list_tacho_hosts")).toBe("apps/app/e2e/fleet.spec.ts");
+    expect(index.has("uninstall_plugin")).toBe(false);
+    expect(index.has("$doc")).toBe(false);
+  });
+
+  it("ignores a proof that is a screenshot rather than a spec", () => {
+    // check:ui-parity accepts either; only a spec answers the e2e layer.
+    const index = buildUiProofIndex({
+      bindings: {
+        a: { proof: "verifications/session_x/a.png" },
+        b: { proof: "apps/app/e2e/b.spec.ts" },
+      },
+    });
+    expect(index.has("a")).toBe(false);
+    expect(index.get("b")).toBe("apps/app/e2e/b.spec.ts");
+  });
+
+  it("gives an empty index for anything that is not a binding map", () => {
+    for (const input of [undefined, null, {}, { bindings: null }, 7, "x"]) {
+      expect(buildUiProofIndex(input).size).toBe(0);
+    }
   });
 });

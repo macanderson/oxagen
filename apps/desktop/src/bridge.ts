@@ -6,6 +6,7 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { Command } from "@tauri-apps/plugin-shell";
+import type { CliInstallReport, Harness } from "./commands";
 import { parseTachoStatus, type TachoStatus } from "./tacho-status";
 
 export interface CliConfigView {
@@ -36,6 +37,8 @@ export interface HostView {
   claude_execpath: string | null;
   codex_version?: string | null;
   codex_execpath?: string | null;
+  stella_version?: string | null;
+  stella_execpath?: string | null;
   wrapper_version: string;
   hook_command: string;
   daemon_command: string[];
@@ -47,14 +50,55 @@ export interface HostView {
   bundle: { version: number; mode: "observe" | "enforce"; expires_at: string };
 }
 
+/**
+ * One entry in the collector's `/status` `agents[]`: everything reporting
+ * to this daemon, one row per harness or per `tacho hook --agent <name>`
+ * custom agent. Consumed by `computeAgentRows` in `agents.ts`.
+ */
+export interface DaemonAgentSummary {
+  key: string;
+  runtime: "claude-code" | "codex" | "stella" | "custom" | string;
+  harness: string;
+  label: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  sessions_total: number;
+  sessions_live: number;
+}
+
 export interface DaemonStatus {
   uptime_s?: number;
   spool_depth?: number;
   last_ingest_at?: string | null;
   last_error?: string | null;
+  /**
+   * Events the control plane refused as malformed. They are off the spool
+   * and leave no error behind, so this count is the only sign they never
+   * reached Oxagen. Absent on a collector that predates the field.
+   */
+  quarantined?: number;
   sessions?: unknown[];
   unobserved_sessions?: string[];
+  agents?: DaemonAgentSummary[];
+  /**
+   * One row per MCP client that has called through the local gateway
+   * (ADR-078). A separate list from `agents` on purpose: those are the
+   * wrapped ones, and a surface that merged the two would have to invent a
+   * tier for each row after the fact.
+   */
+  connected?: DaemonConnectedApp[];
   [key: string]: unknown;
+}
+
+/** A connected app the gateway has served, as `/status` reports it. */
+export interface DaemonConnectedApp {
+  /** The name the app gave in the MCP `initialize` handshake. */
+  client: string;
+  enforcement_tier: "gateway";
+  calls: number;
+  /** Calls the control plane refused. A refusal is a decision, so it counts. */
+  refused: number;
+  last_seen_at: string;
 }
 
 export interface DesktopState {
@@ -82,6 +126,19 @@ export interface DesktopState {
   oxagen_on_path: string | null;
   tacho_on_path: string | null;
   cli_install_dir: string;
+  /**
+   * Whether our own links to `oxagen` or `tacho` sit in `cli_install_dir`
+   * right now. Separate from the two `*_on_path` fields, which resolve
+   * against the running process's PATH: a GUI launch on macOS or Linux never
+   * sources a login profile, so they read null even with the links in place.
+   * Absent on a build that predates the field.
+   */
+  cli_links_present?: boolean;
+  /**
+   * What the launch-time auto-link of `oxagen` and `tacho` did, if the Rust
+   * shell ran it this session. Absent on a build that predates it.
+   */
+  cli_install?: CliInstallReport;
 }
 
 export const readState = () => invoke<DesktopState>("desktop_state");
@@ -215,7 +272,7 @@ export async function tachoStatus(): Promise<TachoStatus | null> {
 
 /** `tacho detect --json`: which harnesses the machine has and which are hooked. */
 export interface DetectedHarness {
-  harness: "claude-code" | "codex";
+  harness: Harness;
   label: string;
   installed: boolean;
   path?: string;
@@ -281,7 +338,7 @@ export function parseConnect(result: RunResult): ConnectResult {
 }
 
 export async function connectRun(
-  harness: "claude-code" | "codex",
+  harness: Harness,
   onLine?: (line: string, stream: "stdout" | "stderr") => void,
 ): Promise<ConnectResult> {
   const result = await runSidecar(

@@ -2043,7 +2043,8 @@
       "name": "list_tacho_hosts",
       "reads": [],
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "writes": []
     },
@@ -3343,7 +3344,7 @@
       "writes": []
     }
   ],
-  "contentHash": "7b133aa537f24e72b06eef8e9259d2170516a1bfc0d80858a3ff2d21009be000",
+  "contentHash": "a630b9537304133aac9c00d3a5f0fd0edea58dab2011cd4e762f67fed5f4bae9",
   "domains": [
     {
       "name": "agent",
@@ -16096,6 +16097,12 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "negotiated_actions_annual",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bigint"
         },
         {
           "name": "status",

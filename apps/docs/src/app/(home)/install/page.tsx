@@ -254,8 +254,8 @@ export default function InstallPage(): ReactNode {
             </h2>
             <p className="mt-4 max-w-xl text-base text-muted-foreground">
               Taught once, known by every agent you run. The CLI reads the same
-              knowledge graph and the same record as the app and the API. Sign in
-              and your workspace graph is on the other end of the prompt.
+              knowledge graph and the same record as the app and the API. Sign
+              in and your workspace graph is on the other end of the prompt.
             </p>
           </div>
           <div className="mt-12 grid gap-5 md:grid-cols-3">

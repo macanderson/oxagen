@@ -37,3 +37,28 @@ export const Default: Story = {
     </Menu>
   ),
 };
+
+/**
+ * Open by default, so the popup, group label, items, shortcuts and separator
+ * are visible in the catalog and verifiable by design-sync's oracle.
+ */
+export const Open: Story = {
+  render: () => (
+    <Menu defaultOpen>
+      <MenuTrigger render={<Button variant="outline">Open menu</Button>} />
+      <MenuPopup>
+        <MenuGroupLabel>My account</MenuGroupLabel>
+        <MenuItem onClick={() => {}}>
+          Profile
+          <MenuShortcut>⇧⌘P</MenuShortcut>
+        </MenuItem>
+        <MenuItem onClick={() => {}}>
+          Settings
+          <MenuShortcut>⌘,</MenuShortcut>
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem onClick={() => {}}>Log out</MenuItem>
+      </MenuPopup>
+    </Menu>
+  ),
+};

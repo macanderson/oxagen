@@ -1,0 +1,129 @@
+---
+title: "The problem is not slop, it is your process"
+description: "The worry about AI slop is about output quality. The measurements point somewhere else: at teams handing an agent a human workflow and expecting it to hold."
+date: 2026-09-16
+authors:
+  - Oxagen Research
+pillars:
+  - autonomous-agents
+  - ai-agents
+tags:
+  - process
+  - reliability
+  - context
+  - review
+  - measurement
+draft: false
+---
+
+The complaint about AI slop is a complaint about output. Low-quality pull requests, documentation nobody asked for, a wall of plausible text with a mistake in the middle of it. It is a real complaint, and it is the wrong thing to organise a team around, because the measurements that exist do not locate the cost in the output.
+
+They locate it in the process wrapped around the output. Teams take the workflow they built for people, hand it to an agent, and keep the parts that only worked because a person was on the other end. The agent then fails in exactly the places the workflow assumed a human.
+
+## The study where everyone was wrong in the same direction
+
+Becker and colleagues ran a randomised controlled trial on 16 experienced open-source developers across 246 tasks, on repositories where each had roughly five years of prior experience.[^1] Half the tasks allowed AI tooling, half did not.
+
+Developers using AI completed tasks 19 percent slower.
+
+The forecasts are the part worth sitting with. Before the study, the developers expected AI to cut completion time by 24 percent. Economists asked to predict the result said 39 percent. Machine-learning experts said 38 percent. After finishing the tasks, having personally been slower, the developers still estimated that AI had made them 20 percent faster.
+
+<Dumbbell
+  title="Forecast change in task completion time, against the measured change"
+  unit="%"
+  min={-45}
+  max={25}
+  ticks={[-40, -20, 0, 20]}
+  fromLabel="Forecast"
+  toLabel="Measured"
+  rows={[
+    { label: "Economists", from: -39, to: 19 },
+    { label: "Machine-learning experts", from: -38, to: 19 },
+    { label: "The developers, beforehand", from: -24, to: 19 },
+    { label: "The developers, afterwards", from: -20, to: 19 },
+  ]}
+  caption="Source: Becker et al. (2025), 16 experienced open-source developers over 246 randomised tasks. Negative is faster. Every forecast, including the one made after the work, landed on the wrong side of zero."
+/>
+
+Nobody in that chart is describing slop. The developers accepted the model's output; they did not report being buried in garbage. The time went somewhere else: into prompting, into reading, into waiting, into the small corrections that feel like nothing and are not nothing. And the self-report stayed positive after the fact, which means the usual way a team decides whether a practice is working, by asking the people doing it, would have returned the opposite of the measurement.
+
+## Bigger batches, worse delivery
+
+DORA's 2024 report found the same shape at the level of an organisation. Across their survey population, a 25 percent increase in AI adoption was associated with an estimated 1.5 percent decrease in delivery throughput and an estimated 7.2 percent decrease in delivery stability, the second year running that AI adoption correlated with worse delivery performance.[^2] Meanwhile roughly three quarters of respondents reported productivity gains.
+
+The mechanism DORA points at is batch size. AI makes writing code cheaper, so changesets get bigger, and bigger changesets carry more risk through a review-and-release process that was tuned for smaller ones. Nothing in that story requires the generated code to be bad. It requires only that the team kept a process whose safety came from a human-sized batch, and then removed the constraint that kept batches human-sized.
+
+That is the pattern in one sentence. The workflow had an implicit governor. The governor was a person's capacity. The agent removed the governor and nobody replaced it.
+
+## Where human habits stop transferring
+
+Most of a working software process is unwritten, and most of the unwritten part is about how people handle being underspecified. You ask a colleague for something vague, they ask two questions, you both converge. You send them a long document and say the answer is in there, and they find it. They notice halfway through that they have been building the wrong thing and back out. None of that is in the ticket, and all of it is load-bearing.
+
+Each of those habits has a measurement against it.
+
+<Schema
+  title="Four habits a team hands to an agent, and what each one assumes"
+  edges={[
+    {
+      from: "Clarify as we go",
+      rel: "assumes",
+      to: "Recovery from a wrong turn",
+      notes: ["39 percent average drop, multi-turn against single-turn", "Laban et al. (2025)"],
+    },
+    {
+      from: "It is in the spec",
+      rel: "assumes",
+      to: "Even attention across a long document",
+      notes: ["Accuracy is highest at the start and end, lowest in the middle", "Liu et al. (2023)"],
+    },
+    {
+      from: "Double-check your work",
+      rel: "assumes",
+      to: "Useful self-review",
+      notes: ["Performance can degrade after unaided self-correction", "Huang et al. (2023)"],
+    },
+    {
+      from: "You will notice the mistake",
+      rel: "assumes",
+      to: "Error does not become evidence",
+      notes: ["Errors already in context raise the rate of later errors", "Sinha et al. (2025)"],
+    },
+  ]}
+  caption="Each row pairs a habit that works between people with the published finding that it does not survive the transfer to an agent."
+/>
+
+The first row is the one that does the most damage. Laban and colleagues compared models given a fully specified instruction at once against the same instruction delivered across a conversation, and found an average drop of 39 percent across six generation tasks.[^3] They decompose it: a minor loss in aptitude and a large increase in unreliability. The cause they describe is that models make assumptions in early turns, attempt a final answer prematurely, and then over-rely on it. A wrong turn early does not get corrected by the next message. It gets built on.
+
+Between people, conversation is error correction. Between a person and a long-running agent, conversation is how the error gets ratified.
+
+The other three compound it. Liu and colleagues showed that a model's accuracy on a long input is highest when the relevant passage sits near the beginning or the end and drops in the middle, so burying the constraint that matters on page nine of the spec is not a way of stating it.[^4] Huang and colleagues found models struggle to self-correct reasoning without external feedback, and that unaided self-correction sometimes makes the answer worse, so asking the agent to check itself is a ritual rather than a check.[^5] And Sinha and colleagues describe self-conditioning, where a model becomes more likely to err because its own earlier errors are sitting in its context, so the longer the run, the more an early mistake behaves like an established fact.[^6]
+
+## Slop is a symptom of the missing check
+
+None of this says output quality does not matter. It says output quality is downstream.
+
+A team gets slop when it has no check outside the model and no constraint on batch size. Remove the human governor from a process whose only real check was a person reading everything, and what comes out is volume that nobody can evaluate. The response most teams reach for is to evaluate harder, which means more review, by the same people, on more material, which is the part that already did not scale.
+
+The response the measurements support is different and duller. Move the check off the model and off the reviewer's patience, onto something that runs. Make the constraint explicit instead of implicit in someone's attention. Say the standing rules once, in a place the agent reads at the start of every run rather than in the middle of a conversation it will mishandle. And when the run is going wrong, change the run rather than argue with it.
+
+That is the theme this pillar is about to work through, and it comes down to four practices.
+
+1. **State the standing rules once, durably.** Not in a prompt that is rewritten each time, and not buried in a document the model reads unevenly. The rules an agent works under should be records with an owner, a scope, and a date, so that what the agent was told is a thing you can look up rather than reconstruct.
+2. **Correct the run, not the conversation.** A correction delivered as another turn of chat is subject to the same multi-turn failure the correction is trying to fix. A correction that changes what the run is operating under is not.
+3. **Check with something outside the model.** A test suite, a schema, a database state, a named person. The check has to be able to return a verdict the agent cannot write itself.
+4. **Keep the record at the step.** When a week-long run goes wrong, the question is which step turned, and that is a query against a record or it is a person rereading a transcript.
+
+## Where this meets Oxagen
+
+Oxagen is Mission Control for your autonomous agents. It holds the mandate each agent works under: the identity it acts as, the systems and data it may request, the budget and rules it runs under, the tools and skills it is equipped with, and the record of what it did.
+
+The first two practices above are two of those clauses. The business context an agent is permitted to read, and the steering it runs under, are the equipment clause, set by the engineers accountable for the agent. Approval thresholds and decision rules are the budget and rules clause, set by the people who own the spend and the systems. Both are written before a run starts and applied to governed requests as the run makes them, which is the point: a rule that answers at the moment of use does not depend on the agent having read it carefully, and does not depend on a person being awake to restate it.
+
+The next two posts take the first two practices one at a time: what an agent should be told before it starts, and what to do when a run you are not watching starts going the wrong way.
+
+[^1]: Becker, J., Rush, N., Barnes, E., & Rein, D. (2025). *Measuring the Impact of Early-2025 AI on Experienced Open-Source Developer Productivity*. arXiv. https://arxiv.org/abs/2507.09089
+[^2]: DORA (2024). *Accelerate State of DevOps Report 2024*. Google Cloud. https://dora.dev/research/2024/dora-report/
+[^3]: Laban, P., Hayashi, H., Zhou, Y., & Neville, J. (2025). *LLMs Get Lost In Multi-Turn Conversation*. arXiv. https://arxiv.org/abs/2505.06120
+[^4]: Liu, N. F., Lin, K., Hewitt, J., Paranjape, A., Bevilacqua, M., Petroni, F., & Liang, P. (2023). *Lost in the Middle: How Language Models Use Long Contexts*. TACL. https://arxiv.org/abs/2307.03172
+[^5]: Huang, J., Chen, X., Mishra, S., Zheng, H. S., Yu, A. W., Song, X., & Zhou, D. (2023). *Large Language Models Cannot Self-Correct Reasoning Yet*. ICLR 2024. https://arxiv.org/abs/2310.01798
+[^6]: Sinha, A., Arun, A., Goel, S., Staab, S., & Geiping, J. (2025). *The Illusion of Diminishing Returns: Measuring Long Horizon Execution in LLMs*. arXiv. https://arxiv.org/abs/2509.09677

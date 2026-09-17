@@ -110,8 +110,7 @@ export default function HomePage(): ReactNode {
             </span>
 
             <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-              Run your agents{" "}
-              <span className="lp-grad-text">as a fleet</span>.
+              Run your agents <span className="lp-grad-text">as a fleet</span>.
             </h1>
 
             <p className="mt-5 max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
@@ -167,9 +166,9 @@ export default function HomePage(): ReactNode {
               Taught once, known by every agent you run. Oxagen hands the agent
               a typed knowledge graph at run time instead of training a model.
               Stuffing every document into the prompt saturates the window.
-              Oxagen retrieves only the slice the task needs and the agent&apos;s
-              mandate lets it read, so the window stays open and the model stays
-              sharp.
+              Oxagen retrieves only the slice the task needs and the
+              agent&apos;s mandate lets it read, so the window stays open and
+              the model stays sharp.
             </p>
             <ul className="mt-7 space-y-3 text-sm">
               {[

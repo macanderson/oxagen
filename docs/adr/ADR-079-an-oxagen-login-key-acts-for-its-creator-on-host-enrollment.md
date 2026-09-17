@@ -1,4 +1,4 @@
-# ADR-067: An `oxagen login` key acts for its creator on Tacho host enrollment
+# ADR-079: An `oxagen login` key acts for its creator on Tacho host enrollment
 
 - **Status:** Accepted
 - **Date:** 2026-09-15

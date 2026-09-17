@@ -8,6 +8,7 @@
  *   oxagen tacho unenroll   remove hooks and service, revoke, delete the host key
  *   oxagen tacho export     a session from the local WAL (tacho | trace | otlp)
  *   oxagen tacho verify     one headless Claude Code turn, confirmed chained
+ *   oxagen tacho hosts      every machine enrolled in this workspace, with its tier
  *
  * The work lives in `@oxagen/tacho/cli`; this module only supplies the CLI's
  * own credentials (`oxagen login`, or OXAGEN_* env) and output plumbing, so
@@ -21,6 +22,7 @@ import {
   writeConfig,
 } from "../lib/config.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
+import { apiPostOrThrow, printTable } from "../lib/api.js";
 
 export interface TachoEnrollOptions {
   token?: string;
@@ -31,7 +33,7 @@ export interface TachoEnrollOptions {
   port?: number;
   service?: boolean;
   force?: boolean;
-  /** `claude-code`, `codex`, or a comma list. */
+  /** `claude-code`, `codex`, `stella`, or a comma list. */
   harness?: string;
   verify?: boolean;
 }
@@ -197,4 +199,97 @@ export async function handleTachoVerify(
   const result = await verify({}, await tachoDeps(writer));
   writer.write(result.ok ? `OK: ${result.detail}` : `FAILED: ${result.detail}`);
   return result.ok;
+}
+
+export interface TachoHostsOptions {
+  status?: "active" | "paused" | "suspended" | "revoked";
+  limit?: number;
+  json?: boolean;
+}
+
+interface HostRow {
+  hostEnrollmentId: string;
+  hostname: string;
+  status: string;
+  harnesses: string[];
+  tiers: Record<string, "gateway" | "harness">;
+  lastSeenAt: string | null;
+  sessionsCount: number;
+  incidentsOpen: number;
+}
+
+/**
+ * `oxagen tacho hosts` — the fleet, from the control plane rather than from
+ * this machine's `host.json`. Unlike the other `tacho` subcommands this one
+ * does no local work at all; it calls `list_tacho_hosts` and prints what came
+ * back.
+ *
+ * Each app is printed with its tier (ADR-078), because "Claude Code, Claude
+ * Desktop" says which apps a machine has and nothing about what Oxagen
+ * records for them — and those two apps are recorded in entirely different
+ * ways. `--json` carries the same `tiers` map the API returns.
+ */
+export async function handleTachoHosts(
+  opts: TachoHostsOptions,
+  writer: CommandWriter = stdoutWriter,
+): Promise<boolean> {
+  // Every page. A truncated fleet listing is worse than a slow one: the
+  // machine the operator is looking for is simply absent. Bounded so a
+  // pathological cursor cannot loop forever.
+  const hosts: HostRow[] = [];
+  let cursor: string | undefined;
+  let truncated = false;
+  for (let page = 0; page < 20; page += 1) {
+    const chunk = await apiPostOrThrow<{
+      hosts: HostRow[];
+      nextCursor: string | null;
+    }>("tacho/hosts", {
+      ...(opts.status ? { status: opts.status } : {}),
+      limit: opts.limit ?? 50,
+      ...(cursor === undefined ? {} : { cursor }),
+    });
+    hosts.push(...chunk.hosts);
+    if (chunk.nextCursor === null) break;
+    cursor = chunk.nextCursor;
+    if (page === 19) truncated = true;
+  }
+  const output = { hosts, nextCursor: truncated ? (cursor ?? null) : null };
+  if (opts.json === true) {
+    writer.write(JSON.stringify(output, null, 2));
+    return true;
+  }
+  if (output.hosts.length === 0) {
+    writer.write("No machines are enrolled in this workspace.");
+    return true;
+  }
+  printTable(
+    ["HOST", "STATUS", "APPS", "LAST SEEN", "SESSIONS", "INCIDENTS"],
+    output.hosts.map((host) => [
+      host.hostname,
+      host.status,
+      host.harnesses
+        .map(
+          (harness) =>
+            `${harness} (${host.tiers[harness] === "gateway" ? "connected" : "wrapped"})`,
+        )
+        .join(", "),
+      host.lastSeenAt ?? "never",
+      String(host.sessionsCount),
+      String(host.incidentsOpen),
+    ]),
+    writer,
+  );
+  if (output.nextCursor !== null)
+    writer.write(
+      "\nMore machines follow than this command will page through; narrow with --status.",
+    );
+  // The legend, every time. "wrapped" and "connected" are not degrees of the
+  // same thing, and a reader who assumes they are will read this table wrong.
+  writer.write(
+    "\nwrapped   every action recorded, and Oxagen does not run the app, so the record is what it reported",
+  );
+  writer.write(
+    "connected only the Oxagen tools it calls, recorded and refused on the server; nothing else it does",
+  );
+  return true;
 }

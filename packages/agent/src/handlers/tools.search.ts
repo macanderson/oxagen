@@ -85,7 +85,7 @@ export async function toolsSearchHandler(
  * per-kind lists come from each source capability's contract
  * (`SEARCH_KIND_ROLES`), so tightening `list_runs` tightens search with it.
  *
- * An API-key call acts as the key's creator (ADR-067), the same rule the rest
+ * An API-key call acts as the key's creator (ADR-079), the same rule the rest
  * of this branch applies, so a key carries its creator's current roles and no
  * more. No resolvable actor keeps only the kinds that need no source
  * capability, which is `tool` — it fails closed.

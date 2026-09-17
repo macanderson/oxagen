@@ -10,6 +10,7 @@ import { defaultCliDeps, isNativeBuild } from "./deps";
 import { detect } from "./detect";
 import { enroll, parseHarnesses } from "./enroll";
 import { exportCommand } from "./export";
+import { runMcpStdio } from "./mcp-stdio";
 import { reassign } from "./reassign";
 import { status } from "./status";
 import { unenroll } from "./unenroll";
@@ -21,14 +22,34 @@ export function buildTachoProgram(): Command {
   program
     .name("tacho")
     .description(
-      "Tacho: put this machine's Claude Code sessions under Oxagen control",
+      "Tacho: put this machine's agent sessions (Claude Code, Codex, Stella, custom agents) under Oxagen control",
     )
     .version(deps.wrapperVersion);
 
   program
+    .command("mcp-stdio")
+    .description(
+      "Serve this machine's Oxagen toolbelt to a connected app over stdio (written into the app's MCP config by `tacho enroll`; not meant to be run by hand)",
+    )
+    .option(
+      "--enrollment <id>",
+      "The enrollment this config entry was written for",
+    )
+    .option("--port <n>", "The collector's loopback port", (v) => Number(v))
+    .action(async (options: { enrollment?: string; port?: number }) => {
+      process.exitCode = await runMcpStdio(options, {
+        stdin: process.stdin,
+        stdout: process.stdout,
+        stderr: process.stderr,
+        env: process.env,
+        fetch: globalThis.fetch,
+      });
+    });
+
+  program
     .command("enroll")
     .description(
-      "Enroll this machine: device key, host API key, tachod service, Claude Code hooks",
+      "Enroll this machine: device key, host API key, tachod service, harness hooks",
     )
     .option("--token <apiKey>", "Oxagen API token (or run `oxagen login`)")
     .option("--org <slug>", "Organization slug")
@@ -49,7 +70,7 @@ export function buildTachoProgram(): Command {
     // running a bare `tacho enroll` would otherwise gain Claude Code hooks).
     .option(
       "--harness <list>",
-      "Harnesses to hook: claude-code (default on a fresh enrollment), codex, or claude-code,codex",
+      "Harnesses to hook: claude-code (default on a fresh enrollment), codex, stella, or a comma list such as claude-code,stella",
     )
     .option("--verify", "Run a headless Claude Code turn afterwards")
     .action(async (opts: Record<string, unknown>) => {
@@ -178,9 +199,9 @@ export function buildTachoProgram(): Command {
   program
     .command("verify")
     .description(
-      "Run one headless turn (Claude Code by default, --harness codex) and confirm it was chained",
+      "Run one headless turn (Claude Code by default, --harness codex or stella) and confirm it was chained",
     )
-    .option("--harness <name>", "claude-code | codex", "claude-code")
+    .option("--harness <name>", "claude-code | codex | stella", "claude-code")
     .option("--json", "Machine-readable result")
     .action(async (opts: { harness?: string; json?: boolean }) => {
       const [harness] = parseHarnesses(opts.harness);
@@ -199,7 +220,7 @@ export function buildTachoProgram(): Command {
   program
     .command("detect")
     .description(
-      "Which harnesses this machine has (claude, codex) and which are enrolled",
+      "Which harnesses this machine has (claude, codex, stella) and which are enrolled",
     )
     .option("--json", "Machine-readable output")
     .action((opts: { json?: boolean }) => {
@@ -214,12 +235,13 @@ export function buildTachoProgram(): Command {
     });
 
   // The command hook, for the compiled single binary where there is no
-  // sibling `tacho-hook`. Flags (`--enrollment`, `--harness`) are read from
-  // argv by the hook itself, so commander must let them through untouched.
+  // sibling `tacho-hook`. Flags (`--enrollment`, `--harness`, `--agent`) are
+  // read from argv by the hook itself, so commander must let them through
+  // untouched.
   program
     .command("hook")
     .description(
-      "Run as the command hook (reads the harness payload on stdin; used by the installed hooks)",
+      "Run as the command hook: reads the hook payload on stdin and prints the answer. --harness claude-code|codex|stella names the harness that ran it; --agent <name> records a custom agent that sends Claude Code-shaped payloads (lowercase letters, digits, '.', '_', '-'; wins over --harness)",
     )
     .allowUnknownOption()
     .allowExcessArguments()

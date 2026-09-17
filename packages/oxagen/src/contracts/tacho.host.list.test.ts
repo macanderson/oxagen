@@ -25,7 +25,10 @@ describe("tachoHostList", () => {
           osUser: "dev",
           status: "active",
           mode: "observe",
-          harnesses: ["claude-code"],
+          harnesses: ["claude-code", "claude-desktop"],
+          // ADR-078: which apps a machine has says nothing about what Oxagen
+          // records for them, so the tier travels with the listing.
+          tiers: { "claude-code": "harness", "claude-desktop": "gateway" },
           claudeVersionAtEnroll: "2.1.263",
           wrapperVersion: "2.1.1",
           managed: false,

@@ -146,7 +146,7 @@ describe("oxagen tacho", () => {
     await expect(
       handleTachoEnroll({ harness: "cursor" }, writer),
     ).rejects.toThrow(
-      'unknown harness "cursor"; expected one of claude-code, codex',
+      'unknown harness "cursor"; expected one of claude-code, codex, stella',
     );
     expect(calls.length).toBe(before);
     await expect(

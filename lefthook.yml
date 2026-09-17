@@ -23,6 +23,11 @@ pre-commit:
         - "docs/**"
         - ".agents/**"
         - ".claude/**"
+      # --no-errors-on-unmatched: this glob can match only files biome.json
+      # excludes (generated JSON such as packages/database/storage-manifest.json),
+      # and Biome then exits non-zero on "no files were processed", failing the
+      # commit over nothing to format. The lint step below carries the same
+      # guard as --no-warn-ignored.
       run: pnpm exec biome format --write --no-errors-on-unmatched {staged_files}
       stage_fixed: true
 

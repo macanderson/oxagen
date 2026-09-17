@@ -1,12 +1,13 @@
 # AGENTS.md
 
-Oxagen is the control plane for the agents an enterprise runs: every agent operates under a mandate — its access, its budget, its tools, its rules — set by the security, FinOps and engineering teams accountable for it and enforced on every run. It is sold to those teams, not to resellers. [`docs/VISION.md`](docs/VISION.md) is the reference for feature direction; CI's Vision Gate (`pnpm check:vision`) judges every PR diff against it.
+Oxagen is Mission Control for an autonomous agent workforce and its agent control plane (ADR-067): every agent has its own identity and operates under a mandate — its access, its budget, its tools and skills, its rules — set by the security, FinOps and engineering teams accountable for it and enforced on the actions routed through Oxagen. It is sold to those teams, not to resellers. [`docs/VISION.md`](docs/VISION.md) is the reference for feature direction; CI's Vision Gate (`pnpm check:vision`) judges every PR diff against it.
 
 Oxagen governs agents; it does not run them (ADR-043). Stella is the coding agent; Oxagen is the governor, grounder, explainer, meter and rater. Monorepo built around one primitive: a **capability kernel** that every surface (API, MCP, web app, CLI) calls through a single `invoke()` function — where governance (IAM + entitlement), metering (ClickHouse→Stripe), and lineage are enforced.
 
 ## Layout
 
 ```
+DEREGISTERED.md  the register of de-registered (unreachable, undeleted) features
 apps/       customer-facing applications (6: api, app, cli, docs, mcp, web)
 packages/   shared platform libraries (30 packages — single source of truth for platform code)
 tools/      dev tooling (scripts, env-manager, codemods) — also a pnpm workspace member
@@ -130,6 +131,7 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 | `pnpm check:ui-parity` | Enforces app-layer capability → UI binding (`capability-ui-map.json`) |
 | `pnpm check:mobile-parity` | Enforces mobile feature parity (ADR-026) — no desktop-only features without registered reflow/hidden justification |
 | `pnpm check:connector-schemas` | Verifies every built-in plugin connector schema is registered |
+| `pnpm check:deregistered` | Asserts every path in `DEREGISTERED.md` §14 still exists — de-registered features must not be deleted without an ADR |
 | `pnpm check:contracts` | Ensures every contract file is in the barrel index, every `docs/capabilities` `**Surfaces:**` line matches its contract, and naming compliance |
 | `pnpm check:vision` | LLM-judges PR diff against `docs/VISION.md` |
 | `pnpm env:check` | Validates `.env.local` against the env registry |
@@ -210,6 +212,7 @@ is unambiguous.
 | `docs/scr/` | Steering Context Records — the standing decisions summarised at the bottom of this file |
 | `docs/specs/` | Specs: `tacho/`, `adr025-naming-mapping.md`, and per-feature designs |
 | `CONTRIBUTING.md` | Branch / PR workflow and the capability-parity checklist |
+| `DEREGISTERED.md` | The register of features taken off the surfaces whose code stays in the tree — what is unreachable, where its code is, and what replaced it |
 | `CLAUDE.md` | Engineering operating rules (prime directive, test gate, CI policy) |
 
 (The generated `.agents/summary/*` codemaps were deleted with the rest of `.agents/` on 2026-07-10; do not reference them.)

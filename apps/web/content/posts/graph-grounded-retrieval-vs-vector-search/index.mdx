@@ -223,11 +223,11 @@ incomplete rather than as having chosen a side.
 
 ## Where this meets Oxagen
 
-Oxagen governs agents, it does not run them. Grounding is one of its five jobs:
-answers are resolved against a Neo4j graph and an ontology, so the retrieval
-unit is a typed, cited, time-aware fact rather than a chunk that looked right.
-Explaining is another: the nodes and edges behind an answer stay on the record,
-so a wrong answer can be traced to the fact that produced it. That does not
+Oxagen is the control plane for the agents you run. It does not run them. The
+knowledge an agent is handed comes from a Neo4j graph and an ontology, so the
+retrieval unit is a typed, cited, time-aware fact rather than a chunk that
+looked right. The nodes and edges behind an answer stay in the run's record, so
+a wrong answer walks back to the fact that produced it. That does not
 make the underlying model more accurate. It makes the difference between a
 right-looking answer and a correct one something a person can check.
 

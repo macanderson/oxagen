@@ -32,8 +32,8 @@
     "createUpdaterArtifacts": true,
     "category": "DeveloperTool",
     "copyright": "© Oxagen",
-    "shortDescription": "Put this machine's Claude Code and Codex sessions under Oxagen control",
-    "longDescription": "Installs the oxagen CLI and the Tacho wrapper, signs the machine in to an Oxagen organization, and sets or changes the workspace its agents report to.",
+    "shortDescription": "Put this machine's coding-agent sessions under Oxagen control",
+    "longDescription": "Installs the oxagen and tacho command-line tools (linked onto PATH automatically), signs the machine in to an Oxagen organization, and wraps Claude Code, Codex and Stella — plus any custom agent that reports through `tacho hook` — under the workspace its agents report to.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
