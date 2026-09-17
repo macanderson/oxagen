@@ -411,7 +411,7 @@ describe("onChargeRefunded", () => {
 });
 
 // ---------------------------------------------------------------------------
-// The GAU dispatch (ADR-084)
+// The GAU dispatch (ADR-085)
 // ---------------------------------------------------------------------------
 
 describe("a refund or dispute against a GAU block purchase", () => {

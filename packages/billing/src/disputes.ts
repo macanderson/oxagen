@@ -49,7 +49,7 @@ async function resolveOrgFromDispute(
   // the charge and nothing in this codebase sets, so it resolves only a
   // dispute an operator has annotated by hand. A GAU block purchase is
   // resolved before this function runs, off the settlement its PaymentIntent
-  // names (ADR-084); a usage-credit dispute has no such record and reaches
+  // names (ADR-085); a usage-credit dispute has no such record and reaches
   // here. Both paths above are exhausted, so leave a breadcrumb for ops to
   // correlate manually.
 
@@ -126,7 +126,7 @@ export async function onDisputeCreated(dispute: BillingDispute): Promise<void> {
   const start = Date.now();
 
   // A disputed GAU block purchase gave the org units, not usage credits, so
-  // its clawback is a withdrawal from the org's GAU bucket (ADR-084). Run
+  // its clawback is a withdrawal from the org's GAU bucket (ADR-085). Run
   // before the transaction below: the reversal opens its own, and the org it
   // resolves off the settlement is the only org a dispute can be attributed
   // to — a Stripe Dispute carries its own metadata, not the charge's, so
@@ -348,7 +348,7 @@ export async function onChargeRefunded(
   const start = Date.now();
 
   // A refunded GAU block purchase gave the org units, not usage credits
-  // (ADR-084). Run before the transaction below: the reversal opens its own.
+  // (ADR-085). Run before the transaction below: the reversal opens its own.
   const gauReversal = await reverseGauPurchaseForRefund(charge);
   if (gauReversal) {
     logger.warn(

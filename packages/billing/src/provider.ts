@@ -176,7 +176,7 @@ export interface BillingRefundedCharge {
    * The charge's own metadata, which a Checkout Session copies onto its
    * PaymentIntent only when it was created with `payment_intent_data.metadata`.
    * `oxagen_kind` says what was sold, so the refund handler debits the ledger
-   * the sale credited rather than whichever one it reaches first (ADR-084).
+   * the sale credited rather than whichever one it reaches first (ADR-085).
    */
   metadata: Record<string, string>;
 }
@@ -456,7 +456,7 @@ export interface BillingCheckoutSession {
    * The PaymentIntent a payment-mode session charged. Recorded on the GAU
    * settlement at grant time: a later refund or dispute names the
    * PaymentIntent, and nothing else links either back to the purchase
-   * (ADR-084).
+   * (ADR-085).
    */
   paymentIntentId: string | null;
 }

@@ -13,8 +13,8 @@ export default defineConfig({
       // branches/functions left at prior floors (measured 83.4 / 95.5).
       thresholds: {
         lines: 85,
-        branches: 80,
-        functions: 70,
+        branches: 85,
+        functions: 85,
         statements: 85,
       },
     },

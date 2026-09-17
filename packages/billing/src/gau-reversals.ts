@@ -38,7 +38,7 @@ export interface GauReversalResult {
  * PaymentIntent's metadata, so a refund could also be matched on
  * `metadata.org_id` — but a Stripe Dispute carries its own metadata, which
  * nothing sets, so metadata alone resolves half the cases. The settlement
- * records the PaymentIntent at grant time and both events name it (ADR-084).
+ * records the PaymentIntent at grant time and both events name it (ADR-085).
  *
  * `checkout` is the only kind matched: an `auto_topup`, `interim_invoice` or
  * `period_close` settlement is charged through an Invoice, and a refund of one
@@ -102,7 +102,7 @@ interface ApplyGauReversalArgs {
  * Returns null when the event is not against a GAU purchase, which is the
  * caller's signal to fall through to the usage-credit clawback.
  *
- * Which bucket is debited (ADR-084): the org's bucket for the period the
+ * Which bucket is debited (ADR-085): the org's bucket for the period the
  * reversal is processed in, not the bucket the grant landed on. Only the
  * current bucket's balance is read by the gate, and the rollover folds last
  * month's `purchased` and `carried` into this month's `carried` rather than
@@ -255,7 +255,7 @@ export async function applyGauReversal(
  * treated as a redelivery rather than as further units to withdraw. A GAU
  * purchase is sold in indivisible blocks and the product offers no partial
  * refund, so this is a deliberate consequence of matching the existing key
- * rather than an oversight (ADR-084).
+ * rather than an oversight (ADR-085).
  */
 export async function reverseGauPurchaseForRefund(
   charge: BillingRefundedCharge,

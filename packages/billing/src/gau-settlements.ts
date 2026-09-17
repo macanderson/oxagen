@@ -815,7 +815,7 @@ export async function grantGauPurchaseForCheckout(
         stripeInvoiceId: session.invoiceId,
         // The purchase's payment identity, recorded here because a later
         // charge.refunded or charge.dispute.created names the PaymentIntent
-        // and nothing else reaches back to this row (ADR-084).
+        // and nothing else reaches back to this row (ADR-085).
         stripePaymentIntentId: session.paymentIntentId,
         settledAt: now,
       })

@@ -932,7 +932,7 @@ export const gauSettlements = billingSchema.table(
      * `charge.dispute.created` carries that reaches back to this purchase: a
      * Stripe Dispute has its own (empty) metadata rather than the charge's, so
      * metadata propagation alone cannot resolve a disputed GAU purchase.
-     * ADR-084.
+     * ADR-085.
      */
     stripePaymentIntentId: text("stripe_payment_intent_id"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
@@ -980,7 +980,7 @@ export const gauSettlements = billingSchema.table(
 
 // ── gau_reversals ────────────────────────────────────────────────────────────
 //
-// ADR-084: the record of a refunded or disputed GAU block purchase.
+// ADR-085: the record of a refunded or disputed GAU block purchase.
 //
 // `gau_settlements` records money taken; this records money given back and the
 // units withdrawn for it. It is a separate table rather than a status on the

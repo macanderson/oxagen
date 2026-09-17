@@ -1,4 +1,4 @@
-# ADR-084: A refunded or disputed GAU purchase withdraws what is left, and records what it could not recover
+# ADR-085: A refunded or disputed GAU purchase withdraws what is left, and records what it could not recover
 
 - **Status:** Accepted
 - **Date:** 2026-09-17

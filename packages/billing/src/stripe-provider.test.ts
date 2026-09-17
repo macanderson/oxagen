@@ -1139,7 +1139,7 @@ describe("StripeProvider", () => {
       };
     }
 
-    // The half of ADR-084 that makes the other half reachable: a refund reads
+    // The half of ADR-085 that makes the other half reachable: a refund reads
     // the CHARGE and nothing else, so unless the session puts the purchase
     // identity on payment_intent_data, `charge.refunded` cannot name the
     // organisation that was paid. These two tests walk the real path —
@@ -1176,7 +1176,7 @@ describe("StripeProvider", () => {
     });
 
     it("session metadata alone does not reach the charge — the same charge built without payment_intent_data resolves to no org", () => {
-      // The pre-ADR-084 shape, kept as the control: if this ever starts
+      // The pre-ADR-085 shape, kept as the control: if this ever starts
       // resolving, the test above has stopped proving anything.
       stripeMethods.webhooks.constructEvent.mockReturnValue(
         gauEvent("charge.refunded", {

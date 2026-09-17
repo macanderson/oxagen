@@ -367,7 +367,7 @@ describe("grantGauPurchaseForCheckout", () => {
       status: "paid",
       stripeCheckoutSessionId: "cs_gau_001",
       stripeInvoiceId: "in_gau_001",
-      // ADR-084: the PaymentIntent is the only identifier a later
+      // ADR-085: the PaymentIntent is the only identifier a later
       // charge.refunded or charge.dispute.created carries that reaches back
       // to this row, so a grant that did not record it would leave the
       // purchase unreversible.

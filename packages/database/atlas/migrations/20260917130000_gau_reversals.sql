@@ -1,4 +1,4 @@
--- ADR-084: a refunded or disputed GAU block purchase withdraws the units it
+-- ADR-085: a refunded or disputed GAU block purchase withdraws the units it
 -- granted.
 --
 -- Two changes:
@@ -25,7 +25,7 @@
 --      the shortfall has nowhere to hide in the arithmetic and is recorded
 --      instead.
 --
--- RLS for the new table is in 20260917120100_rls_gau_reversals.sql (generated
+-- RLS for the new table is in 20260917130100_rls_gau_reversals.sql (generated
 -- from the tenant policy manifest).
 
 -- ── 1. The purchase's payment identity ───────────────────────────────────────

@@ -1,6 +1,6 @@
 /**
  * Unit tests for gau-reversals.ts — what a refunded or disputed GAU block
- * purchase withdraws (ADR-084).
+ * purchase withdraws (ADR-085).
  *
  * Runs against the in-memory executor in test-utils/gau-fake-tx.ts, which
  * enforces the table CHECK constraints Postgres enforces. That matters here

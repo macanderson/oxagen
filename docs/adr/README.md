@@ -108,4 +108,4 @@ first. Move a row into its epic when one fits.
 - [ADR-079](./ADR-079-an-oxagen-login-key-acts-for-its-creator-on-host-enrollment.md) — An `oxagen login` key acts for its creator on Tacho host enrollment; machine-bound keys never do
 - [ADR-080](./ADR-080-stella-is-wrapped-through-its-hooks-until-it-speaks-the-tacho-contract-natively.md) — Stella is wrapped through its hooks until it speaks the Tacho contract natively
 - [ADR-081](./ADR-081-app-layers-retired-at-mission-control-cutover.md) — The `app` layer is retired at the Mission Control cutover for every capability rev1 does not surface
-- [ADR-084](./ADR-084-a-refunded-gau-purchase-withdraws-what-is-left.md) — A refunded or disputed GAU purchase withdraws what is left of its units from the organisation's current bucket, clamped at zero, and records what it could not recover
+- [ADR-085](./ADR-085-a-refunded-gau-purchase-withdraws-what-is-left.md) — A refunded or disputed GAU purchase withdraws what is left of its units from the organisation's current bucket, clamped at zero, and records what it could not recover
