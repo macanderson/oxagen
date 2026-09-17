@@ -165,7 +165,10 @@ describe("getSidebarConfig item counts", () => {
     expect(ids).not.toContain("agent-runs");
     // The clean spec tree, in raw declaration order (the mobile bottom bar's
     // unfiltered MAX_BAR_ITEMS cut relies on this exact order — see
-    // mobile-bottom-bar.tsx).
+    // mobile-bottom-bar.tsx). Fleet is declared after the Agents group even
+    // though it renders in the Workspace group: the sidebar renders by group
+    // so its position across groups is invisible there, while declaring it
+    // earlier would evict Agents from the four thumb-reachable bar slots.
     expect(ids).toEqual([
       "overview",
       "sessions",
@@ -174,9 +177,22 @@ describe("getSidebarConfig item counts", () => {
       "agents",
       "tools",
       "environments",
+      "fleet",
       "marketplace",
       "settings",
     ]);
+  });
+
+  it("workspace config renders Fleet in the Workspace group, not under Agents", () => {
+    // A host is not an agent (ADR-078), so Fleet is a Workspace destination.
+    // The sidebar renders by group, so it appears beside Knowledge even though
+    // it is declared after the Agents group to keep the mobile bar's four
+    // thumb slots (see the declaration-order assertion above).
+    const items = getSidebarConfig("workspace").items;
+    const primaryIds = items
+      .filter((item) => (item.group ?? "primary") === "primary")
+      .map((i) => i.id);
+    expect(primaryIds).toEqual(["overview", "sessions", "knowledge", "fleet"]);
   });
 
   it("workspace config has exactly two 'footer' group items (Marketplace, Settings)", () => {
@@ -224,6 +240,14 @@ describe("href builders produce correct paths", () => {
       expect(findItem("knowledge").href(wsCtx)).toBe(
         "/acme/production/knowledge",
       );
+    });
+
+    it("fleet -> /{org}/{ws}/fleet", () => {
+      expect(findItem("fleet").href(wsCtx)).toBe("/acme/production/fleet");
+    });
+
+    it("fleet falls back to the org root when no workspace is scoped", () => {
+      expect(findItem("fleet").href({ orgSlug: "acme" })).toBe("/acme");
     });
 
     it("marketplace -> /{org}/{ws}/marketplace (workspace-scoped, from ws ctx)", () => {

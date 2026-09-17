@@ -140,6 +140,7 @@ describe("MobileBottomBar — primary tabs", () => {
     expect(
       within(nav).queryByRole("link", { name: "Environments" }),
     ).toBeNull();
+    expect(within(nav).queryByRole("link", { name: "Fleet" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Marketplace" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();
     // The excised runtime destinations are gone entirely — bar AND sheet.
@@ -165,6 +166,10 @@ describe("MobileBottomBar — primary tabs", () => {
     expect(screen.getByRole("link", { name: "Environments" })).toHaveAttribute(
       "href",
       "/acme/prod/workbench/environments",
+    );
+    expect(screen.getByRole("link", { name: "Fleet" })).toHaveAttribute(
+      "href",
+      "/acme/prod/fleet",
     );
     expect(screen.queryByRole("link", { name: "Repos" })).toBeNull();
   });
