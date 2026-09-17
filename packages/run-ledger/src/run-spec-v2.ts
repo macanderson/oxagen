@@ -345,6 +345,58 @@ const capabilityNameSchema = z
   .max(128)
   .regex(/^[a-z][a-z0-9_.]*$/, "expected a lowercase capability name");
 
+/**
+ * The contributor types whose tools a run may be allowed. Both spell their
+ * tools `<prefix>.<server>.<tool>`; `mcp` names the server by its internal
+ * UUID and `file-mcp` by its configured name.
+ */
+const EXTERNAL_TOOL_PREFIXES = ["mcp", "file-mcp"] as const;
+
+/**
+ * An externally contributed tool, as the belt names it. It is a SEPARATE form
+ * from `capabilityNameSchema`, not a loosening of it, and the distinction is
+ * deliberate twice over.
+ *
+ * A platform capability is ADR-025 verb-first snake_case and has no hyphen;
+ * keeping that closed is what stops the run spec's vocabulary — which is
+ * evidence about what a run was permitted to do — from degenerating into
+ * "any string". An external tool's identity is not ours to constrain that
+ * way: every UUID contains hyphens, so admitting `mcp.<uuid>.<tool>` by
+ * widening the capability regex would have admitted everything else too.
+ *
+ * And a reader of a spec can now tell at a glance whether a run was allowed a
+ * capability the platform defines or a tool someone contributed, which carry
+ * different trust. `isExternalToolIdentity` is that test, exported so a reader
+ * does not re-derive it from the prefix.
+ *
+ * If you are here because some name was rejected: add its form here, or give
+ * it one of its own. Do not relax `capabilityNameSchema` to let it through —
+ * that is the move this separation exists to prevent, and it is the one that
+ * looks like a one-character fix.
+ */
+const externalToolNameSchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(
+    /^(?:mcp|file-mcp)\.[A-Za-z0-9][A-Za-z0-9_-]*\.[A-Za-z0-9][A-Za-z0-9._-]*$/,
+    "expected an external tool identity: <mcp|file-mcp>.<server>.<tool>",
+  );
+
+/** True for a name the belt contributed rather than the capability registry. */
+export function isExternalToolIdentity(name: string): boolean {
+  return EXTERNAL_TOOL_PREFIXES.some((p) => name.startsWith(`${p}.`));
+}
+
+/**
+ * What a run's tool allowlist may name: a platform capability, or an
+ * externally contributed tool. The two forms stay distinguishable.
+ */
+const toolIdentitySchema = z.union([
+  capabilityNameSchema,
+  externalToolNameSchema,
+]);
+
 const contextProviderIdSchema = z
   .string()
   .min(1)
@@ -437,6 +489,26 @@ export const workspacePolicySchema = z
   })
   .strict();
 
+/**
+ * A general run's workspace policy (ADR-076). `sandbox_required` is a boolean
+ * here, not the literal `true` a repo edit pins, because a general run kind
+ * covers work that touches no repository and needs no sandbox — the in-app
+ * agent's turn is a governed question answered over the fleet record, executed
+ * in this process through `kernel.invoke()`.
+ *
+ * Pinning `true` on such a run does not make it sandboxed; it makes the seal
+ * attest to a sandbox that never existed. For a product whose thesis is one
+ * provable trace, a structurally valid and factually false spec is worse than
+ * none, so the field says what was true. A repo edit still cannot express
+ * anything but `true` — `repoEditRunSpecV2Schema` keeps the literal.
+ */
+export const generalWorkspacePolicySchema = z
+  .object({
+    sandbox_required: z.boolean(),
+    environment_id: uuidSchema.optional(),
+  })
+  .strict();
+
 export const contextPolicySchema = z
   .object({
     provider_allowlist: uniqueArray(contextProviderIdSchema, 64),
@@ -449,9 +521,19 @@ export const contextPolicySchema = z
   })
   .strict();
 
+/**
+ * The bound on an enumerated tool allowlist. It is the whole registered
+ * capability catalogue plus headroom, not a policy: a run whose tools are the
+ * governed catalogue (the in-app agent's turn is one) has to be able to name
+ * them, or its only expressible allowlist is an empty one that says the
+ * opposite of what happened. The catalogue was ~271 when this was raised from
+ * 256; the bound exists to stop an unbounded array, not to cap policy.
+ */
+export const TOOL_ALLOWLIST_MAX = 1024;
+
 export const toolPolicySchema = z
   .object({
-    allowlist: uniqueArray(capabilityNameSchema, 256),
+    allowlist: uniqueArray(toolIdentitySchema, TOOL_ALLOWLIST_MAX),
     risk_ceiling: z.enum(TOOL_RISK_LEVELS),
   })
   .strict();
@@ -469,7 +551,6 @@ const commonSpecShape = {
   engine_policy: enginePolicySchema,
   actor_binding: actorBindingSchema,
   authorization_snapshot_ref: authorizationSnapshotRefSchema,
-  workspace_policy: workspacePolicySchema,
   context_policy: contextPolicySchema,
   tool_policy: toolPolicySchema,
 };
@@ -481,7 +562,11 @@ const commonSpecShape = {
  * authority without being labelled `repo_edit`.
  */
 export const generalRunSpecV2Schema = z
-  .object({ ...commonSpecShape, run_kind: z.literal("general") })
+  .object({
+    ...commonSpecShape,
+    run_kind: z.literal("general"),
+    workspace_policy: generalWorkspacePolicySchema,
+  })
   .strict();
 
 /** A sandbox-backed repository edit. Every repository field is pinned. */
@@ -489,6 +574,7 @@ export const repoEditRunSpecV2Schema = z
   .object({
     ...commonSpecShape,
     run_kind: z.literal("repo_edit"),
+    workspace_policy: workspacePolicySchema,
     repository_binding: repositoryBindingSchema,
     output_policy: outputPolicySchema,
   })

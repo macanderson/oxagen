@@ -1,29 +1,22 @@
-import type { ModelMessage } from "ai";
-import { invoke, type CapabilityContext } from "@oxagen/oxagen";
+import type { ModelMessage } from "@oxagen/ai";
+import type { CapabilityContext } from "@oxagen/oxagen";
+import { invoke } from "@oxagen/oxagen/kernel";
 import { agentMemoryRecall } from "@oxagen/oxagen/contracts/agent.memory.recall";
 
-// Deterministic per-turn memory recall for the REST chat surface.
+// Deterministic per-turn memory recall for the in-app agent's turn
+// (`assistant-turn.ts`), which injects the block it returns as a per-turn
+// context message into `runGovernedTurn`. Grounding an answer in recalled,
+// cited workspace memory is what the governance agent is for, and it does
+// that through the metered, IAM-gated `recall_memory` capability rather than
+// a raw graph call.
 //
-// RETAINED THROUGH ADR-043 and called again by chat.stream, which injects the
-// block it returns as a per-turn context message into `runGovernedTurn`. It
-// survives the cut because grounding an answer in recalled, cited workspace
-// memory is exactly what the governance agent is for, and because it does that
-// through the metered, IAM-gated `agent.memory.recall` capability rather than a
-// raw graph call.
-//
-// This mirrors the app-chat surface's recall wiring (ADR-021 §2/§8):
-// recall workspace memory BEFORE the turn acts, via the metered, IAM-gated
-// `agent.memory.recall` capability (never a raw Neo4j call), and inject the
-// result per-turn AFTER the stable/cached system prefix — never into the cached
-// system block. The caller owns injection: it places the recalled block as a
-// volatile USER message between history and the instruction, so recalled
-// memory (which changes every turn) never busts the Anthropic prompt-cache
-// breakpoint on the stable system prefix.
-//
-// Unlike the app surface this omits UI citation resolution — the REST wire
-// format carries no "Grounded in" citation strip — but the recall query itself is
-// identical, including `executionRef` so recalled memories are auto-cited as
-// CONSIDERED (the promotion / self-improvement flywheel).
+// ADR-021 §2/§8: recall workspace memory BEFORE the turn acts and inject the
+// result per-turn AFTER the stable/cached system prefix, never into the
+// cached system block. The caller owns injection: it places the recalled
+// block as a volatile USER message between history and the instruction, so
+// recalled memory (which changes every turn) never busts the prompt-cache
+// breakpoint on the stable system prefix. The recall carries `executionRef`
+// so recalled memories are auto-cited as CONSIDERED.
 
 // How many memories to pull. Small — enough to seed context without bloating the
 // prompt or slowing the recall query. Matches the app-chat surface.

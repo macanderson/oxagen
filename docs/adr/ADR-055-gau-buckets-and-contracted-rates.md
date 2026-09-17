@@ -395,13 +395,17 @@ for the two handlers above.
 Until that PR lands, the two-handler sentence above and §11's quoting
 sentence still describe the tree.
 
-### 13. `create_org` grants no credits
+### 13. `create_org` grants the signup credits and nothing else
 
-`create_org` writes nothing billing-shaped: no credit grant, no
-`contract_terms`, `gau_buckets`, `gau_settlements` or `org_billing_settings`
-row. The ADR-053 platform-funded assistant balance of a new organisation
-starts at zero. Whether a signup grant returns with the assistant is an open
-question for the maintainer, not a default.
+`create_org` writes no `contract_terms`, `gau_buckets`, `gau_settlements`
+or `org_billing_settings` row.
+
+Amended 2026-09-15 by the maintainer (#2968, `apps/app/ARCHITECTURE.md`
+§9): the ADR-053 platform-funded assistant balance of a new organisation is
+funded by the $5 signup grant, restored in `create_org` as
+`grantSignupCredits` on the org's bootstrap transaction. The grant is a
+non-expiring `free_grant` lot of 500 credits; it is never invoiced and buys
+no GAU.
 
 ### 14. The rev1 metering surface
 
@@ -448,7 +452,8 @@ credit debit on the governed-action path (`creditsForActions` and the
 `consumeCredits` call the recorder made), `OXAGEN_ACTION_METER_MODE` with
 `resolveActionMeterMode`, `chargeEvidenceRetention` with
 `retentionCreditsForGbMonths`, `get_action_usage` with its panel, and the
-`grantFreeCredits` call in `create_org`. A shadow mode that charged a card
+`grantFreeCredits` call in `create_org` with its retry (the grant itself
+returns on the org transaction, §13). A shadow mode that charged a card
 or cut an invoice would not be a shadow, and one that did neither would
 leave a prepaid organisation running past exhaustion with no record. This
 is the zero-customer window; there is no migration of billed history.

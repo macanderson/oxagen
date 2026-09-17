@@ -2,7 +2,8 @@
  * grants.scope.test.ts — regression for the tenant-scope seam of grantFreeCredits.
  *
  * grantFreeCredits runs right after org creation (the deprecated app's
- * onboarding action; `create_org` writes nothing billing-shaped) where there
+ * onboarding action; `create_org` writes the grant on its own org transaction)
+ * where there
  * is NO active tenant scope. It must use
  * the SYSTEM seam (withSystemDb); using withTenantDb throws TenantScopeError
  * ("no_tenant_scope") under enforced RLS and silently drops the $5 signup grant

@@ -157,6 +157,18 @@ export function clearUsageRecorder(): void {
 const _governedActionScope = new AsyncLocalStorage<true>();
 
 /**
+ * Run `fn` with no enclosing invocation, so every `invoke()` it starts is a
+ * top-level governed action. The in-app agent's turn is the one caller
+ * (`ask_assistant`): the turn is not a governed action itself
+ * (`noBillingGate`), and each tool call it answers is one (ADR-053 §1), on
+ * the API, MCP and SSE adapters alike. The tenant scope and the trace span
+ * are separate stores and stay as they are.
+ */
+export function runOutsideGovernedAction<T>(fn: () => T): T {
+  return _governedActionScope.exit(fn);
+}
+
+/**
  * How many governed actions one invocation is worth, from the contract's
  * `meter` block against the validated output (spec §7.2).
  *
@@ -1130,7 +1142,7 @@ async function _invokeCoreInner(
   // must ALL run inside ONE runInTenantScope so that withTenantDb seams in
   // fetchAuthz (IAM) and consumeCredits/assertOrgCanConsume (billing) can
   // resolve the active scope. For UNSCOPED capabilities (cap.scoped === false,
-  // e.g. user.preferences.write) we must NOT wrap — the ids are empty and
+  // e.g. get_user_preferences) we must NOT wrap — the ids are empty and
   // runInTenantScope would throw TenantScopeError.
   //
   // BUT: "unscoped" describes the handler's data ownership, not the IAM gate.
@@ -1142,7 +1154,7 @@ async function _invokeCoreInner(
   // therefore MUST enter a scope, or fetchAuthz throws TenantScopeError and the
   // kernel fail-closes with "IAM check errored … failing closed". So we enter a
   // scope whenever the capability is scoped OR both tenant ids are valid uuids;
-  // we only skip the wrap for the empty/invalid-id case (user.preferences.write,
+  // we only skip the wrap for the empty/invalid-id case (get_user_preferences,
   // MCP session-token path), where runInTenantScope would reject the ids.
   const isScoped = cap.scoped !== false;
   const hasTenantIds = isUuid(ctx.orgId) && isUuid(ctx.workspaceId);

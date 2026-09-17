@@ -1,19 +1,13 @@
 // Stateful translator for the REST chat SSE stream. It consumes raw AI-SDK
 // `fullStream` parts one at a time and emits the exact `ApiStreamEvent` wire
-// shapes the chat.stream route has always emitted, while collecting per-step
-// execution metadata for the SOC 2 audit trail.
+// shapes the chat.stream route has always emitted.
 //
 // It is the SINGLE source of truth for the part→SSE mapping: one part in, the
-// SSE events for it out, plus the running per-step execution record. It knows
-// nothing about who is feeding it — it takes generic AI-SDK parts (text,
-// reasoning, step boundaries, tool calls/results, usage, error) and no others.
-//
-// RETAINED THROUGH ADR-043 and now driven by `runGovernedTurn` (@oxagen/agent),
-// whose raw AI-SDK `fullStream` chat.stream feeds through it one part at a
-// time. It survives the cut deliberately — it is the published REST chat wire
-// format and it is engine-agnostic. There was never a code/sandbox/media/
-// subagent branch here to strip: the coding-agent generative-UI mapping lived
-// on the client, not in this translator.
+// SSE events for it out. It knows nothing about who is feeding it — it takes
+// generic AI-SDK parts (text, reasoning, step boundaries, tool calls/results,
+// usage, error) and no others. The turn behind the parts is
+// `prepareAssistantTurn` (@oxagen/agent); the turn's own result carries the
+// reply and the usage, so this translator keeps no copy of either.
 
 // Minimal typed stream events emitted over SSE. UNCHANGED wire shapes — every
 // field name and event `type` matches the pre-engine chat.stream output. The
@@ -67,42 +61,8 @@ export type ApiStreamEvent =
       limitUsd: number;
       mode: string;
     }
-  | { type: "error"; message: string };
-
-// Collected token + step data returned by the translator for execution recording.
-export type CollectedExecutionToolCall = {
-  toolCallId: string;
-  toolName: string;
-  inputPreview: unknown;
-  output?: unknown;
-  status: "completed" | "failed";
-  durationMs: number;
-};
-
-export type CollectedExecutionStep = {
-  stepNumber: number;
-  stepType: string;
-  status: "completed";
-  inputPayload: unknown;
-  toolCalls: CollectedExecutionToolCall[];
-  latencyMs: number;
-};
-
-export type CollectedExecution = {
-  inputTokens: number;
-  outputTokens: number;
-  steps: CollectedExecutionStep[];
-};
-
-export type TranslatedTurn = {
-  assistantText: string;
-  execution: CollectedExecution;
-  // True when the model surfaced an `error` part mid-stream. With the engine a
-  // provider/stream error THROWS to the route's catch instead, so this is a
-  // defensive backstop; the accumulated assistantText is then partial and must
-  // not be persisted as a successful turn.
-  streamErrored: boolean;
-};
+  | { type: "run"; runId: string }
+  | { type: "error"; message: string; code?: string };
 
 // Inline stream-part helpers (same logic as apps/app/.../stream-parts.ts).
 function partType(p: unknown): string | undefined {
@@ -120,21 +80,18 @@ function errorMessageOf(error: unknown): string {
 }
 
 export interface ApiStreamTranslator {
-  /** Feed one raw AI-SDK `fullStream` part; emits SSE events + collects execution. */
+  /** Feed one raw AI-SDK `fullStream` part; emits its SSE events. */
   onPart(raw: unknown): void;
-  /** Finalize and return accumulated text + execution metadata. */
-  finish(): TranslatedTurn;
 }
 
 /**
  * Build a stateful translator that maps raw AI-SDK parts onto the chat.stream
- * SSE `ApiStreamEvent` shapes and accumulates per-step execution metadata.
+ * SSE `ApiStreamEvent` shapes.
  *
- * Note on `finish`: the translator collects the per-step token totals but does
- * NOT emit a `usage` event. The route emits ONE aggregated `usage` after the
- * stream is drained, from `runGovernedTurn`'s own summed totals — the same
- * single event, in the same position (last event before `[DONE]`), that this
- * surface has always emitted.
+ * The translator does NOT emit a `usage` event. The route emits ONE aggregated
+ * `usage` after the turn ends, from the turn's own summed totals — the same
+ * single event, in the same position (last event before the terminal), that
+ * this surface has always emitted.
  */
 export function createApiStreamTranslator(args: {
   toolNameMap: Record<string, string>;
@@ -142,25 +99,14 @@ export function createApiStreamTranslator(args: {
 }): ApiStreamTranslator {
   const { toolNameMap, emit } = args;
 
-  let assistantText = "";
-  let streamErrored = false;
   const toolStartedAt: Record<string, number> = {};
   const reasoningStartedAt: Record<string, number> = {};
   let stepIndex = -1;
-
-  // Execution collection state.
-  const collectedSteps: CollectedExecutionStep[] = [];
-  const stepStartedAt: Record<number, number> = {};
-  const toolCallToStep: Record<string, number> = {};
-  const collectedToolCalls: Record<string, CollectedExecutionToolCall> = {};
-  let collectedInputTokens = 0;
-  let collectedOutputTokens = 0;
 
   const onPart = (raw: unknown): void => {
     const pType = partType(raw);
     if (pType === "text-delta") {
       const text = (raw as { text: string }).text;
-      assistantText += text;
       emit({ type: "text", text });
     } else if (pType === "reasoning-start") {
       const { id } = raw as { id: string };
@@ -178,28 +124,9 @@ export function createApiStreamTranslator(args: {
       emit({ type: "reasoning-end", reasoningId: id, durationMs });
     } else if (pType === "start-step") {
       stepIndex += 1;
-      stepStartedAt[stepIndex] = Date.now();
       emit({ type: "step-start", stepIndex });
     } else if (pType === "finish-step") {
-      if (stepIndex >= 0) {
-        const latencyMs =
-          stepStartedAt[stepIndex] !== undefined
-            ? Date.now() - (stepStartedAt[stepIndex] as number)
-            : 0;
-        // Collect all tool calls that were emitted for this step.
-        const stepToolCalls = Object.values(collectedToolCalls).filter(
-          (tc) => toolCallToStep[tc.toolCallId] === stepIndex,
-        );
-        collectedSteps.push({
-          stepNumber: stepIndex,
-          stepType: "llm_turn",
-          status: "completed",
-          inputPayload: null,
-          toolCalls: stepToolCalls,
-          latencyMs,
-        });
-        emit({ type: "step-finish", stepIndex });
-      }
+      if (stepIndex >= 0) emit({ type: "step-finish", stepIndex });
     } else if (pType === "tool-input-start") {
       const { id, toolName } = raw as { id: string; toolName: string };
       emit({
@@ -217,15 +144,6 @@ export function createApiStreamTranslator(args: {
         input: unknown;
       };
       toolStartedAt[toolCallId] = Date.now();
-      // Associate this tool call with the current step.
-      toolCallToStep[toolCallId] = stepIndex;
-      collectedToolCalls[toolCallId] = {
-        toolCallId,
-        toolName,
-        inputPreview: input,
-        status: "completed",
-        durationMs: 0,
-      };
       emit({
         type: "tool-call-start",
         toolCallId,
@@ -242,14 +160,6 @@ export function createApiStreamTranslator(args: {
         toolStartedAt[toolCallId] !== undefined
           ? Date.now() - (toolStartedAt[toolCallId] as number)
           : 0;
-      if (collectedToolCalls[toolCallId]) {
-        collectedToolCalls[toolCallId] = {
-          ...(collectedToolCalls[toolCallId] as CollectedExecutionToolCall),
-          output,
-          status: "completed",
-          durationMs,
-        };
-      }
       emit({
         type: "tool-call-end",
         toolCallId,
@@ -266,13 +176,6 @@ export function createApiStreamTranslator(args: {
         toolStartedAt[toolCallId] !== undefined
           ? Date.now() - (toolStartedAt[toolCallId] as number)
           : 0;
-      if (collectedToolCalls[toolCallId]) {
-        collectedToolCalls[toolCallId] = {
-          ...(collectedToolCalls[toolCallId] as CollectedExecutionToolCall),
-          status: "failed",
-          durationMs,
-        };
-      }
       emit({
         type: "tool-call-end",
         toolCallId,
@@ -281,25 +184,16 @@ export function createApiStreamTranslator(args: {
         durationMs,
       });
     } else if (pType === "finish") {
-      // Collect per-step token totals; do NOT emit usage here (see the factory
-      // doc comment). The route emits ONE aggregated usage after the stream is
-      // drained, from the governed turn's own summed totals.
-      const { totalUsage } = raw as {
-        totalUsage?: {
-          inputTokens?: number;
-          outputTokens?: number;
-          totalTokens?: number;
-        };
-      };
-      if (totalUsage) {
-        collectedInputTokens = totalUsage.inputTokens ?? collectedInputTokens;
-        collectedOutputTokens =
-          totalUsage.outputTokens ?? collectedOutputTokens;
-      }
+      // No usage here: the route emits ONE aggregated usage from the turn's
+      // own totals after the turn ends.
     } else if (pType === "error") {
-      // A provider/gateway failure normally arrives as an `error` PART rather
-      // than a throw: surface it as a typed `error` SSE event and mark the turn
-      // errored so the route skips persisting a partial reply.
+      // No error event here, for the same reason `finish` emits no usage: the
+      // route owns the one terminal `error` SSE event and emits it from the
+      // turn's rejection, where the failure still carries its code. A turn
+      // that produces an error part always goes on to reject with that same
+      // failure, so emitting here too sent the client two error events for
+      // one failure — an untyped one now and the coded one moments later.
+      // Logged here because this is where the part is seen.
       const errVal = (raw as { error?: unknown }).error;
       const message =
         errVal instanceof Error
@@ -307,21 +201,9 @@ export function createApiStreamTranslator(args: {
           : typeof errVal === "string"
             ? errVal
             : "Stream error";
-      streamErrored = true;
       console.error("[chat.stream] LLM stream error part:", message);
-      emit({ type: "error", message });
     }
   };
 
-  const finish = (): TranslatedTurn => ({
-    assistantText,
-    streamErrored,
-    execution: {
-      inputTokens: collectedInputTokens,
-      outputTokens: collectedOutputTokens,
-      steps: collectedSteps,
-    },
-  });
-
-  return { onPart, finish };
+  return { onPart };
 }

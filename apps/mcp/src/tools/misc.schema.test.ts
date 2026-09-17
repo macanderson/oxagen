@@ -1,7 +1,6 @@
 // misc.schema.test.ts — unit tests for miscellaneous tool input schemas.
 //
-// Covers: system.install.instructions, user.preferences.write,
-//         workspace.model.settings.write.
+// Covers: system.install.instructions, workspace.model.settings.write.
 // Pure schema logic; no network / DB / xmcp runtime involved.
 
 import { describe, it, expect } from "vitest";
@@ -60,98 +59,6 @@ describe("system.install.instructions schema", () => {
     expect(() =>
       Schema.parse({ client: "vimcopilot", workspaceSlug: "ws-1" }),
     ).toThrow();
-  });
-});
-
-// ── user.preferences.write ────────────────────────────────────────────────────
-
-import { schema as userPreferencesWriteSchema } from "./user.preferences.write";
-
-describe("user.preferences.write schema", () => {
-  const Schema = obj(userPreferencesWriteSchema);
-
-  it("accepts an empty payload (all fields optional)", () => {
-    expect(() => Schema.parse({})).not.toThrow();
-  });
-
-  it("accepts all valid fontSize values", () => {
-    for (const fontSize of ["small", "medium", "large"] as const) {
-      expect(() => Schema.parse({ fontSize })).not.toThrow();
-    }
-  });
-
-  it("rejects an invalid fontSize enum", () => {
-    expect(() => Schema.parse({ fontSize: "xlarge" })).toThrow();
-  });
-
-  it("accepts all valid density values", () => {
-    for (const density of ["compact", "comfortable", "spacious"] as const) {
-      expect(() => Schema.parse({ density })).not.toThrow();
-    }
-  });
-
-  it("rejects an invalid density enum", () => {
-    expect(() => Schema.parse({ density: "normal" })).toThrow();
-  });
-
-  it("accepts all valid pendingPromptBehavior values", () => {
-    for (const pendingPromptBehavior of ["queue", "interrupt"] as const) {
-      expect(() => Schema.parse({ pendingPromptBehavior })).not.toThrow();
-    }
-  });
-
-  it("rejects an invalid pendingPromptBehavior enum", () => {
-    expect(() => Schema.parse({ pendingPromptBehavior: "cancel" })).toThrow();
-  });
-
-  it("accepts all valid defaultTextTier values", () => {
-    for (const tier of ["fast", "balanced", "precise"] as const) {
-      expect(() => Schema.parse({ defaultTextTier: tier })).not.toThrow();
-    }
-  });
-
-  it("rejects an invalid defaultTextTier enum", () => {
-    expect(() => Schema.parse({ defaultTextTier: "premium" })).toThrow();
-  });
-
-  it("accepts null for defaultTextTier (nullable — clears the pref)", () => {
-    const result = Schema.parse({ defaultTextTier: null });
-    expect(result.defaultTextTier).toBeNull();
-  });
-
-  it("accepts null for defaultTextModel (nullable — clears)", () => {
-    const result = Schema.parse({ defaultTextModel: null });
-    expect(result.defaultTextModel).toBeNull();
-  });
-
-  it("rejects an empty string for defaultTextModel (min 1)", () => {
-    // nullable-optional: null is OK, but empty string is not (z.string().min(1))
-    expect(() => Schema.parse({ defaultTextModel: "" })).toThrow();
-  });
-
-  it("accepts a valid model id string for defaultTextModel", () => {
-    const result = Schema.parse({
-      defaultTextModel: "anthropic/claude-opus-4.8",
-    });
-    expect(result.defaultTextModel).toBe("anthropic/claude-opus-4.8");
-  });
-
-  it("accepts a boolean for enterToSubmit", () => {
-    expect(() => Schema.parse({ enterToSubmit: true })).not.toThrow();
-    expect(() => Schema.parse({ enterToSubmit: false })).not.toThrow();
-  });
-
-  it("accepts a fully-specified valid payload", () => {
-    const result = Schema.parse({
-      fontSize: "small",
-      density: "compact",
-      enterToSubmit: true,
-      pendingPromptBehavior: "queue",
-      defaultTextTier: "fast",
-      defaultTextModel: "anthropic/claude-haiku-3",
-    });
-    expect(result.fontSize).toBe("small");
-    expect(result.defaultTextTier).toBe("fast");
   });
 });
 

@@ -1,19 +1,14 @@
 {
-  "name": "update_user_preferences",
+  "name": "set_preferences",
   "domain": "user",
-  "description": "Update the calling user's UI and model preferences (partial update — only provided fields are changed)",
+  "description": "Set the calling user's account preferences — locale, theme, timezone, appearance, input behaviour and default text model — as a partial write, and return the whole set after it.",
   "mode": "sync",
   "surfaces": [
     "api",
-    "mcp",
-    "agent"
+    "mcp"
   ],
   "sensitivity": "low",
-  "agent": {
-    "requiresApproval": false,
-    "riskLevel": "low",
-    "category": "user"
-  },
+  "agent": null,
   "chain": {
     "produces": [],
     "consumes": [],
@@ -24,6 +19,24 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {
+      "locale": {
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 35
+      },
+      "theme": {
+        "type": "string",
+        "enum": [
+          "system",
+          "light",
+          "dark"
+        ]
+      },
+      "timezone": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
       "fontSize": {
         "type": "string",
         "enum": [
@@ -75,14 +88,6 @@
             "type": "null"
           }
         ]
-      },
-      "timezone": {
-        "type": "string",
-        "minLength": 1
-      },
-      "language": {
-        "type": "string",
-        "minLength": 2
       }
     },
     "additionalProperties": false
@@ -91,6 +96,20 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {
+      "locale": {
+        "type": "string"
+      },
+      "theme": {
+        "type": "string",
+        "enum": [
+          "system",
+          "light",
+          "dark"
+        ]
+      },
+      "timezone": {
+        "type": "string"
+      },
       "fontSize": {
         "type": "string",
         "enum": [
@@ -141,23 +160,18 @@
             "type": "null"
           }
         ]
-      },
-      "timezone": {
-        "type": "string"
-      },
-      "language": {
-        "type": "string"
       }
     },
     "required": [
+      "locale",
+      "theme",
+      "timezone",
       "fontSize",
       "density",
       "enterToSubmit",
       "pendingPromptBehavior",
       "defaultTextTier",
-      "defaultTextModel",
-      "timezone",
-      "language"
+      "defaultTextModel"
     ],
     "additionalProperties": false
   }

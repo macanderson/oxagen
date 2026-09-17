@@ -437,6 +437,47 @@ describe("materializeTools", () => {
     expect(mocks.waitForApproval).toHaveBeenCalledTimes(1);
   });
 
+  it("parks the call under approvalMode park: the request is created, the event fires, nothing waits and the handler never runs", async () => {
+    mocks.createApprovalRequest.mockClear();
+    mocks.waitForApproval.mockClear();
+    vi.mocked(invoke).mockClear();
+    const fixtureGated = [
+      {
+        ...FIXTURE[2],
+        agent: { riskLevel: "high" as const, requiresApproval: true },
+      },
+    ];
+    vi.doMock("@oxagen/oxagen", () => ({
+      listCapabilities: () => fixtureGated,
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
+    }));
+    vi.resetModules();
+    const { materializeTools: mt, ApprovalPendingError } = await import(
+      "./materialize-tools"
+    );
+    const events: unknown[] = [];
+    const { tools } = await mt(
+      { ...CTX, messageId: "msg_42" },
+      { approvalMode: "park", onApprovalRequired: (e) => events.push(e) },
+    );
+    await expect(
+      (
+        tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }
+      ).execute({ y: 1 }),
+    ).rejects.toSatisfy(
+      (e) =>
+        e instanceof ApprovalPendingError &&
+        e.code === "pending_approval" &&
+        e.capability === FIXTURE[2]!.name,
+    );
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.waitForApproval).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+    expect(events).toHaveLength(1);
+  });
+
   it("denied approval throws and the handler never runs", async () => {
     mocks.createApprovalRequest.mockClear();
     mocks.waitForApproval.mockClear();
