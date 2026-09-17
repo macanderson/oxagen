@@ -101,13 +101,19 @@ async function planChangeDirection(
     // monthly plan previews a negative proration (credit for unused time) and
     // would take the `none` branch, so the confirmation said $0 while a full
     // month was charged. The money owed is the whole invoice, not the
-    // proration lines, so it is quoted from the invoice total and billed
-    // under always_invoice rather than silently dropped.
+    // proration lines, so it is billed under always_invoice rather than
+    // silently dropped.
+    //
+    // Quoted from `amountDueCents`, not `totalCents`. This number is shown to
+    // a person as what happens to their card now, and a customer carrying a
+    // credit balance is not charged the total — Stripe applies the balance and
+    // collects `amount_due`. The total overstated the charge by the whole
+    // balance (#3157, PR #3171 review).
     if (intervalChanges) {
       return {
         prorationBehavior: "always_invoice",
         direction: "interval_change",
-        amountCents: preview.totalCents,
+        amountCents: preview.amountDueCents,
         preview,
       };
     }
@@ -557,8 +563,9 @@ async function clearPlanUpgradeIntent(
 }
 
 /**
- * Which price the subscription is on **at the provider**, falling back to the
- * local record only when the provider will not say.
+ * Which price the subscription is on **at the provider**, and on which
+ * interval, falling back to the local record only when the provider will not
+ * say.
  *
  * `subscriptions.stripe_price_id` is written by `syncSubscriptionFromStripe`,
  * which runs AFTER the provider mutation. So the one failure the already-
@@ -573,25 +580,55 @@ async function clearPlanUpgradeIntent(
  * The provider knows. Ask it. This is the same correction the rest of #3157
  * makes over and over: a local record of what happened is not what happened.
  *
+ * THE INTERVAL COMES BACK FOR THE SAME REASON THE PRICE DOES.
+ *
+ * `subscriptions.billing_interval` is written by the same post-mutation sync
+ * and is stale in the same failure, and the decision it feeds is worse to get
+ * wrong: whether the change resets the billing-cycle anchor. After an
+ * unrecorded monthly→annual swap the column still says `month`, so a move back
+ * to monthly reads as same-interval, its negative proration reads as a
+ * downgrade, `none` is selected and the quote is $0 — while the provider
+ * resets the anchor and invoices the new month anyway. This function was
+ * already reading the provider subscription and discarding the one field that
+ * settles it (#3157, PR #3171 review).
+ *
  * The fallback is deliberate and does not reopen the hole it closes. If the
  * provider cannot be reached, the swap cannot be issued either, so refusing
  * here would only trade a wrong answer for an outage; falling back leaves the
  * behaviour exactly as it was before this check existed, and says so.
  */
-async function resolveActivePriceId(
+async function resolveActiveProviderState(
   stripeSubscriptionId: string,
   localPriceId: string | null,
-): Promise<{ priceId: string | null; fromProvider: boolean }> {
+  fallbackInterval: "month" | "year",
+): Promise<{
+  priceId: string | null;
+  billingInterval: "month" | "year";
+  fromProvider: boolean;
+}> {
   try {
     const sub = await billingProvider().getSubscription(stripeSubscriptionId);
-    return { priceId: sub.priceId, fromProvider: true };
+    return {
+      priceId: sub.priceId,
+      billingInterval: sub.billingInterval,
+      fromProvider: true,
+    };
   } catch (err) {
     logger.warn(
       { stripeSubId: stripeSubscriptionId, err },
-      "billing: could not read the provider's active price for a plan change — falling back to the last synced price id",
+      "billing: could not read the provider's active price and interval for a plan change — falling back to the last synced values",
     );
-    return { priceId: localPriceId, fromProvider: false };
+    return {
+      priceId: localPriceId,
+      billingInterval: fallbackInterval,
+      fromProvider: false,
+    };
   }
+}
+
+/** The local column, narrowed. Only ever the fallback — see above. */
+function localInterval(value: string | null | undefined): "month" | "year" {
+  return value === "year" ? "year" : "month";
 }
 
 export async function changeOrgPlan(
@@ -705,13 +742,17 @@ export async function changeOrgPlan(
   // here makes the retry the no-op it should be.
   //
   // Asked of the PROVIDER, not of our record of the provider — see
-  // resolveActivePriceId for why the local column is blind to exactly the
+  // resolveActiveProviderState for why the local column is blind to exactly the
   // failure this guard exists for.
-  const { priceId: activePriceId, fromProvider: priceConfirmed } =
-    await resolveActivePriceId(
-      activeSubRow.stripeSubscriptionId,
-      activeSubRow.stripePriceId,
-    );
+  const {
+    priceId: activePriceId,
+    billingInterval: currentInterval,
+    fromProvider: priceConfirmed,
+  } = await resolveActiveProviderState(
+    activeSubRow.stripeSubscriptionId,
+    activeSubRow.stripePriceId,
+    localInterval(activeSubRow.billingInterval),
+  );
 
   if (activePriceId && activePriceId === newPriceId) {
     // The provider has moved and our row has not: the first attempt's sync is
@@ -812,9 +853,11 @@ export async function changeOrgPlan(
 
   // Active subscription — swap the price in-place. Proration follows the money
   // the change will actually move.
-  const currentInterval: "month" | "year" =
-    activeSubRow.billingInterval === "year" ? "year" : "month";
-  const { prorationBehavior, direction, amountCents } =
+  //
+  // `currentInterval` is the PROVIDER's, resolved above alongside the active
+  // price. The local column cannot be trusted for this: see
+  // resolveActiveProviderState.
+  const { prorationBehavior, direction, amountCents, preview } =
     await planChangeDirection(
       activeSubRow.stripeSubscriptionId,
       newPriceId,
@@ -837,7 +880,15 @@ export async function changeOrgPlan(
       currentTier: currentPlanRow?.tier,
       targetTier: targetPlan.tier,
       currentInterval,
+      // The interval was measured at the provider; say whether the local
+      // column agreed, so a row drifting from the provider is visible in the
+      // log rather than only in its consequences.
+      recordedInterval: activeSubRow.billingInterval,
       previewedProrationCents: amountCents,
+      // The invoice, and what will actually be collected off it. They differ
+      // by the customer's account balance, and only the second is the charge.
+      previewedInvoiceTotalCents: preview?.totalCents ?? null,
+      collectibleCents: preview?.amountDueCents ?? null,
       priceDirection: direction,
       billsMoreNow,
       prorationBehavior,
@@ -1251,8 +1302,18 @@ export async function previewPlanChange(
   // No current-plan lookup here. The preview needs what the subscriber is
   // billed, which the subscription carries, and the plan row behind it would
   // only reintroduce the catalogue figure this path must not read (#3157).
-  const currentInterval: "month" | "year" =
-    activeSub.billingInterval === "year" ? "year" : "month";
+  //
+  // The interval is the provider's, for the reason resolveActiveProviderState
+  // gives: the local column describes the subscription the last successful
+  // sync saw, and whether this change resets the billing-cycle anchor is
+  // decided by the subscription the provider has now. The quote path has to
+  // reach the same answer as the swap path or the confirmation screen promises
+  // something the change will not do.
+  const { billingInterval: currentInterval } = await resolveActiveProviderState(
+    activeSub.stripeSubscriptionId,
+    null,
+    localInterval(activeSub.billingInterval),
+  );
   // One preview answers both questions: which way the money moves, and how
   // much of it moves now. Taken exactly as changeOrgPlan takes it, because a
   // preview computed from one measure while the change bills against another
@@ -1291,7 +1352,10 @@ export async function previewPlanChange(
       targetPlanSlug,
       interval,
       currentInterval,
+      recordedInterval: activeSub.billingInterval,
       previewedProrationCents: amountCents,
+      previewedInvoiceTotalCents: preview?.totalCents ?? null,
+      collectibleCents: preview?.amountDueCents ?? null,
       priceDirection: direction,
       billsMoreNow,
       amountCents: chargedNowCents,

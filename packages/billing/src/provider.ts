@@ -161,8 +161,26 @@ export interface BillingProrationPreview {
    * lines. When a change alters the recurring interval the provider resets the
    * billing-cycle anchor and invoices the new period immediately, and that
    * charge is a NON-proration line: `amountCents` cannot see it.
+   *
+   * What the invoice comes to, NOT what the customer will be asked for — see
+   * {@link amountDueCents}. Reported and logged; never quoted.
    */
   totalCents: number;
+  /**
+   * What the provider will actually COLLECT for this invoice: the total, less
+   * whatever credit the customer's account balance already covers.
+   *
+   * A customer carrying a balance — a refund, an overpayment, a credit note —
+   * has `totalCents` and this disagree, and only this one is the answer to
+   * "what happens to my card now". Quoting the total overstated the charge by
+   * the whole balance; a balance larger than the invoice made it overstate a
+   * collection of nothing (#3157, PR #3171 review).
+   *
+   * This is the same distinction {@link BillingInvoice.amountDueCents} already
+   * draws for issued invoices. A preview is an invoice that has not been
+   * issued, so it draws it the same way.
+   */
+  amountDueCents: number;
   /** Per-line breakdown of the proration adjustments. */
   lines: BillingProrationLine[];
 }

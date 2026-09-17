@@ -34,6 +34,9 @@ function previewingProration(amountCents: number) {
     currency: "usd",
     prorationDate: 1_700_000_000,
     totalCents: amountCents,
+    // What the provider would collect. Equal to the total here: none of these
+    // cases give the customer an account balance.
+    amountDueCents: amountCents,
     lines: [],
   });
 }

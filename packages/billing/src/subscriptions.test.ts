@@ -504,6 +504,12 @@ describe("previewPlanChange — the quote and the change agree (#3157)", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // The interval this change moves FROM is read from the provider, not from
+    // the synced column (#3157, PR #3171 review), so each of these has to say
+    // what the provider reports. Monthly unless the test says otherwise.
+    getSubscriptionMock.mockResolvedValue(
+      makeSubscription({ billingInterval: "month" }),
+    );
   });
 
   it("quotes the previewed charge when the bill rises, under the flag the change will apply", async () => {
@@ -513,6 +519,7 @@ describe("previewPlanChange — the quote and the change agree (#3157)", () => {
       currency: "usd",
       prorationDate: 1_700_000_000,
       totalCents: 0,
+      amountDueCents: 0,
       lines: [],
     });
     dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);
@@ -543,6 +550,7 @@ describe("previewPlanChange — the quote and the change agree (#3157)", () => {
       currency: "usd",
       prorationDate: 1_700_000_000,
       totalCents: 0,
+      amountDueCents: 0,
       lines: [],
     });
     dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);
@@ -591,8 +599,14 @@ describe("previewPlanChange — the quote and the change agree (#3157)", () => {
       currency: "usd",
       prorationDate: 1_700_000_000,
       totalCents: 15_000, // the month the anchor reset raises
+      // No account balance here, so the collection equals the invoice. The
+      // case where they differ is `plan-change-provider-interval.test.ts`.
+      amountDueCents: 15_000,
       lines: [],
     });
+    getSubscriptionMock.mockResolvedValue(
+      makeSubscription({ billingInterval: "year", priceId: "price_annual" }),
+    );
     dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);
     dbMocks.query.subscriptions.findFirst.mockResolvedValue({
       stripeSubscriptionId: "sub_test_001",
@@ -617,6 +631,7 @@ describe("previewPlanChange — the quote and the change agree (#3157)", () => {
       currency: "usd",
       prorationDate: 1_700_000_000,
       totalCents: 0,
+      amountDueCents: 0,
       lines: [],
     });
     dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);

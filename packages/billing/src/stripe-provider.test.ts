@@ -363,6 +363,11 @@ describe("StripeProvider", () => {
       periodStart?: number;
     }>,
     total = 0,
+    /**
+     * What Stripe would COLLECT. Defaults to the total, which is the case with
+     * no customer balance; pass it to model an account credit.
+     */
+    amountDue = total,
   ) {
     stripeMethods.invoices.createPreview.mockImplementation(
       async (args: { subscription_details?: { proration_date?: number } }) => {
@@ -370,6 +375,7 @@ describe("StripeProvider", () => {
         return {
           currency: "usd",
           total,
+          amount_due: amountDue,
           lines: {
             data: lines.map((l) => ({
               proration: l.proration,
@@ -497,6 +503,39 @@ describe("StripeProvider", () => {
       });
       expect(preview.amountCents).toBe(-900);
       expect(preview.isCharge).toBe(false);
+    });
+
+    it("reports the invoice total and the collectible amount separately", async () => {
+      // A customer carrying a credit balance has Stripe apply it to
+      // `amount_due`, so the invoice and the collection are different numbers.
+      // Only the second is what happens to their card, and the interval-change
+      // quote reads it (#3157, PR #3171 review).
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing(
+        [{ proration: false, description: "One month", amount: 20_000 }],
+        20_000,
+        5_000,
+      );
+      const preview = await provider.previewPlanChange("sub_test_001", {
+        newPriceId: "price_scale_monthly",
+      });
+      expect(preview.totalCents).toBe(20_000);
+      expect(preview.amountDueCents).toBe(5_000);
+      // Guard the fixture: a case where the two agree proves nothing.
+      expect(preview.amountDueCents).not.toBe(preview.totalCents);
+    });
+
+    it("collects the total when the customer carries no balance", async () => {
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing(
+        [{ proration: false, description: "One month", amount: 20_000 }],
+        20_000,
+      );
+      const preview = await provider.previewPlanChange("sub_test_001", {
+        newPriceId: "price_scale_monthly",
+      });
+      expect(preview.amountDueCents).toBe(20_000);
+      expect(preview.totalCents).toBe(20_000);
     });
   });
 

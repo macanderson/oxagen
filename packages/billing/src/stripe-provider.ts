@@ -135,10 +135,18 @@ function summarizeProration(
     // Stripe's invoice `total` is already net of discounts. It is deliberately
     // NOT filtered to this preview's anchor: it is read only when the change
     // resets the billing-cycle anchor, and the invoice that reset raises really
-    // does collect everything sitting on it, pending prorations included. The
-    // total is what the customer is charged, so quoting it is honest in a way
-    // that quoting a filtered subset of it would not be.
+    // does collect everything sitting on it, pending prorations included.
+    //
+    // It is reported, not quoted. `total` is what the invoice comes to;
+    // `amount_due` is what Stripe will take, and the two part company the
+    // moment the customer carries an account balance — which is why the
+    // adapter has always mapped `amount_due` for issued invoices
+    // (`stripeInvoiceToNeutral`) and now does the same here.
     totalCents: preview.total,
+    // What is actually collected. Stripe applies the customer's credit balance
+    // to `amount_due`, so this is the figure the confirmation screen means by
+    // "charged now" (#3157, PR #3171 review).
+    amountDueCents: preview.amount_due,
     lines: prorationLines,
   };
 }

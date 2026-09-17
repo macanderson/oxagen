@@ -160,6 +160,7 @@ function makeProrationPreview(
     currency: "usd",
     prorationDate: 1700000000,
     totalCents: 2000,
+    amountDueCents: 2000,
     lines: [],
     ...overrides,
   };

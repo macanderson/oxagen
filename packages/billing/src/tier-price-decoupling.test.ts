@@ -209,8 +209,27 @@ describe("plan price order and TIER_ORDER stay separate (#3157)", () => {
     );
     // The local column is written by the sync that runs after the mutation,
     // so it cannot see a swap whose response was lost.
-    expect(subs).toMatch(/resolveActivePriceId\(/);
+    expect(subs).toMatch(/resolveActiveProviderState\(/);
     expect(subs).not.toMatch(/activeSubRow\.stripePriceId === newPriceId/);
+  });
+
+  it("neither plan-change path derives the current interval from the synced column", () => {
+    const subs = readFileSync(
+      join(REPO_ROOT, "packages/billing/src/subscriptions.ts"),
+      "utf8",
+    );
+    // `billing_interval` is stale in exactly the failure the guard above
+    // exists for, and it decides whether the change resets the billing-cycle
+    // anchor — so it is read only as the fallback INSIDE the resolver, never
+    // as the value a proration decision is made from (#3157, PR #3171
+    // review). Behaviour is asserted in
+    // `plan-change-provider-interval.test.ts`; this catches the reversion.
+    expect(subs).not.toMatch(
+      /currentInterval[^\n]*=[\s\S]{0,80}?(activeSub|activeSubRow)\.billingInterval/,
+    );
+    expect(subs).toMatch(
+      /billingInterval: currentInterval[\s\S]{0,200}?resolveActiveProviderState\(/,
+    );
   });
 
   it("no source file decides a proration behaviour from the tier ordering", () => {
