@@ -50,29 +50,35 @@ mocks.runInTenantScope.mockImplementation(
 mocks.getScope.mockReturnValue(undefined);
 mocks.insertEvents.mockResolvedValue(undefined);
 
-vi.mock("@oxagen/database", () => ({
-  withTenantDb: mocks.withTenantDb,
-  schema: {
-    aiResponseCache: {
-      id: "id",
-      response: "response",
-      usage: "usage",
-      responseKind: "responseKind",
-      embedding: "embedding",
-      orgId: "orgId",
-      workspaceId: "workspaceId",
-      cacheKey: "cacheKey",
-      deletedAt: "deletedAt",
-      expiresAt: "expiresAt",
-      model: "model",
-      surface: "surface",
-      createdAt: "createdAt",
-      hitCount: "hitCount",
-      lastHitAt: "lastHitAt",
-      promptHash: "promptHash",
+vi.mock("@oxagen/database", () => {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    withTenantDb: mocks.withTenantDb,
+    schema: {
+      aiResponseCache: {
+        id: "id",
+        response: "response",
+        usage: "usage",
+        responseKind: "responseKind",
+        embedding: "embedding",
+        orgId: "orgId",
+        workspaceId: "workspaceId",
+        cacheKey: "cacheKey",
+        deletedAt: "deletedAt",
+        expiresAt: "expiresAt",
+        model: "model",
+        surface: "surface",
+        createdAt: "createdAt",
+        hitCount: "hitCount",
+        lastHitAt: "lastHitAt",
+        promptHash: "promptHash",
+      },
     },
-  },
-}));
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: mocks.runInTenantScope,
   getScope: mocks.getScope,

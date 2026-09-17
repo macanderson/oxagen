@@ -5,6 +5,7 @@ import {
   resolveDataPlane,
   type PostgresPlaneConfig,
 } from "@oxagen/tenancy";
+import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/types";
 import { isProductionRuntime } from "@oxagen/config/env";
 import { db, type Database } from "./client";
 import { dedicatedDb } from "./data-plane-pool";
@@ -13,6 +14,82 @@ import { recordIfUnscoped } from "./unscoped-meter";
 
 /** The transaction handle Drizzle hands to a `.transaction(cb)` callback. */
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+/**
+ * What `app.current_workspace_id` is set to when the scope in force is
+ * organisation-only — that is, when `workspaceId` is `ORG_ONLY_WORKSPACE_ID`
+ * (ADR-068's nil-uuid sentinel).
+ *
+ * It is DELIBERATELY NOT A UUID. Every generated `tenant_isolation` policy
+ * reads the GUC as `nullif(current_setting('app.current_workspace_id', true),
+ * '')::uuid`, so a value that is not a uuid makes that policy RAISE — SQLSTATE
+ * 22P02, `invalid input syntax for type uuid` — instead of quietly narrowing.
+ *
+ * That is the whole of ADR-086. Before it, an org-only scope carried the nil
+ * uuid into the GUC and Postgres HID rows rather than refusing: a
+ * `workspace_nullable` table answered with its `workspace_id IS NULL` rows
+ * alone, a `standard` or `workspace_only` table answered with nothing, and in
+ * both cases the caller got a short answer shaped exactly like a complete one.
+ * A signed SOC 2 export came out missing every workspace-scoped security event
+ * that way. ADR-074 tried to catch it by reading the source; eight blind spots
+ * in eight review rounds, every one reporting clean, says that cannot be done.
+ *
+ * Three properties are worth knowing before changing this:
+ *
+ *  - **It refuses at PLAN time, not per row.** Postgres folds stable functions
+ *    while estimating selectivity, so the cast runs once when the statement is
+ *    planned. An `EXPLAIN` raises. A table with no matching rows raises. A
+ *    `LIMIT` that would have stopped before reaching a hidden row raises. There
+ *    is no query shape that slips past by touching nothing.
+ *  - **`app.rls_bypass = 'on'` does NOT suppress it,** for the same reason —
+ *    the cast is folded before the bypass disjunct is ever evaluated. Bypassed
+ *    work therefore must not carry this marker; `withSystemDb` sets no
+ *    workspace GUC at all, which is why it is unaffected.
+ *  - **`org_only` tables are untouched.** Their policy never names the
+ *    workspace GUC, so an org-level read of one answers in full, exactly as it
+ *    did. That is most of the sentinel-scoped code in the tree.
+ *
+ * The value is prose on purpose: Postgres puts it verbatim into the error —
+ * `invalid input syntax for type uuid:
+ * "org-only-scope-names-no-workspace"` — so the failure names its own cause at
+ * the point it happens, with no lookup.
+ */
+export const ORG_ONLY_WORKSPACE_GUC = "org-only-scope-names-no-workspace";
+
+/**
+ * The value `app.current_workspace_id` carries for a given scope.
+ *
+ * One function, used by every seam that opens a tenant transaction, so the
+ * org-only translation cannot be present in one and missing in the next.
+ */
+function workspaceGuc(workspaceId: string): string {
+  return workspaceId === ORG_ONLY_WORKSPACE_ID
+    ? ORG_ONLY_WORKSPACE_GUC
+    : workspaceId;
+}
+
+/**
+ * True when `err`, or anything in its `.cause` chain, is the refusal above.
+ *
+ * Matches SQLSTATE 22P02 AND the marker text. 22P02 alone is not enough — a
+ * caller passing a malformed uuid from a path param raises the same SQLSTATE,
+ * and calling that "an org-only read of a workspace-scoped table" would be a
+ * second wrong answer dressed as a diagnosis.
+ */
+export function isOrgOnlyWorkspaceReadRefusal(err: unknown): boolean {
+  for (let cur: unknown = err, depth = 0; cur != null && depth < 5; depth++) {
+    const e = cur as { code?: string; message?: string; cause?: unknown };
+    if (
+      e.code === "22P02" &&
+      typeof e.message === "string" &&
+      e.message.includes(ORG_ONLY_WORKSPACE_GUC)
+    ) {
+      return true;
+    }
+    cur = e.cause;
+  }
+  return false;
+}
 
 /**
  * Resolve which physical Postgres this organisation's tenant data lives on
@@ -60,7 +137,96 @@ export async function withTenantDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
     await tx.execute(sql`
       select
         set_config('app.current_org_id', ${orgId}, true),
-        set_config('app.current_workspace_id', ${workspaceId}, true),
+        set_config('app.current_workspace_id', ${workspaceGuc(workspaceId)}, true),
+        set_config('app.org_wide', 'off', true),
+        set_config('app.rls_bypass', ${bypass}, true)
+    `);
+    return fn(tx);
+  });
+}
+
+/**
+ * Run an ORGANISATION-WIDE READ on the organisation's own data plane.
+ *
+ * This is the seam ADR-074 recorded as missing. `withTenantDb` is plane-aware
+ * and demands a workspace; `withSystemDb` needs no workspace but always opens
+ * the shared-plane singleton and turns RLS off entirely. An organisation-wide
+ * aggregate over a tenant table — every workspace's runs, every workspace's
+ * security events, the roles a principal holds anywhere in the org — had no
+ * correct seam, so it was written as `withSystemDb` plus a hand-written
+ * `eq(table.orgId, orgId)` fence. That trade is bad in both directions: the
+ * read loses `resolveDataPlane` and `assertDataPlaneUsable`, so it can answer
+ * correctly off the WRONG database; and the org boundary comes to rest on a
+ * predicate a future edit can drop, with nothing but review between that
+ * omission and a cross-tenant read.
+ *
+ * `withOrgDb` keeps both. It resolves the organisation's plane and asserts the
+ * binding exactly as `withTenantDb` does, and it leaves RLS ON: the policies
+ * still fence `org_id`, and `app.org_wide = 'on'` widens only the WORKSPACE
+ * half of the READ. The database, not the caller, is still what keeps one
+ * tenant out of another's rows.
+ *
+ * THE WIDENING IS STRUCTURALLY READ-ONLY. `app.org_wide` is the whole predicate
+ * of a separate `FOR SELECT` policy, `tenant_org_wide_read`, and appears in no
+ * clause of `tenant_isolation`. It has to be: a USING clause is not a read
+ * filter — Postgres applies it to the OLD rows of an UPDATE and of a DELETE too,
+ * and WITH CHECK never runs for a DELETE — so an org-wide disjunct inside
+ * `tenant_isolation` would have let any callback here delete every
+ * workspace-scoped row in the organisation, and move a `workspace_nullable` row
+ * to `workspace_id = NULL` past the unchanged check. Permissive policies are
+ * OR'd within a command type and AND'd across them, so a `FOR SELECT` policy
+ * widens the read and cannot reach an UPDATE's or a DELETE's old-row test.
+ *
+ * Four properties, each of which the generated policies enforce rather than
+ * this function:
+ *
+ *  - **Reads widen, writes are judged by the unchanged WITH CHECK.**
+ *    `app.org_wide` is absent from every WITH CHECK, and the workspace GUC is
+ *    empty here, so the only rows this seam can write are the ones whose own
+ *    `workspace_id` is NULL — an org-wide role assignment on a
+ *    `workspace_nullable` table. A row naming a workspace, or any row on a
+ *    `standard` table, is refused with SQLSTATE 42501. Write those in the
+ *    workspace's own scope through `withTenantDb`.
+ *  - **UPDATE and DELETE see the unwidened row set.** The rows a statement here
+ *    may modify or destroy are the ones `tenant_isolation` admits — this
+ *    scope's workspace (empty), plus the workspace-less rows of a
+ *    `workspace_nullable` table. A DELETE aimed at another workspace's row
+ *    inside this organisation affects ZERO rows. `SELECT … FOR UPDATE` is
+ *    narrowed the same way, which is right: a locking read is the first half of
+ *    a write.
+ *  - **The org fence is still the database's.** A row belonging to another
+ *    organisation is invisible here for the same reason it is invisible in
+ *    `withTenantDb`, and an omitted `eq(orgId)` predicate cannot change that.
+ *  - **`workspace_only` tables get nothing.** A table with a `workspace_id`
+ *    and no `org_id` — `workspace.workspace_users` is the only one in the
+ *    manifest — has no org column for the fence to hold, so its policy carries
+ *    no org-wide disjunct and it reads empty here. That is by construction, not
+ *    by omission: reach such a table through the org-scoped parent it hangs
+ *    off. This is the one under-read `withOrgDb` can still produce, and it is
+ *    derivable from the table's class rather than from a list of names.
+ *
+ * Requires an active tenant scope, like `withTenantDb` — the scope is where the
+ * organisation comes from. The workspace in that scope is ignored, which is the
+ * point: a caller in a real workspace that asks for the organisation gets the
+ * organisation.
+ */
+export async function withOrgDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  const { orgId } = requireScope();
+  const bypass = rlsEnforced() ? "off" : "on";
+  const database = await tenantPlaneDb(orgId);
+  return database.transaction(async (tx) => {
+    // The workspace GUC is set to the EMPTY STRING, not to
+    // ORG_ONLY_WORKSPACE_GUC. `nullif('', '')::uuid` is NULL, which casts
+    // cleanly; the org-only marker would raise at plan time on every policy
+    // that names the GUC, org-wide disjunct or not, because Postgres folds the
+    // cast while estimating selectivity. Setting it explicitly rather than
+    // leaving it inherited also means a `withOrgDb` nested inside an open
+    // transaction cannot pick up the caller's workspace.
+    await tx.execute(sql`
+      select
+        set_config('app.current_org_id', ${orgId}, true),
+        set_config('app.current_workspace_id', '', true),
+        set_config('app.org_wide', 'on', true),
         set_config('app.rls_bypass', ${bypass}, true)
     `);
     return fn(tx);
@@ -134,7 +300,8 @@ export async function withRepeatableReadTenantDb<T>(
     await tx.execute(sql`
       select
         set_config('app.current_org_id', ${orgId}, true),
-        set_config('app.current_workspace_id', ${workspaceId}, true),
+        set_config('app.current_workspace_id', ${workspaceGuc(workspaceId)}, true),
+        set_config('app.org_wide', 'off', true),
         set_config('app.rls_bypass', ${bypass}, true)
     `);
     return fn(tx);
@@ -177,6 +344,43 @@ export async function withSystemDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   //      function. Making it plane-aware would be a cycle: to know which plane
   //      to read from, read the table that says which plane to read from.
   return db().transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.rls_bypass', 'on', true)`);
+    return fn(tx);
+  });
+}
+
+/**
+ * A system write to a table that lives on the ORGANISATION'S plane.
+ *
+ * `withSystemDb` always uses the shared plane, deliberately and for good
+ * reasons (see its comment). Those reasons are about PLATFORM tables. A
+ * tenant-data table on a dedicated plane is the case it does not cover: the
+ * statement runs, matches nothing, and reports success, because the rows it
+ * meant to touch are on another database entirely. That is how the Tacho
+ * gateway observation was written — `tacho.hosts` is read through
+ * `withTenantDb`, so for an organisation with a dedicated plane the write
+ * landed on the shared plane, the observation never arrived, and every genuine
+ * connected-app session stayed classified `observe`
+ * (discussion_r4040617216).
+ *
+ * So this resolves the plane the way `withTenantDb` does, and bypasses RLS the
+ * way `withSystemDb` does. It needs no ALS scope — the organisation is named
+ * outright — which is the whole point: the callers are authorisation-time
+ * paths that know their org and may have no scope yet.
+ *
+ * NARROW BY DESIGN. Reach for it only for a write to tenant-plane data from a
+ * platform path, and say at the callsite why RLS is being bypassed. Anything
+ * running inside a handler already has a scope and wants `withTenantDb`.
+ */
+export async function withOrgPlaneSystemDb<T>(
+  orgId: string,
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  // Counted like `withSystemDb`: this is an audited RLS bypass, and leaving it
+  // out of the meter would make the enforcement gate unreachable.
+  recordIfUnscoped("withOrgPlaneSystemDb");
+  const database = await tenantPlaneDb(orgId);
+  return database.transaction(async (tx) => {
     await tx.execute(sql`select set_config('app.rls_bypass', 'on', true)`);
     return fn(tx);
   });

@@ -10,7 +10,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const original = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...original, withTenantDb: mocks.withTenantDb };
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = { ...original, withTenantDb: mocks.withTenantDb };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 vi.mock("@oxagen/database/security", () => ({
   emitSecurityEvent: mocks.emitSecurityEvent,
@@ -65,6 +69,10 @@ function happyDb(clash = false): void {
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
+        // The host insert asks `information_schema` whether the gateway column
+        // exists before naming it in RETURNING. "Applied" is the state these
+        // cases are about.
+        execute: async () => [{ "?column?": 1 }],
         query: {
           apiKeys: { findFirst: async () => keyRow },
           organizations: { findFirst: async () => ({ namespace: "acme" }) },
@@ -161,6 +169,28 @@ describe("create_tacho_enrollment", () => {
         eventType: "api_key.created",
         capability: "create_tacho_enrollment",
       }),
+    );
+  });
+
+  it("records what the enrolling client says its bundle parser understands", async () => {
+    // Enrollment hands back the host's first policy bundle, parsed by a
+    // `.strict()` schema, so a gated field must not be signed into it unless
+    // the client named the field. A client that says nothing gets an empty
+    // list, which is the same answer as cannot parse it.
+    happyDb();
+    await tachoEnrollmentCreateHandler(
+      { ...INPUT, bundleFeatures: ["gateway_tools"] },
+      CONTEXT,
+    );
+    expect(inserted.find((row) => row.table === "hosts")?.values).toMatchObject(
+      { bundleFeatures: ["gateway_tools"] },
+    );
+
+    inserted = [];
+    happyDb();
+    await tachoEnrollmentCreateHandler(INPUT, CONTEXT);
+    expect(inserted.find((row) => row.table === "hosts")?.values).toMatchObject(
+      { bundleFeatures: [] },
     );
   });
 

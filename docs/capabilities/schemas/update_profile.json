@@ -1,0 +1,68 @@
+{
+  "name": "update_profile",
+  "domain": "user",
+  "description": "Update the calling user's own display name and avatar, and return the persisted values.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "displayName": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      },
+      "avatarUrl": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 512
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "displayName",
+      "avatarUrl"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "displayName": {
+        "type": "string"
+      },
+      "avatarUrl": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "displayName",
+      "avatarUrl"
+    ],
+    "additionalProperties": false
+  }
+}

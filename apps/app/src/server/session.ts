@@ -32,14 +32,20 @@ async function readSession(): Promise<AppSession | null> {
 /** The request's session, memoized per request: one Better Auth lookup however many components ask. */
 export const getSession = cache(readSession);
 
-export type AuthUser = { id: string; email: string; name: string };
+export type AuthUser = {
+  id: string;
+  email: string;
+  name: string;
+  /** Better Auth maps `image` to `auth.users.avatar_url` (packages/auth/src/auth.ts). */
+  avatarUrl: string | null;
+};
 
 /** The signed-in person as the sign-in flows and the shell show them; null when signed out. */
 export async function getAuthUser(): Promise<AuthUser | null> {
   const session = await getSession();
   if (!session) return null;
-  const { id, email, name } = session.user;
-  return { id, email, name: name ?? "" };
+  const { id, email, name, image } = session.user;
+  return { id, email, name: name ?? "", avatarUrl: image };
 }
 
 /** The Better Auth API route, with failed sign-ins audited (packages/auth/src/auth-route.ts). */

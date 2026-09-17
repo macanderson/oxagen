@@ -34,30 +34,36 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../create-function", () => ({ createFunction: mocks.createFunction }));
-vi.mock("@oxagen/database", () => ({
-  withSystemDb: mocks.withSystemDb,
-  withTenantDb: mocks.withTenantDb,
-  schema: {
-    mandates: {
-      id: "id",
-      publicId: "public_id",
-      orgId: "org_id",
-      workspaceId: "workspace_id",
-      status: "status",
-      validTo: "valid_to",
+vi.mock("@oxagen/database", () => {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    withSystemDb: mocks.withSystemDb,
+    withTenantDb: mocks.withTenantDb,
+    schema: {
+      mandates: {
+        id: "id",
+        publicId: "public_id",
+        orgId: "org_id",
+        workspaceId: "workspace_id",
+        status: "status",
+        validTo: "valid_to",
+      },
+      approvalRequests: {
+        id: "id",
+        mandateId: "mandate_id",
+        toolCallId: "tool_call_id",
+        orgId: "org_id",
+        workspaceId: "workspace_id",
+        tokenUsedAt: "token_used_at",
+        expiresAt: "expires_at",
+        resolution: "resolution",
+      },
     },
-    approvalRequests: {
-      id: "id",
-      mandateId: "mandate_id",
-      toolCallId: "tool_call_id",
-      orgId: "org_id",
-      workspaceId: "workspace_id",
-      tokenUsedAt: "token_used_at",
-      expiresAt: "expires_at",
-      resolution: "resolution",
-    },
-  },
-}));
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 vi.mock("@oxagen/database/security", () => ({
   emitSecurityEventAsync: mocks.emitSecurityEventAsync,
 }));

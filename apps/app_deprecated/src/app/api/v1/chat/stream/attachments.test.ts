@@ -30,21 +30,27 @@ vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mockRunInTenantScope }));
 vi.mock("@oxagen/storage", () => ({
   storage: () => ({ get: mockStorageGet }),
 }));
-vi.mock("@oxagen/database", () => ({
-  withTenantDb: mockWithTenantDb,
-  schema: {
-    generatedAssets: {
-      publicId: "publicId_col",
-      storageKey: "storageKey_col",
-      mimeType: "mimeType_col",
-      orgId: "orgId_col",
-      workspaceId: "workspaceId_col",
-      status: "status_col",
-      kind: "kind_col",
-      deletedAt: "deletedAt_col",
+vi.mock("@oxagen/database", () => {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    withTenantDb: mockWithTenantDb,
+    schema: {
+      generatedAssets: {
+        publicId: "publicId_col",
+        storageKey: "storageKey_col",
+        mimeType: "mimeType_col",
+        orgId: "orgId_col",
+        workspaceId: "workspaceId_col",
+        status: "status_col",
+        kind: "kind_col",
+        deletedAt: "deletedAt_col",
+      },
     },
-  },
-}));
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 
 import {
   resolveAttachmentImages,

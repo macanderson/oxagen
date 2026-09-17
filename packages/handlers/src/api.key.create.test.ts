@@ -27,7 +27,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...real, withTenantDb: mocks.withTenantDb };
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = { ...real, withTenantDb: mocks.withTenantDb };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 vi.mock("@oxagen/database/security", () => ({
@@ -450,6 +454,48 @@ describe("api.key.create handler — protected Stella telemetry scope", () => {
     ).rejects.toMatchObject({ code: "authz_denied" });
     expect(mocks.withTenantDb).not.toHaveBeenCalled();
     expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("rejects attempts to mint the reserved Tacho GATEWAY purpose", async () => {
+    // The host purpose was guarded here from the start; this one was not, and
+    // enrollment mints the gateway key by direct insert rather than through
+    // this capability — so refusing it removes no capability from anyone.
+    //
+    // It matters because `retireEnrollmentKeys` now selects the credentials a
+    // host revocation sweeps by their purpose, to stop the sweep reaching keys
+    // the enrollment never minted (discussion_r4036214055). A purpose a caller
+    // can write for themselves is not a server-owned selector, so leaving this
+    // open would have undercut that fix on one of its two values.
+    await expect(
+      apiKeyCreateHandler(
+        {
+          name: "Self-asserted gateway",
+          scope: {
+            purpose: "tacho_gateway_v1",
+            host_enrollment_id: "tch_0123456789abcdefghjkmn",
+          },
+        },
+        TEST_CTX,
+      ),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("still allows an ordinary key whose scope merely mentions a host enrollment id", async () => {
+    // The reviewer's own scenario, from the other side. An Owner may put a
+    // host's PUBLIC enrollment id in their own key's metadata; that is not a
+    // reserved purpose and must keep working. It is also exactly why the sweep
+    // may not select on that id alone.
+    await expect(
+      apiKeyCreateHandler(
+        {
+          name: "Ops key that references a host",
+          scope: { host_enrollment_id: "tch_0123456789abcdefghjkmn" },
+        },
+        TEST_CTX,
+      ),
+    ).resolves.toBeDefined();
   });
 
   it("rejects attempts to mint the reserved CLI session purpose", async () => {

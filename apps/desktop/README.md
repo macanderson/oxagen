@@ -71,9 +71,35 @@ pnpm --filter @oxagen/desktop smoke:e2e -- --login --enroll --org <org> --worksp
 
 `publish:downloads` streams the run's artifacts to disk (never `gh run
 download`, which holds each zip in memory), keeps only the installers for the
-package version, uploads them to `desktop/<version>/` with a
-`SHA256SUMS.txt`, rewrites the listing page, and invalidates it. `--dir
+package version, writes `SHA256SUMS.txt` to `desktop/<version>/`, uploads the
+installers beside it, rewrites the listing page, and invalidates it. `--dir
 <folder>` publishes installers already on disk; `--dry-run` prints the uploads.
+
+Those versioned URLs are served `immutable`, a promise to every cache that
+fetches them and not only to CloudFront, so publishing a version that is
+already there is refused: a corrected build ships as a new version. Pass
+`--allow-overwrite` only when the previous publish failed before anyone was
+given the URLs, since nothing can pull a stale copy back out of a browser or a
+proxy that already has one.
+
+Two things hold that promise up. Before anything is downloaded, the version's
+prefix is listed with `aws s3api list-objects-v2`, which exits 0 only when the
+listing actually succeeded — so an expired session, a transient S3 error or a
+principal with `PutObject` but no `ListBucket` stops the publish instead of
+reading as "nothing is there yet" (`aws s3 ls` cannot be used for this: it
+exits 1 both for an empty prefix and for a failed command). Then the version is
+*reserved*: `SHA256SUMS.txt` is written first with `--if-none-match "*"`, an S3
+conditional write, so when two invocations publish the same new version
+concurrently one gets a 412 and stops before uploading a single installer
+rather than interleaving its uploads with the other's. `--allow-overwrite`
+drops that condition. The conditional write needs `aws-cli` 2.17 or newer.
+
+Neither applies to `--dry-run`, which writes nothing: there is no republish to
+stop, so the probe never refuses a preview. It still runs, and a dry run of a
+version that is already published — or one where the listing could not be made
+at all, for want of credentials or of `aws` itself — says so and then prints
+the planned uploads anyway. `--dir <folder> --dry-run` therefore needs nothing
+but the installers on disk.
 
 `smoke:e2e` (`scripts/e2e-smoke.mjs`, no repo needed — copy it to the test
 machine) drives the installed app's sidecars with the wizard's own argv against

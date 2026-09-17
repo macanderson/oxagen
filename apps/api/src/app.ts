@@ -42,6 +42,7 @@ import { toolsLoadRoute } from "./routes/v1/tools.load";
 import { shellNavCountsGetRoute } from "./routes/v1/shell.nav_counts.get";
 import { runRecentListRoute } from "./routes/v1/run.recent.list";
 import { userPreferencesSetRoute } from "./routes/v1/user.preferences.set";
+import { userProfileUpdateRoute } from "./routes/v1/user.profile.update";
 import { agentToolListRoute } from "./routes/v1/agent.tool.list";
 import { agentMcpRegisterRoute } from "./routes/v1/agent.mcp.register";
 import { agentMcpListRoute } from "./routes/v1/agent.mcp.list";
@@ -420,6 +421,7 @@ userScoped.route("/user/organizations", orgListRoute);
 userScoped.route("/user/workspaces", workspaceListRoute);
 userScoped.route("/user/preferences/read", userPreferencesReadRoute);
 userScoped.route("/user/preferences", userPreferencesSetRoute);
+userScoped.route("/user/profile", userProfileUpdateRoute);
 // Per-turn dollar budget (user-scoped default).
 userScoped.route("/user/budget/read", budgetPolicyReadRoute);
 userScoped.route("/user/budget/write", budgetPolicyWriteRoute);

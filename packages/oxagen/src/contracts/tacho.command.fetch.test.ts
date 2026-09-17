@@ -36,6 +36,26 @@ describe("fetch_commands contract", () => {
     }
   });
 
+  it("accepts the bundle fields an upgraded daemon says it can parse", () => {
+    // This `daemon` object is declared here and `.strict()`, so a field the
+    // collector learned to send and this contract never named would refuse
+    // the poll of every upgraded host -- the compatibility break of #3182's
+    // review finding, pointed the other way. An old daemon sends none.
+    const withFeatures = tachoCommandFetch.input.parse({
+      schema: SCHEMA,
+      host_enrollment_id: HOST,
+      daemon: { version: "2.2.0", bundle_features: ["gateway_tools"] },
+    });
+    expect(withFeatures.daemon?.bundle_features).toEqual(["gateway_tools"]);
+    expect(
+      tachoCommandFetch.input.parse({
+        schema: SCHEMA,
+        host_enrollment_id: HOST,
+        daemon: { version: "2.1.1" },
+      }).daemon?.bundle_features,
+    ).toBeUndefined();
+  });
+
   it("refuses the v1 body, the statuses Oxagen owns, and an unknown member (negative)", () => {
     const refuse = (input: unknown) =>
       expect(tachoCommandFetch.input.safeParse(input).success).toBe(false);

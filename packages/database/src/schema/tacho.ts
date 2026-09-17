@@ -198,6 +198,22 @@ export const tachoHosts = tachoSchema.table(
     lastSeenAt: ts("last_seen_at"),
     lastIngestAt: ts("last_ingest_at"),
     lastHeartbeatAt: ts("last_heartbeat_at"),
+    /**
+     * When the control plane last AUTHORISED a call presenting this host's
+     * `tacho_gateway_v1` key — a server observation, not a client claim.
+     *
+     * The enforcement tier exists to separate what the platform enforced from
+     * what the agent says it did, so it may not be read off a submitted
+     * record. A harness holds the local bearer and OTLP attributes pass
+     * through the normalizer verbatim, so anything the daemon seals is
+     * attested by the client; the seal proves the record was not altered after
+     * collection, never that the value was true going in.
+     *
+     * This column is the other thing: written where the gateway key is
+     * authenticated, from a request the control plane served itself. Ingest
+     * derives the `gateway` tier from it rather than from the batch.
+     */
+    gatewayLastSeenAt: ts("gateway_last_seen_at"),
     spoolDepth: integer("spool_depth").notNull().default(0),
     spoolOldestAt: ts("spool_oldest_at"),
     hooksOk: boolean("hooks_ok"),
@@ -205,6 +221,22 @@ export const tachoHosts = tachoSchema.table(
     otelOk: boolean("otel_ok"),
     daemonVersion: text("daemon_version"),
     daemonUptimeS: integer("daemon_uptime_s"),
+    /**
+     * The bundle fields this host told us it can parse
+     * (`TACHO_BUNDLE_FEATURES` in `@oxagen/tacho`). Written at enrollment and
+     * refreshed from the daemon's health report on every control poll, so it
+     * tracks the code the host is *running* rather than the code it enrolled
+     * with — `wrapper_version` and `daemon_version` both come from
+     * `host.json`, which `enroll` writes once and no upgrade rewrites.
+     *
+     * Empty is the honest default for every row that predates this column:
+     * those hosts never advertised anything, and a gated bundle field must
+     * not be sent to a parser that would reject the whole mandate over it.
+     */
+    bundleFeatures: jsonb("bundle_features")
+      .notNull()
+      .default(sql`'[]'::jsonb`)
+      .$type<string[]>(),
     // Counters
     sessionsCount: integer("sessions_count").notNull().default(0),
     unobservedSessionsCount: integer("unobserved_sessions_count")
@@ -408,7 +440,25 @@ export const tachoSessions = tachoSchema.table(
     permissionDenials: jsonb("permission_denials"),
     modelsUsed: jsonb("models_used"),
     // Policy
+    /**
+     * Derived by `tacho.events.ingest` from the control plane's own records —
+     * the host's mode, and `tacho_hosts.gateway_last_seen_at` for `gateway`.
+     * Never read off a submitted batch: the tier's whole value is that it
+     * separates what the platform enforced from what the agent claims, and a
+     * tier the agent can set is the absence of that, with a seal over it.
+     */
     enforcementTier: text("enforcement_tier").notNull().default("observe"),
+    /**
+     * The gateway observation this row's `gateway` tier stands on: the host's
+     * `gateway_last_seen_at` as it read when the tier was set. Null on every
+     * other tier.
+     *
+     * A tier may rise after the fact — a daemon chain opens before the first
+     * connected app calls anything — so a risen tier has to be answerable for
+     * itself. This column is that answer, and its absence on a `gateway` row
+     * is a defect, not a blank.
+     */
+    gatewayObservedAt: ts("gateway_observed_at"),
     bundleMode: text("bundle_mode"),
     bundleVersion: integer("bundle_version"),
     policyDecisions: integer("policy_decisions").notNull().default(0),
@@ -803,3 +853,34 @@ export const tachoEnrollmentTokens = tachoSchema.table(
     ),
   }),
 );
+
+/**
+ * The two columns migration `20260917140000` adds, named the way
+ * `information_schema` names them.
+ *
+ * Defined here, beside the Drizzle declarations they mirror, because three
+ * packages need them and each is a different kind of consumer: `@oxagen/iam`
+ * writes the host observation, `@oxagen/handlers` reads both and projects them
+ * away while they are missing, and their tests assert the probe was asked.
+ * A literal spelled at each site would be renamed on one side without breaking
+ * a build — it would simply stop matching, and the guard would silently become
+ * "always absent", which reads as a working deploy and is a permanent loss of
+ * the gateway tier.
+ *
+ * Note the SQL names: `"tacho"."hosts"`, not `"tacho"."tacho_hosts"`. The
+ * `tacho_` prefix is this schema's constraint and index naming convention and
+ * how Drizzle spells the binding in TypeScript; it is not part of the table
+ * name. The migration that first shipped this column got that wrong.
+ */
+export const HOST_GATEWAY_COLUMN = {
+  schema: "tacho",
+  table: "hosts",
+  column: "gateway_last_seen_at",
+} as const;
+
+/** The session's copy: what a risen `gateway` tier is answerable for. */
+export const SESSION_GATEWAY_COLUMN = {
+  schema: "tacho",
+  table: "sessions",
+  column: "gateway_observed_at",
+} as const;

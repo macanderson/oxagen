@@ -10,7 +10,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const original = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...original, withTenantDb: mocks.withTenantDb };
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = { ...original, withTenantDb: mocks.withTenantDb };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 vi.mock("@oxagen/database/security", () => ({
   emitSecurityEvent: mocks.emitSecurityEvent,
@@ -172,6 +176,10 @@ function wire(db: Fake, apiKey: Record<string, unknown> = HOST_KEY): void {
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
+        // The gateway-column probe asks `information_schema` before a read
+        // that names a column migration 20260917140000 adds. "Applied" is the
+        // state these cases are about.
+        execute: async () => [{ "?column?": 1 }],
         query: {
           apiKeys: { findFirst: async () => apiKey },
           tachoHosts: {
@@ -249,8 +257,14 @@ function wire(db: Fake, apiKey: Record<string, unknown> = HOST_KEY): void {
               const result = Promise.resolve([
                 { id: "x" },
               ]) as Promise<unknown> & { returning: () => Promise<unknown> };
+              // `api_keys` answers with the rows the scope sweep reached: both
+              // credentials the enrollment minted (ADR-078). A host enrolled
+              // before the scope marker existed returns nothing instead, and
+              // that fallback is covered in tacho.enrollment.revoke.test.ts.
               result.returning = async () =>
-                tableName(table) === "control_commands" ? [{ id: "x" }] : [];
+                tableName(table) === "api_keys"
+                  ? [{ id: "aky_host" }, { id: "aky_gateway" }]
+                  : [{ id: "x" }];
               return result;
             },
           }),
@@ -414,6 +428,149 @@ describe("fetch_commands", () => {
     ).rejects.toThrow(/API key required/);
     expect(db.updates).toEqual([]);
   });
+
+  it("records the bundle fields the daemon says it can parse", async () => {
+    // The gate on a new bundle field reads this column, and it has to track
+    // the code the host is *running*: `wrapper_version` and `daemon_version`
+    // both come from `host.json`, which `enroll` writes once and no upgrade
+    // rewrites, so a host that upgrades in place would otherwise never be
+    // recognised as able to parse the field.
+    const db: Fake = {
+      hosts: [host({ bundleFeatures: [] })],
+      sessions: [],
+      commands: [],
+      updates: [],
+      inserts: [],
+    };
+    wire(db);
+    await tachoCommandFetchHandler(
+      {
+        ...FETCH,
+        host_enrollment_id: HOST_PUBLIC,
+        acknowledgements: [],
+        daemon: { bundle_features: ["gateway_tools"] },
+      },
+      MACHINE,
+    );
+    expect(db.updates.find((u) => u.table === "hosts")?.values).toMatchObject({
+      bundleFeatures: ["gateway_tools"],
+    });
+  });
+
+  it("serves the gated bundle on the FIRST poll that advertises, not the next one", async () => {
+    // The advertisement is persisted and the SAME response is built from the
+    // host object the caller already held. If that object is not updated, the
+    // first post-upgrade poll computes its bundle — and this etag — from the
+    // features the host had before it upgraded, and the daemon keeps serving
+    // the unfiltered tool list until some later poll.
+    const etagFor = async (
+      bundleFeatures: string[],
+      advertise: string[] | undefined,
+    ): Promise<string> => {
+      const db: Fake = {
+        hosts: [host({ bundleFeatures })],
+        sessions: [],
+        commands: [],
+        updates: [],
+        inserts: [],
+      };
+      wire(db);
+      const out = await tachoCommandFetchHandler(
+        {
+          ...FETCH,
+          host_enrollment_id: HOST_PUBLIC,
+          acknowledgements: [],
+          daemon: advertise === undefined ? {} : { bundle_features: advertise },
+        },
+        MACHINE,
+      );
+      return out.control.bundle_etag;
+    };
+
+    const already = await etagFor(["gateway_tools"], ["gateway_tools"]);
+    const firstPoll = await etagFor([], ["gateway_tools"]);
+    const neverAdvertised = await etagFor([], undefined);
+
+    // The one that matters: advertising for the first time must land in THIS
+    // response, not the next one.
+    expect(firstPoll).toBe(already);
+    // And this keeps the assertion above from holding vacuously: if the gate
+    // made no difference to the bundle in this fixture — an empty gateway
+    // mandate, say — all three etags would be equal and the check above would
+    // pass while proving nothing.
+    expect(neverAdvertised).not.toBe(already);
+  });
+
+  /** One poll, returning what it wrote to the host row and what it served. */
+  const poll = async (
+    stored: string[],
+    daemon: Record<string, unknown> | undefined,
+  ): Promise<{ values: Record<string, unknown>; etag: string }> => {
+    const db: Fake = {
+      hosts: [host({ bundleFeatures: stored })],
+      sessions: [],
+      commands: [],
+      updates: [],
+      inserts: [],
+    };
+    wire(db);
+    const out = await tachoCommandFetchHandler(
+      {
+        ...FETCH,
+        host_enrollment_id: HOST_PUBLIC,
+        acknowledgements: [],
+        ...(daemon === undefined ? {} : { daemon }),
+      },
+      MACHINE,
+    );
+    return {
+      values: (db.updates.find((u) => u.table === "hosts")?.values ??
+        {}) as Record<string, unknown>,
+      etag: out.control.bundle_etag,
+    };
+  };
+
+  it("leaves the advertisement alone when a poll reports no health at all", async () => {
+    // No `daemon` object is not a statement about the parser — nothing was
+    // reported, so there is nothing to learn and the stored support stands.
+    const { values } = await poll(["gateway_tools"], undefined);
+    expect(values).not.toHaveProperty("bundleFeatures");
+  });
+
+  it("clears support a daemon reports health without, rather than keeping it stale", async () => {
+    // A daemon new enough to name a feature names it on every poll, so a
+    // health report that omits `bundle_features` says its parser predates the
+    // field — an emergency rollback after a feature poll was persisted, or a
+    // current CLI enrolling a host an older daemon then runs. Keeping the
+    // stored value is what strands it: the envelope keeps publishing the etag
+    // of a bundle carrying `gateway_tools`, and the host's `.strict()` parser
+    // rejects every refresh, forever.
+    const { values } = await poll(["gateway_tools"], { hooks_ok: true });
+    expect(values).toMatchObject({ bundleFeatures: [] });
+  });
+
+  it("does not silently upgrade a host that named no features", async () => {
+    // The other direction of the same rule: clearing is not granting.
+    const { values } = await poll([], { hooks_ok: true });
+    expect(values).toMatchObject({ bundleFeatures: [] });
+  });
+
+  it("serves the rolled-back host a parseable bundle on that same poll", async () => {
+    // The assertion the fix is actually for. Writing the cleared column but
+    // building this response from the host object the caller already held
+    // would serve the gated bundle one more time — and there is no later poll
+    // that fixes it, because the host cannot parse the bundle it is being
+    // told to refetch.
+    const rolledBack = await poll(["gateway_tools"], { hooks_ok: true });
+    const neverAdvertised = await poll([], { hooks_ok: true });
+    const stillCurrent = await poll(["gateway_tools"], {
+      bundle_features: ["gateway_tools"],
+    });
+    expect(rolledBack.etag).toBe(neverAdvertised.etag);
+    // Keeps the line above from holding vacuously: the gate has to make a
+    // difference to the bundle in this fixture at all.
+    expect(rolledBack.etag).not.toBe(stillCurrent.etag);
+  });
 });
 
 describe("ackPatch", () => {
@@ -475,6 +632,8 @@ describe("revoke_tacho_enrollment", () => {
       OPERATOR,
     );
     expect(first.status).toBe("revoked");
+    // One statement retires both the control-plane key and the gateway key,
+    // selected by the enrollment marker they share.
     expect(db.updates.map((u) => u.table)).toEqual(["hosts", "api_keys"]);
     expect(db.inserts[0]?.values).toMatchObject({
       command: "revoke",
@@ -504,7 +663,12 @@ describe("revoke_tacho_enrollment", () => {
       OPERATOR,
     );
     expect(second.revokedAt).toBe("2026-09-01T00:00:00.000Z");
-    expect(already.updates).toEqual([]);
+    // The host row and the queued command are not repeated. The key sweep does
+    // run, and is a no-op here because the first revocation already took them
+    // (`deleted_at IS NULL` matches nothing); see tacho.enrollment.revoke.test.ts
+    // for the case where an earlier revocation left the gateway key live.
+    expect(already.updates.filter((u) => u.table === "hosts")).toEqual([]);
+    expect(already.inserts).toEqual([]);
   });
 
   it("revokes with the operator's `oxagen login` key and refuses the host's own key", async () => {

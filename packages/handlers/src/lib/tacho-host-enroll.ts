@@ -6,6 +6,7 @@
 // the claims, writes the host, and assembles the document the collector keeps.
 import type { Tx } from "@oxagen/database";
 import { schema } from "@oxagen/database";
+import { getTableColumns } from "drizzle-orm";
 import { cryptoRandom } from "@oxagen/database/schema";
 import {
   type EnrollmentClaims,
@@ -29,6 +30,7 @@ import {
   type TachoHostRow,
   unsignedBundle,
 } from "./tacho-host";
+import { hostGatewayColumnReady } from "./tacho-gateway-columns";
 import { logger } from "../logger";
 
 const TACHO_ENROLLMENT_SIGNING_SECRET_ENV = "TACHO_ENROLLMENT_SIGNING_SECRET";
@@ -116,6 +118,8 @@ interface HostFacts {
   claudeExecpath?: string | undefined;
   nodeVersion?: string | undefined;
   wrapperVersion?: string | undefined;
+  /** The bundle fields this host's parser understands; see the contract. */
+  bundleFeatures?: string[] | undefined;
   shell?: string | undefined;
   managed: boolean;
   validityDays: number;
@@ -246,6 +250,23 @@ export async function mintHostEnrollment(
   };
   const signatureHex = signTachoEnrollment(claims, signing.secret);
 
+  // What the INSERT may name in `RETURNING`.
+  //
+  // A bare `.returning()` asks for every column the schema declares, including
+  // `gateway_last_seen_at` — so before migration 20260917140000 is applied, the
+  // insert raises 42703 and enrolling a host fails outright for the window
+  // between deploy and migration (discussion_r4041098517). The reads were
+  // guarded for exactly this and the write side was missed; RETURNING is a
+  // read wearing a write's clothes.
+  // Typed as the full column map so the returned row keeps `TachoHostRow`,
+  // while one key may be absent at runtime — the same shape the projected
+  // reads have, and `gatewayObservationFor` already answers `null` for it.
+  const hostColumns = getTableColumns(schema.tachoHosts);
+  const returning: typeof hostColumns = { ...hostColumns };
+  if (!(await hostGatewayColumnReady(tx))) {
+    delete (returning as Partial<typeof hostColumns>).gatewayLastSeenAt;
+  }
+
   const [inserted] = await tx
     .insert(schema.tachoHosts)
     .values({
@@ -270,6 +291,9 @@ export async function mintHostEnrollment(
       claudeExecpath: facts.claudeExecpath ?? null,
       nodeVersion: facts.nodeVersion ?? null,
       wrapperVersion: facts.wrapperVersion ?? null,
+      // Empty, not null: a client that advertised nothing can parse no gated
+      // field, and the initial bundle below is built from this row.
+      bundleFeatures: facts.bundleFeatures ?? [],
       shell: facts.shell ?? null,
       status: "active",
       enrollmentClaims: claims,
@@ -280,7 +304,7 @@ export async function mintHostEnrollment(
       createdById: args.userId,
       updatedById: args.userId,
     })
-    .returning();
+    .returning(returning);
   if (!inserted) {
     throw new Error("Internal error: failed to create the Tacho host");
   }

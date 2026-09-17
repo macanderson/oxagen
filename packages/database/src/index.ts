@@ -7,13 +7,21 @@ export * as relations from "./relations";
 export * from "./types";
 export {
   withTenantDb,
+  withOrgDb,
   withSystemDb,
+  withOrgPlaneSystemDb,
   setTransactionWorkspaceScope,
   assertRlsConnectionSafe,
   assertRlsEnforcedInProduction,
+  isOrgOnlyWorkspaceReadRefusal,
+  ORG_ONLY_WORKSPACE_GUC,
   type Tx,
 } from "./tenant";
-export { makeWithTenantDbMock, makeWithSystemDbMock } from "./tenant.mock";
+export {
+  makeWithTenantDbMock,
+  makeWithSystemDbMock,
+  makeWithOrgDbMock,
+} from "./tenant.mock";
 // ADR-042 dedicated-plane pool lifecycle. The RESOLVER itself is not re-exported
 // here on purpose: data-plane-resolver.ts imports `schema` from this barrel, so
 // pulling it into the barrel would make the module graph cyclic. Import it from
@@ -40,3 +48,13 @@ export {
   NAMESPACE_MIN_LENGTH,
   NAMESPACE_MAX_LENGTH,
 } from "./namespace";
+export {
+  hasColumn,
+  planeKeyFor,
+  ambientPlaneKey,
+  resetColumnProbesForTests,
+  NEGATIVE_PROBE_TTL_MS,
+  type ColumnRef,
+  type ProbeTx,
+} from "./column-probe";
+export { HOST_GATEWAY_COLUMN, SESSION_GATEWAY_COLUMN } from "./schema/tacho";
