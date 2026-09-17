@@ -26,6 +26,45 @@ import {
 import type { ControlEnvelope, DeliveredCommand } from "../wire";
 import { type DaemonHandle, startDaemon } from "./daemon";
 
+/**
+ * The connect budget a hook gets when the test needs it to REACH the daemon.
+ *
+ * `runTachoHook` defaults to 50ms (hook-client.ts), which is a production
+ * figure: a hook must never block the agent waiting on a socket, so it gives
+ * up fast and decides locally from the cached bundle. A test that asserts the
+ * daemon path is therefore racing that budget, and on a loaded CI runner the
+ * unix-socket connect loses — the hook falls back, `path` is "local", and the
+ * assertion fails on the machine's scheduling rather than on the code. The
+ * nightly full run caught exactly that on 2026-09-17.
+ *
+ * The two cases below that assert the FALLBACK keep the 50ms default on
+ * purpose (the daemon is stopped there); this constant is for the opposite
+ * intent, and being a named constant is what keeps the two legible apart.
+ */
+const DAEMON_CONNECT_MS = 5_000;
+
+/**
+ * Assert the hook reached the daemon, and say WHY when it did not.
+ *
+ * `runTachoHook` turns every failure — connect timeout, response timeout, a
+ * non-200 from the daemon — into the same `path: "local"` with the cause put
+ * in `stderr` and exit code 0, because a hook must never fail the agent. That
+ * is right for production and hostile to a test: a bare
+ * `expect(result.path).toBe("daemon")` reports `expected 'local' to be
+ * 'daemon'` and throws the reason away, which is all the 2026-09-17 nightly
+ * left behind. Carrying stderr into the assertion message costs nothing and
+ * makes the next occurrence self-describing.
+ */
+function expectReachedDaemon(result: {
+  path: string;
+  stderr: string;
+}): void {
+  expect(
+    result.path,
+    `hook fell back to the local path instead of reaching the daemon: ${result.stderr.trim() || "(no stderr)"}`,
+  ).toBe("daemon");
+}
+
 const FIXTURES = join(
   __dirname,
   "..",
@@ -347,8 +386,9 @@ describe("tachod", () => {
           paths,
           env: fixture.env,
           stdin: JSON.stringify(fixture.stdin),
+          connectTimeoutMs: DAEMON_CONNECT_MS,
         });
-        expect(result.path).toBe("daemon");
+        expectReachedDaemon(result);
         expect(result.exitCode).toBe(0);
         if (fixture.name === "09-PreToolUse.json") {
           expect(JSON.parse(result.stdout)).toMatchObject({
@@ -485,6 +525,7 @@ describe("tachod", () => {
       paths,
       env: start.env,
       stdin: JSON.stringify(start.stdin),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
     });
     const sessionUuid = handle.registry.get(String(start.stdin["session_id"]))
       ?.recorder.sessionUuid as string;
@@ -525,6 +566,7 @@ describe("tachod", () => {
       paths,
       env: prompt.env,
       stdin: JSON.stringify(prompt.stdin),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
     });
     expect(JSON.parse(blocked.stdout)).toMatchObject({
       decision: "block",
@@ -543,6 +585,7 @@ describe("tachod", () => {
       paths,
       env: prompt.env,
       stdin: JSON.stringify(prompt.stdin),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
     });
     expect(JSON.parse(resumed.stdout)).toMatchObject({
       hookSpecificOutput: {
@@ -577,6 +620,7 @@ describe("tachod", () => {
       paths,
       env: read.env,
       stdin: JSON.stringify(read.stdin),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
     });
     expect(JSON.parse(denied.stdout)).toMatchObject({
       hookSpecificOutput: {
@@ -607,6 +651,7 @@ describe("tachod", () => {
       paths,
       env: start.env,
       stdin: JSON.stringify(start.stdin),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
     });
     expect(JSON.parse(refused.stdout)).toMatchObject({ continue: false });
   });
@@ -623,6 +668,7 @@ describe("tachod", () => {
       paths,
       env: start.env,
       stdin: JSON.stringify(start.stdin),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
     });
     await handle.stop();
     handles.splice(handles.indexOf(handle), 1);
@@ -718,6 +764,7 @@ describe("tachod", () => {
       paths,
       env: start.env,
       stdin: JSON.stringify(start.stdin),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
     });
     plane.refuseNextIngest(400);
     await handle.tick();
@@ -732,6 +779,7 @@ describe("tachod", () => {
       paths,
       env: prompt.env,
       stdin: JSON.stringify(prompt.stdin),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
     });
     await handle.tick();
     expect(handle.shipper.reachable).toBe(false);
