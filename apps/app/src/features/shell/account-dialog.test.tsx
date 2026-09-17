@@ -264,6 +264,67 @@ describe("AccountDialog", () => {
     }
   });
 
+  // "Saved." describes the draft that was submitted. The first keystroke after
+  // a save makes it false, and the dialog was leaving it on screen over fields
+  // holding unpersisted changes.
+  it("drops the saved line the moment the draft moves away from what was persisted", async () => {
+    const { user } = await openDialog();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByTestId("account-saved")).toBeTruthy();
+
+    await user.type(screen.getByTestId("account-display-name"), "!");
+
+    expect(screen.queryByTestId("account-saved")).toBeNull();
+    expect(screen.getByTestId("account-display-name")).toHaveValue(
+      "Marcus Bell!",
+    );
+  });
+
+  it("drops it when the avatar is the field that changed", async () => {
+    const { user } = await openDialog();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByTestId("account-saved")).toBeTruthy();
+
+    await user.type(screen.getByTestId("account-avatar-url"), "h");
+
+    expect(screen.queryByTestId("account-saved")).toBeNull();
+  });
+
+  // A refusal says what to fix and stays true while it is being fixed, so it
+  // is deliberately NOT cleared by an edit the way the success line is.
+  it("keeps a refusal on screen while the person edits the field it names", async () => {
+    const { user } = await openDialog();
+    updateProfile.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "displayName",
+    });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByTestId("account-invalid")).toBeTruthy();
+
+    await user.type(screen.getByTestId("account-display-name"), "x");
+
+    expect(screen.getByTestId("account-invalid")).toBeTruthy();
+  });
+
+  // The failure path already announces itself (FormAlert is role="alert").
+  // Success was a bare <p> beside a Save button that keeps focus, so a
+  // screen-reader user was told nothing. The region is in the DOM on every
+  // pass: a polite region inserted together with its text is announced
+  // unreliably.
+  it("announces a successful save, and has the region there before the text arrives", async () => {
+    const { user } = await openDialog();
+    const status = screen.getByTestId("account-status");
+    expect(status).toHaveAttribute("role", "status");
+    expect(status.textContent).toBe("");
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByTestId("account-saved")).toBeTruthy();
+    expect(screen.getByTestId("account-status").textContent).toBe("Saved.");
+  });
+
   it("has no axe violations", async () => {
     const { dialog } = await openDialog();
     await expectNoAxe(dialog);

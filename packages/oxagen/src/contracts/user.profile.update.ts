@@ -28,6 +28,27 @@
  * `forbidden`/`no_principal`. Advertising a tool that cannot succeed is worse
  * than not advertising one; the surface returns if and when MCP grows a
  * session principal.
+ *
+ * `defaultEffect: "allow"`, because a person is never the wrong person to be.
+ * On an enterprise org (the only tier the resolver runs for — `checkIAM`
+ * fast-paths everything else to an unconditional allow for a non-agent
+ * principal) a role map is the only thing standing between a member and their
+ * own name, and the four system org roles are Owner, Admin, **Compliance** and
+ * **Billing**: there is no org-level Member or Viewer. This map named the two
+ * that do not exist and omitted the two that do, so `iam-provision` — which
+ * iterates the real role list and reads the map by name — seeded grants for
+ * Owner and Admin alone. A Compliance or Billing member opening the Account
+ * dialog every other member sees was refused on their own profile.
+ *
+ * Listing the missing roles would fix today and go stale the day a fifth role
+ * is added. `defaultEffect` does not: it is rule 8 of the resolver, which is
+ * role-agnostic, so no future role can fall through it. Explicit denial still
+ * wins — rule 7 evaluates role grants deny-first and hard-stops, well before
+ * rule 8 is reached (`packages/oxagen/src/iam/resolve.ts`) — so an enterprise
+ * admin who wants to freeze a role's profile can still say so. The role map is
+ * corrected too, and now names exactly the real roles at each scope: it is what
+ * `list_capabilities` shows an operator, and a map naming roles that do not
+ * exist is a lie on an admin screen whatever the resolver does with it.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -51,15 +72,17 @@ export const userProfileUpdate = registerCapability({
   mutates: true,
   noBillingGate: true,
   sensitivity: "low",
-  defaultEffect: "deny",
+  defaultEffect: "allow",
+  // Every system role at each scope: SystemOrgRole is Owner | Admin |
+  // Compliance | Billing, SystemWorkspaceRole is Owner | Member | Viewer.
   defaultRoles: {
-    org: { Owner: "allow", Admin: "allow", Member: "allow", Viewer: "allow" },
-    workspace: {
+    org: {
       Owner: "allow",
       Admin: "allow",
-      Member: "allow",
-      Viewer: "allow",
+      Compliance: "allow",
+      Billing: "allow",
     },
+    workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
   },
   input: z
     .object({

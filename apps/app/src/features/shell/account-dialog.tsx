@@ -64,6 +64,18 @@ function AccountForm({ data }: { data: ShellData }) {
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [pending, setPending] = useState(false);
 
+  /**
+   * "Saved." describes the draft that was submitted, so the first edit after a
+   * save makes it false: the fields in front of the person now hold changes
+   * that are not persisted, under a line claiming they are. A refusal is left
+   * standing on purpose — it says what to fix, and it is still true while the
+   * person is fixing it.
+   */
+  function editDraft(apply: () => void) {
+    if (outcome === "saved") setOutcome(null);
+    apply();
+  }
+
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
@@ -122,7 +134,9 @@ function AccountForm({ data }: { data: ShellData }) {
             value={displayName}
             maxLength={120}
             onChange={(e) => {
-              setDisplayName(e.target.value);
+              editDraft(() => {
+                setDisplayName(e.target.value);
+              });
             }}
           />
         </div>
@@ -137,7 +151,9 @@ function AccountForm({ data }: { data: ShellData }) {
             value={avatarUrl}
             placeholder={t("avatarPlaceholder")}
             onChange={(e) => {
-              setAvatarUrl(e.target.value);
+              editDraft(() => {
+                setAvatarUrl(e.target.value);
+              });
             }}
           />
           <p className={hint}>{t("avatarHint")}</p>
@@ -165,14 +181,23 @@ function AccountForm({ data }: { data: ShellData }) {
       ) : null}
 
       <div className="mt-5 flex items-center justify-end gap-2">
-        {outcome === "saved" ? (
-          <p
-            data-testid="account-saved"
-            className="mr-auto text-xs text-muted-foreground"
-          >
-            {t("saved")}
-          </p>
-        ) : null}
+        {/* A refusal announces itself: FormAlert is role="alert", which is
+            assertive and is read when it appears. Success was a plain <p>
+            inserted next to a Save button that keeps focus, so a screen-reader
+            user was told nothing at all — the one asymmetry between the two
+            outcomes. The region is rendered on every pass rather than only on
+            success, because a polite live region inserted at the same moment
+            as its text is announced unreliably; it is the text arriving into a
+            region already there that gets read. */}
+        <p
+          role="status"
+          data-testid="account-status"
+          className="mr-auto text-xs text-muted-foreground"
+        >
+          {outcome === "saved" ? (
+            <span data-testid="account-saved">{t("saved")}</span>
+          ) : null}
+        </p>
         <SubmitButton
           pending={pending}
           fullWidth={false}

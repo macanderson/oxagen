@@ -4,7 +4,7 @@
 // `avatar:v1:{...}` string everywhere an avatar is written, and a renderer that
 // tests for `https://` alone shows initials to a person whose avatar is
 // perfectly valid — silently, with nothing to tell them why.
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AVATAR_MAX_LEN, AVATAR_SPEC_PREFIX } from "@oxagen/oxagen/avatar";
 import { afterEach, describe, expect, it } from "vitest";
 import { Avatar, parseAvatarValue } from "./avatar";
@@ -120,6 +120,43 @@ describe("Avatar", () => {
   it("defaults to the preview size", () => {
     render(<Avatar value={null} initials="MB" testId="a" />);
     expect(screen.getByTestId("a").className).toContain("size-13");
+  });
+
+  // A well-formed URL is not a loadable image: the contract checks the
+  // `https://` prefix and cannot know the host will 404, expire the object or
+  // refuse the hotlink. Without this the shell shows a broken image until the
+  // person edits their profile again.
+  it("falls back to initials when the image fails to load (negative)", () => {
+    render(
+      <Avatar value="https://cdn.example/gone.png" initials="MB" testId="a" />,
+    );
+    expect(screen.getByTestId("a").dataset.avatar).toBe("image");
+
+    fireEvent.error(screen.getByTestId("a"));
+
+    const tile = screen.getByTestId("a");
+    expect(tile.dataset.avatar).toBe("initials");
+    expect(tile.textContent).toBe("MB");
+    expect(tile.tagName).not.toBe("IMG");
+  });
+
+  // It remembers which url failed, not that one did, so editing the field to a
+  // different URL tries again instead of staying on the fallback forever.
+  it("tries again when the value changes to a different url", () => {
+    const { rerender } = render(
+      <Avatar value="https://cdn.example/gone.png" initials="MB" testId="a" />,
+    );
+    fireEvent.error(screen.getByTestId("a"));
+    expect(screen.getByTestId("a").dataset.avatar).toBe("initials");
+
+    rerender(
+      <Avatar value="https://cdn.example/works.png" initials="MB" testId="a" />,
+    );
+    expect(screen.getByTestId("a").dataset.avatar).toBe("image");
+    expect(screen.getByTestId("a")).toHaveAttribute(
+      "src",
+      "https://cdn.example/works.png",
+    );
   });
 
   it("falls back to initials when the value names no avatar (negative)", () => {

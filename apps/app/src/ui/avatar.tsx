@@ -1,3 +1,4 @@
+"use client";
 // The one avatar renderer in the app. A stored avatar value is not just an
 // image URL: `avatarUrlSchema` (packages/oxagen/src/avatar.ts), the schema
 // every avatar-carrying contract shares, accepts EITHER an `https://` URL OR
@@ -12,6 +13,16 @@
 // `AVATAR_SPEC_PREFIX` in avatar.test.tsx, so the two cannot drift; it is
 // re-declared here rather than imported so a client bundle does not pull zod
 // in for a 52px ornament.
+//
+// A value being well formed is not the same as an image existing. The contract
+// checks the `https://` prefix and nothing else — it cannot, at write time,
+// know that the host will 404, expire the object, or refuse the hotlink — so a
+// URL that never loads is persistable and would otherwise leave a broken image
+// in the shell until the person edited their profile again. The image branch
+// falls back to the initials tile on `error`. It remembers WHICH url failed
+// rather than a boolean, so editing the field to a different URL tries again
+// with no effect and no stale flag to reset.
+import { useState } from "react";
 
 /** Designed-avatar colour mode: the glyph in its own colours, or a silhouette. */
 export type AvatarMode = "full" | "mono-light" | "mono-dark";
@@ -120,11 +131,12 @@ export function Avatar({
   size?: AvatarSize;
   testId?: string;
 }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const spec = parseAvatarValue(value);
   const step = SIZE[size];
   const box = `flex-none overflow-hidden rounded-full ${step.box}`;
 
-  if (spec.kind === "image")
+  if (spec.kind === "image" && spec.url !== failedUrl)
     return (
       /* An arbitrary remote avatar cannot be in next.config's image allowlist,
          and this is a chrome ornament, not page content worth optimising. */
@@ -135,6 +147,9 @@ export function Avatar({
         data-testid={testId}
         data-avatar="image"
         className={`${box} object-cover`}
+        onError={() => {
+          setFailedUrl(spec.url);
+        }}
       />
     );
 
