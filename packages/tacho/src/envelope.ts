@@ -764,6 +764,43 @@ export const anthropicSchema = z
   })
   .strict();
 
+/**
+ * The `anthropic` members that carry the person's address, directly or as a
+ * value computed from it.
+ *
+ * The wire keeps accepting them and the control plane keeps discarding them,
+ * because a WAL entry sealed before #3072 carries one and its seal covers it —
+ * refusing it would strand the very evidence the compatibility work exists to
+ * protect. A sealed entry is immutable; unsealed collector state is not.
+ */
+export const ADDRESS_MEMBERS = ["user_email", "user_email_digest"] as const;
+
+/**
+ * An `anthropic` block with every address-derived member removed.
+ *
+ * Applied wherever such a block is read back IN, rather than only where one is
+ * written out. A fix on the normalization path does not reach state that was
+ * persisted before the fix existed: a collector upgraded mid-session restores a
+ * daemon-state file written by the previous build, and that file still carries
+ * `anthropic.user_email` in plaintext. Spreading it unchanged put the address
+ * back into every subsequent event and into the chain hash sealed over it,
+ * for the remaining life of the session (#3072).
+ *
+ * Targeted rather than a wipe: `account_uuid`, `org_uuid` and the rest are
+ * observations this records on purpose.
+ */
+export function withoutAddressMembers<T extends Record<string, unknown>>(
+  anthropic: T,
+): T {
+  let out: T | undefined;
+  for (const member of ADDRESS_MEMBERS) {
+    if (!(member in anthropic)) continue;
+    out ??= { ...anthropic };
+    delete out[member];
+  }
+  return out ?? anthropic;
+}
+
 export const spanSchema = z
   .object({
     trace_id: short.optional(),

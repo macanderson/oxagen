@@ -15,6 +15,7 @@ import type {
   TachoKind,
   UnsealedTachoEvent,
 } from "../envelope";
+import { withoutAddressMembers } from "../envelope";
 import { newEventId, sessionUuid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
 import {
@@ -160,7 +161,14 @@ export class SessionRecorder {
     this.stopped = state.stopped;
     this.context = { ...state.context };
     this.host = { ...state.host };
-    this.anthropic = { ...state.anthropic };
+    // Scrubbed on the way IN, not only on the way out. A collector upgraded
+    // mid-session restores a daemon-state file the PREVIOUS build wrote, and
+    // that file still carries `anthropic.user_email` in plaintext. Spreading it
+    // unchanged put the address back into every event this recorder went on to
+    // seal — and into the chain hash sealed over it — for the rest of the
+    // session. Removing the member from `standard()` never reached that state,
+    // because it was persisted before the fix existed (#3072).
+    this.anthropic = withoutAddressMembers({ ...state.anthropic });
     this.harnessVersion = state.harnessVersion ?? this.harnessVersion;
     this.envSnapshot = state.envSnapshot;
     Object.assign(this.totals, state.totals);

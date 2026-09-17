@@ -56,7 +56,7 @@ import {
   type GatewayCallRecord,
   type GatewayFetch,
 } from "./mcp-gateway";
-import { type RegistryState, SessionRegistry } from "./registry";
+import { parseRegistryState, SessionRegistry } from "./registry";
 import {
   type CollectorApi,
   createCollectorServer,
@@ -203,11 +203,8 @@ export async function startDaemon(
     scope: host.host_enrollment_id,
     now,
   });
-  const persisted = readJsonFileIfExists(paths.daemonState) as
-    | RegistryState
-    | undefined;
-  if (persisted?.schema === "tacho.daemon-state.v1")
-    registry.restore(persisted);
+  const persisted = parseRegistryState(readJsonFileIfExists(paths.daemonState));
+  if (persisted !== undefined) registry.restore(persisted);
 
   // The daemon's own chain: host-level incidents, commands, and checkpoints
   // land here so every event the host emits belongs to a verifiable session.

@@ -14,7 +14,7 @@
  *   docs/capabilities/schemas/_index.json         (machine-readable catalog)
  *   docs/capabilities/schemas/README.md           (human summary)
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 // Importing the package root runs its `import "./contracts.generated"` side
 // effect, registering every contract before we enumerate them.
@@ -194,6 +194,38 @@ function toJsonSchema(schema: ZodLike): JsonSchema {
 const outDir = join(process.cwd(), "docs", "capabilities", "schemas");
 mkdirSync(outDir, { recursive: true });
 
+/**
+ * `--check` verifies the committed artifact matches what this script produces,
+ * instead of rewriting it.
+ *
+ * These files are the published machine-readable contract: an external consumer
+ * validates its batches against them. Nothing kept them in step, so they went
+ * stale silently — `ingest_tacho_events.json` carried `user_email_digest` on 45
+ * of its 46 event branches, and the missing one was `proof.observed`, so a
+ * legacy sealed event of that kind would have been rejected by a consumer while
+ * the real ingest validator accepted it (#3072). Being 98% regenerated reads
+ * exactly like being regenerated, from inside the repo; from outside it reads
+ * as a broken contract. Seven other capabilities had drifted too, from contract
+ * changes that landed on `main` without a regeneration.
+ */
+const checkOnly = process.argv.includes("--check");
+const stale: string[] = [];
+
+function emit(file: string, contents: string): void {
+  const path = join(outDir, file);
+  if (!checkOnly) {
+    writeFileSync(path, contents);
+    return;
+  }
+  let current: string | undefined;
+  try {
+    current = readFileSync(path, "utf8");
+  } catch {
+    current = undefined;
+  }
+  if (current !== contents) stale.push(file);
+}
+
 const caps = listCapabilities().sort((a, b) => a.name.localeCompare(b.name));
 const index: Array<Record<string, unknown>> = [];
 
@@ -217,10 +249,7 @@ for (const cap of caps) {
     input: toJsonSchema(cap.input as unknown as ZodLike),
     output: toJsonSchema(cap.output as unknown as ZodLike),
   };
-  writeFileSync(
-    join(outDir, `${cap.name}.json`),
-    JSON.stringify(doc, null, 2) + "\n",
-  );
+  emit(`${cap.name}.json`, JSON.stringify(doc, null, 2) + "\n");
   index.push({
     name: cap.name,
     domain: cap.domain,
@@ -231,8 +260,8 @@ for (const cap of caps) {
   });
 }
 
-writeFileSync(
-  join(outDir, "_index.json"),
+emit(
+  "_index.json",
   JSON.stringify(
     { generatedCount: caps.length, capabilities: index },
     null,
@@ -263,8 +292,24 @@ const readme = [
     ),
   ``,
 ].join("\n");
-writeFileSync(join(outDir, "README.md"), readme);
+emit("README.md", readme);
 
-console.log(
-  `Wrote ${caps.length} capability schema docs to docs/capabilities/schemas/`,
-);
+if (checkOnly) {
+  if (stale.length > 0) {
+    console.error(
+      `docs/capabilities/schemas is ${stale.length} file(s) behind the contracts:\n` +
+        stale.map((f) => `  ${f}`).join("\n") +
+        `\n\nRun \`pnpm docs:schemas\` and commit the result. These files are the` +
+        `\npublished schema other people validate against; a stale branch of one` +
+        `\nrejects traffic the real validator accepts.`,
+    );
+    process.exit(1);
+  }
+  console.log(
+    `docs/capabilities/schemas matches ${caps.length} capability contracts`,
+  );
+} else {
+  console.log(
+    `Wrote ${caps.length} capability schema docs to docs/capabilities/schemas/`,
+  );
+}

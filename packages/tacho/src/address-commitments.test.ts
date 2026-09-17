@@ -41,6 +41,7 @@ vi.mock("./ids", async (importOriginal) => {
 });
 
 import { GENESIS_CURSOR, sealEvent, verifyChain } from "./chain";
+import type { RecorderState } from "./claude-code/recorder";
 import { flattenEvent } from "./columns";
 import { normalizeOtlp } from "./claude-code/otel";
 import { SessionRecorder } from "./claude-code/recorder";
@@ -135,6 +136,95 @@ describe("the persisted record commits to nothing about the address", () => {
       persisted(email).map((r) => r["raw_source_digest"]);
     expect(raws(ALAN)).toEqual(raws(ADA));
     expect(raws(undefined)).toEqual(raws(ADA));
+  });
+
+  it("scrubs a legacy address out of persisted daemon state on restore", () => {
+    // THE UPGRADE BOUNDARY. Removing the member from `standard()` only affects
+    // records normalized AFTER the upgrade. A host whose session was already
+    // running has a daemon-state file written by the old collector, and that
+    // file still carries `recorder.anthropic.user_email` in plaintext.
+    // `startDaemon` casts that JSON, `restore()` spread it unchanged, and
+    // `seal()` copies it into every subsequent event — so an upgraded
+    // collector kept transmitting the address, and kept computing chain hashes
+    // over it, until the session ended. The window is a session lifetime, not
+    // a deploy.
+    //
+    // A fix on the normalization path does not reach state persisted before
+    // the fix existed. The legacy members have to be scrubbed on the way IN.
+    const legacy = {
+      cursor: GENESIS_CURSOR,
+      turnSeq: 0,
+      turnOpen: false,
+      started: true,
+      stopped: false,
+      context: {},
+      host: {},
+      anthropic: {
+        user_email: ADA,
+        user_email_digest: `sha256:${"7".repeat(64)}`,
+        account_uuid: "acct-1",
+      },
+      totals: {},
+      children: {},
+    } as unknown as RecorderState;
+
+    const recorder = new SessionRecorder({
+      context: {
+        agent: {
+          agent_key: "acme.core.cc-laptop",
+          fleet_id: "wrk_test",
+          runtime: "claude-code",
+          harness: "claude-code",
+          wrapper_version: "2.1.1",
+          host_enrollment_id: TEST_HOST,
+        },
+      },
+      harnessSessionId: TEST_SESSION_ID,
+      scope: TEST_HOST,
+      restore: legacy,
+    });
+
+    const events = recorder.ingestOtlp(payload(undefined));
+    expect(events.length).toBeGreaterThan(0);
+
+    for (const event of events) {
+      const text = JSON.stringify(event);
+      expect(text).not.toContain(ADA);
+      expect(text.toLowerCase()).not.toContain(ADA.toLowerCase());
+      expect(text).not.toContain("7".repeat(64));
+      expect(event.anthropic?.user_email).toBeUndefined();
+      expect(event.anthropic?.user_email_digest).toBeUndefined();
+      // What is NOT address-derived stays: scrubbing is targeted, not a wipe.
+      expect(event.anthropic?.account_uuid).toBe("acct-1");
+    }
+
+    // The chain hash is computed over the event, so a surviving member would
+    // make the seal address-dependent as well as the payload.
+    const withLegacy = events.map((e) => e.hash);
+    const clean = new SessionRecorder({
+      context: {
+        agent: {
+          agent_key: "acme.core.cc-laptop",
+          fleet_id: "wrk_test",
+          runtime: "claude-code",
+          harness: "claude-code",
+          wrapper_version: "2.1.1",
+          host_enrollment_id: TEST_HOST,
+        },
+      },
+      harnessSessionId: TEST_SESSION_ID,
+      scope: TEST_HOST,
+      restore: {
+        ...legacy,
+        anthropic: { account_uuid: "acct-1" },
+      } as unknown as RecorderState,
+    }).ingestOtlp(payload(undefined));
+    expect(withLegacy).toEqual(clean.map((e) => e.hash));
+
+    // And the state this recorder hands back must not reintroduce it.
+    const round = JSON.stringify(recorder.state());
+    expect(round).not.toContain(ADA);
+    expect(round).not.toContain("7".repeat(64));
   });
 
   it("still verifies a chain sealed BEFORE this change, member and all", () => {

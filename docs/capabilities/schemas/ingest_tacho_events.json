@@ -29235,6 +29235,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "user_email_digest": {
+                      "type": "string"
+                    },
                     "user_email": {
                       "type": "string",
                       "maxLength": 512
