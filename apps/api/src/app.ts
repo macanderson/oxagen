@@ -9,8 +9,9 @@ import { workspaceMiddleware } from "./middleware/workspace";
 import {
   authorizationFingerprintBucketKey,
   distributedRateLimiter,
+  enrolledMachineBucketKey,
   rateLimitBudgets,
-  trustedVercelIpBucketKey,
+  trustedClientIpBucketKey,
 } from "./middleware/distributed-rate-limit";
 import { health } from "./routes/health";
 import { stripeWebhook } from "./routes/stripe";
@@ -345,7 +346,7 @@ app.use(
   distributedRateLimiter({
     keyPrefix: "stella-preauth-ip",
     max: 3_000,
-    bucketKey: trustedVercelIpBucketKey,
+    bucketKey: trustedClientIpBucketKey,
     methods: "all",
     failClosedOnStoreError: true,
   }),
@@ -372,15 +373,22 @@ app.route("/v1/tacho/enroll", tachoHostEnrollRoute);
 // Tacho hosts speak to Oxagen with their enrolled API key, whose scope pins
 // org and workspace, so the machine routes sit on a static path outside the
 // slug group. Same pre-auth ceilings as the Stella intake: a per-IP bucket
-// for shared NATs and a per-credential bucket for one abused key, registered
-// before the auth-gated /v1 group so an exhausted bucket never reaches
-// API-key resolution.
+// for shared NATs and a per-credential bucket for one abused key.
+//
+// Registered HERE, above `app.route("/v1", userScoped)`, and not beside the
+// `/v1/tacho` mount further down. `userScoped` applies `authMiddleware` on
+// `*`, which becomes a `/v1/*` matcher covering `/v1/tacho/*` too, and Hono
+// runs matching middleware in registration order. Registered after that mount
+// these ran AFTER authentication, so the ceiling a credential-stuffing attacker
+// is supposed to hit never saw one unauthenticated request — every bad
+// credential was rejected by auth first and counted against nothing. Keep them
+// above that mount or they stop being pre-auth.
 app.use(
   "/v1/tacho/*",
   distributedRateLimiter({
     keyPrefix: "tacho-preauth-ip",
     max: 6_000,
-    bucketKey: trustedVercelIpBucketKey,
+    bucketKey: trustedClientIpBucketKey,
     methods: "all",
     failClosedOnStoreError: true,
   }),
@@ -395,6 +403,7 @@ app.use(
     failClosedOnStoreError: true,
   }),
 );
+
 // /v1 user-level routes (org + workspace CRUD) require auth but no
 // org scope: a freshly-authenticated user can create their first
 // org without one existing.
@@ -437,6 +446,9 @@ stellaTelemetryScoped.use(
   distributedRateLimiter({
     keyPrefix: "stella-telemetry",
     max: STELLA_TELEMETRY_PER_MIN,
+    // Deliberately workspace-wide, unlike the per-host Tacho ceiling below:
+    // this bounds a workspace's total evidence ingress rather than any one
+    // instance's share of it, and telemetry.stella.ingest.test.ts pins that.
   }),
 );
 stellaTelemetryScoped.route("/", telemetryStellaIngestRoute);
@@ -456,6 +468,10 @@ tachoScoped.use(
   distributedRateLimiter({
     keyPrefix: "tacho-host",
     max: TACHO_HOST_PER_MIN,
+    // Per HOST, which is what "per enrolled Tacho host" above means. The
+    // default derivation keys on workspaceId, so every host enrolled into one
+    // workspace would share a single 30/min counter.
+    bucketKey: enrolledMachineBucketKey,
   }),
 );
 tachoScoped.route("/", tachoEventsIngestRoute);
