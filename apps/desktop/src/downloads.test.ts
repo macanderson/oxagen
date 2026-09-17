@@ -7,6 +7,7 @@ import {
   type PageEntry,
   type PublicationProbe,
   renderIndexHtml,
+  reportPublicationDecision,
   reservationArgs,
   sha256SumsText,
   sortInstallers,
@@ -266,5 +267,65 @@ describe("reservationArgs", () => {
     const args = reservationArgs({ ...base, allowOverwrite: true });
     expect(args).not.toContain("--if-none-match");
     expect(args).not.toContain("*");
+  });
+});
+
+describe("reportPublicationDecision", () => {
+  const stop = decidePublication(
+    { ...OK, stdout: JSON.stringify({ KeyCount: 1 }) },
+    OPTS,
+  );
+  const unknown = decidePublication({ ...OK, status: 254 }, OPTS);
+
+  it("says nothing and carries on for a version that is free", () => {
+    const got = reportPublicationDecision(
+      { action: "publish" },
+      {
+        dryRun: false,
+      },
+    );
+    expect(got).toEqual({ message: null, level: null, exitCode: null });
+  });
+
+  it("warns and carries on for an authorised overwrite", () => {
+    const decision = decidePublication(
+      { ...OK, stdout: JSON.stringify({ KeyCount: 1 }) },
+      { ...OPTS, allowOverwrite: true },
+    );
+    const got = reportPublicationDecision(decision, { dryRun: false });
+    expect(got.level).toBe("warn");
+    expect(got.exitCode).toBeNull();
+  });
+
+  it("exits a real publish on a stop, with the decision's own code", () => {
+    for (const decision of [stop, unknown]) {
+      const got = reportPublicationDecision(decision, { dryRun: false });
+      expect(got.level).toBe("error");
+      expect(got.exitCode).toBe(1);
+      expect(got.message).toBe(
+        decision.action === "stop" ? decision.message : null,
+      );
+    }
+  });
+
+  it("never exits a dry run, because a dry run writes nothing", () => {
+    for (const decision of [stop, unknown]) {
+      const got = reportPublicationDecision(decision, { dryRun: true });
+      expect(got.exitCode).toBeNull();
+      expect(got.level).toBe("warn");
+    }
+  });
+
+  it("still tells a dry run what a real publish would have decided", () => {
+    const published = reportPublicationDecision(stop, { dryRun: true });
+    expect(published.message).toContain("already published");
+    // Marked as a warning, not a refusal it then has to take back.
+    expect(published.message?.startsWith("! ")).toBe(true);
+    expect(published.message).not.toContain("✖");
+    expect(published.message).toContain("A real publish would stop here.");
+
+    const couldNotCheck = reportPublicationDecision(unknown, { dryRun: true });
+    expect(couldNotCheck.message).toContain("unknown");
+    expect(couldNotCheck.message).toContain("the planned uploads follow");
   });
 });

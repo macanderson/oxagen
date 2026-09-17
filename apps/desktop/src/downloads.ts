@@ -319,6 +319,60 @@ export function decidePublication(
   };
 }
 
+/** What the caller should print, and whether it should then stop. */
+export interface PublicationReport {
+  /** `null` when there is nothing to say. */
+  message: string | null;
+  /** Which stream the message belongs on. */
+  level: "error" | "warn" | null;
+  /** `null` means carry on; a number is the status to exit with. */
+  exitCode: number | null;
+}
+
+/**
+ * Turn a decision into what to print and whether to stop, given `--dry-run`.
+ *
+ * A dry run writes nothing — every upload is printed rather than performed —
+ * so the reason the probe exists does not apply to it: there is no republish
+ * to stop and no fleet to split. A preview that demands working credentials,
+ * or that refuses to show the plan for a version already published, is not a
+ * preview. So a dry run never exits on a stop. It still says what the real
+ * run would have decided, because someone previewing a version that is
+ * already published should be told, and someone whose session has expired
+ * should know the preview could not check — neither is a reason to withhold
+ * the plan.
+ *
+ * The leniency lives here and only here. `decidePublication` keeps its three
+ * outcomes, so the path that actually writes to S3 is decided by the same
+ * function whether or not this one is in the picture, and there is no second
+ * route to an upload.
+ */
+export function reportPublicationDecision(
+  decision: PublicationDecision,
+  options: { dryRun: boolean },
+): PublicationReport {
+  if (decision.action === "publish")
+    return { message: null, level: null, exitCode: null };
+  if (decision.action === "overwrite")
+    return { message: decision.message, level: "warn", exitCode: null };
+  if (!options.dryRun)
+    return {
+      message: decision.message,
+      level: "error",
+      exitCode: decision.code,
+    };
+  return {
+    // Re-marked from ✖ to !, because the line that follows says this is not a
+    // refusal and the first character should not have to be taken back.
+    message:
+      `${decision.message.replace(/^✖ /, "! ")}\n` +
+      "  A dry run writes nothing, so this is a warning and not a refusal;\n" +
+      "  the planned uploads follow. A real publish would stop here.",
+    level: "warn",
+    exitCode: null,
+  };
+}
+
 /**
  * The `aws s3api put-object` argv that reserves a version by writing its
  * checksum file.

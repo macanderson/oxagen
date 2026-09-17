@@ -94,6 +94,13 @@ concurrently one gets a 412 and stops before uploading a single installer
 rather than interleaving its uploads with the other's. `--allow-overwrite`
 drops that condition. The conditional write needs `aws-cli` 2.17 or newer.
 
+Neither applies to `--dry-run`, which writes nothing: there is no republish to
+stop, so the probe never refuses a preview. It still runs, and a dry run of a
+version that is already published — or one where the listing could not be made
+at all, for want of credentials or of `aws` itself — says so and then prints
+the planned uploads anyway. `--dir <folder> --dry-run` therefore needs nothing
+but the installers on disk.
+
 `smoke:e2e` (`scripts/e2e-smoke.mjs`, no repo needed — copy it to the test
 machine) drives the installed app's sidecars with the wizard's own argv against
 the live control plane: sidecar versions, session, the org and workspace

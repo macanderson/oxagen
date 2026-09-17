@@ -44,6 +44,7 @@ import {
   classifyInstaller,
   decidePublication,
   renderIndexHtml,
+  reportPublicationDecision,
   reservationArgs,
   sha256SumsText,
   sortInstallers,
@@ -181,11 +182,13 @@ const probe = sh(
   { capture: true, allowFailure: true },
 );
 const decision = decidePublication(probe, { version, prefix, allowOverwrite });
-if (decision.action === "stop") {
-  console.error(decision.message);
-  process.exit(decision.code);
-}
-if (decision.action === "overwrite") console.warn(decision.message);
+// --dry-run performs no writes, so it is told what the real run would have
+// decided and then shown the plan anyway; only a real publish stops. See
+// reportPublicationDecision, which is the one place that distinction is made.
+const report = reportPublicationDecision(decision, { dryRun });
+if (report.message !== null)
+  (report.level === "error" ? console.error : console.warn)(report.message);
+if (report.exitCode !== null) process.exit(report.exitCode);
 
 // 1. Collect the build outputs.
 const work = mkdtempSync(join(tmpdir(), "oxagen-downloads-"));
