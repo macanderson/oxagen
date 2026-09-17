@@ -1167,6 +1167,10 @@ export const tachoEventsIngestHandler: CapabilityHandler<
             }
           : withoutTerminal(common, terminalColumns);
 
+      // Whether this batch's writes landed. Always true on the existing-session
+      // path, which targets a row it read; decided by the statement on the
+      // insert path, where the guard may refuse it.
+      let accepted = true;
       if (existing) {
         await tx
           .update(schema.tachoSessions)
@@ -1186,7 +1190,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           derivedTier,
           derivedTier === TACHO_GATEWAY_TIER ? (chainRecord?.at ?? null) : null,
         );
-        await tx
+        const written = await tx
           .insert(schema.tachoSessions)
           .values({
             ...row,
@@ -1244,12 +1248,31 @@ export const tachoEventsIngestHandler: CapabilityHandler<
                     eq(schema.tachoSessions.genesisHash, promotedOnGenesis),
                   )
                 : isNull(schema.tachoSessions.sealedAt),
-          });
-        // Counters on a fresh row start from the insert's zero defaults; apply the delta.
-        await tx
-          .update(schema.tachoSessions)
-          .set(increments)
-          .where(eq(schema.tachoSessions.sessionUuid, sessionUuid));
+          })
+          // Whether the statement did anything. `ON CONFLICT DO UPDATE` with a
+          // `setWhere` that does not hold returns no rows, and that is the only
+          // way to find out: the guard is evaluated inside the statement,
+          // against the row it actually hit.
+          //
+          // Named rather than bare, like every other RETURNING in this file: a
+          // bare one asks for every column the schema declares and fails on a
+          // pending migration (`tacho-column-projection.test.ts`).
+          .returning({ id: schema.tachoSessions.id });
+        accepted = written.length > 0;
+        // Counters on a fresh row start from the insert's zero defaults; apply
+        // the delta — but only if the row is this batch's to touch.
+        //
+        // This update used to be unconditional, which quietly undid the guard
+        // above: the upsert correctly changed nothing, and then the counters
+        // landed on the sealed or unrelated row anyway, leaving its aggregate
+        // evidence inconsistent with the seal it is supposed to be final under.
+        // A guard that only covers some of a batch's writes is not a guard.
+        if (accepted) {
+          await tx
+            .update(schema.tachoSessions)
+            .set(increments)
+            .where(eq(schema.tachoSessions.sessionUuid, sessionUuid));
+        }
       }
 
       const sessionRow = await tx.query.tachoSessions.findFirst({
@@ -1265,20 +1288,28 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       ) {
         firstOpenedRunId = sessionRow.publicId;
       }
-      if (sessionId) {
+      // Everything below is this batch's events landing on the session row, so
+      // it is gated on the same answer. A refused batch belongs to a different
+      // chain or to a session already sealed; its models, files, commands,
+      // proof frames and spend are not that session's evidence, and counting
+      // them is the same defect as the counters were.
+      if (sessionId && accepted) {
         await rollupModels(tx, ctx, sessionId, fresh, now);
         await rollupFiles(tx, ctx, sessionId, fresh, now);
         await rollupCommands(tx, ctx, sessionId, fresh, now);
       }
-      for (const event of fresh) {
-        if (event.kind !== PROOF_OBSERVED_KIND) continue;
-        const frames = proofsByRoot.get(event.root_session_uuid) ?? [];
-        frames.push(event);
-        proofsByRoot.set(event.root_session_uuid, frames);
+      if (accepted) {
+        for (const event of fresh) {
+          if (event.kind !== PROOF_OBSERVED_KIND) continue;
+          const frames = proofsByRoot.get(event.root_session_uuid) ?? [];
+          frames.push(event);
+          proofsByRoot.set(event.root_session_uuid, frames);
+        }
+        if (delta.totalCostMicros > 0)
+          spendDeltas.push({ micros: delta.totalCostMicros, at: now });
       }
-      if (delta.totalCostMicros > 0)
-        spendDeltas.push({ micros: delta.totalCostMicros, at: now });
       if (
+        accepted &&
         sessionRow &&
         sessionRow.parentSessionUuid === null &&
         "sealedAt" in terminalColumns

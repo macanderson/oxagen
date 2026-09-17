@@ -516,63 +516,76 @@ function wire(db: FakeDb): void {
         insert: (table: unknown) => ({
           values: (values: Record<string, unknown>) => {
             const name = tableName(table);
+            // Whether the statement changed anything, which `returning()`
+            // reports. A refused `setWhere` returns no rows, and the handler
+            // reads that to decide whether the rest of the batch's writes are
+            // this session's to make.
+            let accepted = true;
+            const apply = (args?: {
+              setWhere?: unknown;
+              set?: Record<string, unknown>;
+            }): void => {
+              const uuid = values["sessionUuid"] as string;
+              const present =
+                name === "sessions" ? db.sessions.get(uuid) : undefined;
+              accepted = true;
+              // `setWhere`, both halves. A seal is final, so nothing may
+              // overwrite one — and a promotion may only land on the chain it
+              // was derived from, which is the genesis hash the predicate
+              // binds. Modelled by reading the bound values out of the
+              // condition: a fixture that checked only the seal would report
+              // the genesis guard working when it was absent.
+              if (args?.setWhere !== undefined && present !== undefined) {
+                if (
+                  present["sealedAt"] !== undefined &&
+                  present["sealedAt"] !== null
+                ) {
+                  accepted = false;
+                  return;
+                }
+                const bound = boundValues(args.setWhere).filter(
+                  (v): v is string => typeof v === "string",
+                );
+                if (
+                  bound.length > 0 &&
+                  !bound.includes(present["genesisHash"] as string)
+                ) {
+                  accepted = false;
+                  return;
+                }
+              }
+              if (name === "sessions") {
+                if (present !== undefined) {
+                  Object.assign(present, args?.set ?? {});
+                } else {
+                  db.sessions.set(uuid, {
+                    id: "s1",
+                    publicId: "tse_fake0000000000000001",
+                    ...values,
+                  });
+                }
+              }
+              if (name === "session_models") db.models.push(values);
+              if (name === "session_files") db.files.push(values);
+            };
             const chain = {
-              onConflictDoUpdate: async (args?: {
+              // Chainable AND awaitable, like drizzle's builder: some call
+              // sites await it directly and the session insert calls
+              // `.returning()` on it to learn whether the guard let the
+              // statement through.
+              onConflictDoUpdate: (args?: {
                 setWhere?: unknown;
                 set?: Record<string, unknown>;
               }) => {
-                // INSERT … ON CONFLICT DO UPDATE, both halves. A row that is
-                // already there takes the SET clause; only a row that is not
-                // takes the insert's values. Modelled rather than collapsed to
-                // "write the values", because the conflict path is where the
-                // tier and the grade have to agree, and a fixture that always
-                // wrote the insert would never exercise it.
-                const uuid = values["sessionUuid"] as string;
-                const present =
-                  name === "sessions" ? db.sessions.get(uuid) : undefined;
-                // `setWhere`, both halves. A seal is final, so nothing may
-                // overwrite one — and a promotion may only land on the chain it
-                // was derived from, which is the genesis hash the predicate
-                // binds. Modelled by reading the bound values out of the
-                // condition: a fixture that checked only the seal would report
-                // the genesis guard working when it was absent.
-                if (args?.setWhere !== undefined && present !== undefined) {
-                  if (
-                    present["sealedAt"] !== undefined &&
-                    present["sealedAt"] !== null
-                  ) {
-                    return;
-                  }
-                  const bound = boundValues(args.setWhere).filter(
-                    (v): v is string => typeof v === "string",
-                  );
-                  // A genesis hash in the predicate means this is the promotion
-                  // branch, and the stored row has to carry that same hash.
-                  if (
-                    bound.length > 0 &&
-                    !bound.includes(present["genesisHash"] as string)
-                  ) {
-                    return;
-                  }
-                }
-                if (name === "sessions") {
-                  if (present !== undefined) {
-                    Object.assign(present, args?.set ?? {});
-                  } else {
-                    db.sessions.set(uuid, {
-                      id: "s1",
-                      publicId: "tse_fake0000000000000001",
-                      ...values,
-                    });
-                  }
-                }
-                if (name === "session_models") db.models.push(values);
-                if (name === "session_files") db.files.push(values);
+                apply(args);
+                return Object.assign(Promise.resolve([]), {
+                  returning: async () => (accepted ? [{ id: "new" }] : []),
+                });
               },
               onConflictDoNothing: async () => {
                 if (name === "session_commands") db.commands.push(values);
               },
-              returning: async () => [{ id: "new" }],
+              returning: async () => (accepted ? [{ id: "new" }] : []),
             };
             return chain;
           },
@@ -1661,6 +1674,43 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     // Both from one derivation, and a rise rather than a downgrade.
     expect(row?.["enforcementTier"]).toBe("gateway");
     expect(row?.["replayGrade"]).toBe("fork");
+  });
+
+  it("applies none of a refused batch's counters or rollups", async () => {
+    // Rejecting the upsert is not the same as discarding the batch. The
+    // counters ran unconditionally right after it, and the models, files,
+    // commands, proof frames and spend followed — so the guard changed nothing
+    // about the row's tier and the batch's aggregates landed on it anyway,
+    // leaving the evidence inconsistent with the seal it is final under.
+    const db = fakeDb();
+    const events = sessionWithContent("gateway");
+    servedChain(db, events);
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "gateway",
+      replayGrade: "fork",
+      sealedAt: new Date("2026-09-08T09:40:00.000Z"),
+      genesisHash: (events[0] as TachoEvent).hash,
+    });
+    db.hideSessionFromRead = true;
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+
+    // The row is untouched…
+    const row = db.sessions.get(SESSION);
+    expect(row?.["enforcementTier"]).toBe("gateway");
+    expect(row?.["replayGrade"]).toBe("fork");
+    // …and so is everything the batch would otherwise have added to it.
+    expect(db.updates.filter((u) => u.table === "sessions")).toEqual([]);
+    expect(db.models).toEqual([]);
+    expect(db.files).toEqual([]);
+    expect(mocks.recordSpend).not.toHaveBeenCalled();
   });
 
   it("does not promote a row whose genesis is not the one it matched", async () => {
