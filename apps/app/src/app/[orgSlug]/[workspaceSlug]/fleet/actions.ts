@@ -34,6 +34,38 @@ export type ListFleetResult =
   | { ok: true; hosts: FleetHost[]; nextCursor: string | null }
   | { ok: false; error: string };
 
+/**
+ * Every page, not the first one. A workspace with more machines than one page
+ * would otherwise show a silently truncated fleet, which is the worst thing a
+ * fleet screen can do: the machine you are looking for is missing and nothing
+ * says so. Bounded so a pathological cursor cannot loop forever.
+ */
+const MAX_FLEET_PAGES = 20;
+
+export async function listAllFleetAction(input: {
+  orgSlug: string;
+  workspaceSlug: string;
+  status?: FleetHost["status"];
+}): Promise<ListFleetResult> {
+  const hosts: FleetHost[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < MAX_FLEET_PAGES; page += 1) {
+    const result = await listFleetAction({
+      ...input,
+      ...(cursor === undefined ? {} : { cursor }),
+    });
+    if (!result.ok) return result;
+    hosts.push(...result.hosts);
+    if (result.nextCursor === null)
+      return { ok: true, hosts, nextCursor: null };
+    cursor = result.nextCursor;
+  }
+  // Ran out of pages rather than hosts. Say so with a cursor still set, so the
+  // page can tell the operator the list is partial instead of implying it is
+  // the whole fleet.
+  return { ok: true, hosts, nextCursor: cursor ?? null };
+}
+
 export async function listFleetAction(input: {
   orgSlug: string;
   workspaceSlug: string;

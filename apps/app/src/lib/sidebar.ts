@@ -22,6 +22,7 @@ import {
   LayoutGrid,
   Lock,
   MessageSquare,
+  MonitorSmartphone,
   Scale,
   Settings,
   ShieldCheck,
@@ -109,6 +110,19 @@ const workspaceConfig: SidebarConfig = {
           : `/${ctx.orgSlug}`,
       group: "primary",
       external: true,
+    },
+    {
+      // The fleet is the machines, not the agents: a row here is a laptop with
+      // apps on it, each at its own enforcement tier (ADR-078). It sits beside
+      // Knowledge rather than under Agents because a host is not an agent.
+      id: "fleet",
+      label: "Fleet",
+      icon: MonitorSmartphone,
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.fleet(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "primary",
     },
     {
       id: "knowledge",
@@ -495,6 +509,11 @@ export function enumerateNavTargets(
       label: "Knowledge",
       href: workspace.knowledge.root(wsCtx),
       parent: "knowledge",
+    });
+    targets.push({
+      label: "Fleet",
+      href: workspace.fleet(wsCtx),
+      parent: "fleet",
     });
     targets.push({
       label: "Settings",

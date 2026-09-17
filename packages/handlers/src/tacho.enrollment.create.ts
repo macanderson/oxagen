@@ -52,6 +52,12 @@ const ISSUER = "oxagen";
 const AUDIENCE = "tacho-collector";
 const CREDENTIAL_ENV = "TACHO_HOST_API_KEY";
 const DEFAULT_ENDPOINT = "https://api.oxagen.sh/v1/tacho";
+/**
+ * Where this deployment's workspace MCP endpoint lives, for the claim the
+ * host's local gateway dials. Unset means the claim omits it and the host
+ * falls back to its own derivation from `api_url`.
+ */
+const MCP_ENDPOINT_ENV = "TACHO_MCP_ENDPOINT";
 
 function denied(message: string): CapabilityError {
   return new CapabilityError(
@@ -134,6 +140,11 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
   const expiresAt = new Date(
     issuedAt.getTime() + input.validityDays * 24 * 60 * 60 * 1000,
   );
+  const mcpEndpointRaw = process.env[MCP_ENDPOINT_ENV];
+  const mcpEndpoint =
+    typeof mcpEndpointRaw === "string" && mcpEndpointRaw.startsWith("https://")
+      ? mcpEndpointRaw
+      : undefined;
   const hostEnrollmentId = `tch_${cryptoRandom(22)}`;
   const { rawKey, keyPrefix, keyHash } = generateApiKey();
   // A second credential, for the local MCP gateway (ADR-078). It is separate
@@ -242,6 +253,10 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
       ingest_endpoint: `${endpointBase}/events`,
       bundle_endpoint: `${endpointBase}/bundle`,
       commands_endpoint: `${endpointBase}/commands`,
+      // Signed rather than derived: the host would otherwise guess it by
+      // swapping `api.` for `mcp.` in api_url, which is wrong for any
+      // deployment whose MCP host is not named that way.
+      ...(mcpEndpoint === undefined ? {} : { mcp_endpoint: mcpEndpoint }),
       credential_env: CREDENTIAL_ENV,
       device_key_fingerprint: fingerprint,
       harnesses: input.harnesses,

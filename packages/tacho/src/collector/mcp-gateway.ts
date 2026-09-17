@@ -235,6 +235,21 @@ export function tooManyToolsMessage(
  * every bundle that ever reached here declared no ceiling and the refusal
  * below could not fire. The cast is what hid that; the schema now names the
  * field, so the type answers the question instead.
+ *
+ * **Why the control plane does not populate this yet, and should not be
+ * "fixed" by wiring the workspace's model in.** The cap this refusal is about
+ * belongs to the provider the *connected app* sends its turn to — Claude
+ * Desktop's, Cursor's — and MCP tells a server nothing about that: the
+ * `initialize` handshake carries a client name and version, not a model. The
+ * workspace's own agent model is a different number for a different path; it
+ * governs turns Oxagen composes, not turns a connected app composes.
+ *
+ * Emitting the workspace model here would enforce one provider's cap on
+ * another provider's request, which is worse than enforcing none — it would
+ * refuse a list the client would have accepted, naming a model the operator
+ * never chose. So the wire carries the field, the host enforces it the moment
+ * a bundle declares one, and a bundle declares one when there is a defensible
+ * source for the number.
  */
 export function ceilingOf(
   bundle: PolicyBundle | undefined,

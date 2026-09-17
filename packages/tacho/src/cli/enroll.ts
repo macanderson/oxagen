@@ -346,6 +346,9 @@ export async function enroll(
         ingest: response.enrollment.claims.ingest_endpoint,
         bundle: response.enrollment.claims.bundle_endpoint,
         commands: response.enrollment.claims.commands_endpoint,
+        ...(response.enrollment.claims.mcp_endpoint !== undefined
+          ? { mcp: response.enrollment.claims.mcp_endpoint }
+          : {}),
       },
       enrollment: {
         claims: response.enrollment.claims,
@@ -382,8 +385,12 @@ export async function enroll(
       wrapper_version: deps.wrapperVersion,
       hook_command: deps.runtime.hookCommand,
       daemon_command: deps.runtime.daemonCommand,
-      displaced_env: {},
-      displaced_mcp_servers: {},
+      // Carried across a re-enrollment, not reset. These are the operator's
+      // own values that a previous enroll moved aside; `unenroll` is what
+      // puts them back, and a `--force` re-enroll that blanked them would
+      // strand an env value and an MCP server nobody could restore.
+      displaced_env: existing?.displaced_env ?? {},
+      displaced_mcp_servers: existing?.displaced_mcp_servers ?? {},
       mcp_stdio_command: deps.runtime.mcpStdioCommand,
       enrolled_at: now,
       expires_at: response.expiresAt,
