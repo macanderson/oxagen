@@ -30,7 +30,7 @@
 # `X-Forwarded-For: 172.17.0.1` with a plain `reverse_proxy`, and as
 # `203.0.113.99, 172.17.0.1` with this block in place. So without it the API
 # never sees a client address at all — only the load balancer's — and no amount
-# of TRUSTED_PROXY_HOP_COUNT tuning on the application side can recover one.
+# of forwarded-header configuration on the application side can recover one.
 #
 # Two things downstream depend on the real client address: the IAM
 # `ip_ranges` / `ip_allow` conditions, which were therefore being evaluated
@@ -43,9 +43,13 @@
 # this listener is already the load balancer. Naming an exact CIDR here would
 # add a second place for a network change to break the client IP silently.
 #
-# After this deploys, set TRUSTED_PROXY_HOP_COUNT=2 for apps/api — the chain is
-# then two entries deep, client first, and the app strips the one hop Caddy
-# appends. See #3167.
+# After this deploys, set TRUSTED_PROXY_CIDRS for apps/api to the range these
+# proxies sit in — that is the switch that turns the pre-authentication IP
+# ceilings on, and the safe form: the app walks the chain from the right while
+# each entry is a named proxy and stops at the first that is not, so a caller
+# padding the header cannot move the result. TRUSTED_PROXY_HOP_COUNT is the
+# legacy form, still read by the IAM allowlist, and it does NOT enable those
+# ceilings. See #3167.
 {
 	servers {
 		trusted_proxies static private_ranges

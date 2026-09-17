@@ -332,10 +332,12 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "routes. Set it to the REAL depth for the deployment — a wrong value " +
       "resolves to a proxy's own address, which puts every caller behind that " +
       "node in one rate-limit bucket that any of them can exhaust for the rest. " +
-      "Those ceilings are enforced only where this is set explicitly; unset, " +
-      "they skip rather than pool callers. The upstream proxy must also be " +
-      "configured to preserve the chain — Caddy replaces x-forwarded-for " +
-      "unless trusted_proxies names its peer — or no depth is correct. " +
+      "This does NOT enable those ceilings — TRUSTED_PROXY_CIDRS does, and is " +
+      "the form to prefer; this one remains for the IAM allowlist as a legacy " +
+      "fallback, and identity wins where both are set. The upstream proxy must " +
+      "also be configured to preserve the chain — Caddy replaces " +
+      "x-forwarded-for unless trusted_proxies names its peer — or no depth is " +
+      "correct. " +
       "they skip rather than pool callers. 0 means nothing in front is trusted, " +
       "so x-forwarded-for AND x-real-ip are both refused. Optional — the schema " +
       "defaults to 1 (one ALB) in packages/config/src/env.ts, but that default " +
