@@ -593,8 +593,8 @@ async function clearPlanUpgradeIntent(
 
 /**
  * Which price the subscription is on **at the provider**, and on which
- * interval, falling back to the local record only when the provider will not
- * say.
+ * interval. The provider is the only source; there is no fallback to the local
+ * record, for the reason set out below.
  *
  * `subscriptions.stripe_price_id` is written by `syncSubscriptionFromStripe`,
  * which runs AFTER the provider mutation. So the one failure the already-

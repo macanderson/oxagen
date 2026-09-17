@@ -244,8 +244,27 @@ matches the provider within one round-trip.</p>
       subscription against its own current price, read no movement, and send <code>none</code> where the first
       attempt sent <code>always_invoice</code> — under the same idempotency key
       (<code>subscription + target price + optional requestId</code>), which Stripe rejects rather than replaying.
-      The <em>swap</em> is a no-op on a retry; the rest of the operation is not. The retry re-emits the audit event
-      and finishes the prorated credit grant if the first attempt died before reaching it.</li>
+      The <em>swap</em> is a no-op on a retry; the rest of the operation is not. A retry re-emits the audit event and
+      finishes the prorated credit grant if the first attempt died before reaching it — but only when there is
+      evidence that a mutation really happened, because the same branch is reached by somebody submitting the plan
+      they are already on. See <em>What counts as evidence of a mutation</em> below.</li>
+  <li><strong>What counts as evidence of a mutation.</strong> One predicate decides both the audit event and the
+      grant recovery, because they answer the same question and two conditions that must agree is how this last went
+      wrong. Either a standing <code>pending_upgrade_from_plan_id</code> — written before a swap, retired only once
+      its grant settled, so unfinished work from a real attempt — or a recorded <code>stripe_price_id</code> that
+      disagrees with the provider, which is a swap that was never written down. Steady state has neither.
+      <br><br>
+      A <strong>NULL</strong> <code>stripe_price_id</code> is not a disagreement. The column was added nullable with
+      no backfill, so every subscription predating it carries NULL and reading that as a mismatch made the test true
+      for the whole legacy population — recording a privileged mutation on requests that changed nothing. It cannot
+      be backfilled in SQL, and must not be derived from <code>billing.plans</code>: the catalogue holds today's
+      price while a grandfathered subscriber sits on an older immutable one, so the derived identity would be wrong
+      in exactly the way this page warns about above. The column fills itself as
+      <code>syncSubscriptionFromStripe</code> runs, including from the repair on this branch.
+      <br><br>
+      Emitting is still inferred rather than recorded: a first attempt whose swap and audit both succeeded and whose
+      grant then failed leaves the intent standing, so a retry writes a second event for one mutation. Recording the
+      emission durably needs a column on the intent and is tracked separately.</li>
   <li><strong>The plan being left is written down before the swap.</strong> The prorated upgrade grant is sized from
       the allowance of the plan moved <em>from</em>, and the swap destroys that: <code>upgradeSubscription</code>
       syncs the subscription synchronously and the sync repoints <code>plan_id</code> at the target. A call that died
@@ -279,9 +298,17 @@ matches the provider within one round-trip.</p>
   <li><strong>The already-applied guard asks the provider, not our record of it.</strong>
       <code>subscriptions.stripe_price_id</code> is written by <code>syncSubscriptionFromStripe</code>, which runs
       <em>after</em> the provider mutation — so it is blind to the one failure the guard exists for, a swap that
-      reached Stripe whose response was lost. The active price is read from the provider; the local column is the
-      fallback only when the provider will not answer (in which case the swap could not be issued either), and when
-      the two disagree the stale row is resynced rather than left wrong.</li>
+      reached Stripe whose response was lost. The active price is read from the provider, and when the two disagree
+      the stale row is resynced rather than left wrong.
+      <br><br>
+      <strong>There is no fallback to the local row.</strong> There used to be, justified as: if the provider cannot
+      be reached the swap cannot be issued either, so refusing would trade a wrong answer for an outage. That holds
+      for an outage and not for a transient failure of this one read — the case where the preview and the update
+      then succeed and the operation runs on the very row the guard exists to distrust. The fallback had no case in
+      which it helped and one in which it silently did harm, so
+      <code>resolveActiveProviderState</code> now raises <code>SubscriptionStateUnavailableError</code> and the
+      caller retries. It is raised before any provider mutation and before the durable upgrade intent is written, so
+      a refusal leaves nothing half-done.</li>
   <li><strong>The interval is read from the provider for the same reason, and by the same call.</strong>
       <code>subscriptions.billing_interval</code> is written by that same post-mutation sync and is stale in the
       same failure — and what it decides is worse to get wrong, because it is what says whether this change resets
@@ -290,9 +317,9 @@ matches the provider within one round-trip.</p>
       downgrade, <code>none</code> is selected, and the quote is $0 while the provider resets the anchor and
       invoices the new month regardless. <code>resolveActiveProviderState</code> returns the price and the interval
       from the one subscription read, and both the swap path and the quote path take the interval from it, so the
-      confirmation screen and the charge are decided by the same subscription. The local column remains the
-      fallback, and the swap logs both so a row drifting from the provider is visible before its consequences
-      are.</li>
+      confirmation screen and the charge are decided by the same subscription. The local column is not a fallback
+      for this either — the same refusal applies — and the swap logs both the provider's interval and the recorded
+      one, so a row drifting from the provider is visible before its consequences are.</li>
   <li>The entitlement tier ordering (<code>TIER_ORDER</code> / <code>meetsMinimumTier</code>) answers a different
       question — <em>does this plan include that feature</em> — and is never read as a price direction. The two
       disagree in the live catalogue: Enterprise outranks Scale on features and costs half as much, so deciding
