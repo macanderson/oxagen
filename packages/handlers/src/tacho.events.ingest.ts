@@ -631,24 +631,6 @@ function genesisRow(
   };
 }
 
-/**
- * `common` with the seal taken back out.
- *
- * Used on the INSERT's conflict path by a batch that did not derive `gateway`:
- * it cannot know whether the row it is conflicting with is on a higher tier, so
- * a `replayGrade` computed from its own tier must not land. Everything else in
- * `common` — the head, the counters, the terminal facts' siblings — is safe,
- * because none of it is signed.
- */
-function withoutTerminal(
-  common: Record<string, unknown>,
-  terminalColumns: Record<string, unknown>,
-): Record<string, unknown> {
-  const out = { ...common };
-  for (const key of Object.keys(terminalColumns)) delete out[key];
-  return out;
-}
-
 /** Terminal facts from an `agent_stop`, when the batch carries one. */
 function terminalPatch(
   events: TachoEvent[],
@@ -822,15 +804,6 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     // The batch's fresh `proof.observed` frames, by the root session they belong to.
     const proofsByRoot = new Map<string, TachoEvent[]>();
     let newSessions = 0;
-    // The sessions whose writes the statement refused: the row they conflicted
-    // with is sealed, or is a different chain wearing the same uuid. Their
-    // events are not that session's evidence and must not be acknowledged.
-    const refusedSessions = new Set<string>();
-    // …and the subset of those refusals that are TRANSIENT: the row moved under
-    // the read this batch was folded against. Unlike a sealed row or a
-    // different genesis, that one succeeds on a re-read, so the batch must come
-    // back rather than be acknowledged and dropped.
-    const staleSessions = new Set<string>();
     // The first root session this batch opened: the run the onboarding gate
     // records when this is the organization's first frame (#2967).
     let firstOpenedRunId: string | null = null;
@@ -1004,18 +977,6 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         : derivedTier;
       // The grade is computed once, at seal: a sealed session is never
       // sealed again, whatever a later batch carries.
-      // The genesis hash THIS batch's own derivation promoted on, or null when
-      // it did not promote. Read by the insert's conflict path, where
-      // `existing` is stale by construction.
-      //
-      // One value rather than a boolean and a hash kept beside it: the conflict
-      // path needs both, and they have to be the same decision. `gateway` is
-      // never derived from a null hash — `enforcementTierOf` requires it on
-      // both sides — so the null branch below is unreachable rather than a
-      // default, and if that ever stopped being true it falls to the
-      // conservative side on its own.
-      const promotedOnGenesis =
-        derivedTier === TACHO_GATEWAY_TIER ? sessionGenesisHash : null;
       const terminal = existing?.sealedAt ? {} : terminalPatch(fresh, now);
       const { totalCostMicrosAuthoritative, ...terminalColumns } =
         terminal as Record<string, unknown> & {
@@ -1137,80 +1098,14 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         ...increments,
       };
 
-      // What the INSERT's conflict path applies, which is not the same thing.
+      // Identity is still enforced, and not by a predicate here.
       //
-      // `common` is computed from `existing`, and on the insert path `existing`
-      // is the read that preceded the INSERT — it says nothing about the row
-      // this statement is now conflicting with. Two first-ingest requests can
-      // both read no row and derive DIFFERENT tiers, because a gateway call
-      // recorded between their two reads is visible to one and not the other.
-      //
-      // `common` then carries a `replayGrade` computed from the loser's tier
-      // and no `enforcementTier` at all — the tier is only set on the promotion
-      // path, which needs an `existing`. The winner's tier and the loser's
-      // signed grade end up on one sealed row, and a sealed session is never
-      // regraded.
-      //
-      // So the two move together here, in the only two shapes that are both
-      // consistent and monotonic:
-      //
-      //   - the loser derived `gateway`: write the tier WITH the grade. That is
-      //     a rise, which is the direction this tier is allowed to move, and
-      //     the pair comes from one derivation.
-      //   - the loser derived anything else: it cannot know whether the winner
-      //     is on a higher tier, so it must not write a grade computed from its
-      //     own. The seal is dropped and the session is sealed by a later batch,
-      //     through the existing-session path, which reads the real row.
-      //
-      // `setWhere` still refuses an already-sealed row outright: a seal is
-      // final, and neither shape above may overwrite one — and on the rise it
-      // also refuses a row whose stored genesis is not the one the promotion
-      // was derived from.
-      const conflictSet =
-        promotedOnGenesis !== null
-          ? {
-              ...common,
-              enforcementTier: TACHO_GATEWAY_TIER,
-              ...(sessionGatewayColumn
-                ? { gatewayObservedAt: chainRecord?.at ?? null }
-                : {}),
-            }
-          : withoutTerminal(common, terminalColumns);
-
-      // The row this INSERT's conflict path may land on must be the chain this
-      // batch IS, whatever tier it derived.
-      //
-      // `genesis_hash` is INSERT-only — the conflict path never rewrites it —
-      // so a row that got there first wearing this session uuid keeps its own
-      // genesis while this batch writes its head, its chain verdict, its
-      // counters and its rollups onto it. The result is one row whose
-      // `genesis_hash` and `last_hash` are the endpoints of two different
-      // chains, recorded `chain_verified = true` with no chain break, so
-      // nothing announces it; and because `chain_verified` is sticky false once
-      // the real chain's next `prev_hash` misses, the real chain is graded
-      // broken for the rest of its life and that verdict is signed into the
-      // seal.
-      //
-      // This predicate used to be conditioned on the promotion
-      // (discussion_r4042105761), which asked the identity question only for
-      // the rare batch that derives `gateway`. Identity is not a property of
-      // the tier: a batch whose genesis differs from the stored row is a
-      // different chain claiming the same name whatever tier it is on, and
-      // nothing it carries belongs on that row. Widening it costs the
-      // promotion branch nothing — `promotedOnGenesis` is `sessionGenesisHash`
-      // or null, so the promotion case is the same predicate it already was.
-      //
-      // Null is a batch that cannot answer: one that does not open at seq 0 and
-      // so has no genesis of its own. It falls back to the seal guard alone,
-      // exactly as before.
-      const landsOnThisChain =
-        sessionGenesisHash !== null
-          ? and(
-              isNull(schema.tachoSessions.sealedAt),
-              eq(schema.tachoSessions.genesisHash, sessionGenesisHash),
-            )
-          : isNull(schema.tachoSessions.sealedAt);
-
+      // The INSERT no longer updates anything, so there is no conflict clause
+      // left to guard. On the existing-session path the question is asked where
+      // it belongs: `enforcementTierOf` promotes only when the gateway record's
+      // genesis hash equals the ROW'S own, so a chain wearing another's uuid
+      // cannot be promoted — and its frames fail chain verification against the
+      // recorded head, which is reported as a chain break.
       // Whether this batch's writes landed, and whether they opened the
       // session. Decided by the statement on BOTH paths: on neither is the row
       // this transaction writes necessarily the row it read.
@@ -1289,95 +1184,63 @@ export const tachoEventsIngestHandler: CapabilityHandler<
             lastHash: last.hash,
             seqCount: last.seq + 1,
           } as typeof schema.tachoSessions.$inferInsert)
-          .onConflictDoUpdate({
-            target: schema.tachoSessions.sessionUuid,
-            set: conflictSet,
-            // Only while the row is not already sealed.
-            //
-            // `common` here was computed as though no row existed — `existing`
-            // was read before the INSERT, so it says nothing about the row this
-            // statement is now conflicting with. That is harmless for the
-            // counters and the head, and it is not harmless for the seal: two
-            // first-ingest requests for the same session can both read
-            // `existing === undefined`, derive different tiers, and the loser
-            // then writes ITS `replayGrade` over the winner's row while leaving
-            // the winner's `enforcementTier` alone, because the tier is only
-            // set on the promotion path. The result is a sealed session whose
-            // signed grade was computed from a tier it does not carry, and a
-            // sealed session is never regraded.
-            //
-            // The guard is the invariant this file already states everywhere
-            // else — a sealed session is final — made true under concurrency
-            // rather than only under the read that preceded the insert. The
-            // losing batch's counters go with it, which is the right trade:
-            // they are a duplicate of a sealed session's, and a wrong signed
-            // grade is not recoverable while a missing increment is.
-            //
-            // And the row must be the chain this batch is: `landsOnThisChain`
-            // carries the seal guard together with the genesis match, so a
-            // mismatch drops the whole update rather than part of it.
-            setWhere: landsOnThisChain,
-          })
-          // Whether the statement did anything. `ON CONFLICT DO UPDATE` with a
-          // `setWhere` that does not hold returns no rows, and that is the only
-          // way to find out: the guard is evaluated inside the statement,
-          // against the row it actually hit.
+          // DO NOTHING, not DO UPDATE.
           //
-          // Named rather than bare, like every other RETURNING in this file: a
-          // bare one asks for every column the schema declares and fails on a
-          // pending migration (`tacho-column-projection.test.ts`).
-          .returning({
-            id: schema.tachoSessions.id,
-            // Whether this statement INSERTED the row, as opposed to updating
-            // one that was already there. `xmax = 0` is true only of a tuple
-            // this transaction created; an `ON CONFLICT DO UPDATE` that took
-            // the update path returns the row with a non-zero `xmax`.
-            //
-            // `newSessions` used to be incremented from `existing === undefined`
-            // — the read that preceded the INSERT — so two concurrent genesis
-            // requests both counted, inflating `hosts.sessions_count`, and a
-            // refused batch could be mistaken for an organisation's first run
-            // by the onboarding gate.
-            inserted: sql<boolean>`xmax = 0`,
-          });
+          // The conflict path used to apply a `common` computed from
+          // `existing` — the read that preceded the INSERT, which says nothing
+          // about the row this statement is now hitting. Every attempt to make
+          // that safe added another predicate and another way to be half
+          // right: it doubled the counters (`common` already carries
+          // `increments`, and the follow-up applied them again), and on the
+          // branch that dropped the seal it still advanced `seq_count` through
+          // the `agent_stop`, putting the stop below the recorded head so that
+          // even a re-send folded `fresh = []` and the session could never be
+          // sealed by anyone.
+          //
+          // There is nothing this statement can safely write to a row it has
+          // not read. So it writes nothing: the INSERT either opens the
+          // session or does nothing at all, and a conflict is refused and
+          // retried. The retry reads the row and takes the existing-session
+          // path, which has the real values and its own guards — which is
+          // where a decision about an existing row belongs.
+          .onConflictDoNothing();
+        // `DO NOTHING` returns a row only when it inserted one, so the two
+        // questions have one answer here.
         accepted = written.length > 0;
-        inserted = written[0]?.inserted === true;
+        inserted = accepted;
         if (inserted) newSessions += 1;
-        // Counters on a fresh row start from the insert's zero defaults; apply
-        // the delta — but only if the row is this batch's to touch.
-        //
-        // This update used to be unconditional, which quietly undid the guard
-        // above: the upsert correctly changed nothing, and then the counters
-        // landed on the sealed or unrelated row anyway, leaving its aggregate
-        // evidence inconsistent with the seal it is supposed to be final under.
-        // A guard that only covers some of a batch's writes is not a guard.
-        if (accepted) {
+        // Counters on a fresh row start from the insert's zero defaults, so
+        // the delta is applied here. Only on a real insert: a conflict wrote
+        // nothing, so there is nothing of this batch's on that row to complete.
+        if (inserted) {
           await tx
             .update(schema.tachoSessions)
             .set(increments)
             .where(eq(schema.tachoSessions.sessionUuid, sessionUuid));
         }
       }
-      // Refused on either path: the row this batch hit is sealed, is a
-      // different chain wearing the same uuid, or moved under the read its
-      // frames were folded against. Its events are not that session's evidence
-      // and nothing of it is written.
+      // Refused, on either path: the row this batch hit moved under the read
+      // its frames were folded against, or the INSERT lost to a row it has not
+      // read. Both are transient — the same batch succeeds against a fresh
+      // read — so the whole attempt is rolled back and the daemon re-sends.
       //
-      // Reported as a chain break rather than silently dropped: the daemon
-      // already surfaces these (`onChainBreak`), so an operator sees that a
-      // batch was not recorded instead of wondering where it went.
+      // Thrown INSIDE the transaction, and that is the point. Raising it after
+      // the commit left the accepted half of a mixed batch committed while the
+      // response never reached the daemon: control commands were marked `sent`
+      // and could not be selected again, and the accepted sessions' spend
+      // deltas were skipped — and on the retry their heads had advanced, so the
+      // deltas folded empty and the spend was undercounted for good.
+      //
+      // `conflict` maps to 409: neither `ControlUnreachable` nor the 400/422
+      // the shipper quarantines on, so it takes the "keep the batch, back off"
+      // branch (`spool.ts`) and the next attempt reads the rows as they now
+      // are. At most one retry: a conflict on the INSERT path means the row
+      // exists, so the retry takes the existing-session path.
       if (!accepted) {
-        refusedSessions.add(sessionUuid);
-        // Which kind of refusal. The existing-session path loses only to the
-        // optimistic guard, which is a stale read and nothing worse; the insert
-        // path's conflict is a sealed row or a different chain, which no retry
-        // can turn into an acceptance.
-        if (existing) staleSessions.add(sessionUuid);
-        chainBreaks.push({
-          session_uuid: sessionUuid,
-          at_seq: first.seq,
-          reason:
-            "this session is already sealed, begins with a different genesis, or moved under the read this batch was folded against; the batch was not recorded",
+        throw new HandlerError({
+          code: "conflict",
+          reason: "session_moved_under_read",
+          message: `session ${sessionUuid} changed between this batch's read and its write; re-send it`,
         });
       }
 
@@ -1494,8 +1357,6 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     const control = await controlEnvelope(tx as never, ctx, seen, now);
     return {
       chainBreaks,
-      refusedSessions,
-      staleSessions,
       verified,
       recordedHeads,
       control,
@@ -1532,53 +1393,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   // to a colleague's row. The session's person is `initiatingPrincipalId` /
   // `initiatingUserId`, which this deployment issues rather than the harness
   // reports (#3072).
-  // A stale-read refusal is RETRIED, not acknowledged.
-  //
-  // The two refusals are not the same. A sealed row or a different genesis is
-  // permanent: no re-send turns it into an acceptance, so the batch is
-  // acknowledged, reported as a chain break, and not written. A lost optimistic
-  // guard is neither — the row simply moved between this request's read and its
-  // write, and the same batch succeeds against a fresh read.
-  //
-  // Acknowledging that one loses it. The shipper marks the whole submitted
-  // batch shipped on any success (`spool.ts`, `markShipped(batch)`), while this
-  // handler excluded the session from Postgres and ClickHouse — so a terminal
-  // batch would be deleted from the WAL without ever being recorded, leaving
-  // the session unsealed and its frames gone.
-  //
-  // `conflict` maps to 409, which is neither `ControlUnreachable` nor the
-  // 400/422 the shipper quarantines on: it takes the "keep the batch, back off"
-  // branch, and the next attempt reads the row as it now is. Thrown before the
-  // ClickHouse write so the attempt leaves nothing half-written; the Postgres
-  // work of the accepted sessions is committed and idempotent under a re-send,
-  // because `fresh` is filtered by the head those writes advanced.
-  if (result.staleSessions.size > 0) {
-    throw new HandlerError({
-      code: "conflict",
-      reason: "session_moved_under_read",
-      message: `${result.staleSessions.size} session(s) in this batch changed between the read and the write; re-send it`,
-    });
-  }
-
-  // Only the events whose session accepted them reach ClickHouse.
-  //
-  // `tacho_events` is a ReplacingMergeTree keyed by session and seq, so a
-  // refused batch's frames would REPLACE the winning chain's rows for the same
-  // sequences: the authoritative session rejected the batch and its raw
-  // evidence overwrote the accepted chain's anyway.
-  //
-  // The RESPONSE still acknowledges them, and deliberately. The daemon's
-  // shipper marks the whole submitted batch shipped on any success — it does
-  // not read `event_ids` — so withholding them does not make it re-send, it
-  // makes it delete the only remaining copy. And a re-send would not help
-  // either: a refused batch belongs to a chain that cannot be recorded under
-  // that uuid, or to a session already sealed, so retrying it forever is the
-  // other way to be wrong. The refusal is reported as a chain break instead,
-  // which the daemon already surfaces.
-  const kept = input.events.filter(
-    (event) => !result.refusedSessions.has(event.session_uuid),
-  );
-  const inserts: TachoEventInsert[] = kept.map((event) => {
+  const inserts: TachoEventInsert[] = input.events.map((event) => {
     const bytesRef =
       bytesRefs.get(event.event_id_idem) ?? storedRefs.get(event.event_id_idem);
     return {
@@ -1620,10 +1435,6 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   }
 
   return {
-    // Every submitted event, not just `kept`. See the note above: the shipper
-    // does not read `event_ids`, and the contract requires at least one, so an
-    // all-refused batch answered with zero is an `invalid_output` the daemon
-    // retries for ever.
     accepted: input.events.length,
     event_ids: input.events.map((event) => event.event_id_idem),
     chain_breaks: result.chainBreaks,

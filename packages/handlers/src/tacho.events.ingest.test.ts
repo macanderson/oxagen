@@ -661,8 +661,29 @@ function wire(db: FakeDb): void {
                     accepted ? [{ id: "new", inserted }] : [],
                 });
               },
-              onConflictDoNothing: async () => {
+              // Chainable AND awaitable, like `onConflictDoUpdate`. `DO
+              // NOTHING` inserts only when there is no row to conflict with,
+              // and `returning()` hands back a row only when it inserted one —
+              // which is how the handler learns that its INSERT lost.
+              onConflictDoNothing: () => {
                 if (name === "session_commands") db.commands.push(values);
+                if (name === "sessions") {
+                  const uuid = values["sessionUuid"] as string;
+                  if (db.sessions.has(uuid)) {
+                    accepted = false;
+                  } else {
+                    accepted = true;
+                    db.sessions.set(uuid, {
+                      id: "s1",
+                      publicId: "tse_fake0000000000000001",
+                      ...values,
+                    });
+                  }
+                }
+                const rows = accepted ? [{ id: "new" }] : [];
+                return Object.assign(Promise.resolve(rows), {
+                  returning: async () => rows,
+                });
               },
               returning: async () => (accepted ? [{ id: "new" }] : []),
             };
@@ -1741,12 +1762,18 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     });
   });
 
-  it("writes the tier with the grade when a racing insert rises to gateway", async () => {
-    // The winner inserted an unsealed row before this batch's read saw the
-    // gateway call; this batch read no row, derived `gateway`, and carries the
-    // terminal event. Applying `common` would write ITS grade and no tier —
-    // the tier is only set on the promotion path, which needs an `existing` —
-    // leaving the winner's tier paired with this batch's signed grade.
+  it("refuses and retries an INSERT that lost to a row it never read", async () => {
+    // The conflict path writes nothing now. It used to apply a `common`
+    // computed from `existing` — the read that PRECEDED the insert, which says
+    // nothing about the row the statement is hitting — and every attempt to
+    // make that safe added another predicate and another way to be half right:
+    // doubled counters, a head advanced past an `agent_stop` whose seal was
+    // dropped, a tier promoted onto a forged genesis.
+    //
+    // So a conflict is refused and the whole attempt rolls back. The retry
+    // reads the row and takes the existing-session path, which has the real
+    // values and its own guards — at most one retry, because a conflict means
+    // the row exists.
     const db = fakeDb();
     const events = sessionWithContent("gateway");
     servedChain(db, events);
@@ -1756,59 +1783,29 @@ describe("ingest_tacho_events: bodies and the seal", () => {
       hostId: HOST_ID,
       enforcementTier: "observe",
       sealedAt: null,
-      // The SAME chain: both requests carry the same genesis, and differ only
-      // in whether their read saw the gateway call.
       genesisHash: (events[0] as TachoEvent).hash,
     });
+    // Invisible to the read that precedes the INSERT: that is the race.
     db.hideSessionFromRead = true;
     wire(db);
 
-    await tachoEventsIngestHandler(
-      batch(events, [bodyFor(events[1] as TachoEvent)]),
-      CONTEXT,
-    );
+    await expect(
+      tachoEventsIngestHandler(batch(events), CONTEXT),
+    ).rejects.toMatchObject({ code: "conflict" });
 
+    // Nothing of this batch landed on the winner's row…
     const row = db.sessions.get(SESSION);
-    // Both from one derivation, and a rise rather than a downgrade.
-    expect(row?.["enforcementTier"]).toBe("gateway");
-    expect(row?.["replayGrade"]).toBe("fork");
-  });
-
-  it("applies none of a refused batch's counters or rollups", async () => {
-    // Rejecting the upsert is not the same as discarding the batch. The
-    // counters ran unconditionally right after it, and the models, files,
-    // commands, proof frames and spend followed — so the guard changed nothing
-    // about the row's tier and the batch's aggregates landed on it anyway,
-    // leaving the evidence inconsistent with the seal it is final under.
-    const db = fakeDb();
-    const events = sessionWithContent("gateway");
-    servedChain(db, events);
-    db.sessions.set(SESSION, {
-      id: "s1",
-      sessionUuid: SESSION,
-      hostId: HOST_ID,
-      enforcementTier: "gateway",
-      replayGrade: "fork",
-      sealedAt: new Date("2026-09-08T09:40:00.000Z"),
-      genesisHash: (events[0] as TachoEvent).hash,
-    });
-    db.hideSessionFromRead = true;
-    wire(db);
-
-    await tachoEventsIngestHandler(
-      batch(events, [bodyFor(events[1] as TachoEvent)]),
-      CONTEXT,
-    );
-
-    // The row is untouched…
-    const row = db.sessions.get(SESSION);
-    expect(row?.["enforcementTier"]).toBe("gateway");
-    expect(row?.["replayGrade"]).toBe("fork");
-    // …and so is everything the batch would otherwise have added to it.
-    expect(db.updates.filter((u) => u.table === "sessions")).toEqual([]);
-    expect(db.models).toEqual([]);
-    expect(db.files).toEqual([]);
-    expect(mocks.recordSpend).not.toHaveBeenCalled();
+    expect(row?.["enforcementTier"]).toBe("observe");
+    expect(row?.["replayGrade"]).toBeUndefined();
+    expect(row?.["lastHash"]).toBeUndefined();
+    // …and nothing reached ClickHouse, so the retry is not a partial re-run.
+    expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+    // Nor was it counted as a new session for the host.
+    expect(
+      db.updates.find(
+        (u) => u.table === "hosts" && "sessionsCount" in u.values,
+      ),
+    ).toBeUndefined();
   });
 
   it("refuses an update whose tier moved under the read", async () => {
@@ -1854,250 +1851,6 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     expect(row?.["sealedAt"] ?? null).toBeNull();
     // …and nothing reached ClickHouse, so the retry is not a partial re-run.
     expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
-  });
-
-  it("writes none of a refused batch's events, and acknowledges them anyway", async () => {
-    // `tacho_events` is a ReplacingMergeTree keyed by session and seq, so a
-    // refused batch's frames would REPLACE the winning chain's rows for the
-    // same sequences — the authoritative session rejected the batch and its raw
-    // evidence overwrote the accepted chain's anyway. Acknowledging them is the
-    // other half: the daemon's spool marks the whole batch shipped, so the
-    // events are gone from the host too.
-    const db = fakeDb();
-    const events = sessionWithContent("gateway");
-    servedChain(db, events);
-    db.sessions.set(SESSION, {
-      id: "s1",
-      sessionUuid: SESSION,
-      hostId: HOST_ID,
-      enforcementTier: "gateway",
-      sealedAt: new Date("2026-09-08T09:40:00.000Z"),
-      genesisHash: (events[0] as TachoEvent).hash,
-    });
-    db.hideSessionFromRead = true;
-    wire(db);
-
-    const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
-
-    // Not written: a ReplacingMergeTree keyed by session and seq would let
-    // these frames replace the winning chain's rows for the same sequences.
-    expect(mocks.insertTachoEvents).toHaveBeenCalledWith([]);
-    // …but still acknowledged. The shipper marks the whole submitted batch
-    // shipped on any success and does not read `event_ids`, so withholding
-    // them deletes the only remaining copy rather than causing a re-send — and
-    // the contract requires at least one, so a zero answer is an
-    // `invalid_output` the daemon retries for ever.
-    expect(output.accepted).toBe(events.length);
-    expect(output.event_ids).toEqual(events.map((e) => e.event_id_idem));
-    // The refusal is reported rather than silent.
-    expect(output.chain_breaks).toEqual([
-      {
-        session_uuid: SESSION,
-        at_seq: 0,
-        reason: expect.stringContaining("already sealed"),
-      },
-    ]);
-  });
-
-  it("answers a refused batch within the output contract", async () => {
-    // `tachoEventsIngest.output` requires `accepted >= 1` and a non-empty
-    // `event_ids`, and the kernel validates handler output — so an all-refused
-    // batch answered with zero is surfaced as `invalid_output`, not as a
-    // usable response, and the daemon retries it for ever.
-    const db = fakeDb();
-    const events = sessionWithContent("gateway");
-    servedChain(db, events);
-    db.sessions.set(SESSION, {
-      id: "s1",
-      sessionUuid: SESSION,
-      hostId: HOST_ID,
-      enforcementTier: "gateway",
-      sealedAt: new Date("2026-09-08T09:40:00.000Z"),
-      genesisHash: (events[0] as TachoEvent).hash,
-    });
-    db.hideSessionFromRead = true;
-    wire(db);
-
-    const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
-
-    // Parsed against the real contract rather than eyeballed: this is the one
-    // response shape where every session was refused, and it is exactly the
-    // shape the schema is strictest about.
-    expect(() => tachoEventsIngest.output.parse(output)).not.toThrow();
-  });
-
-  it("counts a new session only when the statement inserted one", async () => {
-    // `newSessions` was incremented from `existing === undefined` — the read
-    // that preceded the INSERT — so two concurrent genesis requests both
-    // counted and inflated `hosts.sessions_count`. The row this batch
-    // conflicts with already exists, so nothing was inserted.
-    const db = fakeDb();
-    const events = sessionWithContent("gateway");
-    servedChain(db, events);
-    db.sessions.set(SESSION, {
-      id: "s1",
-      sessionUuid: SESSION,
-      hostId: HOST_ID,
-      enforcementTier: "observe",
-      sealedAt: null,
-      genesisHash: (events[0] as TachoEvent).hash,
-    });
-    db.hideSessionFromRead = true;
-    wire(db);
-
-    await tachoEventsIngestHandler(batch(events), CONTEXT);
-
-    const hostUpdate = db.updates.find(
-      (u) => u.table === "hosts" && "sessionsCount" in u.values,
-    );
-    expect(hostUpdate).toBeUndefined();
-  });
-
-  it("does not promote a row whose genesis is not the one it matched", async () => {
-    // `genesis_hash` is INSERT-only: the conflict path never rewrites it. So a
-    // forged row that lands first keeps its own genesis, and a legitimate
-    // gateway batch conflicting onto it would hand that row the tier — a
-    // session carrying a forged chain's identity and `gateway` permanently.
-    //
-    // Discriminating against the case above: identical, except whose genesis
-    // the stored row records.
-    const db = fakeDb();
-    const events = sessionWithContent("gateway");
-    servedChain(db, events);
-    db.sessions.set(SESSION, {
-      id: "s1",
-      sessionUuid: SESSION,
-      hostId: HOST_ID,
-      enforcementTier: "observe",
-      sealedAt: null,
-      genesisHash: `sha256:${"d".repeat(64)}`,
-    });
-    db.hideSessionFromRead = true;
-    wire(db);
-
-    await tachoEventsIngestHandler(
-      batch(events, [bodyFor(events[1] as TachoEvent)]),
-      CONTEXT,
-    );
-
-    const row = db.sessions.get(SESSION);
-    expect(row?.["enforcementTier"]).toBe("observe");
-    // Nothing else from that batch lands either: a chain whose genesis differs
-    // is a different chain wearing the same uuid.
-    expect(row?.["replayGrade"]).toBeUndefined();
-  });
-
-  it("writes no grade when a racing insert cannot know the winner's tier", async () => {
-    // The mirror case. This batch derived a non-gateway tier, so it cannot
-    // tell whether the row it is conflicting with is on a higher one — and a
-    // `replayGrade` computed from `observe` must not land on a `gateway` row.
-    // The seal is dropped; a later batch seals it through the existing-session
-    // path, which reads the real row.
-    const db = fakeDb();
-    const events = sessionWithContent("gateway");
-    // No chain record at all, so this batch derives the host's own mode.
-    db.sessions.set(SESSION, {
-      id: "s1",
-      sessionUuid: SESSION,
-      hostId: HOST_ID,
-      enforcementTier: "gateway",
-      sealedAt: null,
-    });
-    db.hideSessionFromRead = true;
-    wire(db);
-
-    await tachoEventsIngestHandler(
-      batch(events, [bodyFor(events[1] as TachoEvent)]),
-      CONTEXT,
-    );
-
-    const row = db.sessions.get(SESSION);
-    expect(row?.["enforcementTier"]).toBe("gateway");
-    // The winner's row is left unsealed and ungraded rather than graded wrong.
-    expect(row?.["replayGrade"]).toBeUndefined();
-    expect(row?.["sealedAt"] ?? null).toBeNull();
-  });
-
-  it("does not open the onboarding gate on a conflict it did not insert", async () => {
-    // `firstOpenedRunId` was gated on `accepted && !existing`, and `!existing`
-    // is the read that preceded the INSERT. A conflict that took the UPDATE
-    // path is accepted and still did not open the session, so the organisation
-    // had its first frame from the request that inserted the row, not from
-    // this one. `xmax = 0` is the statement's own answer to that question;
-    // `!existing` is a guess made before it ran.
-    const db = fakeDb();
-    const events = session();
-    db.sessions.set(SESSION, {
-      id: "s1",
-      publicId: "tse_s1",
-      sessionUuid: SESSION,
-      hostId: HOST_ID,
-      sealedAt: null,
-      // The SAME chain: the winner is this request's twin, so the guard lets
-      // the conflict through and only `inserted` separates them.
-      genesisHash: (events[0] as TachoEvent).hash,
-      parentSessionUuid: null,
-    });
-    // Hidden from the read that precedes the INSERT and visible to the one
-    // after it, which is exactly what the loser of the race sees.
-    db.hideSessionFromNextRead = true;
-    wire(db);
-
-    await tachoEventsIngestHandler(batch(events), CONTEXT);
-
-    expect(mocks.unlockOnboardingGate).not.toHaveBeenCalled();
-    // …and the host's session count follows the same answer.
-    expect(
-      db.updates.find(
-        (u) => u.table === "hosts" && "sessionsCount" in u.values,
-      ),
-    ).toBeUndefined();
-  });
-
-  it("does not write its chain head onto a row recording a different genesis", async () => {
-    // The identity guard was conditioned on the promotion, so it answered the
-    // question only for the rare batch that derives `gateway`. An ordinary
-    // observe-mode batch conflicting onto a row wearing its session uuid still
-    // wrote its head, its chain verdict and its counters there.
-    //
-    // `genesis_hash` is INSERT-only, so the row keeps the other chain's genesis
-    // and gains this chain's `last_hash` — the two endpoints of two different
-    // chains on one row, recorded `chain_verified = true` with no chain break.
-    // Every later batch of the real chain then misses `prev_hash` against the
-    // foreign head, and `chain_verified` is sticky false from there on and is
-    // signed into the seal.
-    //
-    // Discriminating against "does not promote a row whose genesis is not the
-    // one it matched": same shape, but this batch derives no gateway tier at
-    // all, which is the case the narrow guard let through.
-    const db = fakeDb();
-    const events = session();
-    const foreignHead = `sha256:${"e".repeat(64)}`;
-    db.sessions.set(SESSION, {
-      id: "s1",
-      sessionUuid: SESSION,
-      hostId: HOST_ID,
-      enforcementTier: "observe",
-      sealedAt: null,
-      genesisHash: `sha256:${"d".repeat(64)}`,
-      lastHash: foreignHead,
-      chainVerified: true,
-      numTurns: 0,
-    });
-    // Invisible to the read that precedes the INSERT, which is what makes this
-    // the conflict path rather than the ordinary existing-session one.
-    db.hideSessionFromRead = true;
-    wire(db);
-
-    const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
-
-    const row = db.sessions.get(SESSION);
-    expect(row?.["lastHash"]).toBe(foreignHead);
-    expect(row?.["genesisHash"]).toBe(`sha256:${"d".repeat(64)}`);
-    // Nothing of the batch is written, and the refusal is reported rather than
-    // dropped in silence.
-    expect(mocks.insertTachoEvents).toHaveBeenCalledWith([]);
-    expect(output.chain_breaks.map((b) => b.session_uuid)).toContain(SESSION);
   });
 
   it("refuses a batch whose session advanced under the read its frames were folded against", async () => {
@@ -2148,43 +1901,6 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     // The loser's frames are not written — folding them again would count the
     // winner's own increments a second time.
     expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
-  });
-
-  it("does not re-seal a row another request sealed first", async () => {
-    // Two first-ingest requests for the same session can both read
-    // `existing === undefined` and derive different tiers. The loser's
-    // `onConflictDoUpdate` applies a `common` computed as though no row
-    // existed: it leaves the winner's `enforcementTier` alone, because the tier
-    // is only set on the promotion path, but it would write ITS OWN
-    // `replayGrade`. The row is then a sealed session whose signed grade was
-    // computed from a tier it does not carry — and a sealed session is never
-    // regraded.
-    //
-    // Modelled as the race's second half: the row is already there and sealed,
-    // exactly as the winner left it, and this batch is the loser arriving.
-    const db = fakeDb();
-    const events = sessionWithContent("gateway");
-    servedChain(db, events);
-    db.sessions.set(SESSION, {
-      id: "s1",
-      sessionUuid: SESSION,
-      hostId: HOST_ID,
-      enforcementTier: "gateway",
-      replayGrade: "fork",
-      sealedAt: new Date("2026-09-08T09:40:00.000Z"),
-    });
-    // …and invisible to the read that precedes the INSERT, which is what makes
-    // this the conflict path rather than the ordinary existing-session one.
-    db.hideSessionFromRead = true;
-    wire(db);
-
-    // No body, so this batch's own seal would grade `inspect` — a value that
-    // must not land on the winner's row.
-    await tachoEventsIngestHandler(batch(events), CONTEXT);
-
-    const row = db.sessions.get(SESSION);
-    expect(row?.["enforcementTier"]).toBe("gateway");
-    expect(row?.["replayGrade"]).toBe("fork");
   });
 
   it("grades a genesis-and-seal batch with the tier it actually writes", async () => {
