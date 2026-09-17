@@ -108,7 +108,15 @@ vi.mock("node:fs", async (importOriginal) => {
 
 // ── Import under test ──────────────────────────────────────────────────────────
 
-import { migrate } from "./migrate";
+import {
+  AmbiguousLedgerOriginError,
+  decideLedgerAction,
+  migrate,
+} from "./migrate";
+
+/** The two origin literals, kept in step with migrate.ts by the tests below. */
+const ORIGIN_PRE_LEDGER = "oxagen ledger origin: pre-ledger deployment";
+const ORIGIN_FRESH = "oxagen ledger origin: fresh database";
 
 // ── Shared SQL fixtures ────────────────────────────────────────────────────────
 
@@ -119,6 +127,16 @@ const MIGRATION_SQL = "ALTER TABLE t ADD COLUMN x String;";
 /** Wraps a plain array the way the real `@clickhouse/client` result does. */
 function jsonResult<T>(rows: T[]): { json: <U>() => Promise<U[]> } {
   return { json: async <U>() => rows as unknown as U[] };
+}
+
+/** Filenames this run wrote to the ledger, in order. */
+function recordedFilenames(): string[] {
+  return chInsertMock.mock.calls
+    .filter((c) => (c[0] as { table: string }).table === "_migrations")
+    .flatMap(
+      (c) => (c[0] as { values: readonly { filename: string }[] }).values,
+    )
+    .map((v) => v.filename);
 }
 
 function defaultMocks(): void {
@@ -597,13 +615,12 @@ describe("migrate() — applied-migrations ledger (#2632)", () => {
     expect(recorded).toContain("0027_new_thing.sql");
   });
 
-  it("a fresh database whose FIRST run failed part-way does NOT get bootstrapped (#2972)", async () => {
-    // The witness. Run 1 on an empty database creates _migrations and part of
-    // schema.sql, then dies (ClickHouse blip; the process exits 1). Run 2
-    // arrives at a database that HAS tables and has an EMPTY ledger — which the
-    // old single-count fork read as "a pre-ledger deployment", bootstrapping
-    // every pre-cutover file as applied without ever running it. A brand-new
-    // deployment would then permanently lack the tables those files create.
+  it("a FRESH-origin ledger that is empty runs every migration (#2972)", async () => {
+    // Run 1 on an empty database created _migrations — stamped "fresh" — then
+    // died inside schema.sql. Run 2 sees tables and an empty ledger. Before the
+    // origin existed that shape was read as a pre-ledger deployment and every
+    // pre-cutover file was recorded as applied WITHOUT running, leaving
+    // error_events and friends absent forever. The stamp settles it.
     readdirSyncMock.mockReturnValue(["0001_a.sql", "0002_b.sql"]);
     readFileSyncMock.mockImplementation((p: unknown) => {
       const path = String(p);
@@ -614,12 +631,11 @@ describe("migrate() — applied-migrations ledger (#2632)", () => {
       return SCHEMA_SQL;
     });
     chQueryMock.mockImplementation(async (opts: { query: string }) => {
-      if (opts.query.includes("system.tables")) {
-        // The shape run 1 left behind: the ledger exists, and so do the
-        // tables schema.sql managed to create before it failed.
-        return jsonResult([{ ledger: "1", c: "3" }]);
-      }
-      return jsonResult([]); // ledger table exists but holds nothing
+      if (opts.query.includes("system.tables"))
+        return jsonResult([
+          { ledger: "1", c: "3", ledger_comment: ORIGIN_FRESH },
+        ]);
+      return jsonResult([]);
     });
 
     await migrate();
@@ -627,19 +643,98 @@ describe("migrate() — applied-migrations ledger (#2632)", () => {
     const queries = chCommandMock.mock.calls.map(
       (c) => (c[0] as { query: string }).query,
     );
-    // Both files actually ran. Under the old fork neither did.
     expect(queries.some((q) => q.includes("needed_a"))).toBe(true);
     expect(queries.some((q) => q.includes("needed_b"))).toBe(true);
+    expect(recordedFilenames()).toEqual(["0001_a.sql", "0002_b.sql"]);
+  });
 
-    const recorded = chInsertMock.mock.calls
-      .filter((c) => (c[0] as { table: string }).table === "_migrations")
-      .flatMap(
-        (c) => (c[0] as { values: readonly { filename: string }[] }).values,
-      )
-      .map((v) => v.filename);
-    // Recorded one at a time, after executing — not swept in as a baseline.
-    expect(recorded).toEqual(["0001_a.sql", "0002_b.sql"]);
-    expect(chInsertMock).toHaveBeenCalledTimes(2);
+  it("a PRE-LEDGER-origin ledger that is empty bootstraps instead of replaying (#3192 r4035933342)", async () => {
+    // The mirror, and the one Codex caught. An EXISTING pre-ledger deployment's
+    // first ledger-aware run created _migrations and died inside schema.sql, so
+    // the ledger is empty although every pre-cutover file has already been
+    // applied many times. Reading the empty ledger as authoritative replays
+    // them — and 0021 drops and recreates schema_conformance_events, destroying
+    // retained data. The origin stamp is what stops that.
+    readdirSyncMock.mockReturnValue(["0001_a.sql", "0002_b.sql"]);
+    readFileSyncMock.mockImplementation((p: unknown) => {
+      const path = String(p);
+      if (path.endsWith("0001_a.sql"))
+        return "DROP TABLE IF EXISTS schema_conformance_events; CREATE TABLE IF NOT EXISTS schema_conformance_events (id UInt32) ENGINE=MergeTree() ORDER BY id;";
+      if (path.endsWith("0002_b.sql"))
+        return "ALTER TABLE t ADD COLUMN b String;";
+      return SCHEMA_SQL;
+    });
+    chQueryMock.mockImplementation(async (opts: { query: string }) => {
+      if (opts.query.includes("system.tables"))
+        return jsonResult([
+          { ledger: "1", c: "12", ledger_comment: ORIGIN_PRE_LEDGER },
+        ]);
+      return jsonResult([]); // empty: run 1 died before recording the backlog
+    });
+
+    await migrate();
+
+    const queries = chCommandMock.mock.calls.map(
+      (c) => (c[0] as { query: string }).query,
+    );
+    // The DROP never reached the server. This is the assertion the review is
+    // about: retained data survives the retry.
+    expect(
+      queries.some((q) =>
+        q.includes("DROP TABLE IF EXISTS schema_conformance_events"),
+      ),
+    ).toBe(false);
+    expect(queries.some((q) => q.includes("ADD COLUMN b"))).toBe(false);
+    // Both pre-cutover files were recorded as applied without executing.
+    expect(recordedFilenames()).toEqual(["0001_a.sql", "0002_b.sql"]);
+  });
+
+  it("refuses rather than guess when a pre-comment ledger is empty and tables exist", async () => {
+    // The one undecidable state, and the only one that can still occur: a
+    // ledger created before the origin stamp, holding nothing, in a database
+    // that has tables. The two histories above both produce it and they want
+    // opposite treatment, so this stops instead of picking.
+    readdirSyncMock.mockReturnValue(["0001_a.sql"]);
+    readFileSyncMock.mockImplementation((p: unknown) => {
+      const path = String(p);
+      if (path.endsWith("0001_a.sql"))
+        return "DROP TABLE IF EXISTS schema_conformance_events;";
+      return SCHEMA_SQL;
+    });
+    chQueryMock.mockImplementation(async (opts: { query: string }) => {
+      if (opts.query.includes("system.tables"))
+        return jsonResult([{ ledger: "1", c: "9", ledger_comment: "" }]);
+      return jsonResult([]);
+    });
+
+    await expect(migrate()).rejects.toThrow(AmbiguousLedgerOriginError);
+
+    // Nothing was applied and nothing was recorded — refusing is inert, which
+    // is the point of refusing.
+    const queries = chCommandMock.mock.calls.map(
+      (c) => (c[0] as { query: string }).query,
+    );
+    expect(queries.some((q) => q.includes("schema_conformance_events"))).toBe(
+      false,
+    );
+    expect(chInsertMock).not.toHaveBeenCalled();
+  });
+
+  it("stamps a new ledger with the origin it can only observe right now", async () => {
+    // The CREATE carries the answer, so there is no window between "table
+    // exists" and "origin known" for a crash to fall into.
+    chQueryMock.mockImplementation(async (opts: { query: string }) => {
+      if (opts.query.includes("system.tables"))
+        return jsonResult([{ ledger: "0", c: "7", ledger_comment: "" }]);
+      return jsonResult([]);
+    });
+
+    await migrate();
+
+    const create = chCommandMock.mock.calls
+      .map((c) => (c[0] as { query: string }).query)
+      .find((q) => q.includes("CREATE TABLE IF NOT EXISTS _migrations"));
+    expect(create).toContain(`COMMENT '${ORIGIN_PRE_LEDGER}'`);
   });
 
   it("a pre-ledger deployment (tables, and NO ledger table) still bootstraps", async () => {
@@ -687,7 +782,7 @@ describe("migrate() — applied-migrations ledger (#2632)", () => {
     });
     chQueryMock.mockImplementation(async (opts: { query: string }) => {
       if (opts.query.includes("system.tables"))
-        return jsonResult([{ ledger: "1", c: "0" }]);
+        return jsonResult([{ ledger: "1", c: "0", ledger_comment: "" }]);
       return jsonResult([]);
     });
 
@@ -703,6 +798,7 @@ describe("migrate() — applied-migrations ledger (#2632)", () => {
       .find((q) => q.includes("system.tables"));
     expect(inspect).toContain("countIf(name = '_migrations')");
     expect(inspect).toContain("countIf(name != '_migrations')");
+    expect(inspect).toContain("anyIf(comment, name = '_migrations')");
   });
 
   it("skips a file already recorded in the ledger and only executes the unrecorded one", async () => {
@@ -748,6 +844,146 @@ describe("migrate() — applied-migrations ledger (#2632)", () => {
 // module load time. We exercise it by resetting the module registry, setting
 // process.argv[1] to match migrate.ts's import.meta.url, then re-importing.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// decideLedgerAction — the whole state space
+//
+// The bootstrap decision has exactly four observable inputs and eight reachable
+// states. Enumerating them here rather than only through migrate() is the point:
+// the defect this function exists for was never a wrong line of code, it was a
+// state nobody had written down, twice in a row and in opposite directions.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("decideLedgerAction", () => {
+  const facts = (o: Partial<Parameters<typeof decideLedgerAction>[0]>) =>
+    decideLedgerAction({
+      hasLedgerTable: false,
+      hasOtherTables: false,
+      ledgerComment: "",
+      appliedCount: 0,
+      ...o,
+    });
+
+  describe("no ledger yet — the last moment the database says what it is", () => {
+    it("tables and no ledger is a pre-ledger deployment", () => {
+      expect(facts({ hasOtherTables: true }).action).toBe("bootstrap");
+    });
+
+    it("nothing at all is a new database", () => {
+      expect(facts({}).action).toBe("proceed");
+    });
+  });
+
+  describe("the ledger records its own origin", () => {
+    it("pre-ledger origin with an empty ledger bootstraps — it does NOT replay", () => {
+      // #3192 r4035933342. Replaying here runs 0021's DROP against a table
+      // holding real data.
+      expect(
+        facts({
+          hasLedgerTable: true,
+          hasOtherTables: true,
+          ledgerComment: ORIGIN_PRE_LEDGER,
+          appliedCount: 0,
+        }).action,
+      ).toBe("bootstrap");
+    });
+
+    it("pre-ledger origin with a recorded backlog just proceeds", () => {
+      expect(
+        facts({
+          hasLedgerTable: true,
+          hasOtherTables: true,
+          ledgerComment: ORIGIN_PRE_LEDGER,
+          appliedCount: 26,
+        }).action,
+      ).toBe("proceed");
+    });
+
+    it("fresh origin never bootstraps, empty ledger or not", () => {
+      // The first defect, from the other side: sweeping a backlog into a
+      // database that never had one leaves its tables absent forever.
+      for (const appliedCount of [0, 2]) {
+        expect(
+          facts({
+            hasLedgerTable: true,
+            hasOtherTables: true,
+            ledgerComment: ORIGIN_FRESH,
+            appliedCount,
+          }).action,
+        ).toBe("proceed");
+      }
+    });
+
+    it("does not read an origin it does not recognise as either one", () => {
+      // A comment set by something else must not be taken for a stamp.
+      expect(
+        facts({
+          hasLedgerTable: true,
+          hasOtherTables: true,
+          ledgerComment: "some unrelated table comment",
+          appliedCount: 0,
+        }).action,
+      ).toBe("refuse");
+    });
+  });
+
+  describe("a ledger created before the origin stamp existed", () => {
+    it("proceeds when it has applied things — its rows are the truth", () => {
+      // Every deployment already on the ledger is this state. It must not
+      // suddenly start refusing, and it must not bootstrap a backlog it has
+      // already accounted for.
+      expect(
+        facts({
+          hasLedgerTable: true,
+          hasOtherTables: true,
+          appliedCount: 27,
+        }).action,
+      ).toBe("proceed");
+    });
+
+    it("refuses when it is empty and the database has tables", () => {
+      const d = facts({
+        hasLedgerTable: true,
+        hasOtherTables: true,
+        appliedCount: 0,
+      });
+      expect(d.action).toBe("refuse");
+      expect(d.reason).toContain("pre-comment ledger");
+    });
+
+    it("proceeds when it is empty and the database is otherwise empty", () => {
+      // Both histories agree here: nothing has ever succeeded, so everything
+      // must run. Refusing would strand a database that is not ambiguous.
+      expect(
+        facts({
+          hasLedgerTable: true,
+          hasOtherTables: false,
+          appliedCount: 0,
+        }).action,
+      ).toBe("proceed");
+    });
+  });
+
+  it("never refuses a state that a ledger written by this version can reach", () => {
+    // The test the fix has to pass: with an origin present, no combination of
+    // the other three facts is undecidable. If this ever fails, the ambiguous
+    // state has come back.
+    for (const ledgerComment of [ORIGIN_PRE_LEDGER, ORIGIN_FRESH]) {
+      for (const hasOtherTables of [true, false]) {
+        for (const appliedCount of [0, 1, 27]) {
+          expect(
+            facts({
+              hasLedgerTable: true,
+              ledgerComment,
+              hasOtherTables,
+              appliedCount,
+            }).action,
+          ).not.toBe("refuse");
+        }
+      }
+    }
+  });
+});
 
 describe("isDirectRun block", () => {
   // Path of migrate.ts resolved relative to THIS test file (same directory).
