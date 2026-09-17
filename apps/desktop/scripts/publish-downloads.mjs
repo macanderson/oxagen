@@ -12,6 +12,10 @@
  * with the right content types, then writes SHA256SUMS.txt there and the
  * listing page at the bucket root, and invalidates the page on CloudFront.
  *
+ * Versioned URLs are served immutable, so a version that is already published
+ * is refused: a fix ships as a new version. --allow-overwrite is the escape
+ * hatch for a publish nobody was given the URLs to.
+ *
  * Artifacts are streamed to disk with curl rather than `gh run download`,
  * which holds each zip in memory and is killed on a loaded machine (the
  * Windows artifact alone is ~190 MB). Needs `gh` (signed in), `aws`
@@ -48,6 +52,7 @@ const flag = (name) => {
   return i >= 0 ? argv[i + 1] : undefined;
 };
 const dryRun = argv.includes("--dry-run");
+const allowOverwrite = argv.includes("--allow-overwrite");
 const runId = flag("--run");
 const fromDir = flag("--dir");
 const repo = flag("--repo") ?? "macanderson/oxagen";
@@ -59,7 +64,7 @@ const version =
 
 if ((runId === undefined) === (fromDir === undefined)) {
   console.error(
-    "usage: publish-downloads.mjs (--run <id> | --dir <folder>) [--version x.y.z] [--bucket name] [--host name] [--dry-run]",
+    "usage: publish-downloads.mjs (--run <id> | --dir <folder>) [--version x.y.z] [--bucket name] [--host name] [--allow-overwrite] [--dry-run]",
   );
   process.exit(2);
 }
@@ -79,16 +84,18 @@ const NO_COLOUR_ENV = {
   GH_FORCE_TTY: "",
 };
 
-function sh(command, args, { capture = false } = {}) {
+function sh(command, args, { capture = false, allowFailure = false } = {}) {
   const result = spawnSync(command, args, {
     encoding: "utf8",
     env: NO_COLOUR_ENV,
     stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit",
   });
-  if (result.status !== 0) {
+  if (result.status !== 0 && !allowFailure) {
     console.error(`✖ ${command} ${args.join(" ")} exited ${result.status}`);
     process.exit(result.status ?? 1);
   }
+  if (allowFailure)
+    return { status: result.status ?? 1, stdout: result.stdout ?? "" };
   return capture ? result.stdout : "";
 }
 
@@ -198,6 +205,37 @@ writeFileSync(
 // so they cache for a year; the page is short-lived because it moves with
 // every release.
 const prefix = `s3://${bucket}/desktop/${version}`;
+
+// `immutable, max-age=31536000` is a promise to every cache that fetched the
+// URL, not just to CloudFront. Overwriting the object cannot take that promise
+// back: a browser or a corporate proxy that already downloaded the installer
+// will keep serving its copy for the rest of the year without revalidating,
+// and an invalidation only reaches the edge. So a corrected build has to ship
+// under a new version, and this refuses to republish one rather than leave the
+// fleet split between two different files answering to one URL and one
+// checksum. --allow-overwrite is for the publish that failed before anyone was
+// given the URL, where nothing downstream can hold a stale copy.
+const published = sh("aws", ["s3", "ls", `${prefix}/`], {
+  capture: true,
+  allowFailure: true,
+});
+if (published.status === 0 && published.stdout.trim() !== "") {
+  if (!allowOverwrite) {
+    console.error(
+      `✖ ${version} is already published at ${prefix}/.\n` +
+        "  Those URLs were served as immutable, so caches downstream of\n" +
+        "  CloudFront may hold the old installers for up to a year and no\n" +
+        "  invalidation can reach them. Ship the fix as a new version.\n" +
+        "  If nobody was ever given these URLs, re-run with --allow-overwrite.",
+    );
+    process.exit(1);
+  }
+  console.warn(
+    `! overwriting the published ${version}; only caches that never fetched\n` +
+      "  these URLs will see the new installers",
+  );
+}
+
 const upload = (path, key, contentType, cacheControl) => {
   const args = [
     "s3",
@@ -253,14 +291,10 @@ if (!dryRun) {
       "--paths",
       "/",
       "/index.html",
-      // The versioned objects upload with `immutable, max-age=31536000` on the
-      // assumption that a fix always ships as a new version. Nothing enforces
-      // that, and republishing a version over itself is exactly what happens
-      // when a build is corrected before anyone is asked to upgrade. Without
-      // this line the edge keeps serving the superseded installer for a year
-      // while S3 and SHA256SUMS.txt show the new one — the worst shape of this
-      // bug, because the checksums published beside the file stop matching it.
-      // Invalidating a prefix that was never cached costs nothing.
+      // Only an --allow-overwrite republish can have a stale edge copy of the
+      // versioned prefix, and only the edge is reachable — anything further
+      // downstream was promised a year. Invalidating a prefix that was never
+      // cached costs nothing, so this runs unconditionally.
       `/desktop/${version}/*`,
     ]);
   } else {
