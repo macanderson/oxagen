@@ -67,10 +67,14 @@ export type SystemLookups = {
   ) => Promise<WorkspaceRecord | null>;
   /** The member's organization role, lowercased; null for a non-member. */
   readonly orgRole: (orgId: string, userId: string) => Promise<string | null>;
-  readonly isWorkspaceMember: (
+  /**
+   * The viewer's membership of a workspace — the row id and their role,
+   * lowercased — or null when they are not a member.
+   */
+  readonly workspaceMember: (
     workspaceId: string,
     userId: string,
-  ) => Promise<boolean>;
+  ) => Promise<{ id: string; role: string } | null>;
   /** The organization's MFA policy, or null when it has none. */
   readonly mfaPolicy: (orgId: string) => Promise<MfaPolicy | null>;
   readonly twoFactorEnabled: (userId: string) => Promise<boolean>;
@@ -207,10 +211,18 @@ export const systemLookups: SystemLookups = {
     return role ? role.toLowerCase() : null;
   },
 
-  async isWorkspaceMember(workspaceId, userId) {
+  async workspaceMember(workspaceId, userId) {
+    // workspace_users.role is written in both casings, exactly as org_users.role
+    // is: lowercase by the workspace create and bootstrap paths, TitleCase by
+    // the IAM role names, under a case-insensitive CHECK over the canonical set
+    // (packages/database/src/schema/workspace.ts:148). This is the one place
+    // the casing is settled, so no reader downstream lowercases again.
     const rows = await withSystemDb((tx) =>
       tx
-        .select({ id: schema.workspaceUsers.id })
+        .select({
+          id: schema.workspaceUsers.id,
+          role: schema.workspaceUsers.role,
+        })
         .from(schema.workspaceUsers)
         .where(
           and(
@@ -220,7 +232,8 @@ export const systemLookups: SystemLookups = {
         )
         .limit(1),
     );
-    return rows.length > 0;
+    const row = rows[0];
+    return row ? { id: row.id, role: row.role.toLowerCase() } : null;
   },
 
   async mfaPolicy(orgId) {

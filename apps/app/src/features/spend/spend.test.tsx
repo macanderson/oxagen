@@ -49,6 +49,7 @@ const ctx = unsafeMint(WsCtx, {
   workspaceId: "7b000000-0000-4000-8000-000000000001",
   wsSlug: "core-platform",
   wsName: "Core platform",
+  wsRole: "member",
 });
 
 const TODAY = new Date("2026-09-15T12:00:00.000Z");

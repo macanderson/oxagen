@@ -10,7 +10,8 @@
 //                                         membership is checked BEFORE a stale-slug
 //                                         redirect, so a rename is not disclosed either)
 //   4. a role outside the stored set    → not_found (fail closed)
-//   5. unknown workspace, or not a member of it → not_found
+//   5. unknown workspace, not a member of it, or a workspace role outside the
+//      stored set → not_found (fail closed, as for the org role)
 //   6. MFA policy requires enrollment   → mfa_enroll
 //   7. a historical slug                → redirect to the canonical slugs
 //   8. otherwise                        → the viewer's fields
@@ -30,8 +31,11 @@ export type ViewerResolution =
   | { kind: "mfa_enroll" }
   | { kind: "redirect"; org: string; ws: string | null };
 
-/** Every role the org_users CHECK admits, and nothing else. */
-const ORG_ROLES = {
+/**
+ * Every role a membership CHECK admits, and nothing else. `org_users.role` and
+ * `workspace_users.role` carry the same six values, so one table judges both.
+ */
+const MEMBERSHIP_ROLES = {
   owner: true,
   admin: true,
   member: true,
@@ -40,8 +44,8 @@ const ORG_ROLES = {
   viewer: true,
 } as const satisfies Record<OrgRole, true>;
 
-function isOrgRole(role: string): role is OrgRole {
-  return Object.hasOwn(ORG_ROLES, role);
+function isMembershipRole(role: string): role is OrgRole {
+  return Object.hasOwn(MEMBERSHIP_ROLES, role);
 }
 
 /**
@@ -80,7 +84,7 @@ export async function resolveViewerWith(
   if (!org) return { kind: "not_found" };
 
   const role = await lookups.orgRole(org.id, userId);
-  if (role === null || !isOrgRole(role)) return { kind: "not_found" };
+  if (role === null || !isMembershipRole(role)) return { kind: "not_found" };
 
   let ws: Extract<ViewerResolution, { kind: "ok" }>["ws"] = null;
   if (wsSlug !== undefined) {
@@ -88,9 +92,18 @@ export async function resolveViewerWith(
       (await lookups.workspaceBySlug(org.id, wsSlug)) ??
       (await lookups.workspaceBySlugHistory(org.id, wsSlug));
     if (!found || found.orgId !== org.id) return { kind: "not_found" };
-    if (!(await lookups.isWorkspaceMember(found.id, userId)))
+    // The membership is the workspace gate and the role it carries is the
+    // viewer's authority inside it (#3143). A role the CHECK would not admit is
+    // treated exactly as the org role is: not a member, so not_found.
+    const member = await lookups.workspaceMember(found.id, userId);
+    if (member === null || !isMembershipRole(member.role))
       return { kind: "not_found" };
-    ws = { workspaceId: found.id, wsSlug: found.slug, wsName: found.name };
+    ws = {
+      workspaceId: found.id,
+      wsSlug: found.slug,
+      wsName: found.name,
+      wsRole: member.role,
+    };
   }
 
   const policy = await lookups.mfaPolicy(org.id);

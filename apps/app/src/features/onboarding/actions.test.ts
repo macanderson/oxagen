@@ -50,6 +50,7 @@ const ctx = unsafeMint(WsCtx, {
   workspaceId: "7b000000-0000-4000-8000-000000000001",
   wsSlug: "core-platform",
   wsName: "Core platform",
+  wsRole: "member",
 });
 
 /** The CapabilityContext every workspace write reaches the kernel with. */
@@ -223,7 +224,10 @@ describe("registerAgent", () => {
 
   it("returns the handler's role refusal as denied (negative)", async () => {
     invoke.mockRejectedValue(
-      new kernel.HandlerError({ code: "forbidden", reason: "org_role_required" }),
+      new kernel.HandlerError({
+        code: "forbidden",
+        reason: "org_role_required",
+      }),
     );
     expect(await registerAgent("acme", "core-platform", agentForm)).toEqual({
       ok: false,
@@ -264,9 +268,7 @@ describe("issueEnrollmentToken", () => {
   });
 
   it("refuses an empty agent before the kernel runs (negative)", async () => {
-    expect(
-      await issueEnrollmentToken("acme", "core-platform", ""),
-    ).toEqual({
+    expect(await issueEnrollmentToken("acme", "core-platform", "")).toEqual({
       ok: false,
       reason: "invalid",
       code: "invalid_input",

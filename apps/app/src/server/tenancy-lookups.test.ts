@@ -123,12 +123,27 @@ describe("systemLookups", () => {
     await expect(l.orgRole(orgRow.id, "u3")).resolves.toBeNull();
   });
 
-  it("answers workspace membership", async () => {
-    queue.push([{ id: "wu1" }]);
-    await expect(l.isWorkspaceMember(wsRow.id, "u1")).resolves.toBe(true);
+  it("answers workspace membership with the role, lowercased, and null for a non-member", async () => {
+    // workspace_users.role is written in both casings (#3143): the TitleCase
+    // the IAM role names use must come back the same as the lowercase the
+    // create path writes, because this lookup is the only place it is settled.
+    queue.push([{ id: "wu1", role: "Owner" }]);
+    await expect(l.workspaceMember(wsRow.id, "u1")).resolves.toEqual({
+      id: "wu1",
+      role: "owner",
+    });
+    queue.push([{ id: "wu2", role: "member" }]);
+    await expect(l.workspaceMember(wsRow.id, "u2")).resolves.toEqual({
+      id: "wu2",
+      role: "member",
+    });
     queue.push([]);
-    await expect(l.isWorkspaceMember(wsRow.id, "u2")).resolves.toBe(false);
-    expect(tables).toEqual([schema.workspaceUsers, schema.workspaceUsers]);
+    await expect(l.workspaceMember(wsRow.id, "u3")).resolves.toBeNull();
+    expect(tables).toEqual([
+      schema.workspaceUsers,
+      schema.workspaceUsers,
+      schema.workspaceUsers,
+    ]);
   });
 
   it("reads the MFA policy and the enrollment flag", async () => {

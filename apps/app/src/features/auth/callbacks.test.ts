@@ -54,6 +54,7 @@ function viewer(orgRole: "owner" | "member") {
     workspaceId: "7b000000-0000-4000-8000-000000000001",
     wsSlug: "core",
     wsName: "Core",
+    wsRole: "member",
   });
 }
 
