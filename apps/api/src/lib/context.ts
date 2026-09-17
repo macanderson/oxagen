@@ -36,6 +36,24 @@ function trustEdgeHeader(): boolean {
 }
 
 /**
+ * The proxies this deployment trusts, by identity rather than by count.
+ * Memoized on the same terms as the hop count above.
+ *
+ * Exported because the pre-authentication rate-limit ceilings enforce ONLY
+ * where this is set: a hop count cannot defend itself on a bucket key, so
+ * naming the proxies is the declaration that turns those ceilings on.
+ */
+let cachedTrustedProxyCidrs: string[] | null = null;
+export function trustedProxyCidrs(): string[] {
+  if (cachedTrustedProxyCidrs !== null) return cachedTrustedProxyCidrs;
+  const env = requireEnv(["TRUSTED_PROXY_CIDRS"] as const);
+  cachedTrustedProxyCidrs = env.TRUSTED_PROXY_CIDRS.split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  return cachedTrustedProxyCidrs;
+}
+
+/**
  * The client IP this deployment is willing to authorize on, or null.
  *
  * The derivation itself is `extractTrustedClientIp` in
@@ -55,6 +73,7 @@ function trustEdgeHeader(): boolean {
 export function extractClientIp(c: Context<AppEnv>): string | null {
   return extractTrustedClientIp((name) => c.req.header(name), {
     trustedProxyHops: trustedProxyHops(),
+    trustedProxyCidrs: trustedProxyCidrs(),
     trustEdgeHeader: trustEdgeHeader(),
     onVercel: process.env.VERCEL === "1",
   });
@@ -64,6 +83,7 @@ export function extractClientIp(c: Context<AppEnv>): string | null {
 export function __resetTrustedProxyHopsForTests(): void {
   cachedTrustedProxyHops = null;
   cachedTrustEdgeHeader = null;
+  cachedTrustedProxyCidrs = null;
 }
 
 /**

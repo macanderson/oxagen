@@ -302,21 +302,53 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     placeholder: "60",
   },
 
-  TRUSTED_PROXY_HOP_COUNT: {
+  TRUSTED_PROXY_CIDRS: {
     group: "Rate limiting",
     description:
-      "How many proxies sit in front of the app, api and mcp services and append " +
-      "to x-forwarded-for. The client IP the IAM ip_ranges allowlist checks is the " +
-      "Nth entry from the right; entries left of it are caller-supplied. Optional " +
-      "— defaults to 2 (the ALB, then Caddy) in packages/config/src/env.ts. " +
-      "0 trusts only x-oxagen-client-ip, and only while " +
-      "TRUST_EDGE_CLIENT_IP_HEADER is true.",
+      "Comma-separated CIDRs or addresses of the proxies in front of apps/api, " +
+      "and the safe way to attribute a client address. Prefer it over " +
+      "TRUSTED_PROXY_HOP_COUNT: a hop count trusts the COUNT to be right, and " +
+      "one that is too high selects an entry the caller wrote, because a caller " +
+      "can pad x-forwarded-for until the arithmetic lands on its own value. " +
+      "Naming the proxies removes that: the walk goes right while each entry is " +
+      "a trusted proxy and stops at the first that is not. The pre-authentication " +
+      "IP ceilings on the Tacho and Stella machine routes enforce only when this " +
+      "is set or the edge header is gated on (TRUST_EDGE_CLIENT_IP_HEADER); " +
+      "with neither, they skip rather than trust a count or pool every caller " +
+      "into one bucket. Empty by default.",
     secret: false,
     clientExposed: false,
     services: ["app", "api", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
-    placeholder: "2",
+    placeholder: "10.0.0.0/8",
+  },
+
+  TRUSTED_PROXY_HOP_COUNT: {
+    group: "Rate limiting",
+    description:
+      "How many proxies sit in front of the app, api and mcp services and " +
+      "append to x-forwarded-for. The client IP is the Nth entry from the " +
+      "right; entries left of it are caller-supplied, and a chain shorter than " +
+      "this count is refused rather than clamped to one of them. This is the " +
+      "LEGACY form and it feeds the IAM ip_ranges allowlist only — it does NOT " +
+      "enable the pre-authentication IP ceilings on the Tacho and Stella " +
+      "machine routes. TRUSTED_PROXY_CIDRS does, and identity wins wherever " +
+      "both are set. Set it to the REAL depth: a wrong value is worse than an " +
+      "absent one, because a count that is too high lets a caller pad " +
+      "x-forwarded-for until the arithmetic lands on a value the caller chose. " +
+      "The upstream proxy must also preserve the chain — Caddy replaces " +
+      "x-forwarded-for unless trusted_proxies names its peer — or no depth is " +
+      "correct. 0 means nothing in front is trusted, so x-forwarded-for is " +
+      "refused; x-real-ip is never read at any value. Optional — defaults to 1 " +
+      "in packages/config/src/env.ts, which is a guess only the allowlist " +
+      "falls back to.",
+    secret: false,
+    clientExposed: false,
+    services: ["app", "api", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
   },
 
   TRUST_EDGE_CLIENT_IP_HEADER: {

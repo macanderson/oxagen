@@ -115,10 +115,26 @@ function trustEdgeHeader(): boolean {
   return cachedTrustEdgeHeader;
 }
 
+/**
+ * The proxies this deployment trusts, by identity rather than by count.
+ * Memoized on the same terms as the hop count above, and preferred over it:
+ * a count cannot tell an over-declared depth from a real one.
+ */
+let cachedTrustedProxyCidrs: string[] | null = null;
+function trustedProxyCidrs(): string[] {
+  if (cachedTrustedProxyCidrs !== null) return cachedTrustedProxyCidrs;
+  cachedTrustedProxyCidrs = requireEnv(["TRUSTED_PROXY_CIDRS"] as const)
+    .TRUSTED_PROXY_CIDRS.split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  return cachedTrustedProxyCidrs;
+}
+
 /** Test seam: drop the memoized hop count so a case can set a different env. */
 export function __resetTrustedProxyHopsForTests(): void {
   cachedTrustedProxyHops = null;
   cachedTrustEdgeHeader = null;
+  cachedTrustedProxyCidrs = null;
 }
 
 /**
@@ -138,6 +154,7 @@ export function __resetTrustedProxyHopsForTests(): void {
 function extractClientIp(hdrs: HttpHeaders): string | null {
   return extractTrustedClientIp((name) => firstHeader(hdrs[name]), {
     trustedProxyHops: trustedProxyHops(),
+    trustedProxyCidrs: trustedProxyCidrs(),
     trustEdgeHeader: trustEdgeHeader(),
     onVercel: process.env.VERCEL === "1",
   });

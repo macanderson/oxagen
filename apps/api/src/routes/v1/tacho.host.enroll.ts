@@ -4,8 +4,11 @@ import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
 import { tachoHostEnroll } from "@oxagen/oxagen/contracts/tacho.host.enroll";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { capabilityContext, extractClientIp } from "../../lib/context";
-import { distributedRateLimiter } from "../../middleware/distributed-rate-limit";
+import { capabilityContext } from "../../lib/context";
+import {
+  distributedRateLimiter,
+  trustedClientIpBucketKey,
+} from "../../middleware/distributed-rate-limit";
 import type { AppEnv } from "../../app";
 
 /**
@@ -54,14 +57,6 @@ async function enrollmentTokenBucketKey(c: Context<AppEnv>): Promise<string> {
   return `token:${fingerprint}`;
 }
 
-/**
- * The client address the trusted proxies report (TRUSTED_PROXY_HOP_COUNT). A
- * deployment that reports none puts every caller in one bucket.
- */
-function clientIpBucketKey(c: Context<AppEnv>): string {
-  return `ip:${extractClientIp(c) ?? "unverified"}`;
-}
-
 export const tachoHostEnrollRoute = new Hono<AppEnv>();
 
 tachoHostEnrollRoute.use(
@@ -85,7 +80,7 @@ tachoHostEnrollRoute.use(
   distributedRateLimiter({
     keyPrefix: "tacho-enroll-ip",
     max: ENROLL_PER_IP_PER_MIN,
-    bucketKey: clientIpBucketKey,
+    bucketKey: trustedClientIpBucketKey,
     methods: "all",
     storeErrorPolicy: "degrade-to-local",
   }),

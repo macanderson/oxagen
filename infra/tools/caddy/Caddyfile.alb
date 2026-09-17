@@ -27,6 +27,23 @@
 # placeholder returns the load balancer's own private address and every caller
 # looks like the same one.
 #
+# This is measured rather than argued, against `caddy:2`, the image this node
+# runs. A request arriving as `X-Forwarded-For: 203.0.113.99`:
+#
+#     plain reverse_proxy:                 XFF="172.17.0.1"
+#     with trusted_proxies private_ranges: XFF="203.0.113.99, 172.17.0.1"
+#
+# So `reverse_proxy` does NOT append to an inbound chain unless the immediate
+# peer is a trusted proxy — it REPLACES the header with the peer's own address.
+# Until this block existed the API had never seen a client address in
+# production, only the load balancer's, and no TRUSTED_PROXY_HOP_COUNT could
+# have recovered one.
+#
+# `private_ranges` rather than the VPC CIDR: the security group admits the ALB's
+# security group alone (see the header above), so the only peer that can reach
+# this listener is already the load balancer. Naming an exact CIDR here would
+# add a second place for a network change to break the client IP silently.
+#
 # ## Client address (ADR-083)
 #
 # Every application upstream below is handed the same client address twice, as
@@ -40,8 +57,8 @@
 # version of this file has no rule for that header name and forwards a
 # caller-supplied copy straight through; a reader that trusted it on sight would
 # be handed a forged address by name. Until the flag is set the application
-# falls back to the hop-count walk of `X-Forwarded-For`, which is where it
-# already was. ADR-083 carries the reasoning.
+# falls back to the `x-forwarded-for` walk, which is where it already was.
+# ADR-083 carries the reasoning.
 #
 # `X-Forwarded-For` is rewritten to the same
 # value because the chain itself was the vulnerability: the ALB appends and
@@ -72,6 +89,20 @@
 # entry the ALB appended and a caller-supplied prefix is ignored. Dropping this
 # line does not fail any check; it silently hands `X-Oxagen-Client-Ip` to the
 # caller.
+#
+# ## After this deploys
+#
+# Two application-side values finish the rollout, and BOTH are deliberate acts:
+#
+#  - `TRUST_EDGE_CLIENT_IP_HEADER=true` for apps/api, apps/app and apps/mcp,
+#    which is what makes the header written three lines below believable.
+#  - `TRUSTED_PROXY_CIDRS` set to the range these proxies sit in. That is the
+#    switch that turns the pre-authentication IP ceilings on the Tacho and
+#    Stella machine routes on, and the safe form of the declaration: the app
+#    walks the chain from the right while each entry is a named proxy and stops
+#    at the first that is not, so a caller padding the header cannot move the
+#    result. `TRUSTED_PROXY_HOP_COUNT` is the legacy form, read by the IAM
+#    allowlist alone, and it does NOT enable those ceilings. See #3167.
 {
 	servers {
 		trusted_proxies static private_ranges

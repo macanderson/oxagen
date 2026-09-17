@@ -78,12 +78,18 @@ function scriptCount(count: number): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Both the edge-header gate and the trusted-proxy list are memoized on first
+  // read, in this file and in lib/context.ts. Dropping both per case is how a
+  // test that names proxies stops changing how the next one attributes an
+  // address — that memo outliving a case is a green run for the wrong reason.
   __resetRateLimitEnvForTests();
   // Most cases here model the deployment AFTER the edge is in place and the
   // operator has turned the flag on, because that is the state the per-address
-  // bucketing is for. The gate-off state has its own block below.
+  // bucketing is for. The gate-off and no-proxies-named states have their own
+  // cases below.
   mocks.requireEnv.mockReturnValue({
     TRUST_EDGE_CLIENT_IP_HEADER: true,
+    TRUSTED_PROXY_CIDRS: "",
     RATE_LIMIT_CHAT_PER_MIN: 60,
   });
   // Keep the opportunistic cleanup (Math.random < 0.01) from firing so
@@ -97,8 +103,129 @@ afterEach(() => {
 });
 
 describe("pre-authentication bucket keys", () => {
-  // The regression #3167 is named for: off Vercel this returned a constant, so
-  // every caller on the internet shared one bucket and one Postgres row.
+  // The regression #3167 is named for: off Vercel this returned the constant
+  // "ip:unverified" for every caller, so the whole internet shared one bucket
+  // and one Postgres row. On a mount that runs before any credential exists
+  // that is not a ceiling — it hands anyone who can reach the host the power to
+  // take the entire Tacho and Stella ingress offline with `max + 1` requests.
+  // Two callers must never share a bucket, and where no client can be
+  // identified the limiter must SKIP rather than pool.
+  //
+  // Two declarations can name a caller: the proxies named in
+  // TRUSTED_PROXY_CIDRS, and the edge header once its gate is on (ADR-083).
+  // A hop count names nobody here, deliberately — see trustedClientIpBucketKey.
+  it("gives two off-Vercel callers two different buckets", () => {
+    vi.stubEnv("VERCEL", "");
+    mocks.requireEnv.mockReturnValue({
+      TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
+      TRUSTED_PROXY_HOP_COUNT: 1,
+    });
+
+    // The trailing entry is the named proxy: an address is only attributable
+    // when a trusted proxy wrote it.
+    const first = trustedClientIpBucketKey(
+      fakeContext({ headers: { "x-forwarded-for": "198.51.100.1, 10.0.0.5" } }),
+    );
+    const second = trustedClientIpBucketKey(
+      fakeContext({ headers: { "x-forwarded-for": "198.51.100.2, 10.0.0.5" } }),
+    );
+
+    expect(first).toBe("ip:198.51.100.1");
+    expect(second).toBe("ip:198.51.100.2");
+    expect(first).not.toBe(second);
+  });
+
+  it("stops at the first entry that is not a trusted proxy, whatever the caller prepends", () => {
+    vi.stubEnv("VERCEL", "");
+    mocks.requireEnv.mockReturnValue({
+      TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
+      TRUSTED_PROXY_HOP_COUNT: 2,
+    });
+
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({
+          headers: {
+            // A caller prepending entries only lengthens a prefix the walk
+            // never reaches: it stops on what an entry IS, not on how many.
+            "x-forwarded-for": "evil, 10.9.9.9, 198.51.100.7, 10.0.0.5",
+          },
+        }),
+      ),
+    ).toBe("ip:198.51.100.7");
+  });
+
+  it("refuses a chain that no trusted proxy vouched for", () => {
+    // No named proxy stands to the right of the rightmost entry, so nothing
+    // wrote it but the caller — a typo in the CIDR list, a network change, or
+    // a path that bypasses the proxy all look like this.
+    vi.stubEnv("VERCEL", "");
+    mocks.requireEnv.mockReturnValue({
+      TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
+      TRUSTED_PROXY_HOP_COUNT: 1,
+    });
+
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-forwarded-for": "198.51.100.1" } }),
+      ),
+    ).toBeNull();
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({
+          headers: { "x-forwarded-for": "10.0.0.5, 198.51.100.1" },
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("refuses to enforce a ceiling whose proxies the deployment has not named", () => {
+    // A hop count is not enough on this mount: one that is too high lets a
+    // caller pad x-forwarded-for until the arithmetic lands on a value the
+    // caller chose, which means a fresh bucket per request and no ceiling at
+    // all. Undeclared proxies are an unattributable request.
+    vi.stubEnv("VERCEL", "");
+    mocks.requireEnv.mockReturnValue({
+      TRUSTED_PROXY_CIDRS: "",
+      TRUSTED_PROXY_HOP_COUNT: 1,
+    });
+
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-forwarded-for": "198.51.100.1" } }),
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null when no trusted proxy chain can be read", () => {
+    vi.stubEnv("VERCEL", "");
+    mocks.requireEnv.mockReturnValue({
+      TRUSTED_PROXY_CIDRS: "",
+      TRUSTED_PROXY_HOP_COUNT: 0,
+    });
+
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-forwarded-for": "198.51.100.1" } }),
+      ),
+    ).toBeNull();
+    // Including x-real-ip, which on a zero-trusted-proxy deployment is just as
+    // caller-supplied. Believing it would let a credential-stuffing client mint
+    // a fresh bucket per request by rotating the header, evading this ceiling
+    // entirely rather than being slowed by it.
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-real-ip": "198.51.100.1" } }),
+      ),
+    ).toBeNull();
+  });
+
+  // ── the edge header (ADR-083) ────────────────────────────────────────────
+  // The second way a caller can be named here. Caddy SETS x-oxagen-client-ip
+  // with `header_up`, which REPLACES a copy the caller sent, so the value is
+  // the edge's own — but only once the operator has turned the gate on, which
+  // is the default state of these cases.
+
   it("gives each edge-reported client address its own bucket off Vercel", () => {
     vi.stubEnv("VERCEL", "");
 
@@ -114,12 +241,35 @@ describe("pre-authentication bucket keys", () => {
     ).toBe("ip:2001:db8::1");
   });
 
+  it("prefers the edge-written address over the named-proxy walk", () => {
+    // Both declarations are in force. The edge header is the one the deployment
+    // writes itself, so it wins, and the two must never disagree about which
+    // caller a bucket belongs to.
+    vi.stubEnv("VERCEL", "");
+    mocks.requireEnv.mockReturnValue({
+      TRUST_EDGE_CLIENT_IP_HEADER: true,
+      TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
+      TRUSTED_PROXY_HOP_COUNT: 1,
+    });
+
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({
+          headers: {
+            "x-oxagen-client-ip": "198.51.100.1",
+            "x-forwarded-for": "203.0.113.9, 10.0.0.5",
+          },
+        }),
+      ),
+    ).toBe("ip:198.51.100.1");
+  });
+
   it("ignores the caller-writable forwarding headers off Vercel", () => {
     vi.stubEnv("VERCEL", "");
 
-    // Only the edge header is written by a proxy that replaces a caller's copy;
-    // x-forwarded-for is appended to by both the ALB and Caddy, and x-real-ip
-    // is set by neither.
+    // Only the edge header is written by a proxy that replaces a caller's copy.
+    // x-forwarded-for is appended to by both the ALB and Caddy and names no
+    // trusted proxy here, and x-real-ip is set by neither.
     expect(
       trustedClientIpBucketKey(
         fakeContext({
@@ -132,6 +282,8 @@ describe("pre-authentication bucket keys", () => {
         }),
       ),
     ).toBe("ip:198.51.100.1");
+    // And with no edge header and no named proxies, nothing names the caller,
+    // so the ceiling skips rather than pooling every caller into one bucket.
     expect(
       trustedClientIpBucketKey(
         fakeContext({
@@ -141,10 +293,28 @@ describe("pre-authentication bucket keys", () => {
           },
         }),
       ),
-    ).toBe("ip:unverified");
+    ).toBeNull();
   });
 
-  it("falls back to the unverified bucket for anything that is not an address", () => {
+  it("does not believe the edge header before the gate is turned on", () => {
+    // Before the Caddy config lands, the OLD Caddyfile has no rule for this
+    // header name and forwards a caller's copy unchanged. Trusting it on sight
+    // would hand a caller a by-name route into a bucket key of its choosing.
+    vi.stubEnv("VERCEL", "");
+    mocks.requireEnv.mockReturnValue({
+      TRUST_EDGE_CLIENT_IP_HEADER: false,
+      TRUSTED_PROXY_CIDRS: "",
+      TRUSTED_PROXY_HOP_COUNT: 1,
+    });
+
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.1" } }),
+      ),
+    ).toBeNull();
+  });
+
+  it("skips rather than bucketing anything that is not an address", () => {
     vi.stubEnv("VERCEL", "");
 
     for (const value of [
@@ -157,7 +327,7 @@ describe("pre-authentication bucket keys", () => {
         trustedClientIpBucketKey(
           fakeContext({ headers: { "x-oxagen-client-ip": value } }),
         ),
-      ).toBe("ip:unverified");
+      ).toBeNull();
     }
   });
 
@@ -180,7 +350,7 @@ describe("pre-authentication bucket keys", () => {
       trustedClientIpBucketKey(
         fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.1" } }),
       ),
-    ).toBe("ip:unverified");
+    ).toBeNull();
   });
 
   it("normalizes a bearer credential and returns only a SHA-256 fingerprint", () => {
@@ -212,6 +382,7 @@ describe("pre-authentication bucket keys with the edge header ungated", () => {
     __resetRateLimitEnvForTests();
     mocks.requireEnv.mockReturnValue({
       TRUST_EDGE_CLIENT_IP_HEADER: false,
+      TRUSTED_PROXY_CIDRS: "",
       RATE_LIMIT_CHAT_PER_MIN: 60,
     });
   });
@@ -219,18 +390,20 @@ describe("pre-authentication bucket keys with the edge header ungated", () => {
   it("does not let a forged edge header mint its own bucket", () => {
     vi.stubEnv("VERCEL", "");
 
-    // Two callers, two forged addresses, one shared ceiling — a smaller
-    // ceiling for everyone, never a larger one for anybody.
+    // Two callers, two forged addresses, and no bucket for either: nothing the
+    // deployment wrote names them, so the ceiling skips. It must not be one
+    // shared bucket either — on a pre-authentication mount that is one caller's
+    // power to deny the ingress to all the others.
     expect(
       trustedClientIpBucketKey(
         fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.1" } }),
       ),
-    ).toBe("ip:unverified");
+    ).toBeNull();
     expect(
       trustedClientIpBucketKey(
         fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.2" } }),
       ),
-    ).toBe("ip:unverified");
+    ).toBeNull();
   });
 
   it("keeps the forged header out of the deriveBucketKey fallback too", () => {
@@ -1010,5 +1183,59 @@ describe("enrolled-machine bucket key", () => {
       enrolledMachineBucketKey(fakeContext({ vars: { orgId: "org-1" } })),
     ).toBe("org:org-1");
     expect(enrolledMachineBucketKey(fakeContext())).toBe("ip:unknown");
+  });
+});
+
+describe("unattributable bucket", () => {
+  // A ceiling whose bucket cannot be attributed to one caller is not a ceiling.
+  // On a pre-authentication mount it is strictly worse than nothing: one abuser
+  // exhausts the shared counter and every other caller is denied before its
+  // credential is ever checked. The limiter must pass the request through
+  // instead — the per-credential ceiling beside it still applies.
+  it("skips entirely when the resolver cannot name a bucket", async () => {
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+    scriptCount(1);
+
+    const next = vi.fn();
+    const c = fakeContext();
+    const res = await distributedRateLimiter({
+      keyPrefix: "preauth-ip",
+      max: 1,
+      bucketKey: () => null,
+      methods: "all",
+      // The strictest policy this limiter has under ADR-082. The skip must hold
+      // under it, not only under fail-open.
+      storeErrorPolicy: "degrade-to-local",
+    })(c, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res).toBeUndefined();
+    // Never counted: no store round-trip at all.
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
+    // And never denied.
+    expect(c.json).not.toHaveBeenCalled();
+    // The operator can see the deployment is not enforcing it.
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0]?.[1]).toContain("TRUSTED_PROXY_CIDRS");
+  });
+
+  // The other half of the same contract: a resolver that DOES name a caller
+  // must still be counted. Without this, a skip bug that skipped everything
+  // would pass the case above.
+  it("still counts when the resolver names a bucket", async () => {
+    scriptCount(1);
+
+    const next = vi.fn();
+    const c = fakeContext();
+    await distributedRateLimiter({
+      keyPrefix: "preauth-ip",
+      max: 1,
+      bucketKey: () => "ip:198.51.100.1",
+      methods: "all",
+      storeErrorPolicy: "degrade-to-local",
+    })(c, next);
+
+    expect(mocks.withSystemDb).toHaveBeenCalledOnce();
+    expect(next).toHaveBeenCalledOnce();
   });
 });

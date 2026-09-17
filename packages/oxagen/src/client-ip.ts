@@ -1,3 +1,5 @@
+import { ipInRanges } from "./iam/conditions";
+
 /**
  * The one client-IP derivation in the repo (ADR-083).
  *
@@ -30,12 +32,32 @@
  *    deployment and no Vercel edge in front of an AWS one, so each header is
  *    believable in exactly one place.
  *
- * `x-forwarded-for` is the fallback, walked from the RIGHT. Each proxy APPENDS
- * the address it received the request from, so the header reads oldest-first
- * and everything a caller sent sits on the left. With N trusted proxies the
- * client's own address is the Nth entry from the right — those are the N
- * entries our own proxies wrote. A caller who prepends hops only lengthens the
- * untrusted left-hand side and cannot move the entry this picks.
+ * `x-forwarded-for` is the fallback, and it is read two ways, identity first.
+ *
+ *  - By proxy IDENTITY, when `trustedProxyCidrs` names the proxies in front of
+ *    this deployment. Each proxy APPENDS the address it received the request
+ *    from, so the header reads oldest-first and everything a caller sent sits
+ *    on the left. The walk goes right while each entry is one of the named
+ *    proxies and stops at the first that is not: the furthest address a trusted
+ *    proxy vouched for, which is the client. An entry counts only if a trusted
+ *    proxy WROTE it, meaning at least one trusted entry stood to its right —
+ *    otherwise a request that never passed through a named proxy (a typo in the
+ *    list, a network change, a path that bypasses it) would have its
+ *    caller-supplied header believed whole.
+ *  - By hop COUNT, when no proxies are named, for the IAM allowlist as a
+ *    documented legacy fallback. With N trusted proxies the client's own
+ *    address is the Nth entry from the right. This form is weaker and is why
+ *    the identity walk exists: a count trusts ITSELF to be right, and one that
+ *    is too high lets a caller pad the header until the arithmetic lands on a
+ *    value the caller chose. Nothing readable from the request separates that
+ *    from a correct deeper chain. A chain SHORTER than the declared count is
+ *    refused outright rather than clamped to the leftmost entry: the leftmost
+ *    entry is the oldest thing ANYONE could have written, so clamping turned a
+ *    misconfigured count into the exact bypass the walk exists to prevent.
+ *
+ * Where both forms are configured, identity wins — it is the only one that can
+ * defend itself. The pre-authentication rate-limit ceilings therefore pass
+ * `trustedProxyHops: 0` and accept only an edge header or the identity walk.
  *
  * `x-real-ip` is NOT consulted, and its absence is the point. Nothing in either
  * deployment shape sets it: not the ALB, not Caddy, not Vercel. A value
@@ -87,11 +109,20 @@ export type HeaderReader = (name: string) => string | null | undefined;
 export interface TrustedClientIpOptions {
   /**
    * How many right-hand `x-forwarded-for` entries were written by proxies this
-   * deployment trusts — 2 for the deployed ALB → Caddy shape, because the ALB
-   * appends the client and Caddy appends the ALB. 0 means nothing in front of
-   * this process rewrote the header, so no entry in it is usable.
+   * deployment trusts. 0 means nothing in front of this process rewrote the
+   * header, so no entry in it is usable — which is also what a caller that
+   * wants only the identity walk passes.
+   *
+   * Consulted ONLY when `trustedProxyCidrs` is empty. Prefer naming the
+   * proxies: a count cannot tell an over-declared depth from a real one.
    */
   trustedProxyHops: number;
+  /**
+   * The proxies in front of this deployment, by identity — CIDRs or bare
+   * addresses. When non-empty this is the derivation used, and the hop count is
+   * not consulted at all. Empty by default.
+   */
+  trustedProxyCidrs?: string[];
   /**
    * Whether `x-oxagen-client-ip` is believed. Defaults to FALSE: the header is
    * only trustworthy once the edge that SETS it is deployed, and that deploy is
@@ -110,6 +141,7 @@ export function extractTrustedClientIp(
   getHeader: HeaderReader,
   {
     trustedProxyHops,
+    trustedProxyCidrs = [],
     trustEdgeHeader = false,
     onVercel = false,
   }: TrustedClientIpOptions,
@@ -128,21 +160,46 @@ export function extractTrustedClientIp(
     if (edge) return edge;
   }
 
-  if (trustedProxyHops > 0) {
-    const chain = (getHeader("x-forwarded-for") ?? "")
-      .split(",")
-      .map((hop) => hop.trim())
-      .filter((hop) => hop.length > 0);
-    if (chain.length > 0) {
-      // A chain shorter than the trusted-proxy count means a proxy did not
-      // append what this deployment says it does. Clamping to 0 then yields the
-      // oldest entry any trusted proxy could have written, which is the most
-      // conservative reading available — never an entry further right, which
-      // would be one of our own proxies' addresses.
-      return sanitizeClientIp(
-        chain[Math.max(0, chain.length - trustedProxyHops)],
-      );
+  const chain = (getHeader("x-forwarded-for") ?? "")
+    .split(",")
+    .map((hop) => hop.trim())
+    .filter((hop) => hop.length > 0);
+
+  // Preferred: attribute by proxy IDENTITY. Padding the left of the header only
+  // lengthens a prefix this walk never reaches, because stopping is decided by
+  // what an entry IS rather than by how many entries there are.
+  if (trustedProxyCidrs.length > 0) {
+    if (chain.length === 0) return null;
+    let vouchedFor = false;
+    for (let i = chain.length - 1; i >= 0; i--) {
+      const entry = chain[i] as string;
+      if (ipInRanges(entry, trustedProxyCidrs)) {
+        vouchedFor = true;
+        continue;
+      }
+      // Attributable only if a TRUSTED PROXY WROTE IT — i.e. at least one
+      // trusted entry stood to its right. Without that, the rightmost entry is
+      // whatever the caller sent, which is what a request that never passed
+      // through a named proxy looks like.
+      return vouchedFor ? sanitizeClientIp(entry) : null;
     }
+    // Every entry is a trusted proxy, so none of them is a client. Nothing to
+    // attribute — better than returning a proxy and calling it a caller.
+    return null;
+  }
+
+  if (trustedProxyHops > 0 && chain.length > 0) {
+    // A chain shorter than the declared depth means a proxy did not append what
+    // this deployment says it does, so NOTHING here is attributable. This used
+    // to clamp the index to 0 and return the leftmost entry as "the oldest
+    // thing any trusted proxy could have written". That reasoning is wrong: the
+    // leftmost entry is the oldest thing ANYONE could have written, and a caller
+    // writes it by sending its own x-forwarded-for. Refuse instead — a
+    // correctly declared depth never produces a short chain, so this only fires
+    // where the count is wrong, and failing closed is the documented direction
+    // for that case.
+    if (chain.length < trustedProxyHops) return null;
+    return sanitizeClientIp(chain[chain.length - trustedProxyHops]);
   }
 
   return null;

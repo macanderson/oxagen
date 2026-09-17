@@ -153,14 +153,132 @@ describe("extractTrustedClientIp", () => {
     ).toBeNull();
   });
 
-  it("clamps a chain shorter than the trusted-proxy count to its oldest entry", () => {
-    // Caddy rewrites the header to one entry, so this is the deployed shape
-    // once the config lands: the count must not push the index off the front.
+  it("refuses a chain shorter than the trusted-proxy count", () => {
+    // This used to clamp the index to 0 and return the leftmost entry as "the
+    // oldest thing any trusted proxy could have written". The leftmost entry is
+    // the oldest thing ANYONE could have written — a caller writes it by
+    // sending its own x-forwarded-for — so the clamp turned a misconfigured
+    // count into the exact bypass this walk exists to prevent: a
+    // caller-supplied address handed to the IAM ip_ranges conditions and to the
+    // pre-authentication ceilings, refreshable per request.
     expect(
       extractTrustedClientIp(reader({ "x-forwarded-for": "198.51.100.1" }), {
         trustedProxyHops: 2,
       }),
-    ).toBe("198.51.100.1");
+    ).toBeNull();
+    // And it does not fall through to x-real-ip either: a deployment whose
+    // chain story is wrong has no more credibility on the single-header path.
+    expect(
+      extractTrustedClientIp(
+        reader({
+          "x-forwarded-for": "198.51.100.1",
+          "x-real-ip": "203.0.113.9",
+        }),
+        { trustedProxyHops: 2 },
+      ),
+    ).toBeNull();
+  });
+
+  describe("attribution by proxy identity", () => {
+    // A hop count trusts the COUNT. One that is too high lets a caller pad
+    // x-forwarded-for until the arithmetic lands on a value the caller chose,
+    // and nothing readable from the request separates that from a correct
+    // deeper chain. Naming the proxies removes the arithmetic: the walk stops
+    // on what an entry IS.
+    const cidrs = ["10.0.0.0/8"];
+
+    it("stops at the first entry that is not a trusted proxy", () => {
+      expect(
+        extractTrustedClientIp(
+          reader({ "x-forwarded-for": "203.0.113.7, 10.0.0.5" }),
+          { trustedProxyHops: 0, trustedProxyCidrs: cidrs },
+        ),
+      ).toBe("203.0.113.7");
+    });
+
+    it("is unmoved by a caller padding the header", () => {
+      // Under a hop count the prepended entries are the bypass; here the walk
+      // never reaches them.
+      expect(
+        extractTrustedClientIp(
+          reader({
+            "x-forwarded-for": "198.51.100.1, 10.1.1.1, 203.0.113.7, 10.0.0.5",
+          }),
+          { trustedProxyHops: 0, trustedProxyCidrs: cidrs },
+        ),
+      ).toBe("203.0.113.7");
+    });
+
+    it("refuses a chain no trusted proxy vouched for", () => {
+      // An entry is attributable only if a TRUSTED PROXY WROTE IT, meaning at
+      // least one trusted entry stood to its right. Both shapes: a lone
+      // untrusted entry, and a trusted proxy sitting to the LEFT of an
+      // untrusted one, which is the ordering that looks configured and is not.
+      expect(
+        extractTrustedClientIp(reader({ "x-forwarded-for": "203.0.113.7" }), {
+          trustedProxyHops: 0,
+          trustedProxyCidrs: cidrs,
+        }),
+      ).toBeNull();
+      expect(
+        extractTrustedClientIp(
+          reader({ "x-forwarded-for": "10.0.0.5, 203.0.113.7" }),
+          { trustedProxyHops: 0, trustedProxyCidrs: cidrs },
+        ),
+      ).toBeNull();
+    });
+
+    it("refuses when every entry is a trusted proxy", () => {
+      // None of them is a client — better than returning a proxy and calling
+      // it a caller.
+      expect(
+        extractTrustedClientIp(
+          reader({ "x-forwarded-for": "10.0.0.4, 10.0.0.5" }),
+          { trustedProxyHops: 0, trustedProxyCidrs: cidrs },
+        ),
+      ).toBeNull();
+      expect(
+        extractTrustedClientIp(reader({}), {
+          trustedProxyHops: 0,
+          trustedProxyCidrs: cidrs,
+        }),
+      ).toBeNull();
+    });
+
+    it("takes precedence over the hop count when both are set", () => {
+      // The count alone would pick the rightmost entry, i.e. the proxy itself.
+      expect(
+        extractTrustedClientIp(
+          reader({ "x-forwarded-for": "203.0.113.7, 10.0.0.5" }),
+          { trustedProxyHops: 1, trustedProxyCidrs: cidrs },
+        ),
+      ).toBe("203.0.113.7");
+    });
+
+    it("yields to the edge header, which the deployment wrote itself", () => {
+      expect(
+        extractTrustedClientIp(
+          reader({
+            [EDGE_CLIENT_IP_HEADER]: "198.51.100.1",
+            "x-forwarded-for": "203.0.113.7, 10.0.0.5",
+          }),
+          {
+            trustedProxyHops: 0,
+            trustedProxyCidrs: cidrs,
+            trustEdgeHeader: true,
+          },
+        ),
+      ).toBe("198.51.100.1");
+    });
+
+    it("bounds what the walk returns, like every other path", () => {
+      expect(
+        extractTrustedClientIp(
+          reader({ "x-forwarded-for": "not-an-ip, 10.0.0.5" }),
+          { trustedProxyHops: 0, trustedProxyCidrs: cidrs },
+        ),
+      ).toBeNull();
+    });
   });
 
   it("trusts only Vercel's own header when running on Vercel", () => {

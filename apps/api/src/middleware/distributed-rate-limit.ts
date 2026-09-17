@@ -6,6 +6,10 @@ import { requireEnv } from "@oxagen/config/env";
 import { logger } from "./logger";
 import { extractTrustedClientIp } from "@oxagen/oxagen/client-ip";
 import { createFixedWindowCounter } from "./rate-limit";
+import {
+  trustedProxyCidrs,
+  __resetTrustedProxyHopsForTests,
+} from "../lib/context";
 import type { AppEnv } from "../app";
 
 /**
@@ -87,8 +91,15 @@ export interface DistributedRateLimitOptions {
    * scopes. The limiter always prepends `keyPrefix`, preventing cross-surface
    * collisions. Resolvers must return non-secret, bounded values. A resolver
    * that reads the request body returns a promise.
+   *
+   * Returning `null` means "this request cannot be attributed to a bucket",
+   * and the limiter SKIPS — it does not count, and it does not deny, whatever
+   * the `storeErrorPolicy`. A resolver must never substitute a
+   * shared constant for an identity it cannot establish: every caller in one
+   * bucket is not a ceiling, it is one abuser's power to lock everyone else
+   * out. See `trustedClientIpBucketKey`.
    */
-  bucketKey?: (c: Context<AppEnv>) => string | Promise<string>;
+  bucketKey?: (c: Context<AppEnv>) => string | null | Promise<string | null>;
 }
 
 const DEFAULT_WINDOW_MS = 60_000;
@@ -105,10 +116,10 @@ const LOCAL_DENY_CACHE_MAX = 10_000;
  *
  * Off by default. The header is trustworthy only because Caddy SETS it, and
  * that config ships through the infra pipeline while this code ships through
- * the application one. Until the flag is on, a caller-supplied copy of the
- * header cannot mint a bucket of its own — every such caller collapses into the
- * shared `ip:unverified` bucket, which is a smaller ceiling and not a larger
- * one. See packages/oxagen/src/client-ip.ts.
+ * the application one. Until the flag is on the header is not read at all, so a
+ * caller-supplied copy of it cannot mint a bucket of its own; attribution then
+ * rests on TRUSTED_PROXY_CIDRS, and where that is unset the pre-authentication
+ * ceilings skip. See packages/oxagen/src/client-ip.ts.
  */
 let cachedTrustEdgeHeader: boolean | null = null;
 function trustEdgeHeader(): boolean {
@@ -126,14 +137,21 @@ function trustEdgeHeader(): boolean {
  * one client mint an unbounded number of buckets by varying a header.
  *
  * `trustedProxyHops: 0` for the same reason as `trustedClientIpBucketKey`: a
- * bucket is a partition rather than a permission, so when the edge has not
- * named the caller, sharing one ceiling is the safe answer and guessing from a
- * chain this file cannot verify is not.
+ * hop count cannot defend itself on a bucket key, so only the edge header and
+ * the named-proxy walk may name a caller here.
+ *
+ * Unlike the pre-authentication ceilings, this one falls back to a shared
+ * `ip:unknown` partition rather than skipping. That is safe only because
+ * `deriveBucketKey` serves the fail-open, post-authentication surfaces, where
+ * the request has already been attributed to a workspace or an org in all but
+ * the residual case. A pre-authentication ceiling must never take this
+ * fallback — see `trustedClientIpBucketKey`.
  */
 function clientIp(c: Context<AppEnv>): string {
   return (
     extractTrustedClientIp((name) => c.req.header(name), {
       trustedProxyHops: 0,
+      trustedProxyCidrs: trustedProxyCidrs(),
       trustEdgeHeader: trustEdgeHeader(),
       onVercel: process.env.VERCEL === "1",
     }) ?? "unknown"
@@ -181,7 +199,9 @@ export function enrolledMachineBucketKey(c: Context<AppEnv>): string {
 }
 
 /**
- * Per-client bucket for the pre-authentication ceilings.
+/**
+ * Per-client bucket for the pre-authentication ceilings, or `null` when this
+ * deployment cannot say who the caller is.
  *
  * The address itself comes from `extractTrustedClientIp`
  * (`@oxagen/oxagen/client-ip`), which is the one derivation every surface in
@@ -191,28 +211,40 @@ export function enrolledMachineBucketKey(c: Context<AppEnv>): string {
  * leftmost `x-forwarded-for` entry ended up deciding a mandate while this file
  * had already stopped trusting it.
  *
- * `trustedProxyHops: 0` is deliberate and is the one place this differs from a
- * mandate decision. A bucket key is a partition, not a permission: if the edge
- * header is missing, every caller collapsing into one `ip:unverified` bucket is
- * a smaller ceiling for everyone, while the same fallback in an authorization
- * check would be a bypass. Walking the forwarded chain here would buy a nicer
- * partition in a deployment shape this limiter cannot verify it is in, so it
- * asks for the header it knows the edge writes and takes the shared bucket when
- * that is absent.
+ * Two declarations can name a caller here, and NEITHER of them is the hop
+ * count — `trustedProxyHops: 0` is passed deliberately:
  *
- * The shared bucket is what this replaced, and why it had to go: it was every
- * caller on the internet on one ceiling, one Postgres row as the write
- * contention point for the whole ingress, and — while these mounts were
- * fail-closed — that row's failure taking Tacho and Stella intake offline
- * (#3167). It remains the fallback, not the normal case.
+ *  - the edge header `x-oxagen-client-ip`, once `TRUST_EDGE_CLIENT_IP_HEADER`
+ *    says the Caddy config that SETS it is deployed (ADR-083);
+ *  - `TRUSTED_PROXY_CIDRS`, which names the proxies so the chain walk stops on
+ *    what an entry IS rather than on how many entries there are.
+ *
+ * A hop count cannot defend itself on a bucket key. One that is too high lets a
+ * caller pad `x-forwarded-for` until the arithmetic lands on a value the caller
+ * chose, which here means minting a fresh bucket per request and evading the
+ * ceiling entirely; nothing readable from the request separates that from a
+ * correct deeper chain. So the count is excluded from this seam and kept for
+ * the IAM allowlist alone.
+ *
+ * Returning `null` is load-bearing. It means the request cannot be attributed,
+ * and the limiter SKIPS — it does not count and it does not deny. The
+ * alternative this replaced was a single shared `ip:unverified` bucket, which
+ * on a mount that runs before any credential exists is not a ceiling but one
+ * caller's power to deny the ingress to every other: send `max + 1` in a window
+ * and every enrolled Tacho and Stella host is refused. It was also one Postgres
+ * row as the write contention point for the whole ingress. The per-credential
+ * ceiling mounted beside this one is unaffected either way, and a throttled
+ * warn names the deployment fact so an operator sees it rather than inferring
+ * it from a counter that never moves.
  */
-export function trustedClientIpBucketKey(c: Context<AppEnv>): string {
+export function trustedClientIpBucketKey(c: Context<AppEnv>): string | null {
   const ip = extractTrustedClientIp((name) => c.req.header(name), {
     trustedProxyHops: 0,
+    trustedProxyCidrs: trustedProxyCidrs(),
     trustEdgeHeader: trustEdgeHeader(),
     onVercel: process.env.VERCEL === "1",
   });
-  return `ip:${ip ?? "unverified"}`;
+  return ip ? `ip:${ip}` : null;
 }
 
 /** Domain separator — see authorizationFingerprintBucketKey. */
@@ -311,6 +343,25 @@ function sweepStaleWindows(olderThan: Date): void {
   });
 }
 
+/**
+ * A ceiling that cannot name who it is limiting is not being enforced, and that
+ * is a deployment fact an operator should be able to see rather than infer from
+ * a counter that never moves. Throttled per prefix like the store-error warn.
+ */
+const lastUnattributableWarnAtByPrefix = new Map<string, number>();
+function warnUnattributable(keyPrefix: string, windowMs: number): void {
+  const now = Date.now();
+  if (now - (lastUnattributableWarnAtByPrefix.get(keyPrefix) ?? 0) < windowMs)
+    return;
+  lastUnattributableWarnAtByPrefix.set(keyPrefix, now);
+  logger.warn(
+    { keyPrefix },
+    "distributed rate limiter has no attributable bucket for this request — " +
+      "skipping (set TRUSTED_PROXY_CIDRS to the proxies in front of this " +
+      "deployment)",
+  );
+}
+
 export function distributedRateLimiter(
   opts: DistributedRateLimitOptions,
 ): MiddlewareHandler<AppEnv> {
@@ -323,10 +374,14 @@ export function distributedRateLimiter(
   // awaits it. Interpolating it directly would have rendered a pending promise
   // as the literal string "[object Promise]" — one bucket for every caller,
   // silently, which is the bug #3167 opened with.
-  const bucketKeyOf = async (c: Context<AppEnv>): Promise<string> =>
-    opts.bucketKey
-      ? `${opts.keyPrefix}:${await opts.bucketKey(c)}`
-      : deriveBucketKey(c, opts.keyPrefix);
+  const bucketKeyOf = async (c: Context<AppEnv>): Promise<string | null> => {
+    if (!opts.bucketKey) return deriveBucketKey(c, opts.keyPrefix);
+    const suffix = await opts.bucketKey(c);
+    // `null` means unattributable and propagates; it must never become the
+    // string "null" in a bucket key, which would be a shared bucket by another
+    // name.
+    return suffix === null ? null : `${opts.keyPrefix}:${suffix}`;
+  };
 
   /**
    * The degraded ceiling. It counts the same keys into the same epoch-anchored
@@ -400,6 +455,13 @@ export function distributedRateLimiter(
     if (methods !== "all" && !methods.includes(c.req.method)) return next();
 
     const key = await bucketKeyOf(c);
+    if (key === null) {
+      // The resolver could not name a caller. Skip rather than pool: an
+      // unattributable ceiling converts one abuser into an outage for everyone
+      // else, which on these pre-auth mounts is strictly worse than no ceiling.
+      warnUnattributable(opts.keyPrefix, windowMs);
+      return next();
+    }
     const now = Date.now();
     const windowStartMs = Math.floor(now / windowMs) * windowMs;
     const resetAtMs = windowStartMs + windowMs;
@@ -570,4 +632,8 @@ export function rateLimitBudgets(): { chat: number } {
 export function __resetRateLimitEnvForTests(): void {
   cachedBudgets = null;
   cachedTrustEdgeHeader = null;
+  // `trustedProxyCidrs()` memoizes in lib/context.ts, and the memo outliving a
+  // case is how a test that names proxies changes how a later one attributes an
+  // address — a green run for the wrong reason.
+  __resetTrustedProxyHopsForTests();
 }

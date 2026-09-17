@@ -72,23 +72,27 @@ export const baseEnvSchema = z.object({
   // something we trust — see extractTrustedClientIp in
   // packages/oxagen/src/client-ip.ts, the one reader of this value.
   //
-  // Default 2, because the deployed shape has two appending proxies and not
-  // one: the ALB appends the address it saw (the client) and Caddy appends the
-  // address it saw (the ALB). Measured, not assumed — a request carrying
-  // `X-Forwarded-For: 203.0.113.9, 198.51.100.7` arrives at the upstream as
-  // `203.0.113.9, 198.51.100.7, <caddy peer>`. At 1 this picks Caddy's peer,
-  // which is a load balancer's private address: an IP allowlist of real client
-  // CIDRs then matches nothing and every IP-scoped mandate silently denies.
+  // Default 1, and the default is a guess that only the IAM allowlist falls
+  // back to. The deployed chain that reaches this process is ONE entry deep,
+  // measured against `caddy:2` rather than assumed: with a plain
+  // `reverse_proxy`, Caddy REPLACES an inbound x-forwarded-for with its own
+  // peer (`XFF="172.17.0.1"`), and with the Caddyfile in this repo it SETS the
+  // header to the single trusted `{client_ip}`. Either way the upstream sees
+  // one entry, so a count of 2 would refuse a chain it calls short and hand the
+  // allowlist nothing.
   //
-  // Caddy now rewrites x-forwarded-for to a single trusted entry, so with the
-  // config deployed the count no longer decides anything — `Math.max(0, …)`
-  // clamps a one-entry chain to that entry either way. It decides everything
-  // in the window where the code has shipped and the Caddy config has not,
-  // which is a real window: they deploy through different pipelines.
+  // A short chain is REFUSED rather than clamped to the leftmost entry — see
+  // extractTrustedClientIp. The leftmost entry is the oldest thing ANYONE could
+  // have written, so clamping turned a wrong count into the exact bypass the
+  // walk exists to prevent. That makes an over-declared count fail closed here
+  // rather than fail open, which is the direction to be wrong in, and it is why
+  // this default is not rounded up "to be safe".
   //
-  // 0 means nothing in front of the process rewrites the header, so no entry
-  // in it is usable and only x-oxagen-client-ip is believed.
-  TRUSTED_PROXY_HOP_COUNT: z.coerce.number().int().nonnegative().default(2),
+  // This count does NOT enable the pre-authentication IP ceilings; naming the
+  // proxies in TRUSTED_PROXY_CIDRS does, and identity wins wherever both are
+  // set. 0 means nothing in front of the process rewrites the header, so no
+  // entry in it is usable.
+  TRUSTED_PROXY_HOP_COUNT: z.coerce.number().int().nonnegative().default(1),
 
   // Whether x-oxagen-client-ip is believed at all. Default FALSE, and the
   // default is the whole point.
@@ -113,6 +117,17 @@ export const baseEnvSchema = z.object({
     .union([z.literal("true"), z.literal("false")])
     .optional()
     .transform((v) => v === "true"),
+
+  // The proxies themselves, as a comma-separated CIDR/address list, and the
+  // form that is actually safe. Counting hops trusts the COUNT to be right; a
+  // count that is too high selects an entry the caller wrote, because a caller
+  // can pad x-forwarded-for until the arithmetic lands on its own value. Naming
+  // the proxies instead means attribution never depends on the length of a
+  // list the caller can grow: walk from the right while each entry is a trusted
+  // proxy, and the first entry that is not one is the client.
+  // Empty (the default) means no proxy identity is declared — see
+  // extractClientIp in apps/api/src/lib/context.ts.
+  TRUSTED_PROXY_CIDRS: z.string().default(""),
 
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
