@@ -480,7 +480,12 @@ describe("revoke_tacho_enrollment", () => {
       OPERATOR,
     );
     expect(second.revokedAt).toBe("2026-09-01T00:00:00.000Z");
-    expect(already.updates).toEqual([]);
+    // The host row and the queued command are not repeated. The key sweep does
+    // run, and is a no-op here because the first revocation already took them
+    // (`deleted_at IS NULL` matches nothing); see tacho.enrollment.revoke.test.ts
+    // for the case where an earlier revocation left the gateway key live.
+    expect(already.updates.filter((u) => u.table === "hosts")).toEqual([]);
+    expect(already.inserts).toEqual([]);
   });
 
   it("revokes with the operator's `oxagen login` key and refuses the host's own key", async () => {

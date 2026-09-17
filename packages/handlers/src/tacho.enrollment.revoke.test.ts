@@ -79,6 +79,12 @@ let updates: Statement[] = [];
  */
 let retiredRows: Array<{ id: string }> = [];
 
+/** Rows the by-id fallback retires, when the scope sweep missed the host key. */
+let byIdRetiredRows: Array<{ id: string }> = [];
+
+/** Commands the handler queued. */
+let inserts: number[] = [];
+
 function tableNameOf(table: unknown): string {
   for (const s of Object.getOwnPropertySymbols(table as object)) {
     const v = (table as Record<symbol, unknown>)[s];
@@ -87,7 +93,11 @@ function tableNameOf(table: unknown): string {
   return "unknown";
 }
 
-function fakeDb(host: Record<string, unknown>): void {
+function fakeDb(
+  host: Record<string, unknown>,
+  opts: { byIdRetired?: Array<{ id: string }> } = {},
+): void {
+  if (opts.byIdRetired !== undefined) byIdRetiredRows = opts.byIdRetired;
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
@@ -101,24 +111,35 @@ function fakeDb(host: Record<string, unknown>): void {
                 sql: q.sql,
                 params: q.params,
               });
-              const result = Promise.resolve(retiredRows) as Promise<
+              // The scope sweep names the enrollment; the by-id fallback does
+              // not, so the fixture can answer each with its own rows.
+              const rows = q.sql.includes("host_enrollment_id")
+                ? retiredRows
+                : byIdRetiredRows;
+              const result = Promise.resolve(rows) as Promise<
                 Array<{ id: string }>
               > & {
                 returning: () => Promise<Array<{ id: string }>>;
               };
-              result.returning = async () => retiredRows;
+              result.returning = async () => rows;
               return result;
             },
           }),
         }),
-        insert: () => ({ values: async () => undefined }),
+        insert: () => ({
+          values: async () => {
+            inserts.push(1);
+          },
+        }),
       }),
   );
 }
 
 beforeEach(() => {
   updates = [];
+  inserts = [];
   retiredRows = [{ id: HOST_KEY_ID }, { id: "gateway-key" }];
+  byIdRetiredRows = [{ id: HOST_KEY_ID }];
   mocks.withTenantDb.mockReset();
   mocks.emitSecurityEvent.mockReset();
   mocks.resolveOperatorUserId.mockResolvedValue(OPERATOR);
@@ -186,14 +207,63 @@ describe("revoking a host retires every key the enrollment minted", () => {
     ).toHaveLength(1);
   });
 
-  it("touches no key when the host was already revoked", async () => {
+  it("sweeps the keys of a host revoked before the sweep existed", async () => {
+    // The population this sweep was written for. Such a host had only its
+    // api_key_id deleted, so its gateway key is still live — and returning
+    // early on `already` skipped exactly them. Verified against #3178's own
+    // review (discussion_r4034318904).
     const revokedAt = new Date("2026-09-01T00:00:00.000Z");
+    retiredRows = [{ id: "gateway-key" }];
     fakeDb(host({ status: "revoked", revokedAt }));
     const out = await tachoEnrollmentRevokeHandler(
       { hostEnrollmentId: ENROLLMENT },
       CONTEXT,
     );
-    expect(updates).toHaveLength(0);
+    expect(keyUpdates().some((u) => u.sql.includes("host_enrollment_id"))).toBe(
+      true,
+    );
+    // The revocation instant is the original one: the host was revoked when it
+    // was revoked, and this call only takes the credentials it left live.
     expect(out.revokedAt).toBe(revokedAt.toISOString());
+  });
+
+  it("does not re-revoke the host or re-queue the command on a repeat", async () => {
+    const revokedAt = new Date("2026-09-01T00:00:00.000Z");
+    retiredRows = [{ id: HOST_KEY_ID }, { id: "gateway-key" }];
+    fakeDb(host({ status: "revoked", revokedAt }));
+    await tachoEnrollmentRevokeHandler(
+      { hostEnrollmentId: ENROLLMENT },
+      CONTEXT,
+    );
+    expect(updates.filter((u) => u.table === "hosts")).toHaveLength(0);
+    expect(inserts).toHaveLength(0);
+  });
+
+  it("emits no audit event for a repeat that retired nothing", async () => {
+    // Idempotent by construction: `deleted_at IS NULL` means the second call
+    // matches no row. An audit event there would be noise, not a fact.
+    const revokedAt = new Date("2026-09-01T00:00:00.000Z");
+    retiredRows = [];
+    fakeDb(host({ status: "revoked", revokedAt }), { byIdRetired: [] });
+    await tachoEnrollmentRevokeHandler(
+      { hostEnrollmentId: ENROLLMENT },
+      CONTEXT,
+    );
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("emits an audit event for a repeat that did retire a stranded key", async () => {
+    // Not a duplicate: the first revocation did not take this credential, so
+    // taking it is a new fact about the organisation's access.
+    const revokedAt = new Date("2026-09-01T00:00:00.000Z");
+    retiredRows = [{ id: "gateway-key" }];
+    fakeDb(host({ status: "revoked", revokedAt }));
+    await tachoEnrollmentRevokeHandler(
+      { hostEnrollmentId: ENROLLMENT },
+      CONTEXT,
+    );
+    expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "api_key.revoked" }),
+    );
   });
 });

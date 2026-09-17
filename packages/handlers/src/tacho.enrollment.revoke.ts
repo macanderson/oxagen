@@ -66,9 +66,69 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
     if (!host) {
       throw denied("Forbidden: unknown Tacho host");
     }
+    const retirement = {
+      deletedAt: now,
+      deletedByUserId: operatorUserId,
+      updatedAt: now,
+      updatedByUserId: operatorUserId,
+    };
+
+    /**
+     * Retire every live key this enrollment minted, and answer how many.
+     *
+     * Run on the already-revoked path as well as the fresh one. A host revoked
+     * before the sweep existed had only its `api_key_id` deleted, so its gateway
+     * key is still live — and that population is precisely the one this sweep
+     * was written for. Returning early on `already` skipped exactly them.
+     *
+     * Idempotent by construction: `deleted_at IS NULL` means a second call over
+     * the same host matches nothing and re-stamps no row.
+     */
+    const retireKeys = async (): Promise<number> => {
+      // Every live key minted for this enrollment: the control-plane key and
+      // the MCP gateway key, and anything a later enrollment adds beside them.
+      const swept = await tx
+        .update(schema.apiKeys)
+        .set(retirement)
+        .where(
+          and(
+            eq(schema.apiKeys.orgId, ctx.orgId),
+            isNull(schema.apiKeys.deletedAt),
+            sql`${schema.apiKeys.scope} ->> 'host_enrollment_id' = ${host.publicId}`,
+          ),
+        )
+        .returning({ id: schema.apiKeys.id });
+      // The control-plane key is the one credential this host provably has, so
+      // its absence from the scope sweep means either the row predates the
+      // scope marker or it was already retired. Retire it by id rather than
+      // leaving a live key behind; `deleted_at IS NULL` makes the second case a
+      // no-op rather than a re-stamp.
+      if (swept.some((k) => k.id === host.apiKeyId)) return swept.length;
+      const byId = await tx
+        .update(schema.apiKeys)
+        .set(retirement)
+        .where(
+          and(
+            eq(schema.apiKeys.id, host.apiKeyId),
+            isNull(schema.apiKeys.deletedAt),
+          ),
+        )
+        .returning({ id: schema.apiKeys.id });
+      return swept.length + byId.length;
+    };
+
     if (host.status === "revoked" && host.revokedAt) {
-      return { revokedAt: host.revokedAt, already: true };
+      // No host update, no queued command, no repeated revocation instant — the
+      // host was revoked when it was revoked. Only the keys it left live are
+      // taken, and the caller learns whether any were.
+      const retiredCount = await retireKeys();
+      return {
+        revokedAt: host.revokedAt,
+        already: true,
+        retiredCount,
+      };
     }
+
     await tx
       .update(schema.tachoHosts)
       .set({
@@ -79,43 +139,7 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
         updatedByUserId: operatorUserId,
       })
       .where(eq(schema.tachoHosts.id, host.id));
-    // Every live key minted for this enrollment: the control-plane key and the
-    // MCP gateway key, and anything a later enrollment adds beside them.
-    const retired = await tx
-      .update(schema.apiKeys)
-      .set({
-        deletedAt: now,
-        deletedByUserId: operatorUserId,
-        updatedAt: now,
-        updatedByUserId: operatorUserId,
-      })
-      .where(
-        and(
-          eq(schema.apiKeys.orgId, ctx.orgId),
-          isNull(schema.apiKeys.deletedAt),
-          sql`${schema.apiKeys.scope} ->> 'host_enrollment_id' = ${host.publicId}`,
-        ),
-      )
-      .returning({ id: schema.apiKeys.id });
-    // The control-plane key is the one credential this host provably has, so
-    // its absence from the scope sweep means the row predates the scope marker.
-    // Retire it by id rather than leaving a live key behind.
-    if (!retired.some((k) => k.id === host.apiKeyId)) {
-      await tx
-        .update(schema.apiKeys)
-        .set({
-          deletedAt: now,
-          deletedByUserId: operatorUserId,
-          updatedAt: now,
-          updatedByUserId: operatorUserId,
-        })
-        .where(
-          and(
-            eq(schema.apiKeys.id, host.apiKeyId),
-            isNull(schema.apiKeys.deletedAt),
-          ),
-        );
-    }
+    const retiredCount = await retireKeys();
     await tx.insert(schema.tachoControlCommands).values({
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
@@ -128,10 +152,13 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
       createdByUserId: operatorUserId,
       updatedByUserId: operatorUserId,
     });
-    return { revokedAt: now, already: false };
+    return { revokedAt: now, already: false, retiredCount };
   });
 
-  if (!result.already) {
+  // A first revocation is always worth an audit event. A repeat is worth one
+  // only when it actually took a credential away — which by definition the
+  // first revocation did not, so it is a new fact rather than a duplicate.
+  if (!result.already || result.retiredCount > 0) {
     emitSecurityEvent({
       eventType: "api_key.revoked",
       actorUserId: operatorUserId,
@@ -144,8 +171,15 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
       requestId: ctx.requestId ?? null,
     });
     logger.info(
-      { orgId: ctx.orgId, hostEnrollmentId: input.hostEnrollmentId },
-      "tacho.enrollment.revoke: host revoked",
+      {
+        orgId: ctx.orgId,
+        hostEnrollmentId: input.hostEnrollmentId,
+        retiredCount: result.retiredCount,
+        already: result.already,
+      },
+      result.already
+        ? "tacho.enrollment.revoke: retired keys an earlier revocation left live"
+        : "tacho.enrollment.revoke: host revoked",
     );
   }
   return {
