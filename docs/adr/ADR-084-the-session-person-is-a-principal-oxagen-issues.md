@@ -68,11 +68,50 @@ producer-supplied input* and *readable by the principal who supplied it* is a
 dictionary attack however it is computed. The strength of the function is not
 the variable. The pairing is.
 
+### Fourth: removing the column, and stopping there
+
+Then: delete the column, keep hashing on the host so the address stays off the
+wire, and ship the hash inside `anthropic.user_email_digest`. Every column check
+passed — `ENVELOPE_COLUMNS`, `SERVER_STAMPED_COLUMNS`, the Drizzle schema, a
+grep for the stamping module. The address was still recoverable from a dump of
+`tacho_events`, by two routes neither of those checks looks at.
+
+`sealEvent` hashes **every** member of the event, so the persisted `hash` was a
+commitment to the digest the collector had just put in. And `raw_source_digest`
+is taken over the original OTel attributes, which still held `user.email` in
+plaintext, and is persisted too. An address carries little enough entropy that a
+commitment to one is a confirmation oracle: guess, recompute, compare. Neither
+value is "the address", and both answer the question "is it Ada?".
+
+The check that was made was *is the digest stored in a column*. The question
+that decides the matter is **what would still be true if someone held a full
+dump**. They are different questions, and the first had been read as an answer
+to the second.
+
+The fix has to be on the producer, and working out why names the interaction
+that would otherwise have surfaced later. Excluding a member from `hashEvent`
+would change the hash function itself, so every WAL entry sealed before the
+change — whose seal covers that member — would stop verifying, stranding
+exactly the entries the wire-compatibility work exists to protect. So the
+address-derived value never enters the event, and the address never enters the
+pre-image of `raw_source_digest`. The hashing is untouched and old seals still
+verify. Entries sealed before this change still commit to the address; that
+residue drains as the spools drain and cannot be altered without breaking the
+seal that makes them evidence.
+
+`redactedForDigest` removes address-bearing attribute keys outright rather than
+substituting a marker, so the record does not even reveal whether an address was
+reported. The general form, restated with the extra turn: **a value is not safe
+because it is not stored under its own name. It is safe when nothing persisted
+varies with it.**
+
 ## Decision
 
-**No value derived from the reported address is stored, in either store.** Not
-the address, not a hash of it, not a keyed digest of it. `tacho_events` and
-`tacho.sessions` carry no such column.
+**No value derived from the reported address is computed, shipped or stored.**
+Not the address, not a hash of it, not a keyed digest of it, and nothing that
+commits to one. `tacho_events` and `tacho.sessions` carry no such column, the
+collector puts no such member in the event, and no persisted digest is taken
+over a structure that contains the address.
 
 The reason this costs nothing: `tacho.sessions` already carries
 `agent_principal_id`, `initiating_principal_id` and `initiating_user_id`
@@ -93,12 +132,11 @@ benefit. Removing the field from `get_tacho_session` alone closes today's read
 path while leaving a loaded value in two stores for the next feature that reads
 one.
 
-**The collector still hashes, and the wire still accepts both members.** A
-current collector sends `anthropic.user_email_digest`, so the address does not
-cross the wire; `anthropic.user_email` stays accepted so installed collectors
-and sealed WAL entries keep working. The control plane discards both. Hashing
-on the host is worth keeping on its own terms — it is the part of the first
-round that was right.
+**The collector no longer hashes either, and the wire still accepts both
+members.** `anthropic.user_email` and `anthropic.user_email_digest` stay
+accepted so installed collectors and sealed WAL entries keep working, and the
+control plane discards both. But a current collector now sends neither, and
+`digestUserEmail` is deleted. The fourth mistake below is why.
 
 ## Consequences
 

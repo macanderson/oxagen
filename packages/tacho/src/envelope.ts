@@ -731,8 +731,10 @@ export const hostSchema = z
  * could be matched against a colleague's row. The session's person is
  * `initiating_principal_id`, which this deployment issues.
  *
- * `user_email_digest` is what a collector from this release on sends: the
- * address is hashed on the host, so it never crosses the wire.
+ * `user_email_digest` is what the round before this one sent: the address
+ * hashed on the host. A collector from this release sends it no longer, because
+ * `sealEvent` hashes every member, which made the persisted seal a commitment
+ * to a guessable value. Still accepted, still discarded.
  *
  * `user_email` is the legacy member, still accepted because removing it would
  * be a silent, uncoordinated break. The wire version is still `tacho/1.0`, so

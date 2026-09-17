@@ -4,7 +4,6 @@ import {
   type ChainCursor,
   type TachoEvent,
   type UnsealedTachoEvent,
-  digestUserEmail,
   sealEvent,
   sessionUuid,
 } from "@oxagen/tacho";
@@ -863,6 +862,7 @@ describe("ingest_tacho_events", () => {
 
   describe("the person behind the session (#3072)", () => {
     const ADDRESS = "Ada.Lovelace@example.com";
+    const LEGACY_DIGEST = `sha256:${"7".repeat(64)}`;
 
     function batch(
       anthropic: Record<string, string> | undefined,
@@ -979,11 +979,13 @@ describe("ingest_tacho_events", () => {
     it("stores nothing derived from the address, in either store", async () => {
       const { session, clickhouse } = await persisted({
         user_email: ADDRESS,
-        user_email_digest: digestUserEmail(ADDRESS) as string,
+        // What a collector from the previous round still sends. It computes
+        // this itself; the control plane accepts it and stores nothing.
+        user_email_digest: LEGACY_DIGEST,
       });
       const written = JSON.stringify({ session, clickhouse });
       expect(written).not.toContain("@example.com");
-      expect(written).not.toContain(digestUserEmail(ADDRESS));
+      expect(written).not.toContain(LEGACY_DIGEST);
       for (const key of Object.keys(session)) {
         expect(key.toLowerCase()).not.toContain("email");
       }

@@ -19,7 +19,7 @@ import {
   TACHO_EVENT_COLUMNS,
   flattenEvent,
 } from "./columns";
-import { digestBytes, digestUserEmail, isSha256Digest } from "./digest";
+import { digestBytes, isSha256Digest } from "./digest";
 import { anthropicSchema, parseTachoEvent } from "./envelope";
 import { TEST_HOST, TEST_SESSION_ID, minimalSession } from "./test-helpers";
 
@@ -73,37 +73,28 @@ function otlpLog(attrs: Record<string, string>) {
   };
 }
 
-describe("digestUserEmail is a pre-image, not a stored value", () => {
-  it("reduces the same person to the same value", () => {
-    const expected = digestUserEmail(NORMALIZED);
-    expect(isSha256Digest(expected)).toBe(true);
-    expect(digestUserEmail(ADDRESS)).toBe(expected);
-    expect(digestUserEmail(`  ${ADDRESS}  `)).toBe(expected);
-    expect(digestUserEmail("ADA.LOVELACE@EXAMPLE.COM")).toBe(expected);
+describe("no address-derived value is computed at all", () => {
+  it("has no digestUserEmail to call", async () => {
+    // It existed to keep the address off the wire by hashing it on the host.
+    // That was necessary and not sufficient: `sealEvent` hashes every member,
+    // so shipping the hash made the persisted seal a commitment to a
+    // low-entropy value, and a commitment to a guessable input is a
+    // confirmation oracle. Nothing derived from the address is computed,
+    // shipped or stored now — see address-commitments.test.ts for the
+    // property. This test exists so the function cannot come back unnoticed.
+    const digest = await import("./digest");
+    expect(Object.keys(digest)).not.toContain("digestUserEmail");
   });
 
-  it("distinguishes two people", () => {
-    expect(digestUserEmail("a@example.com")).not.toBe(
-      digestUserEmail("b@example.com"),
-    );
-  });
-
-  it("yields nothing for a missing or empty address", () => {
-    expect(digestUserEmail(undefined)).toBeUndefined();
-    expect(digestUserEmail(null)).toBeUndefined();
-    expect(digestUserEmail("")).toBeUndefined();
-    expect(digestUserEmail("   ")).toBeUndefined();
-  });
-
-  it("is reproducible by anyone who guesses the address, which is why the stored value is keyed", () => {
-    // The finding on the first draft of #3072, pinned so the claim cannot
-    // quietly come back: the domain separator is public, so a guesser
-    // reproduces this exactly. Nothing may store this value as though it were
-    // one-way — see the server-stamped column below.
+  it("would still be reproducible by a guesser, which is why it is gone", () => {
+    // The original finding, kept because the reasoning is what generalises:
+    // the domain separator is public, so anyone holding the value and a
+    // candidate address recomputes it and compares. The strength of sha256 is
+    // not the variable; the guessability of the input is.
     const whatAGuesserComputes = digestBytes(
       `oxagen:tacho:user_email:v1\0${NORMALIZED}`,
     );
-    expect(digestUserEmail(ADDRESS)).toBe(whatAGuesserComputes);
+    expect(isSha256Digest(whatAGuesserComputes)).toBe(true);
   });
 });
 
@@ -118,8 +109,11 @@ describe("the wire", () => {
     });
   });
 
-  it("accepts the host-side pre-image a current collector sends", () => {
-    const digest = digestUserEmail(ADDRESS);
+  it("accepts the host-side pre-image an installed collector still sends", () => {
+    // A collector from the previous round computes this itself. The control
+    // plane must keep accepting it — refusing would fail the whole batch and
+    // strand sealed WAL entries — and stores nothing derived from it.
+    const digest = `sha256:${"7".repeat(64)}`;
     expect(anthropicSchema.parse({ user_email_digest: digest })).toEqual({
       user_email_digest: digest,
     });
@@ -138,8 +132,8 @@ describe("the wire", () => {
   });
 });
 
-describe("the collector hashes on the host", () => {
-  it("turns OTel user.email into a pre-image and keeps the address out of the event", () => {
+describe("the collector drops the address on the host", () => {
+  it("puts neither the address nor anything derived from it in the event", () => {
     const recorder = new SessionRecorder({
       context: {
         agent: {
@@ -164,7 +158,7 @@ describe("the collector hashes on the host", () => {
     );
     expect(events.length).toBeGreaterThan(0);
     const event = events[events.length - 1];
-    expect(event?.anthropic?.user_email_digest).toBe(digestUserEmail(ADDRESS));
+    expect(event?.anthropic?.user_email_digest).toBeUndefined();
     expect(event?.anthropic?.user_email).toBeUndefined();
     for (const text of strings(event)) {
       expect(text.toLowerCase()).not.toContain(NORMALIZED);
@@ -219,7 +213,7 @@ describe("the tacho_events column set", () => {
     const row = flattenEvent(
       eventWithAnthropic({
         user_email: ADDRESS,
-        user_email_digest: digestUserEmail(ADDRESS) as string,
+        user_email_digest: `sha256:${"7".repeat(64)}`,
       }),
     );
     expect(row["anthropic_user_email"]).toBeUndefined();

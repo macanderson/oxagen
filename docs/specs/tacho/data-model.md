@@ -53,12 +53,12 @@ Engine `ReplacingMergeTree(received_at)`, `PARTITION BY toYYYYMM(ts)`, `ORDER BY
 | `anthropic_org_uuid` | String | OTel `organization.id` (also transcript `bridge-session.ownerOrganizationUuid`) |
 | `api_key_source` | LC | init `apiKeySource` (`none` \| `ANTHROPIC_API_KEY` \| …) |
 
-**Nothing derived from the address is stored, and there is no column for one.**
-Two envelope members can carry the person — `anthropic.user_email_digest`, what
-a collector from this release on sends after hashing on the host, and
-`anthropic.user_email`, the legacy member still accepted so installed
-collectors and WAL entries sealed under `tacho/1.0` keep working. The control
-plane discards both (#3072).
+**Nothing derived from the address is computed, shipped or stored, and no
+persisted value varies with it.** Two envelope members can carry the person —
+`anthropic.user_email` and `anthropic.user_email_digest` — and both stay
+accepted so installed collectors and WAL entries sealed under `tacho/1.0` keep
+working. The control plane discards both, and a collector from this release on
+sends neither (#3072).
 
 Earlier designs hashed the address, then keyed the hash with a server-held
 secret, and stored the result here. Both were wrong, for different reasons. A
@@ -70,6 +70,16 @@ producer could submit the hash of a guessed address, read the keyed result back
 and match it against a colleague's row. The server computed the function on
 demand for chosen inputs, which is a dictionary oracle no matter how strong the
 function is.
+
+A third round removed the column but kept hashing on the host and shipping the
+hash. That was still recoverable, because `sealEvent` hashes every member of the
+event — so the persisted `hash` committed to the digest — and `raw_source_digest`
+is taken over the original OTel attributes, which still held `user.email`. A
+commitment to a low-entropy value is a confirmation oracle: guess, recompute,
+compare. So the collector now emits no email-derived member
+(`packages/tacho/src/claude-code/otel.ts`), and `raw_source_digest` is taken over
+`redactedForDigest(attrs)`, which drops address-bearing keys. The hashing itself
+is unchanged, so entries sealed before the change still verify.
 
 The person is `initiating_principal_id` / `initiating_user_id` on
 `tacho.sessions` — an identity this deployment issues, which a producer cannot
