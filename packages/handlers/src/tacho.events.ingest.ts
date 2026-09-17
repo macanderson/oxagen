@@ -994,9 +994,18 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         : derivedTier;
       // The grade is computed once, at seal: a sealed session is never
       // sealed again, whatever a later batch carries.
-      // Whether THIS batch's own derivation is the gateway tier. Read by the
-      // insert's conflict path, where `existing` is stale by construction.
-      const risesToGateway = derivedTier === TACHO_GATEWAY_TIER;
+      // The genesis hash THIS batch's own derivation promoted on, or null when
+      // it did not promote. Read by the insert's conflict path, where
+      // `existing` is stale by construction.
+      //
+      // One value rather than a boolean and a hash kept beside it: the conflict
+      // path needs both, and they have to be the same decision. `gateway` is
+      // never derived from a null hash — `enforcementTierOf` requires it on
+      // both sides — so the null branch below is unreachable rather than a
+      // default, and if that ever stopped being true it falls to the
+      // conservative side on its own.
+      const promotedOnGenesis =
+        derivedTier === TACHO_GATEWAY_TIER ? sessionGenesisHash : null;
       const terminal = existing?.sealedAt ? {} : terminalPatch(fresh, now);
       const { totalCostMicrosAuthoritative, ...terminalColumns } =
         terminal as Record<string, unknown> & {
@@ -1144,16 +1153,19 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       //     through the existing-session path, which reads the real row.
       //
       // `setWhere` still refuses an already-sealed row outright: a seal is
-      // final, and neither shape above may overwrite one.
-      const conflictSet = risesToGateway
-        ? {
-            ...common,
-            enforcementTier: TACHO_GATEWAY_TIER,
-            ...(sessionGatewayColumn
-              ? { gatewayObservedAt: chainRecord?.at ?? null }
-              : {}),
-          }
-        : withoutTerminal(common, terminalColumns);
+      // final, and neither shape above may overwrite one — and on the rise it
+      // also refuses a row whose stored genesis is not the one the promotion
+      // was derived from.
+      const conflictSet =
+        promotedOnGenesis !== null
+          ? {
+              ...common,
+              enforcementTier: TACHO_GATEWAY_TIER,
+              ...(sessionGatewayColumn
+                ? { gatewayObservedAt: chainRecord?.at ?? null }
+                : {}),
+            }
+          : withoutTerminal(common, terminalColumns);
 
       if (existing) {
         await tx
@@ -1207,7 +1219,31 @@ export const tachoEventsIngestHandler: CapabilityHandler<
             // losing batch's counters go with it, which is the right trade:
             // they are a duplicate of a sealed session's, and a wrong signed
             // grade is not recoverable while a missing increment is.
-            setWhere: isNull(schema.tachoSessions.sealedAt),
+            setWhere:
+              promotedOnGenesis !== null
+                ? and(
+                    isNull(schema.tachoSessions.sealedAt),
+                    // The row this lands on must be the chain the promotion was
+                    // derived from.
+                    //
+                    // `conflictSet` writes `gateway` onto whatever row is there,
+                    // and `genesis_hash` is INSERT-only — the conflict path never
+                    // rewrites it. So two first-ingest requests carrying
+                    // different genesis events for one session uuid let a forged
+                    // row land first and then take the legitimate batch's
+                    // promotion: the session keeps the forged genesis and
+                    // everything derived from it, and carries `gateway` for good.
+                    // Matching the hash is the difference between promoting THIS
+                    // chain and promoting whatever got there first wearing its
+                    // uuid.
+                    //
+                    // A mismatch drops the whole update rather than part of it. A
+                    // batch whose genesis differs from the stored row is a
+                    // different chain claiming the same name, and nothing it
+                    // carries belongs on that row.
+                    eq(schema.tachoSessions.genesisHash, promotedOnGenesis),
+                  )
+                : isNull(schema.tachoSessions.sealedAt),
           });
         // Counters on a fresh row start from the insert's zero defaults; apply the delta.
         await tx

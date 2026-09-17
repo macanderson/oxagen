@@ -530,14 +530,30 @@ function wire(db: FakeDb): void {
                 const uuid = values["sessionUuid"] as string;
                 const present =
                   name === "sessions" ? db.sessions.get(uuid) : undefined;
-                // `setWhere` refuses an already-sealed row outright: a seal is
-                // final, and nothing may overwrite one.
-                if (
-                  args?.setWhere !== undefined &&
-                  present?.["sealedAt"] !== undefined &&
-                  present?.["sealedAt"] !== null
-                ) {
-                  return;
+                // `setWhere`, both halves. A seal is final, so nothing may
+                // overwrite one — and a promotion may only land on the chain it
+                // was derived from, which is the genesis hash the predicate
+                // binds. Modelled by reading the bound values out of the
+                // condition: a fixture that checked only the seal would report
+                // the genesis guard working when it was absent.
+                if (args?.setWhere !== undefined && present !== undefined) {
+                  if (
+                    present["sealedAt"] !== undefined &&
+                    present["sealedAt"] !== null
+                  ) {
+                    return;
+                  }
+                  const bound = boundValues(args.setWhere).filter(
+                    (v): v is string => typeof v === "string",
+                  );
+                  // A genesis hash in the predicate means this is the promotion
+                  // branch, and the stored row has to carry that same hash.
+                  if (
+                    bound.length > 0 &&
+                    !bound.includes(present["genesisHash"] as string)
+                  ) {
+                    return;
+                  }
                 }
                 if (name === "sessions") {
                   if (present !== undefined) {
@@ -1629,6 +1645,9 @@ describe("ingest_tacho_events: bodies and the seal", () => {
       hostId: HOST_ID,
       enforcementTier: "observe",
       sealedAt: null,
+      // The SAME chain: both requests carry the same genesis, and differ only
+      // in whether their read saw the gateway call.
+      genesisHash: (events[0] as TachoEvent).hash,
     });
     db.hideSessionFromRead = true;
     wire(db);
@@ -1642,6 +1661,40 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     // Both from one derivation, and a rise rather than a downgrade.
     expect(row?.["enforcementTier"]).toBe("gateway");
     expect(row?.["replayGrade"]).toBe("fork");
+  });
+
+  it("does not promote a row whose genesis is not the one it matched", async () => {
+    // `genesis_hash` is INSERT-only: the conflict path never rewrites it. So a
+    // forged row that lands first keeps its own genesis, and a legitimate
+    // gateway batch conflicting onto it would hand that row the tier — a
+    // session carrying a forged chain's identity and `gateway` permanently.
+    //
+    // Discriminating against the case above: identical, except whose genesis
+    // the stored row records.
+    const db = fakeDb();
+    const events = sessionWithContent("gateway");
+    servedChain(db, events);
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "observe",
+      sealedAt: null,
+      genesisHash: `sha256:${"d".repeat(64)}`,
+    });
+    db.hideSessionFromRead = true;
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+
+    const row = db.sessions.get(SESSION);
+    expect(row?.["enforcementTier"]).toBe("observe");
+    // Nothing else from that batch lands either: a chain whose genesis differs
+    // is a different chain wearing the same uuid.
+    expect(row?.["replayGrade"]).toBeUndefined();
   });
 
   it("writes no grade when a racing insert cannot know the winner's tier", async () => {
