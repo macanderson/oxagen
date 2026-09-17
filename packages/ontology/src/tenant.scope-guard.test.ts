@@ -401,6 +401,90 @@ describe("tenancy guard — the anchor's token boundaries are Cypher's", () => {
   }
 });
 
+// ── The anchor has to be a property, not a name that reads like one ─────────
+//
+// The guard checked WHERE the token sits and WHAT it binds to, and never that
+// the left-hand side is a property ACCESS. A query may bind a variable called
+// `orgId`, and the anchor is then a tautology over every tenant's nodes.
+describe("tenancy guard — a bare name is not a tenant property", () => {
+  const tautologies: Array<[name: string, cypher: string]> = [
+    [
+      "WITH aliases the injected parameter (review's case)",
+      "WITH $orgId AS orgId MATCH (n) WHERE orgId = $orgId RETURN n",
+    ],
+    [
+      "UNWIND binds the same name",
+      "UNWIND [$orgId] AS orgId MATCH (n) WHERE orgId = $orgId RETURN n",
+    ],
+    [
+      "the alias is introduced after a MATCH",
+      "MATCH (n) WITH n, $orgId AS orgId WHERE orgId = $orgId RETURN n",
+    ],
+    [
+      "a caller-supplied parameter map",
+      "MATCH (n) WHERE $p.orgId = $orgId RETURN n",
+    ],
+    [
+      "the injected parameter's own property",
+      "MATCH (n) WHERE $orgId.orgId = $orgId RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of tautologies) {
+    it(`rejects: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(false);
+    });
+    it(`is discriminating: the round-ten anchor accepted ${name}`, () => {
+      // The round-ten guard was `orgId <[:=]> $orgId` with Unicode delimiters and
+      // no shape requirement, so it matched all of these against the same
+      // projection the current guard runs over.
+      const ROUND_TEN =
+        /(?<![\p{ID_Continue}\p{Sc}])orgId\s*[:=]\s*\$orgId(?![\p{ID_Continue}\p{Sc}])/u;
+      expect(ROUND_TEN.test(keepFilteringPositions(cypher))).toBe(true);
+    });
+  }
+
+  const stillAccepted: Array<[name: string, cypher: string]> = [
+    [
+      "a qualified property access",
+      "MATCH (n) WHERE n.orgId = $orgId RETURN n",
+    ],
+    [
+      "a property access with spaces around the dot",
+      "MATCH (n) WHERE n . orgId = $orgId RETURN n",
+    ],
+    [
+      "an accented variable's property",
+      "MATCH (n\u00f8de) WHERE n\u00f8de.orgId = $orgId RETURN n\u00f8de",
+    ],
+    ["a node pattern property map key", "MATCH (n {orgId: $orgId}) RETURN n"],
+    [
+      "a relationship pattern property map key",
+      "MATCH (a)-[r {orgId: $orgId}]->(b) RETURN r",
+    ],
+    ["a pattern map key with spaces", "MATCH (n { orgId : $orgId }) RETURN n"],
+  ];
+  for (const [name, cypher] of stillAccepted) {
+    it(`still accepts: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(true);
+    });
+  }
+
+  // Claim B, and recorded rather than claimed closed. This wears an anchor's
+  // exact syntax — a qualified property access on a variable — and is a
+  // tautology, because the variable is bound to a map rather than to a graph
+  // row. Telling the two apart requires knowing what `m` is BOUND to, which is
+  // dataflow and not spelling. No lexical rule reaches it; ADR-087's decision
+  // (2) does, by constructing the query instead of reading it.
+  it("accepts, and should not be trusted: a property access on a map alias", async () => {
+    await expect(
+      guardAccepts(
+        "WITH {orgId: $orgId} AS m MATCH (n) WHERE m.orgId = $orgId RETURN n",
+      ),
+    ).resolves.toBe(true);
+  });
+});
+
 // ── A map literal is a value, not a filter ──────────────────────────────────
 //
 // `keepFilteringPositions` keeps a `WHERE` clause whole, so a map literal

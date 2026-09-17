@@ -789,6 +789,124 @@ describe("a map literal in a filtering position is not a tenant anchor", () => {
   });
 });
 
+// ── A grouping bracket is not a pattern bracket ──────────────────────────────
+//
+// `opensPattern` decided pattern-ness from the single character before the
+// bracket. That set is `,`, `-`, `>`, `<`, `=`, `|`, `(`, `[` — and every one of
+// them is ordinary EXPRESSION syntax as well as pattern syntax, so outside a
+// graph-pattern clause each one classified grouping as a node pattern. The brace
+// inside then became a pattern property map instead of a map literal, `mapDepth`
+// never rose, and round ten's fix was bypassed:
+//
+//     MATCH (n) WHERE true = ({orgId: $orgId} IS NOT NULL) RETURN n
+//
+// Review reported the `=` spelling. All eight characters do it, and they are
+// enumerated here rather than left for round twelve.
+describe("a grouping bracket in an expression is not a pattern bracket", () => {
+  const labelScope: GraphScope = { labels: ["Doc"] };
+  const grouped: Array<[name: string, cypher: string]> = [
+    [
+      "after `=` (review's case)",
+      "MATCH (n) WHERE true = ({orgId: $orgId} IS NOT NULL) RETURN n",
+    ],
+    [
+      "after `,` in a function call",
+      "MATCH (n) WHERE coalesce(1, ({orgId: $orgId} IS NOT NULL)) RETURN n",
+    ],
+    [
+      "after `(` — grouping inside grouping",
+      "MATCH (n) WHERE ((({orgId: $orgId} IS NOT NULL))) RETURN n",
+    ],
+    [
+      "after `>`",
+      "MATCH (n) WHERE 1 > 0 AND true = ({orgId: $orgId} IS NOT NULL) RETURN n",
+    ],
+    [
+      "after `<>`",
+      "MATCH (n) WHERE true <> ({orgId: $orgId} IS NULL) RETURN n",
+    ],
+    [
+      "after `|` in a list comprehension",
+      "MATCH (n) WHERE [x IN [1] | ({orgId: $orgId})] IS NOT NULL RETURN n",
+    ],
+    [
+      "after `[` — a list of groups",
+      "MATCH (n) WHERE [({orgId: $orgId})] IS NOT NULL RETURN n",
+    ],
+    [
+      "after `-` — a bracket that is not a relationship",
+      "MATCH (n) WHERE n.x - [{orgId: $orgId}] IS NOT NULL RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of grouped) {
+    it(`does not make the enclosed brace a pattern map: ${name}`, () => {
+      expect(keepFilteringPositions(cypher)).not.toContain("$orgId");
+    });
+  }
+
+  it("the scope marker has the same hole through a grouped map", () => {
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (n) WHERE true = ({allowed: n.label IN $${SCOPE_LABELS_PARAM}} IS NOT NULL) RETURN n`,
+        labelScope,
+      ),
+    ).toThrow(GraphScopeError);
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (n) WHERE coalesce(1, ({allowed: n.label IN $${SCOPE_LABELS_PARAM}})) RETURN n`,
+        labelScope,
+      ),
+    ).toThrow(GraphScopeError);
+  });
+
+  // The false-reject direction. Every one of the eight characters above is also
+  // REAL pattern syntax inside a graph-pattern clause, and all of those must
+  // keep anchoring — otherwise the fix trades a bypass for an outage.
+  const stillPatterns: Array<[name: string, cypher: string]> = [
+    ["a plain node pattern map", "MATCH (n {orgId: $orgId}) RETURN n"],
+    [
+      "after `,` — comma-separated patterns",
+      "MATCH (a), (b {orgId: $orgId}) RETURN a",
+    ],
+    [
+      "after `=` — a named path",
+      "MATCH p = (a {orgId: $orgId})-[:R]->(b) RETURN p",
+    ],
+    [
+      "after `-` — a relationship pattern map",
+      "MATCH (a)-[r {orgId: $orgId}]->(b) RETURN r",
+    ],
+    [
+      "under OPTIONAL MATCH",
+      "MATCH (x {orgId: $orgId}) OPTIONAL MATCH (y {orgId: $orgId}) RETURN y",
+    ],
+    ["under MERGE as the first clause", "MERGE (n {orgId: $orgId}) RETURN n"],
+    [
+      "inside an EXISTS subquery's MATCH",
+      "MATCH (n) WHERE EXISTS { MATCH (m {orgId: $orgId}) } RETURN n",
+    ],
+    [
+      "a grouped expression earlier in the query",
+      "MATCH (a) WHERE true = (1 = 1) MATCH (b {orgId: $orgId}) RETURN b",
+    ],
+  ];
+  for (const [name, cypher] of stillPatterns) {
+    it(`still reads as a pattern: ${name}`, () => {
+      expect(keepFilteringPositions(cypher)).toContain("$orgId");
+    });
+  }
+
+  it("a grouped expression does not desync the bracket stack", () => {
+    // The grouping paren is pushed as a non-pattern frame and popped again, so
+    // a pattern AFTER it is classified on its own merits.
+    const kept = keepFilteringPositions(
+      "MATCH (a) WHERE true = ((1 = 1)) AND a.orgId = $orgId RETURN a",
+    );
+    expect(kept).toContain("$orgId");
+  });
+});
+
 // ── Unicode identifier delimiting ────────────────────────────────────────────
 //
 // Cypher spells an unescaped symbolic name with Unicode rules (openCypher:

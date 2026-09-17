@@ -29,7 +29,8 @@ tenants:
 | 7 | a `MERGE` map counts only when nothing before it bound a graph variable | `MATCH (n) SET n.x = $where, n.orgId = $orgId` — a parameter named like a clause keyword moves the clause state |
 | 8 | clause keywords recognised only at clause boundaries; the scope guard gets a stricter projection than the tenancy guard | `MATCH (n) RETURN EXISTS { MATCH (m) WHERE m.x = 1 } AS ok, n.orgId = $orgId AS mine, n` |
 | 9 | clause state saved and restored across braces; every token boundary drawn with Cypher's Unicode identifier classes | `MATCH (n) WHERE {orgId: $orgId} IS NOT NULL RETURN n` — an always-true predicate whose map KEY satisfied the anchor |
-| 10 | a brace is classified `pattern` / `subquery` / `map`, and nothing inside a map literal counts | — (this is where the guard stands) |
+| 10 | a brace is classified `pattern` / `subquery` / `map`, and nothing inside a map literal counts | `WITH $orgId AS orgId … WHERE orgId = $orgId`; `WHERE true = ({orgId: $orgId} IS NOT NULL)` |
+| 11 | the anchor must be a property access or a pattern-map key; a bracket opens a pattern only in a graph-pattern clause | — (this is where the guard stands) |
 
 Seven rounds, seven real holes, one shape: each version was a more precise
 lexical rule, and each time there was another expression form that satisfied it.
@@ -229,6 +230,93 @@ This is what the ADR's recommendation looks like in practice, at the scale of on
 rule. Eleven encodings, ten of them never reported, closed in one round by asking
 the grammar what a brace can mean instead of asking the reviewer what they tried.
 
+### Round 11, and a correction to round 10's own conclusion
+
+Round 11 produced two findings, and **neither is a map-literal position** — the
+construct round 10 enumerated. That matters more than either fix.
+
+**Finding one: the anchor never required a property access.** A query may bind a
+variable named `orgId`, and the anchor becomes a tautology:
+
+```cypher
+WITH $orgId AS orgId MATCH (n) WHERE orgId = $orgId RETURN n
+```
+
+Three spellings of it (`WITH`, `UNWIND`, a `WITH` after a `MATCH`), plus two
+through a parameter (`$p.orgId = $orgId`, where the caller supplies the map).
+The guard now requires one of the two shapes Cypher actually gives an anchor:
+`<variable>.orgId = $orgId`, or `orgId: $orgId` as a pattern-map key.
+
+**Finding two: a grouping bracket was read as a pattern bracket.** `opensPattern`
+decided pattern-ness from the single character before the bracket — `,`, `-`,
+`>`, `<`, `=`, `|`, `(`, `[`. Every one of those is ordinary expression syntax as
+well as pattern syntax, so **all eight** were bypasses of round 10's fix:
+
+```cypher
+MATCH (n) WHERE true = ({orgId: $orgId} IS NOT NULL) RETURN n
+```
+
+The `(` follows `=`, read as `MATCH p = (a)`; the brace inside became a pattern
+property map rather than a map literal, `mapDepth` never rose, and the always-true
+predicate anchored the tenant.
+
+#### What this does to round 10's claim
+
+Round 10 said Claim A is "the openCypher **lexical** grammar", that it is bounded
+and enumerable, and that the fix for the method is to **implement the lexer**.
+Finding two falsifies the prescription, and it is worth stating plainly rather
+than leaving in a commit message.
+
+**A lexer would not have prevented it.** A lexer tokenizes: it returns `LPAREN`
+and stops. Whether a `(` opens a node pattern or groups an expression is a
+question about which *production* is being parsed — syntax, not lexis. Round 10's
+own remedy, applied perfectly, leaves finding two exactly where it was.
+
+So the boundary drawn in round 10 was in the wrong place. The corrected version:
+
+- **Claim A is not lexical, it is syntactic.** The questions this guard asks —
+  which clause are we in, is this bracket a pattern, is this brace a map, is this
+  token a property access — are all grammar-production questions. Bounded, yes,
+  and enumerable from the grammar, yes. But the artifact that answers them is a
+  **parser**, not a lexer, and ADR-087 already weighed parsing above and declined
+  it as the primary answer, because it does not touch Claim B.
+- **The enumeration method is sound and its scope is the thing that fails.**
+  Round 10's enumeration was thorough *within the construct the previous round was
+  about*, and round 11 arrived one construct over. That is the same failure one
+  level up: enumerating within the last finding's category is still taking the
+  agenda from the last reviewer.
+
+#### Are these two inside the structure?
+
+Yes, and that is why they were fixed here rather than escalated.
+
+Finding two's fix **removes a rule rather than adding one**: `opensPattern` now
+asks `clause`, which the scanner already tracks, and the eight-character set
+becomes a refinement *within* patterns instead of the whole test. A rule that was
+answering a question it could not see is replaced by the state that can see it.
+Finding one's fix replaces a shapeless token match with the two shapes the
+grammar gives. Both make the structure *more* accountable to the grammar and
+smaller, which is the right direction even though neither closes the class.
+
+**And no, this is not a claim that round 12 is not one construct over.** The
+structure now answers four questions — which clause, which bracket kind, which
+brace kind, which anchor shape — each by a local rule. Round 11 found a defect in
+two of the four. There is no evidence the other two are clean, and the base rate
+across eleven rounds says they are not.
+
+Finding one also does not close its own class, which is recorded rather than
+glossed:
+
+```cypher
+WITH {orgId: $orgId} AS m MATCH (n) WHERE m.orgId = $orgId RETURN n
+```
+
+is a qualified property access on a variable — an anchor's exact syntax — and a
+tautology, because `m` is bound to a map rather than to a graph row. Telling the
+two apart needs to know what `m` is BOUND to. That is dataflow: **Claim B**, not a
+missed spelling, and no syntactic rule reaches it. It is asserted as
+known-accepted in `tenant.scope-guard.test.ts`.
+
 ### What follows
 
 This does **not** change the decision below — it strengthens the case for it and
@@ -238,12 +326,15 @@ narrows what any interim work should be.
   query the seam built needs no lexical analysis to be trusted and no semantic
   analysis to be proved: provenance is decidable, and it is the only option on
   the table that is.
-- If an interim strengthening is ever wanted, it is **implement the lexer**, not
-  add rule ten. A token stream produced against the openCypher lexical grammar,
-  with clause scope tracked on the bracket/brace stack, replaces a growing list
-  of special cases with something that can be held against a specification. It
-  is bounded work and it would have prevented rounds 1, 3, 5, 7, 9a and 9b as a
-  class rather than one at a time.
+- If an interim strengthening is ever wanted, it is **implement enough of the
+  grammar to answer the questions the guard asks**, held against the
+  specification rather than against the last reviewer. Round 10 wrote this as
+  "implement the lexer"; round 11 corrected it, because a lexer returns `LPAREN`
+  and cannot say whether that paren opens a node pattern — that is a production,
+  not a token. The honest name for the artifact is a **parser**, which this ADR
+  weighs and declines above as the primary answer: it would have prevented rounds
+  1, 3, 5, 7, 9, 10 and 11 as a class, and closes none of Claim B. Anyone
+  proposing it should price it as a parser and justify it on Claim A alone.
 - **Refusing anything outside a known-safe subset** — fail closed on shapes the
   guard cannot certify — was weighed and is the weakest of the three. The corpus
   is 63 queries across 16 files, so whitelisting shapes costs roughly what the

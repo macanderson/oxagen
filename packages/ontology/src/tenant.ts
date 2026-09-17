@@ -97,11 +97,42 @@ export type { GraphScope };
 // symbol, it continues an identifier in Cypher, and excluding it in the
 // LOOKBEHIND is exactly what stops the third case — the parameter `$orgId`
 // being matched as though it were a bare property name.
+//
+// AND `orgId` HAS TO BE A PROPERTY, NOT A NAME THAT READS LIKE ONE. Conditions
+// 1-4 check where the token sits and what it binds to, and never checked that
+// the left-hand side is a property ACCESS at all. A query may bind a variable
+// called `orgId`, and then the anchor is a tautology:
+//
+//     WITH $orgId AS orgId MATCH (n) WHERE orgId = $orgId RETURN n
+//     UNWIND [$orgId] AS orgId MATCH (n) WHERE orgId = $orgId RETURN n
+//
+// Both compare the injected parameter with itself, are true for every row, and
+// scope nothing. Cypher spells the two things that ARE anchors differently from
+// a bare name, so the guard now spells them differently too:
+//
+//   PROPERTY  `<variable>.orgId = $orgId`  — a dot, and an identifier before it
+//   MAP KEY   `orgId: $orgId`              — a key inside a pattern property map
+//
+// The identifier before the dot must not be a PARAMETER. `$` is a currency
+// symbol and therefore in the identifier-part class, so the same lookbehind that
+// refused `$orgId = $orgId` also refuses `$p.orgId = $orgId` — where the caller
+// supplies `$p = {orgId: <their own org>}` and gets another tautology.
+//
+// WHAT THIS STILL ACCEPTS, and it is Claim B rather than a missed spelling:
+//
+//     WITH {orgId: $orgId} AS m MATCH (n) WHERE m.orgId = $orgId RETURN n
+//
+// is a qualified property access on a variable bound to a map, so it is a
+// tautology wearing an anchor's exact syntax. Telling it from `n.orgId` needs to
+// know what `m` is BOUND to, which is dataflow and not spelling; no lexical rule
+// reaches it. `tenant.scope-guard.test.ts` asserts it as known-accepted.
+const ID_START = "\\p{ID_Start}\\p{Pc}";
 const ID_PART = "\\p{ID_Continue}\\p{Sc}";
-const SCOPE_GUARD = new RegExp(
-  `(?<![${ID_PART}])orgId\\s*[:=]\\s*\\$orgId(?![${ID_PART}])`,
-  "u",
-);
+/** `<variable>.orgId = $orgId` — a dot, and a non-parameter identifier before it. */
+const ANCHOR_PROPERTY = `(?<![${ID_PART}])[${ID_START}][${ID_PART}]*\\s*\\.\\s*orgId\\s*=\\s*\\$orgId(?![${ID_PART}])`;
+/** `orgId: $orgId` — a pattern property map key. Never preceded by a dot. */
+const ANCHOR_MAP_KEY = `(?<![${ID_PART}.])orgId\\s*:\\s*\\$orgId(?![${ID_PART}])`;
+const SCOPE_GUARD = new RegExp(`${ANCHOR_PROPERTY}|${ANCHOR_MAP_KEY}`, "u");
 
 /**
  * Return a Neo4j session bound to the active tenant scope. Throws

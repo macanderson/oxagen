@@ -275,6 +275,34 @@ const PATTERN_INTRODUCERS = new Set(["MATCH", "MERGE", "CREATE"]);
 // change rather than another hazard someone happened to find.
 const SUBQUERY_INTRODUCERS = new Set(["CALL", "EXISTS", "COUNT", "COLLECT"]);
 
+// Clauses in which a `(` or `[` can open a GRAPH PATTERN at all. Everywhere else
+// a bracket is grouping, a call, a list or an index.
+//
+// This is the round-eleven correction, and it REPLACES a rule rather than adding
+// one. `opensPattern` decided pattern-ness from the single character before the
+// bracket, and `,`, `-`, `>`, `<`, `=`, `|`, `(` and `[` are all ordinary
+// EXPRESSION syntax as well as pattern syntax. Each one was therefore a bypass:
+//
+//     MATCH (n) WHERE true = ({orgId: $orgId} IS NOT NULL) RETURN n
+//
+// The `(` follows `=`, which the character set read as `MATCH p = (a)`. The
+// grouping paren became a pattern bracket, the brace inside it became a pattern
+// property map instead of a map literal, `mapDepth` never rose, and an
+// always-true predicate anchored the tenant. All eight characters do this.
+//
+// Which clause we are in is state the scanner already tracks, and it is the
+// question the grammar actually asks: a node pattern appears in a graph-pattern
+// clause. Deciding it from the clause makes the character set a refinement
+// WITHIN patterns rather than the whole test, which is what it was written as.
+//
+// `OPTIONAL` is deliberately ABSENT, and it was in this set until a mutation
+// probe showed removing it failed nothing. Cypher only ever writes `OPTIONAL`
+// immediately before `MATCH` or `CALL`, so the clause has already advanced past
+// it by the time any bracket opens; an entry for it would be a rule that reads
+// as protection and executes never. The set lists the clauses in which a bracket
+// CAN open a pattern, and nothing else.
+const GRAPH_PATTERN_CLAUSES = new Set(["MATCH", "MERGE", "CREATE"]);
+
 // Clauses whose pattern property maps constrain an EXISTING row set. `CREATE`
 // is a pattern introducer for bracket-classification purposes — a `(` after it
 // is a node pattern, not a call — but its map only stamps a node being made, so
@@ -395,8 +423,26 @@ function startsAClause(src: string, start: number, end: number): boolean {
  *    (`MATCH (a), (b)`), after the dash/arrow characters that join a path, after
  *    `=` (`MATCH p = (a)`), or inside a pattern comprehension's `[`. Preceded by
  *    any other bare word it is a function call.
+ *
+ * BOTH of those are read only INSIDE a graph-pattern clause. The character set
+ * above is `,`, `-`, `>`, `<`, `=`, `|`, `(`, `[` — every one of which is also
+ * ordinary expression syntax, so outside `MATCH` / `OPTIONAL MATCH` / `MERGE` /
+ * `CREATE` it classified grouping parens, argument lists, comparisons and
+ * comprehensions as node patterns. `clause` answers the question the grammar
+ * asks and the preceding character then refines it; the other way round, the
+ * character was answering a question it cannot see.
+ *
+ * The cost is measured, not assumed: a pattern written in a `WHERE` — a bare
+ * pattern expression, or a pattern comprehension such as
+ * `WHERE size([(n)-->(m) | m]) > 0` — now classifies as an expression, so a
+ * property map inside one stops counting as an anchor. That is the fail-closed
+ * direction, no query in the corpus writes it, and a pattern inside
+ * `WHERE EXISTS { MATCH … }` is unaffected because the subquery's own `MATCH`
+ * sets the clause.
  */
-function opensPattern(src: string, openIdx: number): boolean {
+function opensPattern(src: string, openIdx: number, clause: string): boolean {
+  if (!GRAPH_PATTERN_CLAUSES.has(clause)) return false;
+
   let k = openIdx - 1;
   while (k >= 0 && /\s/.test(src[k]!)) k -= 1;
   if (k < 0) return true;
@@ -699,7 +745,7 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
     if (ch === "(") {
       paren += 1;
       bracketFrames.push({
-        isPattern: opensPattern(src, i),
+        isPattern: opensPattern(src, i, clause),
         braceDepth: braceKinds.length,
       });
     } else if (ch === ")") {
@@ -708,7 +754,7 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
     } else if (ch === "[") {
       bracket += 1;
       bracketFrames.push({
-        isPattern: opensPattern(src, i),
+        isPattern: opensPattern(src, i, clause),
         braceDepth: braceKinds.length,
       });
     } else if (ch === "]") {
