@@ -368,6 +368,10 @@ export async function startDaemon(
     wal,
     client,
     quarantineDir: paths.quarantine,
+    // Re-enrolling leaves the WAL holding events stamped with the old id; the
+    // control plane 403s a batch containing any of them, and a 403 is
+    // retryable, so without this the queue wedges forever.
+    hostEnrollmentId: host.host_enrollment_id,
     health,
     onControl: async (control) => {
       lastIngestAt = now();

@@ -500,6 +500,7 @@ describe("shipper", () => {
     client: Partial<ControlClient>,
     dir: string,
     now: () => number,
+    hostEnrollmentId?: string,
   ) {
     const controls: unknown[] = [];
     const logs: string[] = [];
@@ -515,6 +516,7 @@ describe("shipper", () => {
       now,
       minBackoffMs: 1_000,
       maxBackoffMs: 4_000,
+      ...(hostEnrollmentId !== undefined ? { hostEnrollmentId } : {}),
     });
     return { s, controls, logs };
   }
@@ -555,6 +557,83 @@ describe("shipper", () => {
     expect(wal.stats().unshipped).toBe(0);
     expect(controls.length).toBeGreaterThan(0);
     expect(logs.some((l) => l.includes("quarantined"))).toBe(true);
+  });
+
+  // ── Orphaned events after a re-enrollment ──────────────────────────────────
+  //
+  // Re-enrolling mints a new host_enrollment_id and leaves whatever is still
+  // spooled stamped with the old one. The control plane 403s a batch if ANY
+  // event in it names a different host, and a 403 is retryable (a revoked key
+  // is also a 403), so one orphaned event at the head of the WAL wedges the
+  // queue forever. A real host had five enrollment ids in one WAL and 30,206
+  // of 45,135 events unshippable, with nothing drained since the first
+  // re-enrollment.
+
+  it("quarantines events from a previous enrollment instead of wedging the queue", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    // Stamp the whole session with an enrollment this host no longer has.
+    const orphaned = events.map((e) => ({
+      ...e,
+      agent: { ...e.agent, host_enrollment_id: "tch_previous_enrollment" },
+    })) as typeof events;
+    wal.append(orphaned);
+
+    const shipped: number[] = [];
+    const { s, logs } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          shipped.push(batch.length);
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+      "tch_current_enrollment",
+    );
+
+    const result = await s.drain();
+    // Nothing was sent — every event belonged to the old enrollment — and the
+    // WAL advanced past them rather than offering them again forever.
+    expect(shipped).toHaveLength(0);
+    expect(result.quarantined).toBe(orphaned.length);
+    expect(wal.stats().unshipped).toBe(0);
+    expect(logs.some((l) => l.includes("previous enrollment"))).toBe(true);
+  });
+
+  it("still ships this host's own events in a batch that also held orphans", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const mine = minimalSession();
+    wal.append(mine);
+    const theirs = minimalSession().map((e) => ({
+      ...e,
+      session_uuid: `${e.session_uuid}-old`,
+      agent: { ...e.agent, host_enrollment_id: "tch_previous_enrollment" },
+    })) as typeof mine;
+    wal.append(theirs);
+
+    let sentTotal = 0;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          sentTotal += batch.length;
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+      mine[0]?.agent.host_enrollment_id,
+    );
+
+    const result = await s.drain();
+    expect(sentTotal).toBe(mine.length);
+    expect(result.shipped).toBe(mine.length);
+    expect(result.quarantined).toBe(theirs.length);
+    expect(wal.stats().unshipped).toBe(0);
   });
 
   // ── Rate-limit awareness (throughput under many agents) ────────────────────

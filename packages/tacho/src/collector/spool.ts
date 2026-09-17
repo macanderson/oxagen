@@ -35,6 +35,14 @@ export interface ShipperOptions {
   now: () => number;
   minBackoffMs?: number;
   maxBackoffMs?: number;
+  /**
+   * This host's current enrollment id. Events recorded under a PREVIOUS
+   * enrollment can never be accepted — the control plane rejects a whole batch
+   * with 403 "event names another host" if any event in it names a different
+   * one — so they are quarantined here rather than shipped. Optional so an
+   * existing caller that does not set it keeps the old behaviour.
+   */
+  hostEnrollmentId?: string;
 }
 
 export interface ShipResult {
@@ -157,6 +165,51 @@ export class Shipper {
       this.options.wal.markShipped(session, seq);
   }
 
+  /**
+   * Quarantine events belonging to a previous enrollment, and return the rest.
+   *
+   * Re-enrolling a host mints a new `host_enrollment_id` and leaves whatever is
+   * still spooled stamped with the old one. The control plane rejects a batch
+   * with 403 if ANY event in it names a different host, and the Shipper treats
+   * 403 as retryable — correctly, since a revoked key is also a 403 — so a
+   * single orphaned event at the head of the WAL wedges the queue permanently
+   * and every valid event behind it stops too. Observed on a real host: five
+   * enrollment ids in one WAL, 30,206 of 45,135 events unshippable, nothing
+   * drained since the first re-enrollment.
+   *
+   * Quarantine, not silent discard: these are real recorded events and belong
+   * on disk where someone can inspect them, exactly like a batch the control
+   * plane refuses as malformed.
+   */
+  private setAsideForeignEvents(batch: TachoEvent[]): {
+    own: TachoEvent[];
+    quarantined: number;
+  } {
+    const mine = this.options.hostEnrollmentId;
+    if (mine === undefined) return { own: batch, quarantined: 0 };
+    const own: TachoEvent[] = [];
+    const foreign: TachoEvent[] = [];
+    for (const event of batch) {
+      const stamped = event.agent?.host_enrollment_id;
+      if (stamped === undefined || stamped === mine) own.push(event);
+      else foreign.push(event);
+    }
+    if (foreign.length === 0) return { own, quarantined: 0 };
+    for (const event of foreign) {
+      this.quarantine(
+        event,
+        `recorded under enrollment ${event.agent?.host_enrollment_id}; this host is now ${mine}`,
+      );
+    }
+    // Advance the WAL past them, or the next read returns the same events and
+    // the queue is wedged exactly as it was before this existed.
+    this.markShipped(foreign);
+    this.options.log(
+      `quarantined ${foreign.length} event(s) from a previous enrollment`,
+    );
+    return { own, quarantined: foreign.length };
+  }
+
   /** Ship one batch. Returns what moved; the caller loops. */
   async shipOnce(): Promise<ShipResult> {
     if (!this.ready())
@@ -164,7 +217,11 @@ export class Shipper {
     const batch = this.options.wal.unshipped(TACHO_MAX_BATCH);
     if (batch.length === 0)
       return { shipped: 0, quarantined: 0, reachable: this.reachable };
-    return this.shipBatch(batch);
+    const { own, quarantined } = this.setAsideForeignEvents(batch);
+    if (own.length === 0)
+      return { shipped: 0, quarantined, reachable: this.reachable };
+    const result = await this.shipBatch(own);
+    return { ...result, quarantined: result.quarantined + quarantined };
   }
 
   private async shipBatch(batch: TachoEvent[]): Promise<ShipResult> {
