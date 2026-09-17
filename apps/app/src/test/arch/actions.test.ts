@@ -258,13 +258,28 @@ function actionViolations(source: SourceText): string[] {
 const probe = (name: string): string[] =>
   actionViolations(readSource(`${PROBES}/${name}`));
 
+// Scanned at module scope, like SOURCES in catalog-used.test.ts, rather than
+// inside the `it` below.
+//
+// This reads and TS-parses every production file in the app — the work is the
+// point of the test, and it does not belong inside a 5s per-test budget. On an
+// idle machine the whole file runs in ~2.2s, which looks like ample headroom
+// and is not: CI spawns a worker per test file, and under that contention this
+// one test alone exceeded 5000ms and failed a run whose code was fine
+// (#3178, run 35211928064). A budget with 3x margin on an idle box has no
+// margin on a loaded one.
+//
+// Module scope carries no testTimeout, so the race is gone rather than
+// widened. The assertions stay in the test, where a real violation still
+// reports as a failure of this rule.
+const USE_SERVER_MODULES: SourceText[] = productionFiles()
+  .map(readSource)
+  .filter((source) => directiveOf(parse(source)) === "use server");
+
 describe("server actions", () => {
   it('every "use server" module under src/ keeps the action contract', () => {
-    const modules = productionFiles()
-      .map(readSource)
-      .filter((source) => directiveOf(parse(source)) === "use server");
-    expect(modules.length).toBeGreaterThan(0);
-    expect(modules.flatMap(actionViolations)).toEqual([]);
+    expect(USE_SERVER_MODULES.length).toBeGreaterThan(0);
+    expect(USE_SERVER_MODULES.flatMap(actionViolations)).toEqual([]);
   });
 
   it("ActionResult and never returns, a viewer reached through a helper and a slug from the form pass", () => {
