@@ -281,6 +281,40 @@ app.use(
   }),
 );
 
+// Tacho hosts speak to Oxagen with their enrolled API key, whose scope pins
+// org and workspace, so the machine routes sit on a static path outside the
+// slug group. Same pre-auth ceilings as the Stella intake: a per-IP bucket
+// for shared NATs and a per-credential bucket for one abused key.
+//
+// Registered HERE, above `app.route("/v1", userScoped)`, and not beside the
+// `/v1/tacho` mount further down. `userScoped` applies `authMiddleware` on
+// `*`, which becomes a `/v1/*` matcher covering `/v1/tacho/*` too, and Hono
+// runs matching middleware in registration order. Registered after that mount
+// these ran AFTER authentication, so the ceiling a credential-stuffing attacker
+// is supposed to hit never saw one unauthenticated request — every bad
+// credential was rejected by auth first and counted against nothing. Keep them
+// above that mount or they stop being pre-auth.
+app.use(
+  "/v1/tacho/*",
+  distributedRateLimiter({
+    keyPrefix: "tacho-preauth-ip",
+    max: 6_000,
+    bucketKey: trustedVercelIpBucketKey,
+    methods: "all",
+    failClosedOnStoreError: true,
+  }),
+);
+app.use(
+  "/v1/tacho/*",
+  distributedRateLimiter({
+    keyPrefix: "tacho-preauth-credential",
+    max: 120,
+    bucketKey: authorizationFingerprintBucketKey,
+    methods: "all",
+    failClosedOnStoreError: true,
+  }),
+);
+
 // /v1 user-level routes (org + workspace CRUD) require auth but no
 // org scope: a freshly-authenticated user can create their first
 // org without one existing.
@@ -326,30 +360,6 @@ stellaTelemetryScoped.use(
 stellaTelemetryScoped.route("/", telemetryStellaIngestRoute);
 app.route("/v1/telemetry/stella", stellaTelemetryScoped);
 
-// Tacho hosts speak to Oxagen with their enrolled API key, whose scope pins
-// org and workspace, so the machine routes sit on a static path outside the
-// slug group. Same pre-auth ceilings as the Stella intake: a per-IP bucket
-// for shared NATs and a per-credential bucket for one abused key.
-app.use(
-  "/v1/tacho/*",
-  distributedRateLimiter({
-    keyPrefix: "tacho-preauth-ip",
-    max: 6_000,
-    bucketKey: trustedVercelIpBucketKey,
-    methods: "all",
-    failClosedOnStoreError: true,
-  }),
-);
-app.use(
-  "/v1/tacho/*",
-  distributedRateLimiter({
-    keyPrefix: "tacho-preauth-credential",
-    max: 120,
-    bucketKey: authorizationFingerprintBucketKey,
-    methods: "all",
-    failClosedOnStoreError: true,
-  }),
-);
 // Post-auth ceiling for an enrolled Tacho host, in requests/minute. A constant
 // for the same reason as STELLA_TELEMETRY_PER_MIN above: ADR-043 retired
 // RATE_LIMIT_AGENT_EXEC_PER_MIN, whose value this limiter used to borrow, and a
@@ -416,10 +426,7 @@ orgScoped.route("/billing/usage/breakdown", billingUsageBreakdownRoute);
 orgScoped.route("/billing/actions/rate-card", billingActionRateCardRoute);
 orgScoped.route("/billing/actions/usage", billingActionUsageRoute);
 orgScoped.route("/billing/actions/estimate", billingActionEstimateRoute);
-orgScoped.route(
-  "/billing/evidence/retention",
-  billingEvidenceRetentionRoute,
-);
+orgScoped.route("/billing/evidence/retention", billingEvidenceRetentionRoute);
 orgScoped.route("/chat/messages", chatMessageSendRoute);
 orgScoped.route("/chat/messages/execution", chatMessageExecutionRoute);
 orgScoped.route("/chat/stream", chatStreamRoute);
