@@ -9,7 +9,7 @@
 // `github_not_connected` unless an installation was already attached, which
 // nothing in the app could produce. Here a person installs the App and then
 // picks out of what the installation actually reaches.
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { MouseEvent, ReactNode } from "react";
 import {
@@ -22,6 +22,7 @@ import {
   vi,
 } from "vitest";
 import type {
+  GitHubInstallations,
   InstallationRepositories,
   WorkspaceRepository,
 } from "@/data/contracts/repository";
@@ -35,10 +36,14 @@ import { SidebarHeader } from "./sidebar";
 const readWorkspaceRepository = vi.fn();
 const listInstallationRepositories = vi.fn();
 const bindWorkspaceRepository = vi.fn();
+const listGithubInstallations = vi.fn();
+const attachGithubInstallation = vi.fn();
 vi.mock("./workspace-settings-actions", () => ({
   readWorkspaceRepository,
   listInstallationRepositories,
   bindWorkspaceRepository,
+  listGithubInstallations,
+  attachGithubInstallation,
 }));
 
 const nav = vi.hoisted(() => ({
@@ -81,14 +86,49 @@ vi.mock("next/link", () => ({
 
 const { WorkspaceSettingsDialog } = await import("./workspace-settings");
 
-const INSTALL_URL =
+// The contract's `installUrl` is the IDENTITY leg — authorize Oxagen as this
+// GitHub user — and its `manageUrl` is `installations/new`, which is the door
+// that puts the App on an account that does not have it. The dialog needs both,
+// and a deployment that can mint one can mint the other.
+const CONNECT_URL =
   "https://github.com/login/oauth/authorize?client_id=Iv1.test&state=signed";
+const INSTALL_URL = "https://github.com/apps/oxagen/installations/new";
 const MANAGE_URL = "https://github.com/settings/installations/42";
 
 const notConnected: WorkspaceRepository = {
   repository: null,
-  github: { connected: false, installUrl: INSTALL_URL, manageUrl: null },
+  github: {
+    connected: false,
+    installUrl: CONNECT_URL,
+    manageUrl: INSTALL_URL,
+  },
 };
+
+const reachable: GitHubInstallations = {
+  installations: [
+    {
+      installationId: "111",
+      accountLogin: "acme",
+      accountType: "Organization",
+      avatarUrl: null,
+      repositorySelection: "all",
+    },
+    {
+      installationId: "222",
+      accountLogin: "mac",
+      accountType: "User",
+      avatarUrl: null,
+      repositorySelection: "selected",
+    },
+  ],
+};
+
+/** The first-time state: GitHub has never been authorized for this org. */
+const NOT_AUTHORIZED = {
+  ok: false,
+  reason: "conflict",
+  code: "github_not_authorized",
+} as const;
 
 const connected: WorkspaceRepository = {
   repository: null,
@@ -175,6 +215,15 @@ beforeEach(() => {
   readWorkspaceRepository.mockReset();
   listInstallationRepositories.mockReset();
   bindWorkspaceRepository.mockReset();
+  listGithubInstallations.mockReset();
+  attachGithubInstallation.mockReset();
+  // The ordinary first-time default: nobody has authorized GitHub yet, so
+  // there is nothing to pick from and the doors are the whole panel.
+  listGithubInstallations.mockResolvedValue(NOT_AUTHORIZED);
+  attachGithubInstallation.mockResolvedValue({
+    ok: true,
+    value: { connectionId: "con_abc123", accountLogin: "acme" },
+  });
   readWorkspaceRepository.mockResolvedValue({ ok: true, value: notConnected });
   listInstallationRepositories.mockResolvedValue({ ok: true, value: listing });
   bindWorkspaceRepository.mockResolvedValue({
@@ -243,11 +292,16 @@ describe("no GitHub App installation", () => {
     ).toBeTruthy();
   });
 
-  it("offers the App's install door rather than a picker that could only refuse", async () => {
+  // The defect this fixes. The panel rendered exactly one link — the identity
+  // URL — so a person with the App installed nowhere authorized, came back
+  // unchanged, and pressed the same button again. Both doors, or neither.
+  it("offers BOTH doors: install the App, and connect an existing installation", async () => {
     await openSettings();
     const install = await screen.findByTestId("workspace-github-install");
     expect(install).toHaveAttribute("href", INSTALL_URL);
     expect(install).toHaveAttribute("rel", "noopener noreferrer");
+    const connect = screen.getByTestId("workspace-github-connect");
+    expect(connect).toHaveAttribute("href", CONNECT_URL);
     expect(listInstallationRepositories).not.toHaveBeenCalled();
   });
 
@@ -266,6 +320,7 @@ describe("no GitHub App installation", () => {
       await screen.findByTestId("workspace-github-unconfigured"),
     ).toBeTruthy();
     expect(screen.queryByTestId("workspace-github-install")).toBeNull();
+    expect(screen.queryByTestId("workspace-github-connect")).toBeNull();
   });
 
   it("refuses to link a URL that is not a page on github.com (negative)", async () => {
@@ -276,7 +331,7 @@ describe("no GitHub App installation", () => {
         github: {
           connected: false,
           installUrl: "https://github.com.evil.example/apps/oxagen",
-          manageUrl: null,
+          manageUrl: "https://github.com.evil.example/apps/oxagen",
         },
       },
     });
@@ -284,6 +339,223 @@ describe("no GitHub App installation", () => {
     expect(
       await screen.findByTestId("workspace-github-unconfigured"),
     ).toBeTruthy();
+  });
+
+  it("draws the door it can and drops the one it cannot (negative)", async () => {
+    readWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        repository: null,
+        github: { connected: false, installUrl: CONNECT_URL, manageUrl: null },
+      },
+    });
+    await openSettings();
+    expect(
+      await screen.findByTestId("workspace-github-connect"),
+    ).toBeTruthy();
+    expect(screen.queryByTestId("workspace-github-install")).toBeNull();
+    expect(screen.queryByTestId("workspace-github-unconfigured")).toBeNull();
+  });
+
+  it("has no axe violations with both doors showing", async () => {
+    const { dialog } = await openSettings();
+    await screen.findByTestId("workspace-repository-install");
+    await expectNoAxe(dialog);
+  });
+});
+
+// The other half of the connect. The Connect action opens GitHub's identity
+// URL, which always returns a code and never an `installation_id` — so a person
+// whose account already carries the App comes back authorized with nothing
+// attached. The API's callback settles that itself when the answer is
+// unambiguous; when it is not, this picker is the choice.
+describe("choosing which installation the workspace acts through", () => {
+  beforeEach(() => {
+    listGithubInstallations.mockResolvedValue({ ok: true, value: reachable });
+  });
+
+  it("asks what this account reaches, and names each installation", async () => {
+    await openSettings();
+    const picker = await screen.findByTestId("workspace-installation-picker");
+    expect(listGithubInstallations).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+    );
+    // Cited by the account a person reads, never by the installation id.
+    expect(within(picker).getByText("acme")).toBeTruthy();
+    expect(within(picker).getByText("mac")).toBeTruthy();
+    expect(within(picker).queryByText("111")).toBeNull();
+    expect(within(picker).getByText("all repositories")).toBeTruthy();
+    expect(within(picker).getByText("selected repositories")).toBeTruthy();
+  });
+
+  it("shows a pending state while the live GitHub list is fetched", async () => {
+    let answer!: (value: unknown) => void;
+    listGithubInstallations.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    await openSettings();
+    expect(
+      await screen.findByTestId("workspace-installations-loading"),
+    ).toBeTruthy();
+    answer({ ok: true, value: reachable });
+    expect(
+      await screen.findByTestId("workspace-installation-picker"),
+    ).toBeTruthy();
+  });
+
+  it("attaches the installation a person picked and re-reads the panel", async () => {
+    const { user } = await openSettings();
+    await screen.findByTestId("workspace-installation-picker");
+    await user.click(screen.getByRole("radio", { name: /mac/ }));
+    readWorkspaceRepository.mockResolvedValue({ ok: true, value: connected });
+    await user.click(
+      screen.getByRole("button", { name: "Use this installation" }),
+    );
+
+    expect(attachGithubInstallation).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "222",
+    );
+    // Now connected, so the very next thing drawn is the repository picker.
+    expect(
+      await screen.findByTestId("workspace-repository-picker"),
+    ).toBeTruthy();
+    expect(nav.refresh).toHaveBeenCalled();
+  });
+
+  it("asks for a choice rather than attaching one nobody picked (negative)", async () => {
+    const { user } = await openSettings();
+    await screen.findByTestId("workspace-installation-picker");
+    await user.click(
+      screen.getByRole("button", { name: "Use this installation" }),
+    );
+    expect(attachGithubInstallation).not.toHaveBeenCalled();
+    expect(
+      await screen.findByTestId("workspace-installation-attach-failure"),
+    ).toHaveTextContent("Choose an installation first.");
+  });
+
+  it("attaches once however many times the button is pressed", async () => {
+    let answer!: (value: unknown) => void;
+    attachGithubInstallation.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const { user } = await openSettings();
+    await screen.findByTestId("workspace-installation-picker");
+    await user.click(screen.getByRole("radio", { name: /acme/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Use this installation/ }),
+    );
+    await user.click(screen.getByRole("button", { name: /Attaching/ }));
+    expect(attachGithubInstallation).toHaveBeenCalledTimes(1);
+    answer({
+      ok: true,
+      value: { connectionId: "con_abc123", accountLogin: "acme" },
+    });
+  });
+
+  // The security property the handler holds, said back to the person: an id
+  // the connected account cannot reach is refused, and the panel says so
+  // rather than pretending the attach landed.
+  it("reads back an installation the account cannot reach (negative)", async () => {
+    const { user } = await openSettings();
+    await screen.findByTestId("workspace-installation-picker");
+    await user.click(screen.getByRole("radio", { name: /acme/ }));
+    attachGithubInstallation.mockResolvedValue({
+      ok: false,
+      reason: "not_found",
+      code: "installation_unreachable",
+    });
+    await user.click(
+      screen.getByRole("button", { name: "Use this installation" }),
+    );
+    expect(
+      await screen.findByTestId("workspace-installation-attach-failure"),
+    ).toHaveTextContent("cannot reach that installation");
+    expect(nav.refresh).not.toHaveBeenCalled();
+  });
+
+  it("survives an attach that threw without claiming it landed (negative)", async () => {
+    const { user } = await openSettings();
+    await screen.findByTestId("workspace-installation-picker");
+    await user.click(screen.getByRole("radio", { name: /acme/ }));
+    attachGithubInstallation.mockRejectedValue(new Error("network"));
+    await user.click(
+      screen.getByRole("button", { name: "Use this installation" }),
+    );
+    expect(
+      await screen.findByTestId("workspace-installation-attach-failure"),
+    ).toHaveTextContent("action_failed");
+  });
+
+  // `github_not_authorized` is the precondition, not a fault: nobody has
+  // connected GitHub for this org yet. The Connect door is the answer, and an
+  // alert here would put a red box on the most ordinary state this panel has.
+  it("draws no alarm for the ordinary never-connected state (negative)", async () => {
+    listGithubInstallations.mockResolvedValue(NOT_AUTHORIZED);
+    await openSettings();
+    await screen.findByTestId("workspace-repository-install");
+    expect(screen.queryByTestId("workspace-installations-failure")).toBeNull();
+    expect(screen.queryByTestId("workspace-installation-picker")).toBeNull();
+    expect(screen.getByTestId("workspace-github-connect")).toBeTruthy();
+  });
+
+  // Every other refusal IS shown: a list that could not be read and a list with
+  // nothing in it are different facts, and only one means "install the App".
+  it("says what went wrong for any other refusal (negative)", async () => {
+    listGithubInstallations.mockResolvedValue({
+      ok: false,
+      reason: "unavailable",
+      code: "github_unreachable",
+    });
+    await openSettings();
+    expect(
+      await screen.findByTestId("workspace-installations-failure"),
+    ).toHaveTextContent("github_unreachable");
+    // The doors are still drawn, so the person still has somewhere to go.
+    expect(screen.getByTestId("workspace-github-install")).toBeTruthy();
+  });
+
+  it("draws no picker when the account reaches nothing, only the doors (negative)", async () => {
+    listGithubInstallations.mockResolvedValue({
+      ok: true,
+      value: { installations: [] },
+    });
+    await openSettings();
+    await screen.findByTestId("workspace-repository-install");
+    expect(screen.queryByTestId("workspace-installation-picker")).toBeNull();
+    expect(screen.getByTestId("workspace-github-install")).toHaveAttribute(
+      "href",
+      INSTALL_URL,
+    );
+  });
+
+  it("drops a list that arrives after the dialog is gone (negative)", async () => {
+    let answer!: (value: unknown) => void;
+    listGithubInstallations.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    await openSettings();
+    await screen.findByTestId("workspace-installations-loading");
+    cleanup();
+    answer({ ok: true, value: reachable });
+    await waitFor(() => {
+      expect(screen.queryByTestId("workspace-installation-picker")).toBeNull();
+    });
+  });
+
+  it("has no axe violations with the installation picker showing", async () => {
+    const { dialog } = await openSettings();
+    await screen.findByTestId("workspace-installation-picker");
+    await expectNoAxe(dialog);
   });
 });
 
@@ -746,6 +1018,48 @@ describe("the return leg from GitHub", () => {
     expect(nav.replace).toHaveBeenCalledWith("/acme/core-platform");
   });
 
+  // The identity leg's own two answers. The callback lists what the authorizing
+  // user reaches and, when it will not guess, says which question is open.
+  it("says the account reaches several installations, and shows the picker", async () => {
+    nav.query = "settings=repository&github=choose";
+    readWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: notConnected,
+    });
+    listGithubInstallations.mockResolvedValue({ ok: true, value: reachable });
+    Shell();
+
+    expect(await screen.findByTestId("workspace-settings-dialog")).toBeTruthy();
+    expect(screen.getByTestId("workspace-github-choose")).toBeTruthy();
+    expect(
+      await screen.findByTestId("workspace-installation-picker"),
+    ).toBeTruthy();
+    expect(screen.queryByTestId("workspace-github-connected")).toBeNull();
+  });
+
+  it("says the App is installed nowhere, and points at the install door", async () => {
+    nav.query = "settings=repository&github=install";
+    readWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: notConnected,
+    });
+    listGithubInstallations.mockResolvedValue({
+      ok: true,
+      value: { installations: [] },
+    });
+    Shell();
+
+    expect(await screen.findByTestId("workspace-settings-dialog")).toBeTruthy();
+    expect(screen.getByTestId("workspace-github-none")).toBeTruthy();
+    // Authorizing again would loop: the door that matters is installations/new.
+    expect(
+      (await screen.findByTestId("workspace-github-install")).getAttribute(
+        "href",
+      ),
+    ).toBe(INSTALL_URL);
+    expect(screen.queryByTestId("workspace-github-connected")).toBeNull();
+  });
+
   // Anything the dialog does not recognise degrades to no acknowledgement. The
   // one outcome worse than silence is announcing a connection that never happened.
   it("acknowledges nothing for an unknown github value (negative)", async () => {
@@ -754,5 +1068,7 @@ describe("the return leg from GitHub", () => {
     expect(await screen.findByTestId("workspace-settings-dialog")).toBeTruthy();
     expect(screen.queryByTestId("workspace-github-connected")).toBeNull();
     expect(screen.queryByTestId("workspace-github-failed")).toBeNull();
+    expect(screen.queryByTestId("workspace-github-choose")).toBeNull();
+    expect(screen.queryByTestId("workspace-github-none")).toBeNull();
   });
 });
