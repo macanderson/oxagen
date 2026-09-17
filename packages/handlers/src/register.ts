@@ -1590,6 +1590,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .repositoryMainBindHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_main_repository",
+    async () =>
+      (await import("./repository.main.get"))
+        .repositoryMainGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_installation_repositories",
+    async () =>
+      (await import("./repository.installation.list"))
+        .repositoryInstallationListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "create_enrollment_token",
     async () =>
       (await import("./tacho.enrollment_token.create"))

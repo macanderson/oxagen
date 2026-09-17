@@ -258,6 +258,8 @@ import { onboardingStateGetRoute } from "./routes/v1/onboarding.state.get";
 import { onboardingAdvanceRoute } from "./routes/v1/onboarding.advance";
 import { onboardingFirstFrameGetRoute } from "./routes/v1/onboarding.first_frame.get";
 import { repositoryMainBindRoute } from "./routes/v1/repository.main.bind";
+import { repositoryMainGetRoute } from "./routes/v1/repository.main.get";
+import { repositoryInstallationListRoute } from "./routes/v1/repository.installation.list";
 import { tachoHostListRoute } from "./routes/v1/tacho.host.list";
 import { tachoSessionGetRoute } from "./routes/v1/tacho.session.get";
 import { tachoSessionListRoute } from "./routes/v1/tacho.session.list";
@@ -515,6 +517,14 @@ orgScoped.route("/tacho/enrollment-tokens", tachoEnrollmentTokenCreateRoute);
 orgScoped.route("/onboarding/advance", onboardingAdvanceRoute);
 orgScoped.route("/onboarding/first-frame", onboardingFirstFrameGetRoute);
 orgScoped.route("/repository/main", repositoryMainBindRoute);
+// The read beside the write, on the same path: GET answers the bound repo, the
+// install state and the signed GitHub doors; the picker it feeds sits one level
+// down, under the installation the workspace acts through.
+orgScoped.route("/repository/main", repositoryMainGetRoute);
+orgScoped.route(
+  "/repository/installation/repositories",
+  repositoryInstallationListRoute,
+);
 // Run controls (dispatch_command, list_commands): addressed to runs, agents
 // and the workspace rather than to a host, so they sit beside /runs.
 orgScoped.route("/commands", tachoCommandDispatchRoute);

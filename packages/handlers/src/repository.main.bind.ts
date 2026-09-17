@@ -28,9 +28,13 @@ import type { GitHubRepoInfo } from "@oxagen/github";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { logger } from "./logger";
+import {
+  GITHUB_PROVIDER,
+  resolveWorkspaceGithubInstallation,
+} from "./repository.github-connection";
 
 const MAIN_REPOSITORY_ROLES = ["Owner", "Admin"] as const;
-const PROVIDER = "github";
+const PROVIDER = GITHUB_PROVIDER;
 
 export interface MainRepositoryDeps {
   /** The repository as the installation sees it, or null when it cannot. */
@@ -39,17 +43,6 @@ export interface MainRepositoryDeps {
     owner: string,
     name: string,
   ): Promise<GitHubRepoInfo | null>;
-}
-
-/** The workspace's GitHub connection: the installation id the callback attached. */
-function installationIdOf(deliveryConfig: unknown): string | null {
-  if (typeof deliveryConfig !== "object" || deliveryConfig === null)
-    return null;
-  const raw = (deliveryConfig as { installationId?: unknown }).installationId;
-  if (typeof raw === "string" && /^\d{1,20}$/.test(raw)) return raw;
-  if (typeof raw === "number" && Number.isSafeInteger(raw) && raw > 0)
-    return String(raw);
-  return null;
 }
 
 const githubMainRepositoryDeps: MainRepositoryDeps = {
@@ -98,29 +91,7 @@ export function createMainRepositoryBindHandler(
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     const now = new Date();
 
-    const connection = await withTenantDb(async (tx) => {
-      const rows = await tx
-        .select({
-          id: schema.sourceConnections.id,
-          publicId: schema.sourceConnections.publicId,
-          status: schema.sourceConnections.status,
-          deliveryConfig: schema.sourceConnections.deliveryConfig,
-        })
-        .from(schema.sourceConnections)
-        .where(
-          and(
-            eq(schema.sourceConnections.orgId, scope.orgId),
-            eq(schema.sourceConnections.workspaceId, scope.workspaceId),
-            eq(schema.sourceConnections.connectorId, PROVIDER),
-            isNull(schema.sourceConnections.deletedAt),
-          ),
-        );
-      for (const row of rows) {
-        const installationId = installationIdOf(row.deliveryConfig);
-        if (installationId !== null) return { ...row, installationId };
-      }
-      return null;
-    });
+    const connection = await resolveWorkspaceGithubInstallation(scope);
     if (!connection) {
       throw new HandlerError({
         code: "conflict",

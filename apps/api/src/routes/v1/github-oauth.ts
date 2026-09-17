@@ -20,8 +20,21 @@
  */
 
 import { Hono } from "hono";
-import { createHmac } from "node:crypto";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
+// The install URL, its signed state and the verification of that state live in
+// @oxagen/github: a capability handler needs the same install URL and cannot
+// import from apps/api, and two copies of one HMAC scheme drift apart silently.
+import {
+  GITHUB_SETTINGS_INSTALLATIONS_URL,
+  buildIdentityAuthUrl,
+  buildInstallAuthUrl,
+  buildManageInstallationUrl,
+  parseReturnTo,
+  verifyInstallState,
+  type GithubConnectReturnTo,
+  type GithubInstallState,
+  type GithubInstallStateError,
+} from "@oxagen/github";
 import { encrypt, decrypt, createIngestionCryptoAdapter } from "@oxagen/crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -38,18 +51,6 @@ import { logger } from "../../middleware/logger";
 export const githubOauthRoute = new Hono<AppEnv>();
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-
-function buildStateHmac(stateJson: string, secret: string): string {
-  return createHmac("sha256", secret).update(stateJson).digest("hex");
-}
-
-function encodeState(stateJson: string): string {
-  return Buffer.from(stateJson).toString("base64url");
-}
-
-function decodeState(encoded: string): string {
-  return Buffer.from(encoded, "base64url").toString("utf8");
-}
 
 /**
  * Decrypt an access token stored as { keyId, ciphertext } JSON payload.
@@ -276,123 +277,22 @@ function buildManageInstallationsUrl(
   const slug =
     configuredSlug?.trim() || installations.find((i) => i.app_slug)?.app_slug;
   return slug
-    ? `https://github.com/apps/${slug}/installations/new`
-    : "https://github.com/settings/installations";
+    ? buildManageInstallationUrl(slug)
+    : GITHUB_SETTINGS_INSTALLATIONS_URL;
 }
 
 /**
- * Where the OAuth callback should land the user after a connect. The install
- * now lives in Workspace Settings → GitHub (1 workspace = 1 app install), while
- * the legacy in-wizard connect still returns to the sources picker. The value is
- * carried in the signed state so the (single, global) callback can route back to
- * the surface the connect started from.
+ * The callback's wording for each way a state fails to verify. The verifier
+ * returns a reason rather than a message so this route keeps the exact strings
+ * its clients and tests already read.
  */
-type GithubConnectReturnTo = "settings" | "sources";
-
-function parseReturnTo(raw: string | undefined): GithubConnectReturnTo {
-  return raw === "settings" ? "settings" : "sources";
-}
-
-/** Signed-state payload round-tripped through GitHub's `state` query param. */
-interface GithubInstallState {
-  orgId: string;
-  workspaceId: string;
-  /** publicId of a pre-created source_connection, or null for a settings-level connect. */
-  connectionId: string | null;
-  returnTo: GithubConnectReturnTo;
-  expiresAt: number;
-  nonce: string;
-}
-
-/**
- * Build the signed GitHub App installation URL (`installations/new?state=…`).
- *
- * Drive the user through the App *installation* flow, NOT the bare
- * `login/oauth/authorize` flow: the connector needs the App installed on the
- * target org to read repos, and `installations/new` both installs the App and —
- * with "Request user authorization (OAuth) during installation" enabled — returns
- * an OAuth `code` to the configured callback. GitHub round-trips the `state` we
- * pass here back to the callback, so it can verify the HMAC and attribute the
- * install to the right org/workspace (and connection, when present). The
- * post-install redirect target is the App's configured Callback URL, so no
- * redirect_uri is passed.
- */
-function buildInstallAuthUrl(
-  appSlug: string,
-  stateSecret: string,
-  payload: {
-    orgId: string;
-    workspaceId: string;
-    connectionId: string | null;
-    returnTo: GithubConnectReturnTo;
-  },
-): string {
-  const stateJson = JSON.stringify({
-    orgId: payload.orgId,
-    workspaceId: payload.workspaceId,
-    connectionId: payload.connectionId,
-    returnTo: payload.returnTo,
-    expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
-    nonce: crypto.randomUUID(),
-  } satisfies GithubInstallState);
-
-  const hmac = buildStateHmac(stateJson, stateSecret);
-  const encodedState = encodeState(stateJson);
-
-  return (
-    `https://github.com/apps/${encodeURIComponent(appSlug)}/installations/new` +
-    `?state=${encodeURIComponent(`${encodedState}.${hmac}`)}`
-  );
-}
-
-/**
- * Build the signed GitHub user-authorization URL (`login/oauth/authorize`) — the
- * IDENTITY leg, and the PRIMARY "Connect GitHub" entry point.
- *
- * Why this and not `installations/new`: the install URL only round-trips an OAuth
- * `code` on the FIRST install of the App on an account. Once the App is already
- * installed on an org, GitHub degrades to its stateless Setup-URL "update"
- * redirect, which carries NO `code` and NO signed `state` — so a SECOND Oxagen
- * tenant (a different org/workspace) can never establish its own token and dead-
- * ends at "not connected". The bare user-authorization endpoint has no such
- * dependence: it ALWAYS returns a fresh `code` and echoes our signed `state`,
- * installed-or-not (and silently round-trips with no prompt if the user already
- * authorized). That single fresh `code` is exactly what the callback's
- * oauth_accounts upsert needs, so the second tenant becomes connected and can
- * then attach to the already-installed org via `/user/installations`.
- *
- * GitHub redirects to the App's configured Callback URL (our
- * `/oauth/github/callback`) — the same endpoint the install leg lands on — so no
- * `redirect_uri` is passed.
- */
-function buildIdentityAuthUrl(
-  clientId: string,
-  stateSecret: string,
-  payload: {
-    orgId: string;
-    workspaceId: string;
-    connectionId: string | null;
-    returnTo: GithubConnectReturnTo;
-  },
-): string {
-  const stateJson = JSON.stringify({
-    orgId: payload.orgId,
-    workspaceId: payload.workspaceId,
-    connectionId: payload.connectionId,
-    returnTo: payload.returnTo,
-    expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
-    nonce: crypto.randomUUID(),
-  } satisfies GithubInstallState);
-
-  const hmac = buildStateHmac(stateJson, stateSecret);
-  const encodedState = encodeState(stateJson);
-
-  return (
-    `https://github.com/login/oauth/authorize` +
-    `?client_id=${encodeURIComponent(clientId)}` +
-    `&state=${encodeURIComponent(`${encodedState}.${hmac}`)}`
-  );
-}
+const STATE_ERROR_MESSAGES: Record<GithubInstallStateError, string> = {
+  invalid_format: "Invalid state format",
+  invalid_encoding: "Invalid state encoding",
+  invalid_signature: "Invalid state signature",
+  invalid_json: "Invalid state JSON",
+  expired: "OAuth state has expired — please start the OAuth flow again",
+};
 
 // ── GET /connections/github/auth-url ─────────────────────────────────────────
 
@@ -913,51 +813,15 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
     return c.json({ error: "Missing state parameter" }, 400);
   }
 
-  // State format: "{base64url_json}.{hmac_hex}"
-  const dotIdx = rawState.lastIndexOf(".");
-  if (dotIdx === -1) {
-    return c.json({ error: "Invalid state format" }, 400);
+  // Signature, shape and expiry, verified in @oxagen/github against the same
+  // scheme that minted the state. `connectionId` is null for a settings-level
+  // connect (1 workspace = 1 app install, no source_connection yet); `returnTo`
+  // may be absent on states minted before that field existed → "sources".
+  const verified = verifyInstallState(rawState, stateSecret);
+  if (!verified.ok) {
+    return c.json({ error: STATE_ERROR_MESSAGES[verified.error] }, 400);
   }
-
-  const encodedState = rawState.slice(0, dotIdx);
-  const receivedHmac = rawState.slice(dotIdx + 1);
-
-  let stateJson: string;
-  try {
-    stateJson = decodeState(encodedState);
-  } catch {
-    return c.json({ error: "Invalid state encoding" }, 400);
-  }
-
-  const expectedHmac = buildStateHmac(stateJson, stateSecret);
-  // Constant-time comparison to prevent timing attacks
-  if (receivedHmac.length !== expectedHmac.length) {
-    return c.json({ error: "Invalid state signature" }, 400);
-  }
-  let hmacMismatch = 0;
-  for (let i = 0; i < expectedHmac.length; i++) {
-    hmacMismatch |= expectedHmac.charCodeAt(i) ^ receivedHmac.charCodeAt(i);
-  }
-  if (hmacMismatch !== 0) {
-    return c.json({ error: "Invalid state signature" }, 400);
-  }
-
-  // Parse state payload. `connectionId` is null for a settings-level connect
-  // (1 workspace = 1 app install, no source_connection yet); `returnTo` may be
-  // absent on states minted before this field existed → default to "sources".
-  let statePayload: GithubInstallState;
-  try {
-    statePayload = JSON.parse(stateJson) as GithubInstallState;
-  } catch {
-    return c.json({ error: "Invalid state JSON" }, 400);
-  }
-
-  if (Date.now() > statePayload.expiresAt) {
-    return c.json(
-      { error: "OAuth state has expired — please start the OAuth flow again" },
-      400,
-    );
-  }
+  const statePayload: GithubInstallState = verified.state;
 
   const { orgId, workspaceId, connectionId: connectionPublicId } = statePayload;
   const returnTo = parseReturnTo(statePayload.returnTo);
@@ -1227,9 +1091,17 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
   // Route back to the surface the connect started from. Settings is the new home
   // for the install (1 workspace = 1 app install); the legacy wizard resumes at
   // the sources repo-picker, carrying the connectionId so it lands on Step 2.
+  //
+  // The settings target is the workspace landing route with the params that
+  // open the Workspace settings dialog on its Repository section. It used to be
+  // `/{org}/{ws}/settings/github?github_connected=1`, a route apps/app does not
+  // have: legacy-routes.ts 308s it to `/{org}/{ws}` and a 308 drops the query
+  // string, so a completed App install landed the operator on Fleet with no
+  // acknowledgement and nothing to do — the one moment the product had to say
+  // "now bind a repository" was spent on a silent redirect.
   const redirectUrl =
     returnTo === "settings"
-      ? `${appBaseUrl}/${orgSlug}/${wsSlug}/settings/github?github_connected=1`
+      ? `${appBaseUrl}/${orgSlug}/${wsSlug}?settings=repository&github=connected`
       : `${appBaseUrl}/${orgSlug}/${wsSlug}/knowledge/sources?setup=github` +
         (connectionPublicId
           ? `&connectionId=${encodeURIComponent(connectionPublicId)}`

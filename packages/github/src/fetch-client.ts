@@ -4,6 +4,8 @@ import type {
   GitHubCiChecks,
   GitHubClient,
   GitHubClientOptions,
+  GitHubInstallationRepo,
+  GitHubInstallationRepositories,
   GitHubCommitStatus,
   GitHubPrComment,
   GitHubPrComments,
@@ -202,6 +204,19 @@ interface GHPullFile {
   patch?: string;
 }
 
+/**
+ * One entry of `GET /installation/repositories`. It is a full repository
+ * payload; only the fields a picker needs are declared.
+ */
+interface GHInstallationRepo extends GHRepo {
+  private: boolean;
+}
+
+interface GHInstallationReposResponse {
+  total_count: number;
+  repositories: GHInstallationRepo[];
+}
+
 interface GHBranchListItem {
   name: string;
   commit: { sha: string };
@@ -213,6 +228,16 @@ interface GHBranchListItem {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_BASE_URL = "https://api.github.com";
+/** Page size for the installation-repositories walk — GitHub's maximum. */
+const INSTALLATION_REPOS_PER_PAGE = 100;
+/**
+ * How many pages of `GET /installation/repositories` one call walks: 5 × 100
+ * = 500 repositories. A bound, not a limit of the endpoint — an unbounded walk
+ * turns one settings read into an arbitrary number of upstream requests, and a
+ * person choosing a main repository out of more than 500 is better served by
+ * narrowing the App's repository access than by a longer list.
+ */
+const MAX_PAGES = 5;
 const DEFAULT_SLEEP_MS = 1500;
 
 const defaultSleep = (ms: number): Promise<void> =>
@@ -762,6 +787,43 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       : null;
   }
 
+  async function listInstallationRepositories(): Promise<GitHubInstallationRepositories> {
+    const repositories: GitHubInstallationRepo[] = [];
+    // GitHub reports the installation's true total on every page; the last
+    // page read is the figure `truncated` is judged against.
+    let totalCount = 0;
+
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const data = await request<GHInstallationReposResponse>(
+        "GET",
+        `/installation/repositories?per_page=${INSTALLATION_REPOS_PER_PAGE}&page=${page}`,
+      );
+      const batch = data.repositories ?? [];
+      repositories.push(
+        ...batch.map((r) => ({
+          // GitHub's numeric repository id survives renames and transfers; it
+          // is what a repository binding pins.
+          id: String(r.id),
+          owner: r.owner.login,
+          name: r.name,
+          fullName: r.full_name,
+          htmlUrl: r.html_url,
+          defaultBranch: r.default_branch,
+          private: r.private,
+        })),
+      );
+      totalCount =
+        typeof data.total_count === "number"
+          ? data.total_count
+          : repositories.length;
+      // Short-circuit once a page comes back under-full — the next page is
+      // empty, and an extra round trip on every settings read is not free.
+      if (batch.length < INSTALLATION_REPOS_PER_PAGE) break;
+    }
+
+    return { repositories, truncated: totalCount > repositories.length };
+  }
+
   async function listBranches(args: {
     owner: string;
     repo: string;
@@ -878,6 +940,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     compareCommits,
     findOpenPullRequest,
     listBranches,
+    listInstallationRepositories,
     createCheckRun,
     mergePullRequest,
     closePullRequest,
