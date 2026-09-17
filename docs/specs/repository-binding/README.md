@@ -29,8 +29,11 @@ write a file into `.oxagen/` but cannot account for the directory it writes into
    by a human hand-editing a file in a repository. That is the single sharpest gap here:
    a control the product enforces on every merge and cannot set.
 3. **Four of the six kinds of file have no pull-request path.** Records have the full
-   lifecycle. Agent definitions have `commit_agent_definition`, which opens a pull request
-   and has **no merge capability** — an asymmetry that leaves them stranded on a branch.
+   lifecycle. Agent definitions have two unconnected halves: `commit_agent_definition`
+   opens a pull request and nothing merges it, while `publish_agent_def` marks a version
+   published in Postgres and sets it active without reference to any commit. So an agent
+   definition can be in force in the product without the pull request carrying it ever
+   merging — the exact inversion of the rule records follow.
    Skills have none (`list_skills` is observational telemetry). Tools have none, and
    `tool.import.ts` says so in a comment (ADR-072). Workspace configuration has none.
 4. **A local directory is invisible to the product.** `oxagen init`
@@ -178,8 +181,9 @@ nothing to check.
 checked commit, resumes from an already-merged commit, deletes the branch, publishes, and
 appends the promotion event. **That is the whole lifecycle, and it is record-shaped only in
 its last step.** `merge_oxagen_pr` lifts the first eight into a kind-agnostic merge and
-dispatches publication by kind — which is also what finally gives
-`commit_agent_definition` a merge.
+dispatches publication by kind — which is also what joins `commit_agent_definition`'s
+branch to `publish_agent_def`'s row, so that an agent version becomes active because a
+commit merged rather than in spite of one.
 
 ## 4. Data
 
@@ -202,8 +206,9 @@ Each phase is shippable and leaves the gate green.
 
 1. **The merge generalisation.** Lift `merge_context_pr`'s kind-agnostic body into
    `merge_oxagen_pr`; `merge_context_pr` becomes a thin caller. Give
-   `commit_agent_definition` its merge. No UI. This is the highest-value phase and the
-   only one that fixes an existing asymmetry rather than adding surface.
+   `commit_agent_definition` its merge, and make `publish_agent_def` a consequence of that
+   merge rather than a parallel path to the same state. No UI. This is the highest-value
+   phase and the only one that fixes an existing inversion rather than adding surface.
 2. **Bindings and the page shell.** `list_repository_bindings`, `get_repository_binding`,
    `link_repository`, `set_main_repository`; the page with the Repositories tab; the
    `.oxagen/` presence read.
