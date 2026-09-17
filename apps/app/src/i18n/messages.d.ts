@@ -1860,6 +1860,8 @@ type Messages = {
       allCategories: string;
       categoriesNote: string;
       allOnPage: string;
+      categoriesDeclaredNote: string;
+      categoriesFilteredNote: string;
       unclassified: string;
       noTags: string;
       emptyCategory: string;

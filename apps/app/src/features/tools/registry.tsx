@@ -78,13 +78,26 @@ function ToolName({
 }
 
 /**
- * Every consequence tag the classified versions on this page carry, with its
- * count.
+ * Every consequence tag the versions in `items` carry *in their
+ * classification*, with its count.
  *
- * On this page and no further: `list_tool_versions` returns a page and a
- * cursor, and offers no facet aggregate, so these counts are counts of what
- * was read. When a later page exists the chips say so rather than presenting a
- * page's tally as the registry's.
+ * Three things this is not, each of which the chips now say out loud rather
+ * than leave the reader to assume:
+ *
+ *  1. Not the registry's tags. `list_tool_versions` returns a page and a
+ *     cursor and offers no facet aggregate, so this counts what was read.
+ *  2. Not the tags of an unfiltered registry. With `?category=` the kernel has
+ *     already filtered `items`, so these are the tags carried *alongside* the
+ *     selected one and the tally is of the matches, not of everything.
+ *  3. Not the tags a filter or a kill switch matches on. Those match the union
+ *     of the declared `consequence_tags` column and the classified jsonb
+ *     (`unionConsequenceTags`, packages/handlers/src/tool.version.list.ts),
+ *     and the contract hands this page only the classified half — so a version
+ *     carrying a declared tag and not yet classified is selectable by that tag
+ *     and has no chip for it here.
+ *
+ * (3) wants the union on `toolVersionItemSchema` to fix properly; it is a
+ * contract change and is not taken here.
  */
 function categoryCounts(
   items: readonly ToolVersion[],
@@ -120,6 +133,10 @@ function CategoryChips({
   const t = useTranslations("tools.registry");
   const locale = useLocale();
   const counts = categoryCounts(items);
+  // `items` is already narrowed to the selected tag, so a count on "All" would
+  // be the match count wearing the word "All". There is no unfiltered total in
+  // this read, so the chip clears the filter and counts nothing.
+  const filtered = category !== null;
   return (
     <nav aria-label={t("categories")} className="flex flex-wrap gap-2">
       <SafeLink
@@ -128,10 +145,12 @@ function CategoryChips({
         aria-current={category === null ? "page" : undefined}
         className={chip}
       >
-        {complete ? t("allCategories") : t("allOnPage")}
-        <span className="text-xs tabular-nums">
-          {formatCount(items.length, locale)}
-        </span>
+        {filtered || complete ? t("allCategories") : t("allOnPage")}
+        {filtered ? null : (
+          <span className="text-xs tabular-nums">
+            {formatCount(items.length, locale)}
+          </span>
+        )}
       </SafeLink>
       {counts.map(({ tag, count }) => (
         <SafeLink
@@ -192,6 +211,11 @@ function Row({
   const t = useTranslations("tools.registry");
   const gates = useTranslations("tools.gate");
   const locale = useLocale();
+  // The classified half alone: the record this page is handed carries no
+  // declared tags, and the union of the two is what the filter and a class
+  // kill switch match on. So this can confirm a money tag and can never rule
+  // one out — a governance table must not print "no" over a question it was
+  // not given the data to answer.
   const financial =
     version.classification?.consequenceTags.includes(MONEY_TAG) === true;
   return (
@@ -250,9 +274,7 @@ function Row({
         {financial ? (
           <StateDot tone="deny" name="financial" label={t("financial.yes")} />
         ) : (
-          <span className="text-xs text-muted-foreground">
-            {t("financial.no")}
-          </span>
+          <NotCarried />
         )}
       </td>
       <td className={cell}>
@@ -366,6 +388,20 @@ export function Registry({
             />
           ))}
         </Table>
+      )}
+      <p
+        data-state="facets-declared"
+        className="max-w-prose text-xs text-muted-foreground"
+      >
+        {t("categoriesDeclaredNote")}
+      </p>
+      {category === null ? null : (
+        <p
+          data-state="facets-filtered"
+          className="max-w-prose text-xs text-muted-foreground"
+        >
+          {t("categoriesFilteredNote")}
+        </p>
       )}
       {nextCursor === null ? null : (
         <p

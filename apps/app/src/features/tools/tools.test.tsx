@@ -148,8 +148,40 @@ describe("Tools › registry", () => {
     });
     const plain = rowOf(screen.getByText("Get file contents"));
     expect(within(plain).getByText("Unclassified")).toBeInTheDocument();
-    expect(within(plain).getAllByText("not recorded")).toHaveLength(2);
+    // Egress, calls, and now Financial: the read carries only the classified
+    // half of the consequence tags, and the union is what a money tag lives
+    // in, so the column confirms or says nothing — it never prints "no".
+    expect(within(plain).getAllByText("not recorded")).toHaveLength(3);
     expect(within(plain).queryByText("0")).not.toBeInTheDocument();
+  });
+
+  it("counts nothing on All while a tag narrows the page, and says what the chips are", async () => {
+    await renderTools(
+      { versions: readOk(toolVersionPage()), killSwitches: board() },
+      { category: "moves_money" },
+    );
+    const chips = screen.getByRole("navigation", {
+      name: "Filter by consequence tag",
+    });
+    // The kernel already narrowed the page, so a count here would be the match
+    // count wearing the word "All", and no unfiltered total was read.
+    const all = element(
+      chips.querySelector('[data-category="all"]'),
+      "all chip",
+    );
+    expect(all.textContent).toBe("All");
+    expect(
+      element(
+        document.querySelector('[data-state="facets-filtered"]'),
+        "filter note",
+      ),
+    ).toHaveTextContent("not the registry's");
+    expect(
+      element(
+        document.querySelector('[data-state="facets-declared"]'),
+        "declared note",
+      ),
+    ).toHaveTextContent("never rule one out");
   });
 
   it("offers a chip per consequence tag with its count, and asks the kernel for the one picked", async () => {

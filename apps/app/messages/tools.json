@@ -34,6 +34,8 @@
       "allCategories": "All",
       "categoriesNote": "These tags and counts are this page of the registry. A tag carried only by a version on a later page appears once you reach that page.",
       "allOnPage": "All on this page",
+      "categoriesDeclaredNote": "These chips and the Category column show the tags recorded with a version's classification. A version can also carry tags declared where it was published, and both the filter and a class kill switch match those too — so a tag can select a version whose row shows none, and the Financial column can confirm a money tag but never rule one out.",
+      "categoriesFilteredNote": "While a tag is selected, these chips count only the versions matching it: they are the tags carried alongside that one, not the registry's. Clear the filter to see the rest.",
       "unclassified": "Unclassified",
       "noTags": "No tag",
       "emptyCategory": "No tool version on this page carries that tag.",
