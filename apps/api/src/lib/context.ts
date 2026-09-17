@@ -59,7 +59,16 @@ export function extractClientIp(c: Context<AppEnv>): string | null {
     if (candidate) return candidate;
   }
   // x-real-ip is set by a single reverse proxy and carries no chain to walk.
-  // It is exactly as trustworthy as that proxy, and no more.
+  // It is exactly as trustworthy as that proxy, and no more — so with no
+  // trusted proxy it is worth nothing. This fallback used to run regardless of
+  // the hop count, which contradicted the rule three paragraphs up: at
+  // TRUSTED_PROXY_HOP_COUNT = 0 the x-forwarded-for chain was correctly
+  // ignored as caller-supplied while x-real-ip, equally caller-supplied on a
+  // direct deployment, was still believed. A caller could then hand this
+  // function any address it liked — satisfying an `ip_ranges` / `ip_allow`
+  // condition it should fail, and minting itself a fresh rate-limit bucket per
+  // request by rotating the header.
+  if (hops === 0) return null;
   const realIp = c.req.header("x-real-ip");
   return realIp?.trim() || null;
 }

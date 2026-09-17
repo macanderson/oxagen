@@ -226,6 +226,23 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
   it("returns null when x-real-ip is empty and x-forwarded-for is absent", async () => {
     expect(await clientIpFor({ "x-real-ip": "" })).toBeNull();
   });
+
+  it("refuses x-real-ip when no proxy is trusted", async () => {
+    // TRUSTED_PROXY_HOP_COUNT = 0 says nothing in front of this process
+    // rewrites forwarding headers, so x-real-ip is as caller-supplied as
+    // x-forwarded-for and worth exactly as little. Believing it let a caller
+    // hand this function any address it liked: enough to satisfy an
+    // `ip_ranges` / `ip_allow` condition it should fail, and enough to mint a
+    // fresh rate-limit bucket per request by rotating the header.
+    setTrustedProxyHops("0");
+    expect(await clientIpFor({ "x-real-ip": "1.2.3.4" })).toBeNull();
+    expect(
+      await clientIpFor({
+        "x-real-ip": "1.2.3.4",
+        "x-forwarded-for": "203.0.113.9",
+      }),
+    ).toBeNull();
+  });
 });
 
 // ── capabilityContext: requireOrg behaviour ───────────────────────────────────

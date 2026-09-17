@@ -138,6 +138,15 @@ describe("pre-authentication bucket keys", () => {
         fakeContext({ headers: { "x-forwarded-for": "198.51.100.1" } }),
       ),
     ).toBeNull();
+    // Including x-real-ip, which on a zero-trusted-proxy deployment is just as
+    // caller-supplied. Believing it would let a credential-stuffing client mint
+    // a fresh bucket per request by rotating the header, evading this ceiling
+    // entirely rather than being slowed by it.
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-real-ip": "198.51.100.1" } }),
+      ),
+    ).toBeNull();
   });
 
   it("normalizes a bearer credential and returns only a SHA-256 fingerprint", () => {
