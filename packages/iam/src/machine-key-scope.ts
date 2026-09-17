@@ -39,7 +39,12 @@
  * `oxagen login` mints for a person, and it keeps acting for its creator
  * exactly as before.
  */
-import { schema, withSystemDb } from "@oxagen/database";
+import {
+  hasColumn,
+  HOST_GATEWAY_COLUMN,
+  schema,
+  withSystemDb,
+} from "@oxagen/database";
 import { getCapability } from "@oxagen/oxagen";
 import { and, eq, isNull } from "drizzle-orm";
 
@@ -198,8 +203,14 @@ async function recordGatewayInvocation(
   hostEnrollmentId: string | undefined,
 ): Promise<void> {
   if (!hostEnrollmentId) return;
-  await withSystemDb((tx) =>
-    tx
+  await withSystemDb(async (tx) => {
+    // Ask before writing. Production applies migrations by hand after the
+    // deploy (#1275), so between the two this statement names a column the
+    // database does not have; 42703 would abort the transaction and turn a
+    // missing observation into a FAILED gateway call, denying traffic this
+    // function only meant to take a note about (discussion_r4040352870).
+    if (!(await hasColumn(tx, HOST_GATEWAY_COLUMN))) return;
+    await tx
       .update(schema.tachoHosts)
       .set({ gatewayLastSeenAt: new Date() })
       .where(
@@ -207,8 +218,8 @@ async function recordGatewayInvocation(
           eq(schema.tachoHosts.orgId, orgId),
           eq(schema.tachoHosts.publicId, hostEnrollmentId),
         ),
-      ),
-  );
+      );
+  });
 }
 
 /**

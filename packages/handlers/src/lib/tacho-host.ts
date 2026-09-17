@@ -30,6 +30,7 @@ import {
 import type { z } from "zod";
 import { type BundleSigner, bundleSignerFromEnv } from "./tacho-bundle-signing";
 import { tachoHostApiKeyScopeSchema } from "./tacho-enrollment";
+import { hostReadColumns } from "./tacho-gateway-columns";
 
 export type TachoHostRow = typeof schema.tachoHosts.$inferSelect;
 export type ControlEnvelope = z.output<typeof controlEnvelopeSchema>;
@@ -103,6 +104,11 @@ export async function resolveEnrolledHost(
       eq(schema.tachoHosts.publicId, scope.data.host_enrollment_id),
       eq(schema.tachoHosts.apiKeyId, apiKey.id),
     ),
+    // Every host read on this path — ingest, control fetch, bundle get — goes
+    // through here, and none of them is about the gateway tier. Selecting a
+    // column the database does not have yet would fail all three for the
+    // window between deploy and migration (discussion_r4040352870).
+    columns: await hostReadColumns(tx),
   })) as TachoHostRow | undefined;
   if (!host) {
     throw tachoDenied(capability, "Forbidden: unknown Tacho host");

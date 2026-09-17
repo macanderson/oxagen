@@ -837,3 +837,34 @@ export const tachoEnrollmentTokens = tachoSchema.table(
     ),
   }),
 );
+
+/**
+ * The two columns migration `20260917120000` adds, named the way
+ * `information_schema` names them.
+ *
+ * Defined here, beside the Drizzle declarations they mirror, because three
+ * packages need them and each is a different kind of consumer: `@oxagen/iam`
+ * writes the host observation, `@oxagen/handlers` reads both and projects them
+ * away while they are missing, and their tests assert the probe was asked.
+ * A literal spelled at each site would be renamed on one side without breaking
+ * a build — it would simply stop matching, and the guard would silently become
+ * "always absent", which reads as a working deploy and is a permanent loss of
+ * the gateway tier.
+ *
+ * Note the SQL names: `"tacho"."hosts"`, not `"tacho"."tacho_hosts"`. The
+ * `tacho_` prefix is this schema's constraint and index naming convention and
+ * how Drizzle spells the binding in TypeScript; it is not part of the table
+ * name. The migration that first shipped this column got that wrong.
+ */
+export const HOST_GATEWAY_COLUMN = {
+  schema: "tacho",
+  table: "hosts",
+  column: "gateway_last_seen_at",
+} as const;
+
+/** The session's copy: what a risen `gateway` tier is answerable for. */
+export const SESSION_GATEWAY_COLUMN = {
+  schema: "tacho",
+  table: "sessions",
+  column: "gateway_observed_at",
+} as const;

@@ -14,6 +14,7 @@ import {
   retireEnrollmentKeys,
   revokeHostEnrollment,
 } from "./lib/tacho-host-revoke";
+import { hostReadColumns } from "./lib/tacho-gateway-columns";
 import { logger } from "./logger";
 
 function denied(message: string): CapabilityError {
@@ -51,6 +52,9 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
         eq(schema.tachoHosts.publicId, input.hostEnrollmentId),
         eq(schema.tachoHosts.orgId, ctx.orgId),
       ),
+      // Revoking a host has nothing to do with the gateway tier, and must not
+      // start failing because the column it never reads is not there yet.
+      columns: await hostReadColumns(tx),
     });
     if (!host) {
       throw denied("Forbidden: unknown Tacho host");

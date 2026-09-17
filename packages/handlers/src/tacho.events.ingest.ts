@@ -54,6 +54,7 @@ import { recordSpend } from "@oxagen/billing";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { unlockOnboardingGate } from "./lib/onboarding";
+import { sessionGatewayColumnReady } from "./lib/tacho-gateway-columns";
 import { eventClient } from "./event-client";
 import { recordProofFrames } from "./lib/proof";
 import {
@@ -384,6 +385,11 @@ function genesisRow(
   initiatingPrincipalId: string | null,
   events: TachoEvent[],
   now: Date,
+  // Whether `tacho.sessions.gateway_observed_at` exists yet. Naming a column
+  // the database does not have fails the INSERT, so between deploy and
+  // migration every new session would fail to open — for a field that is null
+  // on all but the gateway tier (discussion_r4040352870).
+  sessionGatewayColumn: boolean,
 ) {
   const first = events[0] as TachoEvent;
   const genesis = events.find((event) => event.kind === "agent_start") ?? first;
@@ -461,8 +467,12 @@ function genesisRow(
     enforcementTier: tier,
     // The evidence the tier stands on, written only when it is what raised
     // the row: a `gateway` session points at the observation that made it one.
-    gatewayObservedAt:
-      tier === TACHO_GATEWAY_TIER ? gatewayObservationFor(host) : null,
+    ...(sessionGatewayColumn
+      ? {
+          gatewayObservedAt:
+            tier === TACHO_GATEWAY_TIER ? gatewayObservationFor(host) : null,
+        }
+      : {}),
     bundleMode: host.mode,
     genesisHash: first.seq === 0 ? first.hash : null,
     createdAt: now,
@@ -649,6 +659,10 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     // Resolved on the first genesis row of the batch; every session a host
     // opens has the same operator, and a batch of continuations never asks.
     let initiatingPrincipalId: string | null | undefined;
+    // Asked once for the whole batch rather than per session: the answer is
+    // per-process and cached, and a batch cannot straddle a migration it holds
+    // a transaction across.
+    const sessionGatewayColumn = await sessionGatewayColumnReady(tx);
 
     for (const [sessionUuid, events] of bySession) {
       events.sort((a, b) => a.seq - b.seq);
@@ -874,7 +888,13 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           ? {
               enforcementTier: TACHO_GATEWAY_TIER,
               // What raised it. A tier that rose must point at the evidence.
-              gatewayObservedAt: gatewayObservationFor(host),
+              // Guarded on the column's presence in its own right rather than
+              // leaning on `promoteToGateway` being unreachable without the
+              // host column: that coupling holds today and is invisible to
+              // anyone changing either half.
+              ...(sessionGatewayColumn
+                ? { gatewayObservedAt: gatewayObservationFor(host) }
+                : {}),
             }
           : {}),
         updatedAt: now,
@@ -891,7 +911,14 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         newSessions += 1;
         if (initiatingPrincipalId === undefined)
           initiatingPrincipalId = await enrollingPrincipalId(tx, ctx, host);
-        const row = genesisRow(host, ctx, initiatingPrincipalId, events, now);
+        const row = genesisRow(
+          host,
+          ctx,
+          initiatingPrincipalId,
+          events,
+          now,
+          sessionGatewayColumn,
+        );
         await tx
           .insert(schema.tachoSessions)
           .values({
