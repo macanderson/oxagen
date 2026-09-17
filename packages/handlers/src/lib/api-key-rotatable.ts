@@ -36,7 +36,7 @@
  * instant it is judging against and a test does not depend on the clock the
  * suite runs on.
  */
-import { requestsReservedCliSessionPurpose } from "@oxagen/auth/cli-auth";
+import { requestsReservedCliSessionPurpose } from "@oxagen/oxagen/cli-session";
 import { requestsReservedAgentCredentialPurpose } from "@oxagen/oxagen/agent-credential";
 import { requestsReservedStellaTelemetryPurpose } from "./stella-telemetry-enrollment";
 import {

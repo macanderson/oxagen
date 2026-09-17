@@ -51,6 +51,17 @@ app.oxagen.sh {
 	# sets X-Forwarded-* by default; Host is passed through unchanged, which is
 	# what Next needs to accept an action from this origin.
 	reverse_proxy 127.0.0.1:3000 {
+		# Same contract as Caddyfile.alb's "Client address" (ADR-083): the
+		# application reads X-Oxagen-Client-Ip, X-Forwarded-For is rewritten to
+		# the same value so no caller-written copy survives for anything that
+		# reaches for it, and X-Real-Ip is deleted because nothing here sets it.
+		# `header_up` SETS rather than appends. No `trusted_proxies` is needed on
+		# this node — Caddy terminates TLS itself, so the peer it sees IS the
+		# caller and `{client_ip}` is that address directly.
+		header_up X-Oxagen-Client-Ip {client_ip}
+		header_up X-Forwarded-For {client_ip}
+		header_up -X-Real-Ip
+
 		# A cold Next 16 start on two shared vCPUs can take longer than the
 		# default read timeout allows, and the visible symptom of losing that
 		# race is a 502 on the first request after every deploy.
@@ -64,6 +75,18 @@ api.oxagen.sh {
 	encode gzip zstd
 
 	reverse_proxy 127.0.0.1:4000 {
+		# Same contract as Caddyfile.alb's "Client address" (ADR-083): the
+		# application reads X-Oxagen-Client-Ip, X-Forwarded-For is rewritten to
+		# the same value so no caller-written copy survives for anything that
+		# reaches for it, and X-Real-Ip is deleted because nothing here sets it.
+		# `header_up` SETS rather than appends. No `trusted_proxies` is needed on
+		# this node — Caddy terminates TLS itself, so the peer it sees IS the
+		# caller and `{client_ip}` is that address directly.
+		header_up X-Oxagen-Client-Ip {client_ip}
+		header_up X-Forwarded-For {client_ip}
+		header_up -X-Real-Ip
+
+
 		transport http {
 			response_header_timeout 60s
 		}
@@ -77,6 +100,17 @@ mcp.oxagen.sh {
 	# of when they are produced. The failure looks like an agent that hangs and
 	# then receives everything at once.
 	reverse_proxy 127.0.0.1:4100 {
+		# Same contract as Caddyfile.alb's "Client address" (ADR-083): the
+		# application reads X-Oxagen-Client-Ip, X-Forwarded-For is rewritten to
+		# the same value so no caller-written copy survives for anything that
+		# reaches for it, and X-Real-Ip is deleted because nothing here sets it.
+		# `header_up` SETS rather than appends. No `trusted_proxies` is needed on
+		# this node — Caddy terminates TLS itself, so the peer it sees IS the
+		# caller and `{client_ip}` is that address directly.
+		header_up X-Oxagen-Client-Ip {client_ip}
+		header_up X-Forwarded-For {client_ip}
+		header_up -X-Real-Ip
+
 		# Flush every write straight through rather than waiting for a buffer.
 		# Caddy already does this when it recognises the content type; saying
 		# it outright means a response that is streamed under some other type

@@ -67,6 +67,29 @@ export const baseEnvSchema = z.object({
   //  - RATE_LIMIT_CHAT_PER_MIN:       chat send / stream (/v1/**/chat/*).
   RATE_LIMIT_CHAT_PER_MIN: z.coerce.number().int().positive().default(60),
 
+  // Whether x-oxagen-client-ip is believed at all. Default FALSE, and the
+  // default is the whole point.
+  //
+  // That header is trustworthy only because Caddy SETS it with `header_up`,
+  // replacing any copy the caller sent. Caddy's config ships through the infra
+  // pipeline; this code ships through the application one. In the window where
+  // the code has deployed and the config has not, the old Caddyfile has no rule
+  // for that header name at all, so it forwards a caller-supplied one straight
+  // through — and a reader that trusts the header unconditionally would take a
+  // forged address into an IAM ip_ranges decision and into pre-authentication
+  // rate-limit bucket keys. Absent and attacker-supplied are different states,
+  // and only the first one is covered by falling through to the next branch.
+  //
+  // Making the flag default off puts the safe state on the default path: before
+  // the edge is in place the header is ignored entirely and attribution rests
+  // on TRUSTED_PROXY_CIDRS alone. Turning it on is a deliberate second step the
+  // operator takes AFTER uploading and reloading the Caddy config. Ordering
+  // instructions to a human are not a mechanism; a flag that must be flipped is.
+  TRUST_EDGE_CLIENT_IP_HEADER: z
+    .union([z.literal("true"), z.literal("false")])
+    .optional()
+    .transform((v) => v === "true"),
+
   // The proxies themselves, as a comma-separated CIDR/address list, and the
   // form that is actually safe. Counting hops trusts the COUNT to be right; a
   // count that is too high selects an entry the caller wrote, because a caller

@@ -349,7 +349,7 @@ app.use(
     max: 3_000,
     bucketKey: trustedClientIpBucketKey,
     methods: "all",
-    failClosedOnStoreError: true,
+    storeErrorPolicy: "degrade-to-local",
   }),
 );
 app.use(
@@ -359,7 +359,7 @@ app.use(
     max: 60,
     bucketKey: authorizationFingerprintBucketKey,
     methods: "all",
-    failClosedOnStoreError: true,
+    storeErrorPolicy: "degrade-to-local",
   }),
 );
 
@@ -391,7 +391,7 @@ app.use(
     max: 6_000,
     bucketKey: trustedClientIpBucketKey,
     methods: "all",
-    failClosedOnStoreError: true,
+    storeErrorPolicy: "degrade-to-local",
   }),
 );
 app.use(
@@ -401,7 +401,7 @@ app.use(
     max: 120,
     bucketKey: authorizationFingerprintBucketKey,
     methods: "all",
-    failClosedOnStoreError: true,
+    storeErrorPolicy: "degrade-to-local",
   }),
 );
 

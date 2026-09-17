@@ -12,7 +12,7 @@
 // resolveApiKey is vi.mock()'d so no network / DB hits occur. Session tokens
 // are rejected at the MCP edge before any session resolver would be invoked.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock the auth resolver before importing context.ts.
 vi.mock("@oxagen/auth", () => ({
@@ -33,6 +33,7 @@ vi.mock("@oxagen/database/security", () => ({
 import { resolveApiKey } from "@oxagen/auth";
 import {
   McpUnauthorizedError,
+  __resetTrustedProxyHopsForTests,
   extractBearerToken,
   resolveMcpContext,
   buildContext,
@@ -176,7 +177,10 @@ describe("resolveMcpContext", () => {
     expect(event.outcome).toBe("success");
     expect(event.orgId).toBe("org-1");
     expect(event.workspaceId).toBe("ws-1");
-    expect(event.actorUserId).toBeNull(); // machine auth — no user
+    // This key resolved to no person, so the access-log row records none.
+    // A CLI session key resolves to one, and the row carries it — see
+    // context.cli-session.test.ts.
+    expect(event.actorUserId).toBeNull();
     expect(event.ip).toBe("203.0.113.7"); // resolved client IP, not from a trusted source
     expect(event.requestId).toBe(requestId);
   });
@@ -381,6 +385,8 @@ describe("firstHeader (via buildContext header extraction)", () => {
 describe("extractClientIp (via buildContext clientIp extraction)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __resetTrustedProxyHopsForTests();
+    vi.stubEnv("TRUSTED_PROXY_CIDRS", "10.0.0.0/8");
     vi.mocked(resolveApiKey).mockResolvedValue({
       ok: true,
       orgId: "org-1",
@@ -390,41 +396,78 @@ describe("extractClientIp (via buildContext clientIp extraction)", () => {
     });
   });
 
-  it("extracts the first IP from a comma-separated x-forwarded-for", async () => {
-    const ctx = await buildContext({
-      authorization: "Bearer ox_valid",
-      "x-forwarded-for": "1.2.3.4, 5.6.7.8",
-    });
-    expect(ctx.clientIp).toBe("1.2.3.4");
+  afterEach(() => {
+    __resetTrustedProxyHopsForTests();
+    vi.unstubAllEnvs();
   });
 
-  it("trims whitespace from the extracted x-forwarded-for IP", async () => {
+  it("prefers the address the edge wrote", async () => {
+    // Believed only once the operator has turned the gate on, after the Caddy
+    // config that SETS the header is deployed (ADR-083).
+    vi.stubEnv("TRUST_EDGE_CLIENT_IP_HEADER", "true");
+    __resetTrustedProxyHopsForTests();
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
-      "x-forwarded-for": " 1.2.3.4 , 5.6.7.8",
+      "x-oxagen-client-ip": "198.51.100.1",
+      "x-forwarded-for": "203.0.113.9, 10.0.0.5",
     });
-    expect(ctx.clientIp).toBe("1.2.3.4");
+    expect(ctx.clientIp).toBe("198.51.100.1");
   });
 
-  it("falls back to x-real-ip when x-forwarded-for is absent", async () => {
+  // The #3183 second P1. Caddy's config ships through the infra pipeline and
+  // this code through the application one. Until the config lands, the old
+  // Caddyfile has no rule for x-oxagen-client-ip and forwards a caller's copy
+  // straight through, and ctx.clientIp is what the IAM ip_ranges condition
+  // ALLOWS on.
+  //
+  // A test asserting only "the edge header is preferred when present" passes
+  // against the implementation being flagged, so this one forges the header and
+  // asserts the forged value does not come back.
+  it("does not believe a forged edge header before the gate is turned on", async () => {
+    const alone = await buildContext({
+      authorization: "Bearer ox_valid",
+      "x-oxagen-client-ip": "198.51.100.1",
+    });
+    expect(alone.clientIp).toBeNull();
+
+    const withChain = await buildContext({
+      authorization: "Bearer ox_valid",
+      "x-oxagen-client-ip": "198.51.100.1",
+      "x-forwarded-for": "203.0.113.9, 10.0.0.5",
+    });
+    expect(withChain.clientIp).toBe("203.0.113.9");
+  });
+
+  // #3183 P1. ctx.clientIp feeds the IAM ip_ranges condition, which ALLOWS on a
+  // CIDR match. This took the leftmost x-forwarded-for entry, so an MCP client
+  // could prefix an allowlisted address and satisfy an IP-scoped mandate.
+  it("ignores a caller-supplied x-forwarded-for prefix", async () => {
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
-      "x-real-ip": "9.9.9.9",
+      "x-forwarded-for": "203.0.113.9, 198.51.100.1, 10.0.0.5",
     });
-    expect(ctx.clientIp).toBe("9.9.9.9");
+    expect(ctx.clientIp).toBe("198.51.100.1");
   });
 
-  it("returns null when neither x-forwarded-for nor x-real-ip is present", async () => {
+  it("never believes x-real-ip, which nothing in front of this process sets", async () => {
+    const ctx = await buildContext({
+      authorization: "Bearer ox_valid",
+      "x-real-ip": "198.51.100.1",
+    });
+    expect(ctx.clientIp).toBeNull();
+  });
+
+  it("returns null when no trusted proxy named the caller", async () => {
     const ctx = await buildContext({ authorization: "Bearer ox_valid" });
     expect(ctx.clientIp).toBeNull();
   });
 
-  it("handles x-forwarded-for as an array — uses first element", async () => {
+  it("handles x-forwarded-for as an array — uses the first element's chain", async () => {
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
-      "x-forwarded-for": ["1.2.3.4, 5.6.7.8", "irrelevant"],
+      "x-forwarded-for": ["198.51.100.1, 10.0.0.5", "irrelevant"],
     });
-    expect(ctx.clientIp).toBe("1.2.3.4");
+    expect(ctx.clientIp).toBe("198.51.100.1");
   });
 });
 
@@ -480,6 +523,11 @@ describe("buildContext", () => {
   });
 
   it("stamps clientIp from x-forwarded-for onto the context", async () => {
+    // Attribution is by proxy identity, so this block has to name one: without
+    // TRUSTED_PROXY_CIDRS nothing in the header is vouched for and clientIp is
+    // null, which is the honest answer rather than a stamping failure.
+    __resetTrustedProxyHopsForTests();
+    vi.stubEnv("TRUSTED_PROXY_CIDRS", "10.0.0.0/8");
     vi.mocked(resolveApiKey).mockResolvedValue({
       ok: true,
       orgId: "org-1",
@@ -489,9 +537,11 @@ describe("buildContext", () => {
     });
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
-      "x-forwarded-for": "203.0.113.5",
+      "x-forwarded-for": "203.0.113.5, 10.0.0.5",
     });
     expect(ctx.clientIp).toBe("203.0.113.5");
+    __resetTrustedProxyHopsForTests();
+    vi.unstubAllEnvs();
   });
 
   it("throws McpUnauthorizedError with reason 'unauthenticated' when no auth header", async () => {
@@ -530,7 +580,10 @@ describe("buildContext", () => {
     ).rejects.toMatchObject({ reason: "invalid_token" });
   });
 
-  it("sets userId to null (MCP only uses API keys, not session users)", async () => {
+  it("carries the resolver's principal — null for a key that acts for nobody", async () => {
+    // Not "MCP has no users". MCP has no *session* users; a bearer key may
+    // still act for a person, and `resolveApiKey` is the one thing that
+    // decides which. See context.cli-session.test.ts for the key that does.
     vi.mocked(resolveApiKey).mockResolvedValue({
       ok: true,
       orgId: "org-1",

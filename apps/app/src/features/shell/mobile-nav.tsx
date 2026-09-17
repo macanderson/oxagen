@@ -20,6 +20,7 @@ import {
 import { NAV_ICONS } from "./nav-icons";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
+import { AssistantLauncher } from "./assistant-launcher";
 import { SidebarHeader, SidebarNav, useSidebarSections } from "./sidebar";
 import { SafeLink } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -135,7 +136,11 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
   );
 }
 
-/** The phone drawer: the whole sidebar over a scrim, opened from the top bar's menu button. */
+/**
+ * The phone drawer: the whole sidebar over a scrim, opened from the top bar's
+ * menu button — the rail's foot included, so the assistant launcher a phone
+ * cannot reach in the `hidden md:flex` rail is reachable here (ADR-026).
+ */
 export function NavDrawer({ data }: { data: ShellData }) {
   const t = useTranslations("shell.drawer");
   const { drawerOpen, setDrawerOpen } = useShellState();
@@ -165,6 +170,9 @@ export function NavDrawer({ data }: { data: ShellData }) {
           </div>
           <SidebarHeader data={data} />
           <SidebarNav data={data} onNavigate={close} />
+          <div className="mt-auto px-2.5">
+            <AssistantLauncher onNavigate={close} />
+          </div>
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

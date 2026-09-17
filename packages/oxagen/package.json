@@ -13,6 +13,7 @@
     "./platform-operator": "./src/platform-operator.ts",
     "./handler-error": "./src/handler-error.ts",
     "./agent-credential": "./src/agent-credential.ts",
+    "./cli-session": "./src/cli-session.ts",
     "./agent-schema": "./src/agent-schema.ts",
     "./avatar": "./src/avatar.ts",
     "./interactive-agent": "./src/interactive-agent.ts",
@@ -25,7 +26,8 @@
     "./tacho/schemas": "./src/tacho/schemas.ts",
     "./mandates/schemas": "./src/mandates/schemas.ts",
     "./approval-rules/schemas": "./src/approval-rules/schemas.ts",
-    "./mandates/schemas.sample": "./src/mandates/schemas.sample.ts"
+    "./mandates/schemas.sample": "./src/mandates/schemas.sample.ts",
+    "./client-ip": "./src/client-ip.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

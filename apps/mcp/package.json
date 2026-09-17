@@ -17,6 +17,7 @@
     "@oxagen/agent": "workspace:*",
     "@oxagen/auth": "workspace:*",
     "@oxagen/billing": "workspace:*",
+    "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/handlers": "workspace:*",
     "@oxagen/iam": "workspace:*",

@@ -31,7 +31,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
 import { AGENT_CREDENTIAL_SCOPE_PURPOSE } from "@oxagen/oxagen/agent-credential";
-import { CLI_SESSION_SCOPE_PURPOSE } from "../cli-auth/index";
+import { CLI_SESSION_SCOPE_PURPOSE } from "@oxagen/oxagen/cli-session";
 
 /**
  * Literal leading marker on every raw API key. Mirrors generateApiKey() in

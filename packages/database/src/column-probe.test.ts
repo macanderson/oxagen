@@ -80,16 +80,16 @@ describe("hasColumn", () => {
     const tx = fakeTx([]);
     expect(await hasColumn(tx, HOSTS, SHARED, 1_000)).toBe(false);
     // Inside the window: answered from the cached miss.
-    expect(await hasColumn(tx, HOSTS, SHARED, 1_000 + NEGATIVE_PROBE_TTL_MS - 1)).toBe(
-      false,
-    );
+    expect(
+      await hasColumn(tx, HOSTS, SHARED, 1_000 + NEGATIVE_PROBE_TTL_MS - 1),
+    ).toBe(false);
     expect(tx.probes).toBe(1);
     // At the boundary: asked again. This is the regression that mattered —
     // caching the miss for the life of the process meant an instance started
     // before a hand-applied migration never noticed it afterwards.
-    expect(await hasColumn(tx, HOSTS, SHARED, 1_000 + NEGATIVE_PROBE_TTL_MS)).toBe(
-      false,
-    );
+    expect(
+      await hasColumn(tx, HOSTS, SHARED, 1_000 + NEGATIVE_PROBE_TTL_MS),
+    ).toBe(false);
     expect(tx.probes).toBe(2);
   });
 
@@ -97,9 +97,9 @@ describe("hasColumn", () => {
     const before = fakeTx([]);
     expect(await hasColumn(before, HOSTS, SHARED, 1_000)).toBe(false);
     const after = fakeTx(["gateway_last_seen_at"]);
-    expect(await hasColumn(after, HOSTS, SHARED, 1_000 + NEGATIVE_PROBE_TTL_MS)).toBe(
-      true,
-    );
+    expect(
+      await hasColumn(after, HOSTS, SHARED, 1_000 + NEGATIVE_PROBE_TTL_MS),
+    ).toBe(true);
   });
 
   it("answers per plane, not per process (ADR-042)", async () => {

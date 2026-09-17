@@ -165,7 +165,7 @@ Real skill directories live in `.claude/skills/` (checked in). Consult the match
 
 - **`oxagen-capability-contracts`** — defining a contract, the registry, handler binding, the `invoke()` pipeline, and the parity rule (contract → API route → MCP tool → CLI → UI).
 - **`oxagen-surface-patterns`** — Hono route and xmcp tool conventions: thin adapters, auth middleware, `capabilityContext`, error shaping.
-- **`oxagen-app-conventions`** — `apps/app`: server/client boundary, `actions.ts`, the `@/components/ui` re-export layer, the single chat SSE transport, the generative-UI registry, `proxy.ts`.
+- **`oxagen-app-conventions`** — `apps/app`: server/client boundary, `actions.ts`, the `@/ui` component layer, the single chat SSE transport, the generative-UI registry, `proxy.ts`.
 - **`oxagen-tenancy`** — `runInTenantScope`, `withTenantDb` / `withSystemDb`, RLS GUCs, principal attribution, the raw `db()` ban.
 - **`oxagen-four-store-data`** — Postgres/Drizzle conventions, Neo4j via ontology contracts, ClickHouse append-only emission, blob storage; which store a datum belongs in.
 - **`oxagen-ai-calls`** — the `@oxagen/ai` chokepoint, `modelIdOf()`, metering emission, the bans on raw `ai` imports and `ai/rsc`.
@@ -360,14 +360,24 @@ Never import `generateText` / `streamText` / `generateObject` directly from `ai`
 
 ## UI component import convention
 
-**Never import `@oxagen/ui/components/*` directly in app code.** All Next.js apps must import UI components from their local re-export layer (`@/components/ui/<name>`), not directly from `@oxagen/ui/components/*`. The re-export layer (`src/components/ui/*.tsx`) is the sole place that touches `@oxagen/ui/components/*` — it's a cheap override escape hatch.
+**Never import `@oxagen/ui/components/*` directly in app code.** An app imports UI components from its own local layer, and that layer is the sole place that touches `@oxagen/ui/components/*` — a cheap override escape hatch.
+
+**Which layer depends on the app, and `apps/app` is not the one most of this file describes.** The WL-52 rebuild gave `apps/app` its own components under `apps/app/src/ui/` (35 files, original implementations, not re-exports) and its own ESLint 10 config; it imports **no** `@oxagen/ui/components/*` at all, and `apps/app/src/components/` does not exist. `apps/app_deprecated` and `apps/docs` are the apps that keep the `src/components/ui/<name>.tsx` re-export layer, and `eslint.next.mjs` — whose first line says it covers exactly those two — is what enforces it there.
+
+| App | Import UI from | Enforced by |
+|---|---|---|
+| `apps/app` | `@/ui/<name>` | nothing — convention only (see below) |
+| `apps/docs`, `apps/app_deprecated` | `@/components/ui/<name>` | `no-restricted-imports` in `eslint.next.mjs` |
 
 ```ts
-// ✅ import { Button } from "@/components/ui/button"
+// ✅ import { Button } from "@/ui/button"           // apps/app
+// ✅ import { Button } from "@/components/ui/button" // apps/docs, app_deprecated
 // ❌ import { Button } from "@oxagen/ui/components/button"
 ```
 
-Enforcement: `no-restricted-imports` in `eslint.next.mjs`. Exceptions: the re-export files themselves, plus `@oxagen/ui` barrel, `@oxagen/ui/styles/*`, `@oxagen/ui/lib/*`.
+**`apps/app` is not covered by that rule, and nothing else covers it either.** `eslint.next.mjs` names `apps/app_deprecated` and `apps/docs` on its first line; `apps/app/eslint.config.mjs` is standalone and its `no-restricted-imports` carries only the tenancy seams, the `next/navigation` names INV-13 routes, and the `@/features/*/*` lane isolation — no `@oxagen/ui/components/*` pattern. A direct shared-component import in `apps/app` therefore lints clean. It holds today because `apps/app` has 35 original components under `src/ui/` and imports that path zero times, not because a rule refuses it.
+
+Exceptions to the rule where it *is* enforced: the re-export files themselves, plus the `@oxagen/ui` barrel, `@oxagen/ui/styles/*` and `@oxagen/ui/lib/*`.
 
 ## Citing nodes & edges in the UI
 
