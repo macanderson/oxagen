@@ -240,7 +240,7 @@ describe("distributedRateLimiter", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  // ADR-079. The four pre-auth mounts used to answer 503 here, which is what
+  // ADR-082. The four pre-auth mounts used to answer 503 here, which is what
   // took Tacho and Stella intake offline in #3167.
   it("serves the request from the per-instance limiter when the counter store is unavailable", async () => {
     mocks.withSystemDb.mockRejectedValue(new Error("db unavailable"));

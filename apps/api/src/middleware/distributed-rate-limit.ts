@@ -34,7 +34,7 @@ import type { AppEnv } from "../app";
  *   4. Set X-RateLimit-Limit/Remaining/Reset on every counted response; on
  *      breach, 429 { error: "rate_limited" } + Retry-After.
  *
- * STORE FAILURE POLICY (ADR-079): fail-open remains the default because rate
+ * STORE FAILURE POLICY (ADR-082): fail-open remains the default because rate
  * limiting is secondary for authenticated product surfaces. Pre-authentication
  * security boundaries opt into `"degrade-to-local"`, which hands the request to
  * the per-process limiter in rate-limit.ts rather than denying it. Neither
@@ -66,7 +66,7 @@ export interface DistributedRateLimitOptions {
    */
   methods?: readonly string[] | "all";
   /**
-   * What to do when the shared counter store is unavailable (ADR-079).
+   * What to do when the shared counter store is unavailable (ADR-082).
    *
    * - `"fail-open"` (default) — pass the request through uncounted. The
    *   historical policy for authenticated product surfaces, where the limit is
@@ -78,7 +78,7 @@ export interface DistributedRateLimitOptions {
    *
    * Neither option denies. `"degrade-to-local"` replaced a fail-closed policy
    * that answered 503 to every caller for as long as the store was unreachable
-   * — see ADR-079 for why the deny bought nothing that the shared Postgres
+   * — see ADR-082 for why the deny bought nothing that the shared Postgres
    * outage had not already bought.
    */
   storeErrorPolicy?: "fail-open" | "degrade-to-local";

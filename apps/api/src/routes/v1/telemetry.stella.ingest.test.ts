@@ -388,7 +388,7 @@ describe("POST /v1/telemetry/stella/operational", () => {
     },
   );
 
-  // ADR-079: the pre-auth ceilings degrade to the per-instance limiter rather
+  // ADR-082: the pre-auth ceilings degrade to the per-instance limiter rather
   // than answering 503. #3167 is the outage the old policy caused — every
   // enrolled host got a 503 on every request for as long as the counter
   // statement was broken.
@@ -399,7 +399,6 @@ describe("POST /v1/telemetry/stella/operational", () => {
 
     const response = await post(VALID_BATCH, {
       authorization: "Bearer counter_store_failure_key",
-      "x-oxagen-client-ip": "198.51.100.60",
     });
 
     expect(response.status).toBe(200);

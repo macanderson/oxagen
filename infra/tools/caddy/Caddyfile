@@ -64,15 +64,6 @@ api.oxagen.sh {
 	encode gzip zstd
 
 	reverse_proxy 127.0.0.1:4000 {
-		# Same contract as Caddyfile.alb: the API's pre-authentication rate
-		# limiters bucket by the address this proxy wrote, and `header_up` SETS
-		# the field so a caller's own copy is replaced rather than appended to.
-		# No `trusted_proxies` is needed here because Caddy terminates TLS
-		# itself on this node, so the peer it sees IS the caller and, with no
-		# trusted range declared, `{client_ip}` is that address directly —
-		# X-Forwarded-For is never consulted.
-		header_up X-Oxagen-Client-Ip {client_ip}
-
 		transport http {
 			response_header_timeout 60s
 		}
