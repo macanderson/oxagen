@@ -125,7 +125,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -349,9 +350,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -824,7 +824,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -1048,9 +1049,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -1645,7 +1645,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -1869,9 +1870,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -2272,7 +2272,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -2496,9 +2497,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -2809,7 +2809,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -3033,9 +3034,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -3508,7 +3508,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -3732,9 +3733,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -4113,7 +4113,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -4337,9 +4338,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -4718,7 +4718,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -4942,9 +4943,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -5323,7 +5323,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -5547,9 +5548,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -5928,7 +5928,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -6152,9 +6153,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -6609,7 +6609,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -6833,9 +6834,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -7308,7 +7308,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -7532,9 +7533,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -8007,7 +8007,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -8231,9 +8232,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -8706,7 +8706,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -8930,9 +8931,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -9243,7 +9243,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -9467,9 +9468,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -9942,7 +9942,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -10166,9 +10167,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -10641,7 +10641,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -10865,9 +10866,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -11132,7 +11132,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -11356,9 +11357,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -11632,7 +11632,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -11856,9 +11857,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -12546,7 +12546,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -12770,9 +12771,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -13060,7 +13060,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -13284,9 +13285,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -13574,7 +13574,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -13798,9 +13799,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -14395,7 +14395,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -14619,9 +14620,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -15052,7 +15052,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -15276,9 +15277,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -15638,7 +15638,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -15862,9 +15863,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -16224,7 +16224,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -16448,9 +16449,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -16818,7 +16818,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -17042,9 +17043,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -17505,7 +17505,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -17729,9 +17730,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -18268,7 +18268,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -18492,9 +18493,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -18859,7 +18859,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -19083,9 +19084,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -19450,7 +19450,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -19674,9 +19675,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -20041,7 +20041,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -20265,9 +20266,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -20632,7 +20632,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -20856,9 +20857,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -21223,7 +21223,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -21447,9 +21448,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -21814,7 +21814,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -22038,9 +22039,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -22635,7 +22635,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -22859,9 +22860,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -23226,7 +23226,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -23450,9 +23451,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -23907,7 +23907,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -24131,9 +24132,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -24493,7 +24493,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -24717,9 +24718,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -25079,7 +25079,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -25303,9 +25304,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -25760,7 +25760,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -25984,9 +25985,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -26441,7 +26441,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -26665,9 +26666,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -27051,7 +27051,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -27275,9 +27276,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -27708,7 +27708,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -27932,9 +27933,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
@@ -28222,7 +28222,8 @@
                         "claude-agent-sdk",
                         "custom",
                         "stella",
-                        "proxy"
+                        "proxy",
+                        "codex"
                       ]
                     },
                     "harness": {
@@ -28446,9 +28447,8 @@
                       "type": "string",
                       "maxLength": 512
                     },
-                    "user_email": {
-                      "type": "string",
-                      "maxLength": 512
+                    "user_email_digest": {
+                      "type": "string"
                     },
                     "account_uuid": {
                       "type": "string",
