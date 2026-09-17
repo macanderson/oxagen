@@ -109,6 +109,16 @@ export const RESERVED_RELATIONSHIP_PROPERTY_KEYS: ReadonlySet<string> = new Set(
  * nodes, which never receive the `:GraphNode` anchor label, so the reconcile
  * MATCH cannot bind them.) All four set `is_system = true` on the relationship.
  *
+ * The enumeration is the whole set, not a sample: relationship types cannot be
+ * parameterized in Cypher, and `sanitizeRelationshipType` — the one coercion
+ * that would let a non-constant type be interpolated — has no production caller.
+ * So no code path in this repository writes a `:GraphNode`-to-`:GraphNode`
+ * relationship that is not platform-owned. A relationship this pass legitimately
+ * reconciles therefore comes from an organisation writing into its OWN graph
+ * endpoint (BYO Neo4j is a design constraint, not an add-on) — which is exactly
+ * the case schema reconciliation exists for, and exactly the case where
+ * mistaking a platform edge for user data destroys something.
+ *
  * Both halves of the predicate are load-bearing. The relationship flag is the
  * direct marker, and the endpoint flags are the backstop for an edge writer
  * that forgets it — `ingestion.delete`'s alias-promotion reroute did forget,
