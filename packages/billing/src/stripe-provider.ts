@@ -47,6 +47,7 @@ import type {
 import {
   AmbiguousProrationAnchorError,
   ProrationAttributionError,
+  ProrationLinesTruncatedError,
 } from "./provider";
 
 /** Wrap an optional Stripe idempotency key into request options. */
@@ -104,8 +105,43 @@ function automaticTaxEnabled(): boolean {
  *    {@link ProrationAttributionError} rather than a fabricated zero: the
  *    lesson of the `?? 0` quote is that an unknown is not a nothing.
  */
+/**
+ * Every line of a previewed invoice, not the first handful.
+ *
+ * `Invoice.lines` is an `ApiList`: Stripe embeds one page and sets `has_more`
+ * when there are others. That flag was in the payload and never read, so a
+ * change whose credit and charge straddled the page boundary was priced from
+ * whichever side happened to land first — an upgrade reading as a downgrade,
+ * with no concurrency required, only enough pending invoice items.
+ *
+ * `listUpcomingLines` takes the same `subscription` and `subscription_details`
+ * this preview was built from, so paging asks for the same invoice rather than
+ * a differently-shaped one. The ordinary quote pays nothing for this: when
+ * `has_more` is false the embedded page IS the whole invoice and no second call
+ * is made.
+ */
+const MAX_PREVIEW_LINES = 1000;
+
+async function allPreviewLines(
+  stripe: Stripe,
+  preview: Stripe.Invoice,
+  params: Stripe.InvoiceListUpcomingLinesParams,
+): Promise<Stripe.InvoiceLineItem[]> {
+  if (!preview.lines?.has_more) return preview.lines?.data ?? [];
+  // 100 is Stripe's per-page maximum, so the bound is ten round trips.
+  const all = await stripe.invoices
+    .listUpcomingLines({ ...params, limit: 100 })
+    .autoPagingToArray({ limit: MAX_PREVIEW_LINES });
+  if (all.length >= MAX_PREVIEW_LINES) {
+    throw new ProrationLinesTruncatedError(MAX_PREVIEW_LINES);
+  }
+  return all;
+}
+
 function summarizeProration(
   preview: Stripe.Invoice,
+  /** Every line of `preview`, already paged — see {@link allPreviewLines}. */
+  lines: Stripe.InvoiceLineItem[],
   prorationDate: number,
   /**
    * How many prorations already sat at this anchor BEFORE the change was
@@ -121,9 +157,7 @@ function summarizeProration(
   if (pendingAtAnchor > 0) {
     throw new AmbiguousProrationAnchorError(prorationDate, pendingAtAnchor);
   }
-  const allProrations = (preview.lines?.data ?? []).filter(
-    (l) => l.proration === true,
-  );
+  const allProrations = lines.filter((l) => l.proration === true);
   // The anchor this preview was taken at is what makes a line ours — sound
   // only because the check above has established that no pre-existing
   // proration shares it.
@@ -467,7 +501,13 @@ async function prorationsAlreadyAtAnchor(
   const baseline = await stripe.invoices.createPreview({
     subscription: subscriptionId,
   });
-  return (baseline.lines?.data ?? []).filter(
+  // Paged for the same reason the change preview is: an interloper sitting
+  // beyond the embedded page would leave this at zero, and the ownership check
+  // would pass by not looking.
+  const lines = await allPreviewLines(stripe, baseline, {
+    subscription: subscriptionId,
+  });
+  return lines.filter(
     (l) => l.proration === true && l.period?.start === prorationDate,
   ).length;
 }
@@ -664,15 +704,20 @@ export class StripeProvider implements BillingProvider {
       subscriptionId,
       prorationDate,
     );
+    const subscriptionDetails = {
+      items: [{ id: item.id, quantity: input.seats }],
+      proration_behavior: input.prorationBehavior ?? "always_invoice",
+      proration_date: prorationDate,
+    };
     const preview = await stripe.invoices.createPreview({
       subscription: subscriptionId,
-      subscription_details: {
-        items: [{ id: item.id, quantity: input.seats }],
-        proration_behavior: input.prorationBehavior ?? "always_invoice",
-        proration_date: prorationDate,
-      },
+      subscription_details: subscriptionDetails,
     });
-    return summarizeProration(preview, prorationDate, pendingAtAnchor);
+    const lines = await allPreviewLines(stripe, preview, {
+      subscription: subscriptionId,
+      subscription_details: subscriptionDetails,
+    });
+    return summarizeProration(preview, lines, prorationDate, pendingAtAnchor);
   }
 
   async previewPlanChange(
@@ -689,15 +734,20 @@ export class StripeProvider implements BillingProvider {
       subscriptionId,
       prorationDate,
     );
+    const subscriptionDetails = {
+      items: [{ id: item.id, price: input.newPriceId }],
+      proration_behavior: input.prorationBehavior ?? "always_invoice",
+      proration_date: prorationDate,
+    };
     const preview = await stripe.invoices.createPreview({
       subscription: subscriptionId,
-      subscription_details: {
-        items: [{ id: item.id, price: input.newPriceId }],
-        proration_behavior: input.prorationBehavior ?? "always_invoice",
-        proration_date: prorationDate,
-      },
+      subscription_details: subscriptionDetails,
     });
-    return summarizeProration(preview, prorationDate, pendingAtAnchor);
+    const lines = await allPreviewLines(stripe, preview, {
+      subscription: subscriptionId,
+      subscription_details: subscriptionDetails,
+    });
+    return summarizeProration(preview, lines, prorationDate, pendingAtAnchor);
   }
 
   // ── Payment methods ───────────────────────────────────────────────────────────

@@ -179,6 +179,34 @@ export class AmbiguousProrationAnchorError extends Error {
   }
 }
 
+/**
+ * Raised when a previewed invoice has more lines than the bounded walk will
+ * fetch, so the set the direction would be computed from is known-incomplete.
+ *
+ * The walk is bounded because the SDK forces the choice: `autoPagingToArray`
+ * takes a required `limit`. What is not forced is what happens past it, and
+ * answering from a set we already know is truncated is the one thing this path
+ * never does — a partial sum is how an upgrade reads as a downgrade in the
+ * first place.
+ *
+ * The bound is high enough that reaching it means something other than a
+ * subscription this code can price: it bills ONE subscription item (every
+ * preview reads `items.data[0]` and throws when there is none), so a legitimate
+ * invoice here is one recurring line, at most two prorations for the change,
+ * and pending items. Needing more than {@link MAX_PREVIEW_LINES} lines to
+ * describe it is not a case this adapter understands, and spending more round
+ * trips to discover that is worse than saying so (#3157, PR #3171 review).
+ */
+export class ProrationLinesTruncatedError extends Error {
+  readonly code = "PRORATION_LINES_TRUNCATED" as const;
+  constructor(readonly limit: number) {
+    super(
+      `The previewed invoice has at least ${limit} lines; this change's cost cannot be computed from a set known to be incomplete.`,
+    );
+    this.name = "ProrationLinesTruncatedError";
+  }
+}
+
 export interface BillingProrationPreview {
   /**
    * Net proration amount in cents for THIS change. Positive = the customer

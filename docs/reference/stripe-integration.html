@@ -286,7 +286,12 @@ matches the provider within one round-trip.</p>
       <code>period.start</code>, and timestamp equality is not ownership. Nothing in the payload settles it either:
       <code>type</code> names the line's source rather than the request that made it, <code>subscription_item</code>
       is the same item for both, and <code>proration_details.credited_items</code> exists only on credit lines. So
-      the adapter takes a baseline preview first — the invoice as it stands, with no change simulated — and refuses
+      the adapter reads <strong>every</strong> line before deciding anything — <code>Invoice.lines</code> is an
+      <code>ApiList</code> that embeds only the first page and sets <code>has_more</code>, and a change whose credit
+      and charge straddle that boundary is otherwise priced from one side, so an upgrade reads as a downgrade with no
+      concurrency involved. Paging is bounded, and past the bound the quote is refused rather than computed from a
+      set known to be incomplete. It then takes a baseline preview — the invoice as it stands, with no change
+      simulated, paged the same way — and refuses
       with <code>AmbiguousProrationAnchorError</code> if a proration already sits at that second, rather than
       guessing at a field that might mean ownership. Both preview paths do this, because both derive their anchor
       the same way. A refusal on a same-second collision is recoverable; summing a stranger's credit makes a real
