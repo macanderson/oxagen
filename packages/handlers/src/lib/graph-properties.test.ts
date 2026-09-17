@@ -93,3 +93,24 @@ describe("safeParseProperties", () => {
     expect(safeParseProperties({ strings })).toEqual({ strings });
   });
 });
+
+describe("safeParseProperties — a customer property named __proto__", () => {
+  it("survives the driver-Integer normalising copy", () => {
+    // Reachable without anything hostile: node property bags are a JSON string
+    // and JSON.parse DEFINES `__proto__` as an own key, while the names in a
+    // customer's own graph are theirs to choose. The copy only runs when some
+    // value is a driver Integer, so on a `{}` bag the property vanished from
+    // SOME bags and not others — the worst version to diagnose.
+    const bag = safeParseProperties(
+      '{"__proto__": "mine", "count": {"low": 7, "high": 0}}',
+    );
+    expect(Object.keys(bag).sort()).toEqual(["__proto__", "count"]);
+    expect(Object.entries(bag)).toContainEqual(["__proto__", "mine"]);
+    expect(bag.count).toBe(7);
+  });
+
+  it("is untouched when no copy is needed", () => {
+    const bag = safeParseProperties('{"__proto__": "mine", "n": 1}');
+    expect(Object.keys(bag)).toContain("__proto__");
+  });
+});

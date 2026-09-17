@@ -590,3 +590,91 @@ describe("the platform relationship-type list cannot drift from its rationale", 
     }
   });
 });
+
+// ── A property name is not a place to invoke a setter ────────────────────────
+
+/**
+ * What the Bolt driver actually sends: a parameter map is serialised from the
+ * object's OWN ENUMERABLE keys. Asserting through this rather than reading the
+ * property back is the whole point — `props["__proto__"]` returns the object's
+ * PROTOTYPE, so `expect(props["__proto__"]).toBeNull()` passes on the broken
+ * construction and proves nothing.
+ */
+function asDriverWouldSerialize(
+  params: Record<string, unknown>,
+): Array<[string, unknown]> {
+  return Object.entries(params);
+}
+
+describe("a property named __proto__ survives into the parameter map", () => {
+  it("carries the removal instruction the driver has to see", () => {
+    const props = buildRelationshipWriteBackProps({ confidence: 0.9 }, [
+      "__proto__",
+    ]);
+
+    // The assertion that was red before the fix. On a `{}` bag the assignment
+    // invoked the prototype setter, so the key never became an own property:
+    // nothing reached Neo4j, the property stayed on the edge, and the job
+    // counted it pruned and reported success.
+    expect(asDriverWouldSerialize(props)).toContainEqual(["__proto__", null]);
+    expect(Object.keys(props)).toContain("__proto__");
+    expect(Object.prototype.hasOwnProperty.call(props, "__proto__")).toBe(true);
+  });
+
+  it("keeps a retained property of that name instead of dropping it", () => {
+    // The same defect on the other loop, and the quieter half: the value would
+    // vanish from the write-back with no counter to notice.
+    const retained: Record<string, unknown> = { ["__proto__"]: "keep-me" };
+    const props = buildRelationshipWriteBackProps(retained, []);
+    expect(asDriverWouldSerialize(props)).toContainEqual([
+      "__proto__",
+      "keep-me",
+    ]);
+  });
+
+  it("keeps a schema-declared property of that name through the prune", () => {
+    const existing: Record<string, unknown> = {
+      ["__proto__"]: "declared",
+      off: 1,
+    };
+    const { pruned, removedKeys } = buildPrunedProperties(existing, [
+      "__proto__",
+    ]);
+    expect(Object.keys(pruned)).toContain("__proto__");
+    expect(removedKeys).toEqual(["off"]);
+  });
+
+  it("reaches the builders the way a real node does, via JSON.parse", () => {
+    // Reachability without needing a hostile schema name: JSON.parse DEFINES
+    // rather than assigns, so a node whose canonical `properties` blob carries
+    // the key hands an own property straight in.
+    const fromGraph = parseNodeProps('{"__proto__": 1, "kept": 2}');
+    expect(Object.keys(fromGraph)).toContain("__proto__");
+
+    const { removedKeys } = buildPrunedProperties(fromGraph, ["kept"]);
+    expect(removedKeys).toEqual(["__proto__"]);
+    expect(
+      asDriverWouldSerialize(buildRelationshipWriteBackProps({}, removedKeys)),
+    ).toContainEqual(["__proto__", null]);
+  });
+
+  it("needs no list of dangerous names — the prototype is gone entirely", () => {
+    // `constructor` and `prototype` are ordinary own keys and were never the
+    // problem; the point of fixing the construction is that there is no next
+    // name to add. A null-prototype bag inherits nothing at all.
+    const props = buildRelationshipWriteBackProps({}, [
+      "__proto__",
+      "constructor",
+      "prototype",
+      "toString",
+    ]);
+    expect(Object.keys(props).sort()).toEqual([
+      "__proto__",
+      "constructor",
+      "prototype",
+      "toString",
+    ]);
+    expect(Object.getPrototypeOf(props)).toBeNull();
+    expect("toString" in props).toBe(true);
+  });
+});

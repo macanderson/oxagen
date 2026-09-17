@@ -11,6 +11,38 @@ import { logger } from "../logger";
 // ── Pure helper — exported for unit testing ────────────────────────────────────
 
 /**
+ * An empty property bag with a NULL PROTOTYPE, for any map whose keys come from
+ * a schema or from a customer's own graph.
+ *
+ * `{}` inherits `Object.prototype`, which carries an accessor named
+ * `__proto__`. Assigning through it — `bag["__proto__"] = null` — invokes the
+ * legacy prototype SETTER instead of creating an own property, so the key is
+ * silently absent from `Object.keys`, absent from what the Bolt driver
+ * serialises, and absent from `JSON.stringify`. In a prune that means the
+ * removal instruction never reaches Neo4j: the property stays on the edge while
+ * the job increments `prunedRelationships` and reports success. A mechanism
+ * that reports success without doing the thing is the whole failure mode this
+ * builder exists to prevent, and this is the quietest instance of it — the only
+ * evidence is a property that is still there.
+ *
+ * Both key sources are free-form: `schema.property.upsert` accepts any
+ * non-empty name up to 200 characters, and a customer's Neo4j properties are
+ * theirs to name. The node path is demonstrably reachable without either:
+ * `JSON.parse` creates `__proto__` as an OWN property (it defines rather than
+ * assigns), so a node whose canonical `properties` JSON contains that key hands
+ * one straight to {@link buildPrunedProperties}.
+ *
+ * Fixed at the CONSTRUCTION, not at the key. `__proto__` is the only name with
+ * an inherited setter — `constructor` and `prototype` are ordinary own keys —
+ * but special-casing it would leave the next reader reasoning about which names
+ * are dangerous and maintaining a list. A null prototype inherits nothing, so
+ * there is no list and no next name.
+ */
+function emptyPropertyBag(): Record<string, unknown> {
+  return Object.create(null) as Record<string, unknown>;
+}
+
+/**
  * Build the pruned properties map: returns only the properties whose keys
  * appear in `schemaKeys`. Removed keys are returned in `removedKeys`.
  *
@@ -23,7 +55,7 @@ export function buildPrunedProperties(
   reservedKeys: ReadonlySet<string> = EMPTY_RESERVED,
 ): { pruned: Record<string, unknown>; removedKeys: string[] } {
   const schemaKeySet = new Set(schemaKeys);
-  const pruned: Record<string, unknown> = {};
+  const pruned: Record<string, unknown> = emptyPropertyBag();
   const removedKeys: string[] = [];
 
   for (const [key, value] of Object.entries(existing)) {
@@ -246,7 +278,7 @@ export function buildRelationshipWriteBackProps(
   retained: Record<string, unknown>,
   removedKeys: readonly string[],
 ): Record<string, unknown> {
-  const props: Record<string, unknown> = {};
+  const props: Record<string, unknown> = emptyPropertyBag();
   // A RETAINED key is omitted when its value is null or undefined, because
   // `null` is this map's removal instruction and a retained key must not carry
   // one. Omitting it is also the correct semantics on its own terms: `+=`
