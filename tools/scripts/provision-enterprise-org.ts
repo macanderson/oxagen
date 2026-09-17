@@ -98,10 +98,22 @@ import { createInterface } from "node:readline";
 import { URL, pathToFileURL } from "node:url";
 import kleur from "kleur";
 import type { SQL } from "drizzle-orm";
-import { and, count, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { fetchAuthz } from "@oxagen/iam";
+import { grantsOrgOwnerSuperUser, type Role } from "@oxagen/oxagen/iam";
 import {
   createCreditLot,
   CREDIT_REASONS,
@@ -184,22 +196,40 @@ export function unprovisionableReason(status: string): string | undefined {
 }
 
 /**
- * The predicate for "this organisation has a human who can still act after the
- * enterprise tier switches the default-deny resolver on".
+ * CANDIDATES for "a human who can still act once the enterprise tier switches
+ * the default-deny resolver on" — not the answer.
  *
- * Exported so the shape can be asserted rather than eyeballed. Every clause is
- * load-bearing, and the two easiest to leave out are the ones that were:
+ * ## Why this is no longer the decision
  *
- *   - `principal_role_assignments.org_id` — an assignment carries its own org,
- *     and joining through to a role owned by this org does not constrain it.
- *   - `principal_role_assignments.workspace_id IS NULL` — a workspace-scoped
- *     assignment grants Owner inside that workspace only, so a workspace-only
- *     Owner does not stop the ORGANISATION locking itself out.
- *   - `roles.scope_kind = 'org'` — two system roles are named "Owner", and only
- *     the org-scoped one is a super-user under resolver rule 7.5.
+ * This predicate used to BE the preflight, and three review findings on #3178
+ * were the same mistake arriving on a different axis:
  *
- * Mirrors the predicates `packages/iam/src/fetch-authz.ts` applies to the same
- * table, which is the resolver this preflight is predicting the behaviour of.
+ *   - `principal_role_assignments.org_id` / `workspace_id IS NULL` — where the
+ *     grant applies. A workspace-only Owner does not stop the ORGANISATION
+ *     locking itself out (discussion_r4034318919).
+ *   - `roles.scope_kind = 'org'` — which role was granted. Two system roles are
+ *     named "Owner" and only the org-scoped one is a super-user under resolver
+ *     rule 7.5 (discussion_r4034776760).
+ *   - `principals.parent_user_id` — who the principal actually is. The resolver
+ *     finds a human ONLY by matching the caller's user id to that column
+ *     (`fetch-authz.ts`), so a null or orphaned link is a principal no caller
+ *     can ever resolve to (discussion_r4035774889).
+ *
+ * After each round the predicate looked complete, and each clause was asserted
+ * through `PgDialect` rather than eyeballed. That is the point: an assertion
+ * shows a clause is PRESENT, never that the set is SUFFICIENT. A predicate is
+ * only as good as the resolver it predicts, and nothing tied the two together.
+ *
+ * So the decision moved. `ownerReadiness` below asks the real resolver —
+ * `fetchAuthz` plus rule 7.5's own exported predicate — whether a candidate
+ * would genuinely still be a super-user. This query only proposes candidates.
+ * A clause missing here now costs one extra resolver call and a rejection, not
+ * an organisation locked out, which is the whole reason for the inversion.
+ *
+ * The clauses stay because a candidate list full of principals that cannot
+ * resolve is a slower preflight and a worse refusal message — and because
+ * `users`/`org_users` liveness is the one thing `fetchAuthz` does NOT check
+ * (it matches `parent_user_id` alone), so this is where it belongs.
  */
 export function orgWideSystemOwnerWhere(orgId: string, now: Date): SQL {
   const predicate = and(
@@ -208,6 +238,21 @@ export function orgWideSystemOwnerWhere(orgId: string, now: Date): SQL {
     // not keep a person out of the organisation.
     eq(schema.principals.kind, "human"),
     eq(schema.principals.status, "active"),
+    // The principal must lead back to a real, usable person.
+    //
+    // `fetch-authz.ts` resolves a human caller by matching their user id to
+    // `principals.parent_user_id` and nothing else. The column is nullable, so
+    // a legacy or hand-made Owner principal can carry NULL — and then NO caller
+    // can ever resolve to it. It is an Owner row that grants Owner to nobody.
+    //
+    // Non-null is necessary and NOT sufficient, which is the trap: the id can
+    // also point at a user who no longer exists, was soft-deleted, or has left
+    // the organisation. All four read identically in `principals` and only the
+    // join tells them apart, so the join at the call site is the real check and
+    // `IS NOT NULL` is the part of it that can live in this predicate.
+    isNotNull(schema.principals.parentUserId),
+    isNull(schema.users.deletedAt),
+    eq(schema.users.status, "active"),
     eq(schema.principalRoleAssignments.orgId, orgId),
     isNull(schema.principalRoleAssignments.workspaceId),
     isNull(schema.principalRoleAssignments.deletedAt),
@@ -240,6 +285,72 @@ export function orgWideSystemOwnerWhere(orgId: string, now: Date): SQL {
     throw new Error("unreachable: the owner-readiness predicate was empty");
   }
   return predicate;
+}
+
+/** A principal the candidate query proposes, with the user it leads back to. */
+export interface OwnerCandidate {
+  principalId: string;
+  userId: string;
+}
+
+/** Just enough of `AuthzData` to ask rule 7.5's question. */
+export interface OwnerAuthz {
+  principal: { id: string } | null;
+  roles: readonly Role[];
+}
+
+export interface OwnerReadinessDeps {
+  /** The candidate query — `orgWideSystemOwnerWhere`, in production. */
+  loadCandidates: () => Promise<OwnerCandidate[]>;
+  /** The real resolver — `fetchAuthz`, in production. */
+  fetchAuthzFor: (userId: string) => Promise<OwnerAuthz>;
+}
+
+export interface OwnerReadiness {
+  ready: boolean;
+  considered: number;
+  /** The first candidate the resolver confirmed, or null when none did. */
+  confirmedUserId: string | null;
+}
+
+/**
+ * Does some human still hold org-owner super-user, according to the resolver
+ * that will actually decide it?
+ *
+ * The inversion that ended three rounds of findings. The SQL predicate used to
+ * be the answer, so every clause it lacked was an organisation that could be
+ * locked out; now it only proposes and the resolver disposes. A candidate the
+ * query should have excluded is rejected here instead of provisioned, and a
+ * fourth axis nobody has found yet costs one wasted resolver call rather than a
+ * lockout.
+ *
+ * `fetchAuthz` is the same function the request path calls, and the confirming
+ * test is `grantsOrgOwnerSuperUser` — rule 7.5's own predicate, exported from
+ * the resolver and called by rule 7.5 itself. There is no second
+ * implementation left to drift.
+ *
+ * It stops at the first confirmation: one super-user is what "not locked out"
+ * means, and an organisation with many Owners should not pay for all of them.
+ */
+export async function ownerReadiness(
+  deps: OwnerReadinessDeps,
+): Promise<OwnerReadiness> {
+  const candidates = await deps.loadCandidates();
+  for (const candidate of candidates) {
+    const authz = await deps.fetchAuthzFor(candidate.userId);
+    // No principal means the resolver could not resolve this user at all —
+    // exactly the null/orphaned `parent_user_id` case, caught by the authority
+    // rather than predicted.
+    if (!authz.principal) continue;
+    if (grantsOrgOwnerSuperUser(authz.roles, authz.principal.id)) {
+      return {
+        ready: true,
+        considered: candidates.length,
+        confirmedUserId: candidate.userId,
+      };
+    }
+  }
+  return { ready: false, considered: candidates.length, confirmedUserId: null };
 }
 
 export function isLocalHost(host: string): boolean {
@@ -574,32 +685,93 @@ async function main(): Promise<void> {
       }
 
       // Enterprise runs the full IAM resolver, whose default effect is deny. An
-      // org with no seeded Owner principal therefore loses every governed
-      // action the moment the tier lands, and the operator finds out from the
-      // customer. Check before the write, and refuse rather than warn.
-      const [ownerPrincipal] = await withSystemDb((tx) =>
+      // org with no usable Owner therefore loses every governed action the
+      // moment the tier lands, and the operator finds out from the customer.
+      // Check before the write, and refuse rather than warn.
+      //
+      // The SQL below proposes candidates; `fetchAuthz` decides. See
+      // `orgWideSystemOwnerWhere` for why the prediction stopped being the
+      // answer.
+      const [ownerWs] = await withSystemDb((tx) =>
         tx
-          .select({ id: schema.principals.id })
-          .from(schema.principals)
-          .innerJoin(
-            schema.principalRoleAssignments,
-            eq(
-              schema.principalRoleAssignments.principalId,
-              schema.principals.id,
-            ),
-          )
-          .innerJoin(
-            schema.roles,
-            eq(schema.roles.id, schema.principalRoleAssignments.roleId),
-          )
-          .where(orgWideSystemOwnerWhere(org.id, new Date()))
+          .select({ id: schema.workspaces.id })
+          .from(schema.workspaces)
+          .where(eq(schema.workspaces.orgId, org.id))
           .limit(1),
       );
+      // Any workspace resolves an ORG-WIDE assignment: fetchAuthz matches
+      // `workspace_id IS NULL OR workspace_id = $ws`, and the org-wide arm
+      // carries it whichever workspace is named. An org with none yet uses its
+      // own id, the same stand-in the credit write below uses, because
+      // runInTenantScope asserts a uuid rather than reading this one.
+      const ownerScope = { orgId: org.id, workspaceId: ownerWs?.id ?? org.id };
 
-      if (!ownerPrincipal) {
+      const readiness = await ownerReadiness({
+        loadCandidates: () =>
+          withSystemDb((tx) =>
+            tx
+              .select({
+                principalId: schema.principals.id,
+                userId: schema.principals.parentUserId,
+              })
+              .from(schema.principals)
+              .innerJoin(
+                schema.principalRoleAssignments,
+                eq(
+                  schema.principalRoleAssignments.principalId,
+                  schema.principals.id,
+                ),
+              )
+              .innerJoin(
+                schema.roles,
+                eq(schema.roles.id, schema.principalRoleAssignments.roleId),
+              )
+              // The user the principal points at must EXIST. An inner join is
+              // the check: an orphaned `parent_user_id` drops the row here, and
+              // no clause on `principals` alone can tell it from a good one.
+              .innerJoin(
+                schema.users,
+                eq(schema.users.id, schema.principals.parentUserId),
+              )
+              // And still be in the organisation. Membership has no soft
+              // delete — leaving removes the row — so the join IS the liveness
+              // check, and a departed Owner stops counting as lockout cover.
+              .innerJoin(
+                schema.orgUsers,
+                and(
+                  eq(schema.orgUsers.userId, schema.users.id),
+                  eq(schema.orgUsers.orgId, org.id),
+                ),
+              )
+              .where(orgWideSystemOwnerWhere(org.id, new Date())),
+          ).then((rows) =>
+            rows.flatMap((r) =>
+              r.userId
+                ? [{ principalId: r.principalId, userId: r.userId }]
+                : [],
+            ),
+          ),
+        fetchAuthzFor: (userId) =>
+          runInTenantScope(ownerScope, () =>
+            fetchAuthz({
+              userId,
+              apiKeyId: null,
+              orgId: org.id,
+              workspaceId: ownerScope.workspaceId,
+              // Rule 7.5 is evaluated per capability, but the answer this
+              // preflight needs is about the ROLE rather than any one
+              // capability. `grantsOrgOwnerSuperUser` reads the roles the
+              // resolver loaded, so the capability named here only has to be
+              // real.
+              capability: "get_org",
+            }),
+          ),
+      });
+
+      if (!readiness.ready) {
         console.log(
           kleur.red(
-            `      refused         : no active human principal holds an ORG-WIDE system Owner assignment. Enterprise runs the full IAM resolver (default deny), so the tier would lock this organisation out, and a workspace-scoped Owner does not prevent that. Run: pnpm db:backfill-iam -- --apply, then re-run.`,
+            `      refused         : the IAM resolver confirms no org-owner super-user for this organisation (${readiness.considered} candidate(s) considered). Enterprise runs the full resolver (default deny), so the tier would lock it out. A workspace-scoped Owner, a workspace-scoped Owner ROLE, and an Owner principal with no live user behind it all read as Owner and none of them is one. Run: pnpm db:backfill-iam -- --apply, then re-run.`,
           ),
         );
         failures += 1;
@@ -607,7 +779,7 @@ async function main(): Promise<void> {
         continue;
       }
       console.log(
-        `      iam             : an active human holds org-wide system Owner`,
+        `      iam             : resolver confirms an org-owner super-user`,
       );
 
       // ── 2a. Does a subscription already answer the tier question? ──────────

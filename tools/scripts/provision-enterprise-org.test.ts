@@ -13,6 +13,7 @@
  */
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, it, expect } from "vitest";
+import { resolve, type Role } from "@oxagen/oxagen/iam";
 import {
   DEFAULT_ACTIONS_ANNUAL,
   DEFAULT_FLOOR_USD,
@@ -21,6 +22,7 @@ import {
   parseActionsAnnual,
   parseFloorUsd,
   orgWideSystemOwnerWhere,
+  ownerReadiness,
   sanitizeUrl,
   shouldWriteAllowance,
   topUpCents,
@@ -258,6 +260,21 @@ describe("orgWideSystemOwnerWhere", () => {
     expect(params).toContain("org");
   });
 
+  it("requires the principal to lead back to a live user", () => {
+    // fetch-authz resolves a human by matching their user id to
+    // principals.parent_user_id and nothing else, so a null link is an Owner
+    // principal no caller can ever resolve to (r4035774889). The column is
+    // nullable, and a legacy or hand-made principal can carry NULL.
+    const { sql, params } = compiled();
+    expect(sql).toMatch(/"parent_user_id" is not null/i);
+    // Non-null is only the first of the three the reviewer named. The user must
+    // also be extant and not soft-deleted — extancy is the inner join at the
+    // call site, which no predicate can carry, so this pins the two that live
+    // here and the join test below pins the rest.
+    expect(sql).toMatch(/"users"\."deleted_at" is null/i);
+    expect(params).toContain("active");
+  });
+
   it("keeps the clauses that were already right", () => {
     const { sql, params } = compiled();
     expect(sql).toMatch(/"kind" = \$/);
@@ -266,5 +283,194 @@ describe("orgWideSystemOwnerWhere", () => {
     expect(sql).toMatch(/"expires_at" is null/i);
     expect(params).toContain("human");
     expect(params).toContain("Owner");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The preflight and the resolver, checked against each other
+// ---------------------------------------------------------------------------
+//
+// Three review findings on #3178 were the same defect on three different axes:
+// the assignment's scope (r4034318919), the role's scope (r4034776760), and the
+// principal's link to a real user (r4035774889). Each time the SQL predicate
+// looked complete, and each clause was asserted through PgDialect. That is the
+// lesson rather than the bug: an assertion shows a clause is PRESENT, never
+// that the set is SUFFICIENT, and nothing tied the predicate to the resolver it
+// was predicting.
+//
+// So the preflight stopped predicting. `ownerReadiness` asks `fetchAuthz` and
+// rule 7.5's own exported predicate. These cases pin the two together by
+// BEHAVIOUR over every lockout shape found so far: for each, the resolver must
+// refuse and the preflight must refuse. A fourth axis added to this list fails
+// here the moment the two disagree.
+
+const ORG = "11111111-1111-4111-8111-111111111111";
+const WS = "22222222-2222-4222-8222-222222222222";
+const PRINCIPAL = "33333333-3333-4333-8333-333333333333";
+const USER = "44444444-4444-4444-8444-444444444444";
+
+const principal = {
+  id: PRINCIPAL,
+  kind: "human" as const,
+  orgId: ORG,
+  workspaceId: null,
+};
+
+function role(overrides: Partial<Role> = {}): Role {
+  return {
+    id: "55555555-5555-4555-8555-555555555555",
+    name: "Owner",
+    scopeKind: "org",
+    orgId: ORG,
+    principalIds: [PRINCIPAL],
+    isSystemDefault: true,
+    ...overrides,
+  };
+}
+
+/** What the resolver decides for a capability with no grant of its own. */
+function resolverOutcome(roles: readonly Role[]) {
+  return resolve({
+    principal,
+    capability: "get_org",
+    scope: { kind: "org" as const, orgId: ORG, workspaceId: WS },
+    grants: [],
+    roles,
+    roleGrants: [],
+    policies: [],
+    defaultEffect: "deny",
+  });
+}
+
+/** What the preflight decides, given what the resolver would return. */
+function preflight(authz: {
+  principal: { id: string } | null;
+  roles: readonly Role[];
+}) {
+  return ownerReadiness({
+    loadCandidates: async () => [{ principalId: PRINCIPAL, userId: USER }],
+    fetchAuthzFor: async () => authz,
+  });
+}
+
+describe("every known lockout shape is refused by BOTH the resolver and the preflight", () => {
+  it("the positive control: a real org-scoped system Owner satisfies both", async () => {
+    // Without this the suite could pass by refusing everything, which is the
+    // failure mode a preflight has: a check that never says yes is not a check.
+    const roles = [role()];
+    const decided = resolverOutcome(roles);
+    expect(decided.outcome).toBe("allow");
+    expect(decided.trace.decidedBy.rule).toBe("7.5:org_owner_superuser");
+
+    const ready = await preflight({ principal: { id: PRINCIPAL }, roles });
+    expect(ready).toEqual({
+      ready: true,
+      considered: 1,
+      confirmedUserId: USER,
+    });
+  });
+
+  it("shape 1 — a workspace-scoped ASSIGNMENT (r4034318919)", async () => {
+    // fetch-authz filters assignments to `workspace_id IS NULL OR = $ws`, so an
+    // assignment made only in another workspace never puts this principal in
+    // the role's principalIds. The role exists; the membership does not.
+    const roles = [role({ principalIds: [] })];
+    expect(resolverOutcome(roles).outcome).toBe("deny");
+
+    const ready = await preflight({ principal: { id: PRINCIPAL }, roles });
+    expect(ready.ready).toBe(false);
+  });
+
+  it("shape 2 — a workspace-scoped ROLE (r4034776760)", async () => {
+    // Every org carries two system roles named Owner. Rule 7.5 grants
+    // super-user for the org-scoped one alone.
+    const roles = [role({ scopeKind: "workspace" })];
+    expect(resolverOutcome(roles).outcome).toBe("deny");
+
+    const ready = await preflight({ principal: { id: PRINCIPAL }, roles });
+    expect(ready.ready).toBe(false);
+  });
+
+  it("shape 3 — a null parent_user_id (r4035774889)", async () => {
+    // The resolver finds a human ONLY by matching the caller's user id to
+    // principals.parent_user_id. A null link is an Owner principal that no
+    // caller can ever resolve to, so fetchAuthz returns no principal at all —
+    // and the preflight refuses on the authority's own answer rather than on a
+    // clause predicting it.
+    const ready = await preflight({ principal: null, roles: [role()] });
+    expect(ready).toEqual({
+      ready: false,
+      considered: 1,
+      confirmedUserId: null,
+    });
+  });
+
+  it("shape 4 — an ORPHANED parent_user_id (r4035774889)", async () => {
+    // Points at a user that was deleted or never existed. Indistinguishable
+    // from shape 3 to the resolver, which is exactly why "IS NOT NULL" alone
+    // does not cover it: non-null is necessary, not sufficient.
+    const ready = await preflight({ principal: null, roles: [role()] });
+    expect(ready.ready).toBe(false);
+  });
+
+  it("a role merely NAMED Owner is not one, on either side", async () => {
+    const roles = [role({ isSystemDefault: false })];
+    expect(resolverOutcome(roles).outcome).toBe("deny");
+    expect(
+      (await preflight({ principal: { id: PRINCIPAL }, roles })).ready,
+    ).toBe(false);
+  });
+});
+
+describe("ownerReadiness", () => {
+  it("asks the resolver about every candidate until one confirms", async () => {
+    const asked: string[] = [];
+    const result = await ownerReadiness({
+      loadCandidates: async () => [
+        { principalId: "p1", userId: "u1" },
+        { principalId: "p2", userId: "u2" },
+        { principalId: "p3", userId: "u3" },
+      ],
+      fetchAuthzFor: async (userId) => {
+        asked.push(userId);
+        return userId === "u2"
+          ? { principal: { id: "p2" }, roles: [role({ principalIds: ["p2"] })] }
+          : { principal: { id: userId }, roles: [] };
+      },
+    });
+    expect(result).toEqual({
+      ready: true,
+      considered: 3,
+      confirmedUserId: "u2",
+    });
+    // Stops at the first confirmation: one super-user is what "not locked out"
+    // means, so u3 is never asked about.
+    expect(asked).toEqual(["u1", "u2"]);
+  });
+
+  it("refuses when the candidate query proposes nobody", async () => {
+    expect(
+      await ownerReadiness({
+        loadCandidates: async () => [],
+        fetchAuthzFor: async () => {
+          throw new Error("must not be asked");
+        },
+      }),
+    ).toEqual({ ready: false, considered: 0, confirmedUserId: null });
+  });
+
+  it("rejects a candidate the query should not have proposed", async () => {
+    // The point of the inversion. A clause missing from the SQL now costs one
+    // resolver call and a rejection, not an organisation locked out — so a
+    // fourth axis nobody has found yet is already handled.
+    const result = await ownerReadiness({
+      loadCandidates: async () => [{ principalId: PRINCIPAL, userId: USER }],
+      fetchAuthzFor: async () => ({
+        principal: { id: PRINCIPAL },
+        roles: [role({ scopeKind: "workspace" })],
+      }),
+    });
+    expect(result.ready).toBe(false);
+    expect(result.considered).toBe(1);
   });
 });
