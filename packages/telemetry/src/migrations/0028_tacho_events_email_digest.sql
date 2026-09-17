@@ -21,7 +21,12 @@
 -- digestUserEmail() in packages/tacho/src/digest.ts. The two must agree byte
 -- for byte, or a backfilled row would never join a newly written one;
 -- packages/telemetry/src/tacho-events-email-digest.test.ts pins the expected
--- digest for a known address so a change to either side fails a test.
+-- digest for a known address so a change to either side fails a test. One
+-- narrow difference: ClickHouse's trimBoth removes spaces where JavaScript's
+-- trim removes every whitespace character, so an address stored with a leading
+-- tab would backfill to a different digest than the collector would now write
+-- for it. Nothing observed has ever carried one, and a stray tab inside an
+-- OTel user.email attribute is not a case worth a second normalisation path.
 --
 -- The four statements run in order on every plane. The first re-adds the
 -- plaintext column when it is missing, because a database created from the
