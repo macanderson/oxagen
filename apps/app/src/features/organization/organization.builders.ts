@@ -73,6 +73,7 @@ export function apiKey(overrides: Partial<ApiKey> = {}): ApiKey {
     lastUsedAt: "2026-09-14T11:30:00.000Z",
     expiresAt: null,
     revokedAt: null,
+    rotatable: true,
     ...overrides,
   };
 }
@@ -140,6 +141,7 @@ export function orgSource(reads: OrgReads): {
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },
+    tools: { versions: refuse, grants: refuse, killSwitches: refuse },
   };
   return { source, calls };
 }

@@ -33,6 +33,7 @@ import {
   type PublishToolArgs,
 } from "./lib/tool-registry";
 import { makeCTX } from "./test-utils/fixtures";
+import { TOOL_NAME_MAX_LENGTH } from "@oxagen/oxagen/contracts/tool.declaration.publish";
 
 const ORG = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
 const WS = "0192d4a8-7c1e-7a00-8000-00000000ac40";
@@ -310,6 +311,53 @@ describe("import_tools", () => {
     const a = [...reg.tools.values()].find((t) => t.mcpServerId === SERVER)!;
     expect(a.versions.map((v) => v.publicId)).toEqual([fromA.tools[0]!.id]);
     expect(fromB.tools[0]!.version).toBe(1);
+  });
+
+  it("refuses a pinned tool whose name cannot be governed, and writes nothing", async () => {
+    // A `tools/list` answer is an external party's, and nothing upstream
+    // bounds its names. It matters because the imported tool is governed
+    // under `mcp.<server uuid>.<name>`, which openAssistantRun pins into the
+    // run spec's tool policy — and the spec pins EVERY materialized tool. One
+    // over-long name landing in the registry would therefore fail spec
+    // admission for every assistant turn in the workspace, naming nothing.
+    const long = "z".repeat(TOOL_NAME_MAX_LENGTH + 1);
+    const reg = memoryRegistry([
+      {
+        name: "search",
+        description: "Search",
+        inputSchema: { type: "object" },
+      },
+      { name: long, description: null, inputSchema: { type: "object" } },
+    ]);
+    const publish = vi.spyOn(reg.deps, "publish");
+
+    await expect(
+      createToolImportHandler(reg.deps)({ serverId: "mcs_github" }, ctx()),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "tool_name_too_long",
+    });
+
+    // Refused at the door: not one tool of the import landed, and no stamp
+    // claims a registry state that does not exist.
+    expect(publish).not.toHaveBeenCalled();
+    expect(reg.tools.size).toBe(0);
+    expect(reg.stamps).toEqual([]);
+  });
+
+  it("imports a name at the limit, which is the longest identity a run spec can carry", async () => {
+    // The boundary is admitted, not merely the one past it rejected: a guard
+    // that also refuses the longest legal name would be the same outage with
+    // a better error message.
+    const atLimit = `a${"b".repeat(TOOL_NAME_MAX_LENGTH - 1)}`;
+    const reg = memoryRegistry([
+      { name: atLimit, description: null, inputSchema: { type: "object" } },
+    ]);
+    const out = await createToolImportHandler(reg.deps)(
+      { serverId: "mcs_github" },
+      ctx(),
+    );
+    expect(out.tools.map((t) => t.name)).toEqual([atLimit]);
   });
 
   it("an unknown server is not_found", async () => {

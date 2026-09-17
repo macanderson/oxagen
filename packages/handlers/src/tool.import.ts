@@ -30,6 +30,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
 import { toolImport } from "@oxagen/oxagen/contracts/tool.import";
+import { TOOL_NAME_MAX_LENGTH } from "@oxagen/oxagen/contracts/tool.declaration.publish";
 import { schema, withTenantDb } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { readLatestPinnedDescriptors } from "@oxagen/agent/runtime/mcp-snapshots";
@@ -210,6 +211,34 @@ export function createToolImportHandler(
           consequenceTags: [],
           measures: {},
           effectIdPath: null,
+        });
+      }
+    }
+
+    // A pulled descriptor's name is the server's, not ours: `tools/list` is an
+    // external party's answer and nothing upstream bounds it. It matters
+    // because an imported tool is GOVERNED under `mcp.<server uuid>.<name>`,
+    // and that identity goes into the run spec's tool policy — which pins
+    // EVERY materialized tool. So a single over-long name landing in the
+    // registry does not break that tool; it fails spec admission for every
+    // assistant turn in the workspace. Refuse it at the door, where the error
+    // names the tool that caused it, rather than at the door of every turn,
+    // where it names nothing.
+    //
+    // The declarations path is already bounded by the contract; this covers
+    // both, because both arrive here.
+    for (const p of publishes) {
+      if (p.name.length > TOOL_NAME_MAX_LENGTH) {
+        throw new HandlerError({
+          // `conflict`: the write would leave the registry in a state the
+          // domain forbids — a tool nothing could name in a run spec, and so
+          // a tool no turn in this workspace could run alongside.
+          code: "conflict",
+          reason: "tool_name_too_long",
+          message:
+            `Tool name is ${p.name.length} characters; the limit is ` +
+            `${TOOL_NAME_MAX_LENGTH}. A longer name cannot be named in a ` +
+            `run's tool policy, so it could not be governed.`,
         });
       }
     }

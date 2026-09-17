@@ -1,7 +1,7 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import { inputDigest } from "@oxagen/rules";
-import { APPROVAL_RESOLVER_ROLES } from "./approval-roles";
-import { eq, and, gt, inArray, isNull, or, sql } from "drizzle-orm";
+import { notifyApprovalRequested } from "@oxagen/rules/approval-notify";
+import { eq, and, gt, isNull, or, sql } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
 import postgres from "postgres";
 import pino from "pino";
@@ -15,22 +15,14 @@ const logger = pino({
 // resolve to `expired` server-side rather than dangling forever.
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
 
-/**
- * The most people one approval notifies. `APPROVAL_RESOLVER_ROLES.workspace`
- * is Owner and Member — effectively everyone — so an unbounded fan-out writes
- * one row per member of the workspace inside the approval's transaction. A
- * 400-member workspace parks one write and holds a 400-row insert; near 8,000
- * it crosses Postgres's 65,535 bind-parameter ceiling and the approval itself
- * fails, so the person never gets the card the fan-out existed to deliver.
- *
- * Past the cap the approval is still written and still resolvable — the feed
- * is a convenience, the approval row is the record — and the truncation is
- * logged with the count so it is visible rather than silent.
- */
-export const APPROVAL_NOTIFY_MAX_RECIPIENTS = 200;
-
-/** Rows per insert statement, so one statement never approaches the ceiling. */
-export const APPROVAL_NOTIFY_CHUNK = 50;
+// The fan-out's own bounds live beside the fan-out, in @oxagen/rules: there
+// are two writers of an approval row and only one place that tells people
+// about it. Re-exported here because this module is where they were first
+// read from, and the cap is part of this module's contract with its callers.
+export {
+  APPROVAL_NOTIFY_CHUNK,
+  APPROVAL_NOTIFY_MAX_RECIPIENTS,
+} from "@oxagen/rules/approval-notify";
 
 export interface CreateApprovalArgs {
   orgId: string;
@@ -183,97 +175,23 @@ export async function createApprovalRequest(
       .returning({ id: schema.approvalRequests.id });
     if (!row) throw new Error("approval insert failed");
 
-    // MC spec §7.7 approval.requested: one feed row per person who may
-    // resolve it, written with the approval so neither exists without the other.
-    const { approvers, truncated } = await approverUserIds(
-      tx,
-      args.orgId,
-      args.workspaceId,
-    );
-    if (truncated) {
-      logger.warn(
-        {
-          orgId: args.orgId,
-          workspaceId: args.workspaceId,
-          capabilityName: args.capabilityName,
-          notified: approvers.length,
-        },
-        "approval.requested fan-out truncated: more people may resolve this approval than the cap notifies",
-      );
-    }
-    for (let i = 0; i < approvers.length; i += APPROVAL_NOTIFY_CHUNK) {
-      await tx.insert(schema.notifications).values(
-        approvers.slice(i, i + APPROVAL_NOTIFY_CHUNK).map((userId) => ({
-          orgId: args.orgId,
-          workspaceId: args.workspaceId,
-          userId,
-          kind: "approval" as const,
-          event: "approval.requested" as const,
-          title: `Approval requested: ${args.capabilityName}`,
-          body: `Risk ${args.riskLevel}. Expires ${expiresAt.toISOString()}.`,
-          deepLink: null,
-        })),
-      );
-    }
+    // MC spec §7.7 approval.requested, written with the approval so neither
+    // exists without the other. Shared with the mandate gate's own insert,
+    // which parks a call when an `alwaysHumanFor` or `humanAbove` rule fires:
+    // the fan-out belongs to the approval row, not to one of its writers.
+    await notifyApprovalRequested(tx, {
+      orgId: args.orgId,
+      workspaceId: args.workspaceId,
+      capabilityName: args.capabilityName,
+      riskLevel: args.riskLevel,
+      expiresAt,
+    });
     return row.id;
   });
   return { approvalId };
 }
 
 type Tx = Parameters<Parameters<typeof withTenantDb>[0]>[0];
-
-/**
- * The people resolve_approval admits, resolved the way its gate resolves
- * them (`assertOrgRole` in @oxagen/iam): an active human principal in the
- * org holding an undeleted, unexpired assignment of an admitted role, either
- * org-wide (`workspace_id IS NULL`) or on this workspace.
- */
-async function approverUserIds(
-  tx: Tx,
-  orgId: string,
-  workspaceId: string,
-): Promise<{ approvers: string[]; truncated: boolean }> {
-  const p = schema.principals;
-  const pra = schema.principalRoleAssignments;
-  const roles = schema.roles;
-  const rows = await tx
-    .select({ userId: p.parentUserId })
-    .from(p)
-    .innerJoin(pra, eq(pra.principalId, p.id))
-    .innerJoin(roles, eq(roles.id, pra.roleId))
-    .where(
-      and(
-        eq(p.orgId, orgId),
-        eq(p.kind, "human"),
-        eq(p.status, "active"),
-        eq(pra.orgId, orgId),
-        isNull(pra.deletedAt),
-        or(isNull(pra.expiresAt), gt(pra.expiresAt, new Date())),
-        or(
-          and(
-            eq(roles.scopeKind, "org"),
-            isNull(pra.workspaceId),
-            inArray(roles.name, APPROVAL_RESOLVER_ROLES.org),
-          ),
-          and(
-            eq(roles.scopeKind, "workspace"),
-            eq(pra.workspaceId, workspaceId),
-            inArray(roles.name, APPROVAL_RESOLVER_ROLES.workspace),
-          ),
-        ),
-      ),
-    )
-    // One person can hold several admitted roles, so rows outnumber people;
-    // read one page past the cap on distinct users rather than guessing.
-    .limit((APPROVAL_NOTIFY_MAX_RECIPIENTS + 1) * 4);
-  const distinct = [
-    ...new Set(rows.flatMap((r) => (r.userId === null ? [] : [r.userId]))),
-  ];
-  return {
-    approvers: distinct.slice(0, APPROVAL_NOTIFY_MAX_RECIPIENTS),
-    truncated: distinct.length > APPROVAL_NOTIFY_MAX_RECIPIENTS,
-  };
-}
 
 /**
  * An unresolved approval already standing for this exact parked call, if one

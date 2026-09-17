@@ -27,6 +27,7 @@ const ctx = unsafeMint(WsCtx, {
   workspaceId: "7b000000-0000-4000-8000-000000000001",
   wsSlug: "core-platform",
   wsName: "Core platform",
+  wsRole: "member",
 });
 
 const TODAY = new Date("2026-09-15T12:00:00.000Z");
@@ -66,6 +67,7 @@ const source: DataSource = {
   audit: { events: refuse, exportEvents: refuse },
   skills: { inventory: refuse },
   steering: { records: refuse, proposals: refuse, contextPr: refuse },
+  tools: { versions: refuse, grants: refuse, killSwitches: refuse },
 };
 
 function spend(over: Partial<FleetSpend> = {}): Read<FleetSpend> {

@@ -313,6 +313,10 @@ import {
 import { connectMcp, listMcpToolDescriptors } from "../dispatch/mcp-client";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
+import {
+  EXTERNAL_TOOL_SEGMENT_MAX,
+  isAdmissibleToolIdentity,
+} from "@oxagen/run-ledger";
 // Note: the @oxagen/database `db` is driven via `dbMocks.db` (hoisted above) —
 // we do not import the banned raw `db` symbol directly into the test.
 
@@ -855,6 +859,59 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
       serverAllowlist: allowlist,
       killSwitches: expect.objectContaining({ check: expect.any(Function) }),
     });
+  });
+
+  it("drops an external tool whose governed identity a run spec cannot carry, and keeps its siblings", async () => {
+    // A contributor's names are a third party's: an MCP server's `tools/list`
+    // or a `.oxagen/settings.json` server key. `openAssistantRun` pins EVERY
+    // materialized tool into `tool_policy.allowlist`, so one identity the
+    // spec refuses does not fail that tool — it fails admission, and with it
+    // every assistant turn in the workspace, including turns that would never
+    // have called it. One tool missing from the belt is the cheap failure.
+    const serverId = "0192d4a8-7c1e-7a00-8000-0000000000aa";
+    const ok = `mcp.${serverId}.list_pull_requests`;
+    const overLong = `mcp.${serverId}.${"z".repeat(EXTERNAL_TOOL_SEGMENT_MAX + 1)}`;
+    // The premise, not assumed: the short one is carryable and the long one
+    // is not. Without this the test would pass on both being dropped.
+    expect(isAdmissibleToolIdentity(ok)).toBe(true);
+    expect(isAdmissibleToolIdentity(overLong)).toBe(false);
+
+    const raw = (realName: string, toolName: string) => ({
+      realName,
+      description: "d",
+      execute: async () => "ok",
+      externalServerId: serverId,
+      externalServerName: "GitHub",
+      externalToolName: toolName,
+    });
+    vi.doMock("./plugin-type", async (importOriginal) => {
+      const real = await importOriginal<typeof import("./plugin-type")>();
+      return {
+        ...real,
+        getPluginTypeContributors: vi.fn(() => [
+          {
+            type: "mcp_server" as const,
+            contributeTools: vi.fn(async () => [
+              raw(ok, "list_pull_requests"),
+              raw(overLong, "z".repeat(EXTERNAL_TOOL_SEGMENT_MAX + 1)),
+            ]),
+          },
+        ]),
+      };
+    });
+    vi.resetModules();
+    const { materializeTools: mt } = await import("./materialize-tools");
+
+    const { nameMap } = await mt(CTX, {});
+    const canonical = Object.values(nameMap);
+
+    expect(canonical).toContain(ok);
+    expect(canonical).not.toContain(overLong);
+    // Dropped, never truncated: a truncated identity is a different tool as
+    // far as governance is concerned, and two long names could collide on one.
+    expect(canonical.some((c) => c.startsWith(`mcp.${serverId}.z`))).toBe(
+      false,
+    );
   });
 });
 

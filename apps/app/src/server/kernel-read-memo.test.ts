@@ -87,6 +87,7 @@ const wsCtx = unsafeMint(WsCtx, {
   workspaceId: WS_ID,
   wsSlug: "core",
   wsName: "Core",
+  wsRole: "member",
 });
 const pretenantCtx = unsafeMint(PretenantCtx, { userId: USER_ID });
 

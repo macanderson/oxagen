@@ -47,6 +47,7 @@ import {
   type DeclaredTool,
 } from "./call-facts";
 import { logger } from "./logger";
+import { notifyApprovalRequested } from "./approval-notify";
 import { loadRuleSetIn } from "./rule-store";
 import {
   exceeds,
@@ -716,6 +717,19 @@ export async function decideMandate(
         })
         .returning({ publicId: schema.approvalRequests.publicId });
       if (!row) throw new Error("mandate: approval insert returned no row");
+      // MC spec §7.7. Inside this transaction, so the approval and the people
+      // told about it land together. A mandate parks a call precisely because
+      // a rule decided a person must see it, so this is the fan-out that
+      // matters most — and it was the one that did not run, because the
+      // fan-out was attached to the runtime's createApprovalRequest instead
+      // of to the row it describes.
+      await notifyApprovalRequested(tx, {
+        orgId: args.orgId,
+        workspaceId: args.workspaceId,
+        capabilityName: args.capability,
+        riskLevel: tool.riskGrade,
+        expiresAt: new Date(at.getTime() + MANDATE_APPROVAL_TTL_MS),
+      });
       return { kind: "pending", approvalPublicId: row.publicId, mandate };
     }
 

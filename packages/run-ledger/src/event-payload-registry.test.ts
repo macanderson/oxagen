@@ -324,6 +324,44 @@ describe("validateInlineEventPayload", () => {
     );
   });
 
+  it("accepts the write-ahead model intention and keeps it unreadable as a call", () => {
+    const started = validateInlineEventPayload("model.engine_call_started", {
+      engine_seq: 7,
+      model_call_id: "req_1",
+      role: "worker",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+    });
+    expect(started.stage).toBe("model");
+    expect(retentionContentClassOf("model.engine_call_started")).toBe(
+      "model_call",
+    );
+    // The intention states no outcome and no token counts. A reader that
+    // mistook one for a completed call would report a charge that was never
+    // made, so the fields it would test are refused outright rather than
+    // merely left unset.
+    expect(() =>
+      validateInlineEventPayload("model.engine_call_started", {
+        engine_seq: 7,
+        model_call_id: "req_1",
+        role: "worker",
+        provider: "oxagen",
+        model: "m",
+        outcome: "completed",
+      }),
+    ).toThrow(RunSpecValidationError);
+    expect(() =>
+      validateInlineEventPayload("model.engine_call_started", {
+        engine_seq: 7,
+        model_call_id: "req_1",
+        role: "worker",
+        provider: "oxagen",
+        model: "m",
+        input_tokens: 120,
+      }),
+    ).toThrow(RunSpecValidationError);
+  });
+
   it("rejects an engine receipt that carries prose or an unknown key", () => {
     expect(() =>
       validateInlineEventPayload("tool.engine_call_completed", {

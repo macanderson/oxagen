@@ -26,6 +26,7 @@ import {
   emitMcpRuleAudit,
 } from "./mcp-rbac";
 import { mcpServerToolKey } from "@oxagen/oxagen/iam";
+import { isAdmissibleToolIdentity } from "@oxagen/run-ledger";
 import {
   getPluginTypeContributors,
   type ContributedRawTool,
@@ -704,6 +705,32 @@ export async function materializeTools(
       // Fail closed (mirrors the capability loop above): an agentRun without
       // its resolution must never expose external tools either.
       if (agentRunFailClosed) continue;
+      // An identity a run spec cannot carry is dropped here rather than
+      // taken into the turn. `openAssistantRun` pins EVERY materialized tool
+      // into `tool_policy.allowlist`, so a single inadmissible identity does
+      // not fail that tool — it fails spec admission, and with it every
+      // assistant turn in the workspace, including the ones that would never
+      // have called it. The contributors' names are third parties' (an MCP
+      // server's `tools/list`, a `.oxagen/settings.json` server name), and a
+      // registry may still hold rows from before the import guard bounded
+      // them, so this is the point where the turn stops trusting the length.
+      //
+      // Dropped, not truncated: a truncated identity is a DIFFERENT tool as
+      // far as governance is concerned, and two long names could truncate to
+      // one. Losing a tool from the belt is recoverable and loud; two tools
+      // sharing a governed identity is not.
+      if (!isAdmissibleToolIdentity(capturedKey)) {
+        logger.error(
+          {
+            capability: capturedKey,
+            length: capturedKey.length,
+            pluginType: contributor.type,
+            serverTool: mcpServerToolKey(capturedServerName, capturedToolName),
+          },
+          "external tool left out of the turn: its governed identity is not one a run spec can carry",
+        );
+        continue;
+      }
       // DENY tools are never registered — the model cannot see or call them.
       // The same decision `get_agent_toolbelt` prints (toolbelt.ts): a deny
       // rule, or an ask rule the agent principal's standing consent has

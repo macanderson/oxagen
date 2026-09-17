@@ -44,6 +44,7 @@ type StoredKey = {
   lastUsedAt: Date | null;
   expiresAt: Date | null;
   deletedAt: Date | null;
+  scope: Record<string, unknown>;
 };
 
 const LIVE: StoredKey = {
@@ -55,6 +56,7 @@ const LIVE: StoredKey = {
   lastUsedAt: new Date("2026-09-13T11:30:00.000Z"),
   expiresAt: null,
   deletedAt: null,
+  scope: { env: "prod" },
 };
 
 const REVOKED: StoredKey = {
@@ -66,6 +68,23 @@ const REVOKED: StoredKey = {
   lastUsedAt: null,
   expiresAt: new Date("2026-12-31T00:00:00.000Z"),
   deletedAt: new Date("2026-09-10T08:00:00.000Z"),
+  scope: {},
+};
+
+/** A key an enrollment owns: rotate_api_key refuses to replace it. */
+const ENROLLED: StoredKey = {
+  publicId: "aky_host",
+  name: "build-01 host key",
+  keyPrefix: "ox_tachotacho",
+  keyHash: "sha256-of-the-host-key",
+  createdAt: new Date("2026-09-05T09:00:00.000Z"),
+  lastUsedAt: null,
+  expiresAt: null,
+  deletedAt: null,
+  scope: {
+    purpose: "tacho_host_v1",
+    host_enrollment_id: "tch_0123456789abcdefghijkl",
+  },
 };
 
 // ── tx doubles ────────────────────────────────────────────────────────────────
@@ -109,11 +128,35 @@ function makeRoleResolutionTx(
  * test proves which columns the handler asked for, and captures the
  * projection so a test can assert key_hash is not among them.
  */
-function makeListTx(stored: StoredKey[], seen: { projection?: object }) {
+function makeListTx(
+  stored: StoredKey[],
+  seen: { projection?: object },
+  // The workspace the keys live in. `rotatable` is not answerable without it —
+  // `rotate_api_key` refuses an archived workspace whatever the key — so the
+  // handler reads it beside the keys and the mock has to serve it. Null stands
+  // for a workspace row that is not there, which fails closed.
+  workspace: { name: string; archivedAt: Date | null } | null = {
+    name: "Core platform",
+    archivedAt: null,
+  },
+) {
+  let selects = 0;
   return {
     select: vi
       .fn()
       .mockImplementation((projection: Record<string, unknown>) => {
+        selects++;
+        // Second select is the workspace, and it ends in `limit` rather than
+        // `orderBy` — one row, not a roster.
+        if (selects > 1) {
+          return {
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue(workspace ? [workspace] : []),
+              }),
+            }),
+          };
+        }
         seen.projection = projection;
         const columnNames = Object.fromEntries(
           Object.entries(projection).map(([out, col]) => [
@@ -144,6 +187,10 @@ function setup(
   roleName: string | null,
   stored: StoredKey[] = [LIVE, REVOKED],
   principalId: string | null = "principal-uuid-1",
+  workspace: { name: string; archivedAt: Date | null } | null = {
+    name: "Core platform",
+    archivedAt: null,
+  },
 ) {
   const seen: { projection?: object } = {};
   let callCount = 0;
@@ -152,7 +199,7 @@ function setup(
       callCount++;
       if (callCount === 1)
         return fn(makeRoleResolutionTx(principalId, roleName));
-      return fn(makeListTx(stored, seen));
+      return fn(makeListTx(stored, seen, workspace));
     },
   );
   return seen;
@@ -235,6 +282,7 @@ describe("list_api_keys — read", () => {
           lastUsedAt: "2026-09-13T11:30:00.000Z",
           expiresAt: null,
           revokedAt: null,
+          rotatable: true,
         },
         {
           publicId: "aky_old",
@@ -244,9 +292,84 @@ describe("list_api_keys — read", () => {
           lastUsedAt: null,
           expiresAt: "2026-12-31T00:00:00.000Z",
           revokedAt: "2026-09-10T08:00:00.000Z",
+          rotatable: false,
         },
       ],
     });
+  });
+
+  it("reports a key an enrollment owns as not rotatable, the same answer rotate_api_key gives", async () => {
+    // Both read lib/api-key-rotatable.ts, so a surface cannot offer a rotation
+    // the handler is certain to refuse.
+    setup("Owner", [LIVE, ENROLLED]);
+    const result = await apiKeyListHandler({}, TEST_CTX);
+    expect(result.items.map((i) => [i.publicId, i.rotatable])).toEqual([
+      ["aky_live", true],
+      ["aky_host", false],
+    ]);
+  });
+
+  it("reports an expired key as not rotatable, the same answer rotate_api_key gives", async () => {
+    // Both read lib/api-key-rotatable.ts. rotate_api_key copies the old
+    // expiry onto the replacement, so an expired key cannot be rotated and the
+    // roster must not say it can.
+    const EXPIRED: StoredKey = {
+      ...LIVE,
+      publicId: "aky_expired",
+      expiresAt: new Date("2020-01-01T00:00:00.000Z"),
+    };
+    setup("Owner", [LIVE, EXPIRED]);
+    const result = await apiKeyListHandler({}, TEST_CTX);
+    expect(result.items.map((i) => [i.publicId, i.rotatable])).toEqual([
+      ["aky_live", true],
+      ["aky_expired", false],
+    ]);
+  });
+
+  it("reports a revoked key as not rotatable, because rotate_api_key answers not-found for one", async () => {
+    // This read deliberately includes revoked rows so the roster can show them;
+    // without revocation in the shared predicate the read model advertised a
+    // rotation that could only fail.
+    setup("Owner", [LIVE, REVOKED]);
+    const result = await apiKeyListHandler({}, TEST_CTX);
+    expect(result.items.map((i) => [i.publicId, i.rotatable])).toEqual([
+      ["aky_live", true],
+      ["aky_old", false],
+    ]);
+  });
+
+  it("reports a live key in an ARCHIVED workspace as not rotatable", async () => {
+    // The mirror of the archived-workspace finding on the page. `key-row.tsx`
+    // withholds Rotate because it is handed a separate `archived` prop, so the
+    // app was right by accident of having a second source of truth. The API and
+    // MCP have only `rotatable`, and it said true for a key that
+    // `rotate_api_key` refuses unconditionally with conflict /
+    // workspace_archived — a read model advertising an operation guaranteed to
+    // fail.
+    //
+    // Archival is a property of the workspace, not the key, so nothing about
+    // these rows changes: the same key is rotatable in a live workspace and not
+    // in an archived one. That is why the fixture differs only in the
+    // workspace.
+    setup("Owner", [LIVE], "principal-uuid-1", {
+      name: "Sunset",
+      archivedAt: new Date("2026-09-01T00:00:00.000Z"),
+    });
+    const result = await apiKeyListHandler({}, TEST_CTX);
+    expect(result.items.map((i) => [i.publicId, i.rotatable])).toEqual([
+      ["aky_live", false],
+    ]);
+  });
+
+  it("reports keys as not rotatable when the workspace row is missing (fails closed)", async () => {
+    // rotate_api_key answers not_found for a workspace that is not there, so
+    // the honest `rotatable` is false. Failing closed here means the roster
+    // never offers a rotation the handler will refuse.
+    setup("Owner", [LIVE], "principal-uuid-1", null);
+    const result = await apiKeyListHandler({}, TEST_CTX);
+    expect(result.items.map((i) => [i.publicId, i.rotatable])).toEqual([
+      ["aky_live", false],
+    ]);
   });
 
   it("returns the same shape for an Admin", async () => {

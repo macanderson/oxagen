@@ -851,6 +851,65 @@ describe("openAssistantRun", () => {
     });
   });
 
+  it("appends the model intention as its own event and never counts it as a call", async () => {
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      surface: "chat",
+      instruction: "hi",
+      maxSteps: 4,
+      toolAllowlist: ["recall_memory"],
+      store: ledger.store,
+    });
+
+    await recorder.modelCallStarted({
+      seq: 1,
+      requestId: "prov-1-0",
+      role: "worker",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+    });
+    await recorder.modelCall({
+      seq: 1,
+      requestId: "prov-1-0",
+      role: "worker",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4.6",
+      outcome: "completed",
+    });
+
+    // Two events, the intention first, both joinable on the frame and the
+    // request id — that join is the whole point, and it is also what shows a
+    // gateway substitution: the intention names the configured model, the
+    // receipt names the one the provider served.
+    expect(
+      ledger.batches.map((b) => [
+        b.events[0]!.attemptSeq,
+        b.events[0]!.eventType,
+      ]),
+    ).toEqual([
+      [1, "admission.run_admitted"],
+      [2, "model.engine_call_started"],
+      [3, "model.engine_call_completed"],
+    ]);
+    expect(ledger.batches[1]!.events[0]!.payload).toEqual({
+      engine_seq: 1,
+      model_call_id: "prov-1-0",
+      role: "worker",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+    });
+
+    // The intention is NOT a receipt. `stepsFromReceipts` turns that array
+    // into the turn's agent_executions steps, so counting it there would
+    // report every completion of the turn twice.
+    expect(recorder.receipts.map((r) => [r.kind, r.seq])).toEqual([
+      ["model", 1],
+    ]);
+  });
+
   // seal() reads the chain once and then takes a seq. An append that arrived
   // during that await would chain onto the older value and could take a seq at
   // or past the terminal event's, which the store refuses. No caller reaches it

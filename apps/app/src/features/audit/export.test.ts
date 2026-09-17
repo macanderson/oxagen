@@ -59,6 +59,7 @@ const source: DataSource = {
   onboarding: { state: refuse, firstFrame: refuse },
   skills: { inventory: refuse },
   steering: { records: refuse, proposals: refuse, contextPr: refuse },
+  tools: { versions: refuse, grants: refuse, killSwitches: refuse },
 };
 const deps: AuditExportDeps = { resolveViewer, dataSource: () => source };
 

@@ -67,7 +67,7 @@ export function agentDetail(overrides: DetailOverrides = {}): AgentDetail {
         name: "release-bot run key",
         prefix: "oxa_ag_7f",
         createdAt: "2026-09-01T10:00:00.000Z",
-        expiresAt: "2027-03-01T10:00:00.000Z",
+        expiresAt: "2099-03-01T10:00:00.000Z",
         lastUsedAt: null,
         revokedAt: null,
       },
@@ -93,7 +93,7 @@ export function agentDetail(overrides: DetailOverrides = {}): AgentDetail {
         hooksOk: null,
         bundleVersionServed: null,
         lastSeenAt: null,
-        expiresAt: "2027-09-01T10:00:00.000Z",
+        expiresAt: "2099-09-01T10:00:00.000Z",
         revokedAt: null,
       },
     ],
@@ -261,6 +261,7 @@ export function agentsSource(reads: AgentReads) {
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },
+    tools: { versions: refuse, grants: refuse, killSwitches: refuse },
   };
   return { source, calls };
 }

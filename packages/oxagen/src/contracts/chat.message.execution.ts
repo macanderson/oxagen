@@ -36,6 +36,22 @@ export const chatMessageExecution = registerCapability({
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
+  // Bookkeeping, never a metered turn. This writes the execution row and the
+  // lineage projection AFTER the work it describes has already happened, so
+  // it spends no model tokens of its own.
+  //
+  // It is not a theoretical tag. The in-app agent's turn runs under
+  // `runOutsideGovernedAction` so that each tool call the model asks for is
+  // its own top-level governed action (ADR-053 §1) — and the turn's own
+  // `recordTurnExecution` invoke (assistant-turn.ts) sits inside that same
+  // exited frame, so without this it was top-level too. That charged a
+  // governed action for the platform's own audit write on every successful
+  // reply, and, worse, put the credit and budget gates in front of it: an org
+  // at zero balance had the gate refuse the recording, which is the one path
+  // that makes `list_executions` and `get_execution_trace` answer "nothing
+  // happened" for a turn that did happen. The audit trail must not be the
+  // thing that fails when the balance does.
+  noBillingGate: true,
   sensitivity: "low",
   defaultEffect: "allow",
   defaultRoles: {
