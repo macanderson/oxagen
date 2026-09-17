@@ -304,8 +304,8 @@ The charge has both. `getChargeMetadata` reads it once per dispute, outside any
 transaction, and the result serves both purposes: `oxagen_kind` says whether to
 park, and `org_id` is the organisation — for a usage-credit dispute as much as a
 GAU one, which is what closes #3189's root cause. A charge that cannot be read
-degrades to `{}` rather than throwing, because a webhook retried for a fault
-that retrying cannot fix is worse than a logged fatal.
+degrades to `{}` only when retrying genuinely cannot change the answer; §9
+settles which failures those are.
 
 ### 9. A charge read that fails is not a charge read that answered
 
@@ -316,16 +316,51 @@ nothing — so the dispute was dropped and the webhook marked processed for ever
 while a later checkout retry handed out every unit. That is §5's defect exactly,
 reached through a failed read instead of a missing field.
 
-The distinction is between Stripe *answering* and Stripe *failing to answer*.
-`StripeInvalidRequestError` (the id is wrong or the resource is gone) and
-`StripePermissionError` are answers: retrying returns the same thing, and `{}`
-is correct. Everything else — including an error carrying no Stripe type at all,
-such as a transport timeout — is the absence of an answer and propagates.
+The first attempt at that distinction asked whether Stripe had *answered*, and
+put `StripePermissionError` on the answering side. That was wrong, and wrong in
+the expensive direction. The test is not "did Stripe answer" but **"can this
+answer change on its own?"** — because what the caller needs to know is whether
+the redelivery will say anything different.
+
+- A charge that does not exist will not exist on the redelivery. Nothing anyone
+  does changes it. Definitive.
+- A key that lacks `charges:read` can be granted it by an operator five minutes
+  later, and the identical call then returns real metadata. That is a fact about
+  our configuration, not about the charge. Transient.
+
+Those are different facts, and the first classifier mapped them to one branch.
+So the definitive branch is now exactly one condition:
+`StripeInvalidRequestError` **with `code === "resource_missing"`** — Stripe
+looked, and there is no such charge. Every other invalid request (a bad expand,
+an API version we no longer send, a malformed id) is our own defect, correctable
+by a deploy, and while it lasted it would finalise *every* dispute that reached
+it. Losing every disputed unit systematically is far worse than a redelivery.
+This also matches `deleteOrVoidDraftInvoice`, which has keyed on
+`resource_missing` rather than on error type since it was written.
+
+Everything else propagates: permission and authentication faults, rate limits,
+connection errors, 5xx, and an error carrying no Stripe type at all, such as a
+transport timeout.
+
+The fork is written as a **total mapping** over `Stripe.errors.StripeError["type"]`
+— the SDK's own union — closed with `satisfies`, so an SDK upgrade that adds an
+error type is a compile error until someone classifies it. A list of two would
+have been cheap to extend and silent when extended wrongly. A runtime fallback
+survives alongside it, because the caught value arrives as `unknown` and a type
+string this build has never heard of is precisely the case the compiler cannot
+reach; that fallback is `retry`.
 
 Throwing *is* the retry. `processStripeEvent` re-dispatches only an event whose
-handler threw, and Stripe's own backoff is a better retry loop than one held
-open inside a webhook handler. Unknown errors default to transient, because an
-extra redelivery costs far less than a dropped dispute.
+handler threw: it records the error without setting `processed_at`, rethrows,
+the route answers non-2xx, and Stripe redelivers — at which point the event is
+not a duplicate and the dispute parks. Stripe's own backoff is a better retry
+loop than one held open inside a webhook handler.
+
+The two costs are not symmetric, and that asymmetry decides every doubtful case.
+Wrongly retrying costs a redelivery. Wrongly finalising costs the units: no
+metadata means no organisation, so the reversal is not parked, the handler
+returns, the event is marked processed for ever, and the retried checkout grants
+every disputed unit. Unknown therefore resolves to retry, never to definitive.
 
 This also repairs §7's invariant. The charge read happens **outside** the
 advisory lock, and its result decides whether to park — so the guarantee that
