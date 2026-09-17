@@ -52,7 +52,10 @@ vi.mock("@oxagen/database", () => {
         : Promise.reject(dbState.error);
     return self;
   };
-  return {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
     withSystemDb: vi.fn((fn: (tx: unknown) => unknown) =>
       fn({ select: () => chain() }),
     ),
@@ -71,6 +74,7 @@ vi.mock("@oxagen/database", () => {
       },
     },
   };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 import { DeveloperTokensBody } from "./tokens-body";

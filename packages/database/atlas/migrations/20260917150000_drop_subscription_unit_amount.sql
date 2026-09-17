@@ -1,6 +1,6 @@
 -- Drop billing.subscriptions.unit_amount_cents.
 --
--- 20260917120000 added it so a plan change could compare what a grandfathered
+-- 20260917121000 added it so a plan change could compare what a grandfathered
 -- subscriber pays against the target plan, rather than reading the catalogue
 -- row a reprice had moved out from under them. That was a closer stand-in for
 -- the money than the plan row, and still a stand-in: the column held

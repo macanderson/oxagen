@@ -21,7 +21,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isHandlerError } from "@oxagen/oxagen";
 
 const mocks = vi.hoisted(() => ({
-  withTenantDb: vi.fn(),
+  withOrgDb: vi.fn(),
   gt: vi.fn((col: unknown, val: unknown) => ({ __gt: [col, val] })),
   isNull: vi.fn((col: unknown) => ({ __isNull: col })),
   eq: vi.fn((col: unknown, val: unknown) => ({ __eq: [col, val] })),
@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...real, withTenantDb: mocks.withTenantDb };
+  return { ...real, withOrgDb: mocks.withOrgDb };
 });
 
 // Capture the expiry and scope predicates without depending on Drizzle SQL
@@ -98,7 +98,7 @@ function stubRoleResolution(
   roleName: string | string[] | null,
   workspaceRoleName: string | string[] | null = null,
 ) {
-  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+  mocks.withOrgDb.mockImplementation((fn: (tx: unknown) => unknown) =>
     Promise.resolve(fn(makeRoleTx(principalId, roleName, workspaceRoleName))),
   );
 }
@@ -172,7 +172,7 @@ describe("assertOrgRole", () => {
     await expect(
       assertOrgRole({ orgId: "org_1", userId: null }, OWNER_ADMIN),
     ).rejects.toSatisfy(forbidden("no_principal"));
-    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    expect(mocks.withOrgDb).not.toHaveBeenCalled();
   });
 
   it("refuses an API-key call the same way: a key holds no org role here", async () => {
@@ -181,7 +181,7 @@ describe("assertOrgRole", () => {
     await expect(assertOrgRole(ctx, OWNER_ADMIN)).rejects.toSatisfy(
       forbidden("no_principal"),
     );
-    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    expect(mocks.withOrgDb).not.toHaveBeenCalled();
   });
 
   it("refuses an actor with no active principal in the org", async () => {
@@ -347,7 +347,7 @@ describe("assertOrgRole with a workspace requirement", () => {
     await expect(
       assertOrgRole({ ...IN_WS, userId: null }, APPROVER),
     ).rejects.toSatisfy(forbidden("no_principal"));
-    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    expect(mocks.withOrgDb).not.toHaveBeenCalled();
   });
 });
 
@@ -358,7 +358,7 @@ describe("resolveActingUserId", () => {
 
   /** Answers the api_keys lookup with the given creator, or no row. */
   function stubKeyLookup(createdById: string | null) {
-    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+    mocks.withOrgDb.mockImplementation((fn: (tx: unknown) => unknown) =>
       Promise.resolve(
         fn({
           select: () => ({
@@ -382,7 +382,7 @@ describe("resolveActingUserId", () => {
     await expect(
       resolveActingUserId({ orgId: "org_1", userId: "user_1", apiKeyId: null }),
     ).resolves.toBe("user_1");
-    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    expect(mocks.withOrgDb).not.toHaveBeenCalled();
   });
 
   it("returns an API key's creator, reading the live key of this org by id", async () => {
@@ -406,6 +406,6 @@ describe("resolveActingUserId", () => {
     await expect(
       resolveActingUserId({ orgId: "org_1", userId: null, apiKeyId: null }),
     ).resolves.toBeNull();
-    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    expect(mocks.withOrgDb).not.toHaveBeenCalled();
   });
 });

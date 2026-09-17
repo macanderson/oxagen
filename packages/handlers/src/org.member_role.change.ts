@@ -17,7 +17,7 @@
 
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberRoleChange } from "@oxagen/oxagen/contracts/org.member_role.change";
-import { schema, withTenantDb, type Tx } from "@oxagen/database";
+import { schema, withOrgDb, type Tx } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq, isNull } from "drizzle-orm";
 import { resolveMemberUserId } from "./lib/org-member";
@@ -107,16 +107,33 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
 
   const actorId = ctx.userId ?? ctx.apiKeyId ?? "system";
 
-  // ── Scoped reads + mutation (single tenant-scoped transaction) ────────────────
-  // withTenantDb opens one RLS-scoped transaction for the current org. The actor
-  // role gate, the IDOR and last-owner guards, plus the role swap all run inside
-  // it so they are atomic and RLS-policied; a guard throw rolls back and
-  // propagates its HandlerError. Resolving the actor role inside this same transaction
-  // (rather than in a prior, separate one) closes a TOCTOU window: a concurrent
-  // demotion of the actor between an earlier check and the write could otherwise
-  // let a now-unauthorized actor complete the change.
+  // ── Scoped reads + mutation (single org-wide transaction) ────────────────────
+  // withOrgDb opens one RLS-scoped transaction ACROSS the organisation's
+  // workspaces (ADR-086). Changing a member's ORG role is an organisation-level
+  // act and the app invokes it with the org-only workspace sentinel, so
+  // `withTenantDb` would now refuse every statement here outright:
+  // `iam.principals` and `iam.principal_role_assignments` are
+  // `workspace_nullable`, and their policies name the workspace GUC. Before the
+  // refusal the same reads were narrowed instead — which happened to be right,
+  // because every predicate below already pins `workspace_id IS NULL`, and that
+  // pin is what actually says "the org-wide assignment" rather than RLS.
+  //
+  // The INSERT and UPDATE stay correct under the unchanged WITH CHECK: the rows
+  // this handler writes carry `workspace_id` NULL, which `workspace_nullable`
+  // admits without consulting the workspace GUC. A row naming a workspace would
+  // be refused here, which is right — this capability does not write one.
+  //
+  // `withOrgDb` resolves the same data plane `withTenantDb` would, so the read
+  // does not change database (ADR-074, coverage gap 4).
+  //
+  // The actor role gate, the IDOR and last-owner guards, plus the role swap all
+  // run inside it so they are atomic and RLS-policied; a guard throw rolls back
+  // and propagates its HandlerError. Resolving the actor role inside this same
+  // transaction (rather than in a prior, separate one) closes a TOCTOU window: a
+  // concurrent demotion of the actor between an earlier check and the write
+  // could otherwise let a now-unauthorized actor complete the change.
   // Returns the target's previous role for the audit event below.
-  const previousRole = await withTenantDb(async (tx) => {
+  const previousRole = await withOrgDb(async (tx) => {
     // ── Actor role gate (IAM, not legacy role string) ──────────────────────────
     const { roleName: actorRole } = await resolveActorPrincipalAndRole(
       tx,
