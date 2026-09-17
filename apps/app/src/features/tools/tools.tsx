@@ -28,6 +28,8 @@ import { parseToolsView, type ToolsAt, type ToolsView } from "./view";
  * An org Owner or Admin: exactly what `set_tool_classification` and
  * `set_kill_switch` declare (both grant no workspace role at all), so hiding
  * their controls from anyone else hides nothing the kernel would have allowed.
+ * Each of those handlers asserts the same pair itself, on every org tier, and
+ * INV-29 pins the assertion — see the note on `canImportTools`.
  */
 function canAdministerOrg(ctx: WsCtx): boolean {
   return ctx.orgRole === "owner" || ctx.orgRole === "admin";
@@ -42,9 +44,17 @@ function canAdministerOrg(ctx: WsCtx): boolean {
  * holding org `member` was offered no control the kernel would have accepted
  * (#3143).
  *
- * Neither role here is the gate, and the two halves of this one are not equally
- * trustworthy. `orgRole` and `wsRole` come from the membership tables
- * (`org_users.role`, `workspace.workspace_users.role`); `assertOrgRole` reads
+ * Neither role here is the gate. The gate is `assertOrgRole` in
+ * `packages/handlers/src/tool.import.ts`, which runs on every org tier — the
+ * kernel's IAM check fast-paths a non-enterprise org to an unconditional allow
+ * for a human principal (`packages/iam/src/check-iam.ts`), so the handler's own
+ * assertion is what refuses, and INV-29 (`packages/handlers/src/
+ * role-check.test.ts`) pins that it stays there. This gate decides which
+ * control a person is shown, never whether the write lands.
+ *
+ * The two halves of it are not equally trustworthy. `orgRole` and `wsRole` come
+ * from the membership tables (`org_users.role`,
+ * `workspace.workspace_users.role`); `assertOrgRole` reads
  * `iam.principal_role_assignments` for a principal of kind `human`. The org
  * side agrees by construction — every path that writes `org_users.role` writes
  * the matching IAM assignment in the same transaction (`org.create.ts`,
