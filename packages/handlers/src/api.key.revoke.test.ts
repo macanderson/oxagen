@@ -300,7 +300,22 @@ describe("api.key.revoke handler — reserved server-owned purposes", () => {
   const RESERVED: [string, RegExp][] = [
     ["tacho_host_v1", /revoke_tacho_enrollment/],
     ["agent_credential_v1", /rotate_agent_credential|retire_agent/],
-    ["stella_operational_telemetry_v1", /operator revocation/],
+  ];
+
+  /**
+   * One entry per purpose that MUST stay revocable, with why. These are the
+   * cases that constrain the refusal set; the RESERVED cases above only confirm
+   * whatever set they are handed.
+   */
+  const MUST_STAY_REVOCABLE: [string, string][] = [
+    [
+      "cli_session_v1",
+      "oxagen login only mints another key and oxagen logout is local-only, so refusing leaves remove_org_member — which also strips org access — as the only revocation",
+    ],
+    [
+      "stella_operational_telemetry_v1",
+      "no Stella revocation capability exists and enrollment writes nothing but auth.api_keys, so the soft-delete here is the whole job",
+    ],
   ];
 
   function setupWithPurpose(purpose: string) {
@@ -355,27 +370,21 @@ describe("api.key.revoke handler — reserved server-owned purposes", () => {
   });
 
   /**
-   * The case that constrains the refusal set, and the one whose absence let an
-   * earlier revision of this guard remove a security control.
+   * The cases that constrain the refusal set, and the ones whose absence let an
+   * earlier revision of this guard remove two revocation paths in one commit.
    *
-   * A `cli_session_v1` key MUST stay revocable. `oxagen login`
-   * (apps/api/src/routes/v1/auth.cli.token.ts) only inserts another key and
-   * never soft-deletes the previous one; `oxagen logout` clears the local
-   * config file and makes no server call; there is no session-scoped revoke
-   * route. Refuse here and the only way to invalidate a lost or compromised CLI
-   * credential is `remove_org_member`, which also strips the person's org
-   * access — a proportionate control traded for a symmetry argument.
-   *
-   * If a session-scoped revoke capability is ever built, this expectation is
-   * what has to be changed, deliberately, with the header updated to name it.
-   * Until then, adding `cli_session_v1` back to the refusal set fails here.
+   * Each asserts the soft-delete ACTUALLY RAN, not merely that nothing threw —
+   * a refusal throws before the update, so `tx.update` is the discriminator.
+   * If a governed revocation path is ever built for one of these purposes, the
+   * corresponding expectation is what has to change, deliberately, with the
+   * handler header updated to name it.
    */
-  it("REVOKES a cli_session_v1 key — refusing it would leave remove_org_member as the only path", async () => {
+  it.each(MUST_STAY_REVOCABLE)("REVOKES a %s key — %s", async (purpose) => {
     vi.clearAllMocks();
     const tx = makeSoftDeleteTx({
       id: "key-uuid-1",
       publicId: "aky_test123",
-      scope: { purpose: "cli_session_v1" },
+      scope: { purpose },
     });
     let callCount = 0;
     mocks.withTenantDb.mockImplementation(
@@ -389,7 +398,6 @@ describe("api.key.revoke handler — reserved server-owned purposes", () => {
 
     const result = await apiKeyRevokeHandler(BASE_INPUT, TEST_CTX);
     expect(result.revoked).toBe(true);
-    // Not merely "did not throw" — the soft-delete actually ran.
     expect(tx.update).toHaveBeenCalled();
   });
 

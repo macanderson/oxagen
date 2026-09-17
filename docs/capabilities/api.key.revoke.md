@@ -43,27 +43,27 @@ purpose is read from the stored `scope`, so the caller cannot avoid the check by
 omitting it.
 
 A refusal has to pass one test: **the path it names must achieve what the
-refused operation was for.** Three of the four server-owned purposes pass it and
-are refused. `cli_session_v1` does not, and is revocable here.
+refused operation was for.** Being server-owned is not the test — all four
+purposes are. Two pass and are refused; two do not, and stay revocable here.
 
-| `scope.purpose` | revoke it through | what a generic revoke would miss |
+| `scope.purpose` | refused? | why |
 |---|---|---|
-| `tacho_host_v1` | `revoke_tacho_enrollment` | the host row staying `active`, and the queued `revoke` control command a collector mid-poll needs |
-| `agent_credential_v1` | `rotate_agent_credential`, `retire_agent` | the paired mint, or the agent's retirement — unpaired, the agent is live with no credential |
-| `stella_operational_telemetry_v1` | operator revocation | no governed path exists yet; ingestion would end with nothing recording why |
+| `tacho_host_v1` | **yes** → `revoke_tacho_enrollment` | that path revokes, and more completely: it also marks the host row `revoked` and queues the `revoke` control command a collector mid-poll needs. A generic revoke leaves `tacho_hosts.status` reading `active`. |
+| `agent_credential_v1` | **yes** → `rotate_agent_credential`, `retire_agent` | both revoke, paired with a fresh mint or the agent's retirement. Unpaired, the agent is live with no credential and nothing re-mints. |
+| `stella_operational_telemetry_v1` | no | **there is no Stella revocation path.** `create_stella_enrollment` and `ingest_stella_operational_telemetry` are the only Stella capabilities, and enrollment writes nothing but `auth.api_keys` — no lifecycle row to leave inconsistent. The soft-delete here is the whole job. |
+| `cli_session_v1` | no | `oxagen login` only mints an additional key and never soft-deletes the previous one; `oxagen logout` clears the local config file and makes no server call; there is no session-scoped revoke route. Refusing would leave `remove_org_member` as the sole revocation, which also strips the person's organization access. |
 
-### `cli_session_v1` is revocable here, deliberately
+The last two are the only way to invalidate a leaked credential of their kind.
+If a governed revocation path is built for either, move it into the refused set
+then — and not before.
 
-This is the only proportionate way to invalidate a lost or compromised CLI
-credential. `oxagen login` only mints an additional key and never soft-deletes
-the previous one; `oxagen logout` clears the local config file and makes no
-server call; there is no session-scoped revoke route. Refusing it would leave
-`remove_org_member` as the sole revocation path, which also strips the person's
-organization access.
+### Why `api.key.rotate` refuses all four and this does not
 
-`api.key.rotate` does refuse it, and that asymmetry is correct: `oxagen login`
-gives the operator a fresh working credential, which is what rotation is for. It
-does not invalidate the old one, which is what revocation is for.
+Rotation is for obtaining a *fresh working credential*, and every path rotate
+names does that: `oxagen login` for a CLI session, enrollment for the other two.
+None of them invalidates the old credential, which is what revocation is for —
+so the same paths pass rotate's test and fail this one. The asymmetry is
+deliberate, not drift.
 
 ## Surfaces
 
@@ -75,7 +75,7 @@ does not invalidate the old one, which is what revocation is for.
 | code | meaning |
 |---|---|
 | `unauthorized` | Caller is not an org Owner or Admin. |
-| `authz_denied` | The key carries one of the three refused server-owned scope purposes; see above. |
+| `authz_denied` | The key carries `tacho_host_v1` or `agent_credential_v1`; see above. |
 | `not_found` | No key with the given public ID exists in this org. |
 | `already_revoked` | Key has already been revoked. |
 | `validation_error` | Input failed Zod parse. |

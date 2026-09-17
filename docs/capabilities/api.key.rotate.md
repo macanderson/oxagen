@@ -63,13 +63,16 @@ caller cannot avoid the check by omitting it.
 | `stella_operational_telemetry_v1` | operator re-enrollment |
 | `cli_session_v1` | `oxagen login` |
 
-`api.key.revoke` does **not** refuse `cli_session_v1`, and the asymmetry is
-deliberate: `oxagen login` gives the operator a fresh working credential, which
-is what rotation is for, but it does not invalidate the old one, which is what
-revocation is for. Rotating a CLI session here would also hand the new raw key
-back through this capability's output, and nothing writes it into the
-operator's config file — so the working credential would be revoked and
-replaced by one the CLI never receives.
+`api.key.revoke` refuses only `tacho_host_v1` and `agent_credential_v1`, and the
+asymmetry is deliberate. Rotation is for obtaining a fresh working credential,
+and every path named above does that. None of them invalidates the old
+credential, which is what revocation is for — so for `cli_session_v1` and
+`stella_operational_telemetry_v1` those same paths pass rotate's test and fail
+revoke's, leaving revoke as the only way to invalidate a leaked credential of
+either kind. Rotating a CLI session here would also hand the new raw key back
+through this capability's output, and nothing writes it into the operator's
+config file, so the working credential would be revoked and replaced by one the
+CLI never receives.
 
 ## Errors
 
