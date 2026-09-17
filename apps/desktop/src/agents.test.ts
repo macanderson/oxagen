@@ -112,8 +112,21 @@ describe("computeAgentRows: not wrapped", () => {
   it("lists every harness even with no machine enrollment at all", () => {
     const s = state({ host: null, daemon: null });
     const rows = computeAgentRows(s, null, NOW);
-    expect(rows.map((r) => r.key)).toEqual(["claude-code", "codex", "stella"]);
+    expect(rows.map((r) => r.key)).toEqual([
+      "claude-code",
+      "codex",
+      "stella",
+      "claude-desktop",
+    ]);
     expect(rows.every((r) => !r.wrapped)).toBe(true);
+    // Every row carries its tier even when nothing is covered, so no surface
+    // has to infer one (ADR-078).
+    expect(rows.map((r) => r.tier)).toEqual([
+      "harness",
+      "harness",
+      "harness",
+      "gateway",
+    ]);
   });
 });
 
@@ -345,6 +358,7 @@ describe("computeAgentRows: custom agents", () => {
       "claude-code",
       "codex",
       "stella",
+      "claude-desktop",
       "my-script",
     ]);
     const custom = rows.find((r) => r.key === "my-script")!;
@@ -407,6 +421,7 @@ describe("computeAgentRows: custom agents", () => {
       "claude-code",
       "codex",
       "stella",
+      "claude-desktop",
       "custom:codex",
     ]);
     const builtinCodex = rows.find((r) => r.key === "codex")!;
@@ -445,7 +460,7 @@ describe("computeAgentRows: custom agents", () => {
 
   it("produces no custom rows when the daemon has none", () => {
     const rows = computeAgentRows(state(), null, NOW);
-    expect(rows.every((r) => r.kind === "harness")).toBe(true);
+    expect(rows.every((r) => r.kind !== "custom")).toBe(true);
   });
 });
 
@@ -488,6 +503,183 @@ describe("summarizeAgents", () => {
   it("every health label is a non-empty accessible string", () => {
     for (const label of Object.values(HEALTH_LABEL)) {
       expect(label.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+/**
+ * The connected tier (ADR-078). What matters here is that a connected row is
+ * never rendered as if it were wrapped: it has no hooks, no sessions, and no
+ * step record, and it carries its own health path so none of the wrapped
+ * cascade's readings can leak into it.
+ */
+describe("computeAgentRows: connected apps", () => {
+  const connectedOf = (s: DesktopState, tacho: TachoStatus | null = null) =>
+    computeAgentRows(s, tacho, NOW).find((r) => r.key === "claude-desktop")!;
+
+  const presence = (
+    over: Partial<NonNullable<TachoStatus["claudeDesktop"]>> = {},
+  ) =>
+    ({
+      claudeDesktop: {
+        present: true,
+        foreignEnrollment: false,
+        otherServers: 0,
+        otherServerNames: [],
+        ...over,
+      },
+    }) as TachoStatus;
+
+  it("shows the app even when it is not connected, so it can be found", () => {
+    const row = connectedOf(
+      state({ host: host({ harnesses: ["claude-code"] }) }),
+    );
+    expect(row.kind).toBe("connected");
+    expect(row.wrapped).toBe(false);
+    expect(row.health).toBe("not_wrapped");
+    expect(row.summary).toBe("not connected");
+  });
+
+  it("is a gateway row, never a harness one", () => {
+    const row = connectedOf(state());
+    expect(row.tier).toBe("gateway");
+    expect(row.tierLabel).toBe("Connected");
+    expect(row.kind).not.toBe("harness");
+  });
+
+  it("always says what it does not record", () => {
+    const row = connectedOf(state());
+    expect(row.records).toContain("Oxagen tools this app calls");
+    expect(row.omits).toContain("Not your prompts");
+    expect(row.omits).not.toHaveLength(0);
+  });
+
+  it("reports no sessions, because it has none", () => {
+    // Not a placeholder: a connected app opens no session, so any non-zero
+    // number here would be a session nobody ran.
+    const row = connectedOf(state());
+    expect(row.sessionsLive).toBe(0);
+    expect(row.sessionsTotal).toBe(0);
+  });
+
+  it("is down when the collector is, because the gateway lives in it", () => {
+    const row = connectedOf(
+      state({
+        host: host({ harnesses: ["claude-code", "claude-desktop"] }),
+        daemon: null,
+      }),
+      presence(),
+    );
+    expect(row.health).toBe("down");
+    expect(row.summary).toContain("no Oxagen tools");
+  });
+
+  it("is degraded when the entry has gone missing from the app's config", () => {
+    const row = connectedOf(
+      state({ host: host({ harnesses: ["claude-desktop"] }) }),
+      presence({ present: false }),
+    );
+    expect(row.health).toBe("degraded");
+    expect(row.summary).toContain("missing from this app's config");
+  });
+
+  it("names a stale entry from an earlier enrollment", () => {
+    const row = connectedOf(
+      state({ host: host({ harnesses: ["claude-desktop"] }) }),
+      presence({ present: false, foreignEnrollment: true }),
+    );
+    expect(row.health).toBe("degraded");
+    expect(row.summary).toContain("reconnect");
+  });
+
+  it("is idle until a call arrives, and says a restart may be needed", () => {
+    const row = connectedOf(
+      state({ host: host({ harnesses: ["claude-desktop"] }) }),
+      presence(),
+    );
+    expect(row.health).toBe("idle");
+    expect(row.summary).toContain("Restart the app");
+  });
+
+  it("is healthy once the gateway has served it", () => {
+    const row = connectedOf(
+      state({
+        host: host({ harnesses: ["claude-desktop"] }),
+        daemon: {
+          spool_depth: 0,
+          connected: [
+            {
+              client: "claude-desktop",
+              enforcement_tier: "gateway",
+              calls: 4,
+              refused: 0,
+              last_seen_at: "2026-09-15T11:58:00Z",
+            },
+          ],
+        },
+      }),
+      presence(),
+    );
+    expect(row.health).toBe("healthy");
+    expect(row.summary).toContain("2m ago");
+    expect(row.details).toContain("4 tool calls through Oxagen");
+  });
+
+  it("reports refusals as the control working, not as ill health", () => {
+    const row = connectedOf(
+      state({
+        host: host({ harnesses: ["claude-desktop"] }),
+        daemon: {
+          spool_depth: 0,
+          connected: [
+            {
+              client: "claude-desktop",
+              enforcement_tier: "gateway",
+              calls: 9,
+              refused: 3,
+              last_seen_at: "2026-09-15T11:59:00Z",
+            },
+          ],
+        },
+      }),
+      presence(),
+    );
+    // A refused call is the mandate being enforced. Nothing to clear.
+    expect(row.health).toBe("healthy");
+    expect(row.details).toContain("3 refused by its mandate");
+  });
+
+  it("shows how much of the app Oxagen cannot see", () => {
+    // ADR-078 §3: nothing in this repo can stop a user adding another MCP
+    // server, so the honest thing is to show the size of the gap.
+    const row = connectedOf(
+      state({ host: host({ harnesses: ["claude-desktop"] }) }),
+      presence({ otherServers: 2, otherServerNames: ["filesystem", "slack"] }),
+    );
+    expect(row.unseenServers).toEqual(["filesystem", "slack"]);
+    expect(row.details.join(" ")).toContain(
+      "2 other MCP servers in this app that Oxagen does not see",
+    );
+  });
+
+  it("has no unseen servers to report on a wrapped row", () => {
+    const rows = computeAgentRows(state(), null, NOW);
+    for (const row of rows.filter((r) => r.tier === "harness")) {
+      expect(row.unseenServers).toEqual([]);
+    }
+  });
+
+  it("gives every row a tier, records line and omits line", () => {
+    const rows = computeAgentRows(
+      state({ host: host({ harnesses: ["claude-code", "claude-desktop"] }) }),
+      presence(),
+      NOW,
+    );
+    for (const row of rows) {
+      expect(row.tier).toMatch(/^(harness|gateway)$/);
+      expect(row.tierLabel.length).toBeGreaterThan(0);
+      expect(row.records.length).toBeGreaterThan(0);
+      expect(row.omits.length).toBeGreaterThan(0);
     }
   });
 });

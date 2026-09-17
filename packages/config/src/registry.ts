@@ -920,6 +920,34 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "https://api.oxagen.sh/v1/tacho",
   },
+  TACHO_LOCAL_TOKEN: {
+    group: "Inngest",
+    description:
+      "The per-install bearer the Tacho collector's loopback listener requires. Written into " +
+      "each wrapped harness's settings and into a connected app's MCP config by `tacho enroll`, " +
+      "and read back by the hook and the `tacho mcp-stdio` shim. Never set by hand and never " +
+      "a deployment value: it is minted per machine at enrollment and lives in host.json.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "",
+  },
+  TACHO_MCP_ENDPOINT: {
+    group: "Inngest",
+    description:
+      "Overrides the workspace MCP endpoint the Tacho collector's local gateway proxies to " +
+      "(ADR-078). Read on the host, not the server: it is how a local stack points the " +
+      "gateway at 127.0.0.1:4100 instead of the deployment's MCP host. Unset, the gateway " +
+      "uses the endpoints.mcp claim from the enrollment, then derives one from api_url.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "http://127.0.0.1:4100/mcp",
+  },
   OXAGEN_CONTEXT_ORG: {
     group: "Context provider",
     description:

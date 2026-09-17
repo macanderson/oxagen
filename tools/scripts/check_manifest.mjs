@@ -160,6 +160,46 @@ function writeContractBarrel(files) {
  *   capability whose surfaces all exist must never be reported as a gap just
  *   because the checker only tried the snake name (fix-the-checker rule).
  */
+/**
+ * capability name -> the `proof` path its apps/app UI binding records, for the
+ * bindings whose proof is an e2e spec. Pure, so it can be tested without a
+ * repo on disk.
+ *
+ * @param {unknown} parsed - the parsed apps/app/capability-ui-map.json
+ * @returns {Map<string, string>}
+ */
+export function buildUiProofIndex(parsed) {
+  const index = new Map();
+  // The bindings live under a `bindings` key, beside the file's own `$doc` and
+  // `$binding_shape` notes.
+  const bindings = parsed?.bindings;
+  if (bindings === null || typeof bindings !== "object") return index;
+  for (const [name, binding] of Object.entries(bindings)) {
+    const proof = binding?.proof;
+    if (typeof proof === "string" && proof.endsWith(".spec.ts"))
+      index.set(name, proof);
+  }
+  return index;
+}
+
+/** @returns {Map<string, string>} the index above, read from disk once. */
+let uiProofIndex;
+function getUiProofIndex() {
+  if (uiProofIndex !== undefined) return uiProofIndex;
+  const mapPath = join(ROOT, "apps/app/capability-ui-map.json");
+  if (!existsSync(mapPath)) {
+    uiProofIndex = new Map();
+    return uiProofIndex;
+  }
+  try {
+    uiProofIndex = buildUiProofIndex(JSON.parse(readFileSync(mapPath, "utf8")));
+  } catch {
+    // A malformed map is check:ui-parity's failure to report, not this one's.
+    uiProofIndex = new Map();
+  }
+  return uiProofIndex;
+}
+
 function layerSatisfied(layer, capName, capSurfaces, fileStem) {
   const slug = slugify(capName);
   const stems =
@@ -178,6 +218,20 @@ function layerSatisfied(layer, capName, capSurfaces, fileStem) {
   // manifest doesn't report false "app missing" gaps; check:ui-parity is the
   // authority for app-surface completeness.
   if (layer === "app") return true;
+  // The "e2e" layer had a filename-only check — apps/app/e2e/<slug>.spec.ts —
+  // which names a spec after the capability. Real specs are named after the
+  // screen they drive (fleet.spec.ts drives list_tacho_hosts), so a capability
+  // with a real, passing e2e test was reported as an e2e gap and a ticket was
+  // filed for a test that exists. The binding is already recorded, exactly and
+  // by hand, in apps/app/capability-ui-map.json's `proof` field, which
+  // check:ui-parity requires to point at a real artifact. Read that rather than
+  // guess from the name; the filename convention still counts, for a capability
+  // with no UI binding. Same fix-the-checker rule the api layer already carries.
+  if (layer === "e2e") {
+    if (existsSync(join(ROOT, `apps/app/e2e/${slug}.spec.ts`))) return true;
+    const proof = getUiProofIndex().get(capName);
+    return proof !== undefined && existsSync(join(ROOT, proof));
+  }
   // The "api" layer has a fallback beyond filename existence: a combined
   // multi-capability route file (schema.ts, connection.ts, etc.) can satisfy
   // MANY capabilities without any of them having a dedicated file — see

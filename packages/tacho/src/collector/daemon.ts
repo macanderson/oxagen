@@ -29,6 +29,7 @@ import {
   applyControlFacts,
   type HostFile,
   readHostFile,
+  mcpEndpointFor,
 } from "../host/host-file";
 import type { TachoPaths } from "../host/paths";
 import { isProcessAlive, listClaudeProcesses } from "../host/process-scan";
@@ -49,6 +50,12 @@ import {
   type PolicyView,
 } from "./hook-handler";
 import { applyCommands } from "./inbox";
+import {
+  createMcpGateway,
+  type GatewayAttribution,
+  type GatewayCallRecord,
+  type GatewayFetch,
+} from "./mcp-gateway";
 import { type RegistryState, SessionRegistry } from "./registry";
 import {
   type CollectorApi,
@@ -484,9 +491,104 @@ export async function startDaemon(
     return files.length;
   }
 
+  /**
+   * The local MCP gateway (ADR-078). Connected apps have no hook surface, so
+   * the only thing Oxagen governs for them is the toolbelt it serves, and the
+   * gateway is how it serves one without the app ever holding a credential.
+   *
+   * Calls land on the daemon's own chain, not a session chain: a connected
+   * app has no agent session — no prompt, no model, no turn — and inventing
+   * one would put a step in the ledger that nobody took.
+   */
+  const connected = new Map<
+    string,
+    { calls: number; refused: number; lastSeenAt: string }
+  >();
+
+  function recordGatewayCall(call: GatewayCallRecord): void {
+    const seen = connected.get(call.client) ?? {
+      calls: 0,
+      refused: 0,
+      lastSeenAt: toProtocolTimestamp(now()),
+    };
+    seen.calls += 1;
+    if (call.status === "rejected") seen.refused += 1;
+    seen.lastSeenAt = toProtocolTimestamp(now());
+    connected.set(call.client, seen);
+    record([
+      hostRecorder.sealCollectorEvent(
+        call.status === "rejected" ? "policy_decision" : "tool_call",
+        {
+          tool_name: call.toolName,
+          tool_source: "mcp",
+          mcp_server_name: "oxagen",
+          mcp_tool_name: call.toolName,
+          tool_status: call.status,
+          tool_duration_ms: call.durationMs,
+          ...(call.status === "rejected"
+            ? {
+                policy_decision: "deny",
+                policy_source: "kernel",
+                policy_reason: call.refusedReason ?? "refused",
+              }
+            : {}),
+        },
+        {
+          attrs: {
+            "oxagen.connected_app": call.client,
+            "oxagen.mcp_session": call.sessionId,
+            "oxagen.enforcement_tier": "gateway",
+          },
+        },
+      ),
+    ]);
+  }
+
+  const gateway = createMcpGateway({
+    attribution: (): GatewayAttribution | undefined => {
+      // Read through `host` every time: a revoke applied by `applyControlFacts`
+      // takes the gateway with it on the next call, not the next restart.
+      if (host.revoked_at !== null) return undefined;
+      if (host.host_status === "revoked" || host.host_status === "suspended")
+        return undefined;
+      if (host.api_key.length === 0) return undefined;
+      return {
+        organizationId: host.organization_id,
+        workspaceId: host.workspace_id,
+        orgSlug: host.org_slug,
+        workspaceSlug: host.workspace_slug,
+        apiKey: host.api_key,
+        hostEnrollmentId: host.host_enrollment_id,
+      };
+    },
+    endpoint: mcpEndpointFor(host),
+    fetch: ((url: string, init: Parameters<GatewayFetch>[1]) =>
+      (options.fetch ?? ((input, opts) => fetch(input, opts) as never))(
+        url,
+        init,
+      )) as GatewayFetch,
+    bundle: () => host.bundle,
+    record: recordGatewayCall,
+    log,
+    now,
+  });
+
   const api: CollectorApi = {
     localToken: host.local_token,
     enrollmentId: host.host_enrollment_id,
+    // Deliberately NOT on `serial`. A gateway call is a round trip to the
+    // control plane with a 30-second timeout, and the queue it used to sit in
+    // is the same one `PreToolUse` hooks, OTel ingestion and spool draining
+    // wait on: one connected app's slow tool call held every wrapped agent on
+    // this machine past its 5-10 second decision budget, and held every other
+    // MCP client behind it too. Nothing is lost by taking it off. The only
+    // shared state the gateway touches is `recordGatewayCall`, which is
+    // synchronous end to end — `sealCollectorEvent` advances the chain and
+    // `wal.append` appends, neither with an await inside — so it cannot
+    // interleave with a queued task however many forwards are in flight. The
+    // queue was never protecting the forward; it was only ever costing.
+    mcp: (body, context) => gateway.handle(body, context),
+    mcpClose: (sessionId) => gateway.forget(sessionId),
     handleHook: (envelope) =>
       serial.run(async () => {
         await drainSpool();
@@ -552,6 +654,18 @@ export async function startDaemon(
       // Every kind of agent this host has run; the daemon's own chain is
       // not one of them.
       agents: registry.agents(),
+      // Connected apps (ADR-078): one row per MCP client that has called
+      // through the local gateway. Deliberately a separate list from
+      // `agents`, which is the wrapped ones: a surface that merged them
+      // would have to invent a tier for each row after the fact.
+      connected: [...connected.entries()].map(([client, seen]) => ({
+        client,
+        enforcement_tier: "gateway",
+        calls: seen.calls,
+        refused: seen.refused,
+        last_seen_at: seen.lastSeenAt,
+      })),
+      mcp_endpoint: mcpEndpointFor(host),
       sessions: registry.list().map((session) => ({
         session_id: session.harnessSessionId,
         session_uuid: session.recorder.sessionUuid,

@@ -745,6 +745,25 @@ export function buildProgram(): Command {
       if (!(await handleTachoVerify())) process.exitCode = 1;
     });
 
+  tacho
+    .command("hosts")
+    .description(
+      "Every machine enrolled in this workspace, with the enforcement tier each of its apps reaches",
+    )
+    .option("--status <state>", "active | paused | suspended | revoked")
+    .option("--limit <n>", "How many to return", (v: string) => Number(v))
+    .option("--json", "Machine-readable output")
+    .action(
+      async (opts: {
+        status?: "active" | "paused" | "suspended" | "revoked";
+        limit?: number;
+        json?: boolean;
+      }) => {
+        const { handleTachoHosts } = await import("./commands/tacho.js");
+        if (!(await handleTachoHosts(opts))) process.exitCode = 1;
+      },
+    );
+
   // ── login / logout: platform authentication ─────────────────────────────────
 
   program

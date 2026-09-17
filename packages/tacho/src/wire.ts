@@ -25,7 +25,12 @@ export const tachoPlatformSchema = z.enum(["darwin", "linux", "win32"]);
  * `{"action": ...}` decisions, so `--harness stella` routes the hook through
  * `claude-code/stella-adapter.ts` in both directions.
  */
-export const tachoHarnessSchema = z.enum(["claude-code", "codex", "stella"]);
+export const tachoHarnessSchema = z.enum([
+  "claude-code",
+  "codex",
+  "stella",
+  "claude-desktop",
+]);
 export type TachoHarness = z.infer<typeof tachoHarnessSchema>;
 
 /** How each harness is named to a person: detect, status, the agent roster. */
@@ -33,6 +38,66 @@ export const TACHO_HARNESS_LABELS: Record<TachoHarness, string> = {
   "claude-code": "Claude Code",
   codex: "Codex",
   stella: "Stella",
+  "claude-desktop": "Claude Desktop",
+};
+
+/**
+ * Which enforcement tier a harness can reach on this machine (ADR-078), using
+ * the `enforcement_tier` vocabulary the record already speaks.
+ *
+ * `harness` — **wrapped.** A `PreToolUse` hook sees every action the agent
+ * takes, including the harness's own Bash and Edit, and can answer deny. It
+ * runs inside a process Oxagen does not own, so the record is
+ * `client_attested`: an action the agent did not report is one Oxagen never
+ * saw, not one it can flag as skipped.
+ *
+ * `gateway` — **connected.** No hook surface exists, so Oxagen sees only the
+ * calls routed through its MCP gateway. For those, the kernel evaluates and
+ * refuses on the server, so a deny is a refusal rather than an attestation.
+ *
+ * Neither dominates the other. Wrapped is broader and weaker; connected is
+ * narrower and stronger. Nothing that renders a harness may put them on one
+ * axis — see ADR-078 §2.
+ */
+export const TACHO_HARNESS_TIERS: Record<TachoHarness, "harness" | "gateway"> =
+  {
+    "claude-code": "harness",
+    codex: "harness",
+    stella: "harness",
+    "claude-desktop": "gateway",
+  };
+
+/**
+ * The harnesses Tacho wraps with a hook, and the ones it connects through the
+ * local MCP gateway. Written out rather than derived from `TACHO_HARNESS_TIERS`
+ * so each carries a literal type, which is what makes a per-tier lookup table
+ * (a harness binary to probe, a runtime to file a session under) total for the
+ * tier it belongs to and absent for the other. `wire.test.ts` asserts the two
+ * lists partition the enum and agree with the tier map, so a harness added
+ * without being classified fails the build rather than defaulting to wrapped.
+ */
+export const WRAPPED_HARNESSES = ["claude-code", "codex", "stella"] as const;
+export type WrappedHarness = (typeof WRAPPED_HARNESSES)[number];
+
+export const CONNECTED_HARNESSES = ["claude-desktop"] as const;
+export type ConnectedHarness = (typeof CONNECTED_HARNESSES)[number];
+
+export function isWrappedHarness(harness: string): harness is WrappedHarness {
+  return (WRAPPED_HARNESSES as readonly string[]).includes(harness);
+}
+
+export function isConnectedHarness(
+  harness: string,
+): harness is ConnectedHarness {
+  return (CONNECTED_HARNESSES as readonly string[]).includes(harness);
+}
+
+/** What each tier does and does not record, in one line, for any surface. */
+export const TACHO_TIER_SUMMARY: Record<"harness" | "gateway", string> = {
+  harness:
+    "Records every action, including this agent's own commands and file edits. Oxagen does not run the process, so the record is what the agent reported.",
+  gateway:
+    "Records only the Oxagen tools this app calls, and refuses the ones its mandate does not allow. It does not record prompts, model calls, or anything else the app does.",
 };
 
 /**
@@ -156,6 +221,29 @@ export const policyBundleSchema = z
       })
       .strict(),
     mode: tachoBundleModeSchema,
+    /**
+     * The ceiling the mandate puts on how many tools may be advertised to a
+     * connected app, and the model whose limit it is (ADR-078). Read by the
+     * local MCP gateway, which refuses a `tools/list` that overflows it rather
+     * than letting the provider refuse the turn with an error about a number
+     * nobody can inspect.
+     *
+     * Optional, and absent means *no ceiling this host has been told about* —
+     * not *no ceiling*, the same reading `PROVIDER_TOOL_LIMITS` documents for
+     * a provider missing from its table. It has to be declared here because
+     * this schema is `.strict()`: a bundle carrying a field the schema does
+     * not name fails to parse, so a host that did not know the field would
+     * reject the whole mandate the day the control plane started signing one.
+     */
+    tool_ceiling: z
+      .object({
+        model_id: z.string().min(1).max(256),
+        max_tools: z.number().int().positive(),
+        /** Where the number comes from; quoted verbatim into the refusal. */
+        source: z.string().min(1).max(512),
+      })
+      .strict()
+      .optional(),
     signature: z
       .object({
         key_id: z.string().min(1),

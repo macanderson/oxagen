@@ -1180,7 +1180,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": false,
+        "e2e": true,
         "docs": true,
         "app": true
       }
@@ -1679,7 +1679,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "e2e": false,
+        "e2e": true,
         "docs": true,
         "app": true
       }
@@ -3782,12 +3782,16 @@
       "domain": "tacho",
       "mode": "sync",
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "layers": {
         "schema": true,
         "api": true,
+        "mcp": true,
+        "app": true,
         "unit": true,
+        "e2e": true,
         "docs": true
       }
     },
