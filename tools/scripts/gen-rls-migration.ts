@@ -48,6 +48,22 @@ const __dirname = dirname(__filename);
 const ORG = `nullif(current_setting('app.current_org_id', true), '')::uuid`;
 const WS = `nullif(current_setting('app.current_workspace_id', true), '')::uuid`;
 const BYPASS = `current_setting('app.rls_bypass', true) = 'on'`;
+/**
+ * The organisation-wide READ mode, set by `withOrgDb` and by nothing else
+ * (ADR-075). It appears in USING and NEVER in WITH CHECK: a read may span the
+ * organisation's workspaces, a write may not — `withOrgDb` widens what you can
+ * see, never what you can land, so a row still has to name the workspace whose
+ * scope the writer is in.
+ *
+ * It is a disjunct BEFORE the `${WS}` comparison so a shape like
+ * `org_wide OR workspace_id = WS` reads as "the organisation, or this
+ * workspace". Do not rely on that ordering to avoid the uuid cast: Postgres
+ * folds stable functions during selectivity estimation, so `WS` is evaluated
+ * at PLAN time whatever the disjunct in front of it says. That is the property
+ * the org-only refusal is built on (ADR-075) and the reason `withOrgDb` leaves
+ * the workspace GUC empty rather than at the org-only marker.
+ */
+const ORG_WIDE = `current_setting('app.org_wide', true) = 'on'`;
 
 interface Predicates {
   /** Read filter (SELECT/UPDATE/DELETE visibility). */
@@ -56,17 +72,23 @@ interface Predicates {
   readonly check: string;
 }
 
-function predicates(cls: PolicyClass): Predicates {
+export function predicates(cls: PolicyClass): Predicates {
   if (cls === "org_only") {
     const p = `${BYPASS} OR (org_id = ${ORG})`;
     return { using: p, check: p };
   }
   if (cls === "workspace_nullable") {
-    const p = `${BYPASS} OR (org_id = ${ORG} AND (workspace_id IS NULL OR workspace_id = ${WS}))`;
-    return { using: p, check: p };
+    return {
+      using: `${BYPASS} OR (org_id = ${ORG} AND (workspace_id IS NULL OR ${ORG_WIDE} OR workspace_id = ${WS}))`,
+      check: `${BYPASS} OR (org_id = ${ORG} AND (workspace_id IS NULL OR workspace_id = ${WS}))`,
+    };
   }
   if (cls === "workspace_only") {
-    // Membership/join tables that carry workspace_id but no org_id.
+    // Membership/join tables that carry workspace_id but no org_id. There is
+    // no org column to fence the org-wide read with, so `app.org_wide` alone
+    // would open the table to every tenant. It gets no org-wide disjunct:
+    // an organisation-wide read of a workspace_only table has to reach it
+    // through the org-scoped parent it hangs off.
     const p = `${BYPASS} OR (workspace_id = ${WS})`;
     return { using: p, check: p };
   }
@@ -84,8 +106,10 @@ function predicates(cls: PolicyClass): Predicates {
     };
   }
   // standard: org_id + workspace_id both required
-  const p = `${BYPASS} OR (org_id = ${ORG} AND workspace_id = ${WS})`;
-  return { using: p, check: p };
+  return {
+    using: `${BYPASS} OR (org_id = ${ORG} AND (${ORG_WIDE} OR workspace_id = ${WS}))`,
+    check: `${BYPASS} OR (org_id = ${ORG} AND workspace_id = ${WS})`,
+  };
 }
 
 const DEFAULT_OUT_NAME = "20260612140000_restore_rls_policies.sql";
@@ -167,6 +191,12 @@ CREATE POLICY tenant_isolation ON ${table}
 -- Bypass-aware: app.rls_bypass='on' (set by withSystemDb / the seeding window
 -- when TENANT_RLS_ENFORCEMENT_ENABLED=false) disables filtering; tenant
 -- sessions get app.current_org_id / app.current_workspace_id via withTenantDb.
+--
+-- Org-wide-aware (ADR-075): app.org_wide='on', set by withOrgDb and nothing
+-- else, widens the READ of an org-scoped table to every workspace in the
+-- organisation while the org fence still holds. It is absent from WITH CHECK,
+-- so writes stay pinned to the workspace in scope, and absent from
+-- workspace_only tables, which have no org column to fence with.
 -- FORCE applies policies to the table owner too; only superusers and
 -- BYPASSRLS roles are exempt — oxagen_app is neither.
 -- ${entries.length} of ${POLICY_MANIFEST.length} manifest tables${onlyArg ? ` (${onlyArg})` : ""}.

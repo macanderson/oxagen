@@ -7,10 +7,13 @@ export * as relations from "./relations";
 export * from "./types";
 export {
   withTenantDb,
+  withOrgDb,
   withSystemDb,
   setTransactionWorkspaceScope,
   assertRlsConnectionSafe,
   assertRlsEnforcedInProduction,
+  isOrgOnlyWorkspaceReadRefusal,
+  ORG_ONLY_WORKSPACE_GUC,
   type Tx,
 } from "./tenant";
 export { makeWithTenantDbMock, makeWithSystemDbMock } from "./tenant.mock";
