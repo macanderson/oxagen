@@ -82,7 +82,7 @@ vi.mock("next/link", () => ({
 const { WorkspaceSettingsDialog } = await import("./workspace-settings");
 
 const INSTALL_URL =
-  "https://github.com/apps/oxagen/installations/new?state=signed";
+  "https://github.com/login/oauth/authorize?client_id=Iv1.test&state=signed";
 const MANAGE_URL = "https://github.com/settings/installations/42";
 
 const notConnected: WorkspaceRepository = {

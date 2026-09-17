@@ -7,9 +7,9 @@ describe("parseGitHubUrl", () => {
     expect(parseGitHubUrl(raw)).toBe(raw);
   });
 
-  it("keeps the query, because the App's install URL carries the signed state", () => {
+  it("keeps the query, because the Connect URL carries the signed state", () => {
     const raw =
-      "https://github.com/apps/oxagen/installations/new?state=signed.state";
+      "https://github.com/login/oauth/authorize?client_id=Iv1.test&state=signed.state";
     expect(parseGitHubUrl(raw)).toBe(raw);
   });
 

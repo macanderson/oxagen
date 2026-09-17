@@ -52,7 +52,8 @@ const UNBOUND = {
   repository: null,
   github: {
     connected: false,
-    installUrl: "https://github.com/apps/oxagen/installations/new?state=s",
+    installUrl:
+      "https://github.com/login/oauth/authorize?client_id=Iv1.test&state=s",
     manageUrl: null,
   },
 };
