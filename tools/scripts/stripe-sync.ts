@@ -438,6 +438,11 @@ async function upsertPlans(
       // 1 credit = 1 cent → included credit count == included credit cents.
       includedCreditCents: plan.includedCredits,
       includedSeats: plan.seats,
+      // `billing.plans.included_actions_annual` is NOT NULL DEFAULT 25000 — the
+      // FREE allowance. Omitting it here priced every paid plan this script
+      // created at one fifteenth of Scale's allowance and billed governed-action
+      // overage from action 25,001, on the PRIMARY meter under ADR-052.
+      includedActionsAnnual: BigInt(plan.includedActionsAnnual),
       features: plan.features,
       isPublic: true,
     };
@@ -462,6 +467,7 @@ async function upsertPlans(
           annualCents: row.annualCents,
           includedCreditCents: row.includedCreditCents,
           includedSeats: row.includedSeats,
+          includedActionsAnnual: row.includedActionsAnnual,
           features: row.features,
           updatedAt: new Date(),
         },

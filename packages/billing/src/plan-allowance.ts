@@ -25,10 +25,13 @@ function isTier(value: unknown): value is PlanTier {
 export interface OrgActionEntitlement {
   tier: PlanTier;
   /**
-   * `billing.plans.included_actions_annual` for the organisation's entitled
-   * subscription, or null when no subscription row answered. Null means "fall
-   * back to the tier default" — never "unlimited"; `resolveActionAllowance`
-   * enforces that distinction.
+   * The organisation's recorded governed-action commitment: from
+   * `billing.plans.included_actions_annual` when an entitled subscription
+   * answered, otherwise from `org.organizations.negotiated_actions_annual` —
+   * the legacy leg's place to record a figure for an enterprise organisation
+   * that never went through Stripe checkout. Null means "fall back to the tier
+   * default" — never "unlimited"; `resolveActionAllowance` enforces that
+   * distinction.
    */
   includedActionsAnnual: number | null;
 }
@@ -73,7 +76,12 @@ export async function resolveOrgActionEntitlement(
       )
       .limit(1);
     const o = await tx
-      .select({ planType: schema.organizations.planType })
+      .select({
+        planType: schema.organizations.planType,
+        // Selected from a row this query already reads, so the legacy leg costs
+        // no extra round trip on the accrual path.
+        negotiatedActionsAnnual: schema.organizations.negotiatedActionsAnnual,
+      })
       .from(schema.organizations)
       .where(eq(schema.organizations.id, orgId))
       .limit(1);
@@ -91,9 +99,31 @@ export async function resolveOrgActionEntitlement(
     };
   }
 
-  const planType = org[0]?.planType;
-  if (isTier(planType)) {
-    return { tier: planType, includedActionsAnnual: null };
+  const orgRow = org[0];
+  if (isTier(orgRow?.planType)) {
+    // `negotiated_actions_annual` is this leg's equivalent of the plan row's
+    // `included_actions_annual`. Without it an enterprise organisation that
+    // never went through Stripe checkout had NOWHERE to record its commitment,
+    // so `resolveActionAllowance` fell to the scale figure and logged
+    // `billing_enterprise_allowance_missing` on every governed action —
+    // permanently, with no action an operator could take to clear it. NULL
+    // still means "fall back to the tier default", never "unlimited".
+    const negotiated = orgRow.negotiatedActionsAnnual;
+    const parsed =
+      negotiated === null || negotiated === undefined
+        ? Number.NaN
+        : Number(negotiated);
+    return {
+      tier: orgRow.planType,
+      // A non-finite or negative figure is a corrupt row, not a smaller
+      // commitment, and handing it on would put NaN into the allowance the
+      // meter compares an action count against. The DB CHECK forbids negatives;
+      // this is the belt to its braces, and it lands on the tier default —
+      // which for enterprise is the bounded fallback plus its alert, so a
+      // corrupt row under-bills visibly rather than running free.
+      includedActionsAnnual:
+        Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : null,
+    };
   }
   return { tier: "free", includedActionsAnnual: null };
 }

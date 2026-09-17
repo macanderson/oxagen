@@ -119,10 +119,34 @@ done   # poll: aws ssm get-command-invocation --command-id … --instance-id "$I
 ## Left for the cutover (maintainer)
 
 - Decide the go-live date; then follow `docs/ops/stripe-product-sync-sop.md` §5 with live keys.
-- `billing.plans` in production Aurora still points at the previous account's
-  `prod_`/`price_` ids. `stripe-sync.yml` has no `DATABASE_URL` and Aurora is
-  VPC-only, so the upsert half of `pnpm billing:stripe-sync --apply` runs from
-  the app node over an SSM port-forward with `DATABASE_URL` pointed at
-  production (echo the host first, per `CLAUDE.md`), then
-  `SELECT slug, stripe_product_id, stripe_price_id_monthly FROM billing.plans`.
+- ~~`billing.plans` in production Aurora still points at the previous account's
+  `prod_`/`price_` ids.~~ **Done 2026-09-16.** The table was in fact *empty* —
+  no row had ever been written to it — so nothing in production resolved a
+  plan and no subscription could be purchased. Filled by running the upsert
+  half of `pnpm billing:stripe-sync --apply` with `DATABASE_URL` pointed at
+  production over an SSM port-forward. `stripe-sync.yml` has no `DATABASE_URL`
+  and Aurora is VPC-only, so that is the only path; it stays a manual step:
+
+  ```bash
+  aws ssm start-session --region us-east-1 --target <oxagen-app instance> \
+    --document-name AWS-StartPortForwardingSessionToRemoteHost \
+    --parameters '{"host":["oxagen-postgres.cluster-cm1o4comkr8r.us-east-1.rds.amazonaws.com"],"portNumber":["5432"],"localPortNumber":["15432"]}' &
+  export DATABASE_URL=$(aws ssm get-parameter --region us-east-1 \
+    --name /oxagen/production/DATABASE_URL --with-decryption \
+    --query Parameter.Value --output text | sed -E 's#@[^/:]+:[0-9]+/#@localhost:15432/#')
+  # Host and database only. `${DATABASE_URL%%@*}` would print everything BEFORE
+  # the `@` — scheme, user and the decrypted production password — into the
+  # terminal and any captured session log. CLAUDE.md asks which database you are
+  # about to mutate, and that is the part after the `@`.
+  echo "TARGET: …@${DATABASE_URL#*@}"
+  pnpm billing:stripe-sync --apply
+  ```
+
+  Verify: `SELECT slug, monthly_cents, stripe_product_id, stripe_price_id_monthly
+  FROM billing.plans ORDER BY monthly_cents;` — three rows (`build-v2` $199,
+  `scale-v2` $999, `enterprise-v2` $500), every price id `active` in the
+  sandbox. The `free` row `seedPlatform` writes is still absent in production;
+  nothing reads it (a free org has no subscription row and the tier resolves to
+  `free` by absence), and `upsertPlans` would tombstone it on the next sync, so
+  it is left alone.
 - Install the Stripe CLI locally (`brew install stripe/stripe-cli/stripe && stripe login`, choosing the sandbox) so `pnpm dev`'s `stripe listen` tunnel forwards sandbox events.
