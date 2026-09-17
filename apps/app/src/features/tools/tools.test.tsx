@@ -631,6 +631,10 @@ describe("Tools › write gates", () => {
     });
   });
 
+  // "No workspace role" in the sense the page can reach: a member of the
+  // workspace holding no role that any of the three grants. Someone holding no
+  // workspace membership at all never gets here — `requireViewer` answers
+  // `notFound()` before the page renders (viewer-resolution.ts).
   it("offers an org member who is no workspace Owner none of the three", async () => {
     expect(await offered(viewer("member", "member"))).toEqual({
       import_tools: false,
