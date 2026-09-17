@@ -14,6 +14,7 @@ import {
   productionFiles,
   readSource,
   type SourceText,
+  WHOLE_TREE_TIMEOUT_MS,
 } from "./parse";
 
 const RULE = "actions";
@@ -265,7 +266,11 @@ describe("server actions", () => {
       .filter((source) => directiveOf(parse(source)) === "use server");
     expect(modules.length).toBeGreaterThan(0);
     expect(modules.flatMap(actionViolations)).toEqual([]);
-  });
+    // Ported from #3196, which fixes this fleet-wide. The walk measured 7947ms
+    // against vitest's 5000ms default, so this test times out on any loaded
+    // runner and has been failing PRs that do not touch it. No-ops once the
+    // base carries the same change.
+  }, WHOLE_TREE_TIMEOUT_MS);
 
   it("ActionResult and never returns, a viewer reached through a helper and a slug from the form pass", () => {
     expect(probe("ok.ts")).toEqual([]);
