@@ -277,6 +277,88 @@ describe("a reversal debiting while an unrelated purchase lands", () => {
   });
 });
 
+describe("a debit alongside a writer of other columns on the same row", () => {
+  // `billing.gau_buckets` has eight writers and seven of them set columns the
+  // reversal never names — overage_invoiced_gau, closed_at, the seqs,
+  // open_topup_settlement_id. This pins that a debit and one of those writers
+  // coexist: both land, and `gau_buckets_overage_invoiced_within_used` still
+  // holds.
+  //
+  // Be honest about what it does NOT prove. The obvious fear is a
+  // read-modify-write reverting a column the reversal did not mean to touch —
+  // and that is not reachable here, so this test cannot discriminate it. Making
+  // the reversal write every column back from its snapshot leaves this test
+  // green, which was checked rather than assumed (4 runs, 4 passes).
+  //
+  // The reason is that the reversal's read is INSIDE the row lock:
+  //
+  //   t0    reversal  SELECT … FOR UPDATE   holds the row
+  //   t100  interim   UPDATE …              blocks
+  //   t200  reversal  UPDATE, commit        releases
+  //   t200  interim   overage += 3000       relative, on the post-reversal row
+  //
+  // Its values are therefore never stale, and the interim's increment is
+  // relative and applies afterwards. The reverse order is safe for the same
+  // reason. So naming only the owned columns is defence in depth here, not the
+  // load-bearing guarantee — the lock is. What guards the column set if that
+  // read ever moves outside the lock is the unit assertion in
+  // gau-reversals.test.ts, which does fail when the `.set()` is widened.
+  it("leaves a concurrent overage increment intact, and the CHECK holds", async () => {
+    await admin.unsafe(`SET app.rls_bypass = 'on'`);
+    await admin.unsafe(
+      `UPDATE billing.gau_buckets
+          SET purchased_gau = 10000, used_gau = 8000, overage_invoiced_gau = 0
+        WHERE id = '${BUCKET}'`,
+    );
+
+    const reversal = a.begin(async (tx) => {
+      await tx.unsafe(`SET LOCAL app.rls_bypass = 'on'`);
+      const rows = await tx.unsafe(
+        `SELECT purchased_gau FROM billing.gau_buckets WHERE id = '${BUCKET}' FOR UPDATE`,
+      );
+      const before = Number(
+        (rows as unknown as { purchased_gau: string }[])[0]!.purchased_gau,
+      );
+      await sleep(200);
+      // Exactly the columns the reversal owns, and no others.
+      await tx.unsafe(
+        `UPDATE billing.gau_buckets
+            SET purchased_gau = ${before - 2000}, updated_at = now()
+          WHERE id = '${BUCKET}'`,
+      );
+    });
+
+    const interim = b.begin(async (tx) => {
+      await tx.unsafe(`SET LOCAL app.rls_bypass = 'on'`);
+      await sleep(100);
+      await tx.unsafe(
+        `UPDATE billing.gau_buckets
+            SET overage_invoiced_gau = overage_invoiced_gau + 3000,
+                interim_seq = interim_seq + 1,
+                updated_at = now()
+          WHERE id = '${BUCKET}'`,
+      );
+    });
+
+    await Promise.all([reversal, interim]);
+
+    const after = await scalar(
+      `SELECT (purchased_gau * 100000 + overage_invoiced_gau)::bigint AS n
+         FROM billing.gau_buckets WHERE id = '${BUCKET}'`,
+    );
+    // 8,000 purchased and 3,000 overage: the debit landed and the increment
+    // was not reverted. Encoded in one scalar so a single query proves both.
+    expect(after).toBe(8000 * 100000 + 3000);
+    // The CHECK is still satisfied, which Postgres would have refused otherwise.
+    expect(
+      await scalar(
+        `SELECT (overage_invoiced_gau <= used_gau)::int AS n
+           FROM billing.gau_buckets WHERE id = '${BUCKET}'`,
+      ),
+    ).toBe(1);
+  });
+});
+
 describe("grant vs refund on one PaymentIntent", () => {
   it("WITHOUT the lock, both commit and the refunded units stay spendable", async () => {
     // The defect, driven against the real schema. Neither transaction did

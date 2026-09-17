@@ -411,6 +411,46 @@ and standing in for a re-read with a held snapshot is precisely the defect. The
 change removed 14 lines net and one parameter, which is the usual sign that the
 safety argument was doing work the code should have been doing.
 
+### 12. The writers of `gau_buckets`, named
+
+§7 and §11 both rested on a claim about "every other writer", which is the
+unnamed-set shape §11 itself warns about. So here is the set, at the time of
+writing: eight writers, none in tests.
+
+| site | columns |
+|---|---|
+| `gau-settlements:112` | `open_topup_settlement_id`, `topup_seq` (+1), `updated_at` |
+| `gau-settlements:164` | `overage_invoiced_gau` (+q), `interim_seq` (+1), `updated_at` |
+| `gau-settlements:264` | `open_topup_settlement_id = null`, `updated_at` |
+| `gau-settlements:469` | `closed_at`, `updated_at` |
+| `gau-settlements:478` | `closed_at`, `overage_invoiced_gau` (+q), `updated_at` |
+| `gau-settlements:856` | `open_topup_settlement_id = null`, `updated_at` |
+| `gau-bucket:268` | ON CONFLICT: `used_gau` (+), `purchased_gau` (+), `updated_at` |
+| `gau-reversals:193` | `purchased_gau` (absolute), `carried_gau` (absolute), `updated_at` |
+
+On the columns the reversal writes, the only other writer is the upsert's
+relative increment — the one §7 and §11 enumerated. `carried_gau` is stronger
+still: nothing else writes it at all after creation, because the upsert's
+conflict branch does not name it.
+
+The reversal never names `used_gau`, so it cannot participate in violating
+`gau_buckets_overage_invoiced_within_used`, which couples that column to
+`overage_invoiced_gau`.
+
+**One correction to a plausible worry.** A read-modify-write that reverts a
+column it did not mean to change is a real shape, and it is *not reachable*
+here: the read feeding the write happens inside the row lock, so its values are
+never stale, and a whole-object write would be correct too. That was checked
+against real Postgres rather than reasoned — the mutation stays green across
+four runs, and a test claiming to discriminate it would have been a test proving
+nothing.
+
+Naming only the owned columns is therefore defence in depth, not the guarantee.
+It is asserted anyway, because the guarantee is a property of where the *read*
+sits, and a future edit could move it outside the lock while leaving the write
+looking identical. The column-ownership assertion is what survives that edit; it
+fails when the `.set()` is widened.
+
 ## Consequences
 
 - A purchase made before this change has no `stripe_payment_intent_id` and no

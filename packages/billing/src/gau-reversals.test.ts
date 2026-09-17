@@ -1128,3 +1128,82 @@ describe("a second partial refund after a period rollover (ADR-085 §11)", () =>
     });
   });
 });
+
+describe("the debit writes only the columns it owns (ADR-085 §11)", () => {
+  // `billing.gau_buckets` has eight writers. Seven of them set columns this one
+  // never names — overage_invoiced_gau (+q), closed_at, interim_seq, topup_seq,
+  // open_topup_settlement_id — and two of those are coupled to used_gau by the
+  // CHECK `gau_buckets_overage_invoiced_within_used`.
+  //
+  // Today the row lock already makes this safe: the read that feeds the write
+  // happens inside it (`ensureCurrentBucket` returns the locked row), so the
+  // values are never stale and even a whole-object write would be correct —
+  // verified against real Postgres, where that mutation stays green.
+  //
+  // This is asserted anyway, because that safety is a property of where the
+  // READ sits, and nothing stops a future edit moving it outside the lock while
+  // leaving the write looking identical. Naming only the owned columns is the
+  // property that survives that edit. Round six's lesson applied to round six's
+  // own fix: a verification that lives only in a reviewer's head is not a
+  // mechanism.
+
+  const OWNED = ["purchasedGau", "carriedGau", "updatedAt"].sort();
+
+  it("names exactly purchased, carried and updatedAt — nothing else", async () => {
+    seedBucket({ purchasedGau: 10_000 });
+    seedCheckoutSettlement();
+
+    await reverseGauPurchaseForRefund(refundedCharge());
+
+    const bucketWrites = store.log.filter(
+      (e) => e.op === "update" && e.table === "buckets",
+    );
+    expect(bucketWrites.length).toBeGreaterThan(0);
+    for (const write of bucketWrites) {
+      expect(Object.keys(write.set ?? {}).sort()).toEqual(OWNED);
+    }
+  });
+
+  it("never names usedGau or overageInvoicedGau, the CHECK-coupled pair", async () => {
+    seedBucket({ purchasedGau: 10_000, usedGau: 4_000, overageInvoicedGau: 0 });
+    seedCheckoutSettlement();
+
+    await reverseGauPurchaseForRefund(refundedCharge());
+
+    for (const write of store.log.filter(
+      (e) => e.op === "update" && e.table === "buckets",
+    )) {
+      const keys = Object.keys(write.set ?? {});
+      expect(keys).not.toContain("usedGau");
+      expect(keys).not.toContain("overageInvoicedGau");
+      expect(keys).not.toContain("closedAt");
+      expect(keys).not.toContain("openTopupSettlementId");
+    }
+    // And the row still carries what it carried.
+    expect(store.buckets[0]).toMatchObject({
+      usedGau: 4_000,
+      overageInvoicedGau: 0,
+    });
+  });
+
+  it("holds on the cumulative-increase path too, which is where the last two defects were", async () => {
+    seedBucket({ purchasedGau: 10_000, usedGau: 4_000 });
+    seedCheckoutSettlement();
+
+    await reverseGauPurchaseForRefund(
+      refundedCharge({ amountRefundedCents: 2_750 }),
+    );
+    store.log.length = 0;
+    await reverseGauPurchaseForRefund(
+      refundedCharge({ amountRefundedCents: 5_500 }),
+    );
+
+    const bucketWrites = store.log.filter(
+      (e) => e.op === "update" && e.table === "buckets",
+    );
+    expect(bucketWrites.length).toBeGreaterThan(0);
+    for (const write of bucketWrites) {
+      expect(Object.keys(write.set ?? {}).sort()).toEqual(OWNED);
+    }
+  });
+});
