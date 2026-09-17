@@ -250,8 +250,14 @@ function wire(db: Fake, apiKey: Record<string, unknown> = HOST_KEY): void {
               const result = Promise.resolve([
                 { id: "x" },
               ]) as Promise<unknown> & { returning: () => Promise<unknown> };
+              // `api_keys` answers with the rows the scope sweep reached: both
+              // credentials the enrollment minted (ADR-078). A host enrolled
+              // before the scope marker existed returns nothing instead, and
+              // that fallback is covered in tacho.enrollment.revoke.test.ts.
               result.returning = async () =>
-                tableName(table) === "control_commands" ? [{ id: "x" }] : [];
+                tableName(table) === "api_keys"
+                  ? [{ id: "aky_host" }, { id: "aky_gateway" }]
+                  : [{ id: "x" }];
               return result;
             },
           }),
@@ -446,6 +452,8 @@ describe("revoke_tacho_enrollment", () => {
       OPERATOR,
     );
     expect(first.status).toBe("revoked");
+    // One statement retires both the control-plane key and the gateway key,
+    // selected by the enrollment marker they share.
     expect(db.updates.map((u) => u.table)).toEqual(["hosts", "api_keys"]);
     expect(db.inserts[0]?.values).toMatchObject({
       command: "revoke",
