@@ -4,6 +4,7 @@
 // overlays, so the layout places it beside the page without a wrapper, and it
 // labels the page's list tables for the phone's card layout.
 import { AccountDialog } from "./account-dialog";
+import { AssistantFlyout } from "./assistant-flyout";
 import { useCardTables } from "./card-tables";
 import { CommandMenu } from "./command-menu";
 import { NavDrawer, ShellMobileNav } from "./mobile-nav";
@@ -22,6 +23,7 @@ export function ShellClient({ data }: { data: ShellData }) {
       <NavDrawer data={data} />
       <CommandMenu data={data} />
       <AccountDialog data={data} />
+      <AssistantFlyout />
     </ShellStateProvider>
   );
 }

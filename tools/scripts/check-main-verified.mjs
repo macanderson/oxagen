@@ -296,7 +296,10 @@ async function main() {
 
   // Wait the grace out rather than suppressing the finding until the next push
   // or the daily cron. Only when something is actually inside the grace.
-  const wait = Math.min(graceRemainingMs(applyGrace(states, GRACE_MS), GRACE_MS), MAX_WAIT_MS);
+  const wait = Math.min(
+    graceRemainingMs(applyGrace(states, GRACE_MS), GRACE_MS),
+    MAX_WAIT_MS,
+  );
   if (wait > 0) {
     console.log(
       `[main-verified] within the grace; re-reading in ${Math.round(wait / 1000)}s`,
