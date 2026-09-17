@@ -20,11 +20,11 @@
  *   - `repository`: the bound main repo, or null while none is bound.
  *   - `github.connected`: whether an installation is attached, which is
  *     exactly the precondition `bind_main_repository` checks.
- *   - `github.installUrl` / `github.manageUrl`: the door to GitHub. The
- *     install URL carries the API's HMAC-signed state naming this org and
+ *   - `github.installUrl` / `github.manageUrl`: the doors to GitHub. The
+ *     Connect URL carries the API's HMAC-signed state naming this org and
  *     workspace, so the callback can attach the installation to the workspace
- *     that asked for it and to no other. It expires, and it is null when the
- *     GitHub App is not configured for this deployment.
+ *     that asked for it and to no other. It expires, and both are null when
+ *     this deployment cannot complete a connect round trip.
  *
  * The installation id is deliberately NOT in the output. A caller that could
  * name an installation could mint tokens for another account's installation,
@@ -42,7 +42,7 @@ export const repositoryMainGet = registerCapability({
   name: "get_main_repository",
   domain: "repository",
   description:
-    "The workspace's main repository, whether a GitHub App installation is attached, and the signed URLs to install or to change which repositories it reaches.",
+    "The workspace's main repository, whether a GitHub App installation is attached, and the signed URLs to connect GitHub or to change which repositories the installation reaches.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -81,9 +81,20 @@ export const repositoryMainGet = registerCapability({
            * `conflict: github_not_connected`.
            */
           connected: z.boolean(),
-          /** Install the Oxagen GitHub App against this workspace; null when the App is unconfigured. */
+          /**
+           * The Connect action: GitHub's user-authorization URL
+           * (`login/oauth/authorize`) carrying the API's HMAC-signed state.
+           * NOT `installations/new` — that only round-trips a `code` and our
+           * state on the FIRST install of the App on an account, so with it
+           * here a reconnect, and a second workspace connecting to an account
+           * that already has the App, both dead-ended at the callback's
+           * no-state branch. Null when this deployment cannot complete the
+           * round trip (any of the App's client id, client secret, slug or
+           * state secret unset) — the handler returns no door rather than one
+           * the callback answers with 503.
+           */
           installUrl: z.string().url().nullable(),
-          /** Change which repositories the existing installation reaches; null when the App is unconfigured. */
+          /** Change which repositories the existing installation reaches, and install it on a further account; null on the same condition as `installUrl`. */
           manageUrl: z.string().url().nullable(),
         })
         .strict(),

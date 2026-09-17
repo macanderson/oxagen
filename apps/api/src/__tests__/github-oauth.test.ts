@@ -919,6 +919,23 @@ describe("GET /oauth/github/callback", () => {
         ok: true,
         status: 200,
         json: async () => ({ id: 99, login: "u" }),
+      })
+      // The wizard leg verifies its installation_id against
+      // /user/installations too, and 142003699 is one this user reaches.
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          total_count: 1,
+          installations: [
+            {
+              id: 142003699,
+              account: { login: "acme", type: "Organization", avatar_url: "" },
+              repository_selection: "all",
+              app_slug: APP_SLUG,
+            },
+          ],
+        }),
       });
 
     // Capture the UPDATE .set() payload to assert the merge.
@@ -1406,11 +1423,173 @@ describe("GET /oauth/github/callback", () => {
     );
   });
 
-  it("legacy wizard path is unchanged: no /user/installations check, no refusal", async () => {
-    // The wizard's consumers call GitHub with the USER token
-    // (`GET /user/installations/:id/repositories`), which GitHub scopes to that
-    // user itself — so this leg needs no extra check and must not gain one.
-    // Exactly two fetches: the token exchange and /user.
+  // ── the legacy wizard leg is checked too ──────────────────────────────────
+  //
+  // This leg used to be exempt, on the reasoning that everything downstream of
+  // it called GitHub with the USER token, which GitHub scopes to that user
+  // itself. That reasoning expired with #2967:
+  // `resolveWorkspaceGithubInstallation` hands ANY github connection row
+  // carrying an installationId — legacy wizard rows included — to
+  // `list_installation_repositories` and `bind_main_repository`, and those mint
+  // a token with the platform App's PRIVATE KEY, which checks no caller
+  // entitlement. So a wizard-written id is an id the App acts through, and the
+  // exemption was the same hole by another door.
+
+  /**
+   * The withSystemDb sequence a legacy-leg callback runs: the connection
+   * lookup, the oauth upsert, the UPDATE (captured here), then the two slug
+   * lookups.
+   */
+  function queueLegacyLeg(deliveryConfig: Record<string, unknown> = {}) {
+    let updateSetArg: Record<string, unknown> | undefined;
+    const updateChain = {
+      set: vi.fn((arg: Record<string, unknown>) => {
+        updateSetArg = arg;
+        return updateChain;
+      }),
+      where: vi.fn().mockResolvedValue(undefined),
+    };
+    const updateTx = {
+      ...makeTxChain([]),
+      update: vi.fn().mockReturnValue(updateChain),
+    };
+
+    mocks.withSystemDb
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([{ id: "uuid-conn-legacy", deliveryConfig }]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([{ id: "oauth-legacy" }]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(updateTx as unknown as TxLike),
+      );
+    queueSlugLookups();
+
+    return {
+      get updateSet() {
+        return updateSetArg;
+      },
+    };
+  }
+
+  it("legacy wizard: an installation_id the authorizing user cannot reach is NEVER written", async () => {
+    // The same forgery the settings leg refuses, through the wizard door: a
+    // valid state for the attacker's OWN connection, a real OAuth code, and a
+    // numeric installation id belonging to someone else. /user/installations is
+    // the authority, and it does not list 999999.
+    //
+    // This assertion is the inverse of the one that used to stand here, which
+    // proved 999999 WAS written — the vulnerability, encoded as a test.
+    queueVerifiedInstallFetches([555]);
+    const captured = queueLegacyLeg();
+
+    const res = await makeCallbackReq({
+      code: "auth-code",
+      state: buildValidState({ connectionId: "con_ABC" }),
+      installation_id: "999999",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    // The unproven fact is dropped: deliveryConfig is not touched at all.
+    expect(captured.updateSet).not.toHaveProperty("deliveryConfig");
+    // And the check really ran, against the user's own list.
+    expect(mocks.fetch).toHaveBeenCalledTimes(3);
+    expect(mocks.fetch.mock.calls[2]?.[0]).toContain(
+      "https://api.github.com/user/installations",
+    );
+  });
+
+  it("legacy wizard: a refused installation_id keeps the oauth link and the status reset", async () => {
+    // A refusal is bounded to the id. `oauthAccountId` names a token GitHub
+    // itself minted in exchange for a code GitHub issued, and the status reset
+    // follows from the HMAC-verified state — neither is the redirect's claim.
+    // Refusing the whole update would strip a legitimately exchanged token and
+    // dead-end an honest user at "OAuth token not found for connection".
+    queueVerifiedInstallFetches([555]);
+    const captured = queueLegacyLeg({ syncDepthDays: 90 });
+
+    await makeCallbackReq({
+      code: "auth-code",
+      state: buildValidState({ connectionId: "con_ABC" }),
+      installation_id: "999999",
+      setup_action: "install",
+    });
+
+    expect(captured.updateSet?.["oauthAccountId"]).toBe("oauth-legacy");
+    expect(captured.updateSet?.["status"]).toBe("pending_setup");
+    expect(captured.updateSet).not.toHaveProperty("deliveryConfig");
+  });
+
+  it("legacy wizard: an installation_id the user CAN reach is written, and only then", async () => {
+    // The mirror, so the check is not merely proven to refuse everything: the
+    // same request, differing only in whether GitHub lists the id, attaches —
+    // and still merges rather than clobbering the wizard's existing keys.
+    queueVerifiedInstallFetches([999999]);
+    const captured = queueLegacyLeg({ syncDepthDays: 90 });
+
+    const res = await makeCallbackReq({
+      code: "auth-code",
+      state: buildValidState({ connectionId: "con_ABC" }),
+      installation_id: "999999",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    expect(captured.updateSet?.["deliveryConfig"]).toEqual({
+      syncDepthDays: 90,
+      installationId: "999999",
+    });
+  });
+
+  it("legacy wizard: an installation_id with NO code to verify it against is refused", async () => {
+    // `code` is optional on this leg, so omitting it is exactly how the forgery
+    // is cheapest: no user token means nothing can testify that this person
+    // reaches this installation, and an unverifiable claim is no claim.
+    // Without a code there is no oauth upsert, so the sequence is one shorter.
+    let updateSetArg: Record<string, unknown> | undefined;
+    const updateChain = {
+      set: vi.fn((arg: Record<string, unknown>) => {
+        updateSetArg = arg;
+        return updateChain;
+      }),
+      where: vi.fn().mockResolvedValue(undefined),
+    };
+    const updateTx = {
+      ...makeTxChain([]),
+      update: vi.fn().mockReturnValue(updateChain),
+    };
+    mocks.withSystemDb
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(
+          makeTxChain([
+            { id: "uuid-conn-legacy", deliveryConfig: {} },
+          ]) as TxLike,
+        ),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(updateTx as unknown as TxLike),
+      );
+    queueSlugLookups();
+
+    const res = await makeCallbackReq({
+      state: buildValidState({ connectionId: "con_ABC" }),
+      installation_id: "555",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    expect(updateSetArg).not.toHaveProperty("deliveryConfig");
+    // No GitHub call at all: there was no token to make one with.
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it("legacy wizard: a malformed installation_id is not written", async () => {
+    // Same pre-filter as the settings leg: `installationIdOf` only accepts a
+    // plain positive integer, so anything else would leave a connection that
+    // looks attached and that every reader silently skips. Only two fetches are
+    // queued, because the syntax guard refuses before the round trip is spent.
     mocks.fetch
       .mockResolvedValueOnce({
         ok: true,
@@ -1426,51 +1605,18 @@ describe("GET /oauth/github/callback", () => {
         status: 200,
         json: async () => ({ id: 11, login: "legacy" }),
       });
-
-    let updateSetArg: Record<string, unknown> | undefined;
-    const updateChain = {
-      set: vi.fn((arg: Record<string, unknown>) => {
-        updateSetArg = arg;
-        return updateChain;
-      }),
-      where: vi.fn().mockResolvedValue(undefined),
-    };
-    const updateTx = {
-      ...makeTxChain([]),
-      update: vi.fn().mockReturnValue(updateChain),
-    };
-
-    // conn lookup, oauth upsert, UPDATE, org slug, ws slug.
-    mocks.withSystemDb
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
-        fn(
-          makeTxChain([
-            { id: "uuid-conn-legacy", deliveryConfig: {} },
-          ]) as TxLike,
-        ),
-      )
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
-        fn(makeTxChain([{ id: "oauth-legacy" }]) as TxLike),
-      )
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
-        fn(updateTx as unknown as TxLike),
-      );
-    queueSlugLookups();
+    const captured = queueLegacyLeg();
 
     const res = await makeCallbackReq({
       code: "auth-code",
-      // A connectionId in the state → the legacy in-wizard leg. The id here is
-      // one no /user/installations list would contain, and it is written anyway.
       state: buildValidState({ connectionId: "con_ABC" }),
-      installation_id: "999999",
+      installation_id: "not-a-number",
       setup_action: "install",
     });
 
     expect(res.status).toBe(302);
-    expect(updateSetArg?.["deliveryConfig"]).toEqual({
-      installationId: "999999",
-    });
-    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+    expect(captured.updateSet).not.toHaveProperty("deliveryConfig");
+    // Refused on syntax alone — the round trip to GitHub is never spent.
     for (const [url] of mocks.fetch.mock.calls as [string, unknown][]) {
       expect(url).not.toContain("/user/installations");
     }

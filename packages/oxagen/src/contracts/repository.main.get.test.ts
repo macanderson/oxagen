@@ -33,8 +33,11 @@ describe("get_main_repository contract", () => {
       },
       github: {
         connected: true,
+        // The Connect action is the identity leg, not installations/new:
+        // installations/new returns neither our state nor a code once the App
+        // is already installed on the target account.
         installUrl:
-          "https://github.com/apps/oxagen/installations/new?state=abc.def",
+          "https://github.com/login/oauth/authorize?client_id=Iv1.x&state=abc.def",
         manageUrl: "https://github.com/apps/oxagen/installations/new",
       },
     };
@@ -52,8 +55,11 @@ describe("get_main_repository contract", () => {
       repository: null,
       github: {
         connected: false,
+        // The Connect action is the identity leg, not installations/new:
+        // installations/new returns neither our state nor a code once the App
+        // is already installed on the target account.
         installUrl:
-          "https://github.com/apps/oxagen/installations/new?state=abc.def",
+          "https://github.com/login/oauth/authorize?client_id=Iv1.x&state=abc.def",
         manageUrl: "https://github.com/apps/oxagen/installations/new",
       },
     };

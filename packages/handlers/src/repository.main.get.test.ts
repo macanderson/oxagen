@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { repositoryMainGet } from "@oxagen/oxagen/contracts/repository.main.get";
 import { makeCTX } from "./test-utils/fixtures";
 
@@ -21,7 +21,10 @@ vi.mock("@oxagen/iam/org-role", () => ({
   resolveActorWorkspaceRole: async () => null,
 }));
 
-import { createMainRepositoryGetHandler } from "./repository.main.get";
+import {
+  createMainRepositoryGetHandler,
+  envGithubUrls,
+} from "./repository.main.get";
 
 const BOUND_AT = new Date("2026-09-15T12:06:00.000Z");
 
@@ -35,7 +38,10 @@ const BINDING_ROW = {
 };
 
 const URLS = {
-  installUrl: "https://github.com/apps/oxagen/installations/new?state=abc.def",
+  // The Connect action is the IDENTITY leg, not installations/new — see
+  // `envGithubUrls` and the env-set suite at the bottom of this file.
+  installUrl:
+    "https://github.com/login/oauth/authorize?client_id=Iv1.x&state=abc.def",
   manageUrl: "https://github.com/apps/oxagen/installations/new",
 };
 
@@ -235,4 +241,88 @@ describe("get_main_repository", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
+});
+
+/**
+ * The env-derived doors — the production `githubUrls`.
+ *
+ * Two behaviours are pinned here. WHICH GitHub URL the Connect action opens:
+ * `installations/new` completes through GitHub's stateless setup/update
+ * redirect when the App is already installed on the target account, returning
+ * neither our signed state nor a fresh `code`, so the callback takes its
+ * no-state branch and attaches nothing — reconnecting, and connecting a second
+ * workspace to an account that already has the App, were both impossible from
+ * the dialog. And WHEN a door is offered at all: only where the complete set
+ * needed to finish the round trip is configured, since a Connect the callback
+ * answers with 503 strands the operator on GitHub with nothing to explain why.
+ */
+describe("envGithubUrls", () => {
+  const ENV = {
+    GITHUB_APP_CLIENT_ID: "Iv1.client",
+    GITHUB_APP_CLIENT_SECRET: "client-secret",
+    GITHUB_APP_SLUG: "oxagen-test",
+    GITHUB_APP_INSTALL_STATE_SECRET: "state-secret-32-bytes-long!!!!!!",
+  } as const;
+
+  const SCOPE = { orgId: "org-1", workspaceId: "ws-1" };
+
+  function withEnv(vars: Record<string, string | undefined>) {
+    for (const [k, v] of Object.entries(vars)) {
+      if (v === undefined) vi.stubEnv(k, "");
+      else vi.stubEnv(k, v);
+    }
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("offers the IDENTITY URL as the Connect action, not installations/new", () => {
+    withEnv(ENV);
+    const urls = envGithubUrls.githubUrls(SCOPE);
+    expect(urls).not.toBeNull();
+    const installUrl = urls!.installUrl;
+    expect(installUrl).toContain("https://github.com/login/oauth/authorize");
+    // The URL that dead-ends when the App is already installed.
+    expect(installUrl).not.toContain("installations/new");
+    const parsed = new URL(installUrl);
+    expect(parsed.searchParams.get("client_id")).toBe(ENV.GITHUB_APP_CLIENT_ID);
+    // Still signed, and still naming this org+workspace: the callback attaches
+    // the installation to the workspace that asked and to no other.
+    const state = parsed.searchParams.get("state") ?? "";
+    const payload = JSON.parse(
+      Buffer.from(state.slice(0, state.lastIndexOf(".")), "base64url").toString(
+        "utf8",
+      ),
+    ) as { orgId: string; workspaceId: string; returnTo: string };
+    expect(payload).toMatchObject({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      returnTo: "settings",
+    });
+  });
+
+  it("keeps installations/new as the manage door", () => {
+    withEnv(ENV);
+    expect(envGithubUrls.githubUrls(SCOPE)?.manageUrl).toBe(
+      `https://github.com/apps/${ENV.GITHUB_APP_SLUG}/installations/new`,
+    );
+  });
+
+  // One case per var: each is independently optional in the env registry, so a
+  // deployment really can hold three of the four.
+  for (const missing of [
+    "GITHUB_APP_CLIENT_ID",
+    "GITHUB_APP_CLIENT_SECRET",
+    "GITHUB_APP_SLUG",
+    "GITHUB_APP_INSTALL_STATE_SECRET",
+  ] as const) {
+    it(`offers no door when ${missing} is unset`, () => {
+      withEnv({ ...ENV, [missing]: undefined });
+      // Null is the contract's honest "unconfigured", which the dialog renders
+      // as "not configured for this deployment" — better than a Connect the
+      // callback refuses with 503 after the operator has left for GitHub.
+      expect(envGithubUrls.githubUrls(SCOPE)).toBeNull();
+    });
+  }
 });
