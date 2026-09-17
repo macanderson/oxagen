@@ -19,7 +19,10 @@ mocks.updateSet.mockReturnValue({ where: mocks.updateWhere });
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
     ...real,
     db: () => ({
       update: (_table: unknown) => ({ set: mocks.updateSet }),
@@ -29,6 +32,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         update: (_table: unknown) => ({ set: mocks.updateSet }),
       }),
   };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 import { workspaceModelSettingsWriteHandler } from "./workspace.model_settings.write";

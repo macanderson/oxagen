@@ -29419,6 +29419,13 @@
           "bundle_etag": {
             "type": "string",
             "maxLength": 128
+          },
+          "bundle_features": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            }
           }
         },
         "additionalProperties": false

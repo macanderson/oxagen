@@ -43,6 +43,21 @@ describe("enroll_host contract", () => {
     ).toBe(false);
   });
 
+  it("accepts the bundleFeatures the CLI actually sends on the token path", () => {
+    // The key-parity loop above only proves the field EXISTS; it would still
+    // pass if the field were typed to reject every value. This parses the
+    // payload `packages/tacho/src/cli/enroll.ts` posts to /v1/tacho/enroll.
+    const parsed = tachoHostEnroll.input.parse({
+      ...FACTS,
+      bundleFeatures: ["gateway_tools", "kill_switch"],
+    });
+    expect(parsed.bundleFeatures).toEqual(["gateway_tools", "kill_switch"]);
+    // Absent and empty are the same answer: a build that predates the field.
+    expect(
+      tachoHostEnroll.input.parse({ ...FACTS }).bundleFeatures,
+    ).toBeUndefined();
+  });
+
   it("answers the enrollment document plus the agent and the tenant the token named", () => {
     for (const key of Object.keys(tachoEnrollmentCreate.output.shape)) {
       expect(tachoHostEnroll.output.shape, key).toHaveProperty(key);

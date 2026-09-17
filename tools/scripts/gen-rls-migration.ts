@@ -48,27 +48,83 @@ const __dirname = dirname(__filename);
 const ORG = `nullif(current_setting('app.current_org_id', true), '')::uuid`;
 const WS = `nullif(current_setting('app.current_workspace_id', true), '')::uuid`;
 const BYPASS = `current_setting('app.rls_bypass', true) = 'on'`;
+/**
+ * The organisation-wide READ mode, set by `withOrgDb` and by nothing else
+ * (ADR-086).
+ *
+ * It is the whole predicate of a SEPARATE `FOR SELECT` policy
+ * (`tenant_org_wide_read`), and appears in no clause of `tenant_isolation`.
+ * That separation is the mechanism, not a tidiness: Postgres applies a
+ * policy's USING clause to the OLD rows of an UPDATE and of a DELETE as well
+ * as to a SELECT, and WITH CHECK never runs for a DELETE at all. An org-wide
+ * disjunct inside `tenant_isolation`'s USING therefore does not widen the
+ * READ — it widens DELETE to every workspace in the organisation, and on
+ * `workspace_nullable` it lets an UPDATE move a workspace row to
+ * `workspace_id = NULL`, which the unchanged WITH CHECK then admits. A seam
+ * documented as read-only would have been a destructive one.
+ *
+ * Permissive policies are OR'd WITHIN a command type and AND'd ACROSS them, so
+ * a `FOR SELECT` policy widens reads and cannot reach the old-row test of an
+ * UPDATE or a DELETE. The destructive path cannot SEE the widened row set —
+ * which is a property of the shape, not of how callers behave. The witness is
+ * `packages/database/integration/org-only-sentinel-refusal.test.ts`, which runs
+ * the DELETE and reads the row count rather than reading this file's output.
+ *
+ * `tenant_isolation`'s USING is exactly what it was before ADR-086, which is
+ * also what keeps the org-only refusal intact: it still casts the workspace
+ * GUC, so the org-only marker still raises 22P02 at plan time. That is the
+ * property the refusal is built on (ADR-086) and the reason `withOrgDb` leaves
+ * the workspace GUC empty rather than at the org-only marker.
+ */
+const ORG_WIDE = `current_setting('app.org_wide', true) = 'on'`;
 
 interface Predicates {
-  /** Read filter (SELECT/UPDATE/DELETE visibility). */
+  /**
+   * `tenant_isolation`'s USING — the OLD-row test, which Postgres applies to
+   * SELECT, to the rows an UPDATE may touch and to the rows a DELETE may
+   * destroy. It never carries the org-wide disjunct; see `ORG_WIDE`.
+   */
   readonly using: string;
-  /** Write filter (INSERT/UPDATE row acceptance). */
+  /** `tenant_isolation`'s WITH CHECK — the NEW-row test (INSERT/UPDATE). */
   readonly check: string;
+  /**
+   * `tenant_org_wide_read`'s USING — a `FOR SELECT` policy OR'd with the one
+   * above, or null for a class that gets no organisation-wide widening.
+   */
+  readonly orgWideRead: string | null;
 }
 
-function predicates(cls: PolicyClass): Predicates {
+/** The read-widening policy's name. Dropped for every table, created for some. */
+const ORG_WIDE_POLICY = "tenant_org_wide_read";
+
+/**
+ * The org-wide READ predicate for a class that has an `org_id` to fence with.
+ * The org fence is repeated here because this policy stands on its own: it is
+ * OR'd with `tenant_isolation`, so anything it admits is admitted outright.
+ */
+const orgWideRead = () => `${ORG_WIDE} AND org_id = ${ORG}`;
+
+export function predicates(cls: PolicyClass): Predicates {
   if (cls === "org_only") {
     const p = `${BYPASS} OR (org_id = ${ORG})`;
-    return { using: p, check: p };
+    // No workspace half to widen — an org_only read is already org-wide.
+    return { using: p, check: p, orgWideRead: null };
   }
   if (cls === "workspace_nullable") {
-    const p = `${BYPASS} OR (org_id = ${ORG} AND (workspace_id IS NULL OR workspace_id = ${WS}))`;
-    return { using: p, check: p };
+    return {
+      using: `${BYPASS} OR (org_id = ${ORG} AND (workspace_id IS NULL OR workspace_id = ${WS}))`,
+      check: `${BYPASS} OR (org_id = ${ORG} AND (workspace_id IS NULL OR workspace_id = ${WS}))`,
+      orgWideRead: orgWideRead(),
+    };
   }
   if (cls === "workspace_only") {
-    // Membership/join tables that carry workspace_id but no org_id.
+    // Membership/join tables that carry workspace_id but no org_id. There is
+    // no org column to fence the org-wide read with, so `app.org_wide` alone
+    // would open the table to every tenant. It gets no org-wide policy at all:
+    // an organisation-wide read of a workspace_only table has to reach it
+    // through the org-scoped parent it hangs off.
     const p = `${BYPASS} OR (workspace_id = ${WS})`;
-    return { using: p, check: p };
+    return { using: p, check: p, orgWideRead: null };
   }
   if (cls === "org_or_global") {
     // Nullable org_id: NULL rows are a shared/global catalog. This is the ONE
@@ -81,11 +137,16 @@ function predicates(cls: PolicyClass): Predicates {
     return {
       using: `${BYPASS} OR (org_id IS NULL OR org_id = ${ORG})`,
       check: `${BYPASS} OR (org_id = ${ORG})`,
+      // Like org_only: the read already spans the organisation.
+      orgWideRead: null,
     };
   }
   // standard: org_id + workspace_id both required
-  const p = `${BYPASS} OR (org_id = ${ORG} AND workspace_id = ${WS})`;
-  return { using: p, check: p };
+  return {
+    using: `${BYPASS} OR (org_id = ${ORG} AND workspace_id = ${WS})`,
+    check: `${BYPASS} OR (org_id = ${ORG} AND workspace_id = ${WS})`,
+    orgWideRead: orgWideRead(),
+  };
 }
 
 const DEFAULT_OUT_NAME = "20260612140000_restore_rls_policies.sql";
@@ -146,13 +207,24 @@ export function renderMigration({
   outName,
 }: Selection): string {
   const blocks = entries.map(({ table, policyClass }) => {
-    const { using, check } = predicates(policyClass);
+    const { using, check, orgWideRead: read } = predicates(policyClass);
+    // The org-wide policy is DROPped for every table and CREATEd for some, so
+    // a table whose class loses its widening loses the policy rather than
+    // keeping a stale one the next run no longer mentions.
+    const widen =
+      read === null
+        ? ""
+        : `
+CREATE POLICY ${ORG_WIDE_POLICY} ON ${table}
+  FOR SELECT
+  USING (${read});`;
     return `ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ${table} FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON ${table};
+DROP POLICY IF EXISTS ${ORG_WIDE_POLICY} ON ${table};
 CREATE POLICY tenant_isolation ON ${table}
   USING (${using})
-  WITH CHECK (${check});`;
+  WITH CHECK (${check});${widen}`;
   });
 
   return `-- GENERATED by tools/scripts/gen-rls-migration.ts — do not edit by hand.
@@ -167,6 +239,18 @@ CREATE POLICY tenant_isolation ON ${table}
 -- Bypass-aware: app.rls_bypass='on' (set by withSystemDb / the seeding window
 -- when TENANT_RLS_ENFORCEMENT_ENABLED=false) disables filtering; tenant
 -- sessions get app.current_org_id / app.current_workspace_id via withTenantDb.
+--
+-- Org-wide-aware (ADR-086): app.org_wide='on', set by withOrgDb and nothing
+-- else, widens the READ of an org-scoped table to every workspace in the
+-- organisation while the org fence still holds. It is the whole predicate of a
+-- separate FOR SELECT policy, tenant_org_wide_read, and appears NOWHERE in
+-- tenant_isolation. USING is the OLD-row test for UPDATE and DELETE too, and
+-- WITH CHECK never runs for DELETE, so an org-wide disjunct inside
+-- tenant_isolation would widen deletion to the organisation rather than widen
+-- the read. Permissive policies are OR'd within a command and AND'd across
+-- command types, so a FOR SELECT policy cannot reach an UPDATE's or a DELETE's
+-- old-row test. workspace_only tables get no such policy: no org column to
+-- fence with. Witness: integration/org-only-sentinel-refusal.test.ts.
 -- FORCE applies policies to the table owner too; only superusers and
 -- BYPASSRLS roles are exempt — oxagen_app is neither.
 -- ${entries.length} of ${POLICY_MANIFEST.length} manifest tables${onlyArg ? ` (${onlyArg})` : ""}.

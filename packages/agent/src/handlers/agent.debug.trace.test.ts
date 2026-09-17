@@ -4,7 +4,11 @@ import type { TraceExecutionNode } from "@oxagen/oxagen/contracts/agent.trace.ge
 // ── Mocks (the handler composes four collaborators; each is mocked). ──
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...real, withTenantDb: vi.fn() };
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = { ...real, withTenantDb: vi.fn() };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 vi.mock("./agent.trace.get", () => ({ agentTraceGetHandler: vi.fn() }));
 vi.mock("@oxagen/telemetry", async (importOriginal) => {

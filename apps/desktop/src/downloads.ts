@@ -207,3 +207,207 @@ ${section("Linux", "x86_64. Install the package for your distribution; the AppIm
 </html>
 `;
 }
+
+/**
+ * What `aws` reported when asked whether a version is already published.
+ *
+ * `status` is `null` when the process never ran or was killed, which is why
+ * it is kept separate from `spawnFailed` and `signal` rather than coerced to
+ * a number: an exit code the CLI never produced must not be mistaken for one
+ * it did.
+ */
+export interface PublicationProbe {
+  status: number | null;
+  signal: string | null;
+  spawnFailed: boolean;
+  /** Captured stdout — the `list-objects-v2` JSON, or "" for no keys. */
+  stdout: string;
+}
+
+export type PublicationDecision =
+  | { action: "publish" }
+  | { action: "overwrite"; message: string }
+  | { action: "stop"; code: number; message: string };
+
+/**
+ * How many objects the probe found, or `null` when its output cannot be read.
+ *
+ * `aws s3api list-objects-v2` answers with `KeyCount` and, when there is
+ * anything to list, a `Contents` array; with the CLI's own pagination merging
+ * pages it answers with `Contents` alone and prints nothing at all for a
+ * prefix that holds nothing. All three are real answers, so both fields are
+ * read and the larger wins. Anything else — output that is not JSON, a
+ * `Contents` that is not an array, a `KeyCount` that is not a number — is no
+ * answer at all and must not be rounded down to zero.
+ */
+export function countPublishedObjects(stdout: string): number | null {
+  const text = stdout.trim();
+  if (text === "") return 0;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (parsed === null || typeof parsed !== "object") return null;
+  const listing = parsed as { Contents?: unknown; KeyCount?: unknown };
+  let count = 0;
+  if (listing.Contents !== undefined && listing.Contents !== null) {
+    if (!Array.isArray(listing.Contents)) return null;
+    count = listing.Contents.length;
+  }
+  if (listing.KeyCount !== undefined && listing.KeyCount !== null) {
+    if (
+      typeof listing.KeyCount !== "number" ||
+      !Number.isFinite(listing.KeyCount)
+    )
+      return null;
+    count = Math.max(count, listing.KeyCount);
+  }
+  return count;
+}
+
+/**
+ * Whether to publish, overwrite or stop, given what the probe reported.
+ *
+ * Versioned download URLs are served `immutable, max-age=31536000`, a promise
+ * to every cache downstream of CloudFront and not only to the edge, so a
+ * republished version can stay wrong in a browser or a corporate proxy for
+ * the rest of the year no matter what is invalidated. The only safe answers
+ * are "this version is new" and "stop": every way of *not knowing* — the CLI
+ * failing, being killed, or answering something unreadable — stops, because
+ * reading a failed probe as "not published yet" would turn the one check
+ * standing between a republish and a split fleet into a no-op exactly when it
+ * is least safe to skip.
+ */
+export function decidePublication(
+  probe: PublicationProbe,
+  options: { version: string; prefix: string; allowOverwrite: boolean },
+): PublicationDecision {
+  const unknown = (why: string): PublicationDecision => ({
+    action: "stop",
+    code: 1,
+    message:
+      `✖ ${why}, so whether ${options.version} is already published is\n` +
+      "  unknown; refusing rather than risk overwriting it.",
+  });
+  if (probe.spawnFailed) return unknown("aws could not be run");
+  if (probe.signal !== null && probe.signal !== undefined)
+    return unknown(`aws was killed by ${probe.signal}`);
+  if (probe.status !== 0)
+    return unknown(`aws s3api list-objects-v2 exited ${probe.status}`);
+  const objects = countPublishedObjects(probe.stdout);
+  if (objects === null)
+    return unknown("aws printed a listing that is not JSON");
+  if (objects === 0) return { action: "publish" };
+  if (!options.allowOverwrite)
+    return {
+      action: "stop",
+      code: 1,
+      message:
+        `✖ ${options.version} is already published at ${options.prefix}/.\n` +
+        "  Those URLs were served as immutable, so caches downstream of\n" +
+        "  CloudFront may hold the old installers for up to a year and no\n" +
+        "  invalidation can reach them. Ship the fix as a new version.\n" +
+        "  If nobody was ever given these URLs, re-run with --allow-overwrite.",
+    };
+  return {
+    action: "overwrite",
+    message:
+      `! overwriting the published ${options.version}; only caches that never\n` +
+      "  fetched these URLs will see the new installers",
+  };
+}
+
+/** What the caller should print, and whether it should then stop. */
+export interface PublicationReport {
+  /** `null` when there is nothing to say. */
+  message: string | null;
+  /** Which stream the message belongs on. */
+  level: "error" | "warn" | null;
+  /** `null` means carry on; a number is the status to exit with. */
+  exitCode: number | null;
+}
+
+/**
+ * Turn a decision into what to print and whether to stop, given `--dry-run`.
+ *
+ * A dry run writes nothing — every upload is printed rather than performed —
+ * so the reason the probe exists does not apply to it: there is no republish
+ * to stop and no fleet to split. A preview that demands working credentials,
+ * or that refuses to show the plan for a version already published, is not a
+ * preview. So a dry run never exits on a stop. It still says what the real
+ * run would have decided, because someone previewing a version that is
+ * already published should be told, and someone whose session has expired
+ * should know the preview could not check — neither is a reason to withhold
+ * the plan.
+ *
+ * The leniency lives here and only here. `decidePublication` keeps its three
+ * outcomes, so the path that actually writes to S3 is decided by the same
+ * function whether or not this one is in the picture, and there is no second
+ * route to an upload.
+ */
+export function reportPublicationDecision(
+  decision: PublicationDecision,
+  options: { dryRun: boolean },
+): PublicationReport {
+  if (decision.action === "publish")
+    return { message: null, level: null, exitCode: null };
+  if (decision.action === "overwrite")
+    return { message: decision.message, level: "warn", exitCode: null };
+  if (!options.dryRun)
+    return {
+      message: decision.message,
+      level: "error",
+      exitCode: decision.code,
+    };
+  return {
+    // Re-marked from ✖ to !, because the line that follows says this is not a
+    // refusal and the first character should not have to be taken back.
+    message:
+      `${decision.message.replace(/^✖ /, "! ")}\n` +
+      "  A dry run writes nothing, so this is a warning and not a refusal;\n" +
+      "  the planned uploads follow. A real publish would stop here.",
+    level: "warn",
+    exitCode: null,
+  };
+}
+
+/**
+ * The `aws s3api put-object` argv that reserves a version by writing its
+ * checksum file.
+ *
+ * `--if-none-match "*"` is the whole point: S3 resolves the conditional write
+ * atomically, so of two publishes of the same new version exactly one gets a
+ * 2xx and the other a 412 — before either has uploaded an installer. Without
+ * it, two invocations that both saw an empty prefix interleave their uploads
+ * and can leave immutable installer URLs from one publish under a
+ * SHA256SUMS.txt from the other. --allow-overwrite drops the condition,
+ * because overwriting what is already there is exactly what that flag asks
+ * for.
+ */
+export function reservationArgs(input: {
+  bucket: string;
+  key: string;
+  body: string;
+  cacheControl: string;
+  allowOverwrite: boolean;
+}): string[] {
+  const args = [
+    "s3api",
+    "put-object",
+    "--bucket",
+    input.bucket,
+    "--key",
+    input.key,
+    "--body",
+    input.body,
+    "--content-type",
+    "text/plain; charset=utf-8",
+    "--cache-control",
+    input.cacheControl,
+    "--no-cli-pager",
+  ];
+  if (!input.allowOverwrite) args.push("--if-none-match", "*");
+  return args;
+}
