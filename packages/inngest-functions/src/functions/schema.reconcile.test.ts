@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { countOf } from "../lib/driver-count";
 import {
   buildPrunedProperties,
   buildRelationshipWriteBackProps,
@@ -676,5 +677,91 @@ describe("a property named __proto__ survives into the parameter map", () => {
     ]);
     expect(Object.getPrototypeOf(props)).toBeNull();
     expect("toString" in props).toBe(true);
+  });
+});
+
+// ── An element id is not an identity ─────────────────────────────────────────
+
+describe("the relationship write-back re-identifies before it mutates", () => {
+  const source = readFileSync(
+    new URL("./schema.reconcile.ts", import.meta.url),
+    "utf8",
+  );
+
+  it("keys on data the element id cannot fake", () => {
+    // Neo4j's manual: an element id is unique "within the scope of a single
+    // transaction", and outside one "no guarantees are given about the mapping
+    // between ID values and elements. Neo4j reuses its internal IDs when nodes
+    // and relationships are deleted." Every session.run here is its own
+    // auto-commit transaction and the loop makes an LLM call between the read
+    // and the write, so the window is real. `SET r += $props` carries
+    // null-valued REMOVALS, so a mis-identified relationship loses properties.
+    expect(RELATIONSHIP_WRITE_BACK_CYPHER).toContain("type(r) = $relType");
+    expect(RELATIONSHIP_WRITE_BACK_CYPHER).toContain("a.publicId = $startId");
+    expect(RELATIONSHIP_WRITE_BACK_CYPHER).toContain("b.publicId = $endId");
+    // Still anchored to the tenant and still off platform edges.
+    expect(RELATIONSHIP_WRITE_BACK_CYPHER).toContain("a.orgId = $orgId");
+    expect(RELATIONSHIP_WRITE_BACK_CYPHER).toContain(
+      NON_SYSTEM_RELATIONSHIP_FILTER,
+    );
+  });
+
+  it("reports whether it matched anything at all", () => {
+    // A verification that silently skips is the same defect in a new place.
+    expect(RELATIONSHIP_WRITE_BACK_CYPHER).toContain(
+      "RETURN count(r) AS written",
+    );
+  });
+
+  it("reads the keys it verifies against in the same batch", () => {
+    // The write can only check `a.publicId`/`b.publicId` if the read returned
+    // them; a re-identification keyed on values nobody selected matches nothing
+    // and would skip every write.
+    expect(source).toContain("a.publicId AS startId, b.publicId AS endId");
+  });
+
+  it("counts a prune only where the write confirmed it", () => {
+    // Both counters used to fire regardless: `prunedRelationships++` inside the
+    // prune block before the write ran at all, and `updatedRelationships++`
+    // straight after `session.run` whether or not it matched. Each must now sit
+    // inside the confirmed-write branch, or the job reports a prune it did not
+    // perform — which is the failure this whole path is being hardened against.
+    const guard = source.indexOf(
+      'countOf(writeResult.records[0]?.get("written"))',
+    );
+    expect(guard).toBeGreaterThan(-1);
+
+    for (const counter of ["updatedRelationships++", "prunedRelationships++"]) {
+      const occurrences = source.split(counter).length - 1;
+      expect(occurrences, `${counter} should appear once`).toBe(1);
+      expect(
+        source.indexOf(counter),
+        `${counter} must sit after the confirmed-write guard`,
+      ).toBeGreaterThan(guard);
+    }
+  });
+});
+
+describe("countOf — a Bolt count is not a JS number", () => {
+  it("is why `written > 0` cannot be read off the raw value", () => {
+    // The driver returns count() as a 64-bit Integer OBJECT. Comparing it
+    // directly is comparing against an object, and an object is truthy — a
+    // zero-match write would have read as a successful one.
+    const driverZero = { toNumber: () => 0, low: 0, high: 0 };
+    expect(Boolean(driverZero)).toBe(true);
+    expect(countOf(driverZero)).toBe(0);
+    expect(countOf(driverZero) > 0).toBe(false);
+  });
+
+  it("reads a real match, and coerces anything unreadable to nothing", () => {
+    expect(countOf({ toNumber: () => 3 })).toBe(3);
+    expect(countOf(2)).toBe(2);
+    expect(countOf(2n)).toBe(2);
+    // Conservative direction: a count that cannot be read is not a write.
+    expect(countOf(undefined)).toBe(0);
+    expect(countOf(null)).toBe(0);
+    expect(countOf("7")).toBe(0);
+    expect(countOf(Number.NaN)).toBe(0);
+    expect(countOf({ toNumber: () => Number.NaN })).toBe(0);
   });
 });

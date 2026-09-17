@@ -7,6 +7,7 @@ import { generateObjectFor, resolveModelFundingSource } from "@oxagen/ai";
 import { CREDIT_REASONS } from "@oxagen/billing";
 import { z } from "zod";
 import { logger } from "../logger";
+import { countOf } from "../lib/driver-count";
 
 // ── Pure helper — exported for unit testing ────────────────────────────────────
 
@@ -235,12 +236,55 @@ export const NON_SYSTEM_RELATIONSHIP_FILTER = `NOT type(r) IN $${PLATFORM_REL_TY
  * would write any relationship in the store whose id happened to collide — and
  * it would never run at all, because the scoped-session tenancy guard rejects
  * Cypher that binds no orgId. `$orgId`/`$workspaceId` are injected by the seam.
+ *
+ * AND THE ELEMENT ID IS NOT AN IDENTITY. Neo4j's manual is explicit: an element
+ * id "is unique … within the scope of a single transaction", and "outside of
+ * the scope of a single transaction, no guarantees are given about the mapping
+ * between ID values and elements. Neo4j reuses its internal IDs when nodes and
+ * relationships are deleted." Every `session.run` on a scoped session is its own
+ * AUTO-COMMIT transaction, so the batch read and this write are already in
+ * different transactions — and the gap between them is not microseconds. The
+ * per-row loop makes an LLM call to derive missing required properties, bounded
+ * at 30s, for up to 50 rows a batch. If a relationship is deleted in that window
+ * and another takes its id, this write lands on the replacement. `SET r += $props`
+ * carries NULL-VALUED REMOVALS, so the damage is not wrong data: it is
+ * properties DELETED off a relationship nobody meant to touch.
+ *
+ * The strong remedy is one transaction around the read and the writes. It is not
+ * available at this batch shape: holding a write transaction open across 50
+ * LLM round-trips is up to 25 minutes of retained locks, well past any sane
+ * transaction timeout, and `scopedSession()` deliberately exposes only `run` —
+ * a transaction API would mean reopening the tenancy seam that carries the
+ * bypass guard. So the write RE-IDENTIFIES instead, against data the read
+ * already returned and that the element id cannot fake:
+ *
+ *  - `type(r) = $relType`. A relationship type is immutable, and the removals in
+ *    `$props` were computed from THAT type's schema, so a different type makes
+ *    the write nonsense by construction.
+ *  - `a.publicId = $startId AND b.publicId = $endId`. `publicId` is
+ *    application-generated and carries a uniqueness constraint
+ *    (`graph_node_public_id`), which is exactly what the manual recommends
+ *    relying on instead of an internal id. With the pattern's direction it pins
+ *    the write to one ordered node pair.
+ *
+ * The residual, stated rather than implied: Neo4j permits more than one
+ * relationship of the same type between the same ordered pair, so a reused id
+ * landing on a SIBLING relationship still matches. That is a far smaller target
+ * than "any relationship in this tenant", and it is the limit of what can be
+ * keyed on without a relationship-level application id.
+ *
+ * `RETURN count(r) AS written` is the other half. A verification that silently
+ * skips is the same defect in a new place — the job would report a prune it did
+ * not perform — so the caller counts only what this query says it matched.
  */
 export const RELATIONSHIP_WRITE_BACK_CYPHER = `MATCH (a:GraphNode)-[r]->(b:GraphNode)
    WHERE elementId(r) = $relElemId
      AND a.orgId = $orgId AND a.workspaceId = $workspaceId
+     AND type(r) = $relType
+     AND a.publicId = $startId AND b.publicId = $endId
      AND ${NON_SYSTEM_RELATIONSHIP_FILTER}
-   SET r += $props`;
+   SET r += $props
+   RETURN count(r) AS written`;
 
 /**
  * Build the parameter map for one relationship's write-back.
@@ -669,22 +713,7 @@ export const [schemaReconcile] = createFunction(
              RETURN count(n) AS total`,
             { orgId, workspaceId, labels: schemaDefinition.labelNames },
           );
-          totalNodes = (nodeResult.records[0]?.get("total") as
-            | { toNumber?: () => number }
-            | number
-            | undefined)
-            ? typeof (
-                nodeResult.records[0]?.get("total") as {
-                  toNumber?: () => number;
-                }
-              ).toNumber === "function"
-              ? (
-                  nodeResult.records[0]?.get("total") as {
-                    toNumber: () => number;
-                  }
-                ).toNumber()
-              : Number(nodeResult.records[0]?.get("total") ?? 0)
-            : 0;
+          totalNodes = countOf(nodeResult.records[0]?.get("total"));
         }
 
         if (schemaDefinition.relTypeNames.length > 0) {
@@ -705,16 +734,7 @@ export const [schemaReconcile] = createFunction(
               ...PLATFORM_REL_TYPE_PARAMS,
             },
           );
-          totalRelationships =
-            typeof (
-              relResult.records[0]?.get("total") as { toNumber?: () => number }
-            ).toNumber === "function"
-              ? (
-                  relResult.records[0]?.get("total") as {
-                    toNumber: () => number;
-                  }
-                ).toNumber()
-              : Number(relResult.records[0]?.get("total") ?? 0);
+          totalRelationships = countOf(relResult.records[0]?.get("total"));
         }
 
         return { totalNodes, totalRelationships };
@@ -918,7 +938,8 @@ Return only the derived property key-value pairs in the derivedProps field.`,
              WHERE a.orgId = $orgId AND a.workspaceId = $workspaceId
                AND type(r) IN $relTypes
                AND ${NON_SYSTEM_RELATIONSHIP_FILTER}
-             RETURN elementId(r) AS relElemId, type(r) AS relType, properties(r) AS props
+             RETURN elementId(r) AS relElemId, type(r) AS relType, properties(r) AS props,
+                    a.publicId AS startId, b.publicId AS endId
              SKIP $skip LIMIT $batchSize`,
               {
                 orgId,
@@ -935,6 +956,8 @@ Return only the derived property key-value pairs in the derivedProps field.`,
             for (const record of batchResult.records) {
               const relElemId = record.get("relElemId") as string;
               const relType = record.get("relType") as string;
+              const startId = record.get("startId") as string | null;
+              const endId = record.get("endId") as string | null;
               const existingProps = (record.get("props") ?? {}) as Record<
                 string,
                 unknown
@@ -1004,6 +1027,11 @@ Return only the derived property key-value pairs in the derivedProps field.`,
               // prune would target the relationship's own temporal and tenancy
               // metadata.
               let removedRelKeys: readonly string[] = [];
+              // Counted only once the write CONFIRMS it landed. Incrementing
+              // here would report a prune that a re-identification refusal
+              // silently skipped, which is the failure this whole path is
+              // being hardened against.
+              let prunedThisRelationship = false;
               if (prune) {
                 const { pruned, removedKeys } = buildPrunedProperties(
                   newProps,
@@ -1014,7 +1042,7 @@ Return only the derived property key-value pairs in the derivedProps field.`,
                   newProps = pruned;
                   removedRelKeys = removedKeys;
                   relUpdated = true;
-                  prunedRelationships++;
+                  prunedThisRelationship = true;
                 }
               }
 
@@ -1026,15 +1054,35 @@ Return only the derived property key-value pairs in the derivedProps field.`,
                 // whose id happened to collide — and it never ran at all,
                 // because the scoped-session tenancy guard rejects Cypher that
                 // binds no orgId. $orgId/$workspaceId are injected by the seam.
-                await session.run(RELATIONSHIP_WRITE_BACK_CYPHER, {
-                  relElemId,
-                  props: buildRelationshipWriteBackProps(
-                    newProps,
-                    removedRelKeys,
-                  ),
-                  ...PLATFORM_REL_TYPE_PARAMS,
-                });
-                updatedRelationships++;
+                const writeResult = await session.run(
+                  RELATIONSHIP_WRITE_BACK_CYPHER,
+                  {
+                    relElemId,
+                    relType,
+                    startId,
+                    endId,
+                    props: buildRelationshipWriteBackProps(
+                      newProps,
+                      removedRelKeys,
+                    ),
+                    ...PLATFORM_REL_TYPE_PARAMS,
+                  },
+                );
+
+                if (countOf(writeResult.records[0]?.get("written")) > 0) {
+                  updatedRelationships++;
+                  if (prunedThisRelationship) prunedRelationships++;
+                } else {
+                  // The row read at the start of this batch is not the
+                  // relationship this element id names now — deleted, or its id
+                  // reused. Nothing was written, so nothing is counted, and it
+                  // is logged rather than swallowed: the next reconcile pass
+                  // reads the graph fresh and picks it up if it still applies.
+                  logger.warn(
+                    { relElemId, relType, startId, endId },
+                    "schema.reconcile: relationship no longer matches the row that was read; write-back skipped",
+                  );
+                }
               }
 
               processedRelationships++;

@@ -1,46 +1,11 @@
 import { createFunction } from "../create-function";
+import { countOf } from "../lib/driver-count";
 import { withTenantDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "@oxagen/ontology";
 import { insertEvents } from "@oxagen/telemetry";
 import { logger } from "../logger";
-
-/**
- * A Neo4j `count()` as a plain, JSON-safe JS number.
- *
- * The driver returns 64-bit integers as its own `Integer` ({low, high}) unless
- * the session opts into lossless integers, and that object is a trap in two
- * directions at once:
- *
- *   1. Arithmetic on it does NOT produce a number. `Integer + Integer` goes
- *      through `Symbol.toPrimitive` and yields a **BigInt**, which
- *      `JSON.stringify` refuses to serialize. A sum handed back from a
- *      `step.run` is therefore dropped from the memoized step output, and on
- *      replay the caller reads `undefined` — see the note on the finalizer
- *      below for what that then does to the SQL.
- *   2. Passed through unconverted it reaches Postgres as `{"low":n,"high":0}`,
- *      not as `n`, so an `integer` column gets garbage even when nothing throws.
- *
- * Every count read out of a Neo4j record goes through here, so neither shape
- * can escape this module. Anything unrecognisable counts as zero: a progress
- * roll-up is telemetry on a deletion that already happened, and must never be
- * the reason the job fails.
- */
-function countOf(value: unknown): number {
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  if (typeof value === "bigint") return Number(value);
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "toNumber" in value &&
-    typeof (value as { toNumber: unknown }).toNumber === "function"
-  ) {
-    const n = (value as { toNumber: () => number }).toNumber();
-    return Number.isFinite(n) ? n : 0;
-  }
-  return 0;
-}
 
 /**
  * Async deletion job triggered by `ingestion/connection.delete`.
@@ -192,19 +157,33 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
               // Rerouting an existing edge, so every property is COPIED rather
               // than re-stamped: a reroute is not a new observation, and a
               // fresh validFrom would rewrite the dedup ledger's history.
-              // is_system is copied for the same reason upsert-entity.ts sets
-              // it — it is the marker that keeps schema reconciliation off
-              // platform-owned edges, and an edge that lost it here would be
-              // pruned as user data.
-              ON CREATE SET newEdge.confidence    = old.confidence,
-                            newEdge.matchReason   = old.matchReason,
-                            newEdge.tentative     = old.tentative,
-                            newEdge.is_system     = coalesce(old.is_system, true),
-                            newEdge.createdAt     = old.createdAt,
-                            newEdge.validFrom     = old.validFrom,
-                            newEdge.validTo       = old.validTo,
-                            newEdge.recordedAt    = old.recordedAt,
-                            newEdge.invalidatedAt = old.invalidatedAt
+              //
+              // Copied WHOLESALE, as a map, rather than key by key. An
+              // enumeration is only complete on the day it is written: this one
+              // listed nine properties and was described as complete, and it
+              // already omitted updatedAt, which createAliasEdge's ON MATCH
+              // branch stamps every time an alias is re-asserted -- so promoting
+              // an alias dropped the timestamp belonging to the confidence
+              // value it kept. properties(old) inverts the default: every
+              // property survives unless something below deliberately overrides
+              // it, which is the only shape that stays correct when a tenth
+              // property appears. Today that is the bi-temporal set, the dedup
+              // fields, and anything a historical schema-reconcile pass wrote
+              // through its SET r += props write-back before ALIAS_OF was
+              // excluded from reconciliation by type.
+              //
+              // is_system is the one override, and it is a LEGACY DEFAULT, not
+              // a re-stamp: it is the marker that keeps schema reconciliation's
+              // prune off platform-owned edges, and an edge written before any
+              // writer set it has it absent rather than false. Copying the map
+              // would carry that absence forward; coalescing repairs it.
+              ON CREATE SET newEdge = properties(old),
+                            newEdge.is_system = coalesce(old.is_system, true)
+            // A MERGE that MATCHED means other was already a direct alias
+            // of promoted. That edge is an assertion between the two surviving
+            // nodes and outranks a rerouted one, so it keeps its own properties
+            // and old is dropped -- deliberate, and stated because it is the
+            // one path where a property does not survive the reroute.
             DELETE old
             RETURN count(promoted) AS promoted
             `,

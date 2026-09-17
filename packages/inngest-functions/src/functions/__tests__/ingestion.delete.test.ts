@@ -202,14 +202,16 @@ describe("ingestion.delete-connection Inngest function", () => {
       expect(mocks.scopedSessionRun).toHaveBeenCalled();
     });
 
-    it("carries every property across when alias promotion reroutes an edge", async () => {
+    it("copies the alias edge wholesale rather than naming its properties", async () => {
       // A reroute moves an EXISTING edge; nothing about it is a new
-      // observation. Copying only confidence/matchReason/tentative/createdAt
-      // silently dropped `is_system` and the four bi-temporal bounds, and
-      // `is_system` is the marker that keeps schema reconciliation's prune off
-      // platform-owned edges (see RESERVED_RELATIONSHIP_PROPERTY_KEYS and
-      // NON_SYSTEM_RELATIONSHIP_FILTER in schema.reconcile.ts). An edge that
-      // lost it here would later be pruned as user data.
+      // observation. The first version of this copy enumerated nine properties
+      // and called itself complete — and had already missed `updatedAt`, which
+      // `createAliasEdge`'s ON MATCH branch stamps on every re-assertion, so
+      // promoting an alias dropped the timestamp belonging to the confidence it
+      // kept. An enumeration is only complete on the day it is written, so the
+      // invariant asserted here is that there is NO enumeration: the map is
+      // copied, and exactly one property is named, because it is a deliberate
+      // legacy default rather than part of the copy.
       const step = makeStep();
 
       await capturedHandler!({
@@ -224,25 +226,21 @@ describe("ingestion.delete-connection Inngest function", () => {
         .find((cypher) => cypher.includes("MERGE (other)-[newEdge:ALIAS_OF]"));
 
       expect(promotion).toBeDefined();
-      for (const property of [
-        "confidence",
-        "matchReason",
-        "tentative",
-        "is_system",
-        "createdAt",
-        "validFrom",
-        "validTo",
-        "recordedAt",
-        "invalidatedAt",
-      ]) {
-        expect(promotion).toContain(`newEdge.${property}`);
-        // Copied off the edge being rerouted, never re-stamped.
-        expect(promotion).toMatch(
-          new RegExp(
-            `newEdge\\.${property}\\s*=\\s*(?:coalesce\\()?old\\.${property}`,
-          ),
-        );
-      }
+      expect(promotion).toContain("newEdge = properties(old)");
+
+      // The only individually named property is the override.
+      const named = [...promotion!.matchAll(/newEdge\.(\w+)\s*=/g)].map(
+        (m) => m[1],
+      );
+      expect(named).toEqual(["is_system"]);
+      expect(promotion).toContain(
+        "newEdge.is_system = coalesce(old.is_system, true)",
+      );
+
+      // `is_system` is the marker that keeps schema reconciliation's prune off
+      // platform-owned edges; an edge that lost it here would later be pruned
+      // as user data (see NON_SYSTEM_RELATIONSHIP_FILTER in schema.reconcile).
+      expect(promotion).toContain("DELETE old");
     });
   });
 
