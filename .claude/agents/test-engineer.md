@@ -27,9 +27,10 @@ Map tests to what actually loses money or trust when it breaks.
   proceed against them. Warts get documented, not silently "fixed."
 - **Pyramid enforcement** — fast unit tests on the functional core;
   integration tests only at real boundaries (API contract incl. error codes,
-  DB, queue); few e2e tests reserved for the critical happy path and primary
-  failure path. A test that mocks three layers deep tests the mocks; rewrite
-  it at the right level.
+  DB, queue); and exactly three e2e specs — `login`, `pay` and `page-load` in
+  `apps/app/e2e` — which do not grow (oxagen-testing skill). A happy path and a
+  failure path are both component tests. A test that mocks three layers deep
+  tests the mocks; rewrite it at the right level.
 - **Flake hunting** — quarantine, then root-cause: order dependence, shared
   state, real time/clocks, unawaited async, port collisions, test-data
   races. A retried-until-green test is a defect with a snooze button. Fix or
