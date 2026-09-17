@@ -19,7 +19,9 @@ export const RECORD_PATH = `.oxagen/rules/${LINEAGE}.toml`;
 export const PR_URL = "https://github.com/acme/core-platform/pull/519";
 const AT = "2026-09-15T09:16:40.000Z";
 
-export function recordOutput(overrides: Partial<RecordOutput> = {}): RecordOutput {
+export function recordOutput(
+  overrides: Partial<RecordOutput> = {},
+): RecordOutput {
   return {
     id: "ctr_7k2m9q4x8r1t5v3w6y0z2a",
     lineageId: LINEAGE,

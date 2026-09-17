@@ -47,10 +47,7 @@ function FleetSpendStrip({
         >
           <CostFigure cost={spend.spend} />
         </Tile>
-        <Tile
-          term={t("fleet.cacheHitRate")}
-          note={t("fleet.cacheHitRateNote")}
-        >
+        <Tile term={t("fleet.cacheHitRate")} note={t("fleet.cacheHitRateNote")}>
           <RatioFigure ratio={spend.cacheHitRate} />
         </Tile>
       </TileStrip>

@@ -79,9 +79,7 @@ export interface DistributedRateLimitOptions {
    * bucket is not a ceiling, it is one abuser's power to lock everyone else
    * out. See `trustedClientIpBucketKey`.
    */
-  bucketKey?: (
-    c: Context<AppEnv>,
-  ) => string | null | Promise<string | null>;
+  bucketKey?: (c: Context<AppEnv>) => string | null | Promise<string | null>;
 }
 
 const DEFAULT_WINDOW_MS = 60_000;
