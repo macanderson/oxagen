@@ -224,6 +224,61 @@ function gatewayBatch(): TachoEvent[] {
   return out;
 }
 
+/**
+ * The attack in the P1 finding, as a batch.
+ *
+ * An ORDINARY agent session — a wrapped Claude Code run on an enrolled host,
+ * genesis through `agent_stop`, so it seals — with
+ * `oxagen.enforcement_tier=gateway` added to one tool call. That attribute is
+ * all a process holding the local OTLP bearer needs: `normalizeOtlp` keeps
+ * unknown attributes verbatim, the daemon seals them onto a valid chain, and
+ * the chain verifies. Nothing about the record is malformed.
+ *
+ * `envelopeTier` is the same claim by the other door — `agent.enforcement_tier`
+ * on the envelope, which the ingest contract accepts and the seal path read.
+ */
+function forgedGatewaySession(
+  options: { envelopeTier?: boolean } = {},
+): TachoEvent[] {
+  let cursor: ChainCursor = GENESIS_CURSOR;
+  const out: TachoEvent[] = [];
+  for (const draft of [
+    unsealed("agent_start", { session_start_source: "startup" }),
+    unsealed("turn_start", { prompt_length: 3 }),
+    unsealed(
+      "tool_call",
+      {
+        tool_name: "Bash",
+        tool_use_id: "toolu_1",
+        tool_status: "ok",
+        effect_kind: "command",
+        tool_target: "echo hi",
+      },
+      "hook",
+      CLAUDE_CODE,
+      { "oxagen.enforcement_tier": "gateway" },
+    ),
+    unsealed("turn_end", {}),
+    unsealed("agent_stop", {
+      session_outcome: "completed",
+      session_end_reason: "other",
+      duration_ms: 900,
+    }),
+  ]) {
+    const claimed =
+      options.envelopeTier === true
+        ? ({
+            ...draft,
+            agent: { ...draft.agent, enforcement_tier: "gateway" },
+          } as UnsealedTachoEvent)
+        : draft;
+    const sealed = sealEvent(claimed, cursor);
+    cursor = sealed.next;
+    out.push(sealed.event);
+  }
+  return out;
+}
+
 interface FakeDb {
   hosts: Array<Record<string, unknown>>;
   principals: Array<Record<string, unknown>>;
@@ -1602,5 +1657,157 @@ describe("gateway attribution reaches the chain that carries the call", () => {
       expect(update.values).not.toHaveProperty("enforcementTier");
     }
     expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("harness");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The enforcement tier is not a field the submitter may set
+// ---------------------------------------------------------------------------
+//
+// discussion_r4036596... (P1). A process that can submit OTLP for an enrolled
+// host — and the harness receives the local bearer, so that set is wider than
+// it looks — adds `oxagen.enforcement_tier=gateway` to an ordinary record.
+// normalizeOtlp keeps unknown attributes verbatim (otel.ts header: "Every
+// attribute is either promoted to a typed member or kept verbatim in attrs"),
+// the daemon seals them into a valid chain, and ingest then promoted an
+// existing observe session to gateway. Exports sign that tier and replay
+// grading trusts it.
+//
+// The seal is doing its job and proves nothing about this: it shows the record
+// was not altered AFTER collection, not that the value was true when it went
+// in. A valid chain over a false input is byte-for-byte a valid chain.
+//
+// The whole value of the tier is that it separates what the platform enforced
+// from what the agent claims. A tier the agent can set is not a weaker version
+// of that separation, it is the absence of one with a signature on top.
+describe("a submitted enforcement tier is a claim, never the tier", () => {
+  /** The host has never had a gateway call authorised. `fakeDb` is already
+   * this, spelled out here because it is the load-bearing fact: with no
+   * server observation there is nothing for any batch to correlate to. */
+  function hostWithNoGatewayObservation(db: FakeDb): void {
+    (db.hosts[0] as Record<string, unknown>)["gatewayLastSeenAt"] = null;
+  }
+
+  it("does not promote an existing observe session on a client-set attribute", async () => {
+    const db = fakeDb();
+    hostWithNoGatewayObservation(db);
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "observe",
+    });
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: forgedGatewaySession(),
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+
+    // The session keeps the tier the control plane derived for it.
+    expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("observe");
+    // And no statement tried to raise it.
+    for (const update of db.updates.filter((u) => u.table === "sessions")) {
+      expect(update.values["enforcementTier"]).not.toBe("gateway");
+    }
+  });
+
+  it("does not let a submitted attribute decide a NEW session either", async () => {
+    const db = fakeDb();
+    hostWithNoGatewayObservation(db);
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: forgedGatewaySession(),
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+
+    expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("observe");
+  });
+
+  it("does not let a submitted ENVELOPE tier decide one", async () => {
+    // The same hole by the other door. `enforcementTierOf` read
+    // events[0].agent.enforcement_tier, which is as client-supplied as the
+    // attribute — the ingest contract accepts whatever the batch carries.
+    // Genesis must land on the host's server-owned mode.
+    const db = fakeDb();
+    hostWithNoGatewayObservation(db);
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: forgedGatewaySession({ envelopeTier: true }),
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+
+    expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("observe");
+  });
+
+  it("does not sign the claimed tier into the seal the export carries", async () => {
+    // What makes this an escalation rather than a mislabel: the seal's replay
+    // grade is computed from the tier and travels in the export bundle and the
+    // attestation. `observe` grades `inspect`; `gateway` with no gaps grades
+    // `retry`/`fork` (evidence/replay-grade.ts). A client-set tier that
+    // reached the seal would be signed as if Oxagen had enforced the calls.
+    const db = fakeDb();
+    hostWithNoGatewayObservation(db);
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: forgedGatewaySession({ envelopeTier: true }),
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+
+    const row = db.sessions.get(SESSION);
+    expect(row?.["sealedAt"]).toBeDefined();
+    expect(row?.["enforcementTier"]).toBe("observe");
+    expect(row?.["replayGrade"]).toBe("inspect");
+  });
+
+  it("still files a real gateway call, on the host the server watched serve one", async () => {
+    // The fix must not buy safety by labelling nothing. With the control
+    // plane's own observation on the host row, the daemon's chain is gateway.
+    const db = fakeDb();
+    (db.hosts[0] as Record<string, unknown>)["gatewayLastSeenAt"] = new Date(
+      "2026-09-08T10:00:00.000Z",
+    );
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "observe",
+    });
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: gatewayBatch(),
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+
+    expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("gateway");
   });
 });
