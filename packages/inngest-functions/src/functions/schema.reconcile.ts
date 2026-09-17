@@ -20,13 +20,14 @@ import { logger } from "../logger";
 export function buildPrunedProperties(
   existing: Record<string, unknown>,
   schemaKeys: string[],
+  reservedKeys: ReadonlySet<string> = EMPTY_RESERVED,
 ): { pruned: Record<string, unknown>; removedKeys: string[] } {
   const schemaKeySet = new Set(schemaKeys);
   const pruned: Record<string, unknown> = {};
   const removedKeys: string[] = [];
 
   for (const [key, value] of Object.entries(existing)) {
-    if (schemaKeySet.has(key)) {
+    if (schemaKeySet.has(key) || reservedKeys.has(key)) {
       pruned[key] = value;
     } else {
       removedKeys.push(key);
@@ -34,6 +35,76 @@ export function buildPrunedProperties(
   }
 
   return { pruned, removedKeys };
+}
+
+const EMPTY_RESERVED: ReadonlySet<string> = new Set<string>();
+
+/**
+ * Relationship properties the PLATFORM owns. They never appear in a user
+ * schema, so a prune pass computed from schema keys alone classifies every one
+ * of them as off-schema.
+ *
+ * That was harmless only while the write merged (`SET r += $props`), which
+ * cannot delete. The moment the write gained removal semantics, pruning a
+ * relationship would have stripped its bi-temporal history (`validFrom`,
+ * `validTo`, `recordedAt`, `invalidatedAt`) and its tenancy stamp (`orgId`,
+ * `workspaceId`) — strictly worse than the bug being fixed. The reserved set is
+ * what makes replacement safe, and it is checked by
+ * `RESERVED_RELATIONSHIP_PROPERTY_KEYS` covering every `r.<key>` this repo
+ * writes onto a relationship.
+ */
+export const RESERVED_RELATIONSHIP_PROPERTY_KEYS: ReadonlySet<string> = new Set(
+  [
+    "orgId",
+    "workspaceId",
+    "is_system",
+    "createdAt",
+    "updatedAt",
+    "validFrom",
+    "validTo",
+    "recordedAt",
+    "invalidatedAt",
+  ],
+);
+
+// A property key safe to interpolate into a REMOVE clause. Cypher has no
+// parameter form for a property NAME, so the key is interpolated; this is the
+// same lexical-guard-then-interpolate shape `ontology.query` uses for
+// relationship types, and it throws rather than skipping, because skipping is
+// how a prune reports success while removing nothing.
+const PROPERTY_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * Build the write-back for one relationship.
+ *
+ * `SET r += $props` MERGES: a key omitted from the map stays on the
+ * relationship. So pruning that only omits keys removes nothing while the job
+ * increments `prunedRelationships` and reports success — the counter would have
+ * looked healthy for work that never happened. Removal has to be stated, so
+ * rejected keys get an explicit `REMOVE r.\`key\``.
+ *
+ * Removal is enumerated rather than achieved by replacement (`SET r = $props`)
+ * on purpose: with replacement, one key missing from the reserved set silently
+ * deletes data, whereas here deleting a property requires naming it.
+ */
+export function buildRelationshipWriteBack(removedKeys: readonly string[]): {
+  setClause: string;
+  removeClause: string;
+} {
+  for (const key of removedKeys) {
+    if (!PROPERTY_KEY_PATTERN.test(key)) {
+      throw new Error(
+        `schema.reconcile: relationship property key ${JSON.stringify(key)} fails the lexical guard and cannot be pruned`,
+      );
+    }
+  }
+  return {
+    setClause: "SET r += $props",
+    removeClause:
+      removedKeys.length > 0
+        ? ` REMOVE ${removedKeys.map((k) => `r.\`${k}\``).join(", ")}`
+        : "",
+  };
 }
 
 /**
@@ -716,13 +787,20 @@ Return only the derived property key-value pairs in the derivedProps field.`,
               }
 
               // Prune off-schema properties from relationships if requested.
+              // `properties(r)` returns EVERY property including the
+              // platform-owned ones, so the reserved set is passed here or the
+              // prune would target the relationship's own temporal and tenancy
+              // metadata.
+              let removedRelKeys: readonly string[] = [];
               if (prune) {
                 const { pruned, removedKeys } = buildPrunedProperties(
                   newProps,
                   schemaKeys,
+                  RESERVED_RELATIONSHIP_PROPERTY_KEYS,
                 );
                 if (removedKeys.length > 0) {
                   newProps = pruned;
+                  removedRelKeys = removedKeys;
                   relUpdated = true;
                   prunedRelationships++;
                 }
@@ -736,11 +814,13 @@ Return only the derived property key-value pairs in the derivedProps field.`,
                 // whose id happened to collide — and it never ran at all,
                 // because the scoped-session tenancy guard rejects Cypher that
                 // binds no orgId. $orgId/$workspaceId are injected by the seam.
+                const { setClause, removeClause } =
+                  buildRelationshipWriteBack(removedRelKeys);
                 await session.run(
                   `MATCH (a:GraphNode)-[r]->(b:GraphNode)
                    WHERE elementId(r) = $relElemId
                      AND a.orgId = $orgId AND a.workspaceId = $workspaceId
-                   SET r += $props`,
+                   ${setClause}${removeClause}`,
                   { relElemId, props: newProps },
                 );
                 updatedRelationships++;

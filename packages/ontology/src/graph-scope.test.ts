@@ -189,6 +189,56 @@ describe("assertScopeMarkers", () => {
     ).toThrow(GraphScopeError);
   });
 
+  // Round-three review. `keepFilteringPositions` rejected a bare
+  // `RETURN … AS allowed`, then re-admitted the same defect through a map
+  // literal nested in a call or a list, because `paren > 0 || bracket > 0` is a
+  // proxy for "inside a pattern" and a proxy admits everything shaped like it.
+  // Each of these is tenant-scoped and label-UNscoped: the tenancy guard passes
+  // and every node comes back regardless of the agent's label allowance.
+  const projectionMaps: Array<[name: string, cypher: string]> = [
+    [
+      "map inside head([…])",
+      "MATCH (n) WHERE n.orgId = $orgId RETURN n, head([{allowed: n.label IN $__scopeLabels}])",
+    ],
+    [
+      "map inside a bare list literal",
+      "MATCH (n) WHERE n.orgId = $orgId RETURN n, [{allowed: n.label IN $__scopeLabels}]",
+    ],
+    [
+      "map inside a function call",
+      "MATCH (n) WHERE n.orgId = $orgId RETURN n, collect({allowed: n.label IN $__scopeLabels})",
+    ],
+    [
+      "map inside a list comprehension",
+      "MATCH (n) WHERE n.orgId = $orgId RETURN n, [x IN $xs | {allowed: n.label IN $__scopeLabels}]",
+    ],
+    [
+      "map literal in a WITH projection",
+      "MATCH (n) WHERE n.orgId = $orgId WITH n, {allowed: n.label IN $__scopeLabels} AS m RETURN n",
+    ],
+    [
+      "map inside a call nested inside a real pattern's parens",
+      "MATCH (n) WHERE n.orgId = $orgId RETURN n, head([{ok: n.label IN $__scopeLabels}]) AS h",
+    ],
+  ];
+
+  for (const [name, cypher] of projectionMaps) {
+    it(`treats a map in a projection as absent: ${name}`, () => {
+      expect(() =>
+        assertScopeMarkers(cypher, withMarkers(true, false)),
+      ).toThrow(GraphScopeError);
+    });
+  }
+
+  it("still accepts a genuine relationship-pattern property map", () => {
+    expect(() =>
+      assertScopeMarkers(
+        `MATCH (a)-[r:T {k: 1}]->(b) WHERE type(r) IN $${SCOPE_REL_TYPES_PARAM} RETURN r`,
+        withMarkers(false, true),
+      ),
+    ).not.toThrow();
+  });
+
   it("treats a marker in a RETURN projection as absent (not a filter)", () => {
     expect(() =>
       assertScopeMarkers(

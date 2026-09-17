@@ -202,6 +202,47 @@ const CLAUSE_KEYWORDS = new Set([
   "LOAD",
 ]);
 
+// Keywords after which a `(` opens a NODE PATTERN rather than a call or a
+// grouping. Any other bare word before a `(` is a function name — `head(`,
+// `any(`, `coalesce(`, `count(` — whose braces are expression maps.
+const PATTERN_INTRODUCERS = new Set(["MATCH", "MERGE", "CREATE"]);
+
+/**
+ * Classify the bracket opening at `openIdx` as a PATTERN bracket or an
+ * EXPRESSION bracket.
+ *
+ * This exists because `paren > 0 || bracket > 0` — "we are nested inside
+ * something" — is a PROXY for "we are inside a pattern", and a proxy admits
+ * everything that shares its shape. `head([{allowed: n.label IN $x}])` is nested
+ * inside a list inside a call, so depth alone read it as a pattern property map
+ * and handed a projection the standing of a filter. The fix is to remember WHAT
+ * opened each level, not merely that one is open.
+ *
+ *  - `[` opens a relationship pattern only when written `-[` or `<-[`, the only
+ *    way Cypher spells one. A list literal, an index and a slice are each
+ *    preceded by something else.
+ *  - `(` opens a node pattern after a pattern-introducing keyword, after `,`
+ *    (`MATCH (a), (b)`), after the dash/arrow characters that join a path, after
+ *    `=` (`MATCH p = (a)`), or inside a pattern comprehension's `[`. Preceded by
+ *    any other bare word it is a function call.
+ */
+function opensPattern(src: string, openIdx: number): boolean {
+  let k = openIdx - 1;
+  while (k >= 0 && /\s/.test(src[k]!)) k -= 1;
+  if (k < 0) return true;
+  const prev = src[k]!;
+
+  if (src[openIdx] === "[") return prev === "-";
+
+  if (",-><=|([".includes(prev)) return true;
+  if (/[A-Za-z0-9_]/.test(prev)) {
+    let j = k;
+    while (j >= 0 && /[A-Za-z0-9_]/.test(src[j]!)) j -= 1;
+    return PATTERN_INTRODUCERS.has(src.slice(j + 1, k + 1).toUpperCase());
+  }
+  return false;
+}
+
 /**
  * Blank every character of `cypher` that is not in a position capable of
  * CONSTRAINING WHICH ROWS THE QUERY TOUCHES, and return the result. Offsets are
@@ -213,8 +254,10 @@ const CLAUSE_KEYWORDS = new Set([
  *
  *  - a `WHERE` clause, from the keyword until the next top-level clause; and
  *  - an inline pattern property map — a `{…}` opened inside a node `(…)` or
- *    relationship `[…]` pattern, which is the `MATCH (n {orgId: $orgId})` /
- *    `MERGE (n {orgId: $orgId})` form.
+ *    relationship `[…]` PATTERN specifically (see `opensPattern`), which is the
+ *    `MATCH (n {orgId: $orgId})` / `MERGE (n {orgId: $orgId})` form. A map
+ *    nested in a call or a list — `head([{allowed: …}])`, `collect({…})` — is an
+ *    expression, and is blanked like any other projection.
  *
  * Everything else is blanked, and the three that matter are:
  *
@@ -241,10 +284,16 @@ export function keepFilteringPositions(cypher: string): string {
 
   let paren = 0;
   let bracket = 0;
+  // One entry per open `(` / `[`: true when THAT bracket opened a pattern. The
+  // stack is what makes `{…}` classification exact — the innermost enclosing
+  // bracket decides, so a map inside a call inside a pattern is still a call's.
+  const bracketIsPattern: boolean[] = [];
   // One entry per open `{`: true when that brace opened inside a pattern.
   const braceIsPattern: boolean[] = [];
   let clause = "";
 
+  const enclosingIsPattern = () =>
+    bracketIsPattern[bracketIsPattern.length - 1] === true;
   const inPatternMap = () => braceIsPattern[braceIsPattern.length - 1] === true;
   const keeping = () => clause === "WHERE" || inPatternMap();
 
@@ -270,11 +319,19 @@ export function keepFilteringPositions(cypher: string): string {
       continue;
     }
 
-    if (ch === "(") paren += 1;
-    else if (ch === ")") paren = Math.max(0, paren - 1);
-    else if (ch === "[") bracket += 1;
-    else if (ch === "]") bracket = Math.max(0, bracket - 1);
-    else if (ch === "{") braceIsPattern.push(paren > 0 || bracket > 0);
+    if (ch === "(") {
+      paren += 1;
+      bracketIsPattern.push(opensPattern(src, i));
+    } else if (ch === ")") {
+      paren = Math.max(0, paren - 1);
+      bracketIsPattern.pop();
+    } else if (ch === "[") {
+      bracket += 1;
+      bracketIsPattern.push(opensPattern(src, i));
+    } else if (ch === "]") {
+      bracket = Math.max(0, bracket - 1);
+      bracketIsPattern.pop();
+    } else if (ch === "{") braceIsPattern.push(enclosingIsPattern());
     else if (ch === "}") braceIsPattern.pop();
 
     if (keeping()) out[i] = ch;

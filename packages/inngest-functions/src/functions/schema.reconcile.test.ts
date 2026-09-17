@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildPrunedProperties, parseNodeProps } from "./schema.reconcile";
+import {
+  buildPrunedProperties,
+  buildRelationshipWriteBack,
+  parseNodeProps,
+  RESERVED_RELATIONSHIP_PROPERTY_KEYS,
+} from "./schema.reconcile";
 
 describe("buildPrunedProperties (schema.reconcile pure helper)", () => {
   it("keeps all properties that are present in the schema", () => {
@@ -132,5 +137,119 @@ describe("parseNodeProps (schema.reconcile — canonical JSON-string property ba
       name: "foo",
       summary: "derived",
     });
+  });
+});
+
+// ── Relationship prune write-back ────────────────────────────────────────────
+//
+// These assert the END STATE OF THE PROPERTY BAG, never that the job reported
+// success. Asserting the counter is what hid the defect: `prunedRelationships`
+// incremented on every pruned relationship while `SET r += $props` removed
+// nothing, so the metric looked healthy for work that never happened.
+//
+// The applier below implements Neo4j's semantics exactly — `+=` MERGES (a key
+// absent from the map survives) and `REMOVE` deletes the named keys. It is
+// deliberately not more permissive than the database in the one direction that
+// matters: if it implemented `+=` as a replacement it would report these tests
+// green against the broken code.
+
+/** Apply `SET r += $props [REMOVE r.`k`, …]` to a property bag, as Neo4j would. */
+function applyWriteBack(
+  stored: Record<string, unknown>,
+  props: Record<string, unknown>,
+  removeClause: string,
+): Record<string, unknown> {
+  const next = { ...stored, ...props }; // `+=` merges; it never deletes.
+  for (const m of removeClause.matchAll(/r\.`([^`]+)`/g)) delete next[m[1]!];
+  return next;
+}
+
+describe("relationship prune write-back", () => {
+  // A relationship as it exists in the graph: platform-owned temporal and
+  // tenancy properties, one schema property, one property the schema dropped.
+  const stored = (): Record<string, unknown> => ({
+    orgId: "org-1",
+    workspaceId: "ws-1",
+    is_system: false,
+    validFrom: "2026-01-01T00:00:00Z",
+    validTo: null,
+    recordedAt: "2026-01-02T00:00:00Z",
+    invalidatedAt: null,
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+    confidence: 0.9, // in schema
+    legacyNote: "written by an older schema version", // NOT in schema
+  });
+  const schemaKeys = ["confidence"];
+
+  it("removes the off-schema property from the relationship", () => {
+    const before = stored();
+    const { pruned, removedKeys } = buildPrunedProperties(
+      before,
+      schemaKeys,
+      RESERVED_RELATIONSHIP_PROPERTY_KEYS,
+    );
+    const { removeClause } = buildRelationshipWriteBack(removedKeys);
+    const after = applyWriteBack(before, pruned, removeClause);
+
+    expect(removedKeys).toEqual(["legacyNote"]);
+    expect(after).not.toHaveProperty("legacyNote");
+  });
+
+  it("would NOT have removed it with a merge-only write (the defect)", () => {
+    const before = stored();
+    const { pruned } = buildPrunedProperties(
+      before,
+      schemaKeys,
+      RESERVED_RELATIONSHIP_PROPERTY_KEYS,
+    );
+    // The previous write: `SET r += $props`, no REMOVE.
+    const after = applyWriteBack(before, pruned, "");
+    expect(after.legacyNote).toBe("written by an older schema version");
+  });
+
+  it("preserves every platform-owned property through the prune", () => {
+    const before = stored();
+    const { pruned, removedKeys } = buildPrunedProperties(
+      before,
+      schemaKeys,
+      RESERVED_RELATIONSHIP_PROPERTY_KEYS,
+    );
+    const { removeClause } = buildRelationshipWriteBack(removedKeys);
+    const after = applyWriteBack(before, pruned, removeClause);
+
+    for (const key of RESERVED_RELATIONSHIP_PROPERTY_KEYS) {
+      expect(after[key]).toEqual(before[key]);
+    }
+    expect(after.confidence).toBe(0.9);
+  });
+
+  it("would have destroyed the temporal ledger without the reserved set", () => {
+    // The same prune computed from schema keys alone, which is what the code
+    // did before this change. Every platform property lands in removedKeys.
+    const before = stored();
+    const { pruned, removedKeys } = buildPrunedProperties(before, schemaKeys);
+    const { removeClause } = buildRelationshipWriteBack(removedKeys);
+    const after = applyWriteBack(before, pruned, removeClause);
+
+    expect(removedKeys).toContain("validFrom");
+    expect(removedKeys).toContain("orgId");
+    expect(after).not.toHaveProperty("recordedAt");
+  });
+
+  it("emits no REMOVE when nothing was pruned", () => {
+    expect(buildRelationshipWriteBack([]).removeClause).toBe("");
+    expect(buildRelationshipWriteBack([]).setClause).toBe("SET r += $props");
+  });
+
+  it("throws rather than silently skipping a key it cannot interpolate", () => {
+    // Skipping would restore the original defect: a prune that reports success
+    // and removes nothing.
+    expect(() => buildRelationshipWriteBack(["bad`key"])).toThrow(
+      /fails the lexical guard/,
+    );
+    expect(() => buildRelationshipWriteBack(["has space"])).toThrow(
+      /fails the lexical guard/,
+    );
   });
 });
