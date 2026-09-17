@@ -935,6 +935,9 @@ export const SESSION_GATEWAY_COLUMN = {
  * a batch; it asks this table which chains this host's gateway actually
  * served.
  *
+ * `chainGenesisHash` is what makes `chainSessionUuid` evidence rather than a
+ * claim; ingest requires the session's own recorded `genesisHash` to equal it.
+ *
  * It is deliberately NOT a foreign key to `tacho.sessions`. The daemon's chain
  * is created locally and reaches the control plane only when its first batch
  * is flushed, which is routinely after the gateway call that named it — so a
@@ -959,6 +962,18 @@ export const tachoGatewayChains = tachoSchema.table(
      * as text.
      */
     chainSessionUuid: text("chain_session_uuid").notNull(),
+    /**
+     * The hash of that chain's first sealed event, as the gateway stated it.
+     *
+     * What makes the name above evidence. A forger holding the host's ingest
+     * key can write the same chain id — open the session first with a chain of
+     * its own and let a genuine gateway call advance `lastSeenAt` — but not the
+     * same genesis hash, because its chain begins with a different event.
+     *
+     * Nullable, for a daemon too old to send it. Ingest then refuses to promote
+     * rather than promoting on the name alone.
+     */
+    chainGenesisHash: text("chain_genesis_hash"),
     firstSeenAt: ts("first_seen_at").notNull().defaultNow(),
     /** What ingest reads. Moved forward by every served call, refusals too. */
     lastSeenAt: ts("last_seen_at").notNull().defaultNow(),

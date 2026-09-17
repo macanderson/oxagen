@@ -157,6 +157,7 @@ describe("resolveMcpContext", () => {
         // field added to the context has to be accounted for by whoever adds
         // it rather than appearing unnoticed in every MCP request.
         gatewaySessionUuid: null,
+        gatewayChainGenesisHash: null,
       },
     });
     expect(resolveApiKey).toHaveBeenCalledWith("ox_mysecret");
@@ -701,6 +702,32 @@ describe("the gateway chain header", () => {
       "x-tacho-gateway-session": ["tachod-first", "tachod-second"],
     });
     expect(ctx.gatewaySessionUuid).toBe("tachod-first");
+  });
+
+  it("carries the chain's genesis hash, in the shape every chain hash has", async () => {
+    // The hash is what makes the chain id above evidence rather than a name,
+    // and it is written to a durable evidence row and compared against one —
+    // so it is accepted only in the shape a Tacho chain hash has.
+    const good = `sha256:${"a".repeat(64)}`;
+    const ctx = await buildContext({
+      authorization: "Bearer ox_valid",
+      "x-tacho-gateway-genesis": good,
+    });
+    expect(ctx.gatewayChainGenesisHash).toBe(good);
+
+    for (const bad of [
+      "",
+      "deadbeef",
+      `sha256:${"A".repeat(64)}`,
+      `sha256:${"a".repeat(63)}`,
+      `sha512:${"a".repeat(64)}`,
+    ]) {
+      const rejected = await buildContext({
+        authorization: "Bearer ox_valid",
+        "x-tacho-gateway-genesis": bad,
+      });
+      expect(rejected.gatewayChainGenesisHash).toBeNull();
+    }
   });
 
   it("never lets the header touch tenant identity", async () => {

@@ -19,6 +19,13 @@
 -- caller is authenticated as the holder of the gateway credential, which never
 -- leaves the daemon, and a batch submitter cannot cause a row to exist at all.
 --
+-- ## What binds a row to a real chain
+--
+-- `chain_session_uuid` says WHICH chain and `chain_genesis_hash` says it is
+-- that chain rather than something wearing its name. Ingest requires both:
+-- the session's recorded `genesis_hash` must equal the value here, which a
+-- forged chain cannot satisfy because its own genesis is a different event.
+--
 -- ## One row per chain, not per call
 --
 -- This is bounded CORRELATION STATE, which is what Postgres is for, and it is
@@ -55,6 +62,19 @@ CREATE TABLE IF NOT EXISTS "tacho"."gateway_chains" (
 	"workspace_id" uuid NOT NULL,
 	"host_id" uuid NOT NULL,
 	"chain_session_uuid" text NOT NULL,
+	-- The hash of that chain's FIRST sealed event, as the gateway stated it.
+	--
+	-- The chain id above is a name, and a holder of the host's ingest key can
+	-- write the same name: open the session first with a chain of its own, wait
+	-- for a genuine gateway call to advance `last_seen_at`, and every other check
+	-- the server could make is satisfied by the row the forger created. This is
+	-- the part it cannot write — a chain that does not begin with the daemon's
+	-- own first event has a different genesis hash, and producing a different
+	-- chain with the same one is a preimage attack.
+	--
+	-- Nullable: a daemon too old to send the header records the chain without it,
+	-- and ingest then refuses to promote rather than promoting on the name alone.
+	"chain_genesis_hash" text,
 	"first_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"last_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "tacho_gateway_chains_public_id_unique" UNIQUE("public_id")

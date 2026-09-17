@@ -59,6 +59,29 @@ export const TACHO_GATEWAY_TIER = "gateway" as const;
 export const TACHO_GATEWAY_SESSION_HEADER = "x-tacho-gateway-session" as const;
 
 /**
+ * The request header the local MCP gateway states its chain's GENESIS HASH on.
+ *
+ * The chain id alone is a name, and a name is something a forger can also
+ * write. A holder of the host's ingest key who learns a real `tachod-*` id can
+ * open that session first with a chain of its own and then be promoted by the
+ * next genuine gateway call, because every check the server could make —
+ * the chain name, the session's lifetime — is satisfied by the forged row it
+ * created.
+ *
+ * The genesis hash is the thing it cannot write. It is the hash of the
+ * daemon's own first sealed event, so a chain that does not begin with that
+ * exact event has a different one, and producing a different chain with the
+ * same genesis hash is a preimage attack. The control plane records it beside
+ * the chain name and ingest requires the session's recorded `genesis_hash` to
+ * equal it.
+ *
+ * It is stable for the life of the chain, which is what makes this cheap: it
+ * is sent on every gateway call and compared against a column the session row
+ * already carries, with no lookup and nothing to keep in step.
+ */
+export const TACHO_GATEWAY_GENESIS_HEADER = "x-tacho-gateway-genesis" as const;
+
+/**
  * A bundle field this host's parser understands, named on the wire so the
  * control plane can withhold fields the host would choke on.
  *

@@ -18,6 +18,8 @@ let gatewayColumnPresent = true;
 let chainTablePresent = true;
 /** Every `tacho.gateway_chains` upsert the gate made, in order. */
 const chainUpserts: Array<Record<string, unknown>> = [];
+/** The SET clause of each upsert, for the monotonicity assertions. */
+const chainSets: Array<Record<string, unknown>> = [];
 /**
  * The ROWS those upserts leave behind, keyed the way the unique index keys
  * them. Modelled rather than counted, because the property under test is that
@@ -52,6 +54,7 @@ const fakeTx = () => ({
         set: Record<string, unknown>;
       }) => {
         chainUpserts.push(values);
+        chainSets.push(args.set);
         // Keyed by the columns the statement ACTUALLY names as its conflict
         // target, not by the pair this fixture would have guessed. The mocked
         // `schema.tachoGatewayChains` maps each property to its SQL name, so a
@@ -130,8 +133,9 @@ const {
   TACHO_HOST_PURPOSE,
 } = await import("./machine-key-scope");
 
-const { CLI_SESSION_SCOPE_PURPOSE } =
-  await import("@oxagen/oxagen/cli-session");
+const { CLI_SESSION_SCOPE_PURPOSE } = await import(
+  "@oxagen/oxagen/cli-session"
+);
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 /** The person a surface resolved a CLI session key to. */
@@ -148,6 +152,7 @@ beforeEach(() => {
   hostWritePlanes.length = 0;
   chainUpserts.length = 0;
   chainRows.clear();
+  chainSets.length = 0;
   gatewayColumnPresent = true;
   chainTablePresent = true;
   hostRow = {
@@ -546,6 +551,38 @@ describe("a served gateway call is recorded where the tier can read it", () => {
     }
     expect(chainUpserts).toHaveLength(5);
     expect(chainRows.size).toBe(1);
+  });
+
+  it("never moves last_seen_at backwards", async () => {
+    // Gateway calls are deliberately not serialised — the forward was taken
+    // off the daemon's queue because one slow connected-app call held every
+    // wrapped agent on the machine — so two calls for the same chain can reach
+    // the upsert out of order and the later-committing one can carry the OLDER
+    // timestamp. Assigning it would rewind `last_seen_at`, and a session
+    // created between the two would then read as having served no gateway call
+    // during its lifetime. If that batch also seals the session, the tier is
+    // wrong for good.
+    //
+    // Asserted on the statement rather than on a modelled row: the fixture
+    // does not execute SQL, and a fake that pretended to would be asserting
+    // its own guess at what GREATEST does.
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_g",
+      userId: null,
+      capabilityName: "query_ontology",
+      gatewaySessionUuid: "tachod-abc",
+    });
+    const set = chainSets[0] ?? {};
+    expect(JSON.stringify(set["lastSeenAt"])).toContain("GREATEST");
+    // …and the genesis hash is coalesced for the same reason one type along: a
+    // daemon too old to state it must not erase what a newer one proved.
+    expect(JSON.stringify(set["chainGenesisHash"])).toContain("COALESCE");
   });
 
   it("keeps the chains of one host apart", async () => {

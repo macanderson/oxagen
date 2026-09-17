@@ -61,6 +61,7 @@ export function bootstrapIAMRuntime(): void {
       // about. It reaches no authorisation decision — the denial below is
       // computed from the key's own scope, exactly as before.
       gatewaySessionUuid: args.ctx.gatewaySessionUuid ?? null,
+      gatewayChainGenesisHash: args.ctx.gatewayChainGenesisHash ?? null,
     });
     if (machineDenial !== undefined) {
       return {

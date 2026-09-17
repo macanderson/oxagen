@@ -487,6 +487,18 @@ export interface CapabilityContext {
    */
   gatewaySessionUuid?: string | null;
   /**
+   * The genesis hash of that daemon chain, as the gateway stated it
+   * (`x-tacho-gateway-genesis`).
+   *
+   * Carries the same caveats as {@link gatewaySessionUuid} and exists for the
+   * same reason, one level deeper: the chain id is a NAME, and a forger
+   * holding the host's ingest key can write the same name. The genesis hash is
+   * the hash of the daemon's own first sealed event, so a chain that does not
+   * begin with that event has a different one. Ingest compares it against the
+   * session's recorded `genesis_hash`.
+   */
+  gatewayChainGenesisHash?: string | null;
+  /**
    * Present when this capability call originates from an AGENT RUN (Agent
    * RBAC Phase 2, docs/specs/agent-rbac/spec.md §3.4/§3.5). Carries the two
    * principals of the delegation ceiling (agent ∩ invoking human), the run

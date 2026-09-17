@@ -300,7 +300,11 @@ interface FakeDb {
    * host's chains its gateway has served, one row each (#3221). Empty by
    * default, which is the honest state: no chain has been served.
    */
-  gatewayChains: Array<{ chainSessionUuid: string; lastSeenAt: Date }>;
+  gatewayChains: Array<{
+    chainSessionUuid: string;
+    lastSeenAt: Date;
+    chainGenesisHash: string | null;
+  }>;
   /** The workspace's latest retention policy row; none by default. */
   retentionPolicy:
     | { mode: string; retainedContentClasses: string[] }
@@ -379,9 +383,37 @@ function watchedGatewayHost(
   db: FakeDb,
   at = new Date("2026-09-08T09:00:00.000Z"),
   chain = SESSION,
+  // The chain's genesis hash, which the gateway states on every call and which
+  // ingest compares against the session's own. Tests that care pass the real
+  // hash of the batch's first event; the default is a chain whose genesis
+  // nothing will match, which is the honest stand-in for "some other chain".
+  chainGenesisHash: string | null = `sha256:${"c".repeat(64)}`,
 ): void {
   (db.hosts[0] as Record<string, unknown>)["gatewayLastSeenAt"] = at;
-  db.gatewayChains.push({ chainSessionUuid: chain, lastSeenAt: at });
+  db.gatewayChains.push({
+    chainSessionUuid: chain,
+    lastSeenAt: at,
+    chainGenesisHash,
+  });
+}
+
+/**
+ * The control plane has served a gateway call for the chain THIS BATCH is on.
+ *
+ * Seeds both halves the promotion needs and takes the genesis hash from the
+ * batch itself rather than inventing one, so the match is the real thing: the
+ * chain row states the hash of the daemon's own first sealed event, and the
+ * session row records the same hash when it opens. A test that made both up
+ * would pass against a comparison of two constants.
+ */
+function servedChain(
+  db: FakeDb,
+  events: TachoEvent[],
+  at = new Date("2026-09-08T09:00:00.000Z"),
+): string {
+  const genesis = (events[0] as TachoEvent).hash;
+  watchedGatewayHost(db, at, (events[0] as TachoEvent).session_uuid, genesis);
+  return genesis;
 }
 
 function tableName(table: unknown): string {
@@ -469,6 +501,7 @@ function wire(db: FakeDb): void {
               db.gatewayChains.map((row) => ({
                 chain: row.chainSessionUuid,
                 at: row.lastSeenAt,
+                genesisHash: row.chainGenesisHash,
               })),
           }),
         }),
@@ -1506,7 +1539,8 @@ describe("ingest_tacho_events: bodies and the seal", () => {
 
   it("seals fork on a gateway-tier session whose tool call kept its result body", async () => {
     const db = fakeDb();
-    watchedGatewayHost(db);
+    const events = sessionWithContent("gateway");
+    const genesisHash = servedChain(db, events);
     // The chain exists before the batch that seals it. A gateway tier is only
     // ever reached on a session the server already has a `createdAt` for —
     // genesis cannot be promoted, because there is no lifetime to bound the
@@ -1521,6 +1555,7 @@ describe("ingest_tacho_events: bodies and the seal", () => {
       enforcementTier: "observe",
       createdAt: new Date("2026-09-08T08:00:00.000Z"),
       sealedAt: null,
+      genesisHash,
       // A chain that is open but has recorded nothing, which is what a daemon
       // chain looks like between its genesis and its first flush. Both fields
       // matter: without `seqCount` every event reads as re-sent, so nothing is
@@ -1535,7 +1570,6 @@ describe("ingest_tacho_events: bodies and the seal", () => {
       chainVerified: true,
     });
     wire(db);
-    const events = sessionWithContent("gateway");
     await tachoEventsIngestHandler(
       batch(events, [bodyFor(events[1] as TachoEvent)]),
       CONTEXT,
@@ -1548,7 +1582,8 @@ describe("ingest_tacho_events: bodies and the seal", () => {
 
   it("seals below fork on a gateway-tier session whose tool call kept no result body (negative)", async () => {
     const db = fakeDb();
-    watchedGatewayHost(db);
+    const events = sessionWithContent("gateway");
+    const genesisHash = servedChain(db, events);
     // The chain exists before the batch that seals it. A gateway tier is only
     // ever reached on a session the server already has a `createdAt` for —
     // genesis cannot be promoted, because there is no lifetime to bound the
@@ -1563,6 +1598,7 @@ describe("ingest_tacho_events: bodies and the seal", () => {
       enforcementTier: "observe",
       createdAt: new Date("2026-09-08T08:00:00.000Z"),
       sealedAt: null,
+      genesisHash,
       // A chain that is open but has recorded nothing, which is what a daemon
       // chain looks like between its genesis and its first flush. Both fields
       // matter: without `seqCount` every event reads as re-sent, so nothing is
@@ -1577,10 +1613,7 @@ describe("ingest_tacho_events: bodies and the seal", () => {
       chainVerified: true,
     });
     wire(db);
-    await tachoEventsIngestHandler(
-      batch(sessionWithContent("gateway")),
-      CONTEXT,
-    );
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
     expect(db.sessions.get(SESSION)).toMatchObject({
       replayGrade: "inspect",
       completenessGaps: ["body_missing", "tool_bodies"],
@@ -1895,6 +1928,13 @@ describe("proof.observed frames (ADR-064)", () => {
 
 describe("enforcementTierOf", () => {
   const AT = new Date("2026-09-08T10:00:00.000Z");
+  /** The chain's genesis hash, stated by the gateway and recorded on the row. */
+  const GENESIS = `sha256:${"a".repeat(64)}`;
+  /** A `tacho.gateway_chains` row that proves which chain it belongs to. */
+  const served = (at: Date = AT, genesisHash: string | null = GENESIS) => ({
+    at,
+    genesisHash,
+  });
   /** A host whose gateway credential the control plane has seen authorised. */
   const watched = (mode: string) => ({ mode, gatewayLastSeenAt: AT });
   /** A host that has never had a gateway call authorised. */
@@ -1907,9 +1947,9 @@ describe("enforcementTierOf", () => {
     // and the host recorder sets no identity tier, so these calls used to be
     // filed under the HOST's mode -- the wrong enforcement semantics for the
     // one kind of call Oxagen saw directly (#3161, discussion_r4033641270).
-    expect(enforcementTierOf(AT, watched("observe"), OPENED, true)).toBe(
-      "gateway",
-    );
+    expect(
+      enforcementTierOf(served(), watched("observe"), OPENED, true, GENESIS),
+    ).toBe("gateway");
   });
 
   it("refuses a session with no server-known lifetime", () => {
@@ -1921,12 +1961,12 @@ describe("enforcementTierOf", () => {
     //
     // Discriminating against the case above: same invocation, same watched
     // host, only the lifetime differs.
-    expect(enforcementTierOf(AT, watched("observe"), null, true)).toBe(
-      "observe",
-    );
-    expect(enforcementTierOf(AT, watched("enforce"), null, true)).toBe(
-      "harness",
-    );
+    expect(
+      enforcementTierOf(served(), watched("observe"), null, true, GENESIS),
+    ).toBe("observe");
+    expect(
+      enforcementTierOf(served(), watched("enforce"), null, true, GENESIS),
+    ).toBe("harness");
   });
 
   it("refuses a chain the control plane has no record of serving", () => {
@@ -1938,21 +1978,21 @@ describe("enforcementTierOf", () => {
     // observation at any session. Now the answer comes from
     // `tacho.gateway_chains` and a chain nobody's gateway served has no
     // row there, whatever the batch says about it.
-    expect(enforcementTierOf(null, watched("observe"), OPENED, true)).toBe(
-      "observe",
-    );
-    expect(enforcementTierOf(null, watched("enforce"), OPENED, true)).toBe(
-      "harness",
-    );
+    expect(
+      enforcementTierOf(null, watched("observe"), OPENED, true, GENESIS),
+    ).toBe("observe");
+    expect(
+      enforcementTierOf(null, watched("enforce"), OPENED, true, GENESIS),
+    ).toBe("harness");
   });
 
   it("refuses an invocation on a host with no observation at all", () => {
     // The belt. The two records are written by the same function but by
     // separate statements, and a deployment can be mid-migration on one and
     // not the other; disagreement is not evidence.
-    expect(enforcementTierOf(AT, unwatched("observe"), OPENED, true)).toBe(
-      "observe",
-    );
+    expect(
+      enforcementTierOf(served(), unwatched("observe"), OPENED, true, GENESIS),
+    ).toBe("observe");
   });
 
   it("will not raise a session the invocation predates", () => {
@@ -1960,22 +2000,66 @@ describe("enforcementTierOf", () => {
     // about it. This is what stops a stale record reaching back.
     expect(
       enforcementTierOf(
-        AT,
+        served(),
         watched("observe"),
         new Date(AT.getTime() + 1),
         true,
+        GENESIS,
       ),
     ).toBe("observe");
-    expect(enforcementTierOf(AT, watched("observe"), AT, true)).toBe("gateway");
+    expect(
+      enforcementTierOf(served(), watched("observe"), AT, true, GENESIS),
+    ).toBe("gateway");
+  });
+
+  it("refuses a chain whose genesis hash does not match the session's", () => {
+    // THE remaining hole this closes. The chain NAME is something a forger
+    // holding the host's ingest key can also write: open the session first
+    // with a chain of its own, wait for a genuine gateway call to advance
+    // `lastSeenAt`, and the name, the lifetime and the host observation are
+    // all satisfied by the row the forger created. Its chain begins with a
+    // different event, so its genesis hash is different — and producing a
+    // different chain with the SAME genesis hash is a preimage attack.
+    const forged = `sha256:${"b".repeat(64)}`;
+    expect(
+      enforcementTierOf(served(), watched("observe"), OPENED, true, forged),
+    ).toBe("observe");
+  });
+
+  it("refuses when either side has no genesis hash to compare", () => {
+    // A daemon too old to state one, and a session row that never recorded
+    // one. Null must not match null, or "neither side knows" would read as
+    // agreement and promote every chain that names itself.
+    expect(
+      enforcementTierOf(
+        served(AT, null),
+        watched("observe"),
+        OPENED,
+        true,
+        GENESIS,
+      ),
+    ).toBe("observe");
+    expect(
+      enforcementTierOf(served(), watched("observe"), OPENED, true, null),
+    ).toBe("observe");
+    expect(
+      enforcementTierOf(
+        served(AT, null),
+        watched("observe"),
+        OPENED,
+        true,
+        null,
+      ),
+    ).toBe("observe");
   });
 
   it("falls back to the host mode when nothing says otherwise", () => {
-    expect(enforcementTierOf(null, unwatched("observe"), OPENED, true)).toBe(
-      "observe",
-    );
-    expect(enforcementTierOf(null, unwatched("enforce"), OPENED, true)).toBe(
-      "harness",
-    );
+    expect(
+      enforcementTierOf(null, unwatched("observe"), OPENED, true, GENESIS),
+    ).toBe("observe");
+    expect(
+      enforcementTierOf(null, unwatched("enforce"), OPENED, true, GENESIS),
+    ).toBe("harness");
   });
 
   it("refuses gateway when there is nowhere to record the evidence", () => {
@@ -1988,12 +2072,12 @@ describe("enforcementTierOf", () => {
     // Same invocation and same watched host as the case that returns
     // `gateway` above — only the evidence column differs, which is what makes
     // this discriminating.
-    expect(enforcementTierOf(AT, watched("enforce"), OPENED, false)).toBe(
-      "harness",
-    );
-    expect(enforcementTierOf(AT, watched("observe"), OPENED, false)).toBe(
-      "observe",
-    );
+    expect(
+      enforcementTierOf(served(), watched("enforce"), OPENED, false, GENESIS),
+    ).toBe("harness");
+    expect(
+      enforcementTierOf(served(), watched("observe"), OPENED, false, GENESIS),
+    ).toBe("observe");
   });
 });
 
@@ -2004,7 +2088,8 @@ describe("gateway attribution reaches the chain that carries the call", () => {
   // handler takes its existing-session branch and applies only `common`.
   it("promotes an EXISTING session's tier on the update path", async () => {
     const db = fakeDb();
-    watchedGatewayHost(db);
+    const events = gatewayBatch();
+    const genesisHash = servedChain(db, events);
     // The chain already exists, opened before any connected app called anything.
     db.sessions.set(SESSION, {
       id: "s1",
@@ -2013,6 +2098,7 @@ describe("gateway attribution reaches the chain that carries the call", () => {
       enforcementTier: "observe",
       createdAt: new Date("2026-09-08T08:00:00.000Z"),
       sealedAt: null,
+      genesisHash,
       // A chain that is open but has recorded nothing, which is what a daemon
       // chain looks like between its genesis and its first flush. Both fields
       // matter: without `seqCount` every event reads as re-sent, so nothing is
@@ -2032,7 +2118,7 @@ describe("gateway attribution reaches the chain that carries the call", () => {
       {
         schema: "tacho.batch.v1",
         host_enrollment_id: HOST_PUBLIC,
-        events: gatewayBatch(),
+        events,
         daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
       },
       CONTEXT,
@@ -2198,9 +2284,11 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
 
   it("still files a real gateway call, on the host the server watched serve one", async () => {
     // The fix must not buy safety by labelling nothing. With the control
-    // plane's own observation on the host row, the daemon's chain is gateway.
+    // plane's own record of this chain — its name AND its genesis hash — the
+    // daemon's chain is gateway.
     const db = fakeDb();
-    watchedGatewayHost(db);
+    const events = gatewayBatch();
+    const genesisHash = servedChain(db, events);
     db.sessions.set(SESSION, {
       id: "s1",
       sessionUuid: SESSION,
@@ -2208,6 +2296,7 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
       enforcementTier: "observe",
       createdAt: new Date("2026-09-08T08:00:00.000Z"),
       sealedAt: null,
+      genesisHash,
       // A chain that is open but has recorded nothing, which is what a daemon
       // chain looks like between its genesis and its first flush. Both fields
       // matter: without `seqCount` every event reads as re-sent, so nothing is
@@ -2227,7 +2316,7 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
       {
         schema: "tacho.batch.v1",
         host_enrollment_id: HOST_PUBLIC,
-        events: gatewayBatch(),
+        events,
         daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
       },
       CONTEXT,
@@ -2247,7 +2336,10 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
     // sealed session's tier is final whatever a later batch — or a later
     // gateway call on the same host — would otherwise derive.
     const db = fakeDb();
-    watchedGatewayHost(db);
+    const events = gatewayBatch();
+    // Everything the promotion needs is satisfied — name, genesis hash and
+    // lifetime — so the SEAL is what refuses it, which is the point here.
+    const genesisHash = servedChain(db, events);
     db.sessions.set(SESSION, {
       id: "s1",
       sessionUuid: SESSION,
@@ -2262,7 +2354,7 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
       {
         schema: "tacho.batch.v1",
         host_enrollment_id: HOST_PUBLIC,
-        events: gatewayBatch(),
+        events,
         daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
       },
       CONTEXT,
@@ -2289,6 +2381,10 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
     // `carriesGatewayCall` correlation this batch promotes; against the server
     // record it cannot.
     const db = fakeDb();
+    const events = gatewayBatch();
+    // A real record for a DIFFERENT chain: the gateway served `tachod-real`
+    // and this batch is on `SESSION`, so neither the name nor the genesis
+    // hash matches.
     watchedGatewayHost(db, new Date("2026-09-08T09:00:00.000Z"), "tachod-real");
     db.sessions.set(SESSION, {
       id: "s1",
@@ -2297,6 +2393,10 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
       enforcementTier: "observe",
       createdAt: new Date("2026-09-08T08:00:00.000Z"),
       sealedAt: null,
+      // The forger's own genesis: this session was opened by a chain that is
+      // not the one the gateway served, so its first event — and therefore its
+      // genesis hash — is a different one.
+      genesisHash: `sha256:${"f".repeat(64)}`,
       // A chain that is open but has recorded nothing, which is what a daemon
       // chain looks like between its genesis and its first flush. Both fields
       // matter: without `seqCount` every event reads as re-sent, so nothing is
@@ -2316,7 +2416,54 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
       {
         schema: "tacho.batch.v1",
         host_enrollment_id: HOST_PUBLIC,
-        events: gatewayBatch(),
+        events,
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+
+    expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("observe");
+    for (const update of db.updates.filter((u) => u.table === "sessions")) {
+      expect(update.values["enforcementTier"]).not.toBe("gateway");
+    }
+  });
+
+  it("refuses a CONTINUATION of a forged chain that stole a real chain's name", async () => {
+    // The attack the genesis rule only delayed. The forger opens the session
+    // first with a chain of its own, so the row's `createdAt` is theirs; then a
+    // genuine gateway call on the real chain advances `lastSeenAt` past it, and
+    // they submit a continuation. The chain name matches, the host observation
+    // is real, the lifetime bound is satisfied — every check but one.
+    //
+    // The one is the genesis hash. Their chain begins with their own first
+    // event, so its hash is not the one the gateway stated, and producing a
+    // different chain with the same genesis hash is a preimage attack.
+    //
+    // Discriminating against "promotes an EXISTING session's tier": identical
+    // in every respect except whose genesis the session row records.
+    const db = fakeDb();
+    const events = gatewayBatch();
+    servedChain(db, events);
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "observe",
+      // Written by the forger's own genesis batch, before the real call.
+      createdAt: new Date("2026-09-08T08:00:00.000Z"),
+      sealedAt: null,
+      genesisHash: `sha256:${"e".repeat(64)}`,
+      seqCount: 0,
+      lastHash: null,
+      chainVerified: true,
+    });
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events,
         daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
       },
       CONTEXT,
@@ -2344,14 +2491,18 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
     // Discriminating against "promotes an EXISTING session's tier" above: same
     // host, same chain record, same batch — only the session row is missing.
     const db = fakeDb();
-    watchedGatewayHost(db);
+    const events = gatewayBatch();
+    // Name and genesis hash BOTH match — the only thing wrong is that this
+    // batch is opening the session, so there is no server-written lifetime
+    // to bound the record against.
+    servedChain(db, events);
     wire(db);
 
     await tachoEventsIngestHandler(
       {
         schema: "tacho.batch.v1",
         host_enrollment_id: HOST_PUBLIC,
-        events: gatewayBatch(),
+        events,
         daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
       },
       CONTEXT,
@@ -2369,6 +2520,7 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
     // the correlation rather than by the bound: an invented chain has no
     // invocation row.
     const db = fakeDb();
+    const events = gatewayBatch();
     watchedGatewayHost(db, new Date("2026-09-08T09:00:00.000Z"), "tachod-real");
     wire(db);
 
@@ -2376,7 +2528,7 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
       {
         schema: "tacho.batch.v1",
         host_enrollment_id: HOST_PUBLIC,
-        events: gatewayBatch(),
+        events,
         daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
       },
       CONTEXT,
@@ -2391,7 +2543,12 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
     // already been opened and run. Evidence from after the fact is not evidence
     // about it.
     const db = fakeDb();
-    watchedGatewayHost(db, new Date("2026-09-08T07:00:00.000Z"));
+    const events = gatewayBatch();
+    const genesisHash = servedChain(
+      db,
+      events,
+      new Date("2026-09-08T07:00:00.000Z"),
+    );
     db.sessions.set(SESSION, {
       id: "s1",
       sessionUuid: SESSION,
@@ -2399,6 +2556,7 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
       enforcementTier: "observe",
       createdAt: new Date("2026-09-08T08:00:00.000Z"),
       sealedAt: null,
+      genesisHash,
       // A chain that is open but has recorded nothing, which is what a daemon
       // chain looks like between its genesis and its first flush. Both fields
       // matter: without `seqCount` every event reads as re-sent, so nothing is
@@ -2418,7 +2576,7 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
       {
         schema: "tacho.batch.v1",
         host_enrollment_id: HOST_PUBLIC,
-        events: gatewayBatch(),
+        events,
         daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
       },
       CONTEXT,

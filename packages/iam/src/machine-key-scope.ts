@@ -80,7 +80,7 @@ import {
   withSystemDb,
 } from "@oxagen/database";
 import { getCapability, listCapabilities } from "@oxagen/oxagen";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 /** The scope purpose Tacho enrollment mints the host's control-plane key with. */
 export const TACHO_HOST_PURPOSE = "tacho_host_v1";
@@ -205,6 +205,12 @@ export interface MachineKeyCheck {
    * It never reaches the denial decision — see `machineKeyDenial`.
    */
   gatewaySessionUuid?: string | null;
+  /**
+   * The genesis hash of that chain, which is what makes the id above evidence
+   * rather than a name a forger could also write (#3221). Read back on the
+   * same one credential and under the same rules.
+   */
+  gatewayChainGenesisHash?: string | null;
 }
 
 /**
@@ -296,6 +302,7 @@ async function recordGatewayInvocation(
   orgId: string,
   hostEnrollmentId: string | undefined,
   chainSessionUuid: string | null,
+  chainGenesisHash: string | null,
 ): Promise<void> {
   if (!hostEnrollmentId) return;
   // The ORGANISATION'S plane, not the shared one. `tacho.hosts` is tenant data
@@ -377,6 +384,7 @@ async function recordGatewayInvocation(
           workspaceId: host.workspaceId,
           hostId: host.id,
           chainSessionUuid,
+          chainGenesisHash,
           firstSeenAt: at,
           lastSeenAt: at,
         })
@@ -385,7 +393,27 @@ async function recordGatewayInvocation(
             schema.tachoGatewayChains.hostId,
             schema.tachoGatewayChains.chainSessionUuid,
           ],
-          set: { lastSeenAt: at },
+          set: {
+            // GREATEST, not assignment. Gateway calls are deliberately NOT
+            // serialised — the forward was taken off the daemon's queue
+            // because one slow connected-app call held every wrapped agent on
+            // the machine — so two calls for the same chain can reach this
+            // upsert out of order, and the later-committing one can carry the
+            // older `at`. Assigning it would move `last_seen_at` BACKWARDS.
+            //
+            // That is not cosmetic. If a session row was created between the
+            // two calls, a rewound timestamp reads as "this chain served no
+            // gateway call during the session's lifetime", and if that batch
+            // also seals the session the tier is wrong for good — the seal is
+            // final and no later call can repair it.
+            lastSeenAt: sql`GREATEST(${schema.tachoGatewayChains.lastSeenAt}, ${at})`,
+            // COALESCE for the same reason, one type along: a chain's genesis
+            // hash is constant, so a non-null value is always the right one and
+            // a null only ever means "this caller did not state it". Assigning
+            // unconditionally would let a daemon too old to send it erase what
+            // a newer one proved, and leave the chain unpromotable.
+            chainGenesisHash: sql`COALESCE(${chainGenesisHash}::text, ${schema.tachoGatewayChains.chainGenesisHash})`,
+          },
         });
     }
   });
@@ -468,6 +496,7 @@ export async function machineKeyDenial(
       // SESSION rather than only about a host (#3221). Read only here, on the
       // one credential whose authentication it can attest anything about.
       check.gatewaySessionUuid ?? null,
+      check.gatewayChainGenesisHash ?? null,
     );
     if (!permitted) {
       return `Forbidden: ${capabilityName} is outside this agent's mandate. A connected app may call read-only, non-sensitive workspace tools through the Oxagen gateway; changing that is a mandate change, made in Oxagen.`;

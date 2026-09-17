@@ -285,13 +285,25 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
  * which aborts the transaction exactly as 42703 does, and would take out
  * ingestion for every host during the deploy-before-migrate window (#1275).
  */
+/** What the control plane recorded about one chain its gateway served. */
+interface GatewayChainRecord {
+  /** The newest call, which the session's lifetime is measured against. */
+  at: Date;
+  /**
+   * The chain's genesis hash as the gateway stated it, or null for a daemon
+   * too old to send one. Null never promotes: the chain NAME alone is
+   * something a forger holding the host's ingest key can also write.
+   */
+  genesisHash: string | null;
+}
+
 async function gatewayInvocationsFor(
   tx: Tx,
   host: GatewayObservable & { id: string },
   chains: string[],
   invocationTable: boolean,
-): Promise<Map<string, Date>> {
-  const answers = new Map<string, Date>();
+): Promise<Map<string, GatewayChainRecord>> {
+  const answers = new Map<string, GatewayChainRecord>();
   if (!invocationTable) return answers;
   if (gatewayObservationFor(host) === null) return answers;
   if (chains.length === 0) return answers;
@@ -302,6 +314,7 @@ async function gatewayInvocationsFor(
     .select({
       chain: schema.tachoGatewayChains.chainSessionUuid,
       at: schema.tachoGatewayChains.lastSeenAt,
+      genesisHash: schema.tachoGatewayChains.chainGenesisHash,
     })
     .from(schema.tachoGatewayChains)
     .where(
@@ -315,7 +328,8 @@ async function gatewayInvocationsFor(
     // and the value is compared against a session's `createdAt`, where a string
     // comparison would silently read as "always after".
     const at = row.at instanceof Date ? row.at : new Date(row.at);
-    if (!isNaN(at.getTime())) answers.set(row.chain, at);
+    if (!isNaN(at.getTime()))
+      answers.set(row.chain, { at, genesisHash: row.genesisHash ?? null });
   }
   return answers;
 }
@@ -367,12 +381,13 @@ export function gatewayObservationFor(host: GatewayObservable): Date | null {
  *
  *  1. The control plane authorised a call on this host's gateway credential.
  *     Its own record, unreachable from any submission.
- *  2. The call was served for *this* chain. `invocationAt` is the newest
- *     `tacho.gateway_chains` row matching the session's uuid, written
- *     where the gateway credential was authenticated — so the correlation is
- *     the server's too, not the batch's (#3221). Null means the table has no
- *     record of this chain, which is the answer for every chain nobody's
- *     gateway ever served, including one invented by a forged batch.
+ *  2. The call was served for *this* chain, and this chain is the one it says
+ *     it is. `chain` is the `tacho.gateway_chains` row matching the session's
+ *     uuid, written where the gateway credential was authenticated — so the
+ *     correlation is the server's too, not the batch's (#3221) — and its
+ *     `genesisHash` must equal the session's own. The uuid alone is a NAME,
+ *     which a forger holding the host's ingest key can write; the genesis hash
+ *     is the hash of the daemon's own first sealed event, which it cannot.
  *  3. That call does not predate the session. `sinceAt` is the session row's
  *     server-clock `createdAt`; a gateway call Oxagen served before this chain
  *     existed cannot be what enforced anything on it.
@@ -397,7 +412,7 @@ export function gatewayObservationFor(host: GatewayObservable): Date | null {
  * `tacho-gateway-attribute.test.ts` fails if any handler reads it back.
  */
 export function enforcementTierOf(
-  invocationAt: Date | null,
+  chain: GatewayChainRecord | null,
   host: GatewayObservable,
   sinceAt: Date | null,
   // Whether `tacho.sessions.gateway_observed_at` exists yet.
@@ -414,6 +429,12 @@ export function enforcementTierOf(
   // self-correcting: the probe re-asks once a minute, and a session that was
   // not sealed meanwhile is promoted by the next batch, evidence and all.
   evidenceColumn: boolean,
+  // The session row's OWN genesis hash, as the server recorded it when the
+  // chain opened. Null for a session with none — an older row, or one whose
+  // first batch did not start at seq 0 — and null never matches. Last because
+  // it is the newest condition, and the three before it are the ones the
+  // docblock numbers.
+  sessionGenesisHash: string | null,
 ): string {
   const observed = gatewayObservationFor(host);
   if (
@@ -423,7 +444,21 @@ export function enforcementTierOf(
     // kept as a belt, because the two are written by separate statements and a
     // deployment can be mid-migration on one and not the other.
     observed !== null &&
-    invocationAt !== null &&
+    chain !== null &&
+    // The chain is the one it says it is. The NAME is something a forger
+    // holding the host's ingest key can write too: open the session first with
+    // a chain of its own and let a genuine gateway call advance `lastSeenAt`,
+    // and the name, the lifetime and the host observation are all satisfied by
+    // the row the forger created. The genesis hash is not — a chain that does
+    // not begin with the daemon's own first event has a different one, and
+    // producing a different chain with the same one is a preimage attack.
+    //
+    // Both sides must be present. A daemon too old to state its genesis, or a
+    // session row that never recorded one, leaves the tier on the host's mode
+    // rather than promoting on a name.
+    chain.genesisHash !== null &&
+    sessionGenesisHash !== null &&
+    chain.genesisHash === sessionGenesisHash &&
     // A server-known lifetime is REQUIRED, not merely respected when present.
     // `sinceAt` null means the session row does not exist yet, so there is no
     // server-clock `createdAt` to bound the observation against and the chain
@@ -431,7 +466,7 @@ export function enforcementTierOf(
     // satisfies as well as the real one does. Stated here rather than left to
     // each caller to pass the right thing, so a future caller cannot reopen it.
     sinceAt != null &&
-    invocationAt.getTime() >= sinceAt.getTime()
+    chain.at.getTime() >= sinceAt.getTime()
   )
     return TACHO_GATEWAY_TIER;
   return host.mode === "enforce" ? "harness" : "observe";
@@ -504,7 +539,7 @@ function genesisRow(
   // against a `createdAt` the server wrote, which is the check genesis cannot
   // make. A daemon chain lives for the daemon's run and flushes repeatedly, so
   // "the next batch" is the ordinary case, not a hoped-for one.
-  const tier = enforcementTierOf(null, host, null, sessionGatewayColumn);
+  const tier = enforcementTierOf(null, host, null, sessionGatewayColumn, null);
   return {
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
@@ -800,6 +835,10 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           toolBodyFrames: true,
           enforcementTier: true,
           sealedAt: true,
+          // What the chain proved it was when it opened. The gateway states
+          // the same hash on every call, and a tier rises only when the two
+          // agree (#3221).
+          genesisHash: true,
           // The session's own server-clock birth. A gateway call the control
           // plane served before this chain existed is not evidence about it.
           createdAt: true,
@@ -880,12 +919,13 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       // seal. A sealed session's tier is final: its replay grade was computed
       // from it and signed into the attestation, and a value that moves
       // underneath a signature is the escalation, not the mislabel.
-      const invocationAt = gatewayInvocations.get(sessionUuid) ?? null;
+      const chainRecord = gatewayInvocations.get(sessionUuid) ?? null;
       const derivedTier = enforcementTierOf(
-        invocationAt,
+        chainRecord,
         host,
         existing?.createdAt ?? null,
         sessionGatewayColumn,
+        existing?.genesisHash ?? null,
       );
       const promoteToGateway =
         existing !== undefined &&
@@ -1014,7 +1054,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
               // host column: that coupling holds today and is invisible to
               // anyone changing either half.
               ...(sessionGatewayColumn
-                ? { gatewayObservedAt: invocationAt }
+                ? { gatewayObservedAt: chainRecord?.at ?? null }
                 : {}),
             }
           : {}),

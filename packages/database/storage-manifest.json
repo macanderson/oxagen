@@ -3353,7 +3353,7 @@
       "writes": []
     }
   ],
-  "contentHash": "9d56c4dd0058749421c8a7db5d52e48a645a076ad0b8ae3c8f991f512b668e7e",
+  "contentHash": "a1a0e0cb94fe43e2e14e7119c3ddcc2d8716c7af13cbd85baa0d1609053b173a",
   "domains": [
     {
       "name": "agent",
@@ -17837,6 +17837,12 @@
         {
           "name": "chain_session_uuid",
           "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "chain_genesis_hash",
+          "nullable": true,
           "primaryKey": false,
           "type": "text"
         },

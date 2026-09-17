@@ -29,8 +29,9 @@
  * read from client-controlled identity headers (`x-oxagen-org-id` & friends).
  * It is derived solely from the validated credential. Two headers are read and
  * neither is a security boundary: `x-request-id`, a trace-correlation id that
- * falls back to a fresh UUID when absent, and `x-tacho-gateway-session`, the
- * Tacho daemon chain a local MCP gateway is serving (#3221).
+ * falls back to a fresh UUID when absent, and `x-tacho-gateway-session` and
+ * `x-tacho-gateway-genesis`, the Tacho daemon chain a local MCP gateway is
+ * serving and that chain's genesis hash (#3221).
  *
  * The second is worth being explicit about, because it is a header that ends
  * up in a durable record. It names the CALLER'S OWN chain and nothing else —
@@ -54,7 +55,10 @@ import { resolveApiKey } from "@oxagen/auth";
 // constants, rather than adding `@oxagen/tacho` to this app's dependencies —
 // the header name is the contract, and it is still spelled in exactly one
 // place.
-import { TACHO_GATEWAY_SESSION_HEADER } from "@oxagen/oxagen/tacho/schemas";
+import {
+  TACHO_GATEWAY_GENESIS_HEADER,
+  TACHO_GATEWAY_SESSION_HEADER,
+} from "@oxagen/oxagen/tacho/schemas";
 import { emitSecurityEvent } from "@oxagen/database/security";
 
 /** xmcp's headers() helper returns this shape (array when a header repeats). */
@@ -111,6 +115,20 @@ function extractGatewaySession(hdrs: HttpHeaders): string | null {
   const raw = firstHeader(hdrs[TACHO_GATEWAY_SESSION_HEADER])?.trim();
   if (raw === undefined || raw.length === 0 || raw.length > 128) return null;
   return /^[A-Za-z0-9_.:-]+$/.test(raw) ? raw : null;
+}
+
+/**
+ * The genesis hash of the daemon chain a gateway call is being served for.
+ *
+ * Accepted only in the shape every Tacho chain hash has — `sha256:` and 64
+ * lowercase hex — for the same reason the chain id is bounded: it is written
+ * to a durable evidence row and compared against one. Anything else reads as
+ * absent, which leaves the session on the host's own enforcement tier.
+ */
+function extractGatewayGenesis(hdrs: HttpHeaders): string | null {
+  const raw = firstHeader(hdrs[TACHO_GATEWAY_GENESIS_HEADER])?.trim();
+  if (raw === undefined) return null;
+  return /^sha256:[0-9a-f]{64}$/.test(raw) ? raw : null;
 }
 
 export type McpContextResolution =
@@ -191,6 +209,7 @@ export async function resolveMcpContext(
   requestId: string,
   clientIp: string | null = null,
   gatewaySessionUuid: string | null = null,
+  gatewayChainGenesisHash: string | null = null,
 ): Promise<McpContextResolution> {
   const token = extractBearerToken(authHeader);
   if (!token) return { ok: false, reason: "unauthenticated" };
@@ -265,6 +284,7 @@ export async function resolveMcpContext(
         messageId: null,
         clientIp,
         gatewaySessionUuid,
+        gatewayChainGenesisHash,
       },
     };
   }
@@ -299,12 +319,14 @@ export async function buildContext(
   const requestId = firstHeader(hdrs["x-request-id"]) ?? crypto.randomUUID();
   const clientIp = extractClientIp(hdrs);
   const gatewaySessionUuid = extractGatewaySession(hdrs);
+  const gatewayChainGenesisHash = extractGatewayGenesis(hdrs);
 
   const resolution = await resolveMcpContext(
     authHeader,
     requestId,
     clientIp,
     gatewaySessionUuid,
+    gatewayChainGenesisHash,
   );
   if (!resolution.ok) throw new McpUnauthorizedError(resolution.reason);
   return resolution.ctx;
