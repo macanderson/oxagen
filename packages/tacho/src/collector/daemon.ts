@@ -224,6 +224,21 @@ export async function startDaemon(
   const pendingAcks: CommandAcknowledgement[] = [];
   const serial = new Serial();
 
+  // Exponential backoff for the command poll, the same 2s→60s shape the
+  // Shipper already applies to ingest. Without it a control plane that is
+  // down converts the daemon into a load generator against it: the tick runs
+  // every second, `sendAcks` has no gate of its own once `lastIngestAt` goes
+  // stale (and ingest going stale is exactly what an outage does), so every
+  // failure is retried a second later, forever. An outage on 2026-09-17 put
+  // 1770 identical failures into 2000 lines of tachod.log and grew the log to
+  // 3 MB while the control plane was answering 503 to all of them. A daemon
+  // that cannot reach its control plane must get quieter, not louder.
+  const COMMAND_POLL_MIN_BACKOFF_MS = 2_000;
+  const COMMAND_POLL_MAX_BACKOFF_MS = 60_000;
+  let commandPollBackoffMs = COMMAND_POLL_MIN_BACKOFF_MS;
+  let commandPollNextAttemptAt = 0;
+  let commandPollFailures = 0;
+
   const client: ControlClient = createControlClient({
     endpoints: host.endpoints,
     apiKey: host.api_key,
@@ -375,15 +390,38 @@ export async function startDaemon(
     ) {
       return;
     }
+    // Backoff gate. Pending acknowledgements do NOT bypass it: an ack is
+    // delivered to a control plane that is answering, and hammering one that
+    // is not delivers nothing while making the outage worse. The acks are
+    // pushed back onto the queue below and ride the next attempt.
+    if (now() < commandPollNextAttemptAt) return;
     const acks = pendingAcks.splice(0, 100);
     try {
       const { spool_oldest_at: _o, bundle_etag: _e, ...daemon } = health();
       const response = await client.commands(acks, daemon);
       await onControl(response.control);
+      if (commandPollFailures > 0) {
+        log(`command poll recovered after ${commandPollFailures} failures`);
+      }
+      commandPollFailures = 0;
+      commandPollBackoffMs = COMMAND_POLL_MIN_BACKOFF_MS;
+      commandPollNextAttemptAt = 0;
     } catch (error) {
       pendingAcks.unshift(...acks);
+      commandPollFailures += 1;
+      const retryInMs = commandPollBackoffMs;
+      commandPollNextAttemptAt = now() + retryInMs;
+      commandPollBackoffMs = Math.min(
+        commandPollBackoffMs * 2,
+        COMMAND_POLL_MAX_BACKOFF_MS,
+      );
+      // The failure count and the wait are on the line because a reader
+      // watching this log needs to tell one failure from the eight hundredth,
+      // and needs to know the daemon is holding off rather than wedged.
       log(
-        `command poll failed: ${error instanceof Error ? error.message : String(error)}`,
+        `command poll failed (${commandPollFailures} in a row, retrying in ${Math.round(retryInMs / 1000)}s): ${
+          error instanceof Error ? error.message : String(error)
+        }`,
       );
     }
   }
