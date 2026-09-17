@@ -84,6 +84,13 @@
           },
           "otel_ok": {
             "type": "boolean"
+          },
+          "bundle_features": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            }
           }
         },
         "additionalProperties": false

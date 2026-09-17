@@ -221,6 +221,22 @@ export const tachoHosts = tachoSchema.table(
     otelOk: boolean("otel_ok"),
     daemonVersion: text("daemon_version"),
     daemonUptimeS: integer("daemon_uptime_s"),
+    /**
+     * The bundle fields this host told us it can parse
+     * (`TACHO_BUNDLE_FEATURES` in `@oxagen/tacho`). Written at enrollment and
+     * refreshed from the daemon's health report on every control poll, so it
+     * tracks the code the host is *running* rather than the code it enrolled
+     * with — `wrapper_version` and `daemon_version` both come from
+     * `host.json`, which `enroll` writes once and no upgrade rewrites.
+     *
+     * Empty is the honest default for every row that predates this column:
+     * those hosts never advertised anything, and a gated bundle field must
+     * not be sent to a parser that would reject the whole mandate over it.
+     */
+    bundleFeatures: jsonb("bundle_features")
+      .notNull()
+      .default(sql`'[]'::jsonb`)
+      .$type<string[]>(),
     // Counters
     sessionsCount: integer("sessions_count").notNull().default(0),
     unobservedSessionsCount: integer("unobserved_sessions_count")
