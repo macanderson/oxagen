@@ -320,21 +320,32 @@ describe("a served gateway call is recorded where the tier can read it", () => {
     expect(hostUpdates).toEqual([]);
   });
 
-  it("records nothing for a call it REFUSED", async () => {
-    // A call outside the mandate is not a call Oxagen served, so it is not
-    // evidence that this host serves connected apps. Recording it would let a
-    // refused call raise a tier.
+  it("stamps the host on a call it REFUSED", async () => {
+    // A refusal is not weaker evidence of enforcement than a success — it is
+    // the strongest there is, the case where Oxagen actually stopped
+    // something, and the case the operator most needs the session to show
+    // (discussion_r4040685657).
+    //
+    // An earlier version asserted the opposite here, reasoning that a refused
+    // call must not raise a tier. What must not raise a tier is a
+    // CLIENT-ATTESTED claim. This is the server's own record that it
+    // authenticated this host's gateway credential and ruled on the request,
+    // which a refusal satisfies exactly as well as a success does.
     getCapability.mockReturnValue({ ...readOnlyMcp, mutates: true });
     keyWithScope({
       purpose: TACHO_GATEWAY_PURPOSE,
       host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
     });
-    await machineKeyDenial({
+    const denial = await machineKeyDenial({
       orgId: ORG,
       apiKeyId: "aky_g",
       capabilityName: "delete_workspace",
     });
-    expect(hostUpdates).toHaveLength(0);
+    // Still refused. Recording the attempt does not permit it.
+    expect(denial).toMatch(/outside this agent's mandate/);
+    expect(hostUpdates).toHaveLength(1);
+    expect(hostUpdates[0]?.["gatewayLastSeenAt"]).toBeInstanceOf(Date);
+    expect(hostWritePlanes).toEqual([ORG]);
   });
 
   it("records nothing for the HOST key, which serves no connected app", async () => {

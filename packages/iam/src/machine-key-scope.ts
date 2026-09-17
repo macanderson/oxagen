@@ -260,24 +260,38 @@ export async function machineKeyDenial(
   const { purpose } = scope;
 
   if (purpose === TACHO_GATEWAY_PURPOSE) {
-    if (!gatewayMayInvoke(capabilityName)) {
-      return `Forbidden: ${capabilityName} is outside this agent's mandate. A connected app may call read-only, non-sensitive workspace tools through the Oxagen gateway; changing that is a mandate change, made in Oxagen.`;
-    }
     // The observation the enforcement tier is derived from.
     //
     // This is the only place the control plane KNOWS a gateway call happened:
-    // it authenticated the credential and is about to serve the call. The tier
-    // used to be read off an attribute on the submitted batch instead, which a
+    // it authenticated the credential and is deciding the call. The tier used
+    // to be read off an attribute on the submitted batch instead, which a
     // harness can set — OTLP attributes pass through the normalizer verbatim
     // and the daemon seals whatever it is handed, so the signature proved the
     // record was not altered after collection and nothing at all about whether
     // the value was true going in. Ingest now reads this column.
+    //
+    // Recorded BEFORE the mandate check, so a refusal is recorded too
+    // (discussion_r4040685657). An earlier version stamped only the allowed
+    // path, reasoning that a refused call is not a call Oxagen served and must
+    // not raise a tier. That guarded the wrong thing. What must not raise a
+    // tier is a CLIENT-ATTESTED claim; this is the server's own record that it
+    // authenticated this host's gateway credential and ruled on the request.
+    // A refusal is not weaker evidence of enforcement than a success — it is
+    // the strongest there is, the case where Oxagen actually stopped
+    // something, and it is exactly what the operator needs the session to be
+    // able to show. Leaving it out meant a connected app whose first call was
+    // outside the mandate produced a `-32002` the daemon filed as a gateway
+    // `policy_decision` while the chain stayed `observe`, so the evidence
+    // could not report the prevention that was the whole point.
     //
     // Awaited rather than fired and forgotten: a call this write did not
     // record is a call the tier will not reflect, and silently under-reporting
     // enforcement is the failure this whole path exists to end. It is one
     // indexed UPDATE by public id.
     await recordGatewayInvocation(orgId, scope.hostEnrollmentId);
+    if (!gatewayMayInvoke(capabilityName)) {
+      return `Forbidden: ${capabilityName} is outside this agent's mandate. A connected app may call read-only, non-sensitive workspace tools through the Oxagen gateway; changing that is a mandate change, made in Oxagen.`;
+    }
     return undefined;
   }
 
