@@ -13,12 +13,19 @@
 // pages; their reads have no rev1 port and their writes have no contract that
 // declares `app` (ADR-081), so they are absent rather than stubbed — a tab
 // that cannot save is the thing this file exists to stop shipping.
-import { Dialog } from "@base-ui/react/dialog";
-import { X } from "lucide-react";
+//
+// It is a `SheetDialog` like every other dialog in the app, so on a phone it
+// rises from the bottom edge with a drag handle, a scrim, safe-area padding
+// and a full-width footer button (ARCHITECTURE.md §1.2, the phone shell;
+// src/ui/phone.css). A hand-rolled `Dialog.Popup` here would be a centred
+// desktop modal at every width.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
-import { buttonSecondary, inputBase } from "@/ui/control-styles";
+import { Avatar } from "@/ui/avatar";
+import { inputBase } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
+import { useNavigate } from "@/ui/navigation";
+import { SheetDialog } from "@/ui/sheet-dialog";
 import { updateProfile } from "./account-actions";
 import { initials } from "./format";
 import type { ShellData } from "./shell-data";
@@ -31,25 +38,23 @@ const fieldLabel =
 const hint = "mt-1.5 text-xs text-muted-foreground";
 
 export function AccountDialog({ data }: { data: ShellData }) {
+  const t = useTranslations("shell.account");
   const { accountOpen, setAccountOpen } = useShellState();
   return (
-    <Dialog.Root open={accountOpen} onOpenChange={setAccountOpen}>
-      <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40" />
-        <Dialog.Popup
-          data-testid="account-dialog"
-          className="fixed left-1/2 top-1/2 z-50 w-[min(34rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-app-panel-bg p-5 text-app-panel-fg shadow-xl outline-none"
-        >
-          <AccountForm data={data} />
-        </Dialog.Popup>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <SheetDialog
+      open={accountOpen}
+      onOpenChange={setAccountOpen}
+      title={t("title")}
+      testId="account-dialog"
+    >
+      <AccountForm data={data} />
+    </SheetDialog>
   );
 }
 
 function AccountForm({ data }: { data: ShellData }) {
   const t = useTranslations("shell.account");
-  const { setAccountOpen } = useShellState();
+  const navigate = useNavigate();
   const { viewer, org } = data;
   const nameId = useId();
   const emailId = useId();
@@ -70,6 +75,13 @@ function AccountForm({ data }: { data: ShellData }) {
         setDisplayName(result.value.displayName);
         setAvatarUrl(result.value.avatarUrl ?? "");
         setOutcome("saved");
+        // The shell renders the same person: the top bar's user menu reads
+        // `data.viewer`, resolved on the server from the session. Without this
+        // the name and avatar in the chrome stay as they were — across
+        // client-side navigation too, because the shell lives in the org
+        // layout — until a full reload. A re-render of the server tree at the
+        // URL already showing, not a navigation: the dialog stays open.
+        navigate.refresh();
       } else if (result.reason === "invalid") setOutcome("invalid");
       else if (result.reason === "denied") setOutcome("denied");
       else setOutcome("failed");
@@ -83,37 +95,12 @@ function AccountForm({ data }: { data: ShellData }) {
   const shown = displayName.trim() === "" ? viewer.email : displayName;
   return (
     <form noValidate onSubmit={(e) => void onSubmit(e)}>
-      <div className="mb-4 flex items-start justify-between gap-4">
-        <Dialog.Title className="text-base font-semibold">
-          {t("title")}
-        </Dialog.Title>
-        <Dialog.Close
-          aria-label={t("close")}
-          className="rounded-sm p-1 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-        >
-          <X aria-hidden="true" className="size-4" />
-        </Dialog.Close>
-      </div>
-
       <div className="mb-5 flex items-center gap-3.5">
-        {avatarUrl.startsWith("https://") ? (
-          /* An arbitrary remote avatar cannot be in next.config's image
-             allowlist, and this is a 52px chrome ornament, not page content
-             worth optimising. */
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={avatarUrl}
-            alt=""
-            className="size-13 flex-none rounded-full object-cover"
-          />
-        ) : (
-          <span
-            aria-hidden="true"
-            className="grid size-13 flex-none place-items-center rounded-full bg-secondary text-base font-semibold text-secondary-foreground"
-          >
-            {initials(shown)}
-          </span>
-        )}
+        <Avatar
+          value={avatarUrl === "" ? null : avatarUrl}
+          initials={initials(shown)}
+          testId="account-avatar-preview"
+        />
         <div className="min-w-0">
           <p className="text-base font-semibold">{shown}</p>
           <p className="truncate text-sm text-muted-foreground">
@@ -178,19 +165,13 @@ function AccountForm({ data }: { data: ShellData }) {
 
       <div className="mt-5 flex items-center justify-end gap-2">
         {outcome === "saved" ? (
-          <p data-testid="account-saved" className="mr-auto text-xs text-muted-foreground">
+          <p
+            data-testid="account-saved"
+            className="mr-auto text-xs text-muted-foreground"
+          >
             {t("saved")}
           </p>
         ) : null}
-        <button
-          type="button"
-          className={buttonSecondary}
-          onClick={() => {
-            setAccountOpen(false);
-          }}
-        >
-          {t("close")}
-        </button>
         <SubmitButton
           pending={pending}
           fullWidth={false}

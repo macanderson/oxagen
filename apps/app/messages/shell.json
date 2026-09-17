@@ -71,16 +71,15 @@
     },
     "account": {
       "title": "Account",
-      "close": "Close",
       "save": "Save",
       "saving": "Saving",
       "saved": "Saved.",
       "displayName": "Display name",
       "avatar": "Avatar",
-      "avatarHint": "An image URL, or leave blank to show your initials.",
+      "avatarHint": "An https image URL or a designed avatar (avatar:v1:\u2026), or leave blank to show your initials.",
       "email": "Email",
       "emailHint": "Your email is how you sign in and cannot be changed here.",
-      "invalid": "That display name or avatar was refused. A name is 1 to 120 characters; an avatar is an https URL.",
+      "invalid": "That display name or avatar was refused. A name is 1 to 120 characters; an avatar is an https URL or a designed-avatar value.",
       "denied": "You do not have permission to change this profile.",
       "failed": "That could not be saved. Try again.",
       "avatarPlaceholder": "https://"

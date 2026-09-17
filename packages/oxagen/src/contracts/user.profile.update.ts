@@ -20,6 +20,21 @@
  *
  * A settings write is never a governed action (ADR-052 exclusion 2):
  * `noBillingGate: true`.
+ *
+ * **API only, deliberately.** The handler acts on `ctx.userId` and nothing
+ * else, and MCP has no user principal to give it: `resolveMcpContext`
+ * (`apps/mcp/src/context.ts`) authenticates an API key and builds its context
+ * with `userId: null`, and rejects a session token outright ("there is no
+ * legitimate MCP use case for session-token auth"). An `update_profile` MCP
+ * tool could therefore only ever answer `forbidden`/`no_principal`, so it is
+ * not advertised at all. Nor is the alternative honest: resolving the acting
+ * user from the key's creator (`resolveActingUserId`, the seam
+ * `workspace.create` and `agent.register` use for attribution) would let a
+ * machine credential rewrite the display name and avatar of the person who
+ * minted it — an impersonation seam in the identity the fleet record and the
+ * audit log render. A person changes their own name from a session, over the
+ * API or in the app. This capability carries no `cli` surface for the same
+ * reason.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -37,8 +52,8 @@ export const userProfileUpdate = registerCapability({
   description:
     "Update the calling user's own display name and avatar, and return the persisted values.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  surfaces: ["api"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: false,
   mutates: true,
   noBillingGate: true,

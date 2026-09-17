@@ -1483,7 +1483,6 @@ type Messages = {
     };
     account: {
       title: string;
-      close: string;
       save: string;
       saving: string;
       saved: string;

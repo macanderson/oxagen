@@ -13,10 +13,28 @@ The input carries no user id: the handler acts on the authenticated principal on
 ## Surface
 
 - API: `PATCH /v1/user/profile`
-- MCP: `update_profile`
+- MCP: none, deliberately — see below
 - Authentication: session; the caller must carry a person (`forbidden` otherwise)
 - Capability name: `update_profile`
 - Not billed (`noBillingGate: true`): a settings write is never a governed action (ADR-052 exclusion 2).
+
+### Why there is no MCP tool
+
+The handler acts on `ctx.userId` and nothing else, and MCP has no user principal
+to give it. `resolveMcpContext` (`apps/mcp/src/context.ts`) authenticates an API
+key and builds its context with `userId: null`, and rejects a session token
+outright — "there is no legitimate MCP use case for session-token auth". An
+`update_profile` MCP tool could therefore only ever answer
+`forbidden`/`no_principal`, so the capability does not declare the `mcp` surface
+and no tool is advertised.
+
+Resolving the acting user from the API key's creator instead (`resolveActingUserId`,
+the attribution seam `workspace.create` and `agent.register` use) is the wrong
+answer here rather than a shortcut: it would let a machine credential rewrite the
+display name and avatar of the person who minted it, which is an impersonation
+seam in the identity the fleet record and the audit log render. A person changes
+their own name from a session — in the app, or over the API with a session
+credential.
 
 ## Input
 
