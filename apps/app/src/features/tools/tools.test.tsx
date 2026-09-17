@@ -5,14 +5,26 @@
 // nothing it does not — an unclassified version says so, a call count the
 // store did not answer stays "not recorded" — and axe checks the state each
 // test ends in (INV-26).
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OrgRole } from "@/data/contracts/common";
 import type { MandateList } from "@/data/contracts/mandates";
 import { type Read, readError, readOk } from "@/data/read";
+// Type-only, so the `server-only` module is not pulled into the jsdom run:
+// the values come from the dynamic import below, as they already did.
+import type { WsCtx as WsCtxType, WsRole } from "@/server/viewer";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { killSwitchSet } from "@oxagen/oxagen/contracts/kill_switch.set";
+import { toolClassificationSet } from "@oxagen/oxagen/contracts/tool.classification.set";
+import { toolImport } from "@oxagen/oxagen/contracts/tool.import";
 import {
   callsAuthority,
   mandateAuthority,
@@ -33,7 +45,13 @@ const { credentialGrantPage, killSwitchBoard, toolsSource, toolVersionPage } =
   await import("./tools.builders");
 const { TOOLS_TABS } = await import("./view");
 
-function viewer(orgRole: OrgRole) {
+/**
+ * A viewer of this workspace. The two roles are independent — the org role and
+ * the workspace role are separate memberships — and `import_tools` is the
+ * capability that reads the second one, so the suites that do not care about
+ * it take the default and the gate suite passes both (#3143).
+ */
+function viewer(orgRole: OrgRole, wsRole: WsRole = "member") {
   return unsafeMint(WsCtx, {
     userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
     orgId: "7a000000-0000-4000-8000-0000000000a1",
@@ -43,11 +61,7 @@ function viewer(orgRole: OrgRole) {
     workspaceId: "7b000000-0000-4000-8000-000000000001",
     wsSlug: "core-platform",
     wsName: "Core platform",
-    // The viewer's role in this workspace (#3145). Independent of the org
-    // role these suites vary, and read by nothing outside `viewer-resolution`
-    // yet, so it is the same constant #3145 used across its own twenty
-    // fixtures rather than a second thing for a reader to interpret.
-    wsRole: "member",
+    wsRole,
   });
 }
 
@@ -531,6 +545,123 @@ describe("Tools › kill switches", () => {
     await renderTools({ killSwitches: board() }, { tab: "switches" }, member);
     expect(screen.queryByTestId("tools-flip-open")).not.toBeInTheDocument();
   });
+});
+
+// The three writes the Tools page offers, each named by the capability it
+// invokes. Two of them grant org roles only; `import_tools` grants a workspace
+// role beside them, which is the case #3143 is about.
+const TOOLS_WRITES = [
+  ["import_tools", toolImport],
+  ["set_tool_classification", toolClassificationSet],
+  ["set_kill_switch", killSwitchSet],
+] as const;
+
+type ToolsWrite = (typeof TOOLS_WRITES)[number][0];
+type ToolsWriteContract = (typeof TOOLS_WRITES)[number][1];
+
+/**
+ * Whether the kernel would accept this viewer for this capability, read off
+ * the capability's own `defaultRoles` — the object each handler asserts
+ * verbatim with `assertOrgRole({ org: [...], workspace: [...] })`. Reading it
+ * rather than restating it is the point: a gate compared against a second copy
+ * of the answer written in the test agrees with whatever the test author
+ * believed, while this comparison fails the moment the gate and the capability
+ * part company in either direction.
+ *
+ * The contract names roles in TitleCase (`Owner`) and the viewer carries them
+ * lowercased, which `systemLookups` settles once; the casing is folded here
+ * for the same reason.
+ */
+function kernelAllows(contract: ToolsWriteContract, ctx: WsCtxType): boolean {
+  const allowed = (grants: Partial<Record<string, string>>): string[] =>
+    Object.entries(grants)
+      .filter(([, effect]) => effect === "allow")
+      .map(([role]) => role.toLowerCase());
+  return (
+    allowed(contract.defaultRoles.org).includes(ctx.orgRole) ||
+    allowed(contract.defaultRoles.workspace).includes(ctx.wsRole)
+  );
+}
+
+/**
+ * Which of the three write controls the page actually offers this viewer.
+ * Import and flip are section actions; classification is written from inside
+ * the version dialog, so the row is opened to see whether the form or the
+ * refusal sentence is behind it, and the two are cross-checked against each
+ * other so a renamed control cannot read as a refusal.
+ */
+async function offered(ctx: WsCtxType): Promise<Record<ToolsWrite, boolean>> {
+  await renderTools(
+    { versions: readOk(toolVersionPage()), killSwitches: board() },
+    {},
+    ctx,
+  );
+  const importOffered = screen.queryByTestId("tools-import-open") !== null;
+
+  fireEvent.click(screen.getByText("Create payment"));
+  const dialog = within(await screen.findByTestId("tool-dialog"));
+  const classifyOffered =
+    dialog.queryByRole("button", { name: "Reclassify this version" }) !== null;
+  expect(
+    dialog.queryByText(
+      "Reclassifying a tool version needs an organization Owner or Admin.",
+    ) === null,
+  ).toBe(classifyOffered);
+  cleanup();
+
+  await renderTools({ killSwitches: board() }, { tab: "switches" }, ctx);
+  const flipOffered = screen.queryByTestId("tools-flip-open") !== null;
+
+  return {
+    import_tools: importOffered,
+    set_tool_classification: classifyOffered,
+    set_kill_switch: flipOffered,
+  };
+}
+
+describe("Tools › write gates", () => {
+  // The paired assertions #3143 asks for. Each names all three writes rather
+  // than the one it is about, because a gate that showed every control to
+  // everyone would satisfy the positive half on its own.
+  it("offers this workspace's Owner the import their capability grants them, and neither write that grants no workspace role", async () => {
+    expect(await offered(viewer("member", "owner"))).toEqual({
+      import_tools: true,
+      set_tool_classification: false,
+      set_kill_switch: false,
+    });
+  });
+
+  it("offers an org member who is no workspace Owner none of the three", async () => {
+    expect(await offered(viewer("member", "member"))).toEqual({
+      import_tools: false,
+      set_tool_classification: false,
+      set_kill_switch: false,
+    });
+  });
+
+  // And the same question asked of the contracts rather than of this file, so
+  // that widening a gate past its capability, or narrowing one back below it,
+  // fails here instead of in production.
+  it.each([
+    ["member", "owner"],
+    ["member", "member"],
+    ["owner", "member"],
+    ["admin", "owner"],
+    ["billing", "viewer"],
+  ] as const)(
+    "gates each write on exactly what its contract grants, for an org %s holding %s in the workspace",
+    async (orgRole, wsRole) => {
+      const ctx = viewer(orgRole, wsRole);
+      expect(await offered(ctx)).toEqual(
+        Object.fromEntries(
+          TOOLS_WRITES.map(([name, contract]) => [
+            name,
+            kernelAllows(contract, ctx),
+          ]),
+        ),
+      );
+    },
+  );
 });
 
 describe("Tools › not loaded", () => {

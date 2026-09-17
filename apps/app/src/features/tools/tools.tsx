@@ -34,22 +34,26 @@ function canAdministerOrg(ctx: WsCtx): boolean {
 }
 
 /**
- * The same org roles, for the import control — knowingly narrower than the
- * capability.
+ * `import_tools` allows an org Owner or Admin *or this workspace's Owner*
+ * (packages/oxagen/src/contracts/tool.import.ts `defaultRoles`, which
+ * packages/handlers/src/tool.import.ts asserts verbatim), so the gate reads
+ * both of the roles the viewer carries. Until `WsFields` carried `wsRole`
+ * (#3145) the third case could not be written at all, and a workspace Owner
+ * holding org `member` was offered no control the kernel would have accepted
+ * (#3143).
  *
- * `import_tools` allows an org Owner or Admin *or a workspace Owner*
- * (packages/oxagen/src/contracts/tool.import.ts defaultRoles), and the
- * organization role is the only role `WsCtx` carries, so this gate cannot
- * represent that third case: a workspace Owner whose org role is `member` is
- * authorized by the handler and offered no control here. The gate that matches
- * the capability wants the viewer's workspace role on `WsFields`
- * (apps/app/src/server/viewer.ts), which `workspace.workspace_users.role`
- * stores and `systemLookups.workspaceMember` does not select today. Widening
- * the viewer seam is not this lane's change, so the narrower gate stands and
- * is named rather than left to look exact.
+ * Neither role here is the gate. `orgRole` and `wsRole` are read from the
+ * membership tables (`org_users.role`, `workspace.workspace_users.role`) while
+ * the handler resolves IAM role assignments, so the two can disagree, and this
+ * gate is an affordance predicting the kernel's answer rather than a second
+ * copy of it. Widening the gate moves the risk from the safe side to the
+ * costly one — a control offered to someone the kernel then refuses — and that
+ * refusal comes back as `denied` / `org_role_required`, which the page names
+ * where the person acted (`action-failure.ts`). The org half of this gate has
+ * always carried the same risk on the same terms.
  */
-function canImportUnderOrgRole(ctx: WsCtx): boolean {
-  return canAdministerOrg(ctx);
+function canImportTools(ctx: WsCtx): boolean {
+  return canAdministerOrg(ctx) || ctx.wsRole === "owner";
 }
 
 async function TabBody({
@@ -76,7 +80,7 @@ async function TabBody({
           names={view.names}
           category={view.category}
           cursor={view.cursor}
-          canImport={canImportUnderOrgRole(ctx)}
+          canImport={canImportTools(ctx)}
           canClassify={canAdministerOrg(ctx)}
           read={read}
         />
