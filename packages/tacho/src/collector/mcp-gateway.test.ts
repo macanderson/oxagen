@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ceilingOf,
   createMcpGateway,
+  filterToolsByMandate,
+  gatewayToolsOf,
   outcomeOf,
   type GatewayAttribution,
   type GatewayCallRecord,
@@ -570,5 +572,154 @@ describe("the gateway's credential is not the host's", () => {
     expect(
       (response.body as { error: { message: string } }).error.message,
     ).toContain("no Oxagen mandate");
+  });
+});
+
+describe("tools/list is served through the gateway mandate", () => {
+  /**
+   * The gateway key's mandate is narrower than the workspace toolbelt the
+   * control plane advertises — `gatewayMayInvoke` allows only an `mcp`
+   * capability that does not mutate and is not high-sensitivity — and it was
+   * applied at `tools/call` only. So the connected app was shown tools that
+   * could only fail when selected, and `tool_ceiling` was counted against a
+   * list including tools the mandate forbids.
+   *
+   * The rule itself stays on the control plane: `@oxagen/tacho` takes no
+   * `@oxagen/*` runtime dependency, so it cannot read a capability's surfaces,
+   * mutation or sensitivity. The bundle carries the rule's answer.
+   */
+  const bundleWith = (
+    overrides: Partial<Omit<PolicyBundle, "signature">>,
+  ): PolicyBundle =>
+    policyBundleSchema.parse({
+      ...unsignedBundle(overrides),
+      signature: { key_id: "k1", alg: "ed25519", sig: "sig" },
+    });
+
+  const named = (...names: string[]) => ({
+    tools: names.map((name) => ({ name, description: `${name} tool` })),
+  });
+
+  const LIST = { jsonrpc: "2.0" as const, id: 1, method: "tools/list" };
+
+  it("serves only the tools the mandate permits", async () => {
+    const { fetch } = remote(
+      named("query_ontology", "delete_workspace", "reveal_secret"),
+    );
+    const { gw, logs } = gateway({
+      fetch,
+      bundle: () => bundleWith({ gateway_tools: ["query_ontology"] }),
+    });
+    const response = await gw.handle(LIST, CTX);
+    expect((response.body as { result: { tools: unknown[] } }).result).toEqual(
+      named("query_ontology"),
+    );
+    expect(logs.join(" ")).toContain("filtered tools/list to the mandate");
+  });
+
+  it("counts the ceiling against what it will serve, not what it was handed", async () => {
+    // A list that fits once the forbidden tools are gone is served. Before,
+    // the forbidden tools were counted, so a mandate whose toolbelt fit was
+    // refused for a size it never had.
+    const { fetch } = remote(
+      named("allowed_one", "allowed_two", "forbidden_one", "forbidden_two"),
+    );
+    const { gw } = gateway({
+      fetch,
+      bundle: () =>
+        bundleWith({
+          gateway_tools: ["allowed_one", "allowed_two"],
+          tool_ceiling: {
+            model_id: "openai/gpt-5",
+            max_tools: 2,
+            source: "OpenAI function-calling limit",
+          },
+        }),
+    });
+    const response = await gw.handle(LIST, CTX);
+    expect((response.body as { result: { tools: unknown[] } }).result).toEqual(
+      named("allowed_one", "allowed_two"),
+    );
+    expect(response.body).not.toHaveProperty("error");
+  });
+
+  it("still refuses when the permitted tools alone overflow the ceiling", async () => {
+    const { fetch } = remote(named("a", "b", "c", "d"));
+    const { gw } = gateway({
+      fetch,
+      bundle: () =>
+        bundleWith({
+          gateway_tools: ["a", "b", "c"],
+          tool_ceiling: {
+            model_id: "openai/gpt-5",
+            max_tools: 2,
+            source: "OpenAI function-calling limit",
+          },
+        }),
+    });
+    const error = (
+      (await gw.handle(LIST, CTX)).body as {
+        error: { code: number; message: string; data: unknown };
+      }
+    ).error;
+    expect(error.code).toBe(RPC_REFUSED);
+    // Three, not four: the count names the list as it would have been served.
+    expect(error.message).toContain("3 tools");
+    expect(error.data).toMatchObject({ toolCount: 3 });
+  });
+
+  it("serves nothing when the mandate permits nothing", async () => {
+    const { fetch } = remote(named("query_ontology"));
+    const { gw } = gateway({
+      fetch,
+      bundle: () => bundleWith({ gateway_tools: [] }),
+    });
+    expect((await gw.handle(LIST, CTX)).body).toMatchObject({
+      result: { tools: [] },
+    });
+  });
+
+  it("serves what it is given when the bundle names no allowance", async () => {
+    // Absent is *not told*, not *none permitted*. A bundle signed before the
+    // field existed must not take a working machine's toolbelt to zero.
+    const { fetch } = remote(named("query_ontology", "delete_workspace"));
+    const { gw, logs } = gateway({ fetch, bundle: () => bundleWith({}) });
+    expect((await gw.handle(LIST, CTX)).body).toMatchObject({
+      result: named("query_ontology", "delete_workspace"),
+    });
+    expect(logs.join(" ")).not.toContain("filtered tools/list");
+  });
+
+  it("leaves a tools/call alone — the kernel is what refuses one", async () => {
+    const { fetch } = remote({ content: [{ type: "text", text: "ok" }] });
+    const { gw } = gateway({
+      fetch,
+      bundle: () => bundleWith({ gateway_tools: [] }),
+    });
+    expect((await gw.handle(CALL, CTX)).body).toHaveProperty("result");
+  });
+
+  it("parses a bundle that declares an allowance, and reads it back", () => {
+    // The schema is strict, so a host that did not name the field would
+    // reject the whole mandate the day the control plane started signing one.
+    expect(gatewayToolsOf(undefined)).toBeUndefined();
+    expect(gatewayToolsOf(bundleWith({}))).toBeUndefined();
+    expect(gatewayToolsOf(bundleWith({ gateway_tools: ["a", "b"] }))).toEqual(
+      new Set(["a", "b"]),
+    );
+    expect(gatewayToolsOf(bundleWith({ gateway_tools: [] }))?.size).toBe(0);
+  });
+
+  it("leaves a result it cannot read untouched", () => {
+    const allowed = new Set(["a"]);
+    expect(filterToolsByMandate(undefined, allowed)).toBeUndefined();
+    expect(filterToolsByMandate({ nope: 1 }, allowed)).toEqual({ nope: 1 });
+    // A nameless entry is not a tool the mandate named, so it does not survive.
+    expect(
+      filterToolsByMandate({ tools: [{}, { name: "a" }] }, allowed),
+    ).toEqual({ tools: [{ name: "a" }] });
+    const untouched = { tools: [{ name: "a" }] };
+    expect(filterToolsByMandate(untouched, undefined)).toBe(untouched);
+    expect(filterToolsByMandate(untouched, allowed)).toBe(untouched);
   });
 });

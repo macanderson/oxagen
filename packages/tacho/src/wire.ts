@@ -19,6 +19,50 @@ export const TACHO_COMMANDS_SCHEMA = "tacho.commands.v2" as const;
 export const TACHO_ENROLLMENT_CLAIMS_SCHEMA =
   "oxagen.tacho.host-enrollment.v1" as const;
 
+/**
+ * A bundle field this host's parser understands, named on the wire so the
+ * control plane can withhold fields the host would choke on.
+ *
+ * `policyBundleSchema` is `.strict()`, which makes every new bundle field a
+ * migration rather than an extension: a daemon or CLI built before the field
+ * rejects the **whole** mandate the day the control plane starts signing one
+ * in, so a bundle refresh fails on every poll and the host is stranded on a
+ * stale mandate, and a fresh enrollment cannot parse its first bundle at all.
+ * The control plane is deployed before the fleet upgrades, so that is the
+ * ordinary case, not the edge one.
+ *
+ * So a host declares what it can read, and the control plane emits a gated
+ * field only to a host that named it. The declaration is a list of names
+ * rather than a version because the question is per field — "can you read
+ * *this*" — and a version answers it only for whoever remembers which release
+ * each field landed in. Names a host does not recognise are simply absent
+ * from its list; names the control plane does not recognise are ignored.
+ *
+ * This is a transition, not the resting state. Once the fleet is upgraded,
+ * the field becomes required and the gate goes away — see the note on
+ * `gateway_tools` below for why absent must not be read as a permissive
+ * default in the meantime.
+ */
+export const BUNDLE_FEATURE_GATEWAY_TOOLS = "gateway_tools" as const;
+
+/**
+ * Every bundle feature the host in *this* tree can parse, which is what it
+ * advertises. One list, read by the daemon's health report and by enrollment,
+ * so a field added to `policyBundleSchema` is advertised from the one place
+ * that also declares it.
+ */
+export const TACHO_BUNDLE_FEATURES = [BUNDLE_FEATURE_GATEWAY_TOOLS] as const;
+
+export type TachoBundleFeature = (typeof TACHO_BUNDLE_FEATURES)[number];
+
+/**
+ * A host's advertised feature list, as the control plane accepts it. Plain
+ * strings rather than the enum: a host from a later release may name a field
+ * this control plane has never heard of, and refusing its whole poll over a
+ * word it does not know would be the same mistake in the other direction.
+ */
+export const bundleFeaturesSchema = z.array(z.string().max(64)).max(32);
+
 export const hostEnrollmentIdSchema = z
   .string()
   .regex(/^tch_[a-z0-9]{22}$/, "a host enrollment public id");
@@ -297,6 +341,46 @@ export const policyBundleSchema = z
       })
       .strict()
       .optional(),
+    /**
+     * Every tool the gateway mandate permits a connected app to call
+     * (ADR-078 §4). The local MCP gateway filters a `tools/list` down to this
+     * set before it counts it against `tool_ceiling` and serves it.
+     *
+     * It is a list here and a rule on the control plane, and it has to be
+     * both. The rule — an `mcp` capability that does not mutate and is not
+     * high-sensitivity — is evaluated by `gatewayMayInvoke` in `@oxagen/iam`,
+     * against the capability registry, and enforced in the kernel's IAM
+     * adapter at `invoke()` time. `@oxagen/tacho` is a leaf package with no
+     * `@oxagen/*` runtime dependency, so the host cannot evaluate that rule
+     * and must not try; it is handed the rule's answer, signed, with the rest
+     * of the mandate.
+     *
+     * Without it the gateway advertised the whole toolbelt and refused the
+     * forbidden part only when a tool was selected, so a connected app was
+     * shown tools that could only fail, and a `tool_ceiling` was counted
+     * against a list including tools the mandate forbids — refusing a toolbelt
+     * that would have fit.
+     *
+     * Optional, and absent means *no allowance this host has been told about*
+     * rather than *an empty allowance* — the same reading `tool_ceiling`
+     * carries. A bundle from a control plane older than this field declares
+     * none, and the gateway then serves what it is given rather than filtering
+     * everything away. An allowance that is present and empty is a mandate
+     * that permits nothing, and the gateway serves nothing.
+     *
+     * **The optionality is a rollout constraint, not a permissive default.**
+     * An unfiltered `tools/list` is the hole this field closes, so absent is
+     * the weak answer and we would rather not have it. It stays optional only
+     * because this schema is `.strict()` and every host deployed before the
+     * field rejects a bundle carrying it — so phase 1 emits it only to a host
+     * that advertised `BUNDLE_FEATURE_GATEWAY_TOOLS`, and a host that did not
+     * keeps the behaviour it already had. Phase 2, once the fleet is
+     * upgraded, makes this required and deletes the gate, at which point
+     * absent stops being representable. Do not read the `.optional()` as a
+     * decision that unfiltered is acceptable, and do not delete the gate as
+     * dead weight before the fleet is there.
+     */
+    gateway_tools: z.array(z.string().max(256)).max(4096).optional(),
     signature: z
       .object({
         key_id: z.string().min(1),
@@ -359,6 +443,22 @@ export const daemonHealthSchema = z
     hooks_ok: z.boolean().optional(),
     otel_ok: z.boolean().optional(),
     bundle_etag: z.string().max(128).optional(),
+    /**
+     * The bundle fields this daemon can parse (`TACHO_BUNDLE_FEATURES`).
+     *
+     * It rides the health report because that is the only channel the host
+     * sends on *every* control poll, and the answer has to be a per-host fact
+     * the control plane has stored rather than a per-request one. The control
+     * envelope on an ingest or a command poll publishes `bundle_etag`, and
+     * the daemon refetches whenever it differs from the bundle it holds; if
+     * the gate answered from the request, the etag would differ between the
+     * two paths and the host would refetch forever.
+     *
+     * Optional, and absent means a host that predates the advertisement —
+     * which is exactly a host that cannot parse a gated field, so absent and
+     * empty lead to the same emission.
+     */
+    bundle_features: bundleFeaturesSchema.optional(),
   })
   .strict();
 

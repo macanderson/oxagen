@@ -80,6 +80,9 @@ export const enrollHost = defineTool({
     claudeExecpath: tachoEnrollmentCreate.input.shape.claudeExecpath,
     nodeVersion: tachoEnrollmentCreate.input.shape.nodeVersion,
     wrapperVersion: tachoEnrollmentCreate.input.shape.wrapperVersion,
+    // What the host's bundle parser understands; the carried comment is the
+    // contract. Without it the initial bundle in this response is ungated.
+    bundleFeatures: tachoEnrollmentCreate.input.shape.bundleFeatures,
     shell: tachoEnrollmentCreate.input.shape.shell,
 
     managed: tachoEnrollmentCreate.input.shape.managed,

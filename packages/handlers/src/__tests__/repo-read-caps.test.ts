@@ -47,21 +47,27 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@oxagen/database", () => ({
-  schema: {
-    sourceConnections: {
-      orgId: "sc.orgId",
-      workspaceId: "sc.workspaceId",
-      connectorId: "sc.connectorId",
-      status: "sc.status",
-      deletedAt: "sc.deletedAt",
-      oauthAccountId: "sc.oauthAccountId",
-      deliveryConfig: "sc.deliveryConfig",
+vi.mock("@oxagen/database", () => {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    schema: {
+      sourceConnections: {
+        orgId: "sc.orgId",
+        workspaceId: "sc.workspaceId",
+        connectorId: "sc.connectorId",
+        status: "sc.status",
+        deletedAt: "sc.deletedAt",
+        oauthAccountId: "sc.oauthAccountId",
+        deliveryConfig: "sc.deliveryConfig",
+      },
+      oauthAccounts: { id: "oa.id", accessTokenEnc: "oa.accessTokenEnc" },
     },
-    oauthAccounts: { id: "oa.id", accessTokenEnc: "oa.accessTokenEnc" },
-  },
-  withTenantDb: mocks.withTenantDb,
-}));
+    withTenantDb: mocks.withTenantDb,
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 
 vi.mock("drizzle-orm", async (importOriginal) => {
   const real = await importOriginal<typeof import("drizzle-orm")>();

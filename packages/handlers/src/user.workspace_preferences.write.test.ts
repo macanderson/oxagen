@@ -15,10 +15,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     insert: (_t: unknown) => ({ values: mocks.insertValues }),
     query: { workspaceUserPreferences: { findFirst: mocks.findFirst } },
   };
-  return {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
     ...real,
     withTenantDb: async (fn: (t: unknown) => Promise<unknown>) => fn(tx),
   };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 import { userWorkspacePreferencesWriteHandler } from "./user.workspace_preferences.write";

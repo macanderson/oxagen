@@ -208,15 +208,15 @@ jobs:
       - name: UI capability parity (strict ratchet)
         run: pnpm check:ui-parity --strict
 
-      # Postgres RLS hides rather than refuses, so an organization-level read
-      # that runs under the org-only workspace sentinel against a table whose
-      # policy class is not `org_only` returns a short answer shaped exactly
-      # like a complete one — no error, no failing test, nothing for a `catch`
-      # to see. This resolves every table such a read touches through
-      # packages/database/src/tenant-policy.manifest.ts and fails on the ones
-      # the sentinel narrows. ADR-074.
-      - name: Org-only sentinel reads
-        run: pnpm check:org-sentinel-reads
+      # `Org-only sentinel reads` (check-org-sentinel-reads.mjs) stood here and
+      # is gone. It read the source to prove no org-level read was narrowed by
+      # RLS, and it could not converge: eight blind spots in eight review
+      # rounds, every one reporting CLEAN rather than erroring (ADR-074). The
+      # enforcement moved into Postgres — an org-only scope now carries a
+      # workspace GUC that is not a uuid, so the policy RAISES instead of
+      # narrowing (#3132, ADR-086). Its witness is the rls-integration job
+      # below, which drives the assertion off POLICY_MANIFEST rather than off a
+      # parse of the call sites. Do not reinstate a static replacement here.
 
       - name: File Linear tickets for manifest gaps
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

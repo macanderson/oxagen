@@ -56,6 +56,13 @@ export const tachoHostEnroll = registerCapability({
       claudeExecpath: source.claudeExecpath,
       nodeVersion: source.nodeVersion,
       wrapperVersion: source.wrapperVersion,
+      /**
+       * The host declares which bundle fields its `.strict()` parser names, on
+       * the token path too. The CLI sends this on BOTH enrollment paths
+       * (`enroll.ts` posts it to `/v1/tacho/enroll`), so omitting it here made
+       * this `.strict()` input reject every CLI enrollment that carried it.
+       */
+      bundleFeatures: source.bundleFeatures,
       shell: source.shell,
       managed: source.managed,
       validityDays: source.validityDays,
