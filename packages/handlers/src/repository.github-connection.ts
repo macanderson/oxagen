@@ -39,7 +39,7 @@ export function installationIdOf(deliveryConfig: unknown): string | null {
   if (typeof deliveryConfig !== "object" || deliveryConfig === null)
     return null;
   const raw = (deliveryConfig as { installationId?: unknown }).installationId;
-  if (typeof raw === "string" && /^\d{1,20}$/.test(raw)) return raw;
+  if (typeof raw === "string" && /^[1-9]\d{0,19}$/.test(raw)) return raw;
   if (typeof raw === "number" && Number.isSafeInteger(raw) && raw > 0)
     return String(raw);
   return null;

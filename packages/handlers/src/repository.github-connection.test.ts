@@ -228,15 +228,17 @@ describe("installationIdOf refuses everything its regex exists to refuse", () =>
     expect(installationIdOf({ owner: "acme", repo: "widgets" })).toBeNull();
   });
 
-  // Characterisation, not endorsement: the string branch tests only
-  // `/^\d{1,20}$/`, which matches "0", while the number branch requires
-  // `raw > 0` and so rejects 0. The asymmetry is harmless — installation 0
-  // does not exist, so the request 404s rather than reaching anything — but it
-  // is pinned here so a future tightening of the regex is a deliberate,
-  // visible change rather than a silent one.
-  it('accepts the string "0" even though the number 0 is refused', () => {
-    expect(installationIdOf({ installationId: "0" })).toBe("0");
+  // The two branches agree, and this is the test that keeps them agreeing. The
+  // string branch used to read `/^\d{1,20}$/`, which matches "0", while the
+  // number branch has always required `raw > 0` — so the same absent
+  // installation was refused as a number and accepted as a string, against a
+  // doc comment promising "a plain positive integer". Harmless in isolation
+  // (installation 0 does not exist, so the request 404s) but the asymmetry is
+  // the kind that outlives the reason it was tolerated.
+  it("refuses a zero installation id, as a string and as a number", () => {
+    expect(installationIdOf({ installationId: "0" })).toBeNull();
     expect(installationIdOf({ installationId: 0 })).toBeNull();
+    expect(installationIdOf({ installationId: "00" })).toBeNull();
   });
 
   // The guard must not be merely proven to refuse everything.
