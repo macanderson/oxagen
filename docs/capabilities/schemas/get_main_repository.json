@@ -1,7 +1,7 @@
 {
   "name": "get_main_repository",
   "domain": "repository",
-  "description": "The workspace's main repository, whether a GitHub App installation is attached, and the signed URLs to install or to change which repositories it reaches.",
+  "description": "The workspace's main repository, whether a GitHub App installation is attached, and the signed URLs to connect GitHub or to change which repositories the installation reaches.",
   "mode": "sync",
   "surfaces": [
     "api",
