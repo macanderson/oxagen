@@ -195,6 +195,49 @@ describe("ingestion.delete-connection Inngest function", () => {
       // scopedSession().run should have been called for alias promotion + deletion
       expect(mocks.scopedSessionRun).toHaveBeenCalled();
     });
+
+    it("carries every property across when alias promotion reroutes an edge", async () => {
+      // A reroute moves an EXISTING edge; nothing about it is a new
+      // observation. Copying only confidence/matchReason/tentative/createdAt
+      // silently dropped `is_system` and the four bi-temporal bounds, and
+      // `is_system` is the marker that keeps schema reconciliation's prune off
+      // platform-owned edges (see RESERVED_RELATIONSHIP_PROPERTY_KEYS and
+      // NON_SYSTEM_RELATIONSHIP_FILTER in schema.reconcile.ts). An edge that
+      // lost it here would later be pruned as user data.
+      const step = makeStep();
+
+      await capturedHandler!({
+        event: { data: { ...BASE_EVENT, mode: "data_only" } },
+        step,
+      });
+
+      const promotion = (
+        mocks.scopedSessionRun.mock.calls as Array<[string, unknown]>
+      )
+        .map(([cypher]) => cypher)
+        .find((cypher) => cypher.includes("MERGE (other)-[newEdge:ALIAS_OF]"));
+
+      expect(promotion).toBeDefined();
+      for (const property of [
+        "confidence",
+        "matchReason",
+        "tentative",
+        "is_system",
+        "createdAt",
+        "validFrom",
+        "validTo",
+        "recordedAt",
+        "invalidatedAt",
+      ]) {
+        expect(promotion).toContain(`newEdge.${property}`);
+        // Copied off the edge being rerouted, never re-stamped.
+        expect(promotion).toMatch(
+          new RegExp(
+            `newEdge\\.${property}\\s*=\\s*(?:coalesce\\()?old\\.${property}`,
+          ),
+        );
+      }
+    });
   });
 
   describe("mode: full", () => {
