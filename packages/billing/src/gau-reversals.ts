@@ -204,6 +204,63 @@ async function debitCurrentBucket(
 type GauReversalRow = typeof schema.gauReversals.$inferSelect;
 
 /**
+ * The units of one purchase that reversal rows already claim.
+ *
+ * A purchase granted `quantity_gau` units and no set of reversal events
+ * against it may withdraw more than that between them. Nothing else can
+ * enforce it: a GAU bucket is ONE balance for the organisation, not a balance
+ * per purchase, so a second event that prices itself against the settlement
+ * from scratch takes units indiscriminately — and the ones still in the bucket
+ * after the first event are, by definition, units some OTHER purchase paid
+ * for. `debitCurrentBucket` cannot tell the difference and correctly refuses
+ * to guess; the cap has to be applied before it is called.
+ *
+ * Summed over `requested_gau` rather than `reversed_gau`, because the question
+ * is what the money entitled the reversal to take, not what the bucket
+ * happened to have. A first event that found the bucket empty still consumed
+ * the purchase's entitlement: its units were spent, and `unrecovered_gau`
+ * records that they are not being pursued. Counting `reversed_gau` would let
+ * that entitlement be claimed a second time, which is the same double debit by
+ * a longer route.
+ *
+ * Scoped to the settlement, so a bucket shared by several purchases still
+ * reverses each of them in full.
+ */
+async function requestedGauForSettlement(
+  tx: Tx,
+  settlementId: string,
+  excludeReversalId?: string,
+): Promise<number> {
+  const rows = await tx
+    .select()
+    .from(schema.gauReversals)
+    .where(eq(schema.gauReversals.settlementId, settlementId));
+  let total = 0;
+  for (const row of rows) {
+    if (row.id === excludeReversalId) continue;
+    total += row.requestedGau;
+  }
+  return total;
+}
+
+/**
+ * What `amountCents` is worth against `settlement`, less what is already
+ * claimed. Never negative: a purchase whose entitlement is used up yields 0,
+ * which reports it as already reversed instead of debiting anything.
+ */
+function remainingReversibleGau(
+  settlement: Pick<
+    GauSettlementRow,
+    "quantityGau" | "ratePerGauMicros" | "chargedCents"
+  >,
+  amountCents: number,
+  alreadyRequestedGau: number,
+): number {
+  const remaining = Math.max(0, settlement.quantityGau - alreadyRequestedGau);
+  return Math.min(reversibleGau(settlement, amountCents), remaining);
+}
+
+/**
  * A second partial refund on a charge this reversal already covers.
  *
  * The units are recomputed for the NEW cumulative total and the difference is
@@ -275,7 +332,18 @@ async function applyCumulativeIncrease(
     };
   }
 
-  const totalRequestedGau = reversibleGau(settlement, args.amountCents);
+  // Every row for this settlement EXCEPT this one: the cumulative total
+  // recomputed here replaces this row's own claim rather than adding to it.
+  const claimedElsewhere = await requestedGauForSettlement(
+    tx,
+    settlement.id,
+    existing.id,
+  );
+  const totalRequestedGau = remainingReversibleGau(
+    settlement,
+    args.amountCents,
+    claimedElsewhere,
+  );
   const deltaGau = Math.max(0, totalRequestedGau - existing.requestedGau);
 
   // The current bucket, NOT `existing.bucketId`. That id records where the
@@ -452,7 +520,15 @@ export async function applyGauReversal(
       } satisfies GauReversalResult;
     }
 
-    const requestedGau = reversibleGau(settlement, args.amountCents);
+    // Capped by what the purchase has left to give, not just by what the
+    // money is worth. A refund and a dispute of the same purchase are distinct
+    // events with distinct ids, so each reaches here on its own and would
+    // otherwise price itself against the full quantity a second time.
+    const requestedGau = remainingReversibleGau(
+      settlement,
+      args.amountCents,
+      await requestedGauForSettlement(tx, settlement.id),
+    );
 
     // One implementation for every single-debit path: resolves the CURRENT
     // bucket and takes its row lock, both of which the absolute write depends
@@ -664,7 +740,15 @@ export async function reconcilePendingGauReversals(
   const settled: GauReversalResult[] = [];
 
   for (const row of pending) {
-    const requestedGau = reversibleGau(args.settlement, row.amountCents);
+    // Re-read each time, not carried: the row updated at the end of the
+    // previous iteration is part of this sum. Two events that both parked
+    // before the grant are priced here one after the other, and without the
+    // cap each would claim the whole purchase.
+    const requestedGau = remainingReversibleGau(
+      args.settlement,
+      row.amountCents,
+      await requestedGauForSettlement(tx, args.settlement.id, row.id),
+    );
     // Each debit re-resolves and re-locks, so the next one reads the balance
     // this one left. That is why there is no running count to carry: the
     // running count only existed to stand in for a re-read, and standing in

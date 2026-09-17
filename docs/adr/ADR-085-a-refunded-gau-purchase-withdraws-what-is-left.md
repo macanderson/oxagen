@@ -545,6 +545,50 @@ An enumeration is evidence about the tree at a moment; an assertion is a propert
 the tree cannot leave. Every "we checked, nothing else does X" is the first kind
 while reading like the second.
 
+### 14. One purchase's units are capped across every event against it
+
+§10 keys a CUMULATIVE refund on the amount, so a charge redelivered with a
+larger figure withdraws only the difference. That settles one charge growing.
+It says nothing about two DIFFERENT events against the same purchase: a refund
+carries `ch_…` and a dispute carries `dp_…`, so the idempotency key
+`(payment_intent, provider_event)` does not match between them and each reaches
+the settlement lookup on its own. Each then priced itself against
+`quantity_gau` from scratch and debited the full prorated quantity a second
+time.
+
+Nothing downstream can catch it. A GAU bucket is ONE balance for the
+organisation, not a balance per purchase, so `debitCurrentBucket` has no way to
+tell a unit this purchase paid for from a unit another purchase paid for — and
+the units still in the bucket after the first event are, by definition, the
+other purchase's. The second event therefore consumed units the customer still
+owned, and reported success.
+
+So the reversal is capped before the debit, at what the purchase has left to
+give: `quantity_gau` less the `requested_gau` already recorded by rows for that
+settlement. Three sites compute it — the new matched reversal, the cumulative
+increase (excluding the row it is replacing), and the reconciliation loop —
+because all three price against a settlement.
+
+Two choices inside the cap are load-bearing:
+
+- **It sums `requested_gau`, not `reversed_gau`.** The question is what the
+  money entitled the reversal to take, not what the bucket happened to hold. A
+  first event that found the bucket empty still spent the purchase's
+  entitlement; §3 records those units as `unrecovered_gau` and does not pursue
+  them. Counting what was recovered would let the entitlement be claimed again
+  the moment a later purchase refilled the bucket — the same double debit by a
+  longer route.
+- **It is scoped to the settlement, not to the bucket.** A cap counting every
+  reversal in the bucket would refuse a legitimate refund of a purchase nothing
+  has reversed yet, which is a second money bug pointing the other way.
+
+The test that covered the refund-then-dispute sequence before this passed on
+the unfixed code: its bucket was empty by the time the dispute arrived, so the
+second full-quantity debit recovered nothing and looked correct. It asserted
+`requested_gau: 10_000` for that dispute, which is the defect's own output
+written down as the expectation. A bucket that still holds another purchase's
+units is what distinguishes the two, and that is what the tests now seed.
+
 ## Consequences
 
 - A purchase made before this change has no `stripe_payment_intent_id` and no

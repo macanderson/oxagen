@@ -496,21 +496,210 @@ describe("applyGauReversal — idempotency", () => {
     expect(store.reversals).toHaveLength(1);
   });
 
-  it("a dispute after a refund of the same purchase is a separate reversal and finds nothing left", async () => {
+  it("a dispute after a refund of the same purchase reports the purchase already reversed", async () => {
     seedBucket({ purchasedGau: 10_000 });
     seedCheckoutSettlement();
 
     await reverseGauPurchaseForRefund(refundedCharge());
     const disputed = await reverseGauPurchaseForDispute(dispute());
 
+    // This test used to assert `requestedGau: 10_000` and read the zero below
+    // as "the units were already gone". Both events did ask for the full
+    // quantity, and the only reason the second withdrew nothing was that this
+    // bucket happened to be empty by then. The describe block beneath seeds a
+    // bucket that is not, and the figure the second event reports is the
+    // purchase's remaining reversible quantity, which the refund left at zero.
     expect(disputed).toMatchObject({
-      requestedGau: 10_000,
+      requestedGau: 0,
       reversedGau: 0,
-      unrecoveredGau: 10_000,
+      unrecoveredGau: 0,
       applied: true,
     });
     expect(store.buckets[0]).toMatchObject({ purchasedGau: 0 });
     expect(store.reversals).toHaveLength(2);
+  });
+});
+
+describe("applyGauReversal — one purchase's units are shared by every event against it", () => {
+  /**
+   * A bucket is one balance, not a balance per purchase. Nothing in the row a
+   * reversal writes stops the next event against the SAME purchase pricing
+   * itself against the settlement again and taking units a DIFFERENT purchase
+   * paid for. The cap has to come from the settlement's own quantity, measured
+   * against the reversal rows already standing for it.
+   */
+  function seedSecondPurchase() {
+    // 8,000 units at 5,000 micros = 4,000c subtotal; 10% tax = 4,400c charged.
+    return seedCheckoutSettlement({
+      stripePaymentIntentId: "pi_gau_002",
+      stripeCheckoutSessionId: "cs_gau_002",
+      quantityGau: 8_000,
+      chargedCents: 4_400,
+    });
+  }
+
+  it("a dispute after a full refund of the same purchase takes nothing, leaving another purchase's units spendable", async () => {
+    // 18,000 purchased: 10,000 from pi_gau_001 and 8,000 from pi_gau_002.
+    seedBucket({ purchasedGau: 18_000 });
+    seedCheckoutSettlement();
+    seedSecondPurchase();
+
+    const refunded = await reverseGauPurchaseForRefund(refundedCharge());
+    const disputed = await reverseGauPurchaseForDispute(dispute());
+
+    expect(refunded).toMatchObject({
+      requestedGau: 10_000,
+      reversedGau: 10_000,
+    });
+    // pi_gau_001 granted 10,000 units and the refund withdrew all of them, so
+    // the dispute of the same purchase has nothing left to claim.
+    expect(disputed).toMatchObject({
+      requestedGau: 0,
+      reversedGau: 0,
+      unrecoveredGau: 0,
+      applied: true,
+    });
+    // The assertion that pins the finding. Uncapped, the dispute prices itself
+    // at the full 10,000 again and eats 8,000 units the customer still owns.
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 8_000 });
+  });
+
+  it("caps per purchase, not per bucket: another purchase's own refund still withdraws in full", async () => {
+    seedBucket({ purchasedGau: 18_000 });
+    seedCheckoutSettlement();
+    seedSecondPurchase();
+
+    await reverseGauPurchaseForRefund(refundedCharge());
+    const second = await reverseGauPurchaseForRefund(
+      refundedCharge({
+        id: "ch_gau_002",
+        paymentIntentId: "pi_gau_002",
+        amountRefundedCents: 4_400,
+      }),
+    );
+
+    // A cap that counted every reversal in the bucket rather than every
+    // reversal of THIS settlement would refuse this one, which is a legitimate
+    // refund of a purchase nothing has reversed yet.
+    expect(second).toMatchObject({
+      requestedGau: 8_000,
+      reversedGau: 8_000,
+      unrecoveredGau: 0,
+      applied: true,
+    });
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 0 });
+  });
+
+  it("a second partial refund still withdraws the rest of what the purchase granted", async () => {
+    seedBucket({ purchasedGau: 18_000 });
+    seedCheckoutSettlement();
+    seedSecondPurchase();
+
+    // Half the tax-inclusive charge, as a distinct charge id rather than a
+    // cumulative redelivery of the first.
+    await reverseGauPurchaseForRefund(
+      refundedCharge({ id: "ch_half_a", amountRefundedCents: 2_750 }),
+    );
+    const rest = await reverseGauPurchaseForRefund(
+      refundedCharge({ id: "ch_half_b", amountRefundedCents: 5_500 }),
+    );
+
+    // The cap is the REMAINDER, not zero: 10,000 granted less the 5,000 the
+    // first event took. A cap that refused any second event outright would
+    // leave 5,000 refunded units spendable.
+    expect(rest).toMatchObject({
+      requestedGau: 5_000,
+      reversedGau: 5_000,
+      applied: true,
+    });
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 8_000 });
+  });
+
+  it("a first event that recovered nothing still spends the purchase's entitlement", async () => {
+    // The units this purchase granted were spent before the money came back,
+    // so the refund recovers nothing and records the shortfall.
+    const bucket = seedBucket({ purchasedGau: 0 });
+    seedCheckoutSettlement();
+    const refunded = await reverseGauPurchaseForRefund(refundedCharge());
+    expect(refunded).toMatchObject({
+      requestedGau: 10_000,
+      reversedGau: 0,
+      unrecoveredGau: 10_000,
+    });
+
+    // A later, unrelated purchase puts units back in the shared bucket.
+    seedSecondPurchase();
+    bucket.purchasedGau = 8_000;
+
+    const disputed = await reverseGauPurchaseForDispute(dispute());
+
+    // The refund already claimed all 10,000 even though it collected none of
+    // them, so the dispute has no entitlement left. Counting what was actually
+    // RECOVERED instead of what was REQUESTED would hand the dispute a fresh
+    // 10,000 here and take the 8,000 units the later purchase paid for — the
+    // same double debit, reached through the shortfall.
+    expect(disputed).toMatchObject({
+      requestedGau: 0,
+      reversedGau: 0,
+      applied: true,
+    });
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 8_000 });
+  });
+
+  it("reports nothing left, rather than a negative claim, when existing rows already over-claim the purchase", async () => {
+    seedBucket({ purchasedGau: 18_000 });
+    seedCheckoutSettlement();
+    seedSecondPurchase();
+
+    await reverseGauPurchaseForRefund(refundedCharge());
+    // A second row claiming the whole purchase as well — the shape the
+    // uncapped code wrote, and the shape any future path that forgets the cap
+    // would write. The rows for this settlement now claim 20,000 of a 10,000
+    // unit purchase.
+    const firstRow = store.reversals[0];
+    if (!firstRow) throw new Error("the refund above records a reversal row");
+    store.reversals.push({
+      ...firstRow,
+      id: crypto.randomUUID(),
+      providerEventId: "ch_over_claim",
+    });
+
+    const disputed = await reverseGauPurchaseForDispute(dispute());
+
+    // Without the zero floor the remainder is -10,000, the row's quantities go
+    // negative and gau_reversals_quantities_check refuses the insert. That is
+    // not a safe failure: the webhook throws, so Stripe redelivers it forever
+    // and the dispute is never recorded at all.
+    expect(disputed).toMatchObject({
+      requestedGau: 0,
+      reversedGau: 0,
+      unrecoveredGau: 0,
+      applied: true,
+    });
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 8_000 });
+  });
+
+  it("reconciles a parked refund and a parked dispute of one purchase without withdrawing it twice", async () => {
+    // Both events land before the grant, so both park and both are priced by
+    // the reconciliation loop against the same settlement.
+    await reverseGauPurchaseForRefund(refundedCharge());
+    await reverseGauPurchaseForDispute(dispute());
+    expect(store.reversals).toHaveLength(2);
+
+    seedBucket({ purchasedGau: 18_000 });
+    const settlement = seedCheckoutSettlement();
+    const tx = makeFakeGauTx(store);
+
+    const settled = await reconcilePendingGauReversals(tx, {
+      settlement,
+      paymentIntentId: "pi_gau_001",
+      now: NOW,
+    });
+
+    expect(settled).toHaveLength(2);
+    expect(settled[0]).toMatchObject({ requestedGau: 10_000 });
+    expect(settled[1]).toMatchObject({ requestedGau: 0 });
+    expect(store.buckets[0]).toMatchObject({ purchasedGau: 8_000 });
   });
 });
 
