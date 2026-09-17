@@ -201,6 +201,15 @@ is unambiguous.
 
 `main` is shared and contested — never commit or push to it directly. Cut a branch from a fresh, synced `main`, push it immediately, commit and push frequently, and open a PR against `main`. Tests run in CI on every push/PR, not in git hooks. Full workflow: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+**Residue merges; it does not iterate.** A PR whose checks are green and whose only remaining review findings are **P2 or below merges now.** Every outstanding finding at P2 or below is collected into **exactly one** issue, titled `Residue from #<PR>: <what is left>`, and the threads are resolved with a comment naming that issue. One ticket per PR, never one per comment.
+
+- **P0 and P1 never merge as residue.** They are fixed on the branch, or the PR waits. A P1 is the line: if one is open, the PR is not done.
+- **The severity is the reviewer's, not the author's.** Take the badge the review left. A finding with no severity is judged by the same bar, and the ticket says which was assigned and why.
+- **A residue ticket is a real handoff, not a receipt** — the finding verbatim, file path and line, why it is worth fixing, the pillar it moves, and a `- [ ]` DoD, to the same standard as any other issue here. Apply only the `triage` label (SCR-005).
+- **Resolving the thread is an acceptance, not a dismissal.** The comment says the finding stands and where it now lives.
+
+**This is repo-local and is not part of the SCR corpus.** It bounds the one case in which a review finding may be deferred at merge time; SCR-004's rule — fix what you find, file only what cannot ride the PR — is otherwise unchanged, and a P0 or P1 still rides the PR as SCR-004 requires. It is stated here as well as in `CLAUDE.md` so that both agents in this repo load the same rule: `CLAUDE.md` imports this file, and Stella reads this file directly. It is deliberately outside the "## Standing decisions" block below, which is a compiled mirror of `docs/scr/` and is checked bullet-for-bullet against the corpus (`scr-corpus-check.yml`). Promoting this rule into the corpus proper would edit `docs/scr/`, which is byte-identical across five repos and cannot be extended from this one — a cross-repo maintainer action, not something a session here can land.
+
 ## Documentation
 
 | Path | Content |
