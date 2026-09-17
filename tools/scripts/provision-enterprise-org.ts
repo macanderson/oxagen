@@ -182,6 +182,43 @@ export function unprovisionableReason(status: string): string | undefined {
     : undefined;
 }
 
+/**
+ * The predicate for "this organisation has a human who can still act after the
+ * enterprise tier switches the default-deny resolver on".
+ *
+ * Exported so the shape can be asserted rather than eyeballed. Every clause is
+ * load-bearing, and the two easiest to leave out are the ones that were:
+ *
+ *   - `principal_role_assignments.org_id` — an assignment carries its own org,
+ *     and joining through to a role owned by this org does not constrain it.
+ *   - `principal_role_assignments.workspace_id IS NULL` — a workspace-scoped
+ *     assignment grants Owner inside that workspace only, so a workspace-only
+ *     Owner does not stop the ORGANISATION locking itself out.
+ *
+ * Mirrors the predicates `packages/iam/src/fetch-authz.ts` applies to the same
+ * table, which is the resolver this preflight is predicting the behaviour of.
+ */
+export function orgWideSystemOwnerWhere(orgId: string, now: Date) {
+  return and(
+    eq(schema.principals.orgId, orgId),
+    // A human, not an agent or service principal: an agent holding Owner does
+    // not keep a person out of the organisation.
+    eq(schema.principals.kind, "human"),
+    eq(schema.principals.status, "active"),
+    eq(schema.principalRoleAssignments.orgId, orgId),
+    isNull(schema.principalRoleAssignments.workspaceId),
+    isNull(schema.principalRoleAssignments.deletedAt),
+    eq(schema.roles.orgId, orgId),
+    eq(schema.roles.name, "Owner"),
+    // The system-seeded Owner, not a custom role somebody named Owner.
+    eq(schema.roles.isSystemDefault, true),
+    or(
+      isNull(schema.principalRoleAssignments.expiresAt),
+      gt(schema.principalRoleAssignments.expiresAt, now),
+    ),
+  );
+}
+
 export function isLocalHost(host: string): boolean {
   return /^(localhost|127\.0\.0\.1|::1)(:\d+)?$/.test(host);
 }
@@ -532,38 +569,23 @@ async function main(): Promise<void> {
             schema.roles,
             eq(schema.roles.id, schema.principalRoleAssignments.roleId),
           )
-          .where(
-            and(
-              eq(schema.principals.orgId, org.id),
-              // A human, not an agent or service principal: an agent holding
-              // Owner does not keep a person out of the organisation.
-              eq(schema.principals.kind, "human"),
-              eq(schema.principals.status, "active"),
-              isNull(schema.principalRoleAssignments.deletedAt),
-              eq(schema.roles.orgId, org.id),
-              eq(schema.roles.name, "Owner"),
-              // The system-seeded Owner, not a custom role somebody named Owner.
-              eq(schema.roles.isSystemDefault, true),
-              or(
-                isNull(schema.principalRoleAssignments.expiresAt),
-                gt(schema.principalRoleAssignments.expiresAt, new Date()),
-              ),
-            ),
-          )
+          .where(orgWideSystemOwnerWhere(org.id, new Date()))
           .limit(1),
       );
 
       if (!ownerPrincipal) {
         console.log(
           kleur.red(
-            `      refused         : no active human principal holds Owner. Enterprise runs the full IAM resolver (default deny), so the tier would lock this organisation out. Run: pnpm db:backfill-iam -- --apply, then re-run.`,
+            `      refused         : no active human principal holds an ORG-WIDE system Owner assignment. Enterprise runs the full IAM resolver (default deny), so the tier would lock this organisation out, and a workspace-scoped Owner does not prevent that. Run: pnpm db:backfill-iam -- --apply, then re-run.`,
           ),
         );
         failures += 1;
         console.log();
         continue;
       }
-      console.log(`      iam             : an active human Owner principal`);
+      console.log(
+        `      iam             : an active human holds org-wide system Owner`,
+      );
 
       // ── 2a. Does a subscription already answer the tier question? ──────────
       //

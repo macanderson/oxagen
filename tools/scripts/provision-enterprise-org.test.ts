@@ -11,6 +11,7 @@
  * The module's `main()` is guarded behind an invoked-directly check, so
  * importing it here opens no database connection.
  */
+import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, it, expect } from "vitest";
 import {
   DEFAULT_ACTIONS_ANNUAL,
@@ -19,6 +20,7 @@ import {
   isLocalHost,
   parseActionsAnnual,
   parseFloorUsd,
+  orgWideSystemOwnerWhere,
   sanitizeUrl,
   shouldWriteAllowance,
   topUpCents,
@@ -214,5 +216,43 @@ describe("unprovisionableReason", () => {
     for (const status of ["active", "suspended", "past_due", "trialing"]) {
       expect(unprovisionableReason(status)).toBeUndefined();
     }
+  });
+});
+
+describe("orgWideSystemOwnerWhere", () => {
+  // The preflight exists to stop an organisation locking itself out when the
+  // enterprise tier switches the default-deny resolver on. It joined through to
+  // a system Owner role without constraining the ASSIGNMENT, so a
+  // workspace-only Owner satisfied it (#3178, discussion_r4034318919).
+  const compiled = () =>
+    new PgDialect().sqlToQuery(
+      orgWideSystemOwnerWhere(
+        "11111111-1111-4111-8111-111111111111",
+        new Date("2026-09-17T00:00:00.000Z"),
+      ),
+    );
+
+  it("requires the assignment to be org-wide, not workspace-scoped", () => {
+    const { sql } = compiled();
+    // The clause a workspace-scoped Owner fails.
+    expect(sql).toMatch(/"workspace_id" is null/i);
+  });
+
+  it("constrains the assignment to this organisation", () => {
+    const { sql, params } = compiled();
+    // Two org_id comparisons on principal_role_assignments and principals, plus
+    // the role's: joining to a role this org owns does not scope the assignment.
+    expect(sql.match(/"org_id" = \$/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(params).toContain("11111111-1111-4111-8111-111111111111");
+  });
+
+  it("keeps the clauses that were already right", () => {
+    const { sql, params } = compiled();
+    expect(sql).toMatch(/"kind" = \$/);
+    expect(sql).toMatch(/"is_system_default" = \$/);
+    expect(sql).toMatch(/"deleted_at" is null/i);
+    expect(sql).toMatch(/"expires_at" is null/i);
+    expect(params).toContain("human");
+    expect(params).toContain("Owner");
   });
 });
