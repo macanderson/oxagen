@@ -243,6 +243,21 @@ export interface TurnLedgerModelCall {
 }
 
 /**
+ * The host is about to ask the provider for a completion. Written BEFORE the
+ * request leaves the process, so a completion whose tokens are incurred can
+ * never be absent from the record (see `model.engine_call_started`).
+ */
+export interface TurnLedgerModelIntent {
+  /** The `provider_request` frame's seq. */
+  seq: number;
+  requestId: string;
+  role: string;
+  provider: string;
+  /** The CONFIGURED model id; the provider has not resolved one yet. */
+  model: string;
+}
+
+/**
  * The host is about to invoke a tool. Written BEFORE the call so a mutation
  * that commits can never be absent from the record (see
  * `tool.engine_call_started`).
@@ -294,6 +309,8 @@ export type TurnLedgerOutcome =
  * engine's outcome or the failure that ended the turn.
  */
 export interface TurnLedger {
+  /** Write-ahead: recorded before the provider is contacted, never a call. */
+  modelCallStarted(record: TurnLedgerModelIntent): Promise<void>;
   modelCall(record: TurnLedgerModelCall): Promise<void>;
   /** Write-ahead: recorded before the tool runs, and never counted as a call. */
   toolCallStarted(record: TurnLedgerToolIntent): Promise<void>;
@@ -643,6 +660,24 @@ export async function runGovernedTurn(
           throw Object.assign(new Error("turn budget exhausted"), {
             name: "AbortError",
           });
+        }
+        // Write-ahead, the mirror of `toolCallStarted` below. The intention is
+        // durable BEFORE the provider is contacted, so tokens that are
+        // incurred and metered can never be missing from the record: if this
+        // append fails, `recorded` aborts the turn and the request is never
+        // made at all. Recording only afterwards meant a provider that
+        // answered and a terminal append that then failed sealed the run
+        // failed with no model call in its evidence, while the vendor had
+        // been paid for the completion — a record that is confidently wrong
+        // about a charge, which is the one an invoice dispute turns on.
+        //
+        // `modelId` and not `result.model`: the resolved id is not knowable
+        // until the provider answers. The completed event carries that one,
+        // and the pair read together is what shows a gateway substitution.
+        if (ledger) {
+          await recorded(() =>
+            ledger.modelCallStarted({ ...receipt, model: modelId }),
+          );
         }
         let result: CompletionResult;
         try {

@@ -46,6 +46,7 @@ import pino from "pino";
 import type {
   TurnLedger,
   TurnLedgerModelCall,
+  TurnLedgerModelIntent,
   TurnLedgerOutcome,
   TurnLedgerToolCall,
   TurnLedgerToolIntent,
@@ -663,6 +664,26 @@ class Recorder implements AssistantRunRecorder {
     // going so the seal can still be attempted with what was recorded.
     this.chain = write.catch(() => undefined);
     return write;
+  }
+
+  /**
+   * Write-ahead intention, appended before the provider is contacted.
+   * Deliberately NOT pushed onto `receipts`, for the same reason
+   * `toolCallStarted` is not: that array becomes the turn's
+   * `agent_executions` steps, and counting the intention there would report
+   * every completion twice. The durable evidence is the event.
+   */
+  modelCallStarted(record: TurnLedgerModelIntent): Promise<void> {
+    return this.append({
+      eventType: "model.engine_call_started",
+      payload: {
+        engine_seq: record.seq,
+        model_call_id: record.requestId,
+        role: record.role,
+        provider: record.provider,
+        model: record.model,
+      },
+    });
   }
 
   modelCall(record: TurnLedgerModelCall): Promise<void> {

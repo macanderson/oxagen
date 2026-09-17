@@ -353,6 +353,31 @@ const capabilityNameSchema = z
 const EXTERNAL_TOOL_PREFIXES = ["mcp", "file-mcp"] as const;
 
 /**
+ * The longest one segment of an external tool identity may be — the server
+ * and the tool each get this much, independently.
+ *
+ * It is the bound the REGISTRY must agree with: a tool name this schema
+ * refuses is a tool that cannot appear in any run spec, and the registry is
+ * what decides which names exist. `publish_tool_declaration` holds the other
+ * half, and `packages/agent/src/runtime/tool-identity-bounds.test.ts` is what
+ * keeps the two from drifting apart again.
+ */
+export const EXTERNAL_TOOL_SEGMENT_MAX = 128;
+
+/** The longest prefix an external identity can carry, `file-mcp`. */
+const EXTERNAL_TOOL_PREFIX_MAX = Math.max(
+  ...EXTERNAL_TOOL_PREFIXES.map((p) => p.length),
+);
+
+/** Derived, never typed twice: prefix + '.' + server + '.' + tool. */
+export const EXTERNAL_TOOL_IDENTITY_MAX =
+  EXTERNAL_TOOL_PREFIX_MAX +
+  1 +
+  EXTERNAL_TOOL_SEGMENT_MAX +
+  1 +
+  EXTERNAL_TOOL_SEGMENT_MAX;
+
+/**
  * An externally contributed tool, as the belt names it. It is a SEPARATE form
  * from `capabilityNameSchema`, not a loosening of it, and the distinction is
  * deliberate twice over.
@@ -373,15 +398,45 @@ const EXTERNAL_TOOL_PREFIXES = ["mcp", "file-mcp"] as const;
  * it one of its own. Do not relax `capabilityNameSchema` to let it through —
  * that is the move this separation exists to prevent, and it is the one that
  * looks like a one-character fix.
+ *
+ * The LENGTH is bounded per segment, not over the whole identity, and that is
+ * the second thing this form does not inherit. A platform capability is one
+ * segment, so 128 is a bound on a name. An external identity is three, and
+ * `mcp.` plus a 36-character server UUID plus a separator spends 41 of them
+ * before the tool's own name starts — so a flat 128 silently meant "an MCP
+ * tool may be named up to 87 characters", a rule stated nowhere and enforced
+ * at the worst possible moment: `openAssistantRun` pins EVERY materialized
+ * tool in the allowlist, so one over-long tool enabled in a workspace fails
+ * spec admission and takes down every assistant turn in it, including the
+ * turns that never mention the tool.
  */
 const externalToolNameSchema = z
   .string()
   .min(1)
-  .max(128)
+  .max(EXTERNAL_TOOL_IDENTITY_MAX)
   .regex(
-    /^(?:mcp|file-mcp)\.[A-Za-z0-9][A-Za-z0-9_-]*\.[A-Za-z0-9][A-Za-z0-9._-]*$/,
+    new RegExp(
+      `^(?:mcp|file-mcp)\\.` +
+        `[A-Za-z0-9][A-Za-z0-9_-]{0,${EXTERNAL_TOOL_SEGMENT_MAX - 1}}\\.` +
+        `[A-Za-z0-9][A-Za-z0-9._-]{0,${EXTERNAL_TOOL_SEGMENT_MAX - 1}}$`,
+    ),
     "expected an external tool identity: <mcp|file-mcp>.<server>.<tool>",
   );
+
+/**
+ * True when a run spec's tool policy can carry this identity — a platform
+ * capability or an externally contributed tool, within the bounds above.
+ *
+ * Exported so the materializer can ASK rather than re-derive. It pins every
+ * materialized tool into the allowlist, so one identity this schema refuses
+ * fails admission for the whole run; the caller drops that one tool instead,
+ * which costs the model a tool it may never have used and costs the turn
+ * nothing. Re-implementing the test at the call site is how the two forms
+ * drift, and the drift shows up as "every turn in this workspace fails".
+ */
+export function isAdmissibleToolIdentity(name: string): boolean {
+  return toolIdentitySchema.safeParse(name).success;
+}
 
 /** True for a name the belt contributed rather than the capability registry. */
 export function isExternalToolIdentity(name: string): boolean {
