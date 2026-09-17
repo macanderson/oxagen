@@ -297,6 +297,8 @@ describe("published GAU terms (ADR-055 §2)", () => {
     );
     expect(byTier["build"]).toBeLessThan(byTier["scale"]!);
     expect(byTier["enterprise"]).toBeGreaterThanOrEqual(byTier["scale"]!);
+  });
+});
 
 /**
  * The governed action is the PRIMARY meter under ADR-052, and

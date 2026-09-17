@@ -179,7 +179,9 @@ describe("resolveOrgActionEntitlement", () => {
   });
 
   it("does not let the legacy allowance override a plan row a customer is paying for", async () => {
-    txState.subRows = [{ tier: "scale", includedActionsAnnual: 1_500_000n }];
+    // The plan row states a monthly GAU allowance now; the annual figure the
+    // resolver returns is that times twelve (ADR-055 section 2, WL-27).
+    txState.subRows = [{ tier: "scale", includedGauPerMonth: 125_000 }];
     txState.orgRows = [
       { planType: "enterprise", negotiatedActionsAnnual: 99_000_000n },
     ];
