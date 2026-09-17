@@ -233,13 +233,27 @@ export async function handleTachoHosts(
   opts: TachoHostsOptions,
   writer: CommandWriter = stdoutWriter,
 ): Promise<boolean> {
-  const output = await apiPostOrThrow<{
-    hosts: HostRow[];
-    nextCursor: string | null;
-  }>("tacho/hosts", {
-    ...(opts.status ? { status: opts.status } : {}),
-    limit: opts.limit ?? 50,
-  });
+  // Every page. A truncated fleet listing is worse than a slow one: the
+  // machine the operator is looking for is simply absent. Bounded so a
+  // pathological cursor cannot loop forever.
+  const hosts: HostRow[] = [];
+  let cursor: string | undefined;
+  let truncated = false;
+  for (let page = 0; page < 20; page += 1) {
+    const chunk = await apiPostOrThrow<{
+      hosts: HostRow[];
+      nextCursor: string | null;
+    }>("tacho/hosts", {
+      ...(opts.status ? { status: opts.status } : {}),
+      limit: opts.limit ?? 50,
+      ...(cursor === undefined ? {} : { cursor }),
+    });
+    hosts.push(...chunk.hosts);
+    if (chunk.nextCursor === null) break;
+    cursor = chunk.nextCursor;
+    if (page === 19) truncated = true;
+  }
+  const output = { hosts, nextCursor: truncated ? (cursor ?? null) : null };
   if (opts.json === true) {
     writer.write(JSON.stringify(output, null, 2));
     return true;
@@ -266,7 +280,9 @@ export async function handleTachoHosts(
     writer,
   );
   if (output.nextCursor !== null)
-    writer.write("\nMore hosts follow; raise --limit to see them.");
+    writer.write(
+      "\nMore machines follow than this command will page through; narrow with --status.",
+    );
   // The legend, every time. "wrapped" and "connected" are not degrees of the
   // same thing, and a reader who assumes they are will read this table wrong.
   writer.write(

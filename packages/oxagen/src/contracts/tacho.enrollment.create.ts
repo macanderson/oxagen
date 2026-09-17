@@ -66,6 +66,20 @@ export const tachoEnrollmentCreate = registerCapability({
       apiKeyPublicId: z.string().min(1),
       /** Shown once. Never recoverable. */
       apiKey: z.string().min(1),
+      /**
+       * The second credential: what the host's local MCP gateway serves a
+       * connected app's tools with (ADR-078). Optional so a client built
+       * before the gateway existed still parses this response.
+       *
+       * It is a separate key from `apiKey` because the two do different jobs
+       * with different blast radii — the host key reports events and fetches
+       * its mandate, the gateway key answers an app's tool calls — and one
+       * credential doing both is what let a connected app inherit the host's
+       * authority. `machineKeyDenial` holds each to its own purpose.
+       */
+      gatewayApiKeyPublicId: z.string().min(1).optional(),
+      /** Shown once. Never recoverable. */
+      gatewayApiKey: z.string().min(1).optional(),
       enrollment: z
         .object({
           claims: enrollmentClaimsSchema,

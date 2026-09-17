@@ -33,7 +33,10 @@ import {
   noOperatorMessage,
   resolveOperatorUserId,
 } from "./lib/api-key-authz";
-import { TACHO_HOST_SCOPE_PURPOSE } from "./lib/tacho-enrollment";
+import {
+  TACHO_GATEWAY_SCOPE_PURPOSE,
+  TACHO_HOST_SCOPE_PURPOSE,
+} from "./lib/tacho-enrollment";
 import { signTachoEnrollment } from "./lib/tacho-enrollment-signing";
 import {
   readDenyGeneration,
@@ -49,6 +52,12 @@ const ISSUER = "oxagen";
 const AUDIENCE = "tacho-collector";
 const CREDENTIAL_ENV = "TACHO_HOST_API_KEY";
 const DEFAULT_ENDPOINT = "https://api.oxagen.sh/v1/tacho";
+/**
+ * Where this deployment's workspace MCP endpoint lives, for the claim the
+ * host's local gateway dials. Unset means the claim omits it and the host
+ * falls back to its own derivation from `api_url`.
+ */
+const MCP_ENDPOINT_ENV = "TACHO_MCP_ENDPOINT";
 
 function denied(message: string): CapabilityError {
   return new CapabilityError(
@@ -131,135 +140,180 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
   const expiresAt = new Date(
     issuedAt.getTime() + input.validityDays * 24 * 60 * 60 * 1000,
   );
+  const mcpEndpointRaw = process.env[MCP_ENDPOINT_ENV];
+  const mcpEndpoint =
+    typeof mcpEndpointRaw === "string" && mcpEndpointRaw.startsWith("https://")
+      ? mcpEndpointRaw
+      : undefined;
   const hostEnrollmentId = `tch_${cryptoRandom(22)}`;
   const { rawKey, keyPrefix, keyHash } = generateApiKey();
+  // A second credential, for the local MCP gateway (ADR-078). It is separate
+  // from the host key on purpose: the host key reports events and fetches its
+  // mandate, and the gateway serves tools to a connected app. Those are
+  // different jobs with different blast radii, and one credential doing both
+  // is what let a connected app inherit the host's authority. The purpose on
+  // each is what `machineKeyDenial` constrains them by.
+  const gatewayKey = generateApiKey();
   const fingerprint = deviceKeyFingerprint(input.devicePublicKey);
 
-  const { host, apiKeyPublicId, agentKey, denyGeneration } = await withTenantDb(
-    async (tx) => {
-      const org = await tx.query.organizations.findFirst({
-        where: eq(schema.organizations.id, ctx.orgId),
-        columns: { namespace: true },
-      });
-      const workspace = await tx.query.workspaces.findFirst({
-        where: and(
-          eq(schema.workspaces.id, ctx.workspaceId),
-          eq(schema.workspaces.orgId, ctx.orgId),
-        ),
-        columns: { namespace: true },
-      });
-      if (!org || !workspace) {
-        throw denied(
-          "Forbidden: organization or workspace namespace not found",
-        );
-      }
-      const baseSlug = agentSlugFor(input.hostname);
-      let agentKeyCandidate = `${org.namespace}.${workspace.namespace}.${baseSlug}`;
-      const clash = await tx.query.tachoHosts.findFirst({
-        where: and(
-          eq(schema.tachoHosts.orgId, ctx.orgId),
-          eq(schema.tachoHosts.agentKey, agentKeyCandidate),
-        ),
-        columns: { id: true },
-      });
-      if (clash) {
-        agentKeyCandidate = `${org.namespace}.${workspace.namespace}.${baseSlug.slice(0, 13)}-${cryptoRandom(4)}`;
-      }
+  const {
+    host,
+    apiKeyPublicId,
+    gatewayApiKeyPublicId,
+    agentKey,
+    denyGeneration,
+  } = await withTenantDb(async (tx) => {
+    const org = await tx.query.organizations.findFirst({
+      where: eq(schema.organizations.id, ctx.orgId),
+      columns: { namespace: true },
+    });
+    const workspace = await tx.query.workspaces.findFirst({
+      where: and(
+        eq(schema.workspaces.id, ctx.workspaceId),
+        eq(schema.workspaces.orgId, ctx.orgId),
+      ),
+      columns: { namespace: true },
+    });
+    if (!org || !workspace) {
+      throw denied("Forbidden: organization or workspace namespace not found");
+    }
+    const baseSlug = agentSlugFor(input.hostname);
+    let agentKeyCandidate = `${org.namespace}.${workspace.namespace}.${baseSlug}`;
+    const clash = await tx.query.tachoHosts.findFirst({
+      where: and(
+        eq(schema.tachoHosts.orgId, ctx.orgId),
+        eq(schema.tachoHosts.agentKey, agentKeyCandidate),
+      ),
+      columns: { id: true },
+    });
+    if (clash) {
+      agentKeyCandidate = `${org.namespace}.${workspace.namespace}.${baseSlug.slice(0, 13)}-${cryptoRandom(4)}`;
+    }
 
-      const [key] = await tx
-        .insert(schema.apiKeys)
-        .values({
-          orgId: ctx.orgId,
-          workspaceId: ctx.workspaceId,
-          keyPrefix,
-          keyHash,
-          name: `tacho host ${input.hostname}`,
-          scope: {
-            purpose: TACHO_HOST_SCOPE_PURPOSE,
-            host_enrollment_id: hostEnrollmentId,
-          },
-          expiresAt,
-          createdByUserId: operatorUserId,
-          updatedByUserId: operatorUserId,
-        })
-        .returning({
-          id: schema.apiKeys.id,
-          publicId: schema.apiKeys.publicId,
-        });
-      if (!key) {
-        throw new Error(
-          "Internal error: failed to create the Tacho host API key",
-        );
-      }
-
-      const claims: EnrollmentClaims = {
-        schema: TACHO_ENROLLMENT_CLAIMS_SCHEMA,
-        issuer: ISSUER,
-        audience: AUDIENCE,
-        host_enrollment_id: hostEnrollmentId,
-        organization_id: ctx.orgId,
-        workspace_id: ctx.workspaceId,
-        agent_key: agentKeyCandidate,
-        ingest_endpoint: `${endpointBase}/events`,
-        bundle_endpoint: `${endpointBase}/bundle`,
-        commands_endpoint: `${endpointBase}/commands`,
-        credential_env: CREDENTIAL_ENV,
-        device_key_fingerprint: fingerprint,
-        harnesses: input.harnesses,
-        issued_at_unix_s: Math.floor(issuedAt.getTime() / 1000),
-        expires_at_unix_s: Math.floor(expiresAt.getTime() / 1000),
-      };
-      const signatureHex = signTachoEnrollment(claims, secret);
-
-      const [inserted] = await tx
-        .insert(schema.tachoHosts)
-        .values({
-          publicId: hostEnrollmentId,
-          orgId: ctx.orgId,
-          workspaceId: ctx.workspaceId,
-          agentKey: agentKeyCandidate,
-          apiKeyId: key.id,
-          hostname: input.hostname,
-          hostnameDigest: digestBytes(input.hostname),
-          platform: input.platform,
-          osVersion: input.osVersion ?? null,
-          arch: input.arch ?? null,
-          osUser: input.osUser,
-          osUserDigest: digestBytes(input.osUser),
-          devicePublicKey: input.devicePublicKey,
-          deviceKeyFingerprint: fingerprint,
-          harnesses: input.harnesses,
-          claudeVersionAtEnroll: input.claudeVersion ?? null,
-          claudeExecpath: input.claudeExecpath ?? null,
-          nodeVersion: input.nodeVersion ?? null,
-          wrapperVersion: input.wrapperVersion ?? null,
-          shell: input.shell ?? null,
-          status: "active",
-          enrollmentClaims: claims,
-          enrollmentSignature: signatureHex,
-          expiresAt,
-          managed: input.managed,
-          mode: "observe",
-          createdByUserId: operatorUserId,
-          updatedByUserId: operatorUserId,
-        })
-        .returning();
-      if (!inserted) {
-        throw new Error("Internal error: failed to create the Tacho host");
-      }
-      const denyGeneration = await readDenyGeneration(
-        tx as never,
-        ctx.orgId,
-        ctx.workspaceId,
+    const [key] = await tx
+      .insert(schema.apiKeys)
+      .values({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        keyPrefix,
+        keyHash,
+        name: `tacho host ${input.hostname}`,
+        scope: {
+          purpose: TACHO_HOST_SCOPE_PURPOSE,
+          host_enrollment_id: hostEnrollmentId,
+        },
+        expiresAt,
+        createdByUserId: operatorUserId,
+        updatedByUserId: operatorUserId,
+      })
+      .returning({
+        id: schema.apiKeys.id,
+        publicId: schema.apiKeys.publicId,
+      });
+    if (!key) {
+      throw new Error(
+        "Internal error: failed to create the Tacho host API key",
       );
-      return {
-        host: inserted as TachoHostRow,
-        apiKeyPublicId: key.publicId,
+    }
+
+    const [gateway] = await tx
+      .insert(schema.apiKeys)
+      .values({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        keyPrefix: gatewayKey.keyPrefix,
+        keyHash: gatewayKey.keyHash,
+        name: `tacho gateway ${input.hostname}`,
+        scope: {
+          purpose: TACHO_GATEWAY_SCOPE_PURPOSE,
+          host_enrollment_id: hostEnrollmentId,
+        },
+        expiresAt,
+        createdByUserId: operatorUserId,
+        updatedByUserId: operatorUserId,
+      })
+      .returning({
+        id: schema.apiKeys.id,
+        publicId: schema.apiKeys.publicId,
+      });
+    if (!gateway) {
+      throw new Error(
+        "Internal error: failed to create the Tacho gateway API key",
+      );
+    }
+
+    const claims: EnrollmentClaims = {
+      schema: TACHO_ENROLLMENT_CLAIMS_SCHEMA,
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      host_enrollment_id: hostEnrollmentId,
+      organization_id: ctx.orgId,
+      workspace_id: ctx.workspaceId,
+      agent_key: agentKeyCandidate,
+      ingest_endpoint: `${endpointBase}/events`,
+      bundle_endpoint: `${endpointBase}/bundle`,
+      commands_endpoint: `${endpointBase}/commands`,
+      // Signed rather than derived: the host would otherwise guess it by
+      // swapping `api.` for `mcp.` in api_url, which is wrong for any
+      // deployment whose MCP host is not named that way.
+      ...(mcpEndpoint === undefined ? {} : { mcp_endpoint: mcpEndpoint }),
+      credential_env: CREDENTIAL_ENV,
+      device_key_fingerprint: fingerprint,
+      harnesses: input.harnesses,
+      issued_at_unix_s: Math.floor(issuedAt.getTime() / 1000),
+      expires_at_unix_s: Math.floor(expiresAt.getTime() / 1000),
+    };
+    const signatureHex = signTachoEnrollment(claims, secret);
+
+    const [inserted] = await tx
+      .insert(schema.tachoHosts)
+      .values({
+        publicId: hostEnrollmentId,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
         agentKey: agentKeyCandidate,
-        denyGeneration,
-      };
-    },
-  );
+        apiKeyId: key.id,
+        hostname: input.hostname,
+        hostnameDigest: digestBytes(input.hostname),
+        platform: input.platform,
+        osVersion: input.osVersion ?? null,
+        arch: input.arch ?? null,
+        osUser: input.osUser,
+        osUserDigest: digestBytes(input.osUser),
+        devicePublicKey: input.devicePublicKey,
+        deviceKeyFingerprint: fingerprint,
+        harnesses: input.harnesses,
+        claudeVersionAtEnroll: input.claudeVersion ?? null,
+        claudeExecpath: input.claudeExecpath ?? null,
+        nodeVersion: input.nodeVersion ?? null,
+        wrapperVersion: input.wrapperVersion ?? null,
+        shell: input.shell ?? null,
+        status: "active",
+        enrollmentClaims: claims,
+        enrollmentSignature: signatureHex,
+        expiresAt,
+        managed: input.managed,
+        mode: "observe",
+        createdByUserId: operatorUserId,
+        updatedByUserId: operatorUserId,
+      })
+      .returning();
+    if (!inserted) {
+      throw new Error("Internal error: failed to create the Tacho host");
+    }
+    const denyGeneration = await readDenyGeneration(
+      tx as never,
+      ctx.orgId,
+      ctx.workspaceId,
+    );
+    return {
+      host: inserted as TachoHostRow,
+      apiKeyPublicId: key.publicId,
+      gatewayApiKeyPublicId: gateway.publicId,
+      agentKey: agentKeyCandidate,
+      denyGeneration,
+    };
+  });
 
   const bundle = signBundle(
     signer,
@@ -292,6 +346,8 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
     agentKey,
     apiKeyPublicId,
     apiKey: rawKey,
+    gatewayApiKeyPublicId,
+    gatewayApiKey: gatewayKey.rawKey,
     enrollment: {
       claims: host.enrollmentClaims as EnrollmentClaims,
       signature_hex: host.enrollmentSignature,

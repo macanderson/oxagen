@@ -235,6 +235,21 @@ export function tooManyToolsMessage(
  * every bundle that ever reached here declared no ceiling and the refusal
  * below could not fire. The cast is what hid that; the schema now names the
  * field, so the type answers the question instead.
+ *
+ * **Why the control plane does not populate this yet, and should not be
+ * "fixed" by wiring the workspace's model in.** The cap this refusal is about
+ * belongs to the provider the *connected app* sends its turn to — Claude
+ * Desktop's, Cursor's — and MCP tells a server nothing about that: the
+ * `initialize` handshake carries a client name and version, not a model. The
+ * workspace's own agent model is a different number for a different path; it
+ * governs turns Oxagen composes, not turns a connected app composes.
+ *
+ * Emitting the workspace model here would enforce one provider's cap on
+ * another provider's request, which is worse than enforcing none — it would
+ * refuse a list the client would have accepted, naming a model the operator
+ * never chose. So the wire carries the field, the host enforces it the moment
+ * a bundle declares one, and a bundle declares one when there is a defensible
+ * source for the number.
  */
 export function ceilingOf(
   bundle: PolicyBundle | undefined,
@@ -381,13 +396,15 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
         // Never defaulted. A call Oxagen cannot attribute is a call it cannot
         // govern, meter or record, and serving it would put an ungoverned
         // action in the ledger under nobody's name.
-        log("mcp gateway refused a call: this machine has no enrollment");
+        log(
+          "mcp gateway refused a call: no enrollment, or no gateway credential on it",
+        );
         return {
           status: 403,
           body: rpcError(
             id,
             RPC_REFUSED,
-            "this machine is not enrolled, so a call cannot be attributed to an organization and workspace. Sign in and enroll in the Oxagen app, then restart this app.",
+            "this machine has no Oxagen mandate to serve tools under. Open the Oxagen app: if it is signed in and connected, reconnect this app to refresh its credential, then restart it.",
           ),
         };
       }

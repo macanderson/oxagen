@@ -86,10 +86,11 @@ describe("attribution is required, never defaulted", () => {
     expect(response.status).toBe(403);
     const body = response.body as { error: { code: number; message: string } };
     expect(body.error.code).toBe(RPC_REFUSED);
-    expect(body.error.message).toContain("not enrolled");
+    expect(body.error.message).toContain("no Oxagen mandate");
     // Nothing was forwarded and nothing was recorded under nobody's name.
     expect(records).toEqual([]);
     expect(logs.join(" ")).toContain("no enrollment");
+    expect(logs.join(" ")).toContain("gateway credential");
   });
 
   it("never reaches the control plane without attribution", async () => {
@@ -530,5 +531,44 @@ describe("counting tools", () => {
     expect(toolCountOf({ content: [] })).toBeUndefined();
     expect(toolCountOf(null)).toBeUndefined();
     expect(toolCountOf("x")).toBeUndefined();
+  });
+});
+
+/**
+ * The gateway presents its own credential, never the host's. The host key
+ * reports events and fetches the mandate; it passes every role gate because an
+ * API-key principal has no org_users row to check. Forwarding a connected
+ * app's tool calls with it handed that app the enrolling admin's authority,
+ * which is what `machineKeyDenial` and this split close (ADR-078).
+ */
+describe("the gateway's credential is not the host's", () => {
+  it("presents the gateway key when the host has one", async () => {
+    const { fetch, calls } = remote({ content: [] });
+    const { gw } = gateway({
+      fetch,
+      attribution: () => attribution({ apiKey: "oxa_gateway_only" }),
+    });
+    await gw.handle(CALL, CTX);
+    expect(calls[0]?.init.headers["Authorization"]).toBe(
+      "Bearer oxa_gateway_only",
+    );
+  });
+
+  it("serves nothing rather than falling back to a host key", async () => {
+    // A host enrolled before the gateway existed has no gateway credential.
+    // The daemon returns no attribution for it, and the gateway refuses --
+    // it never reaches for whatever other key is lying around.
+    const upstream = vi.fn();
+    const { gw, records } = gateway({
+      attribution: () => undefined,
+      fetch: upstream as unknown as GatewayFetch,
+    });
+    const response = await gw.handle(CALL, CTX);
+    expect(response.status).toBe(403);
+    expect(upstream).not.toHaveBeenCalled();
+    expect(records).toEqual([]);
+    expect(
+      (response.body as { error: { message: string } }).error.message,
+    ).toContain("no Oxagen mandate");
   });
 });

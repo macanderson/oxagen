@@ -21,7 +21,7 @@ import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspaceOrRedirect } from "@/lib/resolve-org";
-import { type FleetHost, listFleetAction } from "./actions";
+import { type FleetHost, listAllFleetAction } from "./actions";
 
 // No route segment config. `cacheComponents` (apps/app/next.config.mjs)
 // replaces `dynamic`/`revalidate` and fails the build on a segment that still
@@ -82,7 +82,7 @@ export default async function FleetPage({
     "",
   );
 
-  const result = await listFleetAction({
+  const result = await listAllFleetAction({
     orgSlug,
     workspaceSlug: workspace.slug,
   });
@@ -115,6 +115,17 @@ export default async function FleetPage({
         </Panel>
       ) : (
         <div className="space-y-4" data-testid="fleet-hosts">
+          {result.nextCursor !== null ? (
+            <Panel>
+              <p
+                className="text-sm text-app-link-fg"
+                data-testid="fleet-partial"
+              >
+                This workspace has more machines than fit in one listing. These
+                are the {result.hosts.length} most recently enrolled.
+              </p>
+            </Panel>
+          ) : null}
           {result.hosts.map((host) => (
             <Panel key={host.hostEnrollmentId}>
               <div className="flex flex-wrap items-center gap-3">

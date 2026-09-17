@@ -269,6 +269,13 @@ export const enrollmentClaimsSchema = z
     ingest_endpoint: z.string().url(),
     bundle_endpoint: z.string().url(),
     commands_endpoint: z.string().url(),
+    /**
+     * The workspace MCP endpoint the local gateway proxies to (ADR-078).
+     * Optional so a claim signed before the gateway existed still verifies;
+     * when present it is authoritative and `mcpEndpointFor` stops deriving
+     * one from `api_url`, which is guesswork a signed claim should replace.
+     */
+    mcp_endpoint: z.string().url().optional(),
     credential_env: z.string().regex(/^[A-Z][A-Z0-9_]*$/),
     device_key_fingerprint: z.string().min(1),
     harnesses: z.array(tachoHarnessSchema).min(1),
@@ -390,6 +397,15 @@ export const enrollmentResponseSchema = z
     agentKey: z.string().min(1),
     apiKeyPublicId: z.string().min(1),
     apiKey: z.string().min(1),
+    /**
+     * The credential the local MCP gateway serves a connected app with
+     * (ADR-078). Optional: a control plane older than the gateway mints only
+     * the host key, and a host that gets none serves no tools rather than
+     * falling back to the host key -- which is the escalation this exists to
+     * prevent.
+     */
+    gatewayApiKeyPublicId: z.string().min(1).optional(),
+    gatewayApiKey: z.string().min(1).optional(),
     enrollment: z
       .object({
         claims: enrollmentClaimsSchema,
