@@ -99,7 +99,7 @@ describe("Avatar", () => {
   // trigger and a 52px editor preview -- need their own glyph steps or the
   // emoji is lost in the circle at one of them.
   it("draws each size with its own tile and glyph steps, in lockstep", () => {
-    const { container } = render(
+    render(
       <>
         <Avatar value={DESIGNED} initials="MB" size="trigger" testId="t" />
         <Avatar value={DESIGNED} initials="MB" size="preview" testId="p" />
@@ -107,7 +107,6 @@ describe("Avatar", () => {
         <Avatar value={null} initials="MB" size="preview" testId="pi" />
       </>,
     );
-    expect(container).toBeTruthy();
     expect(screen.getByTestId("t").className).toContain("size-8");
     expect(screen.getByTestId("t").className).toContain("text-base");
     expect(screen.getByTestId("p").className).toContain("size-13");
