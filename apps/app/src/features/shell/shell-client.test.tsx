@@ -300,7 +300,7 @@ describe("command menu", () => {
 });
 
 describe("user menu", () => {
-  it("names the viewer and switches theme: light, dark, system; nothing else is offered (negative)", async () => {
+  it("names the viewer, opens Account and switches theme: light, dark, system; nothing else is offered (negative)", async () => {
     const user = userEvent.setup();
     renderShell(shellData());
     await user.click(
@@ -308,7 +308,10 @@ describe("user menu", () => {
     );
     const menu = await screen.findByRole("menu");
     expect(menu).toHaveTextContent("marcus.bell@acme.example");
-    expect(within(menu).getAllByRole("menuitem")).toHaveLength(1);
+    // Account and Switch theme, and nothing else: the dialog spec App. F folds
+    // the account pages into is reached from here.
+    expect(within(menu).getAllByRole("menuitem")).toHaveLength(2);
+    expect(within(menu).getByTestId("open-account")).toBeTruthy();
     await user.click(within(menu).getByTestId("switch-theme"));
     expect(document.documentElement.dataset.theme).toBe("light");
     await user.click(screen.getByTestId("switch-theme"));
@@ -319,7 +322,9 @@ describe("user menu", () => {
 
   it("names a viewer with no recorded name by their email", () => {
     renderShell(
-      shellData({ viewer: { name: null, email: "dana@acme.example" } }),
+      shellData({
+        viewer: { name: null, email: "dana@acme.example", avatarUrl: null },
+      }),
     );
     expect(
       screen.getByRole("button", { name: "User menu for dana@acme.example" }),

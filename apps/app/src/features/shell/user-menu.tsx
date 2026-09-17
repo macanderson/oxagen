@@ -13,7 +13,7 @@ const itemClass =
 
 export function UserMenu({ data }: { data: ShellData }) {
   const t = useTranslations("shell");
-  const { theme, setTheme } = useShellState();
+  const { theme, setTheme, setAccountOpen } = useShellState();
   const { viewer } = data;
   const displayName = viewer.name ?? viewer.email;
   return (
@@ -32,6 +32,15 @@ export function UserMenu({ data }: { data: ShellData }) {
               <p className="text-sm font-semibold">{displayName}</p>
               <p className="text-xs text-muted-foreground">{viewer.email}</p>
             </div>
+            <Menu.Item
+              className={itemClass}
+              data-testid="open-account"
+              onClick={() => {
+                setAccountOpen(true);
+              }}
+            >
+              <span className="flex-1">{t("userMenu.account")}</span>
+            </Menu.Item>
             <Menu.Item
               className={itemClass}
               closeOnClick={false}

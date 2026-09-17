@@ -40,7 +40,8 @@
     },
     "userMenu": {
       "switchTheme": "Switch theme",
-      "themeNow": "now {theme, select, light {Paper} dark {Ink} other {system}}"
+      "themeNow": "now {theme, select, light {Paper} dark {Ink} other {system}}",
+      "account": "Account"
     },
     "commands": {
       "title": "Command menu",
@@ -67,6 +68,21 @@
     "drawer": {
       "title": "Navigation",
       "close": "Close navigation"
+    },
+    "account": {
+      "title": "Account",
+      "close": "Close",
+      "save": "Save",
+      "saving": "Saving",
+      "saved": "Saved.",
+      "displayName": "Display name",
+      "avatar": "Avatar",
+      "avatarHint": "An image URL, or leave blank to show your initials.",
+      "email": "Email",
+      "emailHint": "Your email is how you sign in and cannot be changed here.",
+      "invalid": "That display name or avatar was refused. A name is 1 to 120 characters; an avatar is an https URL.",
+      "denied": "You do not have permission to change this profile.",
+      "failed": "That could not be saved. Try again."
     }
   }
 }
