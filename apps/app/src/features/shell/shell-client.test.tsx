@@ -38,7 +38,8 @@ const nav = vi.hoisted(() => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => nav.pathname,
+  usePathname: () => nav.pathname.split("?")[0],
+  useSearchParams: () => new URLSearchParams(nav.pathname.split("?")[1] ?? ""),
   useRouter: () => ({ push: nav.push }),
 }));
 

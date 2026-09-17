@@ -36,10 +36,13 @@ declare global {
 const askAssistant = vi.fn();
 vi.mock("./assistant-actions", () => ({ askAssistant }));
 
+// One `url` for both hooks, split the way Next.js splits it: `usePathname`
+// omits the query string, which is the whole of finding #4040859958.
 const pathname = vi.fn(() => "/acme/core-platform");
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
-  usePathname: () => pathname(),
+  usePathname: () => pathname().split("?")[0],
+  useSearchParams: () => new URLSearchParams(pathname().split("?")[1] ?? ""),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
 }));
 
@@ -107,16 +110,34 @@ const turn = (over: Record<string, unknown> = {}) => ({
   },
 });
 
+// A viewport the tests drive: the flyout covers the application below `md` and
+// sits beside the page above it, so the breakpoint is an input, not the window.
+const viewport = { belowMd: false, listeners: new Set<() => void>() };
+function setViewport(belowMd: boolean) {
+  viewport.belowMd = belowMd;
+  act(() => {
+    for (const listener of [...viewport.listeners]) listener();
+  });
+}
+
 beforeAll(() => {
   vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: false,
+    get matches() {
+      return query.includes("max-width") ? viewport.belowMd : false;
+    },
     media: query,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
+    addEventListener: (_: string, listener: () => void) => {
+      viewport.listeners.add(listener);
+    },
+    removeEventListener: (_: string, listener: () => void) => {
+      viewport.listeners.delete(listener);
+    },
   }));
 });
 
 beforeEach(() => {
+  viewport.belowMd = false;
+  viewport.listeners.clear();
   askAssistant.mockReset();
   refresh.mockReset();
   askAssistant.mockResolvedValue(turn());
@@ -154,6 +175,85 @@ describe("AssistantFlyout", () => {
 
   it("carries the page the person asked from, so the agent is asked about what is on screen", async () => {
     pathname.mockReturnValue("/acme/core-platform/runs/arun_01k9");
+    const { user } = await openFlyout();
+    await ask(user, "why did this fail?");
+
+    expect(askAssistant.mock.calls[0]?.[2]).toMatchObject({
+      route: "runs",
+      entityId: "arun_01k9",
+    });
+  });
+
+  // `usePathname()` drops the query string, and Spend and Steering keep the
+  // record on screen there rather than in a path segment (`shared/safe-path.ts`
+  // mints `?finding=` and `?proposal=`). Without these the agent is asked
+  // about "this finding" with no indication of which one.
+  it.each([
+    {
+      page: "a finding on Spend",
+      url: "/acme/core-platform/spend?tab=findings&finding=fnd_014",
+      route: "spend",
+      entityId: "fnd_014",
+    },
+    {
+      page: "a key's drill on Spend",
+      url: "/acme/core-platform/spend?tab=keys&drill=key_88",
+      route: "spend",
+      entityId: "key_88",
+    },
+    {
+      page: "a proposal on Steering",
+      url: "/acme/core-platform/steering?tab=proposals&proposal=prp_7",
+      route: "steering",
+      entityId: "prp_7",
+    },
+  ])("carries the record a query value selects on $page", async (view) => {
+    pathname.mockReturnValue(view.url);
+    const { user } = await openFlyout();
+    await ask(user, "explain this");
+
+    expect(askAssistant.mock.calls[0]?.[2]).toMatchObject({
+      route: view.route,
+      entityId: view.entityId,
+    });
+  });
+
+  // An allow-list, not a pass-through: the query string is whatever the address
+  // bar says, so a value no route asked for is not page context.
+  it("carries no record for a query value no route names (negative)", async () => {
+    pathname.mockReturnValue(
+      "/acme/core-platform/spend?tab=keys&note=ignore+me&proposal=wrong-route",
+    );
+    const { user } = await openFlyout();
+    await ask(user, "explain this");
+
+    expect(askAssistant.mock.calls[0]?.[2]).toMatchObject({
+      route: "spend",
+      entityId: null,
+    });
+  });
+
+  // `entityId` is capped at 256 characters by `assistantPageContextSchema`; a
+  // longer one is no id, and sending it would refuse the whole turn for being
+  // invalid rather than answer the question without it.
+  it("drops a record id longer than the contract accepts rather than refusing the turn (negative)", async () => {
+    pathname.mockReturnValue(
+      `/acme/core-platform/steering?proposal=${"p".repeat(257)}`,
+    );
+    const { user } = await openFlyout();
+    await ask(user, "explain this");
+
+    expect(askAssistant.mock.calls[0]?.[2]).toMatchObject({
+      route: "steering",
+      entityId: null,
+    });
+  });
+
+  // The path still wins where it has one: a run id is a segment, not a query.
+  it("prefers the record in the path over a query value", async () => {
+    pathname.mockReturnValue(
+      "/acme/core-platform/runs/arun_01k9?finding=not-this",
+    );
     const { user } = await openFlyout();
     await ask(user, "why did this fail?");
 
@@ -557,6 +657,87 @@ describe("AssistantFlyout", () => {
     await user.keyboard("{Escape}");
     expect(screen.getByTestId("assistant-flyout")).toHaveAttribute("inert");
     expect(document.activeElement).toBe(document.body);
+  });
+
+  // Below `md` the flyout is `w-full` and covers the application. A plain panel
+  // there leaves a keyboard user tabbing past the send button into invisible
+  // top-bar, navigation and page controls — and once focus is outside the
+  // panel, its own Escape handler never hears the key. Inerting everything
+  // outside is the containment: nothing else can be focused, so focus cannot
+  // leave, which is what a modal dialog does with the top layer.
+  it("makes the application behind it inert while it covers the screen", async () => {
+    viewport.belowMd = true;
+    const user = userEvent.setup();
+    render(tree());
+    const launcher = screen.getByRole("button", { name: "open assistant" });
+
+    await user.click(launcher);
+    const flyout = screen.getByTestId("assistant-flyout");
+    expect(flyout).toHaveAttribute("aria-modal", "true");
+    expect(launcher).toHaveAttribute("inert");
+    await expectNoAxe(flyout);
+
+    await user.keyboard("{Escape}");
+    expect(launcher).not.toHaveAttribute("inert");
+    expect(document.activeElement).toBe(launcher);
+  });
+
+  // Above `md` it is a panel beside the page, not over it: the page it is
+  // being asked about stays readable and clickable.
+  it("leaves the application usable on a wide screen, where it covers nothing (negative)", async () => {
+    const user = userEvent.setup();
+    render(tree());
+    const launcher = screen.getByRole("button", { name: "open assistant" });
+
+    await user.click(launcher);
+    expect(screen.getByTestId("assistant-flyout")).toHaveAttribute(
+      "aria-modal",
+      "false",
+    );
+    expect(launcher).not.toHaveAttribute("inert");
+  });
+
+  // The flyout is open across a rotation or a resize, and the same panel is a
+  // modal dialog on one side of the breakpoint and not on the other.
+  it("takes and gives back the application when the viewport crosses the breakpoint while open", async () => {
+    const user = userEvent.setup();
+    render(tree());
+    const launcher = screen.getByRole("button", { name: "open assistant" });
+    await user.click(launcher);
+    expect(launcher).not.toHaveAttribute("inert");
+
+    setViewport(true);
+    expect(screen.getByTestId("assistant-flyout")).toHaveAttribute(
+      "aria-modal",
+      "true",
+    );
+    expect(launcher).toHaveAttribute("inert");
+
+    setViewport(false);
+    expect(screen.getByTestId("assistant-flyout")).toHaveAttribute(
+      "aria-modal",
+      "false",
+    );
+    expect(launcher).not.toHaveAttribute("inert");
+  });
+
+  // A reply arrives asynchronously while focus is still on the composer or the
+  // close button. A refusal carries `role="alert"`, which is assertive and is
+  // announced on insertion; an answer is an ordinary paragraph, so the
+  // transcript itself has to be the live region — and it has to be there
+  // before the text is. A polite region inserted in the same commit as its
+  // contents is announced unreliably, so the container renders on every pass
+  // and only what is inside it changes.
+  it("announces a reply in a live region that was already there when the question was asked", async () => {
+    const { user } = await openFlyout();
+    const log = screen.getByRole("log");
+
+    await ask(user, "what is live?");
+    const answer = await screen.findByTestId("assistant-answer");
+
+    // The same node, not one that arrived with the reply it is announcing.
+    expect(screen.getByRole("log")).toBe(log);
+    expect(log).toContainElement(answer);
   });
 
   it("has no axe violations", async () => {

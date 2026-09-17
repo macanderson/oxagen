@@ -35,7 +35,8 @@ import type { ShellData } from "./shell-data";
 const nav = vi.hoisted(() => ({ pathname: "/acme/core-platform" }));
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => nav.pathname,
+  usePathname: () => nav.pathname.split("?")[0],
+  useSearchParams: () => new URLSearchParams(nav.pathname.split("?")[1] ?? ""),
   useRouter: () => ({ push: vi.fn() }),
 }));
 

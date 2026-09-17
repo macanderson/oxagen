@@ -57,9 +57,15 @@
 // the close button, the launcher toggling it shut — goes through the one
 // effect below.
 import { CircleAlert, Send, Sparkles } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { type SyntheticEvent, useEffect, useRef, useState } from "react";
+import {
+  type SyntheticEvent,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
 import { parseShellPath } from "./nav";
@@ -79,6 +85,106 @@ type Entry =
 
 /** The refusal reasons a turn can come back with, each said plainly. */
 type Refusal = "denied" | "invalid" | "exhausted" | "parked" | "unavailable";
+
+/**
+ * Below `md` the flyout is `w-full` and covers the application, so it is a
+ * modal dialog; above it, it is a panel beside the page and the page it is
+ * being asked about stays usable. The query is the complement of Tailwind's
+ * `md` (48rem), the breakpoint the class list below switches on.
+ */
+const COVERS_THE_APP = "(max-width: 47.99rem)";
+
+function subscribeToWidth(onChange: () => void): () => void {
+  const mql = window.matchMedia(COVERS_THE_APP);
+  mql.addEventListener("change", onChange);
+  return () => {
+    mql.removeEventListener("change", onChange);
+  };
+}
+
+/**
+ * Whether the flyout covers the application. The viewport is an external store
+ * — `useSyncExternalStore` is what reads one without a render that is briefly
+ * wrong. The server has no viewport, so it renders the panel the wide screen
+ * shows and the first client read corrects it.
+ */
+function useCoversTheApp(): boolean {
+  return useSyncExternalStore(
+    subscribeToWidth,
+    () => window.matchMedia(COVERS_THE_APP).matches,
+    () => false,
+  );
+}
+
+/**
+ * Take the application out of the tab order and the accessibility tree while
+ * `node` is a modal dialog over it, and give it back.
+ *
+ * `inert` is the containment: a keyboard user who tabs past the last control
+ * in the panel finds nothing outside it to land on, so focus cannot leave —
+ * and while focus stays inside, the panel's own Escape handler keeps hearing
+ * the key. That is what a native modal dialog gets from the top layer. Walking
+ * up from the panel marks each level's siblings, which is the whole document
+ * minus the panel's own line of ancestors; a sibling that is already inert
+ * belongs to someone else and is left exactly as it was found.
+ */
+function inertOutside(node: HTMLElement): () => void {
+  const marked: HTMLElement[] = [];
+  for (let el: HTMLElement | null = node; el !== null; el = el.parentElement) {
+    for (const sibling of Array.from(el.parentElement?.children ?? [])) {
+      if (sibling === el || !(sibling instanceof HTMLElement)) continue;
+      if (sibling.hasAttribute("inert")) continue;
+      sibling.setAttribute("inert", "");
+      marked.push(sibling);
+    }
+  }
+  return () => {
+    for (const el of marked) el.removeAttribute("inert");
+  };
+}
+
+/**
+ * The record on screen for a route that keeps it in the query string rather
+ * than in a path segment (`shared/safe-path.ts`: Spend's finding and key drill,
+ * Steering's proposal are query values on one route, ARCHITECTURE.md §1.2), in
+ * the order the page selects them.
+ *
+ * An allow-list, not a pass-through. A query string is whatever the address bar
+ * says, so the page context carries a value one of these routes asked for or it
+ * carries nothing; a tab, a cursor or an offset names a view, not a record, and
+ * is not on this table.
+ */
+const QUERY_RECORD: Readonly<Record<string, readonly string[]>> = {
+  spend: ["finding", "drill"],
+  steering: ["proposal"],
+};
+
+/**
+ * `entityId`'s cap in `assistantPageContextSchema`. A longer value is not an
+ * id; sending it would refuse the whole turn as invalid rather than answer the
+ * question without the record.
+ */
+const ENTITY_ID_MAX = 256;
+
+/** The record the page is showing: the path segment after the route, or the query value that selects one. */
+function recordOnPage(
+  route: string,
+  fromPath: string | undefined,
+  query: Pick<URLSearchParams, "get">,
+): string | null {
+  let found = fromPath;
+  if (found === undefined)
+    for (const key of QUERY_RECORD[route] ?? []) {
+      const value = query.get(key);
+      if (value !== null && value !== "") {
+        found = value;
+        break;
+      }
+    }
+  if (found === undefined || found === "" || found.length > ENTITY_ID_MAX)
+    return null;
+  return found;
+}
 
 function refusalKey(
   result: Extract<Awaited<ReturnType<typeof askAssistant>>, { ok: false }>,
@@ -115,6 +221,7 @@ export function AssistantFlyout() {
   const t = useTranslations("shell.assistant");
   const { assistantOpen, setAssistantOpen } = useShellState();
   const pathname = usePathname();
+  const query = useSearchParams();
   const { org, ws, rest } = parseShellPath(pathname);
   const panelRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -200,6 +307,17 @@ export function AssistantFlyout() {
       active.blur();
   }, [assistantOpen]);
 
+  // Modal only where it covers the application. Cleanups run before setups, so
+  // a close hands the application back before the effect above gives focus to
+  // the launcher it is handing back to.
+  const coversTheApp = useCoversTheApp();
+  const modal = assistantOpen && coversTheApp;
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!modal || panel === null) return;
+    return inertOutside(panel);
+  }, [modal]);
+
   // Keep the newest turn in view. Guarded because scrollTo is a browser
   // affordance jsdom does not implement, and the shell's own tests mount this
   // host on every render — a cosmetic scroll must not fail them.
@@ -237,11 +355,12 @@ export function AssistantFlyout() {
      */
     const stillOurs = () => generationRef.current === asked;
     try {
+      const route = rest[0] ?? "fleet";
       const result = await askAssistant(org, ws, {
         conversationId,
         content,
-        route: rest[0] ?? "fleet",
-        entityId: rest[1] ?? null,
+        route,
+        entityId: recordOnPage(route, rest[1], query),
       });
       if (!stillOurs()) return;
       if (result.ok) {
@@ -287,6 +406,14 @@ export function AssistantFlyout() {
     <aside
       ref={panelRef}
       id={ASSISTANT_PANEL_ID}
+      // A dialog at both widths — the role does not change under a resize —
+      // and modal only at the width where it covers what it is beside. Closed,
+      // it is not a dialog at all: the host stays mounted so a half-typed
+      // message survives, and an empty dialog that nothing can reach is not
+      // what it is. `inert` already says so; the role says it to anything that
+      // reads the markup without honouring `inert`.
+      role={assistantOpen ? "dialog" : undefined}
+      aria-modal={assistantOpen ? modal : undefined}
       aria-labelledby={`${ASSISTANT_PANEL_ID}-title`}
       inert={!assistantOpen}
       data-state={assistantOpen ? "open" : "closed"}
@@ -322,7 +449,22 @@ export function AssistantFlyout() {
         </button>
       </div>
 
-      <div ref={logRef} className="min-h-0 flex-1 overflow-y-auto p-4">
+      {/*
+        The conversation, and the live region that announces it. `role="log"`
+        is polite and reads what is added, which is what an answer arriving
+        while focus is still on the composer needs; a refusal keeps its own
+        `role="alert"`, which is assertive and interrupts.
+
+        The region is this container, which renders on every pass, rather than
+        the list inside it, which appears with the first turn: a polite region
+        inserted in the same commit as the text it holds is announced
+        unreliably, so only the contents may be conditional.
+      */}
+      <div
+        ref={logRef}
+        role="log"
+        className="min-h-0 flex-1 overflow-y-auto p-4"
+      >
         {entries.length === 0 ? (
           <div
             className="flex flex-col gap-2 py-6"
