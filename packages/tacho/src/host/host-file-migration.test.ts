@@ -207,6 +207,37 @@ describe("the persisted endpoint override", () => {
       }),
     ).toEqual({ pinned: "http://127.0.0.1:4100/mcp", warning: undefined });
   });
+
+  it("refuses a URL that parses but names a scheme fetch will not follow", () => {
+    // `new URL("localhost:4100/mcp")` does not throw — it reads `localhost:`
+    // as the scheme — so the commonest typo, leaving off `https://`, cleared
+    // the parse and got pinned. The gateway then handed it to `fetch`, which
+    // refuses the scheme on every connected-app tool call, far from the
+    // enrollment that accepted it.
+    for (const raw of [
+      "localhost:4100/mcp",
+      "ftp://mcp.oxagen.sh/mcp",
+      "file:///tmp/mcp",
+    ]) {
+      const refused = mcpEndpointOverrideRequestFrom({
+        TACHO_MCP_ENDPOINT: raw,
+      });
+      expect(refused.pinned, raw).toBeUndefined();
+      expect(refused.warning, raw).toContain(raw);
+      // It parsed, so the refusal must say which fact failed rather than
+      // repeating the "not a URL" reason, which would send an operator looking
+      // for a syntax error that is not there.
+      expect(refused.warning, raw).toContain("http(s)");
+    }
+
+    // https stays accepted, so the check is narrowing the scheme rather than
+    // refusing everything that reaches it.
+    expect(
+      mcpEndpointOverrideRequestFrom({
+        TACHO_MCP_ENDPOINT: "https://mcp.oxagen.sh/mcp",
+      }),
+    ).toEqual({ pinned: "https://mcp.oxagen.sh/mcp", warning: undefined });
+  });
 });
 
 describe("a host.json written by this build", () => {

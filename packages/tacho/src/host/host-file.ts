@@ -158,12 +158,24 @@ export function mcpEndpointOverrideRequestFrom(
   const raw = env["TACHO_MCP_ENDPOINT"];
   if (typeof raw !== "string" || raw.length === 0)
     return { pinned: undefined, warning: undefined };
+  let parsed: URL;
   try {
-    new URL(raw);
+    parsed = new URL(raw);
   } catch {
     return {
       pinned: undefined,
       warning: `TACHO_MCP_ENDPOINT is not a URL (${raw}); ignoring it rather than writing a host.json that will not load`,
+    };
+  }
+  // Parsing is not enough. `new URL("localhost:4100/mcp")` SUCCEEDS — it reads
+  // `localhost:` as the scheme — so the commonest typo, omitting `https://`,
+  // parses clean and persists. The gateway then hands that value to `fetch`,
+  // which refuses the scheme on every connected-app tool call. `ftp:` and
+  // `file:` get in the same way.
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return {
+      pinned: undefined,
+      warning: `TACHO_MCP_ENDPOINT is not an http(s) URL (${raw}); ignoring it rather than pinning an endpoint fetch will refuse`,
     };
   }
   return { pinned: raw, warning: undefined };
