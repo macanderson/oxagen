@@ -20,6 +20,42 @@
 # bound to 127.0.0.1 on the instance and is not reachable from Docker's
 # bridge network at all.
 
+# Trust the ALB in front of this node, so the client address survives to the
+# services behind it.
+#
+# Caddy's `reverse_proxy` does NOT append to an inbound X-Forwarded-For unless
+# the immediate peer is a trusted proxy — it REPLACES the header with the peer's
+# own address. Measured against `caddy:2`, the image this node runs: a request
+# arriving with `X-Forwarded-For: 203.0.113.99` reached the upstream as
+# `X-Forwarded-For: 172.17.0.1` with a plain `reverse_proxy`, and as
+# `203.0.113.99, 172.17.0.1` with this block in place. So without it the API
+# never sees a client address at all — only the load balancer's — and no amount
+# of forwarded-header configuration on the application side can recover one.
+#
+# Two things downstream depend on the real client address: the IAM
+# `ip_ranges` / `ip_allow` conditions, which were therefore being evaluated
+# against the ALB, and the pre-authentication rate-limit ceilings on the Tacho
+# and Stella machine routes, which refuse to enforce a bucket they cannot
+# attribute to a caller.
+#
+# `private_ranges` rather than the VPC CIDR: the security group admits the ALB's
+# security group alone (see the header above), so the only peer that can reach
+# this listener is already the load balancer. Naming an exact CIDR here would
+# add a second place for a network change to break the client IP silently.
+#
+# After this deploys, set TRUSTED_PROXY_CIDRS for apps/api to the range these
+# proxies sit in — that is the switch that turns the pre-authentication IP
+# ceilings on, and the safe form: the app walks the chain from the right while
+# each entry is a named proxy and stops at the first that is not, so a caller
+# padding the header cannot move the result. TRUSTED_PROXY_HOP_COUNT is the
+# legacy form, still read by the IAM allowlist, and it does NOT enable those
+# ceilings. See #3167.
+{
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
 :80 {
 	route {
 		respond /healthz 200

@@ -19,7 +19,9 @@ for (const row of SIGNED_IN_ROUTES) {
     });
     page.on("pageerror", (error) => errors.push(String(error)));
 
-    const response = await page.goto(row.path, { waitUntil: "domcontentloaded" });
+    const response = await page.goto(row.path, {
+      waitUntil: "domcontentloaded",
+    });
     expect(response?.status(), `${row.path} must answer 200`).toBe(200);
 
     // The signed-in surfaces must not bounce to the sign-in page: that would be

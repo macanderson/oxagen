@@ -32,9 +32,7 @@ export const mandates: DataSource["mandates"] = {
       page: "mandates",
     });
     if (!read.ok) return read;
-    const view = MandateList.safeParse(
-      toMandateList(read.value, PAGE_SIZE),
-    );
+    const view = MandateList.safeParse(toMandateList(read.value, PAGE_SIZE));
     if (!view.success) {
       captureError({
         error: view.error,
