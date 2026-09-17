@@ -18,9 +18,17 @@
 //    the measurements behind it, not a figure copied between files.
 // 2. A whole-tree enumeration evaluates inside one of those callbacks, or inside
 //    a named function they call. The same walk at module or `describe` scope
-//    runs during collection, where no timeout of any kind governs it: it hangs
-//    the file instead of failing it, which is the worse of the two failures and
-//    the one no per-test argument can fix.
+//    runs during collection, where no timeout of any kind governs it.
+//
+// Rule 2 exists because moving a slow check to module scope LOOKS like the
+// remedy for rule 1 — no testTimeout applies there, so the timeout stops
+// failing. It does not remove the race; it removes the budget. Work outside a
+// budget cannot fail cleanly, only hang: a failure that named a file and a line
+// becomes a worker that sits there until the job timeout with no diagnostic at
+// all. Three walks in this suite had already drifted to collection scope when
+// this test landed, one of them proposed in review as the fix for exactly the
+// 5000ms timeout rule 1 governs. If you are reading this because rule 1 just
+// failed you, the answer is the named budget, not a quieter scope.
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
