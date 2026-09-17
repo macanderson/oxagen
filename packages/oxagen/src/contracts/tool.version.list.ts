@@ -51,7 +51,7 @@ export const toolVersionList = registerCapability({
     "List the workspace registry's active tool versions with their safety classification, schema origin and digest, the kill switch that stops each one today, and 30-day call counts; cursor-paged, optionally filtered by consequence tag.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   // A console read: listing the registry is never a governed action
   // (ADR-052 exclusion 2, INV-28).

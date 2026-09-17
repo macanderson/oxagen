@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
 import { dataSource } from "@/data/source";
-import { Tools } from "@/features/tools";
+import { Tools, ToolsLoading } from "@/features/tools";
 import { requireViewer } from "@/server/viewer";
-import { NotRecorded } from "@/ui/not-recorded";
 import { PageHeader } from "@/ui/page-header";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -11,24 +11,33 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("tools") };
 }
 
-// The mandates ledger (#2957, ARCHITECTURE.md §1.2). The registry,
-// connections, kill switches and auto-approval rules arrive with the #2958
-// lane, and the page says so beneath the section it does have rather than
-// leaving a reader to guess that the rest of Tools is missing.
+// The registry, the credential grants and the kill switches (#2958,
+// ARCHITECTURE.md §1.2): a tab, a category chip, the names toggle and a cursor
+// are query values on this one route, so the lane adds no route.
 export default async function ToolsPage({
   params,
+  searchParams,
 }: PageProps<"/[org]/[ws]/tools">) {
   const { org, ws } = await params;
   const ctx = await requireViewer(org, ws);
-  const t = await getTranslations("pages");
+  const [pages, t, query] = await Promise.all([
+    getTranslations("pages"),
+    getTranslations("tools"),
+    searchParams,
+  ]);
   return (
     <main
       id="main"
-      className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-10"
+      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
     >
-      <PageHeader title={t("tools")} />
-      <Tools ctx={ctx} source={dataSource()} />
-      <NotRecorded section="tools" />
+      <PageHeader
+        title={pages("tools")}
+        eyebrow={t("eyebrow", { workspace: ctx.wsName })}
+        description={t("lede")}
+      />
+      <Suspense fallback={<ToolsLoading />}>
+        <Tools ctx={ctx} source={dataSource()} searchParams={query} />
+      </Suspense>
     </main>
   );
 }

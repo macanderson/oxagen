@@ -1,0 +1,432 @@
+// The three Tools writes through the real kernel seam: the viewer resolution
+// and the kernel's invoke() are the only fakes, so each case shows what the
+// person gets back and whether the capability ran — ok, invalid (refused
+// before the kernel), and denied with the handler's reason (INV-19).
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { invoke, requireViewer } = vi.hoisted(() => ({
+  invoke: vi.fn<typeof import("@oxagen/oxagen").invoke>(),
+  requireViewer: vi.fn(),
+}));
+vi.mock("@oxagen/oxagen", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/oxagen")>()),
+  invoke,
+}));
+vi.mock("@oxagen/telemetry", () => ({ captureError: vi.fn() }));
+vi.mock("@oxagen/handlers/register", () => ({}));
+vi.mock("@oxagen/agent/register", () => ({}));
+vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
+vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+vi.mock("@/server/viewer", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/server/viewer")>()),
+  requireViewer,
+}));
+
+const kernel =
+  await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
+const { WsCtx } = await import("@/server/viewer");
+const { unsafeMint } = await import("@/server/viewer.testing");
+const { flipKillSwitch, importTools, setToolClassification } = await import(
+  "./actions"
+);
+
+const ctx = unsafeMint(WsCtx, {
+  userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  orgId: "7a000000-0000-4000-8000-0000000000a1",
+  orgSlug: "acme",
+  orgName: "Acme Robotics",
+  orgRole: "admin",
+  workspaceId: "7b000000-0000-4000-8000-000000000001",
+  wsSlug: "core-platform",
+  wsName: "Core platform",
+  wsRole: "member",
+});
+
+const TENANT = {
+  orgId: ctx.orgId,
+  workspaceId: ctx.workspaceId,
+  surface: "app",
+};
+const refused = (reason: string) =>
+  new kernel.HandlerError({ code: "forbidden", reason });
+
+beforeEach(() => {
+  invoke.mockReset();
+  requireViewer.mockReset();
+  requireViewer.mockResolvedValue(ctx);
+});
+
+describe("importTools", () => {
+  const output = {
+    serverId: "mcs_01k5s1",
+    importDigest: "d1",
+    tools: [
+      {
+        id: "tlv_1",
+        toolId: "tol_1",
+        slug: "a",
+        name: "A",
+        version: 1,
+        checksum: "c",
+        schemaOrigin: "imported" as const,
+        consequenceTags: [],
+        measures: {},
+        effectIdPath: null,
+        published: true,
+      },
+      {
+        id: "tlv_2",
+        toolId: "tol_2",
+        slug: "b",
+        name: "B",
+        version: 2,
+        checksum: "c",
+        schemaOrigin: "imported" as const,
+        consequenceTags: [],
+        measures: {},
+        effectIdPath: null,
+        published: false,
+      },
+    ],
+  };
+
+  it("imports every pin when no tool is named, and counts what landed", async () => {
+    invoke.mockResolvedValue(output);
+    expect(
+      await importTools("acme", "core-platform", {
+        serverId: " mcs_01k5s1 ",
+        tools: [],
+      }),
+    ).toEqual({
+      ok: true,
+      value: { importDigest: "d1", published: 1, unchanged: 1 },
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "import_tools",
+      { serverId: "mcs_01k5s1" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("names only the pins the person picked, blanks dropped", async () => {
+    invoke.mockResolvedValue(output);
+    await importTools("acme", "core-platform", {
+      serverId: "mcs_01k5s1",
+      tools: [" get_page ", "", "create_page"],
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "import_tools",
+      { serverId: "mcs_01k5s1", tools: ["get_page", "create_page"] },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("is refused before the kernel when the server is not named", async () => {
+    expect(
+      await importTools("acme", "core-platform", { serverId: " ", tools: [] }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "serverId",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns the handler's reason when the role gate refuses it", async () => {
+    invoke.mockRejectedValue(refused("org_role_required"));
+    expect(
+      await importTools("acme", "core-platform", {
+        serverId: "mcs_01k5s1",
+        tools: [],
+      }),
+    ).toEqual({ ok: false, reason: "denied", code: "org_role_required" });
+  });
+});
+
+describe("setToolClassification", () => {
+  const draft = {
+    toolVersionId: "tlv_01k5a1",
+    riskGrade: "critical" as const,
+    sideEffect: "irreversible" as const,
+    egress: "third_party" as const,
+    consequenceTags: ["moves_money"],
+    dataClasses: ["payment"],
+    measures: [
+      {
+        name: "amount",
+        path: "$.amount",
+        type: "money" as const,
+        currencyPath: "$.currency",
+        unit: null,
+      },
+    ],
+    reason: "  Reclassified after the Stripe audit.  ",
+  };
+
+  it("carries the four axes and rebuilds the version's measures unchanged", async () => {
+    invoke.mockResolvedValue({
+      toolVersionId: "tlv_01k5a1",
+      riskGrade: "critical",
+      classification: {
+        sideEffect: "irreversible",
+        egress: "third_party",
+        consequenceTags: ["moves_money"],
+        measures: {
+          amount: {
+            path: "$.amount",
+            type: "money",
+            currencyPath: "$.currency",
+          },
+        },
+        dataClasses: ["payment"],
+      },
+      classifiedAt: "2026-09-16T09:00:00.000Z",
+    });
+    expect(await setToolClassification("acme", "core-platform", draft)).toEqual(
+      { ok: true, value: { classifiedAt: "2026-09-16T09:00:00.000Z" } },
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      "set_tool_classification",
+      {
+        toolVersionId: "tlv_01k5a1",
+        riskGrade: "critical",
+        classification: {
+          sideEffect: "irreversible",
+          egress: "third_party",
+          consequenceTags: ["moves_money"],
+          dataClasses: ["payment"],
+          measures: {
+            amount: {
+              path: "$.amount",
+              type: "money",
+              currencyPath: "$.currency",
+            },
+          },
+        },
+        reason: "Reclassified after the Stripe audit.",
+      },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("leaves a measure's optional fields off when the version did not carry them", async () => {
+    invoke.mockResolvedValue({
+      toolVersionId: "tlv_01k5a1",
+      riskGrade: "low",
+      classification: {
+        sideEffect: "read",
+        egress: "local",
+        consequenceTags: [],
+        measures: { rows: { path: "$.rows", type: "count", unit: "rows" } },
+        dataClasses: [],
+      },
+      classifiedAt: "2026-09-16T09:00:00.000Z",
+    });
+    await setToolClassification("acme", "core-platform", {
+      ...draft,
+      riskGrade: "low",
+      sideEffect: "read",
+      egress: "local",
+      consequenceTags: [],
+      dataClasses: [],
+      measures: [
+        {
+          name: "rows",
+          path: "$.rows",
+          type: "count",
+          currencyPath: null,
+          unit: "rows",
+        },
+      ],
+      reason: "Downgraded.",
+    });
+    const [, input] = invoke.mock.calls[0] ?? [];
+    expect(input).toMatchObject({
+      classification: {
+        measures: { rows: { path: "$.rows", type: "count", unit: "rows" } },
+      },
+    });
+  });
+
+  it("is refused before the kernel when no reason is given", async () => {
+    expect(
+      await setToolClassification("acme", "core-platform", {
+        ...draft,
+        reason: "   ",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "reason",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("flipKillSwitch", () => {
+  const output = {
+    switchId: "emd_01k5c1",
+    on: true,
+    changed: true,
+    denyGeneration: { org: 13, workspace: 4 },
+    grantsRevoked: 0,
+  };
+
+  it.each([
+    ["class", "moves_money"],
+    ["tool_version", "tlv_01k5a1"],
+    ["tool_server", "mcs_01k5s1"],
+    ["connection", "mcrd_01k5c9"],
+    ["agent", "agt_01k5g1"],
+  ] as const)("flips a %s switch on with its reason", async (kind, target) => {
+    invoke.mockResolvedValue(output);
+    expect(
+      await flipKillSwitch("acme", "core-platform", {
+        kind,
+        target: ` ${target} `,
+        on: true,
+        reason: "Suspected compromise.",
+      }),
+    ).toEqual({ ok: true, value: output });
+    expect(invoke).toHaveBeenCalledWith(
+      "set_kill_switch",
+      {
+        target: { kind, id: target },
+        on: true,
+        reason: "Suspected compromise.",
+      },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it.each(["operator", "workspace", "org"] as const)(
+    "flips a %s switch, whose target the contract wants as a uuid",
+    async (kind) => {
+      invoke.mockResolvedValue({ ...output, on: false });
+      await flipKillSwitch("acme", "core-platform", {
+        kind,
+        target: "7b000000-0000-4000-8000-000000000001",
+        on: false,
+        reason: "Cleared.",
+      });
+      expect(invoke).toHaveBeenCalledWith(
+        "set_kill_switch",
+        {
+          target: { kind, id: "7b000000-0000-4000-8000-000000000001" },
+          on: false,
+          reason: "Cleared.",
+        },
+        expect.objectContaining(TENANT),
+      );
+    },
+  );
+
+  it.each([
+    ["org", ctx.orgId],
+    ["workspace", ctx.workspaceId],
+  ] as const)(
+    "supplies the %s uuid itself, because the page never prints one",
+    async (kind, id) => {
+      invoke.mockResolvedValue(output);
+      expect(
+        await flipKillSwitch("acme", "core-platform", {
+          kind,
+          target: null,
+          on: true,
+          reason: "Stop everything.",
+        }),
+      ).toEqual({ ok: true, value: output });
+      expect(invoke).toHaveBeenCalledWith(
+        "set_kill_switch",
+        {
+          target: { kind, id },
+          on: true,
+          reason: "Stop everything.",
+        },
+        expect.objectContaining(TENANT),
+      );
+    },
+  );
+
+  it("clears the workspace the card names, not the one in view", async () => {
+    invoke.mockResolvedValue({ ...output, on: false });
+    await flipKillSwitch("acme", "core-platform", {
+      kind: "workspace",
+      target: "7b000000-0000-4000-8000-0000000000ff",
+      on: false,
+      reason: "The sibling workspace is back.",
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "set_kill_switch",
+      {
+        target: {
+          kind: "workspace",
+          id: "7b000000-0000-4000-8000-0000000000ff",
+        },
+        on: false,
+        reason: "The sibling workspace is back.",
+      },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("is refused before the kernel when a level that needs a target got none", async () => {
+    expect(
+      await flipKillSwitch("acme", "core-platform", {
+        kind: "class",
+        target: null,
+        on: true,
+        reason: "Stop money movement.",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "target.id",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("reports the grants a connection switch revoked", async () => {
+    invoke.mockResolvedValue({ ...output, grantsRevoked: 31 });
+    const result = await flipKillSwitch("acme", "core-platform", {
+      kind: "connection",
+      target: "mcrd_01k5c9",
+      on: true,
+      reason: "Key probe.",
+    });
+    expect(result.ok && result.value.grantsRevoked).toBe(31);
+  });
+
+  it("is refused before the kernel when the target is not a uuid the contract accepts", async () => {
+    expect(
+      await flipKillSwitch("acme", "core-platform", {
+        kind: "org",
+        target: "acme",
+        on: true,
+        reason: "Stop everything.",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "target.id",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns the handler's reason when the role gate refuses it", async () => {
+    invoke.mockRejectedValue(refused("org_role_required"));
+    expect(
+      await flipKillSwitch("acme", "core-platform", {
+        kind: "class",
+        target: "moves_money",
+        on: true,
+        reason: "Stop money movement.",
+      }),
+    ).toEqual({ ok: false, reason: "denied", code: "org_role_required" });
+  });
+});

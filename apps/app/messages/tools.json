@@ -1,11 +1,295 @@
 {
   "tools": {
+    "eyebrow": "Workspace · {workspace}",
+    "lede": "The registry is the only source of tools an agent can see. What an agent may do with one is the classification below, the grants the broker mints, and the switches that can deny it at any level.",
+    "loading": "Loading tools",
+    "notCarried": "not recorded",
+    "nextPage": "Next page",
+    "roles": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "member": "Member",
+      "billing": "Billing",
+      "compliance": "Compliance",
+      "viewer": "Viewer"
+    },
+    "tabs": {
+      "label": "Tools sections",
+      "registry": "Registry",
+      "connections": "Connections",
+      "switches": "Kill switches",
+      "mandates": "Mandates",
+      "switchesOn": "{count, plural, one {# on} other {# on}}",
+      "switchesOnAtLeast": "{count, plural, one {# or more on} other {# or more on}}"
+    },
+    "gate": {
+      "open": "Open",
+      "killed_version": "Killed · this version",
+      "killed_server": "Killed · its server",
+      "killed_class": "Killed · its class"
+    },
+    "registry": {
+      "title": "Tool versions",
+      "lead": "Access reaches the version. A server shipping a new version does not silently widen a belt.",
+      "categories": "Filter by consequence tag",
+      "allCategories": "All",
+      "categoriesNote": "These tags and counts are this page of the registry. A tag carried only by a version on a later page appears once you reach that page.",
+      "allOnPage": "All on this page",
+      "categoriesDeclaredNote": "These chips and the Category column show the tags recorded with a version's classification. A version can also carry tags declared where it was published, and both the filter and a class kill switch match those too — so a tag can select a version whose row shows none, and the Financial column can confirm a money tag but never rule one out.",
+      "categoriesFilteredNote": "While a tag is selected, these chips count only the versions matching it: they are the tags carried alongside that one, not the registry's. Clear the filter to see the rest.",
+      "unclassified": "Unclassified",
+      "noTags": "No tag",
+      "emptyCategory": "No tool version on this page carries that tag.",
+      "gateNote": "The gate shown is today’s, in the recorded order: the version’s own kill switch, then its server’s, then a class switch matching its consequence tags.",
+      "empty": {
+        "title": "No tool version is registered",
+        "body": "Until a server is imported, no agent in this workspace has a belt, and every call by name is unknown_tool. Import a registered MCP server to pull its tools/list, version it, and store its schema."
+      },
+      "columns": {
+        "version": "Tool version",
+        "category": "Category",
+        "hazard": "Hazard",
+        "gate": "Gate today",
+        "egress": "Egress",
+        "financial": "Financial",
+        "origin": "Schema origin",
+        "digest": "Digest",
+        "calls": "Calls 30d"
+      },
+      "names": {
+        "label": "Tool names",
+        "labels": "Labels",
+        "api": "API names"
+      },
+      "risk": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "critical": "Critical"
+      },
+      "sideEffect": {
+        "read": "read",
+        "write": "write",
+        "irreversible": "irreversible"
+      },
+      "egress": {
+        "local": "local",
+        "org_tenant": "org tenant",
+        "third_party": "third party"
+      },
+      "financial": {
+        "yes": "Moves money"
+      },
+      "origin": {
+        "declared": "Declared",
+        "imported": "Imported"
+      }
+    },
+    "tool": {
+      "yes": "Yes",
+      "no": "No",
+      "unclassified": "Not classified yet",
+      "source": {
+        "builtin": "Built in",
+        "custom": "Custom",
+        "mcp": "MCP server",
+        "foundry": "Foundry"
+      },
+      "facts": {
+        "id": "Version id",
+        "capability": "Governed as",
+        "source": "Source",
+        "gate": "Gate today",
+        "origin": "Schema origin",
+        "digest": "Schema digest",
+        "readOnly": "Read only",
+        "enabled": "Enabled",
+        "classifiedAt": "Classified",
+        "measures": "Measures",
+        "updatedAt": "Updated"
+      },
+      "classify": {
+        "lead": "Classification describes the tool and decides nothing by itself: a class kill switch matches a version by its consequence tags at call time, and the approval rules are written against it. Reclassifying is a governed action and is recorded in Audit.",
+        "riskGrade": "Risk grade",
+        "sideEffect": "Side effect",
+        "egress": "Egress",
+        "consequenceTags": "Consequence tags",
+        "tagsHint": "Space- or comma-separated, snake_case. The starter set is moves_money, destroys_data, alters_production, communicates_externally, changes_access, changes_entitlement; a tag of your own that fits the pattern is accepted.",
+        "dataClasses": "Data classes",
+        "dataClassesHint": "One per line. A data class is free text up to 64 characters, so it may contain spaces: customer financial data is one class, not three.",
+        "dataClassesPlaceholder": "customer financial data",
+        "reason": "Reason",
+        "reasonHint": "Recorded on the version. The security event carries the actor and the capability, not the reason.",
+        "confirm": "Reclassify this version",
+        "pending": "Reclassifying…",
+        "denied": "Reclassifying a tool version needs an organization Owner or Admin.",
+        "tagsPlaceholder": "moves_money destroys_data"
+      }
+    },
+    "import": {
+      "open": "Import tools from an MCP server",
+      "title": "Import tools from an MCP server",
+      "body": "Pulls the registered server’s pinned tools/list into this workspace’s registry: one immutable version per changed manifest. Re-importing an unchanged server changes nothing.",
+      "serverId": "Server",
+      "tools": "Tools",
+      "toolsHint": "Space- or comma-separated names. Leave it blank to import every pinned tool the server has.",
+      "confirm": "Import",
+      "pending": "Importing…",
+      "done": "{published, plural, =0 {No new version} one {# new version} other {# new versions}} · {unchanged, plural, =0 {nothing unchanged} one {# already registered} other {# already registered}}.",
+      "serverIdPlaceholder": "mcs_…"
+    },
+    "connections": {
+      "title": "Credential grants",
+      "lead": "Every credential the broker put to use for a tool server on behalf of a run, with the connection it drew on and how far it was narrowed. No agent holds any of these; the agent sees the result, never the credential.",
+      "noRun": "Outside a run",
+      "brokerNote": "For each dispatched call the broker mints the narrowest credential the provider allows — a token exchange, a session policy, a restricted key, or the stored credential used server-side for that call only.",
+      "notCarriedNote": "The record carries the server the credential was presented to, not the tool version or the agent that asked for it, so neither is shown here rather than guessed.",
+      "empty": {
+        "title": "No credential has been put to use",
+        "body": "A grant is recorded the first time a governed run reaches a tool server through a stored connection."
+      },
+      "columns": {
+        "grant": "Grant",
+        "server": "Tool server",
+        "run": "Run",
+        "connection": "Connection",
+        "scope": "Scope",
+        "ttl": "TTL",
+        "state": "State"
+      },
+      "ttl": "{minutes}m",
+      "downscope": {
+        "token_exchange": "token exchange",
+        "session_policy": "session policy",
+        "restricted_key": "restricted key",
+        "none": "server-side only"
+      },
+      "authKind": {
+        "oauth": "oauth",
+        "secret": "secret"
+      },
+      "status": {
+        "active": "Active",
+        "expired": "Expired",
+        "revoked": "Revoked"
+      }
+    },
+    "switches": {
+      "title": "Deny is available at every level",
+      "lead": "A flip takes effect at the next call boundary by bumping the deny generation, so every live run token is re-checked at its next call. Runs in flight are not killed; their next call fails closed and the frame names the switch and the reason.",
+      "generation": "Deny generation: {org} organization-wide, {workspace} in this workspace.",
+      "classHeading": "Class switches · organization-wide, in one action",
+      "scopedHeading": "Scoped switches",
+      "empty": "No kill switch has ever been flipped in this workspace. Flip one to record the first.",
+      "truncated": "This board shows the {limit} newest switches and the record holds more, so the count on the tab is a floor. An older switch that is still denying is not on this page; flip it through the API or MCP, which name a switch by its target rather than by a page.",
+      "allowing": "allowing",
+      "denying": "denying",
+      "flippedByUnrecorded": "not recorded",
+      "takesEffect": "at the next call boundary, through deny generation {generation}",
+      "kinds": {
+        "class": "Consequence class",
+        "org": "Organization",
+        "workspace": "Workspace",
+        "tool_server": "Tool server",
+        "tool_version": "Tool version",
+        "connection": "Connection",
+        "agent": "Agent",
+        "operator": "Operator"
+      },
+      "blastRadius": {
+        "class": "Every tool version carrying this consequence tag, across the organization — including one imported tomorrow.",
+        "org": "Every agent in every workspace of this organization.",
+        "workspace": "Every agent in this workspace.",
+        "tool_server": "Every tool version this server has published.",
+        "tool_version": "This version only. Another version of the same tool is untouched.",
+        "connection": "This connection, and every credential grant behind it: live grants are revoked with the flip.",
+        "agent": "This agent, on every run.",
+        "operator": "Every agent this operator is accountable for."
+      },
+      "facts": {
+        "blastRadius": "Blast radius",
+        "takesEffect": "Takes effect",
+        "flippedBy": "Flipped by",
+        "reason": "Reason",
+        "clearedAt": "Cleared"
+      },
+      "dialog": {
+        "openHeader": "Flip a kill switch",
+        "openDeny": "Deny now",
+        "openAllow": "Allow again",
+        "titleDeny": "Flip this switch on",
+        "titleAllow": "Clear this switch",
+        "kind": "Level",
+        "target": "Target",
+        "targetHint": {
+          "class": "The consequence tag every stopped tool carries, such as moves_money.",
+          "org": "This organization.",
+          "workspace": "This workspace.",
+          "tool_server": "The server’s id, mcs_….",
+          "tool_version": "The version’s id, tlv_….",
+          "connection": "The stored credential’s id, mcrd_….",
+          "agent": "The agent’s id, agt_….",
+          "operator": "The person’s user id."
+        },
+        "blastTitle": "Blast radius",
+        "blastBody": "Every affected call is denied at its next boundary. Nothing in flight is killed, and nothing is destroyed — you can clear this switch at any time.",
+        "restoreTitle": "What this restores",
+        "restoreBody": "Denied calls resume at the next boundary. Nothing that was denied while the switch was on is retried.",
+        "classNote": "A class switch names no server and no agent: it matches a tool version by its declared consequence tags, so a tool imported tomorrow carrying this tag is denied the moment it enters the registry.",
+        "connectionNote": "A connection switch also revokes every credential grant that drew on it.",
+        "reason": "Reason — recorded on every denied call",
+        "takesEffect": "Takes effect",
+        "takesEffectValue": "next call boundary · deny generation {from} → {to}",
+        "takesEffectValueIfChanged": "next call boundary · deny generation {from} → {to}, if this flip changes the switch. A target already denied at this level is left as it is, and nothing advances.",
+        "recordedAs": "Recorded as",
+        "recordedAsValue": "a security event, with who, when and why",
+        "confirmDeny": "Deny now",
+        "confirmAllow": "Allow again",
+        "pending": "Recording…",
+        "unchanged": "Nothing changed: the switch was already that way, so no deny generation advanced and nothing new was recorded."
+      },
+      "noNames": "A flip records the user id of whoever made it. The record carries no display name, so this page prints the id rather than guessing at a person."
+    },
+    "failure": {
+      "back": "Back to Fleet",
+      "denied": {
+        "title": "You cannot see the tool registry",
+        "body": "The roles you hold on this organization do not include the tool read on this workspace. An owner can grant it, and the grant is itself a governed action in the audit record.",
+        "signedIn": "Signed in as: {role}",
+        "needed": "Needed:",
+        "decidedBy": "Decided by: the workspace’s decision rules — deny wins over every allow."
+      },
+      "pending": {
+        "title": "Access to this workspace’s tools is waiting for approval",
+        "body": "Access request {request}"
+      },
+      "error": {
+        "title": "Tools could not be loaded",
+        "body": "Nothing was changed. Runs kept recording while this page was down — frames are written by the gateway, not by Mission Control.",
+        "code": "{code} · {status}",
+        "retry": "Try again"
+      }
+    },
+    "actions": {
+      "failure": {
+        "orgRoleRequired": "This needs an organization Owner or Admin. Nothing was changed.",
+        "noPrincipal": "This session carries no person to record the action against. Nothing was changed.",
+        "serverNotFound": "No registered tool server has that id in this workspace.",
+        "versionNotFound": "No tool version has that id in this workspace.",
+        "killSwitchOn": "A kill switch names this target, so it cannot be changed until the switch is cleared.",
+        "refused": "Refused: {code}. Nothing was changed.",
+        "invalid": "Check the values above and try again.",
+        "pendingApproval": "This is waiting for approval. Access request {accessRequestId}.",
+        "unavailable": "Could not be recorded ({code}). Nothing was changed."
+      }
+    },
     "mandates": {
       "title": "Mandates ledger",
       "lead": "The mandates this workspace has recorded — granted, requested, expired and revoked — with what each has settled, what calls in flight hold, and what is left. A mandate is the only thing that lets an agent carry a consequence, and every draw on it reserves, then settles or releases.",
       "empty": "This workspace has recorded no mandate: none granted, and none requested.",
       "emptyDetail": "A call that carries a consequence tag with no mandate is denied before dispatch, whether or not the tool is on the agent's belt.",
       "notGranted": "not granted",
+      "requestedBy": "requested by {user}",
       "columns": {
         "mandate": "Mandate",
         "agent": "Agent",

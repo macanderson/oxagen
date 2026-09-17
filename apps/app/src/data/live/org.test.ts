@@ -40,6 +40,7 @@ const wsCtx = unsafeMint(WsCtx, {
   workspaceId: "7a000000-0000-4000-8000-0000000000c3",
   wsSlug: "core-platform",
   wsName: "Core platform",
+  wsRole: "member",
 });
 
 const member = {

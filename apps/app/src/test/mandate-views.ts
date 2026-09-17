@@ -4,8 +4,14 @@
 // builders because three features read it and no feature may reach into
 // another's folder. Test support only: src/test is never in a production
 // bundle.
+//
+// Values only, no DataSource. The ledger became a tab on the #2958 Tools page,
+// so its tests render through that page's own `toolsSource`
+// (`features/tools/tools.builders.ts`), which answers every Tools read
+// including this one. A second stub of the same seam is a second place for it
+// to fall behind `DataSource` — which is exactly what happened while the two
+// lanes were apart.
 import type { MandateList, MandateRow } from "@/data/contracts/mandates";
-import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
 
 const money = (micros: string) =>
@@ -71,55 +77,4 @@ export function callsAuthority(): MandateRow["authority"][number] {
     settledRatio: 0.22,
     reservedRatio: 0.02,
   });
-}
-
-/** A DataSource answering the mandates read it was handed; `calls` records its arguments. */
-export function toolsSource(read: Read<MandateList>) {
-  const calls: unknown[][] = [];
-  const refuse = () => Promise.reject(new Error("not a Tools read"));
-  const source: DataSource = {
-    pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse },
-    billing: {
-      plan: refuse,
-      usageCredits: refuse,
-      bucket: refuse,
-      contractRate: refuse,
-      invoices: refuse,
-    },
-    runs: { list: refuse },
-    approvals: { pending: refuse },
-    agents: {
-      list: refuse,
-      get: refuse,
-      toolbelt: refuse,
-      incidents: refuse,
-    },
-    mandates: {
-      list: (...args: unknown[]) => {
-        calls.push(args);
-        return Promise.resolve(read);
-      },
-    },
-    spend: {
-      byGroup: refuse,
-      fleet: refuse,
-      drill: refuse,
-      waste: refuse,
-      budgets: refuse,
-      findings: refuse,
-      findingEvidence: refuse,
-    },
-    org: {
-      members: refuse,
-      roles: refuse,
-      workspaces: refuse,
-      apiKeys: refuse,
-    },
-    audit: { events: refuse, exportEvents: refuse },
-    skills: { inventory: refuse },
-    steering: { records: refuse, proposals: refuse, contextPr: refuse },
-    onboarding: { state: refuse, firstFrame: refuse },
-  };
-  return { source, calls };
 }

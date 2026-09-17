@@ -4,11 +4,11 @@
 // page part-built renders it beneath the sections it does have, naming what is
 // still missing.
 import { useTranslations } from "next-intl";
-import { UNRECORDED, type UnrecordedKey } from "@/data/unrecorded";
+import { type UnrecordedKey, unrecordedRow } from "@/data/unrecorded";
 
 export function NotRecorded({ section }: { section: UnrecordedKey }) {
   const t = useTranslations("unrecorded");
-  const { gap } = UNRECORDED[section];
+  const { gap } = unrecordedRow(section);
   return (
     <p
       data-testid="not-recorded"

@@ -65,6 +65,7 @@ Writes `iam.emergency_denies` (insert on; `active = false`, `deactivated_at`, `c
 
 - `PUT /v1/{org}/{ws}/kill-switches`
 - MCP tool `set_kill_switch` (an API key acts as its creator at the role gate, ADR-072 decision 8)
+- App: **Tools → Kill switches → Flip a kill switch** at `/{org}/{ws}/tools?tab=switches` — the switch dialog states the blast radius and the deny-generation bump before the confirming button.
 
 ## Errors
 

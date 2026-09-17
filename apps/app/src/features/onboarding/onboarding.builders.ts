@@ -132,6 +132,11 @@ export function onboardingSource(reads: Reads): {
       proposals: refuse("steering.proposals"),
       contextPr: refuse("steering.contextPr"),
     },
+    tools: {
+      versions: refuse("tools.versions"),
+      grants: refuse("tools.grants"),
+      killSwitches: refuse("tools.killSwitches"),
+    },
   };
   return { source, calls };
 }

@@ -54,6 +54,11 @@ const viewer = (orgRole: OrgRole) =>
     workspaceId: "7b000000-0000-4000-8000-000000000001",
     wsSlug: "core-platform",
     wsName: "Core platform",
+    // The viewer's role in this workspace (#3145). Independent of the org
+    // role these suites vary, and read by nothing outside `viewer-resolution`
+    // yet, so it is the same constant #3145 used across its own twenty
+    // fixtures rather than a second thing for a reader to interpret.
+    wsRole: "member",
   });
 
 const ctx = viewer("owner");

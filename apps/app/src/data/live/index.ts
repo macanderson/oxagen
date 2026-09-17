@@ -14,6 +14,7 @@ import { shell } from "./shell";
 import { skills } from "./skills";
 import { spend } from "./spend";
 import { steering } from "./steering";
+import { tools } from "./tools";
 
 export const liveSource: DataSource = {
   pretenant,
@@ -29,4 +30,5 @@ export const liveSource: DataSource = {
   audit,
   skills,
   steering,
+  tools,
 };

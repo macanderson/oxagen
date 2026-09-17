@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 // Every route under /[org] renders between WL-08 and its page item
-// (ARCHITECTURE.md §8): Tools renders the mandates ledger its lane landed
-// (#2957) and, under it, the UNRECORDED row naming the tabs #2958 still owes;
-// the other rev1 pages render the title alone. Each page names itself once from its pages.* key (§1.2), resolves
+// (ARCHITECTURE.md §8): every page renders its title, and the one that still
+// waits on its lane would render its UNRECORDED row under it. Each page names itself once from its pages.* key (§1.2), resolves
 // its viewer first and renders nothing for a person requireViewer refuses.
 // Fleet hands its viewer, the data source and the runs cursor to the Fleet
 // feature (WL-34) and renders the cost rollup's two tiles under its title
@@ -10,7 +9,9 @@
 // cursor the URL names, to the Agents feature (#2956); Spend hands its viewer,
 // the data source and the query to its body (#2962); Skills hands its viewer,
 // the data source and the cursor to its body (#3098); Steering hands its viewer,
-// the data source and the query to the Steering feature (#2961); Billing hands
+// the data source and the query to the Steering feature (#2961); Tools hands
+// theirs, with the tab and the chips the URL names, to the Tools feature
+// (#2958); Billing hands
 // its viewer, the data source, the checkout outcome and the invoices cursor to
 // the Billing feature (WL-38); People renders its sections from org.members and
 // API keys its table from org.apiKeys. Run gains its body in WL-35.
@@ -37,9 +38,10 @@ const {
   Roles,
   Workspaces,
   OnboardingGate,
-  Tools,
   Skills,
   SkillsLoading,
+  Tools,
+  ToolsLoading,
   members,
   workspaces,
   apiKeys,
@@ -56,9 +58,6 @@ const {
     Agents: vi.fn((_props: Record<string, unknown>) => null),
     Agent: vi.fn((_props: Record<string, unknown>) => null),
     AgentSource: vi.fn((_props: Record<string, unknown>) => null),
-    Tools: vi.fn((_props: Record<string, unknown>) => (
-      <p data-testid="tools-body" />
-    )),
     Steering: vi.fn((props: { searchParams: Record<string, string> }) => (
       <p data-testid="steering-body" data-tab={props.searchParams.tab} />
     )),
@@ -78,6 +77,10 @@ const {
       <p data-testid="skills-body" />
     )),
     SkillsLoading: vi.fn(() => null),
+    Tools: vi.fn((props: { searchParams: Record<string, string> }) => (
+      <p data-testid="tools-body" data-tab={props.searchParams.tab} />
+    )),
+    ToolsLoading: vi.fn(() => null),
     members,
     workspaces,
     apiKeys,
@@ -98,7 +101,6 @@ vi.mock("@/features/billing", () => ({ Billing }));
 vi.mock("@/features/fleet", () => ({ Fleet }));
 vi.mock("@/features/agents", () => ({ Agents, Agent, AgentSource }));
 vi.mock("@/features/steering", () => ({ Steering }));
-vi.mock("@/features/tools", () => ({ Tools }));
 vi.mock("@/features/spend", () => ({ Spend, FleetSpendTiles }));
 // People stays real, so the organization page still renders a roster; the two
 // sections the #2964 lane adds are stubbed to show what each route hands them.
@@ -109,6 +111,7 @@ vi.mock("@/features/organization", async (importOriginal) => ({
 }));
 vi.mock("@/features/onboarding", () => ({ OnboardingGate }));
 vi.mock("@/features/skills", () => ({ Skills, SkillsLoading }));
+vi.mock("@/features/tools", () => ({ Tools, ToolsLoading }));
 vi.mock("@/data/source", () => ({ dataSource: () => source }));
 vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
@@ -153,9 +156,8 @@ const ORG = ["acme"];
 const WS = ["acme", "core-platform"];
 const title = translator("pages");
 
-const TOOLS: Load = () => import("./[ws]/tools/page");
-
 const SKILLS: Load = () => import("./[ws]/skills/page");
+const TOOLS: Load = () => import("./[ws]/tools/page");
 const STEERING: Load = () => import("./[ws]/steering/page");
 
 const FLEET: Load = () => import("./[ws]/page");
@@ -173,18 +175,33 @@ const BILLING: Load = () => import("./billing/page");
 const AUDIT: Load = () => import("./audit/page");
 
 describe("the Tools page", () => {
-  it("resolves the workspace viewer, names the page once, hands the viewer and the data source to Tools, and says what the page still owes", async () => {
-    const ctx = { orgSlug: "acme", wsSlug: "core-platform" };
-    requireViewer.mockResolvedValue(ctx);
-    await expectPageTitle(await TOOLS(), routeProps(SEGMENTS), title("tools"));
-    expect(requireViewer).toHaveBeenCalledWith(...WS);
-    expect(Tools).toHaveBeenCalledOnce();
-    expect(Tools.mock.calls[0]?.[0]).toEqual({ ctx, source });
-    expect(screen.getByTestId("tools-body")).toBeInTheDocument();
-    expect(screen.getByTestId("not-recorded")).toHaveAttribute(
-      "data-section",
-      "tools",
+  it("resolves the workspace viewer, names the page once under the workspace eyebrow and hands the viewer, the data source and the query to Tools", async () => {
+    const viewer = { wsSlug: "core-platform", wsName: "Core platform" };
+    requireViewer.mockResolvedValue(viewer);
+    const page = await expectPageTitle(
+      await TOOLS(),
+      routeProps(SEGMENTS, { tab: "switches", names: "api" }),
+      title("tools"),
     );
+    expect(requireViewer).toHaveBeenCalledWith(...WS);
+    expect(page).toHaveTextContent("Workspace · Core platform");
+    expect(Tools).toHaveBeenCalledOnce();
+    expect(Tools.mock.calls[0]?.[0]).toEqual({
+      ctx: viewer,
+      source,
+      searchParams: { tab: "switches", names: "api" },
+    });
+    expect(screen.getByTestId("tools-body")).toHaveAttribute(
+      "data-tab",
+      "switches",
+    );
+    // Tools has a page, so the UNRECORDED row it used to render is gone (§3.6).
+    expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+
+  it("hands Tools the registry with no query when the URL carries none", async () => {
+    await expectPageTitle(await TOOLS(), routeProps(SEGMENTS), title("tools"));
+    expect(Tools.mock.calls.at(-1)?.[0]).toMatchObject({ searchParams: {} });
   });
 });
 

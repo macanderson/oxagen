@@ -60,6 +60,7 @@ const source: DataSource = {
   skills: { inventory: refuse },
   mandates: { list: refuse },
   steering: { records: refuse, proposals: refuse, contextPr: refuse },
+  tools: { versions: refuse, grants: refuse, killSwitches: refuse },
 };
 const deps: AuditExportDeps = { resolveViewer, dataSource: () => source };
 

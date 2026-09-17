@@ -46,7 +46,7 @@ export const credentialGrantList = registerCapability({
     "List the credential broker's grants for the workspace: every credential put to use for a tool server on behalf of a run, with the connection, the scope it could reach, its TTL and whether it is still live. Newest first, cursor-paged; never returns secret material.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   agent: {

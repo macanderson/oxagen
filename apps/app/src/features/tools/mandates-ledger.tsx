@@ -50,7 +50,23 @@ function Row({ mandate }: { mandate: MandateRow }) {
       </td>
       <td className="px-3 py-2">
         {mandate.grantedBy === null ? (
-          <span className="text-muted-foreground">{t("notGranted")}</span>
+          // Nobody granted it, so the accountable name in this cell is the
+          // operator who asked. `requestedBy` was on the view model and no
+          // surface rendered it, so a ledger of drafts said only "not granted"
+          // — an accountability record that could not say who sought the
+          // authority. Null only when the row records no requester, which a
+          // direct grant does not have.
+          <>
+            <span className="text-muted-foreground">{t("notGranted")}</span>
+            {mandate.requestedBy === null ? null : (
+              <div
+                data-requested-by={mandate.requestedBy}
+                className="text-xs text-muted-foreground"
+              >
+                {t("requestedBy", { user: mandate.requestedBy })}
+              </div>
+            )}
+          </>
         ) : (
           <>
             <span className={`${mono} break-all`}>{mandate.grantedBy}</span>
