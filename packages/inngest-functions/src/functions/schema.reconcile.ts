@@ -316,6 +316,61 @@ export const RELATIONSHIP_WRITE_BACK_CYPHER = `MATCH (a:GraphNode)-[r]->(b:Graph
    RETURN count(r) AS written`;
 
 /**
+ * Remove every reserved key from a relationship property bag.
+ *
+ * Reconciliation's only job is an organisation's OWN properties. These keys are
+ * the platform's — tenancy, the bi-temporal bounds, and `is_system` — and two
+ * of the ways into this bag are not the organisation:
+ *
+ *  - `derivedProps` is typed `z.record(z.unknown())`, so the model may return
+ *    ANY key, including ones nobody asked for. Model output is untrusted data,
+ *    not an author's intent.
+ *  - `schema.property.upsert` accepts any non-empty name up to 200 characters
+ *    (`key: z.string().min(1).max(200)`), so a schema may legitimately DECLARE
+ *    `is_system`, and a declared-required-with-description key is exactly what
+ *    the derivation prompt asks the model to invent.
+ *
+ * Both were checked at source and both are reachable. They meet here, which is
+ * why the fix is here rather than at either of them.
+ *
+ * WHAT IT PREVENTS, and the second harm is the worse one. A customer edge that
+ * acquires `is_system = true` is excluded from every later reconciliation by
+ * {@link NON_SYSTEM_RELATIONSHIP_FILTER} — visible if anyone looks. But that
+ * filter is also part of the predicate the BATCH SELECTION runs, and the batch
+ * is paginated with `SKIP`. Shrink the result set while the offset advances and
+ * rows slide past it unvisited: relationships the job promises to reconcile are
+ * silently never processed, with no error, no counter and nothing in the log.
+ *
+ * Stripping makes that structural rather than incidental. The relationship
+ * write is `SET r += $props` and touches only `r`; the selection predicate
+ * reads `type(r)` (immutable), the endpoints' tenancy and `is_system` (the
+ * write never touches a node), and `r.is_system`. With reserved keys gone from
+ * `$props`, THE LOOP'S OWN WRITES CANNOT CHANGE ITS OWN SELECTION PREDICATE —
+ * which is the property that makes paginating over it safe from itself.
+ *
+ * It does not make `SKIP` pagination safe from everything, and this comment
+ * does not claim it: a concurrent writer and the absence of a total order are
+ * both still there. See the ORDER BY and the note on the batch read.
+ *
+ * NODE property bags are deliberately NOT stripped. A node's properties are a
+ * JSON string, so `createdAt` or `orgId` inside that bag is ordinary customer
+ * data rather than a graph property — which is the same reason
+ * `buildPrunedProperties` is called without a reserved set on the node path.
+ */
+export function stripReservedRelationshipKeys(bag: Record<string, unknown>): {
+  kept: Record<string, unknown>;
+  stripped: string[];
+} {
+  const kept = emptyPropertyBag();
+  const stripped: string[] = [];
+  for (const [key, value] of Object.entries(bag)) {
+    if (RESERVED_RELATIONSHIP_PROPERTY_KEYS.has(key)) stripped.push(key);
+    else kept[key] = value;
+  }
+  return { kept, stripped };
+}
+
+/**
  * Build the parameter map for one relationship's write-back.
  *
  * `SET r += $props` MERGES: a key omitted from the map stays on the
@@ -360,7 +415,13 @@ export function buildRelationshipWriteBackProps(
   // null here is never the graph's own state — it is an AI-derived property
   // the model returned as null, or a caller-supplied bag. Either way it must
   // not delete anything.
-  for (const [key, value] of Object.entries(retained)) {
+  // Reserved keys never ride the write. `+=` MERGES, so a key the map does not
+  // mention is left exactly as it is — which is what "retain" means, and is
+  // strictly better than re-writing the value the read happened to see. This is
+  // the chokepoint, so the invariant holds whatever put the key in the bag.
+  for (const [key, value] of Object.entries(
+    stripReservedRelationshipKeys(retained).kept,
+  )) {
     if (value !== null && value !== undefined) props[key] = value;
   }
   for (const key of removedKeys) {
@@ -820,6 +881,7 @@ export const [schemaReconcile] = createFunction(
             `MATCH (n:GraphNode)
              WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId AND n.label IN $labels
              RETURN n.publicId AS nodeId, n.label AS label, n.properties AS properties, n.displayName AS displayName
+             ORDER BY nodeId
              SKIP $skip LIMIT $batchSize`,
             {
               orgId,
@@ -964,6 +1026,30 @@ Return only the derived property key-value pairs in the derivedProps field.`,
 
           for (;;) {
             const batchResult = await session.run(
+              // PAGINATION, and what it is and is not safe against.
+              //
+              // ORDER BY gives the pages a defined boundary. Without it Cypher
+              // guarantees no row order at all, so consecutive SKIP windows can
+              // overlap or omit rows with nothing mutating anything. The key is
+              // the endpoints' publicIds (application-generated, uniqueness-
+              // constrained) then type, with the element id only as a tiebreak
+              // between sibling relationships.
+              //
+              // The loop's OWN writes can no longer move a row out of this set:
+              // `SET r += $props` touches only `r`, and reserved keys are
+              // stripped from $props, so `r.is_system` — the one predicate
+              // input a write could reach — is untouchable. See
+              // stripReservedRelationshipKeys.
+              //
+              // What remains, stated rather than implied: a CONCURRENT writer
+              // (ingestion, alias promotion, another reconcile, a customer's
+              // own BYO endpoint) that inserts or deletes a matching
+              // relationship between two pages still shifts every later offset,
+              // and rows slide past unvisited with no error and no counter.
+              // SKIP over a live graph is not sound against that; a keyset
+              // cursor over the ordering key would be, and relationships have
+              // no stable application id to key one on today. That is a
+              // separate piece of work and is not closed by this change.
               `MATCH (a:GraphNode)-[r]->(b:GraphNode)
              WHERE a.orgId = $orgId AND a.workspaceId = $workspaceId
                AND ${FAR_ENDPOINT_TENANT_FILTER}
@@ -971,6 +1057,7 @@ Return only the derived property key-value pairs in the derivedProps field.`,
                AND ${NON_SYSTEM_RELATIONSHIP_FILTER}
              RETURN elementId(r) AS relElemId, type(r) AS relType, properties(r) AS props,
                     a.publicId AS startId, b.publicId AS endId
+             ORDER BY startId, endId, relType, relElemId
              SKIP $skip LIMIT $batchSize`,
               {
                 orgId,
@@ -1041,8 +1128,23 @@ Return only the derived property key-value pairs in the derivedProps field.`,
                     object.derivedProps &&
                     typeof object.derivedProps === "object"
                   ) {
-                    newProps = { ...newProps, ...object.derivedProps };
-                    relUpdated = true;
+                    // Stripped HERE as well as at the write chokepoint, so the
+                    // model's attempt is visible and the counters stay honest:
+                    // merging a reserved key would flip `relUpdated` for a
+                    // change that is then, correctly, never written.
+                    const { kept, stripped } = stripReservedRelationshipKeys(
+                      object.derivedProps as Record<string, unknown>,
+                    );
+                    if (stripped.length > 0) {
+                      logger.warn(
+                        { relElemId, relType, stripped },
+                        "schema.reconcile: model returned platform-reserved relationship keys; discarded",
+                      );
+                    }
+                    if (Object.keys(kept).length > 0) {
+                      newProps = { ...newProps, ...kept };
+                      relUpdated = true;
+                    }
                   }
                 } catch (aiErr) {
                   logger.warn(

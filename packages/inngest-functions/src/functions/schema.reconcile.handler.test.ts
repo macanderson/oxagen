@@ -582,6 +582,132 @@ describe("schemaReconcile Inngest handler", () => {
     });
   });
 
+  it("processes every relationship across pages when derivation returns is_system", async () => {
+    // THE PAGINATION HALF, and it needs more than one page to fail on.
+    //
+    // The batch selection excludes edges with is_system = true. If a page's own
+    // writes set that on the rows they touch, the result set SHRINKS while
+    // `skip` advances, and rows slide past the offset unvisited — never
+    // processed, with no error, no counter and nothing in the log.
+    //
+    // So the session mock is a SIMULATED STORE rather than a fixed sequence: it
+    // holds rows, answers the batch query by applying the predicate and then
+    // SKIP/LIMIT, and applies each write to the row it names. A canned response
+    // sequence cannot fail on this, because the fixture, not the code, decides
+    // what page two contains.
+    const { tx, m } = makeTx();
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
+
+    m.schemaVersionsFindFirst.mockResolvedValue({
+      id: "ver-1",
+      versionNumber: 1,
+    });
+    m.schemasFindMany.mockResolvedValue([{ id: "s-1", name: "mySchema" }]);
+    m.schemaActivationsFindMany.mockResolvedValue([]);
+    m.nodeLabelsFindMany.mockResolvedValue([]);
+    m.relTypesFindMany.mockResolvedValue([{ id: "rt-1", name: "RELATES_TO" }]);
+    // `weight` is required WITH a description, which is what makes the handler
+    // call the model at all.
+    m.propertiesFindMany.mockResolvedValue([
+      {
+        id: "p-1",
+        nodeLabelId: null,
+        relationshipTypeId: "rt-1",
+        key: "weight",
+        dataType: "number",
+        required: false,
+        description: null,
+      },
+      {
+        id: "p-2",
+        nodeLabelId: null,
+        relationshipTypeId: "rt-1",
+        key: "score",
+        dataType: "number",
+        required: true,
+        description: "a score",
+      },
+    ]);
+
+    // Two full pages and a bit: BATCH_SIZE is 50.
+    const TOTAL = 120;
+    interface Row {
+      id: string;
+      props: Record<string, unknown>;
+    }
+    const store: Row[] = Array.from({ length: TOTAL }, (_, i) => ({
+      id: `elem-${String(i).padStart(3, "0")}`,
+      props: { weight: 0.5 },
+    }));
+    const selectable = () =>
+      store.filter((row) => row.props.is_system !== true);
+
+    const recordFor = (row: Row) => ({
+      get: (key: string): unknown =>
+        ({
+          relElemId: row.id,
+          relType: "RELATES_TO",
+          props: { ...row.props },
+          startId: `a-${row.id}`,
+          endId: `b-${row.id}`,
+        })[key],
+    });
+
+    const processed: string[] = [];
+    mocks.sessionRun.mockImplementation(
+      async (cypher: string, params: Record<string, unknown>) => {
+        if (cypher.includes("RETURN count(r) AS total")) {
+          return { records: [makeCountRecord(selectable().length)] };
+        }
+        if (cypher.includes("SKIP $skip LIMIT $batchSize")) {
+          const skip = Number(params.skip ?? 0);
+          const size = Number(params.batchSize ?? 50);
+          return {
+            records: selectable()
+              .slice(skip, skip + size)
+              .map(recordFor),
+          };
+        }
+        if (cypher.includes("SET r += $props")) {
+          const row = store.find((r) => r.id === params.relElemId);
+          if (!row) return { records: [makeCountRecord(0)] };
+          processed.push(row.id);
+          Object.assign(row.props, params.props as Record<string, unknown>);
+          return { records: [makeCountRecord(1)] };
+        }
+        return { records: [] };
+      },
+    );
+
+    // The model answers with the key it was asked for AND one it was not.
+    // `derivedProps` is typed z.record(z.unknown()), so nothing stops it.
+    mocks.generateObjectFor.mockResolvedValue({
+      object: { derivedProps: { score: 1, is_system: true } },
+    });
+
+    const result = await capturedHandler!({
+      event: { data: { ...BASE_EVENT_DATA, prune: false } },
+      step: makeStep(),
+    });
+
+    const r = result as Record<string, unknown>;
+    // Every row is visited. Before the reserved-key strip, the first page's
+    // writes marked 50 rows is_system, the set shrank to 70, and `skip = 50`
+    // then landed past rows that had moved down — they were never read again.
+    expect(r.processedRelationships).toBe(TOTAL);
+    expect(new Set(processed).size).toBe(TOTAL);
+
+    // And the cause: not one row carries the key the model tried to set.
+    expect(store.filter((row) => row.props.is_system === true)).toEqual([]);
+    expect(store.every((row) => row.props.score === 1)).toBe(true);
+    expect(mocks.logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ stripped: ["is_system"] }),
+      expect.stringContaining("platform-reserved relationship keys"),
+    );
+  });
+
   it("counts nothing when the write-back matches nothing", async () => {
     // The relationship the batch read saw is gone, or its element id now names
     // a different one, so the re-identified write matches zero rows. Before the

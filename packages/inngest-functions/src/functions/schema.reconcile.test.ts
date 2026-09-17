@@ -12,6 +12,7 @@ import {
   PLATFORM_RELATIONSHIP_TYPES,
   RELATIONSHIP_WRITE_BACK_CYPHER,
   RESERVED_RELATIONSHIP_PROPERTY_KEYS,
+  stripReservedRelationshipKeys,
 } from "./schema.reconcile";
 
 describe("buildPrunedProperties (schema.reconcile pure helper)", () => {
@@ -418,6 +419,21 @@ describe("schema reconciliation excludes platform-owned relationships", () => {
   });
 });
 
+/**
+ * Source with `//` comment lines removed, for the structural assertions below.
+ *
+ * They count occurrences of query text, and a doc comment that DESCRIBES the
+ * query — "ORDER BY gives the pages a defined boundary" — counts as one. That
+ * is a test failing on prose, which teaches the next author to write less of
+ * it. Comments are stripped so these assertions read code.
+ */
+function codeOnly(source: string): string {
+  return source
+    .split("\n")
+    .filter((line) => !/^\s*(?:\/\/|\/\*|\*)/.test(line))
+    .join("\n");
+}
+
 // ── Unmarked platform edges already in the graph ─────────────────────────────
 
 interface CandidateRow {
@@ -568,7 +584,7 @@ describe("the platform relationship-type list cannot drift from its rationale", 
     // The filter references $platformRelTypes. A query that embeds it without
     // passing the list fails at the driver, which is the wrong place to find
     // out — so every embedding site is checked here instead.
-    const calls = source.split("session.run(").slice(1);
+    const calls = codeOnly(source).split("session.run(").slice(1);
     const embedding = calls.filter((chunk) =>
       /NON_SYSTEM_RELATIONSHIP_FILTER|RELATIONSHIP_WRITE_BACK_CYPHER/.test(
         chunk.slice(0, 1200),
@@ -892,5 +908,87 @@ describe("every relationship site anchors both endpoints", () => {
       nearOccurrences,
       "a near anchor without a far anchor beside it is the defect",
     ).toBe(3);
+  });
+});
+
+// ── A model's extra key is not a customer property ───────────────────────────
+
+describe("reserved relationship keys never reach the write", () => {
+  it("strips every reserved key and keeps everything else", () => {
+    const bag: Record<string, unknown> = { weight: 0.9, note: "keep" };
+    for (const key of RESERVED_RELATIONSHIP_PROPERTY_KEYS) bag[key] = "taken";
+
+    const { kept, stripped } = stripReservedRelationshipKeys(bag);
+    expect(Object.keys(kept).sort()).toEqual(["note", "weight"]);
+    expect(stripped.sort()).toEqual(
+      [...RESERVED_RELATIONSHIP_PROPERTY_KEYS].sort(),
+    );
+  });
+
+  it("keeps is_system out of the parameter map the driver sends", () => {
+    // The reported route: derivation returns is_system, the write persists it,
+    // and NON_SYSTEM_RELATIONSHIP_FILTER then excludes that customer edge from
+    // every later reconciliation.
+    const props = buildRelationshipWriteBackProps(
+      { weight: 0.9, is_system: true },
+      [],
+    );
+    expect(Object.keys(props)).toEqual(["weight"]);
+    expect(Object.entries(props)).not.toContainEqual(["is_system", true]);
+  });
+
+  it("leaves a reserved key alone rather than re-writing it", () => {
+    // `SET r += $props` MERGES, so a key the map does not mention is left
+    // exactly as it is. That IS retention, and it is better than re-writing the
+    // value the read happened to see.
+    const props = buildRelationshipWriteBackProps(
+      { weight: 0.9, orgId: "org-1", createdAt: "2026-01-01T00:00:00Z" },
+      [],
+    );
+    expect(Object.keys(props)).toEqual(["weight"]);
+  });
+
+  it("is what makes the loop unable to move a row out of its own batch", () => {
+    // The structural claim, stated as an assertion: the selection predicate
+    // reads only type(r) (immutable), the endpoints (the write touches neither)
+    // and r.is_system — and no reserved key can reach $props from any source.
+    const hostile: Record<string, unknown> = { weight: 1 };
+    for (const key of RESERVED_RELATIONSHIP_PROPERTY_KEYS) hostile[key] = true;
+    const written = Object.keys(buildRelationshipWriteBackProps(hostile, []));
+    for (const key of RESERVED_RELATIONSHIP_PROPERTY_KEYS) {
+      expect(written).not.toContain(key);
+    }
+  });
+});
+
+describe("the batch reads have a defined page boundary", () => {
+  const source = readFileSync(
+    new URL("./schema.reconcile.ts", import.meta.url),
+    "utf8",
+  );
+
+  it("orders both paginated reads before SKIP", () => {
+    // Cypher guarantees NO row order without ORDER BY, so consecutive SKIP
+    // windows can overlap or omit rows even with nothing mutating.
+    // Checked by ADJACENCY rather than by counting: every `SKIP` must have an
+    // `ORDER BY` as the line directly above it. Counting both and comparing
+    // would pass if someone added a third ordered query and an unordered
+    // paginated one in the same change.
+    const lines = codeOnly(source).split("\n");
+    const paginated = lines
+      .map((line, i) => ({ line, i }))
+      .filter(({ line }) => line.includes("SKIP $skip LIMIT $batchSize"));
+
+    expect(paginated.length).toBe(2);
+    for (const { i } of paginated) {
+      expect(
+        lines[i - 1]?.trim(),
+        `the read at line ${i + 1} paginates with no defined order`,
+      ).toMatch(/^ORDER BY /);
+    }
+    expect(lines[paginated[0]!.i - 1]?.trim()).toBe("ORDER BY nodeId");
+    expect(lines[paginated[1]!.i - 1]?.trim()).toBe(
+      "ORDER BY startId, endId, relType, relElemId",
+    );
   });
 });
