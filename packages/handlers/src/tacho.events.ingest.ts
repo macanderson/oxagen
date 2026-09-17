@@ -1340,8 +1340,20 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       // Refused on either path: the row this batch hit is sealed, is a
       // different chain wearing the same uuid, or moved under the read its
       // frames were folded against. Its events are not that session's evidence
-      // and are not acknowledged.
-      if (!accepted) refusedSessions.add(sessionUuid);
+      // and nothing of it is written.
+      //
+      // Reported as a chain break rather than silently dropped: the daemon
+      // already surfaces these (`onChainBreak`), so an operator sees that a
+      // batch was not recorded instead of wondering where it went.
+      if (!accepted) {
+        refusedSessions.add(sessionUuid);
+        chainBreaks.push({
+          session_uuid: sessionUuid,
+          at_seq: first.seq,
+          reason:
+            "this session is already sealed, begins with a different genesis, or moved under the read this batch was folded against; the batch was not recorded",
+        });
+      }
 
       const sessionRow = await tx.query.tachoSessions.findFirst({
         where: eq(schema.tachoSessions.sessionUuid, sessionUuid),
@@ -1493,18 +1505,21 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   // to a colleague's row. The session's person is `initiatingPrincipalId` /
   // `initiatingUserId`, which this deployment issues rather than the harness
   // reports (#3072).
-  // Only the events whose session accepted them.
+  // Only the events whose session accepted them reach ClickHouse.
   //
   // `tacho_events` is a ReplacingMergeTree keyed by session and seq, so a
   // refused batch's frames would REPLACE the winning chain's rows for the same
-  // sequences — the authoritative session rejected the batch and its raw
-  // evidence overwrote the accepted chain's anyway. And acknowledging them
-  // makes the daemon's spool mark the whole batch shipped, so the events are
-  // gone from the host too.
+  // sequences: the authoritative session rejected the batch and its raw
+  // evidence overwrote the accepted chain's anyway.
   //
-  // A refused session's events are simply not acknowledged: they are absent
-  // from the ClickHouse write and from `event_ids`, so the daemon keeps them
-  // and re-sends. That is the honest answer — the batch was not accepted.
+  // The RESPONSE still acknowledges them, and deliberately. The daemon's
+  // shipper marks the whole submitted batch shipped on any success — it does
+  // not read `event_ids` — so withholding them does not make it re-send, it
+  // makes it delete the only remaining copy. And a re-send would not help
+  // either: a refused batch belongs to a chain that cannot be recorded under
+  // that uuid, or to a session already sealed, so retrying it forever is the
+  // other way to be wrong. The refusal is reported as a chain break instead,
+  // which the daemon already surfaces.
   const kept = input.events.filter(
     (event) => !result.refusedSessions.has(event.session_uuid),
   );
@@ -1550,8 +1565,12 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   }
 
   return {
-    accepted: kept.length,
-    event_ids: kept.map((event) => event.event_id_idem),
+    // Every submitted event, not just `kept`. See the note above: the shipper
+    // does not read `event_ids`, and the contract requires at least one, so an
+    // all-refused batch answered with zero is an `invalid_output` the daemon
+    // retries for ever.
+    accepted: input.events.length,
+    event_ids: input.events.map((event) => event.event_id_idem),
     chain_breaks: result.chainBreaks,
     body_rejections: bodyRejections,
     control: result.control,

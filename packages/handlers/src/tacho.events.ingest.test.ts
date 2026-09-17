@@ -1800,7 +1800,7 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     expect(mocks.recordSpend).not.toHaveBeenCalled();
   });
 
-  it("acknowledges none of a refused batch's events", async () => {
+  it("writes none of a refused batch's events, and acknowledges them anyway", async () => {
     // `tacho_events` is a ReplacingMergeTree keyed by session and seq, so a
     // refused batch's frames would REPLACE the winning chain's rows for the
     // same sequences — the authoritative session rejected the batch and its raw
@@ -1823,11 +1823,51 @@ describe("ingest_tacho_events: bodies and the seal", () => {
 
     const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
 
-    // Not written…
+    // Not written: a ReplacingMergeTree keyed by session and seq would let
+    // these frames replace the winning chain's rows for the same sequences.
     expect(mocks.insertTachoEvents).toHaveBeenCalledWith([]);
-    // …and not acknowledged, so the daemon keeps them and re-sends.
-    expect(output.accepted).toBe(0);
-    expect(output.event_ids).toEqual([]);
+    // …but still acknowledged. The shipper marks the whole submitted batch
+    // shipped on any success and does not read `event_ids`, so withholding
+    // them deletes the only remaining copy rather than causing a re-send — and
+    // the contract requires at least one, so a zero answer is an
+    // `invalid_output` the daemon retries for ever.
+    expect(output.accepted).toBe(events.length);
+    expect(output.event_ids).toEqual(events.map((e) => e.event_id_idem));
+    // The refusal is reported rather than silent.
+    expect(output.chain_breaks).toEqual([
+      {
+        session_uuid: SESSION,
+        at_seq: 0,
+        reason: expect.stringContaining("already sealed"),
+      },
+    ]);
+  });
+
+  it("answers a refused batch within the output contract", async () => {
+    // `tachoEventsIngest.output` requires `accepted >= 1` and a non-empty
+    // `event_ids`, and the kernel validates handler output — so an all-refused
+    // batch answered with zero is surfaced as `invalid_output`, not as a
+    // usable response, and the daemon retries it for ever.
+    const db = fakeDb();
+    const events = sessionWithContent("gateway");
+    servedChain(db, events);
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "gateway",
+      sealedAt: new Date("2026-09-08T09:40:00.000Z"),
+      genesisHash: (events[0] as TachoEvent).hash,
+    });
+    db.hideSessionFromRead = true;
+    wire(db);
+
+    const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
+
+    // Parsed against the real contract rather than eyeballed: this is the one
+    // response shape where every session was refused, and it is exactly the
+    // shape the schema is strictest about.
+    expect(() => tachoEventsIngest.output.parse(output)).not.toThrow();
   });
 
   it("counts a new session only when the statement inserted one", async () => {
@@ -1998,10 +2038,10 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     const row = db.sessions.get(SESSION);
     expect(row?.["lastHash"]).toBe(foreignHead);
     expect(row?.["genesisHash"]).toBe(`sha256:${"d".repeat(64)}`);
-    // And the batch is not acknowledged, so the daemon keeps it.
-    expect(output.accepted).toBe(0);
-    expect(output.event_ids).toEqual([]);
+    // Nothing of the batch is written, and the refusal is reported rather than
+    // dropped in silence.
     expect(mocks.insertTachoEvents).toHaveBeenCalledWith([]);
+    expect(output.chain_breaks.map((b) => b.session_uuid)).toContain(SESSION);
   });
 
   it("refuses a batch whose session advanced under the read its frames were folded against", async () => {
@@ -2042,11 +2082,10 @@ describe("ingest_tacho_events: bodies and the seal", () => {
 
     // The winner's head stands, unwritten by the loser.
     expect(db.sessions.get(SESSION)?.["seqCount"]).toBe(events.length);
-    // And the loser's frames are not acknowledged, so they are re-sent rather
-    // than counted twice or lost.
-    expect(output.accepted).toBe(0);
-    expect(output.event_ids).toEqual([]);
+    // The loser's frames are not written — folding them again would count the
+    // winner's own increments a second time — and the refusal is reported.
     expect(mocks.insertTachoEvents).toHaveBeenCalledWith([]);
+    expect(output.chain_breaks.map((b) => b.session_uuid)).toContain(SESSION);
   });
 
   it("does not re-seal a row another request sealed first", async () => {
