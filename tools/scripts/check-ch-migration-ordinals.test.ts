@@ -22,7 +22,9 @@ import {
   ordinalOf,
   sqlFilesIn,
   staleExemptions,
-  unprefixed,
+  malformed,
+  overlooked,
+  sortOrderConflicts,
 } from "./check-ch-migration-ordinals.mjs";
 
 /** What is actually on disk right now. */
@@ -48,7 +50,8 @@ describe("the real migrations directory", () => {
       (g) => g.unexempt.length > 0,
     );
     expect(offending).toEqual([]);
-    expect(unprefixed(REAL)).toEqual([]);
+    expect(malformed(REAL)).toEqual([]);
+    expect(sortOrderConflicts(REAL)).toEqual([]);
     expect(staleExemptions(REAL)).toEqual([]);
   });
 
@@ -134,6 +137,125 @@ describe("a new duplicate", () => {
   });
 });
 
+describe("ordinal width", () => {
+  // Codex, #3192 r4036258976. The guard compared the ordinal's REPRESENTATION
+  // rather than its value: "27" and "0027" are the same ordinal and different
+  // strings, so a short prefix collided with nothing and the runner then
+  // ordered it wrongly. Every case here passed the old `/^(\d+)_/` rule.
+
+  it("rejects a short prefix, which the old rule accepted as ordinal 27", () => {
+    expect(/^(\d+)_/.exec("27_extension.sql")?.[1]).toBe("27"); // the old rule
+    expect(ordinalOf("27_extension.sql")).toBeNull(); // this one
+    expect(malformed([...REAL, "27_extension.sql"])).toEqual([
+      "27_extension.sql",
+    ]);
+  });
+
+  it("rejects an over-wide prefix for the same reason", () => {
+    expect(/^(\d+)_/.exec("00027_extension.sql")?.[1]).toBe("00027");
+    expect(ordinalOf("00027_extension.sql")).toBeNull();
+  });
+
+  it("does not let a short prefix pass as a duplicate of the padded ordinal", () => {
+    // The first half of the finding: `27_` never collided with `0027_`, so two
+    // files could claim ordinal 27 and the duplicate check said nothing. It is
+    // reported now — as malformed rather than as a duplicate, because the name
+    // is wrong before the collision is.
+    const files = [...REAL, "27_extension.sql"].sort();
+    expect(
+      offendingDuplicates(files).filter((g) => g.unexempt.length > 0),
+    ).toEqual([]);
+    expect(malformed(files)).toEqual(["27_extension.sql"]);
+  });
+
+  it("rejects digits with no separator, and a separator that is not an underscore", () => {
+    expect(ordinalOf("0027extension.sql")).toBeNull();
+    expect(ordinalOf("0027-extension.sql")).toBeNull();
+    expect(malformed([...REAL, "0027extension.sql", "0031-x.sql"])).toEqual([
+      "0027extension.sql",
+      "0031-x.sql",
+    ]);
+  });
+
+  it("accepts the four-digit form every file on disk already uses", () => {
+    expect(malformed(REAL)).toEqual([]);
+    // Including the grandfathered names — requiring four digits must not
+    // reject a file nobody is allowed to rename.
+    for (const g of GRANDFATHERED) expect(ordinalOf(g)).not.toBeNull();
+  });
+});
+
+describe("apply order versus ordinal order", () => {
+  // The dangerous half of the finding, asserted as the property rather than
+  // through the width rule that implies it. If the width rule is ever loosened,
+  // this still fails.
+
+  it("agrees for the real directory", () => {
+    expect(sortOrderConflicts(REAL)).toEqual([]);
+  });
+
+  it("catches the inversion a short prefix causes", () => {
+    // '2' sorts after '0', so the file calling itself 27 applies after 0028.
+    const files = [...REAL, "0028_later.sql", "27_extension.sql"].sort();
+    const bad = sortOrderConflicts(
+      files.filter((f) => /^\d+_/.test(f)).map((f) => f),
+    );
+    // With the strict rule, 27_extension.sql has no ordinal and is excluded
+    // here (malformed reports it), so the remaining files are consistent.
+    expect(bad).toEqual([]);
+    expect(malformed(files)).toEqual(["27_extension.sql"]);
+  });
+
+  it("catches the inversion when the width rule is loosened to the old one", () => {
+    // With the strict width rule this function can never report anything —
+    // four-digit ordinals make lexicographic order and numeric order the same
+    // relation. That would leave it an assertion nobody could falsify, so the
+    // ordinal reader is injectable and this test supplies the OLD loose rule
+    // and watches the inversion it allowed get caught.
+    const loose = (f: string) => /^(\d+)_/.exec(f)?.[1] ?? null;
+    const files = ["0027_tacho.sql", "0028_later.sql", "27_extension.sql"];
+
+    // The old rule accepts all three, and this is the order migrate() applies
+    // them in: the file calling itself 27 runs last.
+    expect(files.map(loose)).toEqual(["0027", "0028", "27"]);
+    expect([...files].sort()).toEqual([
+      "0027_tacho.sql",
+      "0028_later.sql",
+      "27_extension.sql",
+    ]);
+
+    const conflicts = sortOrderConflicts(files, loose);
+    expect(conflicts.length).toBeGreaterThan(0);
+    expect(conflicts[0]!.position).toBe(1);
+    expect(conflicts[0]!.applied).toBe("0028_later.sql");
+    expect(conflicts[0]!.expected).toBe("27_extension.sql");
+  });
+
+  it("agrees on a padded set spanning a digit boundary", () => {
+    // 9 -> 10 -> 100 is where unpadded ordinals would invert, and where the
+    // padding earns its keep.
+    expect(
+      sortOrderConflicts(["0009_nine.sql", "0010_ten.sql", "0100_hundred.sql"]),
+    ).toEqual([]);
+  });
+});
+
+describe("files the runner skips in silence", () => {
+  it("reports a migration whose extension is not a lowercase .sql", () => {
+    // Both this guard and migrate() filter on `.endsWith(".sql")`, so
+    // 0029_thing.SQL is a migration that never runs and never complains. The
+    // guard is the only thing positioned to notice, because by construction
+    // the runner cannot.
+    expect(overlooked([...REAL, "0029_thing.SQL"])).toEqual(["0029_thing.SQL"]);
+    expect(overlooked([...REAL, "0030_thing.Sql"])).toEqual(["0030_thing.Sql"]);
+  });
+
+  it("does not flag ordinary .sql files or unrelated entries", () => {
+    expect(overlooked(REAL)).toEqual([]);
+    expect(overlooked([...REAL, "README.md", "notes.txt"])).toEqual([]);
+  });
+});
+
 describe("exemptions that stop matching the tree", () => {
   it("are reported when a grandfathered file is renamed away", () => {
     // Renaming 0020_eval_item_results.sql to a free ordinal would resolve the
@@ -159,7 +281,7 @@ describe("ordinalOf", () => {
 
   it("returns null for a file with no ordinal, which the guard reports", () => {
     expect(ordinalOf("schema.sql")).toBeNull();
-    expect(unprefixed([...REAL, "no_ordinal.sql"])).toEqual(["no_ordinal.sql"]);
+    expect(malformed([...REAL, "no_ordinal.sql"])).toEqual(["no_ordinal.sql"]);
   });
 
   it("does not read a number from the middle of a name", () => {

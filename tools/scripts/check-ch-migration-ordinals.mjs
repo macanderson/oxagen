@@ -87,9 +87,33 @@ export const GRANDFATHERED = Object.freeze([
   "0026_stella_operational_events.sql",
 ]);
 
-/** The leading numeric prefix, or null for a filename that has none. */
+/**
+ * The ordinal width every migration uses, and the reason the width is fixed.
+ *
+ * `migrate()` applies files in `readdirSync(dir).sort()` order — a plain
+ * lexicographic sort of the whole filename. Lexicographic order equals NUMERIC
+ * order only while every ordinal has the same number of digits. Drop a digit
+ * and the two part company: `27_extension.sql` sorts AFTER `0028_later.sql`,
+ * because '2' sorts after '0', so a file calling itself 27 would apply last.
+ *
+ * That is also why a short prefix is not merely untidy: `"27"` and `"0027"` are
+ * different strings, so grouping by the captured text would not see
+ * `27_extension.sql` as a second file under 0027 either. It would pass this
+ * guard on both counts while being wrong on both — caught by Codex on #3192.
+ *
+ * So four digits are required rather than normalised. Normalising would group
+ * the ordinals correctly and leave the apply order still wrong, which is the
+ * half-fix that reads as a fix.
+ */
+const ORDINAL_DIGITS = 4;
+const ORDINAL_RE = new RegExp(`^(\\d{${ORDINAL_DIGITS}})_`);
+
+/**
+ * The leading ordinal, or null for a filename that does not carry one in the
+ * exact fixed-width form. Anything null is reported by `malformed` below.
+ */
 export function ordinalOf(filename) {
-  const m = /^(\d+)_/.exec(filename);
+  const m = ORDINAL_RE.exec(filename);
   return m ? m[1] : null;
 }
 
@@ -112,9 +136,48 @@ export function duplicateOrdinals(filenames) {
     .sort((a, b) => a.ordinal.localeCompare(b.ordinal));
 }
 
-/** `.sql` files whose name does not start with a numeric prefix. */
-export function unprefixed(filenames) {
+/**
+ * `.sql` files that do not carry an ordinal in the exact `NNNN_` form — no
+ * digits at all, too few, too many, or not followed by an underscore.
+ */
+export function malformed(filenames) {
   return filenames.filter((f) => ordinalOf(f) === null).sort();
+}
+
+/**
+ * The invariant the whole guard exists to protect, asserted directly rather
+ * than through the fixed-width rule that implies it: the order `migrate()`
+ * applies these files in must be the order their ordinals ask for.
+ *
+ * Returns the pairs where the two disagree. Files with no valid ordinal are
+ * excluded — `malformed` reports those, and including them here would say the
+ * same thing twice.
+ *
+ * Checking the property and not only its proxy matters because the proxy could
+ * be replaced by a looser one later and this would still fail. `readOrdinal` is
+ * injectable for exactly that reason: with the strict width rule in place this
+ * function can never report anything, which would make it an assertion nobody
+ * could falsify. A test injects the old loose rule and watches it catch the
+ * inversion that rule allowed, so the check is demonstrated rather than assumed.
+ */
+export function sortOrderConflicts(filenames, readOrdinal = ordinalOf) {
+  const ordered = filenames.filter((f) => readOrdinal(f) !== null);
+  const byName = [...ordered].sort();
+  const byOrdinal = [...ordered].sort((a, b) => {
+    const d = Number(readOrdinal(a)) - Number(readOrdinal(b));
+    return d !== 0 ? d : a.localeCompare(b);
+  });
+  const conflicts = [];
+  for (let i = 0; i < byName.length; i++) {
+    if (byName[i] !== byOrdinal[i]) {
+      conflicts.push({
+        position: i,
+        applied: byName[i],
+        expected: byOrdinal[i],
+      });
+    }
+  }
+  return conflicts;
 }
 
 /**
@@ -147,10 +210,30 @@ export function staleExemptions(filenames, exempt = GRANDFATHERED) {
   return exempt.filter((f) => !onDisk.has(f));
 }
 
-export function sqlFilesIn(dir) {
-  return readdirSync(dir)
-    .filter((f) => f.endsWith(".sql"))
+/**
+ * Directory entries that look like a migration but that BOTH this guard and
+ * `migrate()` skip, because both filter on a lowercase `.sql` suffix.
+ *
+ * `0029_thing.SQL` is the shape: it carries a well-formed ordinal, it reads as
+ * a migration to anyone looking at the directory, and it never runs. Nothing
+ * fails, nothing is logged, and the table it was supposed to create is simply
+ * absent — the same silence as the ledger defect this PR is about, arriving by
+ * a different route. This guard is the only thing positioned to notice, since
+ * by construction the runner cannot.
+ */
+export function overlooked(entries) {
+  return entries
+    .filter((f) => !f.endsWith(".sql") && /^\d+[_-].*\.sql$/i.test(f))
     .sort();
+}
+
+/** Every entry in the migrations directory, `.sql` or not. */
+export function allEntriesIn(dir) {
+  return readdirSync(dir).sort();
+}
+
+export function sqlFilesIn(dir) {
+  return allEntriesIn(dir).filter((f) => f.endsWith(".sql"));
 }
 
 const isEntrypoint =
@@ -158,7 +241,8 @@ const isEntrypoint =
   import.meta.url === new URL(`file://${process.argv[1]}`).href;
 
 if (isEntrypoint) {
-  const files = sqlFilesIn(MIGRATIONS_DIR);
+  const entries = allEntriesIn(MIGRATIONS_DIR);
+  const files = entries.filter((f) => f.endsWith(".sql"));
   const problems = [];
 
   for (const group of offendingDuplicates(files)) {
@@ -174,9 +258,27 @@ if (isEntrypoint) {
     );
   }
 
-  for (const f of unprefixed(files)) {
+  for (const f of malformed(files)) {
     problems.push(
-      `  ${f} has no NNNN_ prefix, so migrate() cannot order it by intent.`,
+      `  ${f} does not carry a ${ORDINAL_DIGITS}-digit NNNN_ ordinal.\n` +
+        "    migrate() sorts whole filenames, so an ordinal of any other width\n" +
+        "    applies in the wrong place: 27_x.sql runs AFTER 0028_y.sql.",
+    );
+  }
+
+  for (const c of sortOrderConflicts(files)) {
+    problems.push(
+      `  apply order disagrees with ordinal order at position ${c.position}:\n` +
+        `    migrate() would apply  ${c.applied}\n` +
+        `    the ordinals ask for   ${c.expected}`,
+    );
+  }
+
+  for (const f of overlooked(entries)) {
+    problems.push(
+      `  ${f} is named like a migration but does not end in a lowercase .sql,\n` +
+        "    so migrate() skips it silently and it never runs. Rename the\n" +
+        "    extension to .sql, or remove the file.",
     );
   }
 
@@ -189,14 +291,13 @@ if (isEntrypoint) {
 
   if (problems.length > 0) {
     console.error(
-      "check-ch-migration-ordinals: ClickHouse migration ordinals are not unique.\n\n" +
+      "check-ch-migration-ordinals: the ClickHouse migrations directory would not\napply in the order its filenames claim.\n\n" +
         problems.join("\n\n") +
         "\n\n" +
         "migrate() orders migrations/*.sql by sorting the full filename, so two\n" +
         "files under one ordinal run in whatever order their text happens to give.\n" +
-        "Give the new file the next free ordinal. Do NOT rename a migration that\n" +
-        "has shipped: `_migrations.filename` is the ledger's key, so a rename makes\n" +
-        "the file unrecorded and it runs again on every existing deployment.\n",
+        `Give the new file the next free ordinal, ${ORDINAL_DIGITS} digits wide. Do NOT rename a migration that\n" +
+        "has shipped: \`_migrations.filename\` is the ledger's key, so a rename makes\nthe file unrecorded and it runs again on every existing deployment.\n`,
     );
     process.exit(1);
   }
