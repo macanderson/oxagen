@@ -20,7 +20,9 @@ import {
   parseActionsAnnual,
   parseFloorUsd,
   sanitizeUrl,
+  shouldWriteAllowance,
   topUpCents,
+  unprovisionableReason,
   usdToCents,
 } from "./provision-enterprise-org";
 
@@ -172,5 +174,45 @@ describe("isLocalHost", () => {
     "localhost.evil.com:5432",
   ])("treats %o as remote, so --apply must be confirmed", (host) => {
     expect(isLocalHost(host)).toBe(false);
+  });
+});
+
+describe("shouldWriteAllowance", () => {
+  // The documented recurring top-up command passes no --actions-annual, so
+  // without this guard the default replaced a negotiated commitment and the
+  // organisation began paying overage on terms nobody changed (#3140,
+  // discussion_r4031855536).
+  it("leaves a stored commitment alone when the flag was not given", () => {
+    expect(shouldWriteAllowance(25_000_000n, false)).toBe(false);
+    expect(shouldWriteAllowance(0n, false)).toBe(false);
+  });
+
+  it("writes when the operator supplied a figure", () => {
+    expect(shouldWriteAllowance(25_000_000n, true)).toBe(true);
+  });
+
+  it("fills a column that holds nothing either way", () => {
+    // An enterprise org with no recorded figure is the mis-provisioned state
+    // billing_enterprise_allowance_missing alerts on, so leaving it empty is
+    // not a kindness.
+    expect(shouldWriteAllowance(null, false)).toBe(true);
+    expect(shouldWriteAllowance(undefined, false)).toBe(true);
+  });
+});
+
+describe("unprovisionableReason", () => {
+  // org.list and workspace.list hide an organisation specifically while its
+  // status is 'deleted'. The script writes status: 'active', and the target
+  // queries never filtered on status, so provisioning resurrected a deleted
+  // tenant and re-exposed its retained workspaces (#3140,
+  // discussion_r4032251333).
+  it("refuses a deleted organisation", () => {
+    expect(unprovisionableReason("deleted")).toMatch(/re-expose the tenant/);
+  });
+
+  it("allows the statuses provisioning is meant to repair", () => {
+    for (const status of ["active", "suspended", "past_due", "trialing"]) {
+      expect(unprovisionableReason(status)).toBeUndefined();
+    }
   });
 });

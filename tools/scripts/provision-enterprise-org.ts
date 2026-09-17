@@ -99,7 +99,7 @@ import { URL, pathToFileURL } from "node:url";
 import kleur from "kleur";
 import { and, count, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
-import { db, closeDatabase, schema } from "@oxagen/database";
+import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import {
   createCreditLot,
@@ -162,6 +162,26 @@ export function sanitizeUrl(raw: string): { host: string; database: string } {
   }
 }
 
+/**
+ * Statuses this script refuses to act on.
+ *
+ * `org.list` and `workspace.list` hide an organisation specifically while its
+ * status is `deleted`, so writing `status: 'active'` over it resurrects the
+ * tenant and re-exposes its retained workspaces and data. Deleting an
+ * organisation is a decision; undoing it is not something a provisioning run
+ * should do on the way past, and the target queries do not filter on status.
+ */
+export const UNPROVISIONABLE_STATUSES: ReadonlySet<string> = new Set([
+  "deleted",
+]);
+
+/** Why this organisation cannot be provisioned, or undefined when it can. */
+export function unprovisionableReason(status: string): string | undefined {
+  return UNPROVISIONABLE_STATUSES.has(status)
+    ? `status is '${status}' — provisioning would set it back to 'active' and re-expose the tenant. Restore it deliberately first, then re-run.`
+    : undefined;
+}
+
 export function isLocalHost(host: string): boolean {
   return /^(localhost|127\.0\.0\.1|::1)(:\d+)?$/.test(host);
 }
@@ -217,6 +237,25 @@ export function parseActionsAnnual(raw: string | undefined): number {
   return parseWholeNumberFlag(raw, "--actions-annual", 0);
 }
 
+/**
+ * Whether a recorded commitment may be overwritten with `actionsAnnual`.
+ *
+ * The documented recurring top-up command does not pass `--actions-annual`, so
+ * without this an org provisioned with a negotiated 25,000,000 had that figure
+ * silently replaced by the 1,500,000 default on the next maintenance run — and
+ * the org began paying overage on a commitment nobody changed.
+ *
+ * So: write when the operator asked for a figure, and otherwise only to fill a
+ * column that holds nothing. A stored figure and no flag is a signed commitment
+ * being left alone, not a difference to reconcile.
+ */
+export function shouldWriteAllowance(
+  stored: bigint | number | null | undefined,
+  flagGiven: boolean,
+): boolean {
+  return flagGiven || stored === null || stored === undefined;
+}
+
 export function usdToCents(usd: number): bigint {
   return BigInt(usd) * CENTS_PER_USD;
 }
@@ -259,9 +298,9 @@ async function confirm(question: string): Promise<boolean> {
  * including the credit floor, which is the part someone is usually standing
  * there waiting for — and say plainly which one thing it could not do.
  */
-async function hasNegotiatedAllowanceColumn(
-  d: ReturnType<typeof db>,
-): Promise<boolean> {
+async function hasNegotiatedAllowanceColumn(d: {
+  execute: (q: ReturnType<typeof sql>) => Promise<unknown>;
+}): Promise<boolean> {
   const rows = await d.execute(sql`
     select 1
       from information_schema.columns
@@ -293,7 +332,9 @@ async function main(): Promise<void> {
   const orgRef = flagValue(args, "--org");
   const floorUsd = parseFloorUsd(flagValue(args, "--floor-usd"));
   const floorCents = usdToCents(floorUsd);
-  const actionsAnnual = parseActionsAnnual(flagValue(args, "--actions-annual"));
+  const actionsAnnualFlag = flagValue(args, "--actions-annual");
+  const actionsAnnualGiven = actionsAnnualFlag !== undefined;
+  const actionsAnnual = parseActionsAnnual(actionsAnnualFlag);
 
   if (!email && !orgRef) {
     console.error(
@@ -346,9 +387,9 @@ async function main(): Promise<void> {
   // handful of organisations and production has whatever it has, so the count
   // is the cheapest thing that distinguishes them at a glance.
   if (!DRY_RUN && !SKIP_CONFIRM) {
-    const [fingerprint] = await db()
-      .select({ orgs: count() })
-      .from(schema.organizations);
+    const [fingerprint] = await withSystemDb((tx) =>
+      tx.select({ orgs: count() }).from(schema.organizations),
+    );
     if (!isLocalHost(host)) {
       console.log(kleur.red("  ⚠  Non-local database in --apply mode."));
     }
@@ -371,9 +412,19 @@ async function main(): Promise<void> {
     console.log();
   }
 
-  const d = db();
-
-  const canRecordAllowance = await hasNegotiatedAllowanceColumn(d);
+  // Every operator query below runs through `withSystemDb`, not the raw handle.
+  //
+  // `db()` sets neither the tenant GUCs nor `app.rls_bypass`, and `org_users`,
+  // the billing settings, the spend budgets, the credit lots and the IAM
+  // principals all carry forced RLS. Under enforcement the raw handle found no
+  // organisations for `--email` at all, and `--org --apply` wrote the
+  // unprotected organisation row and then failed the billing-settings insert on
+  // its RLS check, leaving the org half-provisioned. `withSystemDb` is the
+  // intentional, audited bypass, and an operator script provisioning across
+  // tenants is exactly its caller.
+  const canRecordAllowance = await withSystemDb((tx) =>
+    hasNegotiatedAllowanceColumn(tx),
+  );
   if (!canRecordAllowance) {
     console.log(
       kleur.yellow(
@@ -399,32 +450,36 @@ async function main(): Promise<void> {
   };
 
   if (email) {
-    orgs = await d
-      .selectDistinct(cols)
-      .from(schema.organizations)
-      .innerJoin(
-        schema.orgUsers,
-        eq(schema.orgUsers.orgId, schema.organizations.id),
-      )
-      .innerJoin(schema.users, eq(schema.users.id, schema.orgUsers.userId))
-      .where(eq(schema.users.email, email));
+    orgs = await withSystemDb((tx) =>
+      tx
+        .selectDistinct(cols)
+        .from(schema.organizations)
+        .innerJoin(
+          schema.orgUsers,
+          eq(schema.orgUsers.orgId, schema.organizations.id),
+        )
+        .innerJoin(schema.users, eq(schema.users.id, schema.orgUsers.userId))
+        .where(eq(schema.users.email, email)),
+    );
   } else {
     const ref = orgRef as string;
     const isUuid =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
         ref,
       );
-    orgs = await d
-      .select(cols)
-      .from(schema.organizations)
-      .where(
-        isUuid
-          ? eq(schema.organizations.id, ref)
-          : or(
-              eq(schema.organizations.slug, ref),
-              eq(schema.organizations.publicId, ref),
-            ),
-      );
+    orgs = await withSystemDb((tx) =>
+      tx
+        .select(cols)
+        .from(schema.organizations)
+        .where(
+          isUuid
+            ? eq(schema.organizations.id, ref)
+            : or(
+                eq(schema.organizations.slug, ref),
+                eq(schema.organizations.publicId, ref),
+              ),
+        ),
+    );
   }
 
   if (orgs.length === 0) {
@@ -444,6 +499,72 @@ async function main(): Promise<void> {
     console.log(kleur.bold(`  ▸ ${label}`));
 
     try {
+      // ── 2. Refusals, BEFORE anything is written ───────────────────────────
+      //
+      // Both of these used to be discovered after the tier had already been
+      // changed: the deleted-org case was never checked at all, and the IAM
+      // check ran at the end and only printed a warning while the script still
+      // exited zero. A refusal that arrives after the write is not a refusal.
+      const refusal = unprovisionableReason(org.status);
+      if (refusal) {
+        console.log(kleur.red(`      refused         : ${refusal}`));
+        failures += 1;
+        console.log();
+        continue;
+      }
+
+      // Enterprise runs the full IAM resolver, whose default effect is deny. An
+      // org with no seeded Owner principal therefore loses every governed
+      // action the moment the tier lands, and the operator finds out from the
+      // customer. Check before the write, and refuse rather than warn.
+      const [ownerPrincipal] = await withSystemDb((tx) =>
+        tx
+          .select({ id: schema.principals.id })
+          .from(schema.principals)
+          .innerJoin(
+            schema.principalRoleAssignments,
+            eq(
+              schema.principalRoleAssignments.principalId,
+              schema.principals.id,
+            ),
+          )
+          .innerJoin(
+            schema.roles,
+            eq(schema.roles.id, schema.principalRoleAssignments.roleId),
+          )
+          .where(
+            and(
+              eq(schema.principals.orgId, org.id),
+              // A human, not an agent or service principal: an agent holding
+              // Owner does not keep a person out of the organisation.
+              eq(schema.principals.kind, "human"),
+              eq(schema.principals.status, "active"),
+              isNull(schema.principalRoleAssignments.deletedAt),
+              eq(schema.roles.orgId, org.id),
+              eq(schema.roles.name, "Owner"),
+              // The system-seeded Owner, not a custom role somebody named Owner.
+              eq(schema.roles.isSystemDefault, true),
+              or(
+                isNull(schema.principalRoleAssignments.expiresAt),
+                gt(schema.principalRoleAssignments.expiresAt, new Date()),
+              ),
+            ),
+          )
+          .limit(1),
+      );
+
+      if (!ownerPrincipal) {
+        console.log(
+          kleur.red(
+            `      refused         : no active human principal holds Owner. Enterprise runs the full IAM resolver (default deny), so the tier would lock this organisation out. Run: pnpm db:backfill-iam -- --apply, then re-run.`,
+          ),
+        );
+        failures += 1;
+        console.log();
+        continue;
+      }
+      console.log(`      iam             : an active human Owner principal`);
+
       // ── 2a. Does a subscription already answer the tier question? ──────────
       //
       // `resolveOrgTierDetailed` reads the subscription leg FIRST and only then
@@ -455,27 +576,29 @@ async function main(): Promise<void> {
       // subscription answers. Say so instead of claiming a success that is not
       // one; changing the plan row itself is not this script's call, because a
       // plan row is shared by every org subscribed to it.
-      const [entitledSub] = await d
-        .select({
-          stripeSubscriptionId: schema.subscriptions.stripeSubscriptionId,
-          status: schema.subscriptions.status,
-          planSlug: schema.plans.slug,
-          planTier: schema.plans.tier,
-        })
-        .from(schema.subscriptions)
-        .innerJoin(
-          schema.plans,
-          eq(schema.subscriptions.planId, schema.plans.id),
-        )
-        .where(
-          and(
-            eq(schema.subscriptions.orgId, org.id),
-            inArray(schema.subscriptions.status, [
-              ...ENTITLED_SUBSCRIPTION_STATUSES,
-            ]),
-          ),
-        )
-        .limit(1);
+      const [entitledSub] = await withSystemDb((tx) =>
+        tx
+          .select({
+            stripeSubscriptionId: schema.subscriptions.stripeSubscriptionId,
+            status: schema.subscriptions.status,
+            planSlug: schema.plans.slug,
+            planTier: schema.plans.tier,
+          })
+          .from(schema.subscriptions)
+          .innerJoin(
+            schema.plans,
+            eq(schema.subscriptions.planId, schema.plans.id),
+          )
+          .where(
+            and(
+              eq(schema.subscriptions.orgId, org.id),
+              inArray(schema.subscriptions.status, [
+                ...ENTITLED_SUBSCRIPTION_STATUSES,
+              ]),
+            ),
+          )
+          .limit(1),
+      );
 
       if (entitledSub && entitledSub.planTier !== "enterprise") {
         console.log(
@@ -488,6 +611,21 @@ async function main(): Promise<void> {
         console.log(
           `      subscription    : entitled '${entitledSub.status}' subscription already on an enterprise plan ('${entitledSub.planSlug}')`,
         );
+        // `resolveOrgActionEntitlement` takes the subscription plan's allowance
+        // before it looks at `negotiated_actions_annual`, so a figure written
+        // here would be recorded and never read. The script used to write it
+        // and report success, which is how a 25,000,000 commitment kept billing
+        // overage above the plan's seed.
+        if (actionsAnnualGiven) {
+          console.log(
+            kleur.red(
+              `      refused         : --actions-annual cannot apply to an organisation whose allowance comes from plan '${entitledSub.planSlug}'. Change that plan's included_actions_annual, or move the subscription, then re-run.`,
+            ),
+          );
+          failures += 1;
+          console.log();
+          continue;
+        }
       }
 
       // ── 2b. Tier + recorded action commitment ──────────────────────────────
@@ -500,14 +638,21 @@ async function main(): Promise<void> {
       // On a database behind 20260916120000 there is no column to compare or to
       // write, so the allowance half is satisfied by definition and the org
       // keeps `resolveActionAllowance`'s bounded enterprise fallback.
+      // A stored figure the operator did not ask to change is a signed
+      // commitment, not a difference to reconcile. Writing the default over it
+      // on the documented recurring top-up run is how a negotiated allowance
+      // silently shrank and the org began paying overage.
+      const writeAllowance =
+        canRecordAllowance &&
+        shouldWriteAllowance(org.negotiatedActionsAnnual, actionsAnnualGiven);
       const allowanceIsSet =
-        !canRecordAllowance ||
-        (org.negotiatedActionsAnnual !== null &&
-          org.negotiatedActionsAnnual !== undefined &&
-          Number(org.negotiatedActionsAnnual) === actionsAnnual);
-      const recorded = canRecordAllowance
-        ? `, ${actionsAnnual.toLocaleString("en-US")} actions/yr recorded`
-        : " (allowance column absent — bounded fallback applies)";
+        !writeAllowance ||
+        Number(org.negotiatedActionsAnnual) === actionsAnnual;
+      const recorded = !canRecordAllowance
+        ? " (allowance column absent — bounded fallback applies)"
+        : writeAllowance
+          ? `, ${actionsAnnual.toLocaleString("en-US")} actions/yr recorded`
+          : `, ${Number(org.negotiatedActionsAnnual).toLocaleString("en-US")} actions/yr left as recorded (pass --actions-annual to change it)`;
 
       if (tierIsSet && allowanceIsSet) {
         console.log(
@@ -517,40 +662,46 @@ async function main(): Promise<void> {
         console.log(
           kleur.blue(
             `      tier            : would set plan_type '${org.planType}' → 'enterprise', status '${org.status}' → 'active'${
-              canRecordAllowance
+              writeAllowance
                 ? `, negotiated_actions_annual ${org.negotiatedActionsAnnual ?? "NULL"} → ${actionsAnnual}`
-                : " (allowance column absent — skipped)"
+                : canRecordAllowance
+                  ? `, negotiated_actions_annual left at ${org.negotiatedActionsAnnual}`
+                  : " (allowance column absent — skipped)"
             }`,
           ),
         );
       } else {
-        await d
-          .update(schema.organizations)
-          .set({
-            planType: "enterprise",
-            status: "active",
-            ...(canRecordAllowance
-              ? { negotiatedActionsAnnual: BigInt(actionsAnnual) }
-              : {}),
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.organizations.id, org.id));
+        await withSystemDb((tx) =>
+          tx
+            .update(schema.organizations)
+            .set({
+              planType: "enterprise",
+              status: "active",
+              ...(writeAllowance
+                ? { negotiatedActionsAnnual: BigInt(actionsAnnual) }
+                : {}),
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.organizations.id, org.id)),
+        );
         console.log(
           kleur.green(`      tier            : enterprise/active${recorded}`),
         );
       }
 
       // ── 3. Billing settings: no assistant cap, no dunning hold ─────────────
-      const [settings] = await d
-        .select({
-          id: schema.orgBillingSettings.id,
-          assistantSpendCapCents:
-            schema.orgBillingSettings.assistantSpendCapCents,
-          dunningState: schema.orgBillingSettings.dunningState,
-        })
-        .from(schema.orgBillingSettings)
-        .where(eq(schema.orgBillingSettings.orgId, org.id))
-        .limit(1);
+      const [settings] = await withSystemDb((tx) =>
+        tx
+          .select({
+            id: schema.orgBillingSettings.id,
+            assistantSpendCapCents:
+              schema.orgBillingSettings.assistantSpendCapCents,
+            dunningState: schema.orgBillingSettings.dunningState,
+          })
+          .from(schema.orgBillingSettings)
+          .where(eq(schema.orgBillingSettings.orgId, org.id))
+          .limit(1),
+      );
 
       const capIsClear = settings?.assistantSpendCapCents === null;
       const dunningIsClear = settings?.dunningState === "active";
@@ -582,14 +733,18 @@ async function main(): Promise<void> {
           updatedAt: new Date(),
         };
         if (settings) {
-          await d
-            .update(schema.orgBillingSettings)
-            .set(clear)
-            .where(eq(schema.orgBillingSettings.id, settings.id));
+          await withSystemDb((tx) =>
+            tx
+              .update(schema.orgBillingSettings)
+              .set(clear)
+              .where(eq(schema.orgBillingSettings.id, settings.id)),
+          );
         } else {
-          await d
-            .insert(schema.orgBillingSettings)
-            .values({ orgId: org.id, ...clear });
+          await withSystemDb((tx) =>
+            tx
+              .insert(schema.orgBillingSettings)
+              .values({ orgId: org.id, ...clear }),
+          );
         }
         console.log(
           kleur.green(
@@ -599,19 +754,21 @@ async function main(): Promise<void> {
       }
 
       // ── 4. Spend-budget ceilings ───────────────────────────────────────────
-      const enabledBudgets = await d
-        .select({
-          id: schema.spendBudgets.id,
-          workspaceId: schema.spendBudgets.workspaceId,
-          limitMicros: schema.spendBudgets.limitMicros,
-        })
-        .from(schema.spendBudgets)
-        .where(
-          and(
-            eq(schema.spendBudgets.orgId, org.id),
-            eq(schema.spendBudgets.enabled, true),
+      const enabledBudgets = await withSystemDb((tx) =>
+        tx
+          .select({
+            id: schema.spendBudgets.id,
+            workspaceId: schema.spendBudgets.workspaceId,
+            limitMicros: schema.spendBudgets.limitMicros,
+          })
+          .from(schema.spendBudgets)
+          .where(
+            and(
+              eq(schema.spendBudgets.orgId, org.id),
+              eq(schema.spendBudgets.enabled, true),
+            ),
           ),
-        );
+      );
 
       if (enabledBudgets.length === 0) {
         console.log(`      spend budgets   : none enabled`);
@@ -622,15 +779,17 @@ async function main(): Promise<void> {
           ),
         );
       } else {
-        await d
-          .update(schema.spendBudgets)
-          .set({ enabled: false, updatedAt: new Date() })
-          .where(
-            and(
-              eq(schema.spendBudgets.orgId, org.id),
-              eq(schema.spendBudgets.enabled, true),
+        await withSystemDb((tx) =>
+          tx
+            .update(schema.spendBudgets)
+            .set({ enabled: false, updatedAt: new Date() })
+            .where(
+              and(
+                eq(schema.spendBudgets.orgId, org.id),
+                eq(schema.spendBudgets.enabled, true),
+              ),
             ),
-          );
+        );
         console.log(
           kleur.green(
             `      spend budgets   : disabled ${enabledBudgets.length} ceiling(s) (rows kept)`,
@@ -645,18 +804,20 @@ async function main(): Promise<void> {
       // number that reads high is how an org with a "positive" balance gets
       // refused.
       const now = new Date();
-      const lots = await d
-        .select({ remaining: schema.creditLots.remainingCents })
-        .from(schema.creditLots)
-        .where(
-          and(
-            eq(schema.creditLots.orgId, org.id),
-            or(
-              isNull(schema.creditLots.expiresAt),
-              gt(schema.creditLots.expiresAt, now),
+      const lots = await withSystemDb((tx) =>
+        tx
+          .select({ remaining: schema.creditLots.remainingCents })
+          .from(schema.creditLots)
+          .where(
+            and(
+              eq(schema.creditLots.orgId, org.id),
+              or(
+                isNull(schema.creditLots.expiresAt),
+                gt(schema.creditLots.expiresAt, now),
+              ),
             ),
           ),
-        );
+      );
       const current = lots.reduce(
         (acc, r) =>
           acc +
@@ -681,11 +842,13 @@ async function main(): Promise<void> {
         // workspaceId too. Use a real workspace when the org has one so the GUC
         // is truthful; an org with no workspace yet gets its own id, which no
         // policy on this write path consults.
-        const [ws] = await d
-          .select({ id: schema.workspaces.id })
-          .from(schema.workspaces)
-          .where(eq(schema.workspaces.orgId, org.id))
-          .limit(1);
+        const [ws] = await withSystemDb((tx) =>
+          tx
+            .select({ id: schema.workspaces.id })
+            .from(schema.workspaces)
+            .where(eq(schema.workspaces.orgId, org.id))
+            .limit(1),
+        );
 
         const { effectiveBalanceCents } = await runInTenantScope(
           { orgId: org.id, workspaceId: ws?.id ?? org.id },
@@ -716,22 +879,9 @@ async function main(): Promise<void> {
         );
       }
 
-      // ── 6. IAM readiness (enterprise runs the full resolver) ───────────────
-      const [principal] = await d
-        .select({ id: schema.principals.id })
-        .from(schema.principals)
-        .where(eq(schema.principals.orgId, org.id))
-        .limit(1);
-
-      if (principal) {
-        console.log(`      iam             : principals present`);
-      } else {
-        console.log(
-          kleur.yellow(
-            `      iam             : NO principals — enterprise runs the full IAM resolver. Run: pnpm db:backfill-iam -- --apply`,
-          ),
-        );
-      }
+      // IAM readiness was checked in step 2, before anything was written. A
+      // warning printed here could only tell the operator about a lockout the
+      // run had already caused.
     } catch (err) {
       failures += 1;
       console.log(kleur.red(`      failed: ${formatError(err)}`));
