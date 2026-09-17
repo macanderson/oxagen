@@ -42,9 +42,7 @@ vi.mock(
       setUsageRecorder: setUsageRecorderMock,
     }) satisfies Pick<
       typeof import("@oxagen/oxagen/kernel"),
-      | "setBillingAdmissionGate"
-      | "setBudgetAdmissionGate"
-      | "setUsageRecorder"
+      "setBillingAdmissionGate" | "setBudgetAdmissionGate" | "setUsageRecorder"
     >,
 );
 
@@ -54,7 +52,12 @@ vi.mock(
 const recordGovernedActionMock = vi.fn().mockResolvedValue({
   periodActions: 1,
   billableActions: 0,
-  band: { id: "first-1m", minAnnualActions: 0, maxAnnualActions: 1_000_000, usdPer1000: 20 },
+  band: {
+    id: "first-1m",
+    minAnnualActions: 0,
+    maxAnnualActions: 1_000_000,
+    usdPer1000: 20,
+  },
   creditsCharged: 0n,
   shortfallCredits: 0n,
   mode: "charge" as const,
@@ -68,9 +71,10 @@ vi.mock(
     >,
 );
 
-const resolveOrgActionEntitlementMock = vi
-  .fn()
-  .mockResolvedValue({ tier: "scale" as const, includedActionsAnnual: 1_500_000 });
+const resolveOrgActionEntitlementMock = vi.fn().mockResolvedValue({
+  tier: "scale" as const,
+  includedActionsAnnual: 1_500_000,
+});
 vi.mock(
   "./plan-allowance",
   () =>

@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  RATE_CARD,
-  estimateCostUsd,
-} from "./rate-card";
+import { RATE_CARD, estimateCostUsd } from "./rate-card";
 import { providerCostUsd, isRateCardMiss, PROVIDER_RATE_CARD } from "./pricing";
 
 /**

@@ -203,6 +203,19 @@ matches the provider within one round-trip.</p>
       (keeps access until renewal, no proration line). A preview that cannot be taken settles as
       <code>always_invoice</code>, never <code>none</code> — an invoice raised the wrong way is a credit the
       customer can see and we can refund; a charge never raised is simply gone.</li>
+  <li><strong>An interval change is never a downgrade.</strong> Changing the recurring interval resets the
+      billing-cycle anchor at the provider, which invoices the new period <em>immediately</em>, prorations disabled
+      or not. An annual subscriber moving to a monthly plan previews a NEGATIVE proration (credit for the unused
+      year) and would otherwise take the <code>none</code> branch — quoting $0 while a full month was charged.
+      So when the interval moves, the change is billed under <code>always_invoice</code> and quoted from the
+      invoice <strong>total</strong> rather than the proration lines: the anchor-reset charge is a non-proration
+      line, which <code>amountCents</code> cannot see.</li>
+  <li><strong>No preview, no quote.</strong> The two paths diverge deliberately when the provider cannot answer.
+      <code>changeOrgPlan</code> settles an unknown direction as <code>always_invoice</code>, because the provider
+      bills the true difference either way. <code>previewPlanChange</code> raises
+      <code>PlanChangePreviewUnavailableError</code> instead, because it is answering a person about to confirm and
+      there is no safe default: coercing an unavailable amount to 0 promises "nothing to pay" and then lets
+      <code>always_invoice</code> charge the real figure.</li>
   <li><strong>Why a preview and not a price field.</strong> Three figures have stood in for "what this subscriber
       pays", and all three inverted (#3157):
       <ul>

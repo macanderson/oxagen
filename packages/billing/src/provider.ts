@@ -125,6 +125,13 @@ export interface BillingProrationPreview {
   currency: string;
   /** Unix-seconds proration timestamp the preview was anchored to. */
   prorationDate: number;
+  /**
+   * Total of the previewed invoice, net of discounts — not just the proration
+   * lines. When a change alters the recurring interval the provider resets the
+   * billing-cycle anchor and invoices the new period immediately, and that
+   * charge is a NON-proration line: `amountCents` cannot see it.
+   */
+  totalCents: number;
   /** Per-line breakdown of the proration adjustments. */
   lines: BillingProrationLine[];
 }

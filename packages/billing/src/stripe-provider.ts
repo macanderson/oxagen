@@ -91,6 +91,8 @@ function summarizeProration(
     isCharge: amountCents > 0,
     currency: preview.currency,
     prorationDate,
+    // Stripe's invoice `total` is already net of discounts.
+    totalCents: preview.total,
     lines: prorationLines,
   };
 }

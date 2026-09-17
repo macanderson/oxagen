@@ -494,6 +494,7 @@ describe("previewPlanChange — the quote and the change agree (#3157)", () => {
       isCharge: true,
       currency: "usd",
       prorationDate: 1_700_000_000,
+      totalCents: 0,
       lines: [],
     });
     dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);
@@ -523,6 +524,7 @@ describe("previewPlanChange — the quote and the change agree (#3157)", () => {
       isCharge: false,
       currency: "usd",
       prorationDate: 1_700_000_000,
+      totalCents: 0,
       lines: [],
     });
     dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);
@@ -540,6 +542,54 @@ describe("previewPlanChange — the quote and the change agree (#3157)", () => {
     expect(result.isCharge).toBe(false);
   });
 
+  it("an unavailable preview produces no quote at all, rather than a quote of zero", async () => {
+    // The discriminating case: NOT "the quote is zero when the preview fails",
+    // which is the defect written down as an expectation. A caller must be
+    // unable to read a number here, because `always_invoice` will go on to
+    // charge the true difference and a $0 confirmation promises otherwise.
+    previewPlanChangeMock.mockRejectedValue(new Error("stripe unavailable"));
+    dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
+      stripeSubscriptionId: "sub_test_001",
+      stripeCustomerId: "cus_test_001",
+      planId: "plan-legacy-1",
+      billingInterval: "month",
+      stripePriceId: "price_list_200",
+    });
+
+    await expect(
+      previewPlanChange("org-abc-123", "mid-v2", "month"),
+    ).rejects.toMatchObject({ code: "PLAN_CHANGE_PREVIEW_UNAVAILABLE" });
+  });
+
+  it("annual → monthly quotes the anchor-reset invoice, not zero", async () => {
+    // Changing the recurring interval resets the billing-cycle anchor and
+    // invoices the new period immediately. The proration nets NEGATIVE (credit
+    // for unused annual time), so treating it as a downgrade quoted $0 while a
+    // full month was charged. The money owed is the invoice total.
+    previewPlanChangeMock.mockResolvedValue({
+      amountCents: -80_000, // credit for the unused year
+      isCharge: false,
+      currency: "usd",
+      prorationDate: 1_700_000_000,
+      totalCents: 15_000, // the month the anchor reset raises
+      lines: [],
+    });
+    dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
+      stripeSubscriptionId: "sub_test_001",
+      stripeCustomerId: "cus_test_001",
+      planId: "plan-annual-1",
+      billingInterval: "year", // moving to a monthly price
+      stripePriceId: "price_annual",
+    });
+
+    const result = await previewPlanChange("org-abc-123", "mid-v2", "month");
+
+    expect(result.amountCents).toBe(15_000);
+    expect(result.isCharge).toBe(true);
+  });
+
   it("a discounted subscriber is quoted the discounted proration", async () => {
     // Same P1 case as the swap path: the list prices read as a decrease, the
     // invoice is +$50, and the quote has to be the invoice.
@@ -548,6 +598,7 @@ describe("previewPlanChange — the quote and the change agree (#3157)", () => {
       isCharge: true,
       currency: "usd",
       prorationDate: 1_700_000_000,
+      totalCents: 0,
       lines: [],
     });
     dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);

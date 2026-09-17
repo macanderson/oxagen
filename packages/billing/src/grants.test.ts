@@ -165,6 +165,7 @@ const {
   grantFreeCredits,
   grantPlanCreditsForInvoicePaid,
   grantCreditPackForCheckout,
+  hasPlanUpgradeGrant,
 } = await import("./grants");
 
 // ---------------------------------------------------------------------------
@@ -612,5 +613,57 @@ describe("grantCreditPackForCheckout", () => {
     // Ledger insert was called (idempotency check) but lot/balance were not
     expect(txMock.insert).toHaveBeenCalledTimes(1);
     expect(txMock._lotInsertCalled).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hasPlanUpgradeGrant — answerable without the plan moved FROM (#3157)
+// ---------------------------------------------------------------------------
+
+describe("hasPlanUpgradeGrant", () => {
+  const PERIOD = new Date("2026-09-01T00:00:00.000Z");
+
+  it("is true when the grant for this org, target plan and period exists", async () => {
+    const findFirst = vi.fn().mockResolvedValue({ id: "led_1" });
+    const txMock = makeTx(false) as TxMock & { query?: unknown };
+    txMock.query = { creditLedger: { findFirst } };
+    dbState.instance = makeDb(txMock);
+
+    await expect(
+      hasPlanUpgradeGrant("org-1", "plan-target", PERIOD),
+    ).resolves.toBe(true);
+    expect(findFirst).toHaveBeenCalled();
+  });
+
+  it("is false when it does not", async () => {
+    const txMock = makeTx(false) as TxMock & { query?: unknown };
+    txMock.query = {
+      creditLedger: { findFirst: vi.fn().mockResolvedValue(undefined) },
+    };
+    dbState.instance = makeDb(txMock);
+
+    await expect(
+      hasPlanUpgradeGrant("org-1", "plan-target", PERIOD),
+    ).resolves.toBe(false);
+  });
+
+  it("keys on the target plan and period only, so a retry can ask it", async () => {
+    // The plan moved FROM is deliberately absent from the reference id: after
+    // a resync it is no longer recoverable, and that is exactly when a retried
+    // plan change needs this answer.
+    const findFirst = vi.fn().mockResolvedValue(undefined);
+    const txMock = makeTx(false) as TxMock & { query?: unknown };
+    txMock.query = { creditLedger: { findFirst } };
+    dbState.instance = makeDb(txMock);
+
+    await hasPlanUpgradeGrant("org-1", "plan-target", PERIOD);
+    await hasPlanUpgradeGrant("org-1", "plan-target", PERIOD);
+
+    // Same inputs, same query both times — nothing about the previous plan
+    // enters it, so the answer survives a resync.
+    expect(findFirst).toHaveBeenCalledTimes(2);
+    expect(findFirst.mock.calls[0]?.[0]).toStrictEqual(
+      findFirst.mock.calls[1]?.[0],
+    );
   });
 });

@@ -4,13 +4,42 @@ import { eq, and, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
 import { getOrgSeatUsage, SeatLimitError } from "./seats";
+import { hasPlanUpgradeGrant } from "./grants";
 import type { BillingProrationPreview } from "./provider";
+
+/**
+ * Raised when the provider cannot tell us what a change would cost.
+ *
+ * A quote is allowed to be unavailable; it is not allowed to be invented. The
+ * decision path can fall back conservatively because the provider settles the
+ * true difference either way, but a number shown to a person before they
+ * confirm has no safe default: zero reads as "this is free".
+ */
+export class PlanChangePreviewUnavailableError extends Error {
+  readonly code = "PLAN_CHANGE_PREVIEW_UNAVAILABLE" as const;
+  constructor(readonly stripeSubscriptionId: string) {
+    super(
+      "Could not preview this plan change with the billing provider; no amount can be quoted.",
+    );
+    this.name = "PlanChangePreviewUnavailableError";
+  }
+}
 
 /** Which way the money moves across a plan change, and what the swap owes now. */
 export interface PlanChangeDirection {
   prorationBehavior: "always_invoice" | "none";
-  direction: "increase" | "decrease" | "unchanged" | "unknown";
-  /** Net proration in cents, discounts included; null when unresolved. */
+  direction:
+    | "increase"
+    | "decrease"
+    | "unchanged"
+    | "interval_change"
+    | "unknown";
+  /**
+   * What the change bills now, in cents. For a same-interval change that is
+   * the net proration; for an interval change it is the whole invoice the
+   * anchor reset raises. Null means the preview was unavailable — NEVER zero,
+   * which would read as "nothing to pay".
+   */
   amountCents: number | null;
   /** The previewed invoice itself; null when the preview could not be taken. */
   preview: BillingProrationPreview | null;
@@ -57,12 +86,32 @@ export interface PlanChangeDirection {
 async function planChangeDirection(
   stripeSubscriptionId: string,
   newPriceId: string,
+  intervalChanges: boolean,
 ): Promise<PlanChangeDirection> {
   try {
     const preview = await billingProvider().previewPlanChange(
       stripeSubscriptionId,
       { newPriceId, prorationBehavior: "create_prorations" },
     );
+
+    // An interval change is not a downgrade, whichever way the proration
+    // nets out. Changing the recurring interval resets the billing-cycle
+    // anchor at the provider, which invoices the new period IMMEDIATELY —
+    // with prorations disabled or not. An annual subscriber moving to a
+    // monthly plan previews a negative proration (credit for unused time) and
+    // would take the `none` branch, so the confirmation said $0 while a full
+    // month was charged. The money owed is the whole invoice, not the
+    // proration lines, so it is quoted from the invoice total and billed
+    // under always_invoice rather than silently dropped.
+    if (intervalChanges) {
+      return {
+        prorationBehavior: "always_invoice",
+        direction: "interval_change",
+        amountCents: preview.totalCents,
+        preview,
+      };
+    }
+
     const amountCents = preview.amountCents;
     const direction =
       amountCents > 0 ? "increase" : amountCents < 0 ? "decrease" : "unchanged";
@@ -500,8 +549,10 @@ export async function changeOrgPlan(
           // and each side of the price comparison is priced on its own
           // interval.
           billingInterval: true,
-          // Recognises a retry that lands on a subscription already swapped.
+          // Recognises a retry that lands on a subscription already swapped,
+          // and dates the grant that retry has to check for.
           stripePriceId: true,
+          currentPeriodStart: true,
         },
       }),
     ),
@@ -552,6 +603,48 @@ export async function changeOrgPlan(
   // not pass a requestId, so the key is identical across the two attempts.
   // Returning here makes the retry the no-op it should be.
   if (activeSubRow.stripePriceId && activeSubRow.stripePriceId === newPriceId) {
+    // The swap is done; the rest of the operation may not be. The audit row is
+    // reconstructible, so it is emitted rather than lost to the retry.
+    emitSecurityEvent({
+      eventType: "billing.plan_changed",
+      actorUserId: null,
+      orgId,
+      workspaceId: null,
+      capability: null,
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: null,
+    });
+
+    // The prorated credit grant is NOT reconstructible here. Its size depends
+    // on the allowance of the plan moved FROM, and `syncSubscriptionFromStripe`
+    // has already repointed this row at the target, so that plan id is gone.
+    // Re-calling the grant with what the row now holds is a silent no-op: from
+    // and to are the same plan, `delta <= 0`, and it returns without granting
+    // (grants.ts). So the gap is detected and raised rather than papered over.
+    // Closing it properly needs either durable intent captured before the swap
+    // or the grant driven off the observed transition in the subscription
+    // webhook, which is a design choice the maintainer owns.
+    try {
+      const granted = await hasPlanUpgradeGrant(
+        orgId,
+        targetPlan.id,
+        activeSubRow.currentPeriodStart,
+      );
+      if (!granted) {
+        logger.error(
+          { orgId, targetPlanSlug, targetPlanId: targetPlan.id, newPriceId },
+          "billing: plan change was already applied but its prorated credit grant is missing — the first attempt died between the swap and the grant, and the plan it moved from is no longer recoverable; grant needs manual repair",
+        );
+      }
+    } catch (err) {
+      logger.error(
+        { orgId, targetPlanSlug, err },
+        "billing: could not determine whether the prorated credit grant landed for an already-applied plan change",
+      );
+    }
+
     logger.info(
       { orgId, targetPlanSlug, interval, newPriceId },
       "billing: changeOrgPlan — subscription is already on the target price, nothing to swap",
@@ -564,8 +657,15 @@ export async function changeOrgPlan(
   const currentInterval: "month" | "year" =
     activeSubRow.billingInterval === "year" ? "year" : "month";
   const { prorationBehavior, direction, amountCents } =
-    await planChangeDirection(activeSubRow.stripeSubscriptionId, newPriceId);
-  const isUpgrade = direction === "increase";
+    await planChangeDirection(
+      activeSubRow.stripeSubscriptionId,
+      newPriceId,
+      currentInterval !== interval,
+    );
+  // The credit grant is delta-guarded and idempotent, so an interval change
+  // is offered to it too: moving to a plan with a larger allowance earns the
+  // prorated credits whether or not the interval moved with it.
+  const isUpgrade = direction === "increase" || direction === "interval_change";
 
   // Use activeSubRow from now on (renamed to avoid confusion).
   const activeSub = activeSubRow;
@@ -969,14 +1069,28 @@ export async function previewPlanChange(
   // preview computed from one measure while the change bills against another
   // quotes a price the change will not honour (#3157).
   const { prorationBehavior, direction, amountCents, preview } =
-    await planChangeDirection(activeSub.stripeSubscriptionId, newPriceId);
-  const isUpgrade = direction === "increase";
+    await planChangeDirection(
+      activeSub.stripeSubscriptionId,
+      newPriceId,
+      currentInterval !== interval,
+    );
+  const isUpgrade = direction === "increase" || direction === "interval_change";
 
-  // What the customer is actually asked for now. A change that does not raise
-  // the bill ships `none`, which writes no proration line, so nothing is owed
-  // at the moment of the swap however large the previewed credit was.
+  // No preview, no quote. `changeOrgPlan` may settle an unknown direction as
+  // always_invoice because the provider bills the true difference either way;
+  // this path cannot, because it is answering a person who is about to press
+  // a button. Coercing null to 0 here promised "nothing to pay" and then let
+  // always_invoice charge the real amount.
+  if (amountCents === null) {
+    throw new PlanChangePreviewUnavailableError(activeSub.stripeSubscriptionId);
+  }
+
+  // What the customer is actually asked for now. A same-interval change that
+  // does not raise the bill ships `none`, which writes no proration line, so
+  // nothing is owed at the moment of the swap however large the previewed
+  // credit was. An interval change always owes its invoice.
   const chargedNowCents =
-    prorationBehavior === "always_invoice" ? (amountCents ?? 0) : 0;
+    prorationBehavior === "always_invoice" ? amountCents : 0;
 
   const card = await resolveDefaultCard(activeSub.stripeCustomerId);
 

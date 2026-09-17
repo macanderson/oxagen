@@ -33,6 +33,7 @@ function previewingProration(amountCents: number) {
     isCharge: amountCents > 0,
     currency: "usd",
     prorationDate: 1_700_000_000,
+    totalCents: amountCents,
     lines: [],
   });
 }
@@ -82,6 +83,20 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 // ── drizzle-orm mock ─────────────────────────────────────────────────────────
 
 // ── @oxagen/config/env mock ──────────────────────────────────────────────────
+
+const loggerMock = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn(),
+}));
+vi.mock("./logger", () => ({ logger: loggerMock }));
+
+const hasPlanUpgradeGrantMock = vi.fn().mockResolvedValue(true);
+vi.mock("./grants", () => ({
+  hasPlanUpgradeGrant: hasPlanUpgradeGrantMock,
+  grantProratedPlanUpgradeCredits: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock("@oxagen/config/env", () => ({
   requireEnv: () => ({ NEXT_PUBLIC_APP_URL: "https://app.test" }),
@@ -146,6 +161,7 @@ function makeActiveSub(
     planId: string;
     billingInterval: string;
     stripePriceId: string | null;
+    currentPeriodStart: Date;
     plan: { tier: string };
   }> = {},
 ) {
@@ -158,6 +174,7 @@ function makeActiveSub(
     // how a retry of an already-applied swap is recognised. The direction
     // comes from the previewed invoice (#3157).
     stripePriceId: "price_build_m",
+    currentPeriodStart: new Date("2026-09-01T00:00:00.000Z"),
     plan: { tier: "build" },
     ...overrides,
   };
@@ -525,6 +542,75 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
     expect(upgradeSubscriptionMock).not.toHaveBeenCalled();
     // And it does not even ask, so no provider call is spent on a settled swap.
     expect(previewPlanChangeMock).not.toHaveBeenCalled();
+  });
+
+  it("a retry whose grant never landed raises it rather than reporting success", async () => {
+    // The discriminating case is the credit ledger, not "a function was
+    // skipped": the operation looks complete from the outside, so the only
+    // evidence that the first attempt died mid-way is the absent grant.
+    hasPlanUpgradeGrantMock.mockResolvedValue(false);
+    previewingProration(0);
+    stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({
+        planId: "plan-scale-id",
+        stripePriceId: "price_scale_m",
+      }),
+    );
+
+    await changeOrgPlan("org-abc", "scale-v2", "month");
+
+    expect(hasPlanUpgradeGrantMock).toHaveBeenCalledWith(
+      "org-abc",
+      SCALE_PLAN.id,
+      expect.anything(),
+    );
+    const raised = loggerMock.error.mock.calls.find((c) =>
+      String(c[1]).includes("prorated credit grant is missing"),
+    );
+    expect(raised).toBeDefined();
+  });
+
+  it("a retry whose grant did land reports nothing", async () => {
+    hasPlanUpgradeGrantMock.mockResolvedValue(true);
+    previewingProration(0);
+    stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({
+        planId: "plan-scale-id",
+        stripePriceId: "price_scale_m",
+      }),
+    );
+
+    await changeOrgPlan("org-abc", "scale-v2", "month");
+
+    const raised = loggerMock.error.mock.calls.find((c) =>
+      String(c[1]).includes("prorated credit grant is missing"),
+    );
+    expect(raised).toBeUndefined();
+  });
+
+  it("a grant check that itself fails is reported, not swallowed", async () => {
+    hasPlanUpgradeGrantMock.mockRejectedValue(new Error("db unavailable"));
+    previewingProration(0);
+    stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({
+        planId: "plan-scale-id",
+        stripePriceId: "price_scale_m",
+      }),
+    );
+
+    // The retry still succeeds — the swap really is done — but not knowing
+    // whether the grant landed is itself worth saying out loud.
+    await expect(
+      changeOrgPlan("org-abc", "scale-v2", "month"),
+    ).resolves.toBeNull();
+    const raised = loggerMock.error.mock.calls.find((c) =>
+      String(c[1]).includes("could not determine whether the prorated credit"),
+    );
+    expect(raised).toBeDefined();
+    hasPlanUpgradeGrantMock.mockResolvedValue(true);
   });
 
   it("a subscription on a different price is still swapped", async () => {

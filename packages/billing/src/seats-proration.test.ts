@@ -155,6 +155,7 @@ function makeProrationPreview(
     isCharge: true,
     currency: "usd",
     prorationDate: 1700000000,
+    totalCents: 2000,
     lines: [],
     ...overrides,
   };

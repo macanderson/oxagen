@@ -360,6 +360,38 @@ export async function grantPlanCreditsForInvoicePaid(
  * Idempotent: the (org_id, reason, reference_type, reference_id) ledger key
  * ensures the grant fires at most once per upgrade × period.
  */
+/**
+ * Whether the prorated plan-upgrade grant for this org, target plan and period
+ * has already landed.
+ *
+ * The grant's reference id deliberately does not include the plan moved FROM,
+ * so this is answerable on a retry, after the subscription row has been
+ * resynced and the previous plan id is no longer recoverable from it. That is
+ * exactly when the question matters: a retried plan change must be able to
+ * tell "the first attempt finished" from "the first attempt died before
+ * granting" (#3157, PR #3171 review).
+ */
+export async function hasPlanUpgradeGrant(
+  orgId: string,
+  toPlanId: string,
+  periodStart: Date,
+): Promise<boolean> {
+  const referenceId = deterministicUuid(
+    `plan_upgrade:${orgId}:${toPlanId}:${periodStart.toISOString()}`,
+  );
+  const row = await withTenantDb((tx) =>
+    tx.query.creditLedger.findFirst({
+      where: and(
+        eq(schema.creditLedger.orgId, orgId),
+        eq(schema.creditLedger.referenceId, referenceId),
+        eq(schema.creditLedger.reason, CREDIT_REASONS.GRANT_PLAN_UPGRADE),
+      ),
+      columns: { id: true },
+    }),
+  );
+  return Boolean(row);
+}
+
 export async function grantProratedPlanUpgradeCredits(
   orgId: string,
   fromPlanId: string,
