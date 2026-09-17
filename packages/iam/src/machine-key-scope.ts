@@ -37,8 +37,17 @@
  *
  * It constrains machine keys only. A key with no `purpose` is what
  * `oxagen login` mints for a person, and it keeps acting for its creator
- * exactly as before.
+ * exactly as before. `cli_session_v1` (`CLI_SESSION_SCOPE_PURPOSE`) carries a
+ * purpose too, but it is not a machine credential: `resolveApiKey`
+ * (`packages/auth/src/resolvers/api-key.ts`) resolves it to the *person* who
+ * approved the `oxagen login` flow — re-checking their org/workspace
+ * membership on every call — and treats every other purpose as a bare
+ * machine key with `userId: null`. Before this exemption existed, every CLI
+ * session key fell into the "unrecognised purpose" branch below and was
+ * denied every capability, which broke `oxagen login`'s org/workspace picker
+ * outright.
  */
+import { CLI_SESSION_SCOPE_PURPOSE } from "@oxagen/auth/cli-auth";
 import { schema, withSystemDb } from "@oxagen/database";
 import { getCapability } from "@oxagen/oxagen";
 import { and, eq, isNull } from "drizzle-orm";
@@ -151,6 +160,10 @@ export async function machineKeyDenial(
   const purpose = await purposeOf(orgId, apiKeyId);
   // No purpose: a person's key, acting for its creator. Unchanged.
   if (purpose === undefined) return undefined;
+  // A CLI session key also acts for a person (its creator, re-checked for
+  // membership on every call by resolveApiKey) — it is not a machine
+  // credential, so it is not subject to a machine mandate.
+  if (purpose === CLI_SESSION_SCOPE_PURPOSE) return undefined;
 
   if (purpose === TACHO_GATEWAY_PURPOSE) {
     return gatewayMayInvoke(capabilityName)

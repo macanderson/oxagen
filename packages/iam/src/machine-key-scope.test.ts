@@ -30,6 +30,8 @@ const {
   TACHO_HOST_PURPOSE,
 } = await import("./machine-key-scope");
 
+const { CLI_SESSION_SCOPE_PURPOSE } = await import("@oxagen/auth/cli-auth");
+
 const ORG = "11111111-1111-4111-8111-111111111111";
 
 function keyWithScope(scope: unknown): void {
@@ -62,6 +64,23 @@ describe("a person's credential is untouched", () => {
         orgId: ORG,
         apiKeyId: "aky_person",
         capabilityName: "set_model_credential",
+      }),
+    ).toBeUndefined();
+  });
+
+  it("lets a CLI session key act for its creator, not a machine mandate", async () => {
+    // `oxagen login`'s token exchange mints these with `purpose:
+    // "cli_session_v1"`. `resolveApiKey` resolves that purpose to the
+    // approving person (re-checked for org/workspace membership on every
+    // call), so it must not fall into the "unrecognised purpose" branch
+    // below — that regression denied the CLI's org/workspace picker every
+    // capability outright.
+    keyWithScope({ purpose: CLI_SESSION_SCOPE_PURPOSE });
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_cli",
+        capabilityName: "list_workspaces",
       }),
     ).toBeUndefined();
   });
