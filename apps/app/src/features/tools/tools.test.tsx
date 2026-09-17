@@ -560,19 +560,26 @@ type ToolsWrite = (typeof TOOLS_WRITES)[number][0];
 type ToolsWriteContract = (typeof TOOLS_WRITES)[number][1];
 
 /**
- * Whether the kernel would accept this viewer for this capability, read off
- * the capability's own `defaultRoles` — the object each handler asserts
- * verbatim with `assertOrgRole({ org: [...], workspace: [...] })`. Reading it
- * rather than restating it is the point: a gate compared against a second copy
- * of the answer written in the test agrees with whatever the test author
- * believed, while this comparison fails the moment the gate and the capability
- * part company in either direction.
+ * Whether this capability admits this viewer, read off the capability's own
+ * `defaultRoles` — the object each handler asserts verbatim with
+ * `assertOrgRole({ org: [...], workspace: [...] })`. Reading it rather than
+ * restating it is the point: a gate compared against a second copy of the
+ * answer written in the test agrees with whatever the test author believed,
+ * while this comparison fails the moment the gate and the capability part
+ * company in either direction.
+ *
+ * It answers what the contract grants, not what the kernel would answer on a
+ * real call. Those differ today for the workspace half: `assertOrgRole`
+ * resolves workspace roles from `iam.principal_role_assignments`, and nothing
+ * assigns a human principal a workspace-scoped one (see the comment on
+ * `canImportTools`). The gate under test is written against the contract, so
+ * the contract is what it is checked against.
  *
  * The contract names roles in TitleCase (`Owner`) and the viewer carries them
  * lowercased, which `systemLookups` settles once; the casing is folded here
  * for the same reason.
  */
-function kernelAllows(contract: ToolsWriteContract, ctx: WsCtxType): boolean {
+function contractGrants(contract: ToolsWriteContract, ctx: WsCtxType): boolean {
   const allowed = (grants: Partial<Record<string, string>>): string[] =>
     Object.entries(grants)
       .filter(([, effect]) => effect === "allow")
@@ -660,7 +667,7 @@ describe("Tools › write gates", () => {
         Object.fromEntries(
           TOOLS_WRITES.map(([name, contract]) => [
             name,
-            kernelAllows(contract, ctx),
+            contractGrants(contract, ctx),
           ]),
         ),
       );
