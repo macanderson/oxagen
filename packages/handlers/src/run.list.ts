@@ -23,17 +23,32 @@
 // Every field the store may not have recorded maps to null, never to a
 // substitute.
 //
+// The in-app agent's turns are runs too (MC spec §14.1), admitted on the
+// `chat` and `api-chat` surfaces by `openAssistantRun` in @oxagen/agent. The
+// assistant is Oxagen's: the customer talks to it and never owns or manages
+// it, so its runs are recorded and never listed as the customer's (Mockups
+// 71bc546; apps/app/ARCHITECTURE.md §1.2). The page query excludes those two
+// surfaces; `ledgerIdentityQuery` does not, because the flyout's per-turn run
+// link opens the run through `get_run`.
+//
 // Ported from apps/app/src/data/adapters/live/runs.ts and mappers/runs.ts at
 // 27b9d2520 (ARCHITECTURE.md §7.2), minus the view-model concerns that stay
 // in the app.
 import type { CapabilityContext, CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
+  IN_APP_AGENT_SURFACES,
   type RunItem,
   runList,
   type RunListOutput,
 } from "@oxagen/oxagen/contracts/run.list";
-import { schema, type Tx, withTenantDb } from "@oxagen/database";
+import {
+  hidesWitnessRuns,
+  notWitnessRun,
+  schema,
+  type Tx,
+  withTenantDb,
+} from "@oxagen/database";
 import { isReplayGrade } from "@oxagen/tacho";
 import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import {
@@ -43,6 +58,7 @@ import {
   inArray,
   isNull,
   lt,
+  notInArray,
   or,
   type SQL,
   sql,
@@ -101,7 +117,6 @@ const runs = schema.agentRuns;
 const events = schema.agentRunEvents;
 const seals = schema.agentRunAttemptSeals;
 const sessions = schema.tachoSessions;
-const verdicts = schema.verdicts;
 
 /** Millisecond precision, so a cursor built from a JS Date compares exactly. */
 const ms = (column: SQL | typeof sessions.startedAt) =>
@@ -138,8 +153,12 @@ export type PageQuery = {
   withoutWitnessRuns: boolean;
 };
 
-/** No verdict in the run's workspace names it as a witness run, when the page asks. */
-function notWitnessRun(
+/**
+ * No verdict in the run's workspace names it as a witness run, when the page
+ * asks. The predicate itself is `notWitnessRun` in `@oxagen/database`, shared
+ * with `search_tools`; this only decides whether this page applies it.
+ */
+function hideWitnessRuns(
   q: PageQuery,
   run: {
     orgId: typeof runs.orgId | typeof sessions.orgId;
@@ -148,7 +167,7 @@ function notWitnessRun(
   },
 ): SQL | undefined {
   if (!q.withoutWitnessRuns) return undefined;
-  return sql`not exists (select 1 from ${verdicts} where ${verdicts.orgId} = ${run.orgId} and ${verdicts.workspaceId} = ${run.workspaceId} and ${verdicts.witnessRunId} = ${run.publicId}::text)`;
+  return notWitnessRun(run);
 }
 
 const ledgerColumns = {
@@ -200,7 +219,7 @@ function ledgerRunsSelect(db: QueryDb) {
     );
 }
 
-/** V2 ledger runs in the workspace, newest first. */
+/** V2 ledger runs in the workspace, newest first, the in-app agent's excluded. */
 export function ledgerPageQuery(db: QueryDb, scope: RunScope, q: PageQuery) {
   return ledgerRunsSelect(db)
     .where(
@@ -208,8 +227,9 @@ export function ledgerPageQuery(db: QueryDb, scope: RunScope, q: PageQuery) {
         eq(runs.orgId, scope.orgId),
         eq(runs.workspaceId, scope.workspaceId),
         eq(runs.specVersion, 2),
+        notInArray(runs.surface, [...IN_APP_AGENT_SURFACES]),
         beforeCursor(ledgerStartedAt, runs.publicId, q.cursor),
-        notWitnessRun(q, runs),
+        hideWitnessRuns(q, runs),
       ),
     )
     .orderBy(desc(ms(ledgerStartedAt)), desc(byteOrder(runs.publicId)))
@@ -417,7 +437,7 @@ export function tachoPageQuery(db: QueryDb, scope: RunScope, q: PageQuery) {
         eq(sessions.workspaceId, scope.workspaceId),
         isNull(sessions.parentSessionUuid),
         beforeCursor(sql`${sessions.startedAt}`, sessions.publicId, q.cursor),
-        notWitnessRun(q, sessions),
+        hideWitnessRuns(q, sessions),
       ),
     )
     .orderBy(desc(ms(sessions.startedAt)), desc(byteOrder(sessions.publicId)))
@@ -912,7 +932,7 @@ export function createRunListHandler(
     const page = {
       cursor,
       limit: input.limit,
-      withoutWitnessRuns: ctx.apiKeyId !== null,
+      withoutWitnessRuns: hidesWitnessRuns(ctx),
     };
 
     const [ledger, tacho] = await Promise.all([

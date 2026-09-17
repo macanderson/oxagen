@@ -2,8 +2,8 @@
 /**
  * preferences-action.ts — server action for the Account Preferences page.
  *
- * Routes writes through the `user.preferences.write` capability handler;
- * never hand-rolls a direct DB insert. Also sets `pref-font-size` and
+ * Routes writes through the `set_preferences` capability handler; never
+ * hand-rolls a direct DB insert. Also sets `pref-font-size` and
  * `pref-density` cookies for flash-free SSR appearance on next load.
  */
 import { z } from "zod";
@@ -13,7 +13,7 @@ import { getSessionOrRedirect } from "@/lib/session";
 import { account } from "@/lib/routes";
 import { invoke } from "@oxagen/oxagen";
 // Side-effect import: bind every foundation handler into the shared kernel so
-// invoke("update_user_preferences", …) can resolve its handler at runtime.
+// invoke("set_preferences", …) can resolve its handler at runtime.
 import "@oxagen/handlers/register";
 import { logger } from "@oxagen/handlers/logger";
 import type { CapabilityContext } from "@oxagen/oxagen";
@@ -67,18 +67,23 @@ export async function updatePreferencesAction(
   };
 
   try {
-    // NOTE: `surface: "agent"` is not a description of where this call came
-    // from — it is the nearest value the contract's `surfaces` allowlist
-    // accepts (["api", "mcp", "agent"]; there is no "app"). Until the contract
-    // gains an "app" surface, preference writes from this page are metered and
-    // traced as agent traffic.
-    await invoke("update_user_preferences", data, ctx, { surface: "agent" });
+    // `set_preferences` is the one writer of the preference row (ADR-075). Its
+    // `locale` is the row's `language` column, which is the name this form and
+    // `get_user_preferences` use; the rest carry across unchanged.
+    //
+    // No `surface` override: the contract's allowlist is ["api", "mcp"] and
+    // this is neither. Naming a surface the call did not arrive on to satisfy
+    // the allowlist would file every preference write from this page under
+    // traffic that never happened. `ctx.surface` already records "app", which
+    // is what the kernel's own event carries.
+    const { language, ...rest } = data;
+    await invoke("set_preferences", { ...rest, locale: language }, ctx);
   } catch (err) {
     // Log before returning the generic message: without this the only trace of
     // a failed preference write is a toast on the user's screen.
     logger.error(
       { err, userId: session.user.id },
-      "[account-preferences] update_user_preferences failed",
+      "[account-preferences] set_preferences failed",
     );
     return {
       ok: false,

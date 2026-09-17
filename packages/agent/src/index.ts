@@ -30,13 +30,19 @@ export * from "./runtime/ontology-tools";
 // The governed turn loop — ONE bounded, metered model turn over the
 // materialised tools (ADR-043 §2). The only thing left of "running an agent".
 export * from "./runtime/governed-turn";
+// The SSE route streams `ask_assistant` through the kernel with this beside it.
+export { streamAssistantTurn } from "./runtime/assistant-stream";
 export * from "./runtime/approval";
 export * from "./runtime/stream-events";
 export { isKnowledgeGraphEnabled } from "./runtime/knowledge-graph";
 export * from "./dispatch/mcp-client";
 export * from "./dispatch/tool-projection";
 export * from "./memory/neo4j";
-export { resolveHandler, invokeCapability } from "./handlers/index";
+export {
+  resolveHandler,
+  invokeCapability,
+  agentHandlerNames,
+} from "./handlers/index";
 export type { CapabilityHandlerFn } from "./handlers/index";
 // Typed execution-lookup error — surfaces (apps/api) import these to map an
 // unknown / cross-tenant execution id to a 404 instead of a 500 via

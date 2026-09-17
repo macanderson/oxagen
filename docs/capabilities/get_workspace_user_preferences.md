@@ -57,4 +57,4 @@ None — read-only.
 ## Related
 
 - [update_workspace_user_preferences](update_workspace_user_preferences.md) — the app-only write counterpart.
-- [user.preferences.read](user.preferences.read.md) / [user.preferences.write](user.preferences.write.md) — the per-user (not per-workspace) UI/model preference pair.
+- [user.preferences.read](user.preferences.read.md) / [user.preferences.set](user.preferences.set.md) — the per-user (not per-workspace) preference read and write.

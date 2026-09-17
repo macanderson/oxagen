@@ -866,6 +866,12 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@oxagen/run-evidence':
+        specifier: workspace:*
+        version: link:../run-evidence
+      '@oxagen/run-ledger':
+        specifier: workspace:*
+        version: link:../run-ledger
       '@oxagen/rules':
         specifier: workspace:*
         version: link:../rules

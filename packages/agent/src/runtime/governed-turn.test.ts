@@ -16,6 +16,8 @@ import {
   type ServerFrame,
 } from "@oxagen/stella-engine-client";
 import { FakeEngine, goldenScript } from "@oxagen/stella-engine-client/testing";
+import { digestJcs } from "@oxagen/run-evidence";
+import { z } from "zod";
 
 const streamAgentReply = vi.fn();
 const selectModel = vi.fn((s: { tier?: string }) => ({
@@ -23,6 +25,7 @@ const selectModel = vi.fn((s: { tier?: string }) => ({
 }));
 
 vi.mock("@oxagen/ai", () => ({
+  tool: (def: unknown) => def,
   streamAgentReply: (args: unknown) => streamAgentReply(args),
   defaultModel: () => ({ modelId: "default-model" }),
   modelIdOf: (m: unknown) =>
@@ -48,8 +51,14 @@ import {
   buildTurnUserMessage,
   runGovernedTurn,
   serializeMutatingTools,
+  type TurnLedger,
+  type TurnLedgerModelCall,
+  type TurnLedgerOutcome,
+  type TurnLedgerToolCall,
+  type TurnLedgerToolIntent,
 } from "./governed-turn";
 import { modelForRole } from "./engine/provider";
+import { LOAD_TOOLS, SEARCH_TOOLS, createToolBelt } from "./tool-belt";
 
 interface FakeStreamOptions {
   text?: string;
@@ -395,6 +404,39 @@ describe("runGovernedTurn on the engine", () => {
     });
   });
 
+  it("records the provider request the budget stopped, as cancelled", async () => {
+    // A run sealed `cancelled` with no receipt for the request that hit the
+    // budget cannot show why it stopped, which is the one thing a customer
+    // disputing a bill asks for. The event schema already carries `cancelled`.
+    const { client } = setup();
+    const modelCalls: TurnLedgerModelCall[] = [];
+    const outcomes: TurnLedgerOutcome[] = [];
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {},
+      budgetGuard: () => "stop",
+      engine: client,
+      ledger: {
+        modelCall: async (record) => {
+          modelCalls.push(record);
+        },
+        toolCallStarted: async () => undefined,
+        toolCall: async () => undefined,
+        seal: async (outcome) => {
+          outcomes.push(outcome);
+        },
+      },
+    });
+    await drain(result);
+    expect(modelCalls).toHaveLength(1);
+    expect(modelCalls[0]).toMatchObject({ outcome: "cancelled" });
+    expect(modelCalls[0]!.requestId).toBeTruthy();
+    expect(outcomes.map((o) => o.status)).toEqual(["aborted"]);
+  });
+
   it("cancels the engine turn when the caller aborts, and ends the stream", async () => {
     const { client } = setup();
     const controller = new AbortController();
@@ -416,6 +458,488 @@ describe("runGovernedTurn on the engine", () => {
       type: "finish",
       finishReason: "error",
     });
+  });
+
+  it("records every answered reverse request on the ledger before answering it, then seals", async () => {
+    const { engine, client } = setup();
+    const log: string[] = [];
+    const modelCalls: TurnLedgerModelCall[] = [];
+    const toolCalls: TurnLedgerToolCall[] = [];
+    const outcomes: TurnLedgerOutcome[] = [];
+    const ledger: TurnLedger = {
+      modelCall: async (record) => {
+        log.push(`model:${record.requestId}`);
+        modelCalls.push(record);
+      },
+      toolCallStarted: async () => undefined,
+      toolCall: async (record) => {
+        log.push(`tool:${record.requestId}`);
+        toolCalls.push(record);
+      },
+      seal: async (outcome) => {
+        log.push(`seal:${outcome.status}`);
+        outcomes.push(outcome);
+      },
+    };
+    const originalFetch = engine.fetch;
+    const posted: string[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (init?.method === "POST" && /provider-result|tool-result/.test(url))
+        posted.push(`post:${url.split("/").at(-1)}`);
+      // The receipt for a request is written before its answer is posted.
+      if (url.endsWith("provider-result") || url.endsWith("tool-result")) {
+        expect(log.length).toBeGreaterThan(posted.length - 1);
+      }
+      return originalFetch(input, init);
+    };
+    const recordingClient = new StellaEngineClient({
+      baseUrl: "http://engine.test",
+      token: "fake-token",
+      fetchImpl,
+    });
+    void client;
+    const result = await runGovernedTurn({
+      telemetry,
+      model: { modelId: "anthropic/claude-sonnet-4.6" } as never,
+      system: "s",
+      history: [],
+      instruction: "list the nodes",
+      tools: {
+        search_nodes: {
+          description: "d",
+          inputSchema: { type: "object" } as never,
+          execute: async () => ({ rows: 3 }),
+        } as never,
+      },
+      engine: recordingClient,
+      ledger,
+    });
+    await drain(result);
+    expect(await result.finalText).toBe("There are 3 nodes.");
+
+    // One receipt per reverse request, in the engine's order, each carrying
+    // the frame's seq; the seal is the last write.
+    expect(log).toEqual([
+      "model:prov-1-0",
+      "tool:tool-1-0",
+      "model:prov-1-1",
+      "seal:completed",
+    ]);
+    // The provider is what the engine's frame echoed (the golden recording's
+    // id), the seq is the frame's own.
+    expect(modelCalls[0]).toMatchObject({
+      seq: 1,
+      role: "worker",
+      provider: "openrouter",
+      outcome: "completed",
+      usage: expect.objectContaining({ input_tokens: 10, output_tokens: 5 }),
+    });
+    expect(modelCalls[1]).toMatchObject({ seq: 5, outcome: "completed" });
+    expect(toolCalls[0]).toMatchObject({
+      seq: 3,
+      toolName: "search_nodes",
+      outcome: "completed",
+      // The receipt carries what the engine was answered with.
+      output: { ok: { content: '{"rows":3}' } },
+    });
+    expect(outcomes).toEqual([
+      { status: "completed", text: "There are 3 nodes." },
+    ]);
+  });
+
+  it("records the intention before the tool runs, under the canonical capability name", async () => {
+    // Two defects in one place. The receipt used to be written only AFTER the
+    // tool had run, so a mutating tool whose side effect committed and whose
+    // receipt then failed to append left evidence asserting it never
+    // happened. And it was keyed on the model-facing alias, which for an
+    // external MCP tool is sanitized and can be collision-suffixed, so the
+    // evidence could not be joined back to the capability that was
+    // authorized.
+    const { client } = setup();
+    const log: string[] = [];
+    const intents: TurnLedgerToolIntent[] = [];
+    const toolCalls: TurnLedgerToolCall[] = [];
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {
+        search_nodes: {
+          description: "d",
+          inputSchema: { type: "object" } as never,
+          execute: async () => {
+            log.push("exec");
+            return "ok";
+          },
+        } as never,
+      },
+      // As materializeTools builds it: alias → canonical capability name.
+      toolNameMap: { search_nodes: "query_ontology" },
+      engine: client,
+      ledger: {
+        modelCall: async () => undefined,
+        toolCallStarted: async (record) => {
+          log.push("start");
+          intents.push(record);
+        },
+        toolCall: async (record) => {
+          log.push("done");
+          toolCalls.push(record);
+        },
+        seal: async () => undefined,
+      },
+    });
+    await drain(result);
+    // The intention is durable before the side effect can happen.
+    expect(log).toEqual(["start", "exec", "done"]);
+    // Identity is the canonical name on both events; the alias rides beside
+    // it and is never the identifier.
+    expect(intents[0]).toMatchObject({
+      toolName: "query_ontology",
+      toolAlias: "search_nodes",
+    });
+    expect(toolCalls[0]).toMatchObject({
+      toolName: "query_ontology",
+      toolAlias: "search_nodes",
+      outcome: "completed",
+    });
+  });
+
+  it("never invokes a tool whose intention could not be recorded", async () => {
+    // The write-ahead guarantee only holds if a failed intention stops the
+    // call: otherwise the mutation happens with nothing durable about it.
+    const { client } = setup();
+    const execute = vi.fn(async () => "ok");
+    const outcomes: TurnLedgerOutcome[] = [];
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {
+        search_nodes: {
+          description: "d",
+          inputSchema: { type: "object" } as never,
+          execute,
+        } as never,
+      },
+      engine: client,
+      ledger: {
+        modelCall: async () => undefined,
+        toolCallStarted: async () => {
+          throw new Error("ledger is read-only");
+        },
+        toolCall: async () => undefined,
+        seal: async (outcome) => {
+          outcomes.push(outcome);
+        },
+      },
+    });
+    await drain(result);
+    // The mutation never happened, which is the guarantee.
+    expect(execute).not.toHaveBeenCalled();
+    // And the turn does not answer: a receipt that cannot be written cancels
+    // the turn and rejects it, the same as every other receipt in this file.
+    expect(outcomes.map((o) => o.status)).toEqual(["aborted"]);
+    await expect(result.finalText).rejects.toThrow("ledger is read-only");
+  });
+
+  it("records a refused tool as denied on the ledger", async () => {
+    const { client } = setup();
+    const toolCalls: TurnLedgerToolCall[] = [];
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {
+        search_nodes: {
+          description: "d",
+          inputSchema: { type: "object" } as never,
+          execute: async () => {
+            throw new Error("approval denied for search_nodes");
+          },
+        } as never,
+      },
+      engine: client,
+      ledger: {
+        modelCall: async () => undefined,
+        toolCallStarted: async () => undefined,
+        toolCall: async (record) => {
+          toolCalls.push(record);
+        },
+        seal: async () => undefined,
+      },
+    });
+    await drain(result);
+    expect(toolCalls).toEqual([
+      expect.objectContaining({
+        toolName: "search_nodes",
+        outcome: "denied",
+        error: "approval denied for search_nodes",
+      }),
+    ]);
+  });
+
+  it("cancels the turn and does not answer when a receipt cannot be written", async () => {
+    const { engine, client } = setup();
+    const outcomes: TurnLedgerOutcome[] = [];
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {
+        search_nodes: {
+          description: "d",
+          inputSchema: { type: "object" } as never,
+          execute: async () => "ok",
+        } as never,
+      },
+      engine: client,
+      ledger: {
+        modelCall: async () => {
+          throw new Error("ledger is read-only");
+        },
+        toolCallStarted: async () => undefined,
+        toolCall: async () => undefined,
+        seal: async (outcome) => {
+          outcomes.push(outcome);
+        },
+      },
+    });
+    const parts = await drain(result);
+    expect(parts.at(-1)).toMatchObject({
+      type: "finish",
+      finishReason: "error",
+    });
+    // The first completion's answer never reached the engine, and the turn
+    // was cancelled instead of continued from an unrecorded step.
+    const answers = engine.posts
+      .filter((p) => p.route === "provider-result")
+      .map((p) => (p.body as { status: string }).status);
+    expect(answers).toEqual(["error"]);
+    expect(outcomes.map((o) => o.status)).toEqual(["aborted"]);
+    // A turn that could not be recorded does not answer: the result promises
+    // reject with the receipt's failure instead of resolving the aborted text.
+    await expect(result.finalText).rejects.toThrow("ledger is read-only");
+    await expect(result.usage).rejects.toThrow("ledger is read-only");
+  });
+
+  it("writes the receipt for a load_tools call over zod schemas, and the model is shown the loaded tool", async () => {
+    const script = goldenScript().map((frame) =>
+      frame.type === "tool_request"
+        ? { ...frame, name: LOAD_TOOLS, input: { names: ["search_nodes"] } }
+        : frame,
+    ) as ServerFrame[];
+    const { client } = setup(script);
+    const belt = createToolBelt({
+      tools: {
+        search_nodes: {
+          description: "Search graph nodes",
+          inputSchema: z.object({ q: z.string() }),
+          execute: async () => ({ rows: 3 }),
+        },
+      } as never,
+      pinned: [],
+      modelId: "anthropic/claude-sonnet-4.6",
+    });
+    const receipts: Array<{ toolName: string; outputDigest: string }> = [];
+    const outcomes: TurnLedgerOutcome[] = [];
+    const result = await runGovernedTurn({
+      telemetry,
+      model: { modelId: "anthropic/claude-sonnet-4.6" } as never,
+      system: "s",
+      history: [],
+      instruction: "list the nodes",
+      tools: belt.tools,
+      modelTools: belt.modelTools,
+      governance: belt.governance,
+      engine: client,
+      ledger: {
+        modelCall: async () => undefined,
+        // The recorder digests the receipt synchronously while building it.
+        toolCallStarted: async () => undefined,
+        toolCall: (record) => {
+          receipts.push({
+            toolName: record.toolName,
+            outputDigest: digestJcs(record.output ?? null),
+          });
+          return Promise.resolve();
+        },
+        seal: async (outcome) => {
+          outcomes.push(outcome);
+        },
+      },
+    });
+    await drain(result);
+    expect(await result.finalText).toBe("There are 3 nodes.");
+    expect(receipts).toEqual([
+      { toolName: LOAD_TOOLS, outputDigest: expect.stringMatching(/^sha256:/) },
+    ]);
+    expect(outcomes.map((o) => o.status)).toEqual(["completed"]);
+    const shown = streamAgentReply.mock.calls.map((call) =>
+      Object.keys((call[0] as { tools: Record<string, unknown> }).tools).sort(),
+    );
+    expect(shown[1]).toEqual([LOAD_TOOLS, SEARCH_TOOLS, "search_nodes"].sort());
+  });
+
+  it("writes the receipt for a tool whose output is not plain JSON (an undefined field, a Date)", async () => {
+    const { client } = setup();
+    const digests: string[] = [];
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "list the nodes",
+      tools: {
+        search_nodes: {
+          description: "d",
+          inputSchema: z.object({ q: z.string() }),
+          execute: async () => ({ a: undefined, at: new Date(0) }),
+        } as never,
+      },
+      engine: client,
+      ledger: {
+        modelCall: async () => undefined,
+        toolCallStarted: async () => undefined,
+        toolCall: (record) => {
+          digests.push(digestJcs(record.output ?? null));
+          return Promise.resolve();
+        },
+        seal: async () => undefined,
+      },
+    });
+    await drain(result);
+    expect(await result.finalText).toBe("There are 3 nodes.");
+    expect(digests).toEqual([expect.stringMatching(/^sha256:/)]);
+  });
+
+  it("cancels the turn when the recorder throws while building a receipt (negative)", async () => {
+    const { engine, client } = setup();
+    const outcomes: TurnLedgerOutcome[] = [];
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "list the nodes",
+      tools: {
+        search_nodes: {
+          description: "d",
+          inputSchema: { type: "object" } as never,
+          execute: async () => "ok",
+        } as never,
+      },
+      engine: client,
+      ledger: {
+        modelCall: async () => undefined,
+        // Not async: the throw happens before any promise exists.
+        toolCallStarted: async () => undefined,
+        toolCall: () => {
+          throw new TypeError("$.output must be a plain object");
+        },
+        seal: async (outcome) => {
+          outcomes.push(outcome);
+        },
+      },
+    });
+    await drain(result);
+    expect(
+      engine.posts
+        .filter((p) => p.route === "tool-result")
+        .map((p) => (p.body as { status?: string }).status),
+    ).not.toContain("ok");
+    expect(outcomes.map((o) => o.status)).toEqual(["aborted"]);
+    await expect(result.finalText).rejects.toThrow(
+      "$.output must be a plain object",
+    );
+  });
+
+  it("seals the run as failed when the engine cannot be reached mid-turn", async () => {
+    const outcomes: TurnLedgerOutcome[] = [];
+    // Ready answers, then every turn route fails: the engine went away.
+    let calls = 0;
+    const flaky = new StellaEngineClient({
+      baseUrl: "http://engine.test",
+      token: "fake-token",
+      fetchImpl: async (input) => {
+        calls += 1;
+        if (String(input).endsWith("/readyz"))
+          return new Response(JSON.stringify({ state: "ready" }), {
+            status: 200,
+          });
+        throw Object.assign(new Error("connect ECONNREFUSED"), {
+          code: "ECONNREFUSED",
+        });
+      },
+    });
+    const result = await runGovernedTurn({
+      telemetry,
+      system: "s",
+      history: [],
+      instruction: "hi",
+      tools: {},
+      engine: flaky,
+      ledger: {
+        modelCall: async () => undefined,
+        toolCallStarted: async () => undefined,
+        toolCall: async () => undefined,
+        seal: async (outcome) => {
+          outcomes.push(outcome);
+        },
+      },
+    });
+    const parts = await drain(result);
+    expect(parts).toEqual([
+      { type: "error", error: expect.any(EngineUnavailableError) },
+    ]);
+    expect(calls).toBeGreaterThan(1);
+    expect(outcomes).toEqual([
+      { status: "failed", error: expect.stringContaining("unavailable") },
+    ]);
+  });
+
+  it("declares the whole belt to the engine and shows the model only the pinned tools, the meta-tools and what it loaded", async () => {
+    const { engine, client } = setup();
+    const governed: Record<string, unknown> = {};
+    for (let i = 0; i < 40; i += 1) {
+      governed[`tool_${i}`] = {
+        description: `Tool number ${i}`,
+        inputSchema: { type: "object" } as never,
+        execute: async () => i,
+      };
+    }
+    governed.search_nodes = {
+      description: "Search graph nodes",
+      inputSchema: { type: "object" } as never,
+      execute: async () => ({ rows: 3 }),
+    };
+    const belt = createToolBelt({
+      tools: governed as never,
+      pinned: ["search_nodes"],
+      modelId: "anthropic/claude-sonnet-4.6",
+    });
+    const result = await runGovernedTurn({
+      telemetry,
+      model: { modelId: "anthropic/claude-sonnet-4.6" } as never,
+      system: "s",
+      history: [],
+      instruction: "list the nodes",
+      tools: belt.tools,
+      modelTools: belt.modelTools,
+      governance: belt.governance,
+      engine: client,
+    });
+    await drain(result);
+    // The engine's gate knows every tool; the provider saw three.
+    const request = engine.turnRequests[0] as { tools: unknown[] };
+    expect(request.tools).toHaveLength(43);
+    const shown = streamAgentReply.mock.calls.map((call) =>
+      Object.keys((call[0] as { tools: Record<string, unknown> }).tools).sort(),
+    );
+    expect(shown[0]).toEqual([LOAD_TOOLS, SEARCH_TOOLS, "search_nodes"].sort());
   });
 
   it("routes the verdict role to a model that is not the worker's", () => {

@@ -7,7 +7,10 @@ import { schema } from "@oxagen/database";
 import type { AttemptEventReadRecord, RunSummary } from "@oxagen/run-ledger";
 import type { TachoFrameRow } from "@oxagen/telemetry";
 import { NO_BODY } from "@oxagen/run-ledger";
-import type { RunItem } from "@oxagen/oxagen/contracts/run.list";
+import {
+  IN_APP_AGENT_SURFACES,
+  type RunItem,
+} from "@oxagen/oxagen/contracts/run.list";
 import {
   type LedgerEventRollup,
   type LedgerRunRow,
@@ -95,6 +98,8 @@ const sameScope = (a: RunScope, b: RunScope) =>
 export type LedgerFixture = LedgerRunRow & {
   scope: RunScope;
   specVersion: number;
+  /** `agent_runs.surface`; the page query excludes the in-app agent's two. */
+  surface?: string;
   rollup?: LedgerEventRollup;
   seal?: LedgerSeal | null;
   /** The run's `cost.run_totals` row; absent when the rollup has not covered it. */
@@ -250,7 +255,13 @@ export function memoryStores(
         Promise.resolve(
           pageOf(
             inScope(scope)
-              .ledger.filter((r) => r.specVersion === 2)
+              .ledger.filter(
+                (r) =>
+                  r.specVersion === 2 &&
+                  !(IN_APP_AGENT_SURFACES as readonly string[]).includes(
+                    r.surface ?? "external",
+                  ),
+              )
               .filter(listed(q))
               .map((r) => ({
                 at: (r.run.startedAt ?? r.run.createdAt).getTime(),

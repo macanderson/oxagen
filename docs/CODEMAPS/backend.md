@@ -46,7 +46,6 @@ POST /v1/organizations               → org create
 GET  /v1/user/organizations          → org list
 GET  /v1/user/workspaces             → workspace list (pre-org CLI linker)
 GET  /v1/user/preferences/read       → user prefs
-POST /v1/user/preferences/write      → update prefs
 GET  /v1/user/budget/read            → per-user turn budget (default)
 POST /v1/user/budget/write           → update per-user turn budget
 ```
