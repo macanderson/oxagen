@@ -62,7 +62,8 @@
         "toolbelt": "Toolbelt",
         "enrollment": "Enrollment",
         "incidents": "Tamper incidents",
-        "definition": "Definition in git"
+        "definition": "Definition in git",
+        "mandates": "Mandates"
       },
       "identity": {
         "title": "Identity",
@@ -106,6 +107,7 @@
         "never": "never",
         "noExpiry": "does not expire",
         "active": "active",
+        "expired": "expired",
         "revoked": "revoked"
       },
       "toolbelt": {
@@ -188,6 +190,7 @@
         "bundleVersion": "version {version}",
         "never": "never",
         "revoked": "revoked",
+        "expired": "expired",
         "empty": {
           "title": "No host is enrolled under this agent",
           "body": "Enroll the host it runs on, from the repository it works in:",
@@ -300,7 +303,10 @@
         "refused": "The change was refused: {code}. Nothing was changed.",
         "invalid": "The request was refused as invalid. Nothing was changed.",
         "pendingApproval": "The change is waiting for approval, request {accessRequestId}.",
-        "unavailable": "The change could not be made: {code}. Nothing was changed."
+        "unavailable": "The change could not be made: {code}. Nothing was changed.",
+        "noToolMatches": "No declared tool with a consequence tag matches those patterns in this workspace, so the mandate would cover nothing.",
+        "measureNotDeclared": "A tool version those patterns match declares no such measure, so the limit could not be read from a call. A financial tool whose schema does not expose an amount cannot be given a mandate.",
+        "measureUnitMismatch": "A covered tool declares that measure in a different unit. The gate reads a call in the unit the tool declares, so a limit denominated in anything else would be enforced as a figure nobody entered. Name the unit the tool declares."
       }
     },
     "source": {
@@ -347,6 +353,71 @@
           "source": "The file is empty or larger than 64 KB."
         }
       }
+    },
+    "mandates": {
+      "title": "Mandates recorded",
+      "noneTitle": "No mandate",
+      "lead": "A mandate is bounded, expiring authority for the consequences it names. Nothing in a role, a grant or a toolbelt substitutes for one.",
+      "none": "No mandate is recorded for this agent — none granted, and none requested — so it cannot carry a consequence.",
+      "noneDetail": "A call that carries a consequence tag is denied before dispatch — before any credential is minted and before anything reaches a tool server — whether or not the tool is on this agent's belt.",
+      "authority": "Remaining authority is what the ledger says: every draw reserves, then settles against a receipt or releases. The tools a mandate covers appear on the belt gated by mandate and approval, never as plainly allowed.",
+      "columns": {
+        "mandate": "Mandate",
+        "effect": "Consequence",
+        "tools": "Tools",
+        "perCall": "Per call",
+        "perPeriod": "Per period",
+        "remaining": "Remaining",
+        "validTo": "Expires",
+        "status": "Status"
+      },
+      "status": {
+        "draft": "requested",
+        "active": "active",
+        "expired": "expired",
+        "revoked": "revoked"
+      },
+      "request": {
+        "open": "Request a mandate",
+        "title": "Request a mandate",
+        "body": "The request is recorded as a draft for the role accountable for this consequence to grant or decline. A draft grants nothing.",
+        "measure": "Measure",
+        "measureHint": "The name the tool version declares the figure under, which is how it is read from a call. It cannot be “calls”: every call draws one of those, and the field below sets that limit. Leave the measure fields blank to limit calls alone — the only limit a tool that declares no measure can carry.",
+        "perCall": "Per call",
+        "perPeriod": "Per period",
+        "perPeriodHint": "Name a per-call limit, a per-period limit, or both.",
+        "period": "Period",
+        "periods": {
+          "daily": "daily",
+          "weekly": "weekly",
+          "monthly": "monthly"
+        },
+        "callsPerDay": "Calls per day",
+        "tools": "Tools",
+        "toolsHint": "Patterns over slug@version, separated by commas. Everything else is denied.",
+        "purpose": "Purpose",
+        "purposeHint": "Written for the office that reads the ledger.",
+        "validFrom": "Valid from",
+        "validTo": "Valid to",
+        "validToHint": "A mandate expires. There is no unbounded option.",
+        "confirm": "Request the mandate",
+        "pending": "Requesting",
+        "unit": "Unit",
+        "unitHint": "What the measure counts, in the name the tool version declares — rows, recipients, GB. It must be the declared unit: the gate reads a call in that unit, so a limit denominated in another is enforced as a figure nobody entered, and the request is refused. Not a currency code: a limit in money is scaled by the tool’s declaration, which nothing here can read, so it is asked for over the API or MCP instead.",
+        "perCallHint": "Whole units of the measure. The figure is recorded exactly as typed and is never scaled, so the limit this request carries is the figure entered.",
+        "consequenceTags": "Consequences",
+        "consequenceTagsHint": "Name every consequence the covered tools declare. A mandate covers a tool only when it names all of them — name one of a tool’s two and the mandate is granted as asked and the call is still denied. The six above are the starter set; a workspace defines its own, and those go in the field beneath.",
+        "consequenceOther": "Others the tools declare, separated by commas"
+      },
+      "truncated": "The newest {shown} mandates recorded for this agent. There are at least that many, and older ones are not listed here.",
+      "noneEffective": "No mandate recorded for this agent is in effect, so it cannot carry a consequence. The rows below are a request awaiting a decision, or history.",
+      "noneListedTitle": "No mandate listed",
+      "partial": "You see the mandates of the agents you created. This list is not every mandate recorded for this agent.",
+      "noneListed": "No mandate listed here is in effect. The list above is not complete, so that is not a statement that the agent holds no authority.",
+      "noneListedDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate recorded in the workspace. Ask one of them whether this agent holds authority, or read the Tools ledger with that role.",
+      "retired": "This agent is retired, so it cannot be given a mandate: its principal is suspended and authority granted now could never be drawn. The mandates recorded for it stay listed.",
+      "noneEffectiveUpcoming": "No mandate recorded for this agent is in effect yet, so it cannot carry a consequence. A mandate granted below has not reached the date it starts on; any others are a request awaiting a decision, or history.",
+      "startsOn": "starts {date}"
     }
   }
 }

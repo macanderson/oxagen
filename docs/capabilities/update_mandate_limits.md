@@ -51,7 +51,7 @@ The consequence roles of every tag on the mandate, as `grant_mandate`.
 | `not_found` | `mandate_not_found` | Not in this workspace. |
 | `conflict` | `mandate_ended` | Only an active mandate changes. |
 | `conflict` | `validity_inverted` | `validTo` at or before `validFrom`. |
-| `conflict` | `no_tool_matches`, `measure_not_declared` | Denied by construction. |
+| `conflict` | `no_tool_matches`, `measure_not_declared`, `measure_unit_mismatch` | Denied by construction, the same checks `grant_mandate` runs. |
 
 ## SPEC references
 

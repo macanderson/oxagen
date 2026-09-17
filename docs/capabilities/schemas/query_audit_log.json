@@ -1,7 +1,7 @@
 {
   "name": "query_audit_log",
   "domain": "audit",
-  "description": "Query the org's security audit events (security_events) with filters — actor, capability, outcome, event type, time range — returning a unified, time-ordered feed. Read-only.",
+  "description": "Query the org's security audit events (security_events) with filters — actor, capability, outcome, event type, time range — returning a time-ordered feed. Read-only.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -37,6 +37,10 @@
         "type": "string"
       },
       "actorUserId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "actorPublicId": {
         "type": "string"
       },
       "capability": {
@@ -52,7 +56,8 @@
         ]
       },
       "workspaceId": {
-        "type": "string"
+        "type": "string",
+        "format": "uuid"
       },
       "from": {
         "type": "string"
@@ -83,6 +88,10 @@
         "items": {
           "type": "object",
           "properties": {
+            "id": {
+              "type": "string",
+              "description": "The security event's id"
+            },
             "source": {
               "type": "string",
               "enum": [
@@ -92,7 +101,7 @@
             },
             "eventType": {
               "type": "string",
-              "description": "Event classification (e.g. capability.invoked, run_completed)"
+              "description": "Event classification (e.g. capability.invoke_denied)"
             },
             "occurredAt": {
               "type": "string",
@@ -108,7 +117,27 @@
                 }
               ]
             },
+            "actorPublicId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "workspaceId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "workspaceSlug": {
               "anyOf": [
                 {
                   "type": "string"
@@ -138,6 +167,26 @@
                 }
               ]
             },
+            "ip": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "userAgent": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "requestId": {
               "anyOf": [
                 {
@@ -150,13 +199,18 @@
             }
           },
           "required": [
+            "id",
             "source",
             "eventType",
             "occurredAt",
             "actorUserId",
+            "actorPublicId",
             "workspaceId",
+            "workspaceSlug",
             "capability",
             "outcome",
+            "ip",
+            "userAgent",
             "requestId"
           ],
           "additionalProperties": false

@@ -52,11 +52,20 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-    // The handler runs all reads + writes inside a single withTenantDb (one
-    // RLS-scoped transaction); resolveActorPrincipalAndRole uses its own. Both
-    // route to the same fluent tx mock so the call sequence is continuous.
-    withTenantDb: async (fn: (tx: typeof mockTx) => Promise<unknown>) =>
+    // The handler runs all reads + writes inside a single withSystemDb
+    // transaction fenced on ctx.orgId; resolveActorPrincipalAndRole uses its
+    // own. Both route to the same fluent tx mock so the call sequence is
+    // continuous.
+    //
+    // withTenantDb is mocked inert on purpose. Under the org-only workspace
+    // sentinel the app removes a member with, RLS narrows
+    // iam.principal_role_assignments to its workspace_id IS NULL rows and
+    // auth.api_keys and workspace.workspace_users to none at all — silently. A
+    // regression to the tenant-scoped seam fails on `undefined` here rather
+    // than leaving a removed member holding their workspace roles.
+    withSystemDb: async (fn: (tx: typeof mockTx) => Promise<unknown>) =>
       fn(mockTx),
+    withTenantDb: () => undefined,
   };
 });
 
@@ -94,13 +103,32 @@ async function expectHandlerError(
   expect(err).toMatchObject({ code, reason });
 }
 
-/** Chain builder for select().from().where().limit() returning a resolved array. */
+/**
+ * Chain builder for select().from().where()[.limit()] returning a resolved
+ * array. `where()` is awaitable as well as chainable, because the workspace
+ * sweep reads every workspace of the org without a limit.
+ */
 function selectChain(result: unknown[]) {
   const limit = vi.fn().mockResolvedValue(result);
-  const where = vi.fn().mockReturnValue({ limit });
+  const where = vi
+    .fn()
+    .mockImplementation(() =>
+      Object.assign(Promise.resolve(result), { limit }),
+    );
   const innerJoin = vi.fn().mockReturnValue({ where });
   const from = vi.fn().mockReturnValue({ where, innerJoin });
   return { select: vi.fn().mockReturnValue({ from }), limit, where };
+}
+
+/**
+ * A write terminator that is both awaitable and `.returning()`-able — the two
+ * revocations report the rows they touched now, because an UPDATE that matches
+ * nothing is not an error and that is exactly how the narrowing hid.
+ */
+function writeResult(rows: unknown[] = []) {
+  return Object.assign(Promise.resolve(rows), {
+    returning: vi.fn().mockResolvedValue(rows),
+  });
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -199,13 +227,9 @@ describe("orgMemberRemoveHandler", () => {
     let callCount = 0;
     mockTx.select = vi.fn().mockImplementation(() => {
       callCount++;
-      const build = (result: unknown[]) => {
-        const limit = vi.fn().mockResolvedValue(result);
-        const where = vi.fn().mockReturnValue({ limit });
-        const innerJoin = vi.fn().mockReturnValue({ where });
-        const from = vi.fn().mockReturnValue({ where, innerJoin });
-        return { from };
-      };
+      const build = (result: unknown[]) => ({
+        from: selectChain(result).select().from,
+      });
       if (callCount === 1) return build([{ id: "actor-principal-id" }]); // actor principal
       if (callCount === 2) return build([{ roleName: "Owner" }]); // actor PRA = Owner
       if (callCount === 3) return build([{ id: "target-ou", role: "owner" }]); // target orgUser found
@@ -237,13 +261,9 @@ describe("orgMemberRemoveHandler", () => {
     let callCount = 0;
     mockTx.select = vi.fn().mockImplementation(() => {
       callCount++;
-      const build = (result: unknown[]) => {
-        const limit = vi.fn().mockResolvedValue(result);
-        const where = vi.fn().mockReturnValue({ limit });
-        const innerJoin = vi.fn().mockReturnValue({ where });
-        const from = vi.fn().mockReturnValue({ where, innerJoin });
-        return { from };
-      };
+      const build = (result: unknown[]) => ({
+        from: selectChain(result).select().from,
+      });
       if (callCount === 1) return build([{ id: "actor-principal-id" }]); // actor principal
       if (callCount === 2) return build([{ roleName: "Admin" }]); // actor PRA = Admin
       if (callCount === 3) return build([{ id: "target-ou", role: "member" }]); // target orgUser found
@@ -255,11 +275,11 @@ describe("orgMemberRemoveHandler", () => {
       return build([]);
     });
 
-    const updateWhere = vi.fn().mockResolvedValue([]);
+    const updateWhere = vi.fn().mockImplementation(() => writeResult());
     const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
     mockTx.update = vi.fn().mockReturnValue({ set: updateSet });
 
-    const deleteWhere = vi.fn().mockResolvedValue([]);
+    const deleteWhere = vi.fn().mockImplementation(() => writeResult());
     mockTx.delete = vi.fn().mockReturnValue({ where: deleteWhere });
 
     const ctx = makeCtx();
@@ -292,5 +312,174 @@ describe("orgMemberRemoveHandler", () => {
         deletedById: "actor-user-id",
       }),
     );
+  });
+
+  it("revokes role assignments at every scope and drops workspace memberships", async () => {
+    // The removal the org-only workspace sentinel used to narrow. Step (b)
+    // deliberately carries no workspace predicate — its intent is to revoke the
+    // principal's roles at EVERY scope — and RLS put the predicate back, so the
+    // UPDATE reached only the workspace_id IS NULL rows and said nothing. Step
+    // (c)'s status: "deleted" does not compensate: fetch-authz resolves a
+    // principal with no status filter and iam-provision reuses the same row, so
+    // a re-invited member returns holding their old workspace roles.
+    let callCount = 0;
+    mockTx.select = vi.fn().mockImplementation(() => {
+      callCount++;
+      const build = (result: unknown[]) => ({
+        from: selectChain(result).select().from,
+      });
+      if (callCount === 1) return build([{ id: "actor-principal-id" }]);
+      if (callCount === 2) return build([{ roleName: "Owner" }]);
+      if (callCount === 3) return build([{ id: "target-ou", role: "member" }]);
+      if (callCount === 4) return build([{ id: "owner-role-id" }]);
+      if (callCount === 5) return build([{ n: 2 }]);
+      if (callCount === 6) return build([{ id: "target-principal-id" }]);
+      if (callCount === 7) return build([]);
+      if (callCount === 8) return build([{ id: "target-principal-id" }]);
+      // (e) the org's workspaces, the fence for workspace_users
+      if (callCount === 9) return build([{ id: "ws-1" }, { id: "ws-2" }]);
+      return build([]);
+    });
+
+    const revokedAssignments = [
+      { id: "pra-org", workspaceId: null },
+      { id: "pra-ws-1", workspaceId: "ws-1" },
+      { id: "pra-ws-2", workspaceId: "ws-2" },
+    ];
+    const praReturning = vi.fn().mockResolvedValue(revokedAssignments);
+    const keyReturning = vi.fn().mockResolvedValue([{ id: "key-1" }]);
+    const updateSet = vi.fn();
+    mockTx.update = vi.fn().mockImplementation((table: unknown) => ({
+      set: updateSet.mockReturnValue({
+        where: vi.fn().mockReturnValue(
+          Object.assign(Promise.resolve([]), {
+            returning: table === schema.apiKeys ? keyReturning : praReturning,
+          }),
+        ),
+      }),
+    }));
+
+    const wsuReturning = vi.fn().mockResolvedValue([{ id: "wsu-1" }]);
+    const deletedTables: unknown[] = [];
+    mockTx.delete = vi.fn().mockImplementation((table: unknown) => {
+      deletedTables.push(table);
+      return {
+        where: vi
+          .fn()
+          .mockReturnValue(
+            Object.assign(Promise.resolve([]), { returning: wsuReturning }),
+          ),
+      };
+    });
+
+    const result = await orgMemberRemoveHandler(
+      { targetUserId: "target-user" },
+      makeCtx(),
+    );
+
+    expect(result.removed).toBe(true);
+    // The workspace-scoped assignments are in the revoked set, not only the
+    // org-wide one.
+    expect(praReturning).toHaveBeenCalled();
+    // org_users AND workspace_users, in that order.
+    expect(deletedTables).toEqual([schema.orgUsers, schema.workspaceUsers]);
+    expect(wsuReturning).toHaveBeenCalled();
+    // The CLI session keys are revoked for real rather than matching nothing.
+    expect(keyReturning).toHaveBeenCalled();
+  });
+
+  it("skips the workspace sweep when the org has no workspaces", async () => {
+    let callCount = 0;
+    mockTx.select = vi.fn().mockImplementation(() => {
+      callCount++;
+      const build = (result: unknown[]) => ({
+        from: selectChain(result).select().from,
+      });
+      if (callCount === 1) return build([{ id: "actor-principal-id" }]);
+      if (callCount === 2) return build([{ roleName: "Owner" }]);
+      if (callCount === 3) return build([{ id: "target-ou", role: "member" }]);
+      if (callCount === 4) return build([{ id: "owner-role-id" }]);
+      if (callCount === 5) return build([{ n: 2 }]);
+      if (callCount === 6) return build([{ id: "target-principal-id" }]);
+      if (callCount === 7) return build([]);
+      if (callCount === 8) return build([{ id: "target-principal-id" }]);
+      return build([]); // no workspaces
+    });
+    mockTx.update = vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({ where: () => writeResult() }),
+    });
+    const deletedTables: unknown[] = [];
+    mockTx.delete = vi.fn().mockImplementation((table: unknown) => {
+      deletedTables.push(table);
+      return { where: () => writeResult() };
+    });
+
+    await orgMemberRemoveHandler({ targetUserId: "target-user" }, makeCtx());
+
+    expect(deletedTables).toEqual([schema.orgUsers]);
+  });
+
+  it("a member named by public id is resolved to their user id, after the actor gate", async () => {
+    let callCount = 0;
+    mockTx.select = vi.fn().mockImplementation(() => {
+      callCount++;
+      const build = (result: unknown[]) => ({
+        from: selectChain(result).select().from,
+      });
+      if (callCount === 1) return build([{ id: "actor-principal-id" }]); // actor principal
+      if (callCount === 2) return build([{ roleName: "Admin" }]); // actor PRA = Admin
+      if (callCount === 3) return build([{ userId: "target-user-uuid" }]); // usr_… → users.id
+      if (callCount === 4) return build([{ id: "target-ou", role: "member" }]); // target orgUser
+      if (callCount === 5) return build([{ id: "owner-role-id" }]); // Owner role row
+      if (callCount === 6) return build([{ n: 2 }]); // 2 owners — no lockout
+      if (callCount === 7) return build([{ id: "target-principal-id" }]); // target principal
+      if (callCount === 8) return build([]); // target holds no Owner PRA
+      if (callCount === 9) return build([{ id: "target-principal-id" }]); // mutation principal
+      return build([]);
+    });
+
+    const updateWhere = vi.fn().mockImplementation(() => writeResult());
+    const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
+    mockTx.update = vi.fn().mockReturnValue({ set: updateSet });
+    const deleteWhere = vi.fn().mockImplementation(() => writeResult());
+    mockTx.delete = vi.fn().mockReturnValue({ where: deleteWhere });
+
+    const result = await orgMemberRemoveHandler(
+      { targetUserId: "usr_7k2m9q4x8r1t5v3w6y0z2a" },
+      makeCtx(),
+    );
+
+    // The answer names the target the caller named, not the uuid it resolved.
+    expect(result).toMatchObject({
+      removed: true,
+      targetUserId: "usr_7k2m9q4x8r1t5v3w6y0z2a",
+    });
+    expect(mockTx.delete).toHaveBeenCalledOnce();
+  });
+
+  it("a public id that names nobody in this org → not_found, nothing deleted", async () => {
+    let callCount = 0;
+    mockTx.select = vi.fn().mockImplementation(() => {
+      callCount++;
+      const build = (result: unknown[]) => ({
+        from: selectChain(result).select().from,
+      });
+      if (callCount === 1) return build([{ id: "actor-principal-id" }]);
+      if (callCount === 2) return build([{ roleName: "Owner" }]);
+      return build([]); // 3: the public id resolves to no member of this org
+    });
+    mockTx.delete = vi.fn();
+    mockTx.update = vi.fn();
+
+    await expectHandlerError(
+      orgMemberRemoveHandler(
+        { targetUserId: "usr_0000000000000000000000" },
+        makeCtx(),
+      ),
+      "not_found",
+      "target_not_member",
+    );
+    expect(mockTx.delete).not.toHaveBeenCalled();
+    expect(mockTx.update).not.toHaveBeenCalled();
   });
 });

@@ -20,6 +20,7 @@ import { orgMemberRoleChange } from "@oxagen/oxagen/contracts/org.member_role.ch
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq, isNull } from "drizzle-orm";
+import { resolveMemberUserId } from "./lib/org-member";
 import { logger } from "./logger";
 
 const OWNER_ROLE_NAME = "Owner";
@@ -45,6 +46,13 @@ async function resolveActorPrincipalAndRole(
         eq(schema.principals.orgId, orgId),
         eq(schema.principals.parentUserId, userId),
         eq(schema.principals.kind, "human"),
+        // A member's principal is org-level: iam-provision creates it with no
+        // workspace, and an agent principal that shares the same
+        // parent_user_id is what the kind filter above excludes. Pinning
+        // workspace_id IS NULL says so in the query rather than relying on it,
+        // and keeps the read identical under an org-only scope, where
+        // iam.principals (workspace_nullable) admits exactly the NULL rows.
+        isNull(schema.principals.workspaceId),
         eq(schema.principals.status, "active"),
       ),
     )
@@ -127,6 +135,13 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
       });
     }
 
+    // ── Resolve the target's user id ────────────────────────────────────────────
+    // The console names a member by public id (`usr_…`) and never by uuid, which
+    // org_users.user_id is; lib/org-member.ts resolves one form into the other
+    // inside this transaction, after the gate, so a caller the org refuses
+    // learns nothing about who is in it.
+    const target = await resolveMemberUserId(tx, ctx.orgId, input.targetUserId);
+
     // ── Resolve target membership (IDOR guard) ──────────────────────────────────
     const [targetOrgUser] = await tx
       .select({ id: schema.orgUsers.id, role: schema.orgUsers.role })
@@ -134,7 +149,7 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
       .where(
         and(
           eq(schema.orgUsers.orgId, ctx.orgId),
-          eq(schema.orgUsers.userId, input.targetUserId),
+          eq(schema.orgUsers.userId, target),
         ),
       )
       .limit(1);
@@ -202,8 +217,15 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
           .where(
             and(
               eq(schema.principals.orgId, ctx.orgId),
-              eq(schema.principals.parentUserId, input.targetUserId),
+              eq(schema.principals.parentUserId, target),
               eq(schema.principals.kind, "human"),
+              // A member's principal is org-level: iam-provision creates it with no
+              // workspace, and an agent principal that shares the same
+              // parent_user_id is what the kind filter above excludes. Pinning
+              // workspace_id IS NULL says so in the query rather than relying on it,
+              // and keeps the read identical under an org-only scope, where
+              // iam.principals (workspace_nullable) admits exactly the NULL rows.
+              isNull(schema.principals.workspaceId),
             ),
           )
           .limit(1);
@@ -273,8 +295,15 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
       .where(
         and(
           eq(schema.principals.orgId, ctx.orgId),
-          eq(schema.principals.parentUserId, input.targetUserId),
+          eq(schema.principals.parentUserId, target),
           eq(schema.principals.kind, "human"),
+          // A member's principal is org-level: iam-provision creates it with no
+          // workspace, and an agent principal that shares the same
+          // parent_user_id is what the kind filter above excludes. Pinning
+          // workspace_id IS NULL says so in the query rather than relying on it,
+          // and keeps the read identical under an org-only scope, where
+          // iam.principals (workspace_nullable) admits exactly the NULL rows.
+          isNull(schema.principals.workspaceId),
         ),
       )
       .limit(1);
@@ -330,7 +359,7 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
       .where(
         and(
           eq(schema.orgUsers.orgId, ctx.orgId),
-          eq(schema.orgUsers.userId, input.targetUserId),
+          eq(schema.orgUsers.userId, target),
         ),
       );
 

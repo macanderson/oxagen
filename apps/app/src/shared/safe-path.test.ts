@@ -123,6 +123,8 @@ describe("routes", () => {
     expect(routes.resetPassword()).toBe("/reset-password");
     expect(routes.invite("invi_1")).toBe("/invite/invi_1");
     expect(routes.cliAuthorize({})).toBe("/cli/authorize");
+    expect(routes.people("acme")).toBe("/acme");
+    expect(routes.roles("acme")).toBe("/acme/roles");
     expect(routes.billing("acme")).toBe("/acme/billing");
     expect(routes.billing("acme", { cursor: "c 2&x" })).toBe(
       "/acme/billing?cursor=c+2%26x",
@@ -133,6 +135,14 @@ describe("routes", () => {
     expect(routes.billing("acme", { checkout: "cancel" })).toBe(
       "/acme/billing?checkout=cancel",
     );
+    expect(routes.steering("acme", "core")).toBe("/acme/core/steering");
+    expect(
+      routes.steering("acme", "core", {
+        tab: "prs",
+        offset: "50",
+        proposal: "prp_1&x",
+      }),
+    ).toBe("/acme/core/steering?tab=prs&offset=50&proposal=prp_1%26x");
   });
 
   it("percent-encodes every segment, so a slug cannot add a segment or a host", () => {
@@ -184,6 +194,12 @@ describe("routes", () => {
     expect(routes.spend("acme", "core-platform", { tab: "waste" })).toBe(
       "/acme/core-platform/spend?tab=waste",
     );
+    expect(routes.skills("acme", "core-platform")).toBe(
+      "/acme/core-platform/skills",
+    );
+    expect(routes.skills("acme", "core-platform", { cursor: "c 2&x" })).toBe(
+      "/acme/core-platform/skills?cursor=c+2%26x",
+    );
     expect(
       routes.spend("acme", "core-platform", {
         tab: "agent",
@@ -192,6 +208,12 @@ describe("routes", () => {
     ).toBe(
       "/acme/core-platform/spend?tab=agent&drill=acme%2Fcore-platform%2Ftriage%26tab%3Dx",
     );
+    expect(
+      routes.spend("acme", "core-platform", {
+        tab: "findings",
+        finding: "fnd_01k5rtgh",
+      }),
+    ).toBe("/acme/core-platform/spend?tab=findings&finding=fnd_01k5rtgh");
     expect(() => routes.run("", "x", "arun_1")).toThrow("unsafe_path");
   });
 });

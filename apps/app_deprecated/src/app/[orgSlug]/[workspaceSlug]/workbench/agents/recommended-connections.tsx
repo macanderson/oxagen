@@ -19,6 +19,7 @@
  * Extracted from agent-builder.tsx so the panel is unit-testable without
  * mounting the whole wizard (mirrors suggestion-mapping.ts's extraction).
  */
+import type { JSX } from "react";
 import Link from "next/link";
 import { ExternalLink, Plug, Server } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +35,7 @@ export interface RecommendedConnectionsProps {
 export function RecommendedConnections({
   recommendations,
   orgSlug,
-}: RecommendedConnectionsProps) {
+}: RecommendedConnectionsProps): JSX.Element | null {
   const connectable = recommendations.filter(
     (rec) => rec.kind === "mcp_server",
   );

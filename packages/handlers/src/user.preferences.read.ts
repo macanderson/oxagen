@@ -15,6 +15,7 @@ const PREF_DEFAULTS = {
   defaultTextModel: null,
   timezone: "UTC",
   language: "en",
+  theme: "system" as const,
 };
 
 export const userPreferencesReadHandler: CapabilityHandler<
@@ -39,6 +40,7 @@ export const userPreferencesReadHandler: CapabilityHandler<
         defaultTextModel: true,
         timezone: true,
         language: true,
+        theme: true,
       },
     }),
   );
@@ -65,5 +67,11 @@ export const userPreferencesReadHandler: CapabilityHandler<
     defaultTextModel: row.defaultTextModel ?? null,
     timezone: row.timezone,
     language: row.language,
+    theme: themeOf(row.theme),
   };
 };
+
+/** The stored column is free text; anything outside the three choices reads as `system`. */
+function themeOf(value: string): "system" | "light" | "dark" {
+  return value === "light" || value === "dark" ? value : "system";
+}

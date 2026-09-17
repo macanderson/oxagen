@@ -14,7 +14,9 @@
     "src/test/**",
     "src/**/*.builders.ts",
     "src/server/viewer.testing.ts",
-    "src/**/*.type-test.ts"
+    "src/**/*.type-test.ts",
+    "src/data/unrecorded.ts",
+    "src/ui/not-recorded.tsx"
   ],
   "preprocessor": "./knip.preprocessor.ts"
 }

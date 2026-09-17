@@ -84,6 +84,24 @@ billing. The figures are spec-owned
 (`docs/specs/governed-action-metering.md` §4.1, §4.2, §4.6) and this ADR
 cites them without restating them elsewhere.
 
+**2026-09-15: Enterprise is negotiated only, and nothing is gated on it
+(maintainer decision 3).** Enterprise has no published plan. `enterprise-v2`
+is removed from `SUBSCRIPTION_PLANS` (`packages/billing/src/pricing.ts`) and
+from the Stripe catalogue, so an enterprise organisation's terms come only
+from its `billing.contract_terms` row (WL-56). No feature is gated on the
+enterprise licence: every feature is on for every tier, including the IAM
+resolver and the SOC 2 controls. That removes these gates (WL-55):
+
+- `canAccessACL`, `canAccessSSO`, `canAccessSCIM` and `canAccessAuditLog`
+  (`packages/billing/src/entitlements.ts:93-118`),
+- the `tier_gate` step of `checkIAM` (`packages/iam/src/check-iam.ts:159`),
+- every `requireTier(…, "enterprise", …)` call
+  (`packages/handlers/src/prompt.settings.write.ts:39`).
+
+This replaces the Enterprise sentence of the rates line above. Once WL-55
+lands, the `resolveOrgTier` leg kept for "the IAM tier gate" (§3) has no
+gate left to answer for.
+
 There is no `source`, `tier`, `stripe_price_id` or `exhaustion_policy`
 column on the negotiated row: the source is implied by the table, the tier
 is the entitlement's, the checkout uses `price_data`, and what happens past
@@ -205,6 +223,15 @@ saves the card as the default payment method. This replaces the "hard stop:
 no card, no auto top-up" of the 2026-09-14 rates line under §2 and the
 Free-tier half of the saved-cards consequence below.
 
+**2026-09-15: Credit packs stay the in-app agent's top-up (maintainer
+decision 2).** `purchase_credits` and the credit packs (`CREDIT_PACKS`,
+`packages/billing/src/pricing.ts`) are not retired. They fund the ADR-053
+platform-funded assistant balance. GAU blocks remain the governed-action
+product. `pnpm billing:stripe-sync` catalogues a GAU block product with a
+lookup key beside the packs, and the Checkout and invoice lines name that
+product while pricing at the organisation's contracted rate (WL-57). Credits
+never pay for GAUs, and a GAU block never funds an assistant turn.
+
 ### 7. Invoice billing: consumption is never capped; overage is invoiced at period end or at `invoice_gau_max`
 
 An organisation with `approved_for_invoice_billing = true` is never
@@ -218,6 +245,18 @@ invoiced at the contracted rate:
   exactly the cap, so accrual restarts at GAU #`invoice_gau_max`+1. A second
   crossing in the same month gets the next sequence number.
 
+**2026-09-15: The cap bounds overage, and the interim invoice fires at unit
+max+1 (maintainer decision 6).** `invoice_gau_max` limits overage beyond the
+monthly allowance. It does not count total GAUs in the month. The interim
+invoice fires when uninvoiced overage exceeds the cap, which happens at
+overage unit `invoice_gau_max`+1. It invoices exactly `invoice_gau_max`
+GAUs, and that extra unit starts the next accrual. On Build (50,000 GAUs
+included) with the default cap of 100,000, the first interim invoice fires
+at GAU #150,001 of the month and the second at #250,001. This replaces
+"reaches `invoice_gau_max`" in the bullet above. The recorder compares with
+`>=` today (`packages/billing/src/action-metering.ts:324`); WL-59 changes
+it.
+
 Either invoice is charged on the saved payment method that day when one
 exists; when none does it is a `send_invoice` invoice due in 30 days, which
 Stripe emails and the hosted invoice page collects.
@@ -230,11 +269,30 @@ collectable by Stripe: its retry schedule on a card, the hosted invoice
 page in either case. There is no automatic suspension for GAU invoices in
 rev1. Subscription dunning is unchanged and still suspends.
 
+**2026-09-15: Suspension 5 days past due (maintainer decision 12).** An
+invoice-billed organisation is suspended 5 days after an interim or
+period-close invoice is past due. Metering continues while it is suspended:
+the recorder, the interim threshold and the close job keep accruing,
+closing and invoicing for it. Paying the full outstanding balance
+reactivates it. The suspension refuses what the existing `billing_suspended`
+gate refuses. This replaces "There is no automatic suspension for GAU
+invoices in rev1" above; the confirmation that an interim invoice does not
+move the monthly clock stands. WL-60 builds it.
+
 Switching an organisation from invoice billing to prepaid closes the
 accrual: `set_org_billing_terms` cuts an interim invoice for the uninvoiced
 amount in the same call, so no overage is stranded between the modes.
 Switching to invoice billing needs no settlement; purchased units stay
 usable as carry.
+
+**2026-09-15: The invoice is the purchase (maintainer decision 5).** When
+invoice billing is switched off, the same call moves the current bucket's
+`overage_invoiced_gau`, including the closing interim invoice, into
+`purchased_gau`. It then sets `overage_invoiced_gau` to 0. The prepaid
+bucket therefore opens at `remaining = 0` with no overdraft, and a later switch
+back to invoice billing does not count those units twice. For this one call
+it replaces the rule that invoice-kind settlements never touch
+`purchased_gau`. WL-58 builds it.
 
 ### 8. One settlement ledger; `paid` is its only terminal state
 
@@ -323,13 +381,31 @@ has no production caller, and WL-25 deletes it with
 `retentionCreditsForGbMonths` (§15). `RETENTION_USD_PER_GB_MONTH` stays,
 for the two handlers above.
 
-### 13. `create_org` grants no credits
+**2026-09-15: The upgrade stays in the app; three reads retire at cutover
+(maintainer decision 7).**
 
-`create_org` writes nothing billing-shaped: no credit grant, no
-`contract_terms`, `gau_buckets`, `gau_settlements` or `org_billing_settings`
-row. The ADR-053 platform-funded assistant balance of a new organisation
-starts at zero. Whether a signup grant returns with the assistant is an open
-question for the maintainer, not a default.
+- **Upgrade.** Rev1 keeps an in-app Build/Scale upgrade through Stripe
+  Checkout. `start_subscription_upgrade` stays, and the billing page's Plan
+  card binds it, resolving the price by its `stripe-sync` lookup key
+  (WL-66).
+- **Retirements.** `get_rate_card`, `preview_action_cost` and
+  `get_evidence_retention` retire at cutover. WL-50 deletes their contracts,
+  handlers, API routes, MCP tools and docs.
+
+Until that PR lands, the two-handler sentence above and §11's quoting
+sentence still describe the tree.
+
+### 13. `create_org` grants the signup credits and nothing else
+
+`create_org` writes no `contract_terms`, `gau_buckets`, `gau_settlements`
+or `org_billing_settings` row.
+
+Amended 2026-09-15 by the maintainer (#2968, `apps/app/ARCHITECTURE.md`
+§9): the ADR-053 platform-funded assistant balance of a new organisation is
+funded by the $5 signup grant, restored in `create_org` as
+`grantSignupCredits` on the org's bootstrap transaction. The grant is a
+non-expiring `free_grant` lot of 500 credits; it is never invoiced and buys
+no GAU.
 
 ### 14. The rev1 metering surface
 
@@ -353,6 +429,22 @@ this ADR records it:
   purchase (`purchase_gau_bucket`). Buying more is never refused for lack
   of GAUs.
 
+**2026-09-15: Ratified (maintainer decision, overrides).** The maintainer
+confirmed three points:
+
+- `resolve_approval` is the only billable action.
+- Membership writes are free.
+- `set_org_billing_terms` stays an operator-script capability with no
+  surface.
+
+The settlement states of §8 and the `billing.invoices` mirror stand as
+designed. Review found one defect against §8 and §9: an `auto_topup` row
+that the close job marks `failed` for `idempotency_key_expired` keeps the
+bucket's `open_topup_settlement_id`. `packages/billing/src/gau-settlements.ts:625-637`
+called `settleGauFailed`, which changed only the status, so the month got no
+second automatic attempt. #3073 fixed it on `app-rebuild`: `settleGauFailed`
+clears `open_topup_settlement_id` in the same transaction.
+
 ### 15. What is retired
 
 `billing.governed_action_counters`, `plans.included_actions_annual`, the
@@ -360,10 +452,16 @@ credit debit on the governed-action path (`creditsForActions` and the
 `consumeCredits` call the recorder made), `OXAGEN_ACTION_METER_MODE` with
 `resolveActionMeterMode`, `chargeEvidenceRetention` with
 `retentionCreditsForGbMonths`, `get_action_usage` with its panel, and the
-`grantFreeCredits` call in `create_org`. A shadow mode that charged a card
+`grantFreeCredits` call in `create_org` with its retry (the grant itself
+returns on the org transaction, §13). A shadow mode that charged a card
 or cut an invoice would not be a shadow, and one that did neither would
 leave a prepaid organisation running past exhaustion with no record. This
 is the zero-customer window; there is no migration of billed history.
+
+**2026-09-15: Shadow period waived (maintainer decision 14).** The
+maintainer skipped the metering shadow period, with a waiver dated
+2026-09-15. The shadow, compare and notify steps of
+`docs/specs/governed-action-metering.md` §6 do not run.
 
 ## Alternatives
 

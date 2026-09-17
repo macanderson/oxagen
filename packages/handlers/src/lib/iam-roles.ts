@@ -7,7 +7,7 @@
 // `iam.role_grants` carry the org_only RLS policy; every read here still
 // pins `org_id`, as the list handler does.
 
-import { schema, withTenantDb, type Tx } from "@oxagen/database";
+import { schema, withSystemDb, withTenantDb, type Tx } from "@oxagen/database";
 import {
   postgresDelegationCeilingReads,
   type DelegationCeilingReads,
@@ -53,7 +53,10 @@ export interface RoleStore {
     capabilityIds: readonly string[],
     actorUserId: string,
   ): Promise<void>;
-  /** Non-deleted, unexpired assignments holding the role. */
+  /**
+   * Non-deleted, unexpired assignments holding the role, across the WHOLE
+   * organization — every workspace of it and its org-wide assignments alike.
+   */
   activeAssignmentCount(orgId: string, roleId: string): Promise<number>;
   /** The role's grants and the role. */
   deleteRole(orgId: string, roleId: string): Promise<void>;
@@ -188,20 +191,38 @@ export function postgresRoleStore(tx: Tx): RoleStore {
         .where(and(eq(schema.roles.orgId, orgId), eq(schema.roles.id, roleId)));
     },
     async activeAssignmentCount(orgId, roleId) {
-      const [row] = await tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.principalRoleAssignments)
-        .where(
-          and(
-            eq(schema.principalRoleAssignments.orgId, orgId),
-            eq(schema.principalRoleAssignments.roleId, roleId),
-            isNull(schema.principalRoleAssignments.deletedAt),
-            or(
-              isNull(schema.principalRoleAssignments.expiresAt),
-              gt(schema.principalRoleAssignments.expiresAt, new Date()),
+      // NOT on `tx`. `iam.principal_role_assignments` is `workspace_nullable`
+      // (tenant-policy.manifest.ts), so its `tenant_isolation` USING clause
+      // shows a row only when `workspace_id IS NULL` or it equals
+      // `app.current_workspace_id`. Every assignment scoped to a REAL
+      // workspace is therefore invisible under any other scope — and under the
+      // org-only sentinel (ADR-068), which names no workspace, ALL of them
+      // are. `delete_role` is a check-then-act on this number: it read zero,
+      // deleted the role and its grants, and left the live assignment rows
+      // pointing at a role that no longer exists. Nothing raised, because RLS
+      // hides rather than refuses.
+      //
+      // "Does anyone in this org hold this role?" is an org-wide question, so
+      // it is answered the way `list_iam_roles` answers the same one: through
+      // withSystemDb with the org fence written out here. Never relax the
+      // `org_id` predicate below — it is the whole of the isolation on this
+      // read.
+      const [row] = await withSystemDb((sys) =>
+        sys
+          .select({ count: sql<number>`count(*)::int` })
+          .from(schema.principalRoleAssignments)
+          .where(
+            and(
+              eq(schema.principalRoleAssignments.orgId, orgId),
+              eq(schema.principalRoleAssignments.roleId, roleId),
+              isNull(schema.principalRoleAssignments.deletedAt),
+              or(
+                isNull(schema.principalRoleAssignments.expiresAt),
+                gt(schema.principalRoleAssignments.expiresAt, new Date()),
+              ),
             ),
           ),
-        );
+      );
       return row?.count ?? 0;
     },
     async deleteRole(orgId, roleId) {

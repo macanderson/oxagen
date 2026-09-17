@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => {
     update,
     insert,
     insertValues,
+    /** The tenant scope each withTenantDb call ran in, in order. */
+    scopes: [] as Array<{ orgId: string; workspaceId: string }>,
     /** The actor's principal, org role and workspace role, as assertOrgRole reads them. */
     tenant: {
       principalId: "prn_1" as string | null,
@@ -32,6 +34,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
+  const { getScope } = await import("@oxagen/tenancy");
   const dialect = new PgDialect();
   // The role gate's reads are answered by table and by the scope the WHERE
   // pins: an org-wide assignment has `workspace_id is null`, a workspace
@@ -57,8 +60,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
   return {
     ...real,
-    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
+      const scope = getScope();
+      if (scope)
+        mocks.scopes.push({
+          orgId: scope.orgId,
+          workspaceId: scope.workspaceId,
+        });
+      return fn({
         query: { workspaces: { findFirst: mocks.findFirst } },
         update: mocks.update,
         insert: mocks.insert,
@@ -76,19 +85,31 @@ vi.mock("@oxagen/database", async (importOriginal) => {
             return chain;
           },
         }),
-      }),
+      });
+    },
   };
 });
 
 import { workspaceSettingsWriteHandler } from "./workspace.settings.write";
-import { isHandlerError } from "@oxagen/oxagen";
-import { TEST_CTX as CTX } from "./test-utils/fixtures";
+import { isHandlerError, ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
+import { runInTenantScope } from "@oxagen/tenancy";
+import { makeCTX } from "./test-utils/fixtures";
+
+// Real uuids: the handler now re-enters the target workspace's tenant scope
+// before it writes, and `runInTenantScope` asserts both ids are uuids.
+const ORG_ID = "00000000-0000-0000-0000-0000000000a1";
+const WS_ID = "00000000-0000-0000-0000-0000000000b1";
+const OTHER_WS_ID = "00000000-0000-0000-0000-0000000000b2";
+const CTX = makeCTX({ orgId: ORG_ID, workspaceId: WS_ID });
 
 const EXISTING = {
   id: CTX.workspaceId,
   name: "Research",
   slug: "research",
   description: "old",
+  // The handler selects archivedAt and refuses an archived workspace, so the
+  // row a live workspace returns carries the null.
+  archivedAt: null,
 };
 
 const refusal = async (p: Promise<unknown>) => {
@@ -112,6 +133,7 @@ describe("workspace.settings.write handler", () => {
     mocks.tenant.roleName = "Owner";
     mocks.tenant.workspaceRoleName = null;
     mocks.tenant.keyCreator = "u_1";
+    mocks.scopes.length = 0;
   });
 
   // ── Role gate (INV-29) ───────────────────────────────────────────────────
@@ -208,7 +230,7 @@ describe("workspace.settings.write handler", () => {
   it("updates the workspace workspaceId names for an org Admin, by public id in the org, and captures its slug history under that id", async () => {
     mocks.tenant.roleName = "Admin";
     mocks.findFirst
-      .mockResolvedValueOnce({ ...EXISTING, id: "ws-other-uuid" })
+      .mockResolvedValueOnce({ ...EXISTING, id: OTHER_WS_ID })
       .mockResolvedValueOnce({ ...EXISTING, slug: "renamed" });
     const out = await workspaceSettingsWriteHandler(
       { workspaceId: "wrk_other", slug: "renamed" },
@@ -218,7 +240,7 @@ describe("workspace.settings.write handler", () => {
     const insertRow = mocks.insertValues.mock.calls[0]![0] as {
       workspaceId: string;
     };
-    expect(insertRow.workspaceId).toBe("ws-other-uuid");
+    expect(insertRow.workspaceId).toBe(OTHER_WS_ID);
   });
 
   it("refuses with not_found when workspaceId names a workspace outside the org (negative)", async () => {
@@ -445,6 +467,94 @@ describe("workspace.settings.write handler", () => {
     expect(insertRow.newSlug).toBe("new-slug");
     expect(insertRow.orgId).toBe(CTX.orgId);
     expect(insertRow.workspaceId).toBe(CTX.workspaceId);
+  });
+
+  // `archive_workspace` promises the archived workspace's slug "stays taken",
+  // and the redirect from its old slugs in workspace_slug_history rests on
+  // that promise. Nothing here checked archivedAt, so an archived workspace
+  // could be re-slugged: the (org_id, slug) unique index released the old
+  // value, a new workspace took it, and a direct slug match then beat the
+  // archived workspace's history redirect — a link to the archived workspace
+  // landed silently on a different one.
+  describe("an archived workspace", () => {
+    const ARCHIVED = {
+      ...EXISTING,
+      archivedAt: new Date("2026-03-04T05:06:07.000Z"),
+    };
+
+    it("is refused a re-slug", async () => {
+      mocks.tenant.roleName = "Admin";
+      mocks.findFirst.mockResolvedValueOnce(ARCHIVED);
+      expect(
+        await refusal(workspaceSettingsWriteHandler({ slug: "reused" }, CTX)),
+      ).toEqual({ code: "conflict", reason: "workspace_archived" });
+    });
+
+    it("is refused every other edit too, and nothing is written", async () => {
+      mocks.tenant.roleName = "Admin";
+      mocks.findFirst.mockResolvedValueOnce(ARCHIVED);
+      expect(
+        await refusal(workspaceSettingsWriteHandler({ name: "Renamed" }, CTX)),
+      ).toEqual({ code: "conflict", reason: "workspace_archived" });
+      expect(mocks.insertValues).not.toHaveBeenCalled();
+      expect(mocks.set).not.toHaveBeenCalled();
+    });
+
+    it("names the instant it was archived, as archive_workspace does", async () => {
+      mocks.tenant.roleName = "Admin";
+      mocks.findFirst.mockResolvedValueOnce(ARCHIVED);
+      const err: unknown = await workspaceSettingsWriteHandler(
+        { slug: "reused" },
+        CTX,
+      ).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect((err as Error).message).toContain("2026-03-04T05:06:07.000Z");
+    });
+  });
+
+  // The regression this file exists to hold (#3029, ADR-068). The app's
+  // Workspaces section on /{org}, and the API's org-only mount, both invoke
+  // this capability with ORG_ONLY_WORKSPACE_ID as the scope's workspace, because
+  // an organization viewer names no workspace. `workspace.workspaces` is
+  // org_only so the resolve is fine, but `workspace.workspace_slug_history` is a
+  // `standard` table: its tenant_isolation WITH CHECK compares the row's
+  // workspace_id against app.current_workspace_id, so an INSERT carrying the
+  // real workspace id under the sentinel's scope is refused with 42501 — not a
+  // unique violation, so it escapes the slug_taken classifier and reaches the
+  // caller as a 500. The write therefore re-enters the TARGET workspace's scope.
+  it("re-enters the target workspace's scope for the write when the caller's scope is org-only", async () => {
+    mocks.tenant.roleName = "Admin";
+    mocks.findFirst
+      .mockResolvedValueOnce({ ...EXISTING, id: OTHER_WS_ID })
+      .mockResolvedValueOnce({ ...EXISTING, slug: "renamed" });
+
+    const out = await runInTenantScope(
+      { orgId: ORG_ID, workspaceId: ORG_ONLY_WORKSPACE_ID },
+      () =>
+        workspaceSettingsWriteHandler(
+          { workspaceId: "wrk_other", slug: "renamed" },
+          { ...CTX, workspaceId: ORG_ONLY_WORKSPACE_ID },
+        ),
+    );
+
+    expect(out.slug).toBe("renamed");
+    // The resolve runs in the caller's org-only scope; the write does not.
+    expect(mocks.scopes[0]).toEqual({
+      orgId: ORG_ID,
+      workspaceId: ORG_ONLY_WORKSPACE_ID,
+    });
+    expect(mocks.scopes.at(-1)).toEqual({
+      orgId: ORG_ID,
+      workspaceId: OTHER_WS_ID,
+    });
+    // …and the history row the policy checks names that same workspace.
+    const insertRow = mocks.insertValues.mock.calls[0]![0] as {
+      workspaceId: string;
+    };
+    expect(insertRow.workspaceId).toBe(OTHER_WS_ID);
+    expect(mocks.scopes.at(-1)?.workspaceId).toBe(insertRow.workspaceId);
   });
 
   it("does NOT write history when slug is omitted or unchanged", async () => {

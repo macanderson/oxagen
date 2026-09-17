@@ -10,6 +10,17 @@ import { registerCapability } from "../registry";
 // Revoked keys are included with their revokedAt so the page can show them;
 // live keys carry revokedAt: null.
 //
+// Each item says whether rotate_api_key will replace it. The rotate handler
+// refuses a key carrying a server-owned scope purpose, an expired or revoked
+// key, and any key whose workspace is archived; both read the one answer in
+// packages/handlers/src/lib/api-key-rotatable.ts, so a page cannot offer a
+// rotation that is certain to be denied.
+//
+// Archival is part of that answer because it is a property of the workspace
+// rather than of the key: the app withheld Rotate correctly only because its row
+// component takes a separate `archived` prop, while API and MCP callers have
+// this field and nothing else.
+//
 // Authorization: org Owner or Admin only, checked in the handler.
 export const apiKeyList = registerCapability({
   name: "list_api_keys",
@@ -48,6 +59,11 @@ export const apiKeyList = registerCapability({
           .string()
           .nullable()
           .describe("ISO-8601 revocation timestamp, or null for a live key"),
+        rotatable: z
+          .boolean()
+          .describe(
+            "Whether rotate_api_key will replace this key, as at the instant of this read. False for a key an enrollment or a login flow owns, whose lifecycle belongs to that service; false for an expired or revoked key; and false for every key in an archived workspace, because a rotation mints fresh secret material and archival exists to stop that. Revocation is always available.",
+          ),
       }),
     ),
   }),

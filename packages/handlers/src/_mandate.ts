@@ -8,6 +8,7 @@
 
 import { schema, type Tx } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
+import { unionConsequenceTags } from "@oxagen/oxagen/contracts/tool.classification";
 import { HandlerError, type CheckedContext } from "@oxagen/oxagen";
 import {
   CALLS_MEASURE,
@@ -111,6 +112,7 @@ export async function assertToolsDeclareMeasures(
       version: schema.toolVersions.versionNumber,
       measures: schema.toolVersions.measures,
       consequenceTags: schema.toolVersions.consequenceTags,
+      classification: schema.toolVersions.classification,
     })
     .from(schema.tools)
     .innerJoin(
@@ -127,11 +129,37 @@ export async function assertToolsDeclareMeasures(
   const limitMeasures = Object.keys(args.limits).filter(
     (k) => k !== CALLS_MEASURE,
   );
+  // The built-in measure is exempt from the declared-measure check below
+  // because no tool declares it: every call draws exactly one, whatever a tool
+  // says. That exemption is about the *declaration*, not about the *unit* —
+  // `calls` has a correct denomination and it is its own name. Without this,
+  // `{ calls: { perPeriod: "250000000", currencyOrUnit: "USD" } }` is accepted
+  // by the contract, enforced by the gate as a ceiling of 250 million calls,
+  // and rendered by every screen as $250.00: the same two-halves-a-billion-
+  // apart failure the declared-measure unit check closes, reached through the
+  // exemption beside it. An exemption from a check needs its own rule rather
+  // than silence, so this one is checked against a constant where the others
+  // are checked against a declaration.
+  const callsLimit = args.limits[CALLS_MEASURE];
+  if (callsLimit !== undefined && callsLimit.currencyOrUnit !== CALLS_MEASURE) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "measure_unit_mismatch",
+      message: `the built-in "${CALLS_MEASURE}" measure is denominated in ${CALLS_MEASURE}; the mandate denominates its limit in ${callsLimit.currencyOrUnit}`,
+    });
+  }
   const targetMeasures = Object.keys(args.targets);
   for (const pattern of args.tools) {
+    // "Tagged" means EFFECTIVELY tagged — the declared column unioned with the
+    // classified jsonb, through the one function every reader of this fact
+    // uses. `decideMandate` governs a call by the same union, so reading only
+    // the column here made the two disagree about which tools a mandate can
+    // name: a tool with no declared tag that an administrator classified
+    // `moves_money` is governed at call time and was refused at grant time as
+    // `no_tool_matches`.
     const matched = declared.filter(
       (t) =>
-        t.consequenceTags.length > 0 &&
+        unionConsequenceTags(t).length > 0 &&
         toolMatches([pattern], t.slug, t.version),
     );
     if (matched.length === 0) {
@@ -151,6 +179,24 @@ export async function assertToolsDeclareMeasures(
             code: "conflict",
             reason: "measure_not_declared",
             message: `${tool.slug}@${tool.version} declares no measure "${name}" for the limit the mandate names`,
+          });
+        }
+        // The unit is the third field of the same declaration, and the gate
+        // reads the call by the declaration: `readMeasure` takes a count as
+        // the tool reported it, in the tool's unit, and compares it against
+        // this limit's figure. A limit denominated in anything else is
+        // therefore enforced in the tool's unit while every screen shows the
+        // operator's — a tool declaring `storage` in GB accepts a limit read
+        // by a person as "50 bytes" and admits a call of 50 GB. Both halves
+        // are self-consistent and they differ by a billion, which is why this
+        // is checked here, where the declaration is in hand, and not at a
+        // caller: every path that writes a measure limit comes through here.
+        const asked = args.limits[name]?.currencyOrUnit;
+        if (asked !== undefined && asked !== d.unit) {
+          throw new HandlerError({
+            code: "conflict",
+            reason: "measure_unit_mismatch",
+            message: `${tool.slug}@${tool.version} declares measure "${name}" in ${d.unit}; the mandate denominates its limit in ${asked}`,
           });
         }
       }

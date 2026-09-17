@@ -780,3 +780,80 @@ describe("contributeFileBasedMcpTools — tool without execute function is skipp
     expect(tools).toEqual([]);
   });
 });
+
+describe("contributeFileBasedMcpTools — kill switches", () => {
+  /**
+   * The gate belongs here for containment, not authorization: the shared
+   * external-tool execute closure in materialize-tools refuses the CALL
+   * regardless. Without this check an org kill switch still left the process
+   * connecting to a third-party endpoint, pulling tools/list, and presenting
+   * the static header or token from .oxagen/settings.json — which is exactly
+   * what mcp.ts promises does not happen ("no connect, no tools/list").
+   */
+  beforeEach(() => {
+    resolveMocks.resolveSettings.mockReturnValue({
+      settings: { mcpServers: { killedSrv: httpServer() } },
+      scopes: [],
+      serverSources: {},
+    });
+    managedMocks.loadManagedConfig.mockReturnValue(null);
+    managedMocks.getManagedServers.mockReturnValue({});
+    credMocks.resolveCredential.mockResolvedValue({
+      hasRefreshToken: false,
+      source: "none" as const,
+      expired: false,
+    });
+    permMocks.filterToolVisibility.mockImplementation(
+      (tools: string[]) => tools,
+    );
+    permMocks.getNonDeniedTools.mockImplementation(
+      (_s: string, tools: string[]) => tools,
+    );
+    managedMocks.checkToolDenied.mockReturnValue(null);
+    mcpClientMocks.connectMcp.mockReset().mockResolvedValue({});
+    mcpClientMocks.materializeMcpTools.mockReset().mockResolvedValue({
+      "file-mcp.killedSrv.search": {
+        description: "Search",
+        execute: () => Promise.resolve("ok"),
+      },
+    });
+  });
+
+  it("contributes nothing and never connects when a switch reaches the turn", async () => {
+    const orgSwitch = {
+      publicId: "emd_org",
+      targetKind: "org",
+      targetId: "org_1",
+    };
+    const check = vi.fn().mockResolvedValue(orgSwitch);
+
+    const tools = await contributeFileBasedMcpTools(CTX, {
+      killSwitches: { check },
+    } as never);
+
+    expect(tools).toEqual([]);
+    expect(mcpClientMocks.connectMcp).not.toHaveBeenCalled();
+    expect(mcpClientMocks.materializeMcpTools).not.toHaveBeenCalled();
+    expect(check).toHaveBeenCalledWith({
+      capabilityId: "file-mcp.killedSrv",
+      serverId: null,
+      connectionId: null,
+      readOnly: false,
+    });
+  });
+
+  it("contributes normally when the gate finds the turn open", async () => {
+    const check = vi.fn().mockResolvedValue(null);
+    const tools = await contributeFileBasedMcpTools(CTX, {
+      killSwitches: { check },
+    } as never);
+
+    expect(tools.map((t) => t.externalToolName)).toEqual(["search"]);
+    expect(mcpClientMocks.connectMcp).toHaveBeenCalledTimes(1);
+  });
+
+  it("contributes normally when no gate was supplied", async () => {
+    const tools = await contributeFileBasedMcpTools(CTX);
+    expect(tools.map((t) => t.externalToolName)).toEqual(["search"]);
+  });
+});

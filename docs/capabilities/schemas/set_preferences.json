@@ -1,0 +1,178 @@
+{
+  "name": "set_preferences",
+  "domain": "user",
+  "description": "Set the calling user's account preferences — locale, theme, timezone, appearance, input behaviour and default text model — as a partial write, and return the whole set after it.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "locale": {
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 35
+      },
+      "theme": {
+        "type": "string",
+        "enum": [
+          "system",
+          "light",
+          "dark"
+        ]
+      },
+      "timezone": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "fontSize": {
+        "type": "string",
+        "enum": [
+          "small",
+          "medium",
+          "large"
+        ]
+      },
+      "density": {
+        "type": "string",
+        "enum": [
+          "compact",
+          "comfortable",
+          "spacious"
+        ]
+      },
+      "enterToSubmit": {
+        "type": "boolean"
+      },
+      "pendingPromptBehavior": {
+        "type": "string",
+        "enum": [
+          "queue",
+          "interrupt"
+        ]
+      },
+      "defaultTextTier": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "fast",
+              "balanced",
+              "precise"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultTextModel": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "locale": {
+        "type": "string"
+      },
+      "theme": {
+        "type": "string",
+        "enum": [
+          "system",
+          "light",
+          "dark"
+        ]
+      },
+      "timezone": {
+        "type": "string"
+      },
+      "fontSize": {
+        "type": "string",
+        "enum": [
+          "small",
+          "medium",
+          "large"
+        ]
+      },
+      "density": {
+        "type": "string",
+        "enum": [
+          "compact",
+          "comfortable",
+          "spacious"
+        ]
+      },
+      "enterToSubmit": {
+        "type": "boolean"
+      },
+      "pendingPromptBehavior": {
+        "type": "string",
+        "enum": [
+          "queue",
+          "interrupt"
+        ]
+      },
+      "defaultTextTier": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "fast",
+              "balanced",
+              "precise"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultTextModel": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "locale",
+      "theme",
+      "timezone",
+      "fontSize",
+      "density",
+      "enterToSubmit",
+      "pendingPromptBehavior",
+      "defaultTextTier",
+      "defaultTextModel"
+    ],
+    "additionalProperties": false
+  }
+}

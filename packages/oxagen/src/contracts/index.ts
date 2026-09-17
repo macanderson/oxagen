@@ -31,6 +31,11 @@ import { mandateList } from "./mandate.list";
 import { mandateGet } from "./mandate.get";
 import { mandateRevoke } from "./mandate.revoke";
 import { mandateLimitsUpdate } from "./mandate.limits.update";
+import { approvalRuleList } from "./approval_rule.list";
+import { approvalRuleSet } from "./approval_rule.set";
+import { approvalRuleDelete } from "./approval_rule.delete";
+import { approvalRuleEnabledSet } from "./approval_rule.enabled.set";
+import { approvalAutoEligibilityGet } from "./approval.auto_eligibility.get";
 import { agentDefinitionCreate } from "./agent.definition.create";
 import { agentDefinitionDelete } from "./agent.definition.delete";
 import { agentDefinitionSuggest } from "./agent.definition.suggest";
@@ -71,9 +76,12 @@ import { onboardingFirstFrameGet } from "./onboarding.first_frame.get";
 import { repositoryMainBind } from "./repository.main.bind";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
+import { runProofGet } from "./run.proof.get";
+import { evidenceDisclosureGrainSet } from "./evidence.disclosure_grain.set";
 import { spendGet } from "./spend.get";
 import { spendDrill } from "./spend.drill";
 import { spendWasteList } from "./spend.waste";
+import { skillList } from "./skill.list";
 import { spendStatementExport } from "./spend.statement.export";
 import { costPriceEntryList } from "./cost.price_entry.list";
 import { findingList } from "./finding.list";
@@ -87,6 +95,15 @@ import { runExport } from "./run.export";
 import { runBisect } from "./run.bisect";
 import { runFork } from "./run.fork";
 import { runSummarize } from "./run.summarize";
+import { runRecentList } from "./run.recent.list";
+// The shell (#2968): the in-app agent on stella-serve, the command menu, the
+// sidebar counts and the account preferences.
+import { assistantAsk } from "./assistant.ask";
+import { assistantEngineGet } from "./assistant.engine.get";
+import { toolsSearch } from "./tools.search";
+import { toolsLoad } from "./tools.load";
+import { shellNavCountsGet } from "./shell.nav_counts.get";
+import { userPreferencesSet } from "./user.preferences.set";
 import { agentMcpList } from "./agent.mcp.list";
 import { agentMcpResolve } from "./agent.mcp.resolve";
 import { agentMcpRegister } from "./agent.mcp.register";
@@ -149,7 +166,6 @@ import { workspaceList } from "./workspace.list";
 import { workspaceArchive } from "./workspace.archive";
 import { systemInstallInstructions } from "./system.install.instructions";
 import { userPreferencesRead } from "./user.preferences.read";
-import { userPreferencesWrite } from "./user.preferences.write";
 import { userWorkspacePreferencesRead } from "./user.workspace_preferences.read";
 import { userWorkspacePreferencesWrite } from "./user.workspace_preferences.write";
 import { budgetPolicyRead } from "./budget.policy.read";
@@ -191,6 +207,13 @@ import { listMembers } from "./workspace.member.list";
 import { workspaceInviteSend } from "./workspace.invite.send";
 import { toolDeclarationPublish } from "./tool.declaration.publish";
 import { toolDeclarationList } from "./tool.declaration.list";
+import { toolClassificationSchema } from "./tool.classification";
+import { toolVersionList } from "./tool.version.list";
+import { toolClassificationSet } from "./tool.classification.set";
+import { toolImport } from "./tool.import";
+import { credentialGrantList } from "./credential.grant.list";
+import { killSwitchSet } from "./kill_switch.set";
+import { killSwitchList } from "./kill_switch.list";
 import { contextRecordPublish } from "./context.record.publish";
 import { contextRecordList } from "./context.record.list";
 import { contextRecordPromote } from "./context.record.promote";
@@ -243,6 +266,7 @@ import { ontologyQuery } from "./ontology.query";
 import { ontologyNeighbors } from "./ontology.neighbors";
 import { apiKeyRotate } from "./api.key.rotate";
 import { auditLogQuery } from "./audit.log.query";
+import { auditEventsExport } from "./audit.events.export";
 import { connectionPause } from "./connection.pause";
 import { connectionUpdate } from "./connection.update";
 import { orgDataPlaneGet } from "./org.data_plane.get";
@@ -513,6 +537,11 @@ export {
   mandateGet,
   mandateRevoke,
   mandateLimitsUpdate,
+  approvalRuleList,
+  approvalRuleSet,
+  approvalRuleDelete,
+  approvalRuleEnabledSet,
+  approvalAutoEligibilityGet,
   agentDefinitionCreate,
   agentDefinitionDelete,
   agentDefinitionSuggest,
@@ -583,10 +612,20 @@ export {
   runBisect,
   runFork,
   runSummarize,
+  runRecentList,
+  assistantAsk,
+  assistantEngineGet,
+  toolsSearch,
+  toolsLoad,
+  shellNavCountsGet,
+  userPreferencesSet,
   runCostGet,
+  runProofGet,
+  evidenceDisclosureGrainSet,
   spendGet,
   spendDrill,
   spendWasteList,
+  skillList,
   spendStatementExport,
   costPriceEntryList,
   findingList,
@@ -629,7 +668,6 @@ export {
   workspaceArchive,
   systemInstallInstructions,
   userPreferencesRead,
-  userPreferencesWrite,
   userWorkspacePreferencesRead,
   userWorkspacePreferencesWrite,
   budgetPolicyRead,
@@ -671,6 +709,13 @@ export {
   workspaceInviteSend,
   toolDeclarationPublish,
   toolDeclarationList,
+  toolVersionList,
+  toolClassificationSet,
+  toolImport,
+  credentialGrantList,
+  killSwitchSet,
+  killSwitchList,
+  toolClassificationSchema,
   contextRecordPublish,
   contextRecordList,
   contextRecordPromote,
@@ -723,6 +768,7 @@ export {
   ontologyNeighbors,
   apiKeyRotate,
   auditLogQuery,
+  auditEventsExport,
   connectionPause,
   connectionUpdate,
   orgDataPlaneGet,
@@ -820,6 +866,11 @@ export const contracts: readonly CapabilityDeclaration[] = [
   mandateGet,
   mandateRevoke,
   mandateLimitsUpdate,
+  approvalRuleList,
+  approvalRuleSet,
+  approvalRuleDelete,
+  approvalRuleEnabledSet,
+  approvalAutoEligibilityGet,
   agentDefinitionCreate,
   agentDefinitionDelete,
   agentDefinitionSuggest,
@@ -887,10 +938,20 @@ export const contracts: readonly CapabilityDeclaration[] = [
   runBisect,
   runFork,
   runSummarize,
+  runRecentList,
+  assistantAsk,
+  assistantEngineGet,
+  toolsSearch,
+  toolsLoad,
+  shellNavCountsGet,
+  userPreferencesSet,
   runCostGet,
+  runProofGet,
+  evidenceDisclosureGrainSet,
   spendGet,
   spendDrill,
   spendWasteList,
+  skillList,
   spendStatementExport,
   costPriceEntryList,
   findingList,
@@ -933,7 +994,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   workspaceArchive,
   systemInstallInstructions,
   userPreferencesRead,
-  userPreferencesWrite,
   userWorkspacePreferencesRead,
   userWorkspacePreferencesWrite,
   budgetPolicyRead,
@@ -975,6 +1035,12 @@ export const contracts: readonly CapabilityDeclaration[] = [
   workspaceInviteSend,
   toolDeclarationPublish,
   toolDeclarationList,
+  toolVersionList,
+  toolClassificationSet,
+  toolImport,
+  credentialGrantList,
+  killSwitchSet,
+  killSwitchList,
   contextRecordPublish,
   contextRecordList,
   contextRecordPromote,
@@ -1029,6 +1095,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   ontologyNeighbors,
   apiKeyRotate,
   auditLogQuery,
+  auditEventsExport,
   connectionPause,
   connectionUpdate,
   orgDataPlaneGet,

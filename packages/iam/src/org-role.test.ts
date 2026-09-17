@@ -2,8 +2,9 @@
 //
 // Guards and their negatives:
 //   - resolveActorOrgRole: no active principal → null; principal with no
-//     org-scoped role → null; the assigned role name; expired (JIT)
-//     assignments are excluded from the lookup
+//     org-scoped role → null; the assigned role name; the most privileged name
+//     when the principal holds several; expired (JIT) assignments are excluded
+//     from the lookup
 //   - resolveActorWorkspaceRole: the workspace-scoped assignment on the
 //     named workspace, or null; the query is pinned to that workspace id
 //   - assertOrgRole: no userId (an API-key call, or no actor) → forbidden
@@ -55,8 +56,8 @@ import {
  */
 function makeRoleTx(
   principalId: string | null,
-  roleName: string | null,
-  workspaceRoleName: string | null = null,
+  roleName: string | string[] | null,
+  workspaceRoleName: string | string[] | null = null,
 ) {
   const pinsWorkspace = () =>
     mocks.eq.mock.calls.some(
@@ -79,8 +80,10 @@ function makeRoleTx(
           innerJoin: () => ({
             where: () => ({
               limit: () => {
-                const name = pinsWorkspace() ? workspaceRoleName : roleName;
-                return Promise.resolve(name ? [{ roleName: name }] : []);
+                const names = pinsWorkspace() ? workspaceRoleName : roleName;
+                return Promise.resolve(
+                  [names ?? []].flat().map((name) => ({ roleName: name })),
+                );
               },
             }),
           }),
@@ -92,8 +95,8 @@ function makeRoleTx(
 
 function stubRoleResolution(
   principalId: string | null,
-  roleName: string | null,
-  workspaceRoleName: string | null = null,
+  roleName: string | string[] | null,
+  workspaceRoleName: string | string[] | null = null,
 ) {
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
     Promise.resolve(fn(makeRoleTx(principalId, roleName, workspaceRoleName))),
@@ -128,6 +131,15 @@ describe("resolveActorOrgRole", () => {
   it("returns the assigned org role name", async () => {
     stubRoleResolution("prn_1", "Admin");
     expect(await resolveActorOrgRole("org_1", "user_1")).toBe("Admin");
+  });
+
+  it("returns the most privileged role when the principal holds several", async () => {
+    // Whichever row Postgres returned first used to win, so an Admin who is
+    // also a Member was refused depending on row order.
+    stubRoleResolution("prn_1", ["Member", "Admin"]);
+    expect(await resolveActorOrgRole("org_1", "user_1")).toBe("Admin");
+    stubRoleResolution("prn_1", ["Viewer", "Member"]);
+    expect(await resolveActorOrgRole("org_1", "user_1")).toBe("Viewer");
   });
 
   it("excludes expired (JIT) role assignments from the role lookup", async () => {
@@ -209,6 +221,30 @@ describe("assertOrgRole", () => {
     await expect(
       assertOrgRole(USER, { org: ["Owner", "Billing"] }),
     ).resolves.toBe("Billing");
+  });
+
+  // The gate reads every assignment, not the one ROLE_PRECEDENCE would name:
+  // Admin outranks Billing, so resolving a single role first discarded the
+  // Billing assignment and refused a billing member of purchase_credits.
+  it("accepts a principal holding Billing alongside the higher-ranked Admin", async () => {
+    stubRoleResolution("prn_1", ["Admin", "Billing"]);
+    await expect(
+      assertOrgRole(USER, { org: ["Owner", "Billing"] }),
+    ).resolves.toBe("Billing");
+  });
+
+  it("returns the most privileged role when several satisfy the gate", async () => {
+    stubRoleResolution("prn_1", ["Billing", "Owner"]);
+    await expect(
+      assertOrgRole(USER, { org: ["Owner", "Billing"] }),
+    ).resolves.toBe("Owner");
+  });
+
+  it("still refuses when none of several held roles is in the set (negative)", async () => {
+    stubRoleResolution("prn_1", ["Admin", "Member"]);
+    await expect(
+      assertOrgRole(USER, { org: ["Owner", "Billing"] }),
+    ).rejects.toSatisfy(forbidden("org_role_required"));
   });
 
   it("never runs the workspace leg for an org-only requirement", async () => {

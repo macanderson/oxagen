@@ -173,3 +173,34 @@ frame chain and the command row cannot disagree.
   change for it: the row records both modes already, and the resolver in
   `tacho.command.dispatch.ts` is where the proxy's ceiling joins the
   adapter's.
+
+## Amendment 2026-09-15: a ledger-ingested run gets a revocable run token (maintainer decision)
+
+The maintainer decided on 2026-09-15 (decision 11) to build the ledger
+ingest contract with a revocable run token now, so Halt and Cancel work on
+ledger-ingested runs. A ledger run has no connection point today. No
+producer in this tree appends to `@oxagen/run-ledger` and no run token
+exists to revoke, so `dispatch_command` refuses a ledger run with
+`no_connection_point` (`packages/handlers/src/tacho.command.dispatch.ts:15-18`).
+The Run page renders Halt disabled on such a run. This amendment adds a
+second connection point beside the hook adapter:
+
+- **The ledger ingest contract.** A producer appends a ledger run's frames
+  to `@oxagen/run-ledger` under a run token that Oxagen mints when the run
+  opens. The token names the organisation, workspace, run and attempt. It is
+  stored as a hash and is short-lived: at most fifteen minutes, refreshed on
+  the ingest response, per the run-token rule of the Mission Control spec
+  (`docs/specs/mission-control/spec.md:338`).
+- **Cancel revokes the token.** A `cancel` addressed to a ledger run revokes
+  the run token in the same transaction that writes the command row. Every
+  later ingest call under that token is refused, so a halt holds even if the
+  producer ignores the command. The ingest response carries queued commands,
+  so the producer learns of the cancel on its next append. The delivery mode
+  is resolved at dispatch the same way as for the hook adapter, and both
+  modes are recorded on the row.
+- **What stays refused.** `steer`, `pause` and `resume` on a ledger run still
+  answer `no_connection_point` until a producer carries them. The Run page's
+  Halt/Cancel is enabled on a ledger run once the contract lands, and the
+  `no_connection_point` copy stays for the kinds that remain refused.
+
+`apps/app/architecture.worklist.json` WL-61 builds it.

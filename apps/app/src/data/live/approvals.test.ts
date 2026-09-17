@@ -27,6 +27,7 @@ const ctx = unsafeMint(WsCtx, {
   workspaceId: "7b000000-0000-4000-8000-000000000001",
   wsSlug: "core-platform",
   wsName: "Core platform",
+  wsRole: "member",
 });
 
 const item = {
@@ -34,6 +35,7 @@ const item = {
   runId: null,
   tool: "create_release",
   requester: null,
+  mandateId: null,
   createdAt: "2026-09-15T08:57:30.000Z",
   expiresAt: "2026-09-15T09:07:30.000Z",
   chain: { agentKey: null, rule: null },
@@ -55,6 +57,7 @@ describe("approvals.pending", () => {
           tool: "create_release",
           agentKey: null,
           requester: null,
+          mandateId: null,
           createdAt: "2026-09-15T08:57:30.000Z",
           expiresAt: "2026-09-15T09:07:30.000Z",
         },

@@ -124,6 +124,17 @@ export const SECURITY_EVENT_TYPES = [
   // key writes nothing and is not audited.
   "model_credential.set",
   "model_credential.revoked",
+  // Tool governance (MC spec §6.9, §6.11, ADR-072, #2958). A kill switch
+  // flip is the emergency deny an operator issues against a tool version, a
+  // tool server, a connection, an agent, an operator, a workspace, the
+  // organisation or a consequence class; every flip, on or off, is recorded
+  // with who, why and what it stopped (spec §6.11: "every switch flip is a
+  // security event"). Reclassifying a tool version changes which class
+  // switches and, later, which approval rules reach it, so it is recorded
+  // too. Emitted by packages/handlers/src/kill_switch.set.ts and
+  // tool.classification.set.ts.
+  "tool.kill_switch_flipped",
+  "tool.classification_changed",
   // Agent identity (MC spec §6.2, ADR-057, #2956). An agent identity is a
   // principal with a long-lived credential and roles; registering one adds a
   // machine actor to the organisation, suspending or resuming one changes
@@ -136,6 +147,12 @@ export const SECURITY_EVENT_TYPES = [
   "agent.suspended",
   "agent.resumed",
   "agent.retired",
+  // Witness disclosure (MC spec §8.5 invariant 3, ADR-064, #2955). The grain
+  // is how much a worker is told when a witness it cannot see fails; raising
+  // it above L0 hands the worker detail about the oracle, so only an org
+  // Owner or Admin in a signed-in session changes it. Emitted by the
+  // set_disclosure_grain handler (packages/handlers/src/evidence.disclosure_grain.set.ts).
+  "evidence.disclosure_grain_changed",
   // Governed agent runs (docs/specs/run-evidence-ingress/spec.md). These four
   // are INTEGRITY failures, not ordinary denials: each one means some part of
   // the run-evidence chain was contradicted, and none can be produced by
@@ -173,6 +190,15 @@ export const SECURITY_EVENT_TYPES = [
   "mandate.revoked",
   "mandate.expired",
   "mandate.exception",
+  // Auto-approval (MC spec §6.9 part 2, ADR-070): a call a decision rule sent
+  // to a person that an auto-approval rule released instead, recorded with
+  // `policy:<rule id>` as its approver. Emitted by
+  // packages/rules/src/auto-approval-path.ts.
+  "approval.auto_approved",
+  // The rules themselves: written, switched off, or deleted. Emitted by
+  // packages/handlers/src/approval_rule.*.ts.
+  "approval_rule.changed",
+  "approval_rule.deleted",
   // Access review
   "access.review_completed",
   "access.member_access_confirmed",

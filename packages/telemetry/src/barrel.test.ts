@@ -57,8 +57,8 @@ describe("index.ts barrel exports", () => {
     // Security
     expect(typeof mod.chInsert).toBe("function");
     expect(typeof mod.chSelect).toBe("function");
-    // Skill telemetry
-    expect(typeof mod.recordSkillLoad).toBe("function");
-    expect(typeof mod.readSkillMetrics).toBe("function");
+    // The skill-load reader and writer were deleted with #3098 (no caller since ADR-043).
+    expect("recordSkillLoad" in mod).toBe(false);
+    expect("readSkillMetrics" in mod).toBe(false);
   });
 });

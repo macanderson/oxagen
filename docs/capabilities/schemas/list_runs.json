@@ -1,7 +1,7 @@
 {
   "name": "list_runs",
   "domain": "run",
-  "description": "List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, status, counts and metered cost each row recorded.",
+  "description": "List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, status, counts and metered cost each row recorded. The in-app agent's own turns are not listed.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -170,6 +170,25 @@
                 }
               ]
             },
+            "verdict": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "flipped",
+                    "failing",
+                    "unmoved",
+                    "unsatisfied",
+                    "tampered",
+                    "unverified",
+                    "waived"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "name": {
               "anyOf": [
                 {
@@ -222,6 +241,7 @@
             "startedAt",
             "sealedAt",
             "replayGrade",
+            "verdict",
             "name",
             "summary"
           ],

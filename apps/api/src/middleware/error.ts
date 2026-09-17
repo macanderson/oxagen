@@ -19,6 +19,8 @@ import type { AppEnv } from "../app";
 //                            (gau-bucket.ts, ADR-055); carries an optional
 //                            `reason` ("free_no_payment_method") the client
 //                            prints as "add a payment method or wait"
+//   - assistant_spend_cap  — the org spent its monthly cap of platform-paid
+//                            assistant tokens (metering.ts, ADR-053 §3)
 // The list is a hand-maintained mirror of the throwing classes in
 // @oxagen/billing; BILLING_ERROR_CODES is exported so a test can assert the
 // mirror stays complete rather than discovering a gap as a production 500.
@@ -27,6 +29,7 @@ export const BILLING_ERROR_CODES = [
   "billing_suspended",
   "budget_exceeded",
   "gau_exhausted",
+  "assistant_spend_cap",
 ] as const;
 type BillingErrorCode = (typeof BILLING_ERROR_CODES)[number];
 interface BillingError extends Error {
@@ -41,6 +44,13 @@ function isBillingError(err: unknown): err is BillingError {
   return (BILLING_ERROR_CODES as readonly string[]).includes(code as string);
 }
 
+// A TenantScopeError from @oxagen/tenancy, duck-typed on its code the way the
+// kernel does, so this middleware takes no dependency on that package.
+function isTenantScopeError(err: unknown): err is Error {
+  if (!(err instanceof Error)) return false;
+  return (err as Error & { code?: unknown }).code === "no_tenant_scope";
+}
+
 // A handler's typed refusal (HandlerError, @oxagen/oxagen) reaches this
 // middleware unchanged: the kernel rethrows what a handler throws. Each code is
 // a client-side outcome with its own status; the `reason` sub-code travels in
@@ -50,6 +60,26 @@ const HANDLER_ERROR_STATUS: Record<HandlerErrorCode, 403 | 404 | 409> = {
   not_found: 404,
   conflict: 409,
 };
+
+// The in-app agent's turn failures (`ask_assistant`, @oxagen/agent), by code.
+// The engine being down and a turn the ledger could not record are the service
+// being unable to answer; a turn cancelled before it answered (a per-turn
+// budget stop) conflicts with the state the caller asked in.
+export const ASSISTANT_TURN_ERROR_STATUS: Record<string, 409 | 503> = {
+  engine_unavailable: 503,
+  assistant_run_not_recorded: 503,
+  engine_aborted: 409,
+};
+
+function assistantTurnFailure(
+  err: unknown,
+): { code: string; status: 409 | 503 } | null {
+  if (typeof err !== "object" || err === null) return null;
+  const code = (err as Record<string, unknown>).code;
+  if (typeof code !== "string") return null;
+  const status = ASSISTANT_TURN_ERROR_STATUS[code];
+  return status === undefined ? null : { code, status };
+}
 
 export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
   const requestId = c.get("requestId") ?? "unknown";
@@ -190,6 +220,33 @@ export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
         requestId,
       },
       402,
+    );
+  }
+
+  const turnFailure = assistantTurnFailure(err);
+  if (turnFailure !== null) {
+    const { code, status } = turnFailure;
+    logger.warn(
+      { requestId, code, message: err.message },
+      "assistant turn failure",
+    );
+    return c.json({ error: { code, message: err.message }, requestId }, status);
+  }
+  // A tenant scope the kernel refused to enter (#3029). The two cases share
+  // one code, so the message distinguishes them: a malformed id is a bad
+  // request from the surface that built the context, and a missing scope is
+  // the same to the caller. Either way it is a 4xx, never a 500.
+  if (isTenantScopeError(err)) {
+    logger.warn({ requestId, message: err.message }, "tenant scope refused");
+    return c.json(
+      {
+        error: {
+          code: "invalid_tenant_scope",
+          message: err.message,
+        },
+        requestId,
+      },
+      400,
     );
   }
 

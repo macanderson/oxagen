@@ -332,7 +332,7 @@ When an authorized org Owner/Admin revokes an API key, the handler SHALL soft-de
 
 #### Scenario: key does not exist or already revoked
 - **WHEN** no api_keys row matches publicId + orgId + isNull(deletedAt)
-- **THEN** throw Error("Not found: API key does not exist, is not in this org, or is already revoked")
+- **THEN** throw HandlerError { code: "not_found", reason: "api_key_not_found" }
 
 ---
 
@@ -394,7 +394,7 @@ When an authorized org Owner/Admin rotates an API key, the handler SHALL atomica
 
 #### Scenario: old key not found or already revoked
 - **WHEN** no api_keys row matches publicId + orgId + isNull(deletedAt)
-- **THEN** throw Error("Not found: API key does not exist, is not in this org, or is already revoked")
+- **THEN** throw HandlerError { code: "not_found", reason: "api_key_not_found" }
 
 #### Scenario: new key insertion fails
 - **WHEN** insert of replacement key returns empty result

@@ -2,10 +2,10 @@
 // identity card with its status and the writes on it, then one section chosen
 // by `?tab=`. Five sections have a store behind them: Identity (get_agent),
 // Toolbelt (get_agent_toolbelt), Enrollment (get_agent's hosts), Tamper
-// incidents (list_incidents) and Definition in git (get_agent's cached
-// commit). The mockup's Mandates, Budgets and Runs tabs have no contract that
-// reads them per agent, so they are not drawn (§3.6). Only the chosen section
-// makes its own read.
+// incidents (list_incidents), Definition in git (get_agent's cached commit)
+// and Mandates (list_mandates narrowed to this agent, #2957). The mockup's
+// Budgets and Runs tabs have no contract that reads them per agent, so they
+// are not drawn (§3.6). Only the chosen section makes its own read.
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
@@ -22,6 +22,7 @@ import { DefinitionSection } from "./definition";
 import { EnrollmentSection } from "./enrollment";
 import { IdentitySection } from "./identity";
 import { IncidentsSection } from "./incidents";
+import { MandatesSection } from "./mandates";
 import { AgentStatusBadge } from "./parts";
 import { ToolbeltSection } from "./toolbelt";
 
@@ -31,6 +32,7 @@ const TABS = [
   "enrollment",
   "incidents",
   "definition",
+  "mandates",
 ] as const;
 type Tab = (typeof TABS)[number];
 
@@ -112,6 +114,16 @@ function Tabs({ selected, org, ws, agent }: { selected: Tab } & Place) {
   );
 }
 
+/**
+ * The agent's record and the instant it was read. The credential and host
+ * clocks start when the read returned, so a section is pure of `Date.now()`
+ * and a state cannot disagree with the dates in the row beside it.
+ */
+async function readAgent(ctx: WsCtx, source: DataSource, agent: string) {
+  const read = await source.agents.get(ctx, agent);
+  return { read, now: Date.now() };
+}
+
 export async function Agent({
   ctx,
   source,
@@ -129,7 +141,7 @@ export async function Agent({
   cursor: string | null;
 }) {
   const selected = TABS.find((name) => name === tab) ?? "identity";
-  const read = await source.agents.get(ctx, agent);
+  const { read, now } = await readAgent(ctx, source, agent);
   if (!read.ok) {
     if (read.reason === "error" && read.status === 404) notFound();
     return (
@@ -144,7 +156,7 @@ export async function Agent({
   let body: ReactNode;
   switch (selected) {
     case "identity":
-      body = <IdentitySection detail={detail} />;
+      body = <IdentitySection detail={detail} now={now} />;
       break;
     case "toolbelt":
       body = (
@@ -154,7 +166,7 @@ export async function Agent({
       );
       break;
     case "enrollment":
-      body = <EnrollmentSection hosts={detail.hosts} />;
+      body = <EnrollmentSection hosts={detail.hosts} now={now} />;
       break;
     case "incidents":
       body = (
@@ -162,6 +174,19 @@ export async function Agent({
           read={await source.agents.incidents(ctx, identity.id, { cursor })}
           cursor={cursor}
           {...place}
+        />
+      );
+      break;
+    case "mandates":
+      body = (
+        <MandatesSection
+          read={await source.mandates.list(ctx, { agentId: identity.id })}
+          orgRole={ctx.orgRole}
+          agentStatus={identity.status}
+          org={place.org}
+          ws={place.ws}
+          agentId={identity.id}
+          agentSlug={identity.slug}
         />
       );
       break;

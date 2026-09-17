@@ -14,12 +14,11 @@
 
 ## Access
 
-Org `Owner` or `Admin`, checked in the handler (INV-29). `noBillingGate`. Sensitivity **high**.
+Org `Owner` or `Admin`, checked in the handler (INV-29). `noBillingGate`. Sensitivity **high**. No tier gates this write (ADR-069); see `create_role`.
 
 | code        | reason                               | when                                                                                                                                       |
 | ----------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `forbidden` | `no_principal` / `org_role_required` | no signed-in user and no API key with a live creator, or an acting user (the signed-in user, or the key's creator) outside Owner and Admin |
-| `forbidden` | `enterprise_tier_required`           | the org's tier is not enforced (see `create_role`)                                                                                         |
 | `not_found` | `role_not_found`                     | no role with that public id in the org                                                                                                     |
 | `conflict`  | `system_role_readonly`               | the role is system-seeded                                                                                                                  |
 | `forbidden` | `delegation_ceiling_exceeded`        | a capability the new set names is above the granter's own; the old grants stay                                                             |

@@ -1,11 +1,29 @@
 // The approvals panel: one card per pending approval, soonest expiry first as
 // list_approvals orders them. The decisions (approve, deny) arrive with the
 // approval dialog; this panel reads.
+//
+// A card whose call drew on a mandate carries the mandate bar (#2957): what
+// the period has settled, what calls in flight reserve, and what is left, from
+// the same ledger the Tools ledger reads. A card that drew on no mandate names
+// none. A card whose mandate the page could not read — the viewer may not read
+// the ledger, or the mandate fell outside the one page `list_mandates` answers
+// — names the mandate instead of drawing nothing, because a bar that silently
+// disappears reads as an agent acting under no authority at all.
+//
+// The bar reads the mandate's current period, which is what `list_mandates`
+// answers, and a parked call can outlive one: an approval holds for up to 24
+// hours, so a call parked before midnight holds a daily reservation recorded
+// under the period that has since rolled. Neither the reservation nor its
+// period key is on `list_approvals`, so the card says what the figures are
+// counted over rather than implying they isolate this call.
 import { useLocale, useTranslations } from "next-intl";
 import type { ApprovalItem } from "@/data/contracts/approvals";
+import type { MandateRow } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { linkText, mono, panel } from "@/ui/control-styles";
+import { drawsBar, MandateBar } from "@/ui/mandate-bar";
+import { NamedMeasure } from "@/ui/measure";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { Clock } from "./clock";
@@ -15,11 +33,29 @@ type Place = { org: string; ws: string };
 
 function ApprovalCard({
   item,
+  mandate,
   now,
   org,
   ws,
-}: { item: ApprovalItem; now: number } & Place) {
+}: {
+  item: ApprovalItem;
+  /** The mandate the call drew on, when the viewer could read it. */
+  mandate: MandateRow | null;
+  now: number;
+} & Place) {
   const t = useTranslations("fleet.approvals");
+  /**
+   * A mandate's measures are a partition, not an either/or: `drawsBar` (the
+   * component's own predicate, so the two cannot drift) says which get a bar,
+   * and the rest are limited per call with no period to count against. Both
+   * halves are rendered. Keying on "are there any bars" instead hid the
+   * per-call measures of a mandate that had one of each.
+   */
+  const authority = mandate?.authority ?? [];
+  const metered = authority.filter(drawsBar);
+  const perCallOnly = authority.filter(
+    (a) => !drawsBar(a) && a.perCall !== null,
+  );
   const recorded = (value: string | null) =>
     value === null ? (
       <dd className="text-muted-foreground">{t("notRecorded")}</dd>
@@ -38,6 +74,40 @@ function ApprovalCard({
         <dt className="text-muted-foreground">{t("requester")}</dt>
         {recorded(item.requester)}
       </dl>
+      {mandate !== null ? (
+        <>
+          {metered.map((measure) => (
+            <MandateBar key={measure.measure} authority={measure} />
+          ))}
+          {metered.length === 0 ? null : (
+            <p
+              data-testid="mandate-period-basis"
+              className="text-xs text-muted-foreground"
+            >
+              {t("mandatePeriodBasis")}
+            </p>
+          )}
+          {perCallOnly.length === 0 ? null : (
+            <p data-testid="mandate-per-call-only" className="text-xs">
+              {t("mandatePerCallOnly", { mandate: mandate.id })}
+              {perCallOnly.map((measure) =>
+                measure.perCall === null ? null : (
+                  <span key={measure.measure} className="ml-1">
+                    <NamedMeasure
+                      measure={measure.measure}
+                      value={measure.perCall}
+                    />
+                  </span>
+                ),
+              )}
+            </p>
+          )}
+        </>
+      ) : item.mandateId === null ? null : (
+        <p data-testid="mandate-unread" className="text-xs">
+          {t("mandateUnread", { mandate: item.mandateId })}
+        </p>
+      )}
       <p className="text-xs">
         {t.rich("timesOut", {
           clock: () => (
@@ -63,10 +133,16 @@ function ApprovalCard({
 
 export function ApprovalsPanel({
   approvals,
+  mandates,
   now,
   org,
   ws,
-}: { approvals: Read<ApprovalItem[]>; now: number } & Place) {
+}: {
+  approvals: Read<ApprovalItem[]>;
+  /** The mandates the cards name, by public id; empty when none was read. */
+  mandates: ReadonlyMap<string, MandateRow>;
+  now: number;
+} & Place) {
   const t = useTranslations("fleet.approvals");
   const locale = useLocale();
   return (
@@ -96,6 +172,11 @@ export function ApprovalsPanel({
             <ApprovalCard
               key={item.id}
               item={item}
+              mandate={
+                item.mandateId === null
+                  ? null
+                  : (mandates.get(item.mandateId) ?? null)
+              }
               now={now}
               org={org}
               ws={ws}

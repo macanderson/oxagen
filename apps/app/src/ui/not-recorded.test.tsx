@@ -5,7 +5,11 @@ import type { ReactElement } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import en from "../../messages/en.json";
-import { UNRECORDED, type UnrecordedKey } from "@/data/unrecorded";
+import {
+  UNRECORDED,
+  type UnrecordedKey,
+  unrecordedRow,
+} from "@/data/unrecorded";
 import { NotRecorded } from "./not-recorded";
 
 afterEach(async () => {
@@ -39,15 +43,16 @@ describe("NotRecorded", () => {
     expect(state).not.toHaveTextContent(/milestone/i);
   });
 
-  it("carries the backend gap as data only, and only where the row names one", () => {
-    renderWithIntl(<NotRecorded section="run.frames_wrapped" />);
-    expect(screen.getByTestId("not-recorded")).toHaveAttribute(
-      "data-gap",
-      "G6",
-    );
+  // The table only shrinks, so this asserts the rule over whatever rows it
+  // still holds rather than naming a row a lane has since deleted: the gap is
+  // carried as data where the row names one, and nowhere else.
+  it.each(keys)("carries %s's backend gap as data only", (section) => {
+    renderWithIntl(<NotRecorded section={section} />);
+    const state = screen.getByTestId("not-recorded");
+    const { gap } = unrecordedRow(section);
+    if (gap === null) expect(state).not.toHaveAttribute("data-gap");
+    else expect(state).toHaveAttribute("data-gap", gap);
     cleanup();
-    renderWithIntl(<NotRecorded section="tools" />);
-    expect(screen.getByTestId("not-recorded")).not.toHaveAttribute("data-gap");
   });
 
   it("has prose in the catalog for every row and no row without prose", () => {

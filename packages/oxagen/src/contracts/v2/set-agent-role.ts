@@ -18,7 +18,10 @@ import { agentRoleRevoke } from "../agent.role.revoke";
  * agent roles or custom roles may attach to an agent, never a human org role,
  * because the system org Owner role is a super-user via the resolver's own
  * override and attaching it to an unattended automation would be privilege
- * escalation by construction. Custom roles stay enterprise-only. And the
+ * escalation by construction. Custom roles carry no tier gate (ADR-069): the
+ * tier decides whether the kernel resolves a grant, not whether a role may be
+ * held, and gating the bind while the editor was open on every tier left a
+ * role that could be created and never used. And the
  * delegation ceiling holds — a user cannot attach a role whose grants exceed
  * their own effective grants (`agent_role_ceiling_exceeded`), which is §6.2's
  * rule that "an agent can never do more than the person it acts for."
@@ -27,7 +30,7 @@ export const setAgentRole = defineTool({
   name: "set_agent_role",
   domain: "agent",
   description:
-    "Attach or detach an IAM role on an agent's delegated principal. System agent roles (Agent Observer/Contributor/Operator) are assignable at every tier; custom roles are enterprise-only. Refused when the role's grants exceed the caller's own effective grants (delegation ceiling). Revocation is idempotent and soft-deletes the assignment so the audit trail survives. Audited with principal_kind='agent'.",
+    "Attach or detach an IAM role on an agent's delegated principal. System agent roles (Agent Observer/Contributor/Operator) and custom roles are both assignable at every tier. Refused when the role's grants exceed the caller's own effective grants (delegation ceiling). Revocation is idempotent and soft-deletes the assignment so the audit trail survives. Audited with principal_kind='agent'.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli", "agent"],
   layers: ["api", "mcp", "unit", "docs", "app"],

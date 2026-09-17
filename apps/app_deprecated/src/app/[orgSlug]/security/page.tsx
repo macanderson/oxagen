@@ -8,11 +8,9 @@
 // live (security_events + the consolidated emit path), so CC7.2 reflects that,
 // and org-wide MFA enforcement is read from the policy the MFA tab writes.
 
-import { and, count, desc, eq, gte, isNull, or } from "drizzle-orm";
-import { withTenantDb, schema } from "@oxagen/database";
-import { runInTenantScope } from "@oxagen/tenancy";
-import { logger } from "@oxagen/handlers/logger";
-import { resolveOrg } from "@/lib/resolve-org";
+import { loadPosture } from "./posture";
+import { assertSecurityManager, resolveOrg } from "@/lib/resolve-org";
+import { getSessionOrRedirect } from "@/lib/session";
 import { getEnterpriseAccess } from "@/lib/enterprise";
 import { EnterpriseUpsell } from "@/components/security/enterprise-upsell";
 import { loadMfaPolicy } from "./mfa/actions";
@@ -33,102 +31,6 @@ import {
 import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { Stat, StatGroup } from "@/components/ui/stat";
-
-// Org-only route — sentinel workspaceId (no workspace context).
-const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-
-interface Posture {
-  authFailures7d: number;
-  deniedInvocations7d: number;
-  activeApiKeys: number;
-  totalAuditEvents: number;
-  lastEventAt: Date | null;
-}
-
-const EMPTY_POSTURE: Posture = {
-  authFailures7d: 0,
-  deniedInvocations7d: 0,
-  activeApiKeys: 0,
-  totalAuditEvents: 0,
-  lastEventAt: null,
-};
-
-async function loadPosture(orgId: string): Promise<Posture> {
-  const since = new Date(Date.now() - SEVEN_DAYS_MS);
-  const now = new Date();
-  try {
-    return await runInTenantScope({ orgId, workspaceId: ORG_ONLY_WS }, () =>
-      withTenantDb(async (tx) => {
-        const [failures] = await tx
-          .select({ c: count() })
-          .from(schema.securityEvents)
-          .where(
-            and(
-              eq(schema.securityEvents.orgId, orgId),
-              eq(schema.securityEvents.eventType, "auth.sign_in_failed"),
-              gte(schema.securityEvents.occurredAt, since),
-            ),
-          );
-
-        const [denied] = await tx
-          .select({ c: count() })
-          .from(schema.securityEvents)
-          .where(
-            and(
-              eq(schema.securityEvents.orgId, orgId),
-              eq(schema.securityEvents.eventType, "capability.invoke_denied"),
-              gte(schema.securityEvents.occurredAt, since),
-            ),
-          );
-
-        const [total] = await tx
-          .select({ c: count() })
-          .from(schema.securityEvents)
-          .where(eq(schema.securityEvents.orgId, orgId));
-
-        const [latest] = await tx
-          .select({ occurredAt: schema.securityEvents.occurredAt })
-          .from(schema.securityEvents)
-          .where(eq(schema.securityEvents.orgId, orgId))
-          .orderBy(desc(schema.securityEvents.occurredAt))
-          .limit(1);
-
-        const [keys] = await tx
-          .select({ c: count() })
-          .from(schema.apiKeys)
-          .where(
-            and(
-              eq(schema.apiKeys.orgId, orgId),
-              isNull(schema.apiKeys.deletedAt),
-              or(
-                isNull(schema.apiKeys.expiresAt),
-                gte(schema.apiKeys.expiresAt, now),
-              ),
-            ),
-          );
-
-        return {
-          authFailures7d: failures?.c ?? 0,
-          deniedInvocations7d: denied?.c ?? 0,
-          activeApiKeys: keys?.c ?? 0,
-          totalAuditEvents: total?.c ?? 0,
-          lastEventAt: latest?.occurredAt ?? null,
-        };
-      }),
-    );
-  } catch (err) {
-    // Degrade to zeroes so a DB blip does not 500 the whole security section.
-    // This is the one place the page can show a figure that is not live, so it
-    // MUST leave a trace: an all-zero posture that nobody logged is
-    // indistinguishable from a genuinely clean org.
-    logger.error(
-      { err, orgId },
-      "security-overview: posture query failed; rendering an empty posture",
-    );
-    return EMPTY_POSTURE;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // SOC 2 control status (derived from live signals)
@@ -179,7 +81,20 @@ export default async function SecurityOverviewPage({
   params: Promise<{ orgSlug: string }>;
 }) {
   const { orgSlug } = await params;
+  const session = await getSessionOrRedirect();
   const tenant = await resolveOrg(orgSlug);
+
+  // Owner/Admin, not membership. Not flagged in review, but it is the same
+  // shape as the audit viewer beside it: loadPosture now reads the whole
+  // organization's security_events and api_keys, where RLS used to answer it
+  // only the org-wide rows. The figures are counts rather than rows, so the
+  // leak is smaller — but "12 denied invocations and 7 active keys across the
+  // organization" is still the security posture of every workspace, the
+  // governed read behind it (query_audit_log) is org Owner/Admin, and this is
+  // the SOC 2 control dashboard an enterprise buyer opens. It answers to the
+  // same role as the audit feed it summarizes.
+  await assertSecurityManager(tenant.id, session.user.id);
+
   const [posture, access, mfaPolicy] = await Promise.all([
     loadPosture(tenant.id),
     getEnterpriseAccess(tenant.id),

@@ -208,6 +208,16 @@ jobs:
       - name: UI capability parity (strict ratchet)
         run: pnpm check:ui-parity --strict
 
+      # Postgres RLS hides rather than refuses, so an organization-level read
+      # that runs under the org-only workspace sentinel against a table whose
+      # policy class is not `org_only` returns a short answer shaped exactly
+      # like a complete one — no error, no failing test, nothing for a `catch`
+      # to see. This resolves every table such a read touches through
+      # packages/database/src/tenant-policy.manifest.ts and fails on the ones
+      # the sentinel narrows. ADR-074.
+      - name: Org-only sentinel reads
+        run: pnpm check:org-sentinel-reads
+
       - name: File Linear tickets for manifest gaps
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         continue-on-error: true

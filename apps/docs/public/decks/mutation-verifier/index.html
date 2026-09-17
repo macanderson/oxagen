@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <meta charset="utf-8">
-<title>Oxagen — The Mutation Verifier</title>
+<title>Oxagen · The mutation verifier</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0B0B0C">
 <meta name="description" content="Ship note: the mutation verifier. After every judged-complete coding turn, the Oxagen agent engine reverts the fix in a shadow and re-runs the agent's own test evidence. A test must fail without its fix.">
@@ -247,7 +247,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
       <svg class="title-logo" viewBox="7.775 4.325 36.343 37.216" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Oxagen logo"><defs><linearGradient gradientTransform="matrix(27.9194 19.5129 -21.9367 24.8347 12.2858 18.2731)" gradientUnits="userSpaceOnUse" id="lgA" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#F1C364"/><stop offset="0.5" stop-color="#D6962C"/><stop offset="1" stop-color="#8B5E1A"/></linearGradient><linearGradient gradientTransform="matrix(12.59 0 0 12.59 9.77471 32.9406)" gradientUnits="userSpaceOnUse" id="lgB" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#F1C364"/><stop offset="0.5" stop-color="#D6962C"/><stop offset="1" stop-color="#8B5E1A"/></linearGradient></defs><g stroke="#F1EDEA" stroke-width="1" fill="none"><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z"/></g><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="url(#lgA)"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="url(#lgB)" opacity="0.55"/></svg>
     </div>
     <div class="eyebrow rv" data-d="2">Engineering ship note · Agent engine · ADR-029</div>
-    <h1 class="rv" data-d="3">Green you can trust.<br><span class="gradtext">The mutation verifier.</span></h1>
+    <h1 class="rv" data-d="3">The mutation verifier.<br><span class="gradtext">A test must fail without its fix.</span></h1>
     <p class="lede rv" data-d="4">Shipped, on by default: after every judged-complete coding turn, the harness <strong>reverts the fix in a shadow and re-runs the agent's own test evidence</strong>. If the tests still pass without the fix, the green is false, and the turn is sent back before anyone ever sees it. A test must <strong>fail without its fix</strong>. That is now a physical law of the harness, not a convention.</p>
     <div class="title-meta rv" data-d="5">
       <span class="pill">Shipped V1 · default on</span>
@@ -267,11 +267,11 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
     <p class="lede rv" data-d="2">The agent edits source, writes a test, runs it, sees green, and declares victory. An LLM judge looks at the evidence and agrees: tests ran, tests passed. But nobody ever asked the only question that matters: <strong>would that test have passed anyway?</strong></p>
     <div class="grid4 rv" data-d="3">
       <div class="card"><h3><span class="g">Vacuous test</span>Asserts nothing real</h3><p>The new test exercises the happy path that already worked, or asserts a tautology. It passes with or without the fix.</p></div>
-      <div class="card"><h3><span class="g">Rewritten oracle</span>Test bent to the code</h3><p>The agent "fixes" a failing test by weakening the assertion instead of the behavior. The suite goes green; the bug stays.</p></div>
-      <div class="card"><h3><span class="g">Dead fix</span>Code that never runs</h3><p>The patch lands in a branch the test never reaches. Fix and test are both real; the connection between them is not.</p></div>
+      <div class="card"><h3><span class="g">Rewritten oracle</span>Test bent to the code</h3><p>The agent "fixes" a failing test by weakening the assertion instead of the behavior. The suite goes green. The bug stays.</p></div>
+      <div class="card"><h3><span class="g">Dead fix</span>Code that never runs</h3><p>The patch lands in a branch the test never reaches. Fix and test are both real. The connection between them is not.</p></div>
       <div class="card"><h3><span class="g">Environmental flip</span>Green for the wrong reason</h3><p>The earlier failure was a missing install or a stale cache. It heals itself, and the agent takes credit.</p></div>
     </div>
-    <p class="footnote rv" data-d="4">Every one of these survives an LLM completeness judge, because the executed evidence looks decisive. None of them survives reverting the fix.</p>
+    <p class="footnote rv" data-d="4">Every one of these survives an LLM completeness judge, because the evidence it ran looks decisive. None of them survives reverting the fix.</p>
   </div>
 </section>
 
@@ -291,11 +291,11 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
       <div class="node em">Fail = real · Pass = vacuous</div>
     </div>
     <div class="grid3 rv" data-d="4">
-      <div class="card"><span class="k">witnessed</span><p>The tests <strong>fail without the fix</strong>. The green is real; the verdict stands; the turn ships.</p></div>
+      <div class="card"><span class="k">witnessed</span><p>The tests <strong>fail without the fix</strong>. The green is real, the verdict stands, and the turn ships.</p></div>
       <div class="card"><span class="k">vacuous</span><p>Everything still passes. The verdict is overridden and the existing revise loop sends the agent back with one instruction: write a test that fails without the fix.</p></div>
       <div class="card"><span class="k">skipped</span><p>Anything the gate cannot do faithfully (renames, binary files, a diverged tree, no witness command) steps aside with a recorded reason. Fail-open, never fail-wrong.</p></div>
     </div>
-    <p class="footnote rv" data-d="5">The shadow is restored byte-for-byte in a finally block, on every path including aborts. A failed restore throws loudly rather than leaving a corrupted tree.</p>
+    <p class="footnote rv" data-d="5">The shadow is restored byte-for-byte in a <code>finally</code> block, on every path including aborts. A failed restore throws loudly rather than leaving a corrupted tree.</p>
   </div>
 </section>
 
@@ -309,8 +309,8 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
       <div class="card"><h3><span class="g">Layer 2</span>Mutation scoring</h3><p>Opt-in: deterministic one-line mutants of exactly the lines the fix added (operator flips, boundary flips, early returns). The kill rate measures how tightly the tests constrain the patch.</p></div>
       <div class="card"><h3><span class="g">Honesty guard</span>The witness claim</h3><p>The gate only arms when the turn claimed test evidence: a fail-to-pass flip or edited test files. A turn that never pretended to be test-witnessed is not punished for honesty.</p></div>
       <div class="card"><h3><span class="g">Ports only</span>No raw filesystem</h3><p>Revert, re-run, and restore go through the engine's <code>Workspace</code> port. Every step is injectable, replayable, and unit-tested against a fake tree.</p></div>
-      <div class="card"><h3><span class="g">Observable</span>Trace + live stages</h3><p>Every verdict lands on <code>TurnTrace.mutationGates</code> and streams as live stage events, so <code>/replay</code> and the REPL show exactly why a turn was held.</p></div>
-      <div class="card"><h3><span class="g">Proven</span>49 tests, gate green</h3><p>Pure core, gate orchestration, and pipeline wiring suites; the package's 90 percent coverage ratchet passes with the new module at 96 percent lines.</p></div>
+      <div class="card"><h3><span class="g">Recorded</span>Run record + live stages</h3><p>Every verdict lands on <code>TurnTrace.mutationGates</code> and streams as live stage events, so <code>/replay</code> and the REPL show exactly why a turn was held.</p></div>
+      <div class="card"><h3><span class="g">Tested</span>49 tests, gate green</h3><p>Pure core, gate orchestration, and pipeline wiring suites. The package's 90 percent coverage ratchet passes with the new module at 96 percent lines.</p></div>
     </div>
     <p class="footnote rv" data-d="3">Cost of layer 1: one extra run of a test command the agent already ran, only on judged-complete coding turns.</p>
   </div>
@@ -321,13 +321,13 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
   <div class="inner">
     <div class="eyebrow rv" data-d="1"><span class="idx">04</span> Why this matters</div>
     <h2 class="rv" data-d="1">The accountability chain just gained its <span class="gradtext">hardest link</span>.</h2>
-    <p class="lede rv" data-d="2">Oxagen's wedge is one enforced object binding identity, scope, permitted action, commercial terms, <strong>verified outcome</strong>, and audit record. For coding turns, "verified outcome" was the softest link: a model's opinion about completeness. It is now executed proof.</p>
+    <p class="lede rv" data-d="2">Oxagen's wedge is one enforced object binding identity, scope, permitted action, commercial terms, <strong>verified outcome</strong>, and audit record. For coding turns, "verified outcome" was the softest link: a model's opinion about completeness. It is now evidence from a test that ran.</p>
     <div class="grid3 rv" data-d="3">
       <div class="card"><h3><span class="g">Trust</span>Green becomes a claim with evidence</h3><p>A turn that survives the gate carries proof its tests witness its fix. That is the difference between "the agent says done" and "the harness verified done".</p></div>
       <div class="card"><h3><span class="g">Compounding</span>The ladder gets honest</h3><p>The judge-skip fast path trusts the fail-to-pass flip. The gate verifies that exact flip, so every deterministic shortcut upstream inherits the guarantee.</p></div>
       <div class="card"><h3><span class="g">Billing</span>Meter verified work</h3><p>Usage that reconciles to invoices should bill outcomes that are real. Verified greens make "pay for what agents actually did" a defensible sentence in a contract.</p></div>
     </div>
-    <div class="verdict rv" data-d="4"><div class="big">No agentic coding harness on the market verifies that its tests witness its fixes. This one does, by default.</div></div>
+    <div class="verdict rv" data-d="4"><div class="big">No coding agent harness on the market verifies that its tests witness its fixes. This one does, by default.</div></div>
   </div>
 </section>
 
@@ -336,10 +336,10 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
   <div class="inner">
     <div class="eyebrow rv" data-d="1"><span class="idx">05</span> The competitive read</div>
     <h2 class="rv" data-d="1">Everyone judges. <span class="gradtext">Nobody witnesses.</span></h2>
-    <p class="lede rv" data-d="2">The market's answer to "is the work done" is another model call: a completeness judge, a review agent, a rubric. Useful, and we run one too. But a judge reads evidence; it cannot manufacture it. Only the harness can, by executing the counterfactual.</p>
+    <p class="lede rv" data-d="2">The market's answer to "is the work done" is another model call: a completeness judge, a review agent, a rubric. Useful, and Oxagen runs one too. But a judge reads evidence. It cannot manufacture it. Only the harness can, by running the counterfactual.</p>
     <div class="grid2 rv" data-d="3">
-      <div class="vs lose"><h3>Status quo harnesses</h3><p>Agent runs tests, reports green. Maybe an LLM judge re-reads the diff and transcript. The no-op fix, the weakened assertion, and the environmental flip all sail through, because the evidence genuinely looks good.</p></div>
-      <div class="vs win"><h3>Oxagen agent engine</h3><p>The harness re-executes the agent's own witness against the reverted fix and demands a failure, then optionally mutates the patch and measures the kill rate. Deterministic, replayable, recorded on the trace.</p></div>
+      <div class="vs lose"><h3>Status quo harnesses</h3><p>Agent runs tests, reports green. Maybe an LLM judge re-reads the diff and transcript. The no-op fix, the weakened assertion, and the environmental flip all sail through, because the evidence looks good.</p></div>
+      <div class="vs win"><h3>Oxagen agent engine</h3><p>The harness re-runs the agent's own witness against the reverted fix and demands a failure, then optionally mutates the patch and measures the kill rate. Deterministic, replayable, recorded on the run.</p></div>
     </div>
     <p class="footnote rv" data-d="4">The equivalent discipline exists in mature software engineering as mutation testing. V1 brings it inside the agent loop, scoped to the patch, at the moment of the claim.</p>
   </div>
@@ -352,10 +352,10 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
     <h2 class="rv" data-d="1">V1 is the law. <span class="gradtext">V2 is the ecosystem.</span></h2>
     <div class="grid3 rv" data-d="2">
       <div class="card"><h3><span class="g">Smarter mutants</span>LLM-guided mutation</h3><p>Deterministic operators catch token-level weakness. A model proposing <em>semantic</em> mutants of the changed region (through <code>@oxagen/ai</code>, metered) would catch tests that miss the point, not just the operator.</p></div>
-      <div class="card"><h3><span class="g">True shadow</span>Snapshot sandboxes</h3><p>V1 reverts in place with a guaranteed restore. Filesystem-layer snapshots would give a disposable shadow, unlock parallel witness runs, and feed bit-for-bit time-travel replay of any turn.</p></div>
+      <div class="card"><h3><span class="g">True shadow</span>Snapshot sandboxes</h3><p>V1 reverts in place and restores the tree on every path. Filesystem-layer snapshots would give a disposable shadow, unlock parallel witness runs, and feed bit-for-bit time-travel replay of any turn.</p></div>
       <div class="card"><h3><span class="g">Merge gates</span>Kill rate in CI</h3><p>Gate merges on patch-scoped kill rate, annotate PRs with surviving mutants, and let repos set a witness policy: strict mode requires a fail-to-pass flip on every fix turn.</p></div>
-      <div class="card"><h3><span class="g">Surfacing</span>Verdicts in the app</h3><p>A gate chip on chat turns and the trace viewer, so a human reviewing agent work sees "witnessed, kill rate 4 of 5" next to the diff, cited and inspectable.</p></div>
-      <div class="card"><h3><span class="g">Learning loop</span>Vacuous turns become evals</h3><p>Every vacuous verdict is a labeled failure the model produced under real conditions. Distilled into evals-v1 datasets, the nightly optimizer trains against exactly the failures the gate caught.</p></div>
+      <div class="card"><h3><span class="g">Surfacing</span>Verdicts in the app</h3><p>A gate chip on chat turns and the run viewer, so a human reviewing agent work sees "witnessed, kill rate 4 of 5" next to the diff, cited and inspectable.</p></div>
+      <div class="card"><h3><span class="g">Learning loop</span>Vacuous turns become training data</h3><p>Every vacuous verdict is a labeled failure the model produced under real conditions. Distilled into evals-v1 datasets, the nightly optimizer trains against exactly the failures the gate caught.</p></div>
       <div class="card"><h3><span class="g">Coverage</span>Beyond the pipeline</h3><p>Run the same gate in headless bench harnesses and fleet workers, and export it as a capability so CI systems outside Oxagen can call the verifier on any diff plus test command.</p></div>
     </div>
     <p class="footnote rv" data-d="3">Each seam already exists in the V1 code: the gate is a pure module behind a port, so every upgrade above is additive.</p>
@@ -381,7 +381,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
     <div class="grid3 rv" data-d="3">
       <div class="stat"><b>1</b><span>extra test run per green coding turn. That is the whole price of the law.</span></div>
       <div class="stat"><b>0</b><span>model calls in the gate. Deterministic, replayable, fail-open.</span></div>
-      <div class="stat"><b>49</b><span>tests prove the gate itself: witnessed, vacuous, skipped, restore, abort, scoring.</span></div>
+      <div class="stat"><b>49</b><span>tests cover the gate itself: witnessed, vacuous, skipped, restore, abort, scoring.</span></div>
     </div>
     <p class="footnote rv" data-d="4">Shipped in <code>@oxagen/agent-engine</code> behind <code>runTurn</code> · ADR-029 · <code>OXAGEN_MUTATION_VERIFY</code> defaults on · layer 2 via <code>OXAGEN_MUTATION_SCORE=1</code>.</p>
   </div>
@@ -535,9 +535,9 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
 '</style></head><body>',
 '<div class="hd"><span class="badge">Presenter · private</span><span class="pos" id="pos">–</span><span class="timer" id="timer">00:00</span></div>',
 '<div class="lbl">Now saying</div><div class="title" id="ptitle">Connecting…</div>',
-'<div class="say" id="say">Open this from the deck (press S) — it will sync automatically.</div>',
+'<div class="say" id="say">Open this from the deck (press S). It syncs automatically.</div>',
 '<div class="demo" id="demo"></div>',
-'<div class="next"><span class="lbl">Up next → </span><b id="pnext">—</b></div>',
+'<div class="next"><span class="lbl">Up next → </span><b id="pnext">–</b></div>',
 '<div class="ctrls"><button class="btn" id="preconn">⟳ Sync</button><button class="btn" id="pprev">← Prev</button><button class="btn" id="treset">Timer</button><button class="btn p" id="pnextb">Next →</button></div>',
 '<div class="tnote">Share only the DECK window/tab on your call · this window stays off-screen</div>',
 '<script>(function(){',
@@ -553,7 +553,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
 'document.getElementById("pos").textContent="Slide "+(i+1)+" / "+S.length;',
 'document.getElementById("ptitle").textContent=e.title;',
 'document.getElementById("say").textContent=e.say;',
-'var nx=S[i+1];document.getElementById("pnext").textContent=nx?nx.title:"— end —";',
+'var nx=S[i+1];document.getElementById("pnext").textContent=nx?nx.title:"End";',
 'var d=document.getElementById("demo");d.innerHTML="";',
 'if(e.demo){e.demo.forEach(function(step){var el=document.createElement("div");el.className="step";el.innerHTML=fmtStep(step);d.appendChild(el);});}',
 '}',

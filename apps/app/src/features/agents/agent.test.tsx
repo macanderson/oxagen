@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 // One agent over a fake DataSource: the header and each of the five sections
 // in its ok, empty, denied and error states, with an axe check in every one.
-// Only the chosen section makes its own read; an unknown agent is a 404.
-import { cleanup, render, screen, within } from "@testing-library/react";
+// Only the chosen section makes its own read; an unknown agent is a 404. The
+// Mandates section has its own file, mandates.test.tsx.
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
@@ -49,6 +50,7 @@ const ctx = unsafeMint(WsCtx, {
   workspaceId: "7b000000-0000-4000-8000-000000000001",
   wsSlug: "core-platform",
   wsName: "Core platform",
+  wsRole: "member",
 });
 
 async function renderAgent(
@@ -67,6 +69,9 @@ async function renderAgent(
   render(<IntlProvider>{element}</IntlProvider>);
   return calls;
 }
+
+/** A fixed instant the expiry-boundary tests move the clock across. */
+const CLOCK_NOW = Date.parse("2026-09-16T12:00:00.000Z");
 
 const region = (name: string) => screen.getByRole("region", { name });
 const current = () =>
@@ -107,7 +112,7 @@ describe("Agent header and tabs", () => {
     );
   });
 
-  it("links the five sections a store backs, and no Mandates, Budgets or Runs tab (negative)", async () => {
+  it("links the six sections a store backs, and no Budgets or Runs tab (negative)", async () => {
     await renderAgent({ get: readOk(agentDetail()) });
     const links = within(
       screen.getByRole("navigation", { name: "Agent sections" }),
@@ -124,8 +129,9 @@ describe("Agent header and tabs", () => {
         "Definition in git",
         "/acme/core-platform/agents/release-bot?tab=definition",
       ],
+      ["Mandates", "/acme/core-platform/agents/release-bot?tab=mandates"],
     ]);
-    expect(document.body).not.toHaveTextContent(/mandate|budget|trust|score/i);
+    expect(document.body).not.toHaveTextContent(/budget|trust|score/i);
   });
 
   it("offers Resume for a suspended agent and no write at all for a retired one", async () => {
@@ -148,7 +154,7 @@ describe("Agent header and tabs", () => {
   });
 
   it("opens Identity for an unknown tab (negative)", async () => {
-    const calls = await renderAgent({ get: readOk(agentDetail()) }, "mandates");
+    const calls = await renderAgent({ get: readOk(agentDetail()) }, "budgets");
     expect(current()).toEqual(["Identity"]);
     expect(calls.toolbelt).toEqual([]);
     expect(calls.incidents).toEqual([]);
@@ -200,7 +206,7 @@ describe("Identity", () => {
       "oxa_ag_7frelease-bot run key",
       "Sep 1, 2026, 10:00 AM",
       "never",
-      "Mar 1, 2027, 10:00 AM",
+      "Mar 1, 2099, 10:00 AM",
       "active",
     ]);
     expect(calls.toolbelt).toEqual([]);
@@ -229,6 +235,87 @@ describe("Identity", () => {
     );
   });
 
+  it("marks a credential whose expiry has passed as expired, never active (negative)", async () => {
+    // resolveApiKey refuses an expired key; a row reading "active" over it
+    // would be the page disagreeing with the date in the cell beside it.
+    const [credential] = agentDetail().credentials;
+    await renderAgent({
+      get: readOk(
+        agentDetail({
+          credentials: credential
+            ? [{ ...credential, expiresAt: "2020-01-01T10:00:00.000Z" }]
+            : [],
+        }),
+      ),
+    });
+    const row = screen.getByTestId("credential-row");
+    expect(row.querySelector("[data-state]")).toHaveAttribute(
+      "data-state",
+      "expired",
+    );
+    expect(row).toHaveTextContent("expired");
+    expect(row).not.toHaveTextContent("active");
+  });
+
+  it("turns a credential from active to expired when its expiry passes while the page is open", async () => {
+    // `now` is captured once, server-side, so without a running clock this row
+    // would go on claiming authority the resolver already refuses. The word
+    // has to change, not merely the control beside it — there is no control
+    // here, the word is the whole claim.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(CLOCK_NOW);
+    const [credential] = agentDetail().credentials;
+    await renderAgent({
+      get: readOk(
+        agentDetail({
+          credentials: credential
+            ? [
+                {
+                  ...credential,
+                  expiresAt: new Date(CLOCK_NOW + 20_000).toISOString(),
+                },
+              ]
+            : [],
+        }),
+      ),
+    });
+    const state = () =>
+      screen.getByTestId("credential-row").querySelector("[data-state]");
+    expect(state()).toHaveAttribute("data-state", "live");
+    expect(screen.getByTestId("credential-row")).toHaveTextContent("active");
+
+    await act(async () => {
+      vi.setSystemTime(CLOCK_NOW + 60_000);
+      await vi.advanceTimersByTimeAsync(31_000);
+    });
+
+    expect(state()).toHaveAttribute("data-state", "expired");
+    const row = screen.getByTestId("credential-row");
+    expect(row).toHaveTextContent("expired");
+    expect(row).not.toHaveTextContent("active");
+  });
+
+  it("leaves a credential with no expiry active however long the page is open (negative)", async () => {
+    // Nothing to cross, so the row sets no timer and nothing can change it.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(CLOCK_NOW);
+    const [credential] = agentDetail().credentials;
+    await renderAgent({
+      get: readOk(
+        agentDetail({
+          credentials: credential ? [{ ...credential, expiresAt: null }] : [],
+        }),
+      ),
+    });
+    await act(async () => {
+      vi.setSystemTime(CLOCK_NOW + 86_400_000);
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(
+      screen.getByTestId("credential-row").querySelector("[data-state]"),
+    ).toHaveAttribute("data-state", "live");
+  });
+
   it("marks a revoked credential with when it was revoked", async () => {
     const [credential] = agentDetail().credentials;
     await renderAgent({
@@ -243,6 +330,31 @@ describe("Identity", () => {
     expect(region("Run credentials")).toHaveTextContent(
       "revoked Sep 10, 2026, 10:00 AM",
     );
+  });
+
+  it("names revocation on a credential that is both revoked and expired, as the resolver does (negative)", async () => {
+    const [credential] = agentDetail().credentials;
+    await renderAgent({
+      get: readOk(
+        agentDetail({
+          credentials: credential
+            ? [
+                {
+                  ...credential,
+                  expiresAt: "2020-01-01T10:00:00.000Z",
+                  revokedAt: "2026-09-10T10:00:00.000Z",
+                },
+              ]
+            : [],
+        }),
+      ),
+    });
+    const row = screen.getByTestId("credential-row");
+    expect(row.querySelector("[data-state]")).toHaveAttribute(
+      "data-state",
+      "revoked",
+    );
+    expect(row).not.toHaveTextContent("expired");
   });
 });
 
@@ -426,6 +538,87 @@ describe("Enrollment", () => {
       "Sep 14, 2026, 10:00 AM",
     ]);
     expect(calls.toolbelt).toEqual([]);
+  });
+
+  it("says an enrollment past its expiry has expired, over the status column alone (negative)", async () => {
+    // tacho-host.ts refuses a host whose enrollment has expired, and the table
+    // prints no expiry column, so the stored status is all a person would see.
+    const [host] = agentDetail().hosts;
+    await renderAgent(
+      {
+        get: readOk(
+          agentDetail({
+            hosts: host
+              ? [{ ...host, expiresAt: "2020-01-01T10:00:00.000Z" }]
+              : [],
+          }),
+        ),
+      },
+      "enrollment",
+    );
+    const row = screen.getByTestId("host-row");
+    expect(row.querySelector("[data-state]")).toHaveAttribute(
+      "data-state",
+      "expired",
+    );
+    expect(row).toHaveTextContent("expired Jan 1, 2020, 10:00 AM");
+  });
+
+  it("turns an enrollment expired when its expiry passes while the page is open", async () => {
+    // The table prints no expiry column, so without a running clock the stored
+    // status word is the only thing a person sees — over a host whose every
+    // request tacho-host.ts already refuses.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(CLOCK_NOW);
+    const [host] = agentDetail().hosts;
+    const expiresAt = new Date(CLOCK_NOW + 20_000).toISOString();
+    await renderAgent(
+      { get: readOk(agentDetail({ hosts: host ? [{ ...host, expiresAt }] : [] })) },
+      "enrollment",
+    );
+    const state = () =>
+      screen.getByTestId("host-row").querySelector("[data-state]");
+    expect(state()).toHaveAttribute("data-state", "live");
+    expect(screen.getByTestId("host-row")).not.toHaveTextContent("expired");
+
+    await act(async () => {
+      vi.setSystemTime(CLOCK_NOW + 60_000);
+      await vi.advanceTimersByTimeAsync(31_000);
+    });
+
+    // The expired state is a state with copy of its own, not the active one
+    // going quiet: the row names it and prints the instant it ended.
+    expect(state()).toHaveAttribute("data-state", "expired");
+    expect(screen.getByTestId("host-row")).toHaveTextContent("expired");
+  });
+
+  it("names revocation on an enrollment that is both revoked and expired (negative)", async () => {
+    const [host] = agentDetail().hosts;
+    await renderAgent(
+      {
+        get: readOk(
+          agentDetail({
+            hosts: host
+              ? [
+                  {
+                    ...host,
+                    expiresAt: "2020-01-01T10:00:00.000Z",
+                    revokedAt: "2026-09-14T11:00:00.000Z",
+                  },
+                ]
+              : [],
+          }),
+        ),
+      },
+      "enrollment",
+    );
+    const row = screen.getByTestId("host-row");
+    expect(row.querySelector("[data-state]")).toHaveAttribute(
+      "data-state",
+      "revoked",
+    );
+    expect(row).toHaveTextContent("revoked Sep 14, 2026, 11:00 AM");
+    expect(row).not.toHaveTextContent("expired");
   });
 
   it("tells a person how to enroll a host when none is", async () => {

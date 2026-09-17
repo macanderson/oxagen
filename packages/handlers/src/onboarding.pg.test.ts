@@ -194,6 +194,15 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
         await del(schema.principals, schema.principals.orgId);
         await del(schema.roles, schema.roles.orgId);
         await del(schema.securityEvents, schema.securityEvents.orgId);
+        // create_org writes the $5 signup grant on its own bootstrap
+        // transaction (packages/billing/src/grants.ts grantSignupCredits), so
+        // every org this file creates holds a ledger row, a free_grant lot and
+        // a balance mirror. All three carry an FK to org.organizations, so the
+        // org delete below fails on credit_balances_org_id_organizations_id_fk
+        // unless they go first. Mirrors org.create.pg.test.ts.
+        await del(schema.creditLots, schema.creditLots.orgId);
+        await del(schema.creditLedger, schema.creditLedger.orgId);
+        await del(schema.creditBalances, schema.creditBalances.orgId);
         await del(schema.orgUsers, schema.orgUsers.orgId);
         await tx
           .delete(schema.organizations)

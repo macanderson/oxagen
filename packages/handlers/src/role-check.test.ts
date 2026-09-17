@@ -30,6 +30,7 @@ import { getCapability } from "@oxagen/oxagen";
 
 const ROLE_CHECKED_CONTRACTS = [
   "authorize_cli",
+  "purchase_credits",
   "register_agent",
   "rotate_agent_credential",
   "suspend_agent",
@@ -40,12 +41,22 @@ const ROLE_CHECKED_CONTRACTS = [
   "revoke_mandate",
   "update_mandate_limits",
   "publish_tool_declaration",
+  "list_approval_rules",
+  "set_approval_rules",
+  "delete_approval_rule",
+  "set_approval_rule_enabled",
+  "get_auto_eligibility",
   "update_workspace_settings",
   "set_spend_budget",
   "append_record",
   "propose_record",
   "dismiss_proposal",
   "open_context_pr",
+  "query_audit_log",
+  "export_audit_events",
+  "list_skills",
+  "get_run_proof",
+  "set_disclosure_grain",
 ] as const;
 
 const AGENT_ROLE_CHECKED_CONTRACTS = [
@@ -105,7 +116,9 @@ function agentHandlerModule(
   };
   visit(indexSource);
   if (!module) {
-    throw new Error(`packages/agent LOADERS binds no handler for ${capability}`);
+    throw new Error(
+      `packages/agent LOADERS binds no handler for ${capability}`,
+    );
   }
   return module;
 }
@@ -350,17 +363,15 @@ describe("INV-29: role-restricted packages/agent contracts are gated in their ha
     "%s's handler body calls assertOrgRole",
     (name) => {
       const source = handlerSource(name);
-      expect(
-        handlerCallsRoleGate(source, soleHandlerExport(source)),
-      ).toBe(true);
+      expect(handlerCallsRoleGate(source, soleHandlerExport(source))).toBe(
+        true,
+      );
     },
   );
 
   it("the scan itself sees no gate in an agent handler that has none", () => {
     const source = handlerSource("list_agent_roles");
-    expect(handlerCallsRoleGate(source, soleHandlerExport(source))).toBe(
-      false,
-    );
+    expect(handlerCallsRoleGate(source, soleHandlerExport(source))).toBe(false);
   });
 });
 
@@ -374,11 +385,14 @@ describe("INV-29: every role gate acts as the resolved user", () => {
         "agent/src/handlers/agent.approval.resolve.ts",
         "agent/src/handlers/agent.role.assign.ts",
         "agent/src/handlers/agent.role.revoke.ts",
+        "handlers/src/billing.credits.purchase.ts",
         "handlers/src/billing.gau_bucket.purchase.ts",
         "handlers/src/billing.invoice.list.ts",
         "handlers/src/context.pr.open.ts",
         "handlers/src/context.records.append.ts",
         "handlers/src/tacho.command.dispatch.ts",
+        "handlers/src/audit.events.export.ts",
+        "handlers/src/audit.log.query.ts",
         "handlers/src/workspace.archive.ts",
         "iam/src/mandate-role.ts",
       ]),

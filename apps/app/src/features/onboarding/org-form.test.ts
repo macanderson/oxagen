@@ -59,13 +59,29 @@ describe("OrganizationForm", () => {
     [{ name: "" }, "name", "orgNameRequired"],
     [{ workspaceSlug: "billing" }, "workspaceSlug", "workspaceSlugReserved"],
     [{ workspaceSlug: "-core" }, "workspaceSlug", "workspaceSlugInvalid"],
+    // The form takes the contract's own spelling now (#3110). It used to take
+    // a doubled hyphen and let `create_org` do the refusing — and worse, a
+    // workspace created that way could never be edited, because
+    // `update_workspace_settings` always rejected it.
+    [
+      { workspaceSlug: "core--platform" },
+      "workspaceSlug",
+      "workspaceSlugInvalid",
+    ],
+    [{ workspaceSlug: "core-" }, "workspaceSlug", "workspaceSlugInvalid"],
+    [{ workspaceSlug: "roles" }, "workspaceSlug", "workspaceSlugReserved"],
+    [{ workspaceSlug: "api-keys" }, "workspaceSlug", "workspaceSlugReserved"],
   ])("refuses %j", (patch, field, key) => {
     const r = OrganizationForm.safeParse({ ...valid, ...patch });
     expect(r.success).toBe(false);
     expect(r.error?.issues.find((i) => i.path[0] === field)?.message).toBe(key);
   });
 
-  it("every form error key and both alerts have catalog copy, and the catalog carries no other", () => {
+  // `onboarding.errors` is the one catalog both onboarding forms raise keys
+  // from, so the exhaustive check covers the register form's keys (agent-form.ts)
+  // as well: a key either form can raise has copy, and the catalog carries no
+  // copy no form can reach.
+  it("every key either onboarding form raises, and both alerts, have catalog copy, and the catalog carries no other", () => {
     const keys = [
       "orgNameRequired",
       "orgNameTooLong",
@@ -76,6 +92,11 @@ describe("OrganizationForm", () => {
       "workspaceSlugInvalid",
       "workspaceSlugReserved",
       "slugTaken",
+      "agentSlugInvalid",
+      "agentNameRequired",
+      "agentNameTooLong",
+      "agentDescriptionTooLong",
+      "agentHarnessInvalid",
       "failed",
       "denied",
     ];

@@ -34,6 +34,13 @@ import { billingEvidenceRetentionRoute } from "./routes/v1/billing.evidence_rete
 import { chatMessageSendRoute } from "./routes/v1/chat.message.send";
 import { chatMessageExecutionRoute } from "./routes/v1/chat.message.execution";
 import { chatStreamRoute } from "./routes/v1/chat.stream";
+import { assistantAskRoute } from "./routes/v1/assistant.ask";
+import { assistantEngineGetRoute } from "./routes/v1/assistant.engine.get";
+import { toolsSearchRoute } from "./routes/v1/tools.search";
+import { toolsLoadRoute } from "./routes/v1/tools.load";
+import { shellNavCountsGetRoute } from "./routes/v1/shell.nav_counts.get";
+import { runRecentListRoute } from "./routes/v1/run.recent.list";
+import { userPreferencesSetRoute } from "./routes/v1/user.preferences.set";
 import { agentToolListRoute } from "./routes/v1/agent.tool.list";
 import { agentMcpRegisterRoute } from "./routes/v1/agent.mcp.register";
 import { agentMcpListRoute } from "./routes/v1/agent.mcp.list";
@@ -79,7 +86,6 @@ import { orgMemberInviteDeclineRoute } from "./routes/v1/org.member_invite.decli
 import { orgMemberRemoveRoute } from "./routes/v1/org.member.remove";
 import { orgMemberRoleChangeRoute } from "./routes/v1/org.member_role.change";
 import { userPreferencesReadRoute } from "./routes/v1/user.preferences.read";
-import { userPreferencesWriteRoute } from "./routes/v1/user.preferences.write";
 import { budgetPolicyReadRoute } from "./routes/v1/budget.policy.read";
 import { budgetPolicyWriteRoute } from "./routes/v1/budget.policy.write";
 import { workspaceBudgetPolicyReadRoute } from "./routes/v1/workspace.budget_policy.read";
@@ -166,7 +172,18 @@ import { mandateListRoute } from "./routes/v1/mandate.list";
 import { mandateGetRoute } from "./routes/v1/mandate.get";
 import { mandateRevokeRoute } from "./routes/v1/mandate.revoke";
 import { mandateLimitsUpdateRoute } from "./routes/v1/mandate.limits.update";
+import { approvalRuleListRoute } from "./routes/v1/approval_rule.list";
+import { approvalRuleSetRoute } from "./routes/v1/approval_rule.set";
+import { approvalRuleDeleteRoute } from "./routes/v1/approval_rule.delete";
+import { approvalRuleEnabledSetRoute } from "./routes/v1/approval_rule.enabled.set";
+import { approvalAutoEligibilityGetRoute } from "./routes/v1/approval.auto_eligibility.get";
 import { toolDeclarationListRoute } from "./routes/v1/tool.declaration.list";
+import { toolVersionListRoute } from "./routes/v1/tool.version.list";
+import { toolClassificationSetRoute } from "./routes/v1/tool.classification.set";
+import { toolImportRoute } from "./routes/v1/tool.import";
+import { credentialGrantListRoute } from "./routes/v1/credential.grant.list";
+import { killSwitchSetRoute } from "./routes/v1/kill_switch.set";
+import { killSwitchListRoute } from "./routes/v1/kill_switch.list";
 import { contextRecordPublishRoute } from "./routes/v1/context.record.publish";
 import { contextRecordListRoute } from "./routes/v1/context.record.list";
 import { contextRecordPromoteRoute } from "./routes/v1/context.record.promote";
@@ -221,6 +238,7 @@ import { graphStatsRoute } from "./routes/v1/graph.stats";
 import { ontologyQueryRoute } from "./routes/v1/ontology.query";
 import { ontologyNeighborsRoute } from "./routes/v1/ontology.neighbors";
 import { auditLogQueryRoute } from "./routes/v1/audit.log.query";
+import { auditEventsExportRoute } from "./routes/v1/audit.events.export";
 import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
 import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
 import { telemetryStellaEnrollRoute } from "./routes/v1/telemetry.stella.enroll";
@@ -261,12 +279,15 @@ import { tachoIncidentListRoute } from "./routes/v1/tacho.incident.list";
 import { spendGetRoute } from "./routes/v1/spend.get";
 import { spendDrillRoute } from "./routes/v1/spend.drill";
 import { spendWasteListRoute } from "./routes/v1/spend.waste";
+import { skillListRoute } from "./routes/v1/skill.list";
 import { spendStatementExportRoute } from "./routes/v1/spend.statement.export";
 import { findingListRoute } from "./routes/v1/finding.list";
 import { findingEvidenceGetRoute } from "./routes/v1/finding.evidence.get";
 import { findingFixRecordRoute } from "./routes/v1/finding.fix.record";
 import { findingDismissRoute } from "./routes/v1/finding.dismiss";
 import { runCostGetRoute } from "./routes/v1/run.cost";
+import { runProofGetRoute } from "./routes/v1/run.proof.get";
+import { evidenceDisclosureGrainSetRoute } from "./routes/v1/evidence.disclosure_grain.set";
 import { costPriceEntryListRoute } from "./routes/v1/cost.price_entry.list";
 
 export type AppEnv = {
@@ -389,7 +410,7 @@ userScoped.route("/auth/whoami", authWhoamiRoute);
 userScoped.route("/user/organizations", orgListRoute);
 userScoped.route("/user/workspaces", workspaceListRoute);
 userScoped.route("/user/preferences/read", userPreferencesReadRoute);
-userScoped.route("/user/preferences/write", userPreferencesWriteRoute);
+userScoped.route("/user/preferences", userPreferencesSetRoute);
 // Per-turn dollar budget (user-scoped default).
 userScoped.route("/user/budget/read", budgetPolicyReadRoute);
 userScoped.route("/user/budget/write", budgetPolicyWriteRoute);
@@ -499,11 +520,18 @@ orgScoped.route("/spend", spendGetRoute);
 orgScoped.route("/spend/drill", spendDrillRoute);
 orgScoped.route("/spend/waste", spendWasteListRoute);
 orgScoped.route("/spend/statement/export", spendStatementExportRoute);
+// The skills a workspace's harness sessions reported at start (#3098): a
+// noBillingGate read of tacho.sessions.
+orgScoped.route("/skills", skillListRoute);
 orgScoped.route("/spend/findings", findingListRoute);
 orgScoped.route("/spend/findings/evidence", findingEvidenceGetRoute);
 orgScoped.route("/spend/findings/fix", findingFixRecordRoute);
 orgScoped.route("/spend/findings/dismiss", findingDismissRoute);
 orgScoped.route("/runs/cost", runCostGetRoute);
+// Proof (ADR-064): a run's witness record and the workspace's disclosure grain.
+// Both handlers refuse an API-key caller; the session auth above is the path.
+orgScoped.route("/runs/proof", runProofGetRoute);
+orgScoped.route("/evidence/disclosure-grain", evidenceDisclosureGrainSetRoute);
 orgScoped.route("/cost/price-entries", costPriceEntryListRoute);
 orgScoped.route("/billing/gau-bucket", billingGauBucketGetRoute);
 orgScoped.route("/billing/invoices", billingInvoiceListRoute);
@@ -527,6 +555,14 @@ orgScoped.route("/billing/evidence/retention", billingEvidenceRetentionRoute);
 orgScoped.route("/chat/messages", chatMessageSendRoute);
 orgScoped.route("/chat/messages/execution", chatMessageExecutionRoute);
 orgScoped.route("/chat/stream", chatStreamRoute);
+// The shell (#2968): the in-app agent's turn and engine probe, the command
+// menu's search, belt definitions and recent runs, the sidebar counts.
+orgScoped.route("/assistant/ask", assistantAskRoute);
+orgScoped.route("/assistant/engine", assistantEngineGetRoute);
+orgScoped.route("/tools/search", toolsSearchRoute);
+orgScoped.route("/tools/load", toolsLoadRoute);
+orgScoped.route("/shell/nav-counts", shellNavCountsGetRoute);
+orgScoped.route("/runs/recent", runRecentListRoute);
 orgScoped.route("/conversations", conversationListRoute);
 // GET /conversations/:conversationId/files — registered at the same prefix as the
 // list route; Hono dispatches by method+full path so it does not clash with the
@@ -746,7 +782,19 @@ orgScoped.route("/mandates/list", mandateListRoute);
 orgScoped.route("/mandates/get", mandateGetRoute);
 orgScoped.route("/mandates/revoke", mandateRevokeRoute);
 orgScoped.route("/mandates/limits/update", mandateLimitsUpdateRoute);
+orgScoped.route("/approval-rules/list", approvalRuleListRoute);
+orgScoped.route("/approval-rules/set", approvalRuleSetRoute);
+orgScoped.route("/approval-rules/delete", approvalRuleDeleteRoute);
+orgScoped.route("/approval-rules/enabled/set", approvalRuleEnabledSetRoute);
+orgScoped.route("/approvals/auto-eligibility", approvalAutoEligibilityGetRoute);
 orgScoped.route("/tool/declaration/list", toolDeclarationListRoute);
+// Tools lane (#2958): registry, classification, import, the broker's grants, kill switches.
+orgScoped.route("/tools/versions", toolVersionListRoute);
+orgScoped.route("/tools/versions/classification", toolClassificationSetRoute);
+orgScoped.route("/tools/import", toolImportRoute);
+orgScoped.route("/credential-grants", credentialGrantListRoute);
+orgScoped.route("/kill-switches", killSwitchSetRoute);
+orgScoped.route("/kill-switches/list", killSwitchListRoute);
 orgScoped.route("/context/record/publish", contextRecordPublishRoute);
 orgScoped.route("/context/record/list", contextRecordListRoute);
 orgScoped.route("/context/record/promote", contextRecordPromoteRoute);
@@ -778,6 +826,7 @@ orgScoped.route("/graph/stats", graphStatsRoute);
 orgScoped.route("/ontology/query", ontologyQueryRoute);
 orgScoped.route("/ontology/neighbors", ontologyNeighborsRoute);
 orgScoped.route("/audit/log/query", auditLogQueryRoute);
+orgScoped.route("/audit/events/export", auditEventsExportRoute);
 // Creating a workspace needs an org and cannot need a workspace: the caller is
 // asking for their first one. Mounted only under the workspace-scoped group, the
 // REST surface could not take a new account past org creation — every attempt
@@ -792,6 +841,11 @@ orgOnlyScoped.use("*", authMiddleware, orgMiddleware);
 orgOnlyScoped.route("/workspaces", workspaceCreateRoute);
 // The onboarding gate for an organization (#2967): its gate row.
 orgOnlyScoped.route("/onboarding/state", onboardingStateGetRoute);
+// An audit export answers for the whole organization, and the documented path
+// is `POST /v1/:org_slug/audit/events/export`. Mounted only on the
+// workspace-scoped group above, that URL matched no route and 404'd, leaving
+// the advertised REST surface unreachable (#3097).
+orgOnlyScoped.route("/audit/events/export", auditEventsExportRoute);
 app.route("/v1/:org_slug", orgOnlyScoped);
 
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

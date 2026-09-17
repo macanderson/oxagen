@@ -379,6 +379,32 @@ export type CapabilityHandler<C extends CapabilityDeclaration> = (
  */
 export type PlanTier = "free" | "build" | "scale" | "enterprise";
 
+/**
+ * The workspace id an organization-level invoke carries (#3029).
+ *
+ * `invoke` enters a tenant scope for every scoped capability, and
+ * `runInTenantScope` asserts both ids are uuids, so a surface that has an org
+ * but no workspace cannot pass `""`: the call is refused with a
+ * `TenantScopeError` before any handler runs. This uuid-shaped constant names
+ * no workspace, so it satisfies the assertion without widening anything.
+ *
+ * Whether it is SOUND for a given table is a property of the table, not of the
+ * capability (ADR-068): `packages/database/src/tenant-policy.manifest.ts`
+ * records each one's class, and only `org_only` genuinely ignores the
+ * workspace GUC. A `standard` or `workspace_only` table compares the row's
+ * `workspace_id` against it and raises `42501` — which is not `23505`, so it
+ * escapes an `isUniqueViolation` catch and surfaces as a 500. A
+ * `workspace_nullable` table is worse: it raises nothing and simply hides
+ * every row carrying a real workspace, so a check-then-act reads zero. A
+ * capability reached under this sentinel that touches any of those three must
+ * first re-enter the target workspace's scope, or read org-wide through
+ * `withSystemDb` with an explicit `org_id` fence.
+ *
+ * Every surface builder uses this one constant: `apps/app`'s kernel seam and
+ * `apps/api`'s `capabilityContext` when a route needs no workspace.
+ */
+export const ORG_ONLY_WORKSPACE_ID = "00000000-0000-0000-0000-000000000000";
+
 export interface CapabilityContext {
   orgId: string;
   workspaceId: string;
@@ -399,8 +425,8 @@ export interface CapabilityContext {
    *
    * A capability could not previously tell which execution it was part of, so
    * the sole producer of `skill_loads` wrote `execution_step_id: null` on every
-   * row and the read-side join in `skill-telemetry.ts` had never returned
-   * anything (#2597). The key itself was not missing: each surface already
+   * row and the read-side join over it had never returned anything (#2597;
+   * both were deleted with #3098). The key itself was not missing: each surface already
    * computed one and handed it to the metered AI port, which is what fills
    * `token_usage.execution_step_id`. It simply had no name here, so three
    * surfaces each decided independently that some other id would double as it.

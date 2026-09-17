@@ -26,11 +26,17 @@ import {
   emitMcpRuleAudit,
 } from "./mcp-rbac";
 import { mcpServerToolKey } from "@oxagen/oxagen/iam";
+import { isAdmissibleToolIdentity } from "@oxagen/run-ledger";
 import {
   getPluginTypeContributors,
   type ContributedRawTool,
 } from "./plugin-type";
 import { getOxagenRegistry, type RegistryCapability } from "../registry-loader";
+import {
+  createKillSwitchGate,
+  KillSwitchDeniedError,
+  type KillSwitchGate,
+} from "./kill-switch-gate";
 import { decideCapabilityForBelt, decideMcpToolForBelt } from "./toolbelt";
 // Side-effect imports register the plugin-type contributors.
 import "./plugin-types/mcp";
@@ -164,6 +170,37 @@ export interface MaterializeOptions {
    * until the consent TTL expires.
    */
   onConsentRequired?: (event: ConsentRequiredEvent) => void;
+  /**
+   * What a tool does after it has created its approval request. `wait`
+   * blocks inside `execute` until the person decides or the TTL passes,
+   * which is what the chat surfaces have always done. `park` refuses the
+   * call at once with `ApprovalPendingError`, naming the request: the in-app
+   * agent on `stella-serve` runs this way (MC spec §4.4; the engine has no
+   * approval gate of its own), so the turn completes with the write parked
+   * as a card and the person's decision starts the next turn.
+   */
+  approvalMode?: "wait" | "park";
+  /** Seam for tests; defaults to the Postgres-backed gate. */
+  killSwitchGate?: KillSwitchGate;
+}
+
+/**
+ * A governed write the turn opened that is waiting on a person. Thrown out of
+ * a tool's `execute` under `approvalMode: "park"`; the engine reads it as a
+ * refusal by policy and the surface reads the fields as the parked card.
+ */
+export class ApprovalPendingError extends Error {
+  override readonly name = "ApprovalPendingError";
+  readonly code = "pending_approval" as const;
+  constructor(
+    readonly capability: string,
+    readonly approvalId: string,
+    readonly expiresAt: string,
+  ) {
+    super(
+      `refused: ${capability} is waiting for approval ${approvalId} until ${expiresAt}`,
+    );
+  }
 }
 
 // Result of materializeTools: the Vercel AI SDK tool map keyed by *model-safe*
@@ -234,6 +271,24 @@ export function toModelToolName(capabilityName: string): string {
  * different questions, and 219 of 271 agent-surface capabilities were reaching
  * dispatch marked concurrent-safe on the strength of it (#2600).
  */
+/**
+ * The value the decision path will digest for this call.
+ *
+ * invoke() validates with `cap.input.safeParse` and hands `inputResult.data`
+ * to the rules gate, which digests THAT and looks the standing approval
+ * window up by it. An approval row digested from the raw tool arguments
+ * therefore keys on a different value for any schema that supplies a
+ * default, coerces a type, or transforms a field — and the window silently
+ * never matches.
+ *
+ * A parse failure returns the raw value: invoke() refuses that input, so
+ * nothing ever looks up a window for the digest it produces.
+ */
+export function digestInputFor(cap: AnyCapability, input: unknown): unknown {
+  const parsed = (cap.input as ZodTypeAny).safeParse(input);
+  return parsed.success ? parsed.data : input;
+}
+
 export function isMutatingCapability(cap: AnyCapability): boolean {
   return capabilityMutates(cap);
 }
@@ -288,6 +343,13 @@ export async function materializeTools(
 
   const mutatingToolNames: string[] = [];
   const governance: Record<string, ToolGovernance> = {};
+
+  // Kill switches (spec §6.11): one gate per materialization, consulted in
+  // every execute closure below. A non-read-only call re-reads the deny
+  // generation before it runs and reloads the switches when it moved, so a
+  // flip takes effect at the next call boundary for every tool on the belt.
+  const killSwitches: KillSwitchGate =
+    opts.killSwitchGate ?? createKillSwitchGate(ctx);
 
   // Register a tool under a model-safe alias and record the reverse mapping.
   // Sanitizing collapses distinct chars to "_", so two real names could in
@@ -435,6 +497,26 @@ export async function materializeTools(
           const startedAt = Date.now();
           const inputBytes = byteSize(input);
           try {
+            // Kill switch (spec §6.11): a switch on this version, the agent,
+            // the operator, the workspace, the organisation or a class this
+            // version carries stops the call at this boundary. Checked before
+            // an approval card opens and again once it is approved, so a
+            // switch flipped during the wait stops the call (§7.4).
+            //
+            // `readOnly` decides whether the gate re-reads the deny generation
+            // first. A read-only capability is checked against the turn's
+            // snapshot, which is what §7.4's guarantee column grants
+            // ("guaranteed for non-read-only tools"): a switch flipped
+            // mid-turn stops every mutation immediately and stops reads from
+            // the next turn. That is the intent, not an oversight.
+            const refuseIfKilled = async () => {
+              const killed = await killSwitches.check({
+                capabilityId: cap.name,
+                readOnly: !isMutatingCapability(cap),
+              });
+              if (killed !== null) throw new KillSwitchDeniedError(killed);
+            };
+            await refuseIfKilled();
             // Approval gate. Only fires when the capability declares
             // `requiresApproval: true` AND we have a `messageId` to attach the
             // request to in the chat DAG. Direct API / MCP callers skip the
@@ -461,6 +543,24 @@ export async function materializeTools(
                     messageId: ctx.messageId!,
                     capabilityName: cap.name,
                     inputPreview: input,
+                    // Digest the VALIDATED input, because that is what the
+                    // decision path digests. invoke() runs cap.input.safeParse
+                    // and hands inputResult.data to the rules gate
+                    // (packages/oxagen/src/kernel.ts), which digests it and
+                    // looks the standing window up by that value. Handing the
+                    // raw AI SDK arguments here was a mismatch for every
+                    // capability whose schema supplies a default, coerces, or
+                    // transforms: the approval row stored one digest, the
+                    // ensuing invocation looked up another, standingWindowMs
+                    // matched nothing, and a second person was asked to approve
+                    // a call that had just been approved. Passing the same
+                    // object to both is not the same as passing the same value,
+                    // because the kernel parses in between.
+                    //
+                    // A parse failure falls back to the raw value: invoke()
+                    // below refuses that input anyway, so no window is ever
+                    // read for this digest.
+                    digestInput: digestInputFor(cap, input),
                     riskLevel,
                   }),
               );
@@ -475,12 +575,16 @@ export async function materializeTools(
                 riskLevel,
                 expiresAt,
               });
+              if (opts.approvalMode === "park") {
+                throw new ApprovalPendingError(cap.name, approvalId, expiresAt);
+              }
               const resolution = await waitForApproval(approvalId);
               if (resolution.resolution !== "approved") {
                 throw new Error(
                   `approval ${resolution.resolution} for ${cap.name}`,
                 );
               }
+              await refuseIfKilled();
             }
             const result = await invoke(cap.name, input, ctx, {
               surface: "agent",
@@ -608,6 +712,7 @@ export async function materializeTools(
     try {
       contributed = await contributor.contributeTools(ctx, {
         serverAllowlist: opts.serverAllowlist,
+        killSwitches,
       });
     } catch (err) {
       logger.error(
@@ -630,6 +735,32 @@ export async function materializeTools(
       // Fail closed (mirrors the capability loop above): an agentRun without
       // its resolution must never expose external tools either.
       if (agentRunFailClosed) continue;
+      // An identity a run spec cannot carry is dropped here rather than
+      // taken into the turn. `openAssistantRun` pins EVERY materialized tool
+      // into `tool_policy.allowlist`, so a single inadmissible identity does
+      // not fail that tool — it fails spec admission, and with it every
+      // assistant turn in the workspace, including the ones that would never
+      // have called it. The contributors' names are third parties' (an MCP
+      // server's `tools/list`, a `.oxagen/settings.json` server name), and a
+      // registry may still hold rows from before the import guard bounded
+      // them, so this is the point where the turn stops trusting the length.
+      //
+      // Dropped, not truncated: a truncated identity is a DIFFERENT tool as
+      // far as governance is concerned, and two long names could truncate to
+      // one. Losing a tool from the belt is recoverable and loud; two tools
+      // sharing a governed identity is not.
+      if (!isAdmissibleToolIdentity(capturedKey)) {
+        logger.error(
+          {
+            capability: capturedKey,
+            length: capturedKey.length,
+            pluginType: contributor.type,
+            serverTool: mcpServerToolKey(capturedServerName, capturedToolName),
+          },
+          "external tool left out of the turn: its governed identity is not one a run spec can carry",
+        );
+        continue;
+      }
       // DENY tools are never registered — the model cannot see or call them.
       // The same decision `get_agent_toolbelt` prints (toolbelt.ts): a deny
       // rule, or an ask rule the agent principal's standing consent has
@@ -673,6 +804,55 @@ export async function materializeTools(
           execute: async (input: unknown) => {
             const invocationId = crypto.randomUUID();
             const startedAt = Date.now();
+
+            // ── Kill switch (spec §6.11) ────────────────────────────────────
+            // A switch on this version, its server, the connection it was
+            // reached with, a class its version carries, the agent, the
+            // operator, the workspace or the organisation stops the call. An
+            // external tool's semantics are unknown, so every call re-reads
+            // the deny generation (§7.4: non-read-only). Checked again before
+            // the transport when the call waited on a person (an agent-consent
+            // or first-use consent card), so a switch flipped during the wait
+            // stops the call.
+            const refuseIfKilled = async (): Promise<string | null> => {
+              const killed = await killSwitches.check({
+                capabilityId: capturedKey,
+                serverId: externalServerId,
+                connectionId: raw.externalConnectionId ?? null,
+                readOnly: false,
+              });
+              if (killed === null) return null;
+              // The capability path throws and the generic catch records
+              // `err.name`. This path returns a message to the model instead
+              // of throwing, so it records the same class off the same object
+              // — one `error_class` counts every kill-switch refusal.
+              const denied = new KillSwitchDeniedError(killed);
+              try {
+                await insertToolInvocation(
+                  buildInvocationPayload(
+                    {
+                      invocationId,
+                      ctx,
+                      capabilityName: capturedKey,
+                      externalServerId,
+                      inputBytes: byteSize(input),
+                    },
+                    {
+                      status: "failed",
+                      outputBytes: 0,
+                      latencyMs: Date.now() - startedAt,
+                      errorClass: denied.name,
+                    },
+                  ),
+                );
+              } catch {
+                /* telemetry must never fail the call */
+              }
+              return denied.message;
+            };
+            const killedBeforeGates = await refuseIfKilled();
+            if (killedBeforeGates !== null) return killedBeforeGates;
+            let waitedOnPerson = false;
 
             // ── IAM gate (GAP-4) ────────────────────────────────────────────
             // capturedKey is the synthetic capability id, e.g.
@@ -871,6 +1051,7 @@ export async function materializeTools(
                     approvalId,
                     CONSENT_PROMPT_TTL_MS,
                   );
+                  waitedOnPerson = true;
                   const askGranted = askResolution.resolution === "approved";
                   await runInTenantScope(
                     { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
@@ -987,6 +1168,7 @@ export async function materializeTools(
                   approvalId,
                   CONSENT_PROMPT_TTL_MS,
                 );
+                waitedOnPerson = true;
                 const granted = resolution.resolution === "approved";
                 // Persist the durable grant/denial so the next call is inline.
                 await runInTenantScope(
@@ -1031,6 +1213,11 @@ export async function materializeTools(
               }
             }
             // ── End consent gate ────────────────────────────────────────────
+
+            if (waitedOnPerson) {
+              const killedDuringWait = await refuseIfKilled();
+              if (killedDuringWait !== null) return killedDuringWait;
+            }
 
             // ── OTEL span: covers external MCP tool call duration ──────────
             // Started inside any active kernel/stream span so the parent

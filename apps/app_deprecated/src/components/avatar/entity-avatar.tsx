@@ -11,6 +11,7 @@
  *
  * No hooks — safe to render from a Server Component as well as client code.
  */
+import type { JSX } from "react";
 import NextImage from "next/image";
 import { cn } from "@/lib/utils";
 import { parseAvatarValue, type AvatarMode } from "@/lib/avatar/spec";
@@ -80,7 +81,7 @@ export function EntityAvatar({
   shape = "circle",
   size = "md",
   className,
-}: EntityAvatarProps) {
+}: EntityAvatarProps): JSX.Element {
   const spec = parseAvatarValue(value);
   const shapeClass = shape === "circle" ? "rounded-full" : "rounded-md";
   const label = `${name} avatar`;

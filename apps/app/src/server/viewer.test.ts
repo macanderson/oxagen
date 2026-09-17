@@ -80,6 +80,7 @@ const wsFields: WsFields = {
   workspaceId: "22222222-2222-4222-8222-222222222222",
   wsSlug: "core-platform",
   wsName: "Core platform",
+  wsRole: "member",
 };
 const session = { user: { id: "u1", email: "Priya@Acme.example" } };
 const invitation: InvitationRecord = {

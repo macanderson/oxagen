@@ -66,6 +66,76 @@ export function mulMicros(value: Money, quantity: number): Money {
   };
 }
 
+/** The precision `ratioOfMicros` divides at: a ratio carries six decimal places. */
+const RATIO_SCALE = 1_000_000;
+
+/**
+ * `part ÷ whole` as a ratio, or null when the two carry different currencies
+ * or `whole` is zero. The division is BigInt on the micros, scaled first, so a
+ * figure past what a float holds exactly still divides where it should. The
+ * answer is a ratio and never money: the caller prints it through
+ * `formatRatio` (INV-09). A ratio above one or below zero is answered as
+ * measured; nothing here clamps a figure the contract carried.
+ */
+export function ratioOfMicros(part: Money, whole: Money): number | null {
+  if (part.currency !== whole.currency) return null;
+  const divisor = toBigInt(whole.micros);
+  if (divisor === BigInt(0)) return null;
+  const scaled = (toBigInt(part.micros) * BigInt(RATIO_SCALE)) / divisor;
+  return Number(scaled) / RATIO_SCALE;
+}
+
+/**
+ * The ISO 4217 codes this runtime knows, which is what "a currency code"
+ * means. A mandate limit names either one of these or a unit of a count
+ * (`schemas.ts`), and the two are told apart by membership here rather than by
+ * spelling: `GAU` and `RPM` are well-formed three-letter units and every
+ * three-letter test would read them as money, printing 50 GAU as GAU 0.00.
+ * The durable answer is a kind on the wire, which belongs to the contract that
+ * writes the limit; until it carries one, this is the set the contract names.
+ */
+const CURRENCY_CODES: ReadonlySet<string> = new Set(
+  Intl.supportedValuesOf("currency"),
+);
+
+export function isCurrencyCode(code: string): boolean {
+  return CURRENCY_CODES.has(code);
+}
+
+/**
+ * `part` as a fraction of `whole`, for a meter's width. The pair beside
+ * `ratioOfMicros`, which answers what a figure measures and never clamps: this
+ * one answers how much of a bar to fill, so it takes the bare integer strings
+ * a mandate limit carries — micros for money, whole units for a count, with no
+ * currency to compare — and clamps to 0…1, because a bar wider than its track
+ * is not a reading. The division is BigInt, so a figure past what a double
+ * holds exactly still divides where it should.
+ */
+export function ratioOfIntegers(part: string, whole: string): number {
+  const total = toBigInt(whole);
+  if (total <= 0n) return 0;
+  const drawn = toBigInt(part);
+  if (drawn <= 0n) return 0;
+  if (drawn >= total) return 1;
+  const scale = BigInt(RATIO_SCALE);
+  return Number((drawn * scale) / total) / RATIO_SCALE;
+}
+
+/**
+ * Whether `a` and `b` together are past `whole`, on the bare integer strings.
+ * The pair to `ratioOfIntegers`, and the reason it has to exist separately:
+ * that function clamps to 0…1, because a bar wider than its track is not a
+ * reading — so by the time a caller holds two ratios, the fact that either
+ * exceeded the whole is gone. 600 of a limit of 500 is a ratio of 1,
+ * indistinguishable from exactly 500, and summing two clamped ratios cannot
+ * recover it. The ratios are for drawing; this is for saying. The comparison
+ * is BigInt on the digits the ledger recorded, with nothing clamped, rounded
+ * or scaled before it is asked.
+ */
+export function sumExceeds(a: string, b: string, whole: string): boolean {
+  return toBigInt(a) + toBigInt(b) > toBigInt(whole);
+}
+
 /**
  * A decimal amount a person typed ("500", "0.25", "12.000001") as integer
  * micros, or null for anything else: a sign, a grouping separator, more than

@@ -57,8 +57,10 @@ describe("agent.approval.list handler", () => {
         requester: "usr_0123456789abcdefghjkmn",
         createdAt: "2026-09-13T10:00:00.000Z",
         expiresAt: "2026-09-13T10:05:00.000Z",
-        // A row the chat approval gate wrote: no mandate hop, no parking rule.
+        // A row the chat approval gate wrote: no mandate hop, no parking rule,
+        // and no auto-approval rule read against it.
         mandateId: null,
+        autoEligibility: null,
         chain: { agentKey: null, rule: null },
       },
     ],
@@ -92,6 +94,12 @@ describe("agent.approval.list handler", () => {
         {
           ...validOutput.items[0],
           mandateId: "mnd_0123456789abcdefghjkmn",
+          autoEligibility: {
+            ruleId: "small-vendor-payments",
+            ok: false,
+            reasons: ["measure_above_ceiling:amount"],
+            floor: false,
+          },
           chain: {
             agentKey: null,
             rule: "mandate:mnd_0123456789abcdefghjkmn:human_above:usd",

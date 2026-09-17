@@ -1,12 +1,14 @@
-// Money and counts as text: exact micros at any magnitude, half-even cents,
-// trimmed exact precision, a refusal for a display string, and ratios as
-// percentages.
+// Money, counts and clock readings as text: exact micros at any magnitude,
+// half-even cents, trimmed exact precision, a refusal for a display string, and
+// ratios as percentages.
 import { describe, expect, it } from "vitest";
 import {
   formatClock,
   formatCount,
   formatMoney,
   formatRatio,
+  formatWholeUnits,
+  ratioWidth,
 } from "./money-format";
 
 const usd = (micros: string) => ({ micros, currency: "USD" });
@@ -70,6 +72,35 @@ describe("formatCount", () => {
   });
 });
 
+describe("formatWholeUnits", () => {
+  it("prints a count from its digits, past what a double holds exactly", () => {
+    expect(formatWholeUnits("50", "en-US")).toBe("50");
+    expect(formatWholeUnits("9007199254740993", "en-US")).toBe(
+      "9,007,199,254,740,993",
+    );
+    expect(formatWholeUnits("0", "en-US")).toBe("0");
+  });
+
+  it("refuses anything but digits (negative)", () => {
+    expect(() => formatWholeUnits("-1", "en-US")).toThrow(/integer string/);
+    expect(() => formatWholeUnits("1.5", "en-US")).toThrow(/integer string/);
+    expect(() => formatWholeUnits("", "en-US")).toThrow(/integer string/);
+  });
+});
+
+describe("ratioWidth", () => {
+  it("prints a 0…1 ratio as a CSS length, to a tenth of a percent", () => {
+    expect(ratioWidth(0.4567)).toBe("45.7%");
+    expect(ratioWidth(1)).toBe("100%");
+    expect(ratioWidth(0)).toBe("0%");
+  });
+
+  it("clamps a ratio outside 0…1 (negative)", () => {
+    expect(ratioWidth(1.4)).toBe("100%");
+    expect(ratioWidth(-0.2)).toBe("0%");
+  });
+});
+
 describe("formatClock", () => {
   it("reads whole seconds as m:ss", () => {
     expect(formatClock(0, "en-US")).toBe("0:00");
@@ -87,5 +118,46 @@ describe("formatRatio", () => {
     expect(formatRatio(0.4567, "en-US")).toBe("45.7%");
     expect(formatRatio(0.81, "en-US")).toBe("81%");
     expect(formatRatio(0, "en-US")).toBe("0%");
+  });
+});
+
+describe("formatWholeUnits", () => {
+  it("prints a count from its digits, past what a double holds exactly", () => {
+    expect(formatWholeUnits("50", "en-US")).toBe("50");
+    expect(formatWholeUnits("9007199254740993", "en-US")).toBe(
+      "9,007,199,254,740,993",
+    );
+    expect(formatWholeUnits("0", "en-US")).toBe("0");
+  });
+
+  it("refuses anything but digits (negative)", () => {
+    expect(() => formatWholeUnits("-1", "en-US")).toThrow(/integer string/);
+    expect(() => formatWholeUnits("1.5", "en-US")).toThrow(/integer string/);
+    expect(() => formatWholeUnits("", "en-US")).toThrow(/integer string/);
+  });
+});
+
+describe("ratioWidth", () => {
+  it("prints a 0…1 ratio as a CSS length, to a tenth of a percent", () => {
+    expect(ratioWidth(0.4567)).toBe("45.7%");
+    expect(ratioWidth(1)).toBe("100%");
+    expect(ratioWidth(0)).toBe("0%");
+  });
+
+  it("clamps a ratio outside 0…1 (negative)", () => {
+    expect(ratioWidth(1.4)).toBe("100%");
+    expect(ratioWidth(-0.2)).toBe("0%");
+  });
+});
+
+describe("formatClock", () => {
+  it("reads whole seconds as m:ss", () => {
+    expect(formatClock(0, "en-US")).toBe("0:00");
+    expect(formatClock(65.9, "en-US")).toBe("1:05");
+    expect(formatClock(600, "en-US")).toBe("10:00");
+  });
+
+  it("reads a negative duration as 0:00 (negative)", () => {
+    expect(formatClock(-30, "en-US")).toBe("0:00");
   });
 });

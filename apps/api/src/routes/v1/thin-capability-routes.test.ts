@@ -72,6 +72,12 @@ import { billingContractRateGet } from "@oxagen/oxagen/contracts/billing.contrac
 import { billingGauBucketGet } from "@oxagen/oxagen/contracts/billing.gau_bucket.get";
 import { billingGauBucketPurchase } from "@oxagen/oxagen/contracts/billing.gau_bucket.purchase";
 import { billingInvoiceList } from "@oxagen/oxagen/contracts/billing.invoice.list";
+import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
+import { toolClassificationSet } from "@oxagen/oxagen/contracts/tool.classification.set";
+import { toolImport } from "@oxagen/oxagen/contracts/tool.import";
+import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
+import { killSwitchSet } from "@oxagen/oxagen/contracts/kill_switch.set";
+import { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
 import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
 import { budgetPolicyRead } from "@oxagen/oxagen/contracts/budget.policy.read";
 import { budgetPolicyWrite } from "@oxagen/oxagen/contracts/budget.policy.write";
@@ -107,6 +113,8 @@ import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import { spendStatementExport } from "@oxagen/oxagen/contracts/spend.statement.export";
+import { auditEventsExport } from "@oxagen/oxagen/contracts/audit.events.export";
+import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/contracts/audit.log.query";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
 import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
@@ -117,6 +125,11 @@ import { mandateGet } from "@oxagen/oxagen/contracts/mandate.get";
 import { mandateGrant } from "@oxagen/oxagen/contracts/mandate.grant";
 import { mandateLimitsUpdate } from "@oxagen/oxagen/contracts/mandate.limits.update";
 import { mandateList } from "@oxagen/oxagen/contracts/mandate.list";
+import { approvalRuleList } from "@oxagen/oxagen/contracts/approval_rule.list";
+import { approvalRuleSet } from "@oxagen/oxagen/contracts/approval_rule.set";
+import { approvalRuleDelete } from "@oxagen/oxagen/contracts/approval_rule.delete";
+import { approvalRuleEnabledSet } from "@oxagen/oxagen/contracts/approval_rule.enabled.set";
+import { approvalAutoEligibilityGet } from "@oxagen/oxagen/contracts/approval.auto_eligibility.get";
 import { mandateRequest } from "@oxagen/oxagen/contracts/mandate.request";
 import { mandateRevoke } from "@oxagen/oxagen/contracts/mandate.revoke";
 import { runGet } from "@oxagen/oxagen/contracts/run.get";
@@ -164,6 +177,12 @@ import { billingContractRateGetRoute } from "./billing.contract_rate.get";
 import { billingGauBucketGetRoute } from "./billing.gau_bucket.get";
 import { billingGauBucketPurchaseRoute } from "./billing.gau_bucket.purchase";
 import { billingInvoiceListRoute } from "./billing.invoice.list";
+import { toolVersionListRoute } from "./tool.version.list";
+import { toolClassificationSetRoute } from "./tool.classification.set";
+import { toolImportRoute } from "./tool.import";
+import { credentialGrantListRoute } from "./credential.grant.list";
+import { killSwitchSetRoute } from "./kill_switch.set";
+import { killSwitchListRoute } from "./kill_switch.list";
 import { billingBudgetSetRoute } from "./billing.budget.set";
 import { budgetPolicyReadRoute } from "./budget.policy.read";
 import { budgetPolicyWriteRoute } from "./budget.policy.write";
@@ -186,6 +205,7 @@ import { runCostGetRoute } from "./run.cost";
 import { spendDrillRoute } from "./spend.drill";
 import { spendGetRoute } from "./spend.get";
 import { spendStatementExportRoute } from "./spend.statement.export";
+import { auditEventsExportRoute } from "./audit.events.export";
 import { spendWasteListRoute } from "./spend.waste";
 import { findingDismissRoute } from "./finding.dismiss";
 import { findingEvidenceGetRoute } from "./finding.evidence.get";
@@ -198,6 +218,20 @@ import { iamRoleGrantsSetRoute } from "./iam.role.grants.set";
 import { iamRoleDeleteRoute } from "./iam.role.delete";
 import { workspaceArchiveRoute } from "./workspace.archive";
 import { tachoIncidentListRoute } from "./tacho.incident.list";
+import { assistantAsk } from "@oxagen/oxagen/contracts/assistant.ask";
+import { assistantEngineGet } from "@oxagen/oxagen/contracts/assistant.engine.get";
+import { toolsSearch } from "@oxagen/oxagen/contracts/tools.search";
+import { toolsLoad } from "@oxagen/oxagen/contracts/tools.load";
+import { shellNavCountsGet } from "@oxagen/oxagen/contracts/shell.nav_counts.get";
+import { runRecentList } from "@oxagen/oxagen/contracts/run.recent.list";
+import { userPreferencesSet } from "@oxagen/oxagen/contracts/user.preferences.set";
+import { assistantAskRoute } from "./assistant.ask";
+import { assistantEngineGetRoute } from "./assistant.engine.get";
+import { toolsSearchRoute } from "./tools.search";
+import { toolsLoadRoute } from "./tools.load";
+import { shellNavCountsGetRoute } from "./shell.nav_counts.get";
+import { runRecentListRoute } from "./run.recent.list";
+import { userPreferencesSetRoute } from "./user.preferences.set";
 import { onboardingAdvanceRoute } from "./onboarding.advance";
 import { onboardingFirstFrameGetRoute } from "./onboarding.first_frame.get";
 import { onboardingStateGetRoute } from "./onboarding.state.get";
@@ -209,6 +243,11 @@ import { mandateGetRoute } from "./mandate.get";
 import { mandateGrantRoute } from "./mandate.grant";
 import { mandateLimitsUpdateRoute } from "./mandate.limits.update";
 import { mandateListRoute } from "./mandate.list";
+import { approvalRuleListRoute } from "./approval_rule.list";
+import { approvalRuleSetRoute } from "./approval_rule.set";
+import { approvalRuleDeleteRoute } from "./approval_rule.delete";
+import { approvalRuleEnabledSetRoute } from "./approval_rule.enabled.set";
+import { approvalAutoEligibilityGetRoute } from "./approval.auto_eligibility.get";
 import { mandateRequestRoute } from "./mandate.request";
 import { mandateRevokeRoute } from "./mandate.revoke";
 import { runGetRoute } from "./run.get";
@@ -252,6 +291,12 @@ interface ThinRoute {
   body?: unknown;
   /** The input `invoke` should receive — defaults to the body when omitted. */
   expectedInput?: unknown;
+  /**
+   * The capability context `invoke` should receive — defaults to CTX. Set it
+   * where the route deliberately sends something else, as the audit export
+   * does with the organization-only workspace sentinel.
+   */
+  expectedCtx?: Record<string, unknown>;
   /** A body the contract must reject. Omitted for bodyless GET routes. */
   invalidBody?: unknown;
   /**
@@ -777,6 +822,75 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
+    file: "tool.version.list",
+    route: toolVersionListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolVersionList.name,
+    body: { limit: 10, category: "moves_money" },
+    invalidBody: { category: "Moves Money" },
+    status: 200,
+  },
+  {
+    file: "tool.classification.set",
+    route: toolClassificationSetRoute as unknown as Hono<never>,
+    method: "PUT",
+    capability: toolClassificationSet.name,
+    body: {
+      toolVersionId: "tlv_1",
+      riskGrade: "high",
+      classification: {
+        sideEffect: "write",
+        egress: "third_party",
+        consequenceTags: ["communicates_externally"],
+        measures: {},
+        dataClasses: [],
+      },
+      reason: "sends mail",
+    },
+    invalidBody: { toolVersionId: "tlv_1", riskGrade: "high", reason: "x" },
+    status: 200,
+  },
+  {
+    file: "tool.import",
+    route: toolImportRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolImport.name,
+    body: { serverId: "mcs_1", tools: ["search"] },
+    invalidBody: { serverId: "mcs_1", tools: [] },
+    status: 200,
+  },
+  {
+    file: "credential.grant.list",
+    route: credentialGrantListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: credentialGrantList.name,
+    body: { limit: 5 },
+    invalidBody: { limit: 0 },
+    status: 200,
+  },
+  {
+    file: "kill_switch.set",
+    route: killSwitchSetRoute as unknown as Hono<never>,
+    method: "PUT",
+    capability: killSwitchSet.name,
+    body: {
+      target: { kind: "class", id: "moves_money" },
+      on: true,
+      reason: "processor incident",
+    },
+    invalidBody: { target: { kind: "class", id: "moves_money" }, on: true },
+    status: 200,
+  },
+  {
+    file: "kill_switch.list",
+    route: killSwitchListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: killSwitchList.name,
+    body: { onlyOn: true, limit: 10 },
+    invalidBody: { limit: 0 },
+    status: 200,
+  },
+  {
     file: "billing.auto_topup.set",
     route: billingAutoTopupSetRoute as unknown as Hono<never>,
     method: "PUT",
@@ -930,6 +1044,75 @@ const ROUTES: ThinRoute[] = [
     expectedInput: { runId: "tse_a1b2c3", limit: 50 },
     invalidBody: { runId: "not-a-run-id" },
     jsonGuard: true,
+    status: 200,
+  },
+  // The shell (#2968): the in-app agent's turn and engine probe, the command
+  // menu's search, belt definitions and recent runs, the sidebar counts, the
+  // account preferences.
+  {
+    file: "assistant.ask",
+    route: assistantAskRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: assistantAsk.name,
+    body: { content: "explain this run" },
+    expectedInput: {
+      content: "explain this run",
+      conversationId: null,
+      pageContext: null,
+    },
+    invalidBody: { content: "" },
+    status: 200,
+  },
+  {
+    file: "assistant.engine.get",
+    route: assistantEngineGetRoute as unknown as Hono<never>,
+    method: "GET",
+    capability: assistantEngineGet.name,
+    body: {},
+    status: 200,
+  },
+  {
+    file: "tools.search",
+    route: toolsSearchRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolsSearch.name,
+    body: { query: "budget", kinds: ["tool"] },
+    invalidBody: { query: "budget", kinds: ["node"] },
+    status: 200,
+  },
+  {
+    file: "tools.load",
+    route: toolsLoadRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolsLoad.name,
+    body: { names: ["list_runs"] },
+    invalidBody: { names: [] },
+    status: 200,
+  },
+  {
+    file: "shell.nav_counts.get",
+    route: shellNavCountsGetRoute as unknown as Hono<never>,
+    method: "GET",
+    capability: shellNavCountsGet.name,
+    body: {},
+    status: 200,
+  },
+  {
+    file: "run.recent.list",
+    route: runRecentListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: runRecentList.name,
+    body: { limit: 5 },
+    invalidBody: { limit: 50 },
+    status: 200,
+  },
+  {
+    file: "user.preferences.set",
+    route: userPreferencesSetRoute as unknown as Hono<never>,
+    method: "PATCH",
+    capability: userPreferencesSet.name,
+    body: { theme: "dark" },
+    invalidBody: { theme: "sepia" },
     status: 200,
   },
   {
@@ -1184,6 +1367,19 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
+    file: "audit.events.export",
+    route: auditEventsExportRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: auditEventsExport.name,
+    body: { outcome: "deny" },
+    expectedInput: { outcome: "deny", format: "csv" },
+    // An export answers for the whole organization, so the route sends the
+    // organization-only sentinel whichever router it was reached through.
+    expectedCtx: { ...CTX, workspaceId: ORG_ONLY_WORKSPACE_ID },
+    invalidBody: { format: "pdf" },
+    status: 200,
+  },
+  {
     file: "run.cost",
     route: runCostGetRoute as unknown as Hono<never>,
     method: "POST",
@@ -1294,6 +1490,77 @@ const ROUTES: ThinRoute[] = [
     expectedInput: { limit: 50 },
     // "paused" is not one of draft/active/expired/revoked.
     invalidBody: { status: "paused" },
+    status: 200,
+  },
+  {
+    file: "approval_rule.list",
+    route: approvalRuleListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: approvalRuleList.name,
+    body: {},
+    // The read takes no argument at all.
+    invalidBody: { limit: 10 },
+    status: 200,
+  },
+  {
+    file: "approval_rule.set",
+    route: approvalRuleSetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: approvalRuleSet.name,
+    body: {
+      rules: [
+        {
+          id: "small-vendor-payments",
+          name: "Small vendor payments",
+          tools: ["stripe__create_payment@*"],
+        },
+      ],
+    },
+    expectedInput: {
+      rules: [
+        {
+          id: "small-vendor-payments",
+          name: "Small vendor payments",
+          tools: ["stripe__create_payment@*"],
+          enabled: true,
+          maxMeasures: {},
+          allowTargets: {},
+          standingWindowMs: null,
+          businessHours: null,
+        },
+      ],
+    },
+    // A rule id is a slug; "Small Vendor" is not one.
+    invalidBody: {
+      rules: [{ id: "Small Vendor", name: "x", tools: ["stripe__*"] }],
+    },
+    status: 200,
+  },
+  {
+    file: "approval_rule.delete",
+    route: approvalRuleDeleteRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: approvalRuleDelete.name,
+    body: { ruleId: "small-vendor-payments" },
+    invalidBody: {},
+    status: 200,
+  },
+  {
+    file: "approval_rule.enabled.set",
+    route: approvalRuleEnabledSetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: approvalRuleEnabledSet.name,
+    body: { ruleId: "small-vendor-payments", enabled: false },
+    invalidBody: { ruleId: "small-vendor-payments" },
+    status: 200,
+  },
+  {
+    file: "approval.auto_eligibility.get",
+    route: approvalAutoEligibilityGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: approvalAutoEligibilityGet.name,
+    body: { approvalId: "apr_0123456789abcdefghjkmn" },
+    invalidBody: { approvalId: "nope" },
     status: 200,
   },
   {
@@ -1492,7 +1759,7 @@ describe("thin capability routes", () => {
       expect(mocks.invoke).toHaveBeenCalledWith(
         entry.capability,
         entry.expectedInput ?? entry.body,
-        CTX,
+        entry.expectedCtx ?? CTX,
         { surface: "api" },
       );
     },

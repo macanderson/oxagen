@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   txInsertWsReturning: vi.fn(),
   txInsertWsUsers: vi.fn(),
   txFn: vi.fn(),
+  /** The insert count at each mid-transaction scope move the bootstrap makes (#3029). */
+  txScopeMoves: [] as number[],
   /** The actor's principal, org role and workspace role, as assertOrgRole reads them. */
   tenant: {
     principalId: "prn_1" as string | null,
@@ -41,6 +43,7 @@ mocks.txFn.mockImplementation(
   async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
     let insertCount = 0;
     const tx = {
+      execute: async () => undefined,
       insert: (table: unknown): unknown => {
         insertCount++;
         if (insertCount === 1) return mocks.txInsertWs(table) as unknown;
@@ -86,6 +89,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       // ws-query, and transaction calls each see a fresh counter.
       const insertCountRef = { n: 0 };
       const tx = {
+        // The bootstrap re-points app.current_workspace_id on this transaction
+        // once the workspace row exists (#3029) — every row after it lands in a
+        // workspace-GUC-scoped table.
+        execute: async () => {
+          mocks.txScopeMoves.push(insertCountRef.n);
+          return undefined;
+        },
         query: {
           organizations: { findFirst: mocks.orgFindFirst },
           workspaces: { findFirst: mocks.wsFindFirst },
@@ -150,6 +160,7 @@ import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 describe("workspaceCreateHandler (@oxagen/handlers)", () => {
   beforeEach(() => {
+    mocks.txScopeMoves.length = 0;
     mocks.orgFindFirst.mockClear();
     mocks.wsFindFirst.mockClear();
     mocks.txFn.mockClear();
@@ -184,6 +195,24 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
       throw new Error(`expected a HandlerError, got ${err}`);
     return { code: err.code, reason: err.reason };
   }
+
+  // #3029 / ADR-068: the app's /{org} create-workspace form and the API's
+  // org-only mount both invoke this with ORG_ONLY_WORKSPACE_ID as the scope's
+  // workspace, so `app.current_workspace_id` names no workspace when the
+  // transaction opens. `workspace.workspaces` is org_only and its INSERT lands,
+  // but `workspace.workspace_users` (workspace_only), `agent.agents` and
+  // `environments.environments` (standard) are all refused by tenant_isolation's
+  // WITH CHECK (42501 — not a unique violation, so it escapes the slug_taken
+  // classifier and reaches the caller as a 500). The bootstrap therefore moves
+  // the transaction's workspace scope onto the new row the moment it exists,
+  // between the workspaces INSERT and everything after it.
+  it("moves the transaction's workspace scope onto the new workspace before any workspace-scoped row", async () => {
+    await workspaceCreateHandler({ name: "Test", slug: "test" }, CTX);
+    // Exactly one move, and it lands after insert #1 (workspaces) — so insert
+    // #2 (workspace_users) and the seeds all run under the new workspace.
+    expect(mocks.txScopeMoves).toEqual([1]);
+    expect(mocks.txInsertWsUsers).toHaveBeenCalled();
+  });
 
   it("refuses a context with no user before any query (negative)", async () => {
     const anonCtx: CapabilityContext = { ...CTX, userId: null };

@@ -978,7 +978,7 @@
   {
     "name": "send_message",
     "group": "Wrapping and control",
-    "does": "message to `@<agent-slug>`, `@agents`, or a run id, with a delivery mode; reaches `applied` at the model request that carried it (§7.3, §7.6)",
+    "does": "message to `@<agent-slug>`, `@agents`, or a run id, with a delivery mode; reaches `applied` at the model request that carried it (\u00a77.3, \u00a77.6)",
     "absorbs": [],
     "resolved": [],
     "unresolved": [],
@@ -1602,7 +1602,7 @@
   {
     "name": "propose_ontology_version",
     "group": "Ontology and knowledge",
-    "does": "profiler plus author; opens the pull request on the main repo (merge activates, §11.8)",
+    "does": "profiler plus author; opens the pull request on the main repo (merge activates, \u00a711.8)",
     "absorbs": [
       "recommend_schema",
       "setup_schema",
@@ -2440,7 +2440,7 @@
   {
     "name": "set_event_subscription",
     "group": "Audit and compliance",
-    "does": "event kinds, filters, delivery mode; returns the unique endpoint (§7.7)",
+    "does": "event kinds, filters, delivery mode; returns the unique endpoint (\u00a77.7)",
     "absorbs": [],
     "resolved": [],
     "unresolved": [],
@@ -2538,14 +2538,14 @@
     "group": "Assistant and account",
     "does": "",
     "absorbs": [
-      "update_user_preferences",
+      "set_preferences",
       "get_user_preferences",
       "update_workspace_user_preferences",
       "get_workspace_user_preferences",
       "set_auth_alerts"
     ],
     "resolved": [
-      "update_user_preferences",
+      "set_preferences",
       "get_user_preferences",
       "update_workspace_user_preferences",
       "get_workspace_user_preferences",
@@ -2554,8 +2554,8 @@
     "unresolved": [],
     "isNew": false,
     "inherit": {
-      "name": "update_user_preferences",
-      "file": "user.preferences.write.ts",
+      "name": "set_preferences",
+      "file": "user.preferences.set.ts",
       "domain": "user",
       "mode": "sync",
       "sensitivity": "low",

@@ -4,7 +4,8 @@ const mockRows = [
   {
     id: "uuid-1",
     publicId: "ntf_A",
-    kind: "security",
+    kind: "approval",
+    event: "approval.requested",
     title: "Reconnect GitHub",
     body: null,
     deepLink: "/reauth/x",
@@ -26,6 +27,7 @@ vi.mock("@oxagen/database", () => {
         id: "id_col",
         publicId: "publicId_col",
         kind: "kind_col",
+        event: "event_col",
         title: "title_col",
         body: "body_col",
         deepLink: "deepLink_col",
@@ -78,6 +80,11 @@ describe("notifications.list handler", () => {
       unreadCount: number;
     };
     expect(result.notifications).toHaveLength(1);
+    expect(result.notifications[0]).toMatchObject({
+      publicId: "ntf_A",
+      kind: "approval",
+      event: "approval.requested",
+    });
     expect(result.unreadCount).toBeGreaterThanOrEqual(0);
   });
 

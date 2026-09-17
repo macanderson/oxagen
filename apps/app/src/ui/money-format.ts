@@ -18,6 +18,10 @@ function isDecimal(value: string): value is Intl.StringNumericLiteral {
   return /^-?\d+\.\d+$/.test(value);
 }
 
+function isWhole(value: string): value is Intl.StringNumericLiteral {
+  return /^\d+$/.test(value);
+}
+
 /** "-1500000" → "-1.500000"; throws on anything but an integer string. */
 function microsToDecimal(micros: string): Intl.StringNumericLiteral {
   const match = MICROS.exec(micros);
@@ -57,6 +61,20 @@ export function formatCount(count: number, locale: string): string {
   );
 }
 
+/**
+ * A whole count the source recorded as digits, formatted from the string so a
+ * figure past what a double holds exactly is printed as recorded. The same
+ * route money takes: Intl reads an integer literal without converting it.
+ */
+export function formatWholeUnits(digits: string, locale: string): string {
+  if (!isWhole(digits)) {
+    throw new Error(`a count must be an integer string: ${digits}`);
+  }
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(
+    digits,
+  );
+}
+
 /** Whole seconds as `m:ss`, the approval clock's reading; a negative duration reads 0:00. */
 export function formatClock(seconds: number, locale: string): string {
   const total = Math.max(0, Math.floor(seconds));
@@ -65,6 +83,16 @@ export function formatClock(seconds: number, locale: string): string {
     minimumIntegerDigits: 2,
   }).format(total % 60);
   return `${minutes}:${rest}`;
+}
+
+/**
+ * A 0…1 ratio as a CSS length ("42.3%") for a meter's width. A style value is
+ * not prose, so it is built without a locale: a decimal comma or a narrow
+ * no-break space would not be a length any browser reads.
+ */
+export function ratioWidth(ratio: number): string {
+  const clamped = Math.min(1, Math.max(0, ratio));
+  return `${String(Math.round(clamped * 1000) / 10)}%`;
 }
 
 /** A 0..1 ratio (a productive ratio, a cache hit rate) as a percentage with at most one decimal. */

@@ -45,17 +45,48 @@ async function findActivePrincipalId(
 }
 
 /**
- * ONE unexpired role name assigned to `principalId` in `scope`, or null. An
- * org-wide assignment has `workspace_id IS NULL` and an org-scoped role; a
- * workspace assignment carries the workspace id and a workspace-scoped role.
+ * When a principal holds several roles in one scope at once, the most
+ * privileged name wins. `iam.principal_role_assignments` is unique on
+ * (principal, role, org), not on (principal, org), and the lookup carries no
+ * ORDER BY, so taking whichever row Postgres returned first denied a user
+ * holding both Admin and Member depending on plan/row order.
  */
-async function findAssignedRole(
+const ROLE_PRECEDENCE = ["Owner", "Admin"] as const;
+
+/**
+ * A principal holds a handful of roles per scope; the bound only guards a
+ * runaway row set, never which role is chosen.
+ */
+const ROLE_ASSIGNMENT_LIMIT = 50;
+
+/**
+ * The most privileged of `names` by `ROLE_PRECEDENCE`, else the first one,
+ * else null. Used both to name a principal's single effective role and, in
+ * `assertOrgRole`, to name which of the roles that satisfied a gate did so.
+ */
+function mostPrivileged(names: readonly string[]): string | null {
+  return (
+    ROLE_PRECEDENCE.find((name) => names.includes(name)) ?? names[0] ?? null
+  );
+}
+
+/**
+ * Every unexpired role name assigned to `principalId` in `scope`. An org-wide
+ * assignment has `workspace_id IS NULL` and an org-scoped role; a workspace
+ * assignment carries the workspace id and a workspace-scoped role.
+ *
+ * All of them are returned rather than one, because a gate that names several
+ * acceptable roles has to see every role the principal holds: choosing one
+ * first and comparing that against the set discards the assignment that would
+ * have passed (see `assertOrgRole`).
+ */
+async function findAssignedRoles(
   tx: Tx,
   principalId: string,
   orgId: string,
   scope: RoleScope,
-): Promise<string | null> {
-  const [praRow] = await tx
+): Promise<string[]> {
+  const assigned = await tx
     .select({ roleName: schema.roles.name })
     .from(schema.principalRoleAssignments)
     .innerJoin(
@@ -77,8 +108,8 @@ async function findAssignedRole(
         ),
       ),
     )
-    .limit(1);
-  return praRow?.roleName ?? null;
+    .limit(ROLE_ASSIGNMENT_LIMIT);
+  return assigned.map((row) => row.roleName);
 }
 
 /**
@@ -86,13 +117,11 @@ async function findAssignedRole(
  * have no active principal / unexpired org-role assignment in this org.
  *
  * A principal may hold several org-wide roles at once — `iam.principal_role_
- * assignments` is unique on (principal, role, org), not on (principal, org) —
- * and this query takes the first row Postgres returns with no ORDER BY, so
- * WHICH role comes back is not deterministic. Every caller only asks "is it in
- * {Owner, Admin}?", so a user holding both Admin and Member can be denied
- * depending on plan/row order. Fixing that means asking "does ANY assigned role
- * qualify?" instead of resolving a single name, which changes what this helper
- * promises to its callers — tracked separately, not patched here.
+ * assignments` is unique on (principal, role, org), not on (principal, org).
+ * Every caller asks "is it in {Owner, Admin}?", so the most privileged role
+ * the principal holds wins (`ROLE_PRECEDENCE`); taking whichever row Postgres
+ * returned first denied a user holding both Admin and Member depending on
+ * plan/row order.
  *
  * Time-bounded (JIT) assignments are honored the same way the kernel resolver
  * honors them (`isExpired` in packages/oxagen/src/iam/resolve.ts): an
@@ -105,27 +134,52 @@ export async function resolveActorOrgRole(
   orgId: string,
   userId: string,
 ): Promise<string | null> {
+  return mostPrivileged(await resolveActorOrgRoles(orgId, userId));
+}
+
+/**
+ * Every org-scoped role name the acting user holds in this org, unordered and
+ * possibly empty. `resolveActorOrgRole` reduces this to one name; a gate that
+ * accepts several roles reads the list instead, so that a principal holding
+ * both Admin and Billing is not refused a Billing-gated capability because
+ * Admin outranks Billing in `ROLE_PRECEDENCE` (apps/app/ARCHITECTURE.md §3.2).
+ */
+export async function resolveActorOrgRoles(
+  orgId: string,
+  userId: string,
+): Promise<string[]> {
   return withTenantDb(async (tx) => {
     const principalId = await findActivePrincipalId(tx, orgId, userId);
-    if (principalId === null) return null;
-    return findAssignedRole(tx, principalId, orgId, { kind: "org" });
+    if (principalId === null) return [];
+    return findAssignedRoles(tx, principalId, orgId, { kind: "org" });
   });
 }
 
 /**
- * The same lookup for the user's role in one workspace of the org: the first
- * unexpired workspace-scoped assignment on that workspace, or null. Carries
- * the non-determinism `resolveActorOrgRole` documents.
+ * The same lookup for the user's role in one workspace of the org: an
+ * unexpired workspace-scoped assignment on that workspace, or null, chosen by
+ * the same precedence rule `resolveActorOrgRole` documents.
  */
 export async function resolveActorWorkspaceRole(
   orgId: string,
   workspaceId: string,
   userId: string,
 ): Promise<string | null> {
+  return mostPrivileged(
+    await resolveActorWorkspaceRoles(orgId, workspaceId, userId),
+  );
+}
+
+/** Every role the user holds on that one workspace, the plural of the above. */
+export async function resolveActorWorkspaceRoles(
+  orgId: string,
+  workspaceId: string,
+  userId: string,
+): Promise<string[]> {
   return withTenantDb(async (tx) => {
     const principalId = await findActivePrincipalId(tx, orgId, userId);
-    if (principalId === null) return null;
-    return findAssignedRole(tx, principalId, orgId, {
+    if (principalId === null) return [];
+    return findAssignedRoles(tx, principalId, orgId, {
       kind: "workspace",
       workspaceId,
     });
@@ -206,7 +260,16 @@ export interface OrgRoleRequirement {
  * principal, no qualifying role, or a role outside both sets. The workspace
  * leg runs only after the org leg failed, and only when the context names a
  * workspace. Returns the role name that satisfied the check so a handler can
- * record it.
+ * record it; when several of the user's roles satisfy it, the most privileged
+ * of those by `ROLE_PRECEDENCE`.
+ *
+ * The gate reads every role the principal holds, not the one
+ * `resolveActorOrgRole` would name. `principal_role_assignments` allows a
+ * principal several roles per scope, and picking one by precedence before
+ * comparing it against `required` throws away an assignment that would have
+ * passed: a user holding both Admin and Billing resolves to Admin, which is
+ * outside `{Owner, Billing}`, so `purchase_credits` refused a billing member
+ * for holding one role too many.
  */
 export async function assertOrgRole(
   ctx: OrgRoleActor,
@@ -219,16 +282,23 @@ export async function assertOrgRole(
       message: "No signed-in user on the request",
     });
   }
-  const orgRole = await resolveActorOrgRole(ctx.orgId, ctx.userId);
-  if (orgRole !== null && required.org.includes(orgRole)) return orgRole;
+  const orgRoles = await resolveActorOrgRoles(ctx.orgId, ctx.userId);
+  const orgMatch = mostPrivileged(
+    orgRoles.filter((name) => required.org.includes(name)),
+  );
+  if (orgMatch !== null) return orgMatch;
 
   if (required.workspace && ctx.workspaceId) {
-    const wsRole = await resolveActorWorkspaceRole(
+    const acceptedOnWorkspace = required.workspace;
+    const wsRoles = await resolveActorWorkspaceRoles(
       ctx.orgId,
       ctx.workspaceId,
       ctx.userId,
     );
-    if (wsRole !== null && required.workspace.includes(wsRole)) return wsRole;
+    const wsMatch = mostPrivileged(
+      wsRoles.filter((name) => acceptedOnWorkspace.includes(name)),
+    );
+    if (wsMatch !== null) return wsMatch;
   }
 
   const accepted = [

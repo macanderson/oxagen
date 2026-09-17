@@ -34,7 +34,13 @@ function makeTx(opts: {
   insertError?: Error;
 }) {
   const inserts: Array<Record<string, unknown>> = [];
+  /** Every statement the bootstrap runs directly on the transaction, in order. */
+  const steps: string[] = [];
   const tx = {
+    execute: async () => {
+      steps.push("execute");
+      return undefined;
+    },
     select: () => ({
       from: () => ({
         where: async () =>
@@ -45,6 +51,7 @@ function makeTx(opts: {
       values: (v: Record<string, unknown>) => {
         if (opts.insertError) throw opts.insertError;
         inserts.push(v);
+        steps.push("insert");
         return {
           returning: async () => opts.returning ?? [WS_ROW],
           then: (res: (v: unknown) => unknown) =>
@@ -53,7 +60,7 @@ function makeTx(opts: {
       },
     }),
   };
-  return { tx: tx as unknown as Tx, inserts };
+  return { tx: tx as unknown as Tx, inserts, steps };
 }
 
 const ARGS = { orgId: "org_1", userId: "u_1", name: "Core", slug: "core" };
@@ -116,6 +123,28 @@ describe("bootstrapWorkspace", () => {
     expect(mocks.bootstrapWorkspaceAgents).not.toHaveBeenCalled();
     expect(mocks.seedWorkspaceDefaultRegistry).not.toHaveBeenCalled();
     expect(mocks.seedWorkspaceDefaultEnvironment).not.toHaveBeenCalled();
+  });
+
+  // #3029: `create_workspace` runs on the CALLER's scope, and an org-only
+  // caller's `app.current_workspace_id` is ORG_ONLY_WORKSPACE_ID (ADR-068) —
+  // never the workspace being created. Every row after the workspace insert
+  // lands in a workspace-GUC-scoped table, so the transaction's GUC has to move
+  // to the new workspace between the two, or `tenant_isolation`'s WITH CHECK
+  // refuses them with 42501.
+  it("re-points the transaction's workspace scope before writing any workspace-scoped row", async () => {
+    const { tx, steps } = makeTx({});
+    await bootstrapWorkspace({ tx, ...ARGS });
+
+    // insert (workspaces) → execute (set_config) → insert (workspace_users)
+    expect(steps).toEqual(["insert", "execute", "insert"]);
+  });
+
+  it("does not re-point the scope when the workspace insert returned no row", async () => {
+    const { tx, steps } = makeTx({ returning: [] });
+    await expect(bootstrapWorkspace({ tx, ...ARGS })).rejects.toThrow(
+      "workspace insert returned no row",
+    );
+    expect(steps).toEqual(["insert"]);
   });
 
   it("lets a unique violation reach the caller unchanged", async () => {

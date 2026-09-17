@@ -59,7 +59,6 @@ const baseProps = {
   options: SYSTEM_OPTIONS,
   value: "Agent Contributor",
   onChange: () => {},
-  customRolesAvailable: false,
   rolesError: null,
   assignedRoleName: null,
 };
@@ -162,20 +161,20 @@ describe("RolePicker", () => {
     expect(screen.getByTestId("role-option-agent-observer")).toBeDefined();
   });
 
-  it("shows the tier hint when custom roles are unavailable, the empty hint otherwise", () => {
-    const { unmount } = render(<RolePicker {...baseProps} />);
-    expect(screen.getByTestId("agent-role-custom-tier-hint")).toBeDefined();
-    unmount();
-
-    render(<RolePicker {...baseProps} customRolesAvailable={true} />);
+  // The tier hint is gone with the gate it described (ADR-069): custom roles
+  // bind on every tier, so "an Enterprise capability" was a refusal the handler
+  // no longer makes. An org with no custom roles gets the empty hint, which is
+  // the true statement for every tier.
+  it("shows the empty hint, and no tier hint, when the org has no custom roles", () => {
+    render(<RolePicker {...baseProps} />);
     expect(screen.getByTestId("agent-role-custom-empty")).toBeDefined();
+    expect(screen.queryByTestId("agent-role-custom-tier-hint")).toBeNull();
   });
 
   it("lists custom roles under their own heading and badges the current role", () => {
     render(
       <RolePicker
         {...baseProps}
-        customRolesAvailable={true}
         assignedRoleName="Release Ops"
         value="Release Ops"
         options={[

@@ -1,0 +1,59 @@
+{
+  "$comment": "UI Capability Parity (CLAUDE.md): every capability whose contract declares the `app` layer is bound here to the page a person operates it on, and to the runtime artifact that proves the page works. During the Mission Control rebuild this file carries the rebuilt app's bindings while apps/app_deprecated/capability-ui-map.json still carries the deprecated app's; tools/scripts/check_ui_parity.mjs reads both and this one wins on a name they share. The cutover batch (ARCHITECTURE.md §8, WL-50) flips APP_DIR and drops the deprecated registry.",
+  "bindings": {
+    "list_tool_versions": {
+      "route": "/[org]/[ws]/tools",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools → Registry: the tool versions table with its consequence-tag chips, the labels/API-names toggle and the cursor pager (features/tools/registry.tsx → data/live/tools.ts versions → list_tool_versions)",
+      "testid": "tools-next-page",
+      "proof": "verifications/session_01WFa3XThtVerpD7XeenEnYK/tools-registry.png",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session_01WFa3XThtVerpD7XeenEnYK"
+    },
+    "import_tools": {
+      "route": "/[org]/[ws]/tools",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools → Registry → \"Import tools from an MCP server\": the import dialog names the server and, optionally, the pins to take (features/tools/import-controls.tsx → actions.ts importTools → import_tools)",
+      "testid": "tools-import-dialog",
+      "proof": "verifications/session_01WFa3XThtVerpD7XeenEnYK/tools-registry.png",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session_01WFa3XThtVerpD7XeenEnYK"
+    },
+    "set_tool_classification": {
+      "route": "/[org]/[ws]/tools",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools → Registry → a row opens the tool dialog → the reclassification form: risk grade, side effect, egress, consequence tags, data classes and the reason (features/tools/tool-dialog.tsx → actions.ts setToolClassification → set_tool_classification)",
+      "testid": "tool-dialog",
+      "proof": "verifications/session_01WFa3XThtVerpD7XeenEnYK/tools-tool-dialog.png",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session_01WFa3XThtVerpD7XeenEnYK"
+    },
+    "list_credential_grants": {
+      "route": "/[org]/[ws]/tools",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools → Connections: the credential grants log — grant, tool server, run, connection, scope, TTL and state (features/tools/connections.tsx → data/live/tools.ts grants → list_credential_grants)",
+      "testid": "tools-next-page",
+      "proof": "verifications/session_01WFa3XThtVerpD7XeenEnYK/tools-connections.png",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session_01WFa3XThtVerpD7XeenEnYK"
+    },
+    "list_kill_switches": {
+      "route": "/[org]/[ws]/tools",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools → Kill switches: the levels, the deny generation and a card per recorded switch with its blast radius, who flipped it and why; the tab's count is the switches denying now (features/tools/switches.tsx → data/live/tools.ts killSwitches → list_kill_switches)",
+      "testid": "tools-flip-open",
+      "proof": "verifications/session_01WFa3XThtVerpD7XeenEnYK/tools-kill-switches.png",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session_01WFa3XThtVerpD7XeenEnYK"
+    },
+    "set_kill_switch": {
+      "route": "/[org]/[ws]/tools",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools → Kill switches → \"Flip a kill switch\" (and the button on each card): the switch dialog states the blast radius, the deny-generation bump and that the flip is a security event before the confirming button (features/tools/switch-controls.tsx → actions.ts flipKillSwitch → set_kill_switch)",
+      "testid": "tools-flip-blast-radius",
+      "proof": "verifications/session_01WFa3XThtVerpD7XeenEnYK/tools-switch-dialog.png",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session_01WFa3XThtVerpD7XeenEnYK"
+    }
+  }
+}

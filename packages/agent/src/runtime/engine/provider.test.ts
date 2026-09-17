@@ -85,6 +85,7 @@ describe("createProviderPort", () => {
     const result = await port(
       {
         request_id: "prov-1-0",
+        seq: 1,
         provider_id: "oxagen",
         role: "worker",
         request: {
@@ -151,6 +152,7 @@ describe("createProviderPort", () => {
     const result = await port(
       {
         request_id: "r",
+        seq: 1,
         provider_id: "oxagen",
         role: "worker",
         request: { messages: [{ role: "user", content: "q" }] },
@@ -179,6 +181,7 @@ describe("createProviderPort", () => {
     const result = await port(
       {
         request_id: "r",
+        seq: 1,
         provider_id: "oxagen",
         role: "verdict",
         request: { messages: [{ role: "user", content: "judge" }] },

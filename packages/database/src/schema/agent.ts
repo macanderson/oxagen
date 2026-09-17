@@ -185,10 +185,23 @@ export const approvalRequests = agentSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+    // The auto-approval clause of the workspace's rule set, evaluated when the
+    // call was parked (MC spec §6.9 part 2, ADR-070): the rule that was read,
+    // and every reason the call did not qualify (empty when it did). Null /
+    // empty when no rule covered the call.
+    autoRuleId: text("auto_rule_id"),
+    resolvedReasons: text("resolved_reasons")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     // resolution null until resolved.
     resolution: text("resolution"),
     resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "date" }),
     resolvedByUserId: uuid("resolved_by_user_id"),
+    // `policy:<rule id>` when an auto-approval rule resolved the request and
+    // no person looked. Exclusive with resolved_by_user_id, so a receipt can
+    // never read a policy decision as somebody's.
+    resolvedByPolicy: text("resolved_by_policy"),
     note: text("note"),
     expiresAt: timestamp("expires_at", {
       withTimezone: true,
@@ -214,6 +227,36 @@ export const approvalRequests = agentSchema.table(
     riskLevelCheck: check(
       "approval_requests_risk_level_check",
       sql`${t.riskLevel} IN ('low', 'medium', 'high', 'critical')`,
+    ),
+    // The rule-hit counters list_approval_rules reports over a 30-day window.
+    autoRuleIdx: index("approval_requests_auto_rule_idx")
+      .on(t.workspaceId, t.autoRuleId, t.createdAt)
+      .where(sql`auto_rule_id IS NOT NULL`),
+    // The standing-approval lookup an auto-approval rule's window reads
+    // (ADR-070, lastHumanApprovalOf): the newest approval of this exact call
+    // that a PERSON resolved. mandate_digest_idx above cannot serve it — that
+    // one is partial on mandate_id IS NOT NULL and keys on mandate_id, and
+    // this lookup has no mandate and keys on capability_name. Partial on the
+    // same predicate as the query, so it stays small: only resolved rows a
+    // person approved.
+    humanApprovalDigestIdx: index("approval_requests_human_digest_idx")
+      .on(
+        t.workspaceId,
+        t.capabilityName,
+        t.inputDigest,
+        sql`${t.resolvedAt} DESC`,
+      )
+      .where(
+        sql`resolution = 'approved' AND resolved_by_user_id IS NOT NULL AND resolved_at IS NOT NULL`,
+      ),
+    resolvedByPolicyFormCheck: check(
+      "approval_requests_resolved_by_policy_form_check",
+      sql`${t.resolvedByPolicy} IS NULL OR ${t.resolvedByPolicy} ~ '^policy:[a-z0-9][a-z0-9._-]*$'`,
+    ),
+    // One approver, never two: an auto-approval is not somebody's decision.
+    oneApproverCheck: check(
+      "approval_requests_one_approver_check",
+      sql`NOT (${t.resolvedByPolicy} IS NOT NULL AND ${t.resolvedByUserId} IS NOT NULL)`,
     ),
   }),
 );
@@ -1127,6 +1170,10 @@ export const tools = agentSchema.table(
     activeVersionId: uuid("active_version_id").references(
       (): AnyPgColumn => toolVersions.id,
     ),
+    // The mcp.mcp_servers row an imported tool was pulled from (source =
+    // 'mcp'); null for declared tools. Not a foreign key: a server soft-deletes
+    // and its tools keep their rows for replay (#2958).
+    mcpServerId: uuid("mcp_server_id"),
     activatedByUserId: uuid("activated_by_user_id"),
     activatedAt: timestamp("activated_at", {
       withTimezone: true,
@@ -1140,6 +1187,9 @@ export const tools = agentSchema.table(
     ),
     orgIdx: index("tools_org_idx").on(t.orgId, t.workspaceId),
     activeVersionIdx: index("tools_active_version_idx").on(t.activeVersionId),
+    mcpServerIdx: index("tools_mcp_server_idx")
+      .on(t.mcpServerId)
+      .where(sql`mcp_server_id IS NOT NULL`),
     sourceCheck: check(
       "tools_source_check",
       sql`${t.source} IN ('builtin', 'custom', 'mcp', 'foundry')`,
@@ -1165,11 +1215,41 @@ export const toolVersions = agentSchema.table(
     // SHA-256 hex over the canonical (sorted-key) manifest JSON — immutability
     // contract (see skill_versions.checksum).
     checksum: text("checksum").notNull(),
-    // Safety classification (MC spec §6.9 part 1, ADR-059 decision 6): the
+    // Where the schema came from (MC spec App. A.5): 'declared' for a
+    // hand-authored manifest (publish_tool_declaration), 'imported' for a
+    // server's tools/list (import_tools). The observed origins arrive with the
+    // recorder that captures tool outputs (ADR-072).
+    schemaOrigin: text("schema_origin").notNull().default("declared"),
+    // Safety classification (spec §6.9 part 1), the shape of
+    // toolClassificationSchema in @oxagen/oxagen/contracts/tool.classification:
+    // side-effect class, egress class, consequence tags, measures, data
+    // classes. Null until an admin classifies the version. Describes the tool
+    // and decides nothing by itself; a class kill switch matches a version by
+    // its tags at call time. A new version of the tool starts with the
+    // classification of the version it replaces (publishTool), and a changed
+    // classification bumps the deny generation in the writer's transaction
+    // (trigger tool_versions_classification_deny_generation), so the gateway's
+    // gate reloads the tags.
+    classification: jsonb("classification"),
+    // The risk grade the classifier set. risk_grade is the declared grade and
+    // part of the checksum; this one is not, so reclassifying never makes an
+    // unchanged manifest look changed.
+    classifiedRiskGrade: text("classified_risk_grade"),
+    classifiedByUserId: uuid("classified_by_user_id"),
+    classifiedAt: timestamp("classified_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    classificationReason: text("classification_reason"),
+    // The mandate gate's half of the same classification (MC spec §6.9 part 1,
+    // ADR-059 decision 6, 20260915202300_mandates_and_ledger.sql): the
     // consequences invoking this version can cause, the measures it exposes
     // as paths into its input ({ path, type, unit, scale? } per measure name),
     // and the path into its output that carries the external effect id a
-    // settlement records. Describes the tool; decides nothing by itself.
+    // settlement records. These are columns rather than keys inside
+    // `classification` because a mandate reads them on every gated call and
+    // the kill-switch gate reads the jsonb; both describe the tool and decide
+    // nothing by themselves.
     consequenceTags: text("consequence_tags")
       .array()
       .notNull()
@@ -1194,6 +1274,19 @@ export const toolVersions = agentSchema.table(
     checksumCheck: check(
       "tool_versions_checksum_check",
       sql`${t.checksum} ~ '^[0-9a-f]{64}$'`,
+    ),
+    schemaOriginCheck: check(
+      "tool_versions_schema_origin_check",
+      sql`${t.schemaOrigin} IN ('declared', 'imported')`,
+    ),
+    classifiedRiskGradeCheck: check(
+      "tool_versions_classified_risk_grade_check",
+      sql`${t.classifiedRiskGrade} IS NULL OR ${t.classifiedRiskGrade} IN ('low', 'medium', 'high', 'critical')`,
+    ),
+    // A classification names its risk grade and when it was set, or is absent altogether.
+    classificationCheck: check(
+      "tool_versions_classification_check",
+      sql`(${t.classification} IS NULL AND ${t.classifiedAt} IS NULL AND ${t.classifiedRiskGrade} IS NULL) OR (${t.classification} IS NOT NULL AND ${t.classifiedAt} IS NOT NULL AND ${t.classifiedRiskGrade} IS NOT NULL)`,
     ),
   }),
 );

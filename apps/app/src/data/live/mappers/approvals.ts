@@ -15,6 +15,7 @@ export function toApprovalItems(
     tool: item.tool,
     agentKey: item.chain.agentKey,
     requester: item.requester,
+    mandateId: item.mandateId,
     createdAt: item.createdAt,
     expiresAt: item.expiresAt,
   }));

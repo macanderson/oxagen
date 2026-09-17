@@ -1,5 +1,5 @@
 {
-  "generatedCount": 293,
+  "generatedCount": 314,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -90,6 +90,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "ask_assistant",
+      "domain": "assistant",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -418,6 +429,18 @@
       "consumes": []
     },
     {
+      "name": "delete_approval_rule",
+      "domain": "approval_rule",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "delete_connection",
       "domain": "connection",
       "surfaces": [
@@ -686,6 +709,17 @@
       "consumes": []
     },
     {
+      "name": "export_audit_events",
+      "domain": "audit",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "export_conversation",
       "domain": "conversation",
       "surfaces": [
@@ -821,12 +855,34 @@
       "consumes": []
     },
     {
+      "name": "get_assistant_engine",
+      "domain": "assistant",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_auth_alerts",
       "domain": "plugin",
       "surfaces": [
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_auto_eligibility",
+      "domain": "approval_rule",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1127,6 +1183,17 @@
       "consumes": []
     },
     {
+      "name": "get_nav_counts",
+      "domain": "shell",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_node",
       "domain": "graph",
       "surfaces": [
@@ -1343,6 +1410,16 @@
       "consumes": []
     },
     {
+      "name": "get_run_proof",
+      "domain": "run",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_run_transcript",
       "domain": "run",
       "surfaces": [
@@ -1517,6 +1594,17 @@
       "consumes": []
     },
     {
+      "name": "import_tools",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "ingest_stella_operational_telemetry",
       "domain": "telemetry",
       "surfaces": [
@@ -1644,6 +1732,17 @@
       "consumes": []
     },
     {
+      "name": "list_approval_rules",
+      "domain": "approval_rule",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_approvals",
       "domain": "agent",
       "surfaces": [
@@ -1740,6 +1839,17 @@
       "consumes": []
     },
     {
+      "name": "list_credential_grants",
+      "domain": "credential",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_environments",
       "domain": "environment",
       "surfaces": [
@@ -1825,6 +1935,17 @@
     {
       "name": "list_invoices",
       "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_kill_switches",
+      "domain": "kill_switch",
       "surfaces": [
         "api",
         "mcp"
@@ -2025,6 +2146,17 @@
       "consumes": []
     },
     {
+      "name": "list_recent_runs",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_records",
       "domain": "context",
       "surfaces": [
@@ -2097,6 +2229,17 @@
       "consumes": []
     },
     {
+      "name": "list_skills",
+      "domain": "skill",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_tacho_hosts",
       "domain": "tacho",
       "surfaces": [
@@ -2129,6 +2272,17 @@
       "consumes": []
     },
     {
+      "name": "list_tool_versions",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_waste",
       "domain": "spend",
       "surfaces": [
@@ -2142,6 +2296,18 @@
     {
       "name": "list_workspaces",
       "domain": "workspace",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "load_tools",
+      "domain": "tools",
       "surfaces": [
         "api",
         "mcp",
@@ -2774,6 +2940,18 @@
       "consumes": []
     },
     {
+      "name": "search_tools",
+      "domain": "tools",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "send_message",
       "domain": "chat",
       "surfaces": [
@@ -2790,6 +2968,30 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_approval_rule_enabled",
+      "domain": "approval_rule",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_approval_rules",
+      "domain": "approval_rule",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2854,6 +3056,28 @@
       "consumes": []
     },
     {
+      "name": "set_disclosure_grain",
+      "domain": "evidence",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_kill_switch",
+      "domain": "kill_switch",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "set_mcp_enabled",
       "domain": "agent",
       "surfaces": [
@@ -2908,6 +3132,17 @@
       "consumes": []
     },
     {
+      "name": "set_preferences",
+      "domain": "user",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "set_role_grants",
       "domain": "iam",
       "surfaces": [
@@ -2951,6 +3186,17 @@
         "mcp",
         "agent",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_tool_classification",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -3267,18 +3513,6 @@
     },
     {
       "name": "update_user_budget",
-      "domain": "user",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "update_user_preferences",
       "domain": "user",
       "surfaces": [
         "api",

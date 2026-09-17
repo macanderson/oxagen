@@ -62,8 +62,27 @@ type MandateCheck = (args: {
   requestId?: string;
 }) => Promise<DecisionSettlement | undefined>;
 
+/**
+ * The auto-approval clause of the same rule set (ADR-070). The gate asks it
+ * once, on a `require_approval` verdict, and the ask WRITES NOTHING: an
+ * outcome with `ok` carries a `commit` the gate calls only once every later
+ * check has cleared, in the caller's tenant scope. That order is the point — a mandate's own approval rule
+ * runs after the rules and can still park the call, and a receipt saying
+ * `policy:<rule id>` for a call a person was required to look at would invert
+ * the one thing the `policy:` form is for.
+ */
+export type AutoApprovalHook = (args: {
+  capability: string;
+  input: unknown;
+  ruleSet: RuleSet;
+  verdict: Verdict;
+  ctx: { orgId: string; workspaceId: string; userId: string | null };
+}) => Promise<{ ok: boolean; commit?: () => Promise<void> } | null>;
+
 export interface DecisionRulesGateOptions {
   loadRuleSet: RuleSetLoader;
+  /** Omitted ⇒ every `require_approval` verdict goes to a person. */
+  autoApprove?: AutoApprovalHook;
   /** Omitted ⇒ no mandate check; every agent call proceeds on the rules alone. */
   checkMandate?: MandateCheck;
   /** Omitted ⇒ rules that declare `requires_facts` see an empty bag and their fact conditions do not match. */
@@ -102,7 +121,10 @@ export function createDecisionRulesGate(
   options: DecisionRulesGateOptions,
 ): DecisionRulesGateFn {
   return async ({ capability, input, ctx, principal }) => {
-    await judgeRules(options, { capability, input, ctx });
+    // The rules decide first, and an auto-approval they release is only
+    // EVALUATED here: `commit` writes the receipt, and it is called at the
+    // end, once nothing later can still send the call to a person.
+    const commit = await judgeRules(options, { capability, input, ctx });
     // The mandate check binds an agent acting under delegated authority; a
     // person under their own role needs no mandate (spec §6.9 part 3), and
     // the check needs a workspace to read the tool registry from.
@@ -113,9 +135,11 @@ export function createDecisionRulesGate(
       principal.kind !== "agent" ||
       ctx.workspaceId === null
     ) {
+      await record(options, commit);
       return;
     }
-    return options.checkMandate({
+    // Throws to refuse or to park; either way the receipt is never written.
+    const settlement = await options.checkMandate({
       capability,
       input,
       orgId: ctx.orgId,
@@ -124,10 +148,122 @@ export function createDecisionRulesGate(
       userId: ctx.userId,
       requestId: ctx.requestId,
     });
+    // By here the mandate has reserved authority in the ledger, and the only
+    // thing that gives it back is the settlement the kernel applies to the
+    // settlement this gate RETURNS. A throw from here never returns it, so
+    // the reservation would sit open forever: no approval row names the call,
+    // so neither the expiry sweep nor a revoke would ever find it, and the
+    // mandate's remaining authority would shrink on every failed call. The
+    // release happens here instead, before the failure propagates.
+    try {
+      await record(options, commit);
+    } catch (error) {
+      await releaseReservation(options, settlement);
+      throw error;
+    }
+    return settlement;
   };
 }
 
-/** Evaluate the workspace's rule set; throws on a deny or a require_approval verdict. */
+/** What a released call still owes: the receipt saying no person looked. */
+type AutoApprovalCommit = (() => Promise<void>) | undefined;
+
+/**
+ * Whether an auto-approval rule answered the person's question for this call,
+ * and what writing that answer down will take.
+ *
+ * Needs a workspace: the rules are a workspace's. A hook that throws is
+ * infrastructure failing, and the gate's posture there is unchanged — the
+ * call goes to the person the verdict already sent it to, which is the safe
+ * direction, so the error is reported and swallowed rather than allowed to
+ * release the call.
+ */
+async function skipsThePerson(
+  options: DecisionRulesGateOptions,
+  args: {
+    capability: string;
+    input: unknown;
+    ctx: DecisionGateArgs["ctx"];
+    ruleSet: RuleSet;
+    verdict: Verdict;
+  },
+): Promise<AutoApprovalCommit> {
+  if (options.autoApprove === undefined || args.ctx.workspaceId === null) {
+    return undefined;
+  }
+  try {
+    const outcome = await options.autoApprove({
+      capability: args.capability,
+      input: args.input,
+      ruleSet: args.ruleSet,
+      verdict: args.verdict,
+      ctx: {
+        orgId: args.ctx.orgId,
+        workspaceId: args.ctx.workspaceId,
+        userId: args.ctx.userId,
+      },
+    });
+    if (outcome?.ok !== true) return undefined;
+    // A hook that says ok and hands back nothing to write would release the
+    // call with no receipt; the person looks instead.
+    return outcome.commit;
+  } catch (error) {
+    options.onError?.(error);
+    return undefined;
+  }
+}
+
+/**
+ * Give back what a mandate reserved for a call that is not going to happen.
+ *
+ * Reported and swallowed: it runs while another error is already on its way
+ * up, and losing that error to a secondary failure would hide why the call
+ * was refused. The same posture `applyDecisionSettlement` takes in the kernel.
+ */
+async function releaseReservation(
+  options: DecisionRulesGateOptions,
+  settlement: void | DecisionSettlement,
+): Promise<void> {
+  if (!settlement) return;
+  try {
+    await settlement.release();
+  } catch (error) {
+    options.onError?.(error);
+  }
+}
+
+/**
+ * Write the receipt for a call the rules released, now that nothing later can
+ * still send it to a person.
+ *
+ * A commit that fails does not release the call: the `policy:<rule id>` row IS
+ * the authority for skipping the human, so a decision that cannot be recorded
+ * is a decision that did not happen, and the call goes to the person the
+ * verdict sent it to.
+ */
+async function record(
+  options: DecisionRulesGateOptions,
+  commit: AutoApprovalCommit,
+): Promise<void> {
+  if (commit === undefined) return;
+  try {
+    await commit();
+  } catch (error) {
+    options.onError?.(error);
+    throw new DecisionRuleApprovalRequiredError({
+      effect: "require_approval",
+      ruleId: "auto_approval_not_recorded",
+      description:
+        "an auto-approval rule released this call and the approval could not be recorded",
+    });
+  }
+}
+
+/**
+ * Evaluate the workspace's rule set; throws on a deny, and on a
+ * require_approval verdict no auto-approval rule released. Returns the
+ * receipt one did release still owes, or undefined when nothing is owed.
+ */
 async function judgeRules(
   options: DecisionRulesGateOptions,
   {
@@ -135,7 +271,7 @@ async function judgeRules(
     input,
     ctx,
   }: Pick<DecisionGateArgs, "capability" | "input" | "ctx">,
-): Promise<void> {
+): Promise<AutoApprovalCommit> {
   let ruleSet: RuleSet | null;
   try {
     ruleSet = await options.loadRuleSet({
@@ -144,9 +280,9 @@ async function judgeRules(
     });
   } catch (error) {
     options.onError?.(error);
-    return;
+    return undefined;
   }
-  if (ruleSet === null || ruleSet.rules.length === 0) return;
+  if (ruleSet === null || ruleSet.rules.length === 0) return undefined;
 
   let facts: Record<string, unknown> = {};
   const keys = requiredFactKeys(ruleSet, capability);
@@ -181,8 +317,16 @@ async function judgeRules(
     },
   };
   const verdict = evaluateRules(ruleSet, subject);
-  if (verdict === null || verdict.effect === "allow") return;
+  if (verdict === null || verdict.effect === "allow") return undefined;
   if (verdict.effect === "require_approval") {
+    const commit = await skipsThePerson(options, {
+      capability,
+      input,
+      ctx,
+      ruleSet,
+      verdict,
+    });
+    if (commit !== undefined) return commit;
     throw new DecisionRuleApprovalRequiredError(verdict);
   }
   throw new DecisionRuleDeniedError(verdict);

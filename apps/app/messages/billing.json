@@ -6,7 +6,8 @@
     "range": "{start} – {end}",
     "checkout": {
       "success": "Checkout finished. The governed action units you bought are added to the bucket once Stripe confirms the payment.",
-      "cancel": "Checkout was cancelled. Nothing was charged."
+      "cancel": "Checkout was cancelled. Nothing was charged.",
+      "credits": "Checkout finished. The usage credits you bought are added to the balance once Stripe confirms the payment."
     },
     "plan": {
       "title": "Plan",
@@ -46,6 +47,11 @@
       "blocks": "Blocks per top-up",
       "perTopup": "= {count} GAU per top-up",
       "readOnly": "An owner or admin can change auto top-up.",
+      "save": "Save",
+      "saving": "Saving…",
+      "saved": "Auto top-up saved.",
+      "invalidBlocks": "Enter a whole number of blocks from 1 to 100.",
+      "failed": "Auto top-up could not be saved. Try again.",
       "savedCard": "charged to {brand} ····{last4}",
       "savedCardUnlabelled": "charged to the saved payment method",
       "noCard": "no saved payment method — your next purchase saves one, and auto top-up runs from then on",
@@ -125,6 +131,26 @@
       "pager": "Invoice pages",
       "older": "Older invoices",
       "newest": "Newest invoices"
+    },
+    "usageCredits": {
+      "title": "In-app AI usage",
+      "balance": "Balance",
+      "faceValue": "Face value",
+      "credits": "{count} credits",
+      "basis": "Credits pay for the in-app agent's model calls at provider cost times the published markup. 1 credit = $0.01.",
+      "exhausted": "The in-app agent's platform-paid turns stop until a top-up lands.",
+      "presets": "Preset top-up amounts",
+      "amount": "Top-up amount",
+      "min": "whole dollars, at least ${min}",
+      "submit": "Continue to Checkout",
+      "submitting": "Opening Checkout…",
+      "denied": "An owner or a billing member can top up usage credits.",
+      "planDenied": "Usage credits need a Build plan or above. Subscribe first and the top-up opens here.",
+      "errors": {
+        "invalid": "Enter a whole dollar amount of at least ${min}.",
+        "denied": "Your role cannot top up usage credits. An owner or a billing member can.",
+        "unavailable": "Checkout could not be opened. Nothing was charged."
+      }
     },
     "failure": {
       "denied": "You cannot see {section} for this organization. Your role does not include {permission}; an organization owner can grant it.",

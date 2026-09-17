@@ -46,21 +46,21 @@ export const idMixin = (publicIdPrefix: string) => ({
 export const auditMixin = () => ({
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-  createdByUserId: uuid("created_by_user_id"),
-  updatedByUserId: uuid("updated_by_user_id"),
+  createdById: uuid("created_by_id"),
+  updatedById: uuid("updated_by_id"),
 });
 
 /** soft_delete_mixin — hard deletes prohibited on org-scoped tables. */
 export const softDeleteMixin = () => ({
   deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
-  deletedByUserId: uuid("deleted_by_user_id"),
+  deletedById: uuid("deleted_by_id"),
 });
 ```
 
 - Internal id is a UUIDv7 (`id`), never exposed externally.
 - `public_id` is a citext, prefixed (`org_`, `wrk_`, `agt_`, ...), unique, and is what the API/UI ever shows or accepts from clients — never leak the raw `id` as a user-facing identifier (see `oxagen-naming` for the UI corollary on node/edge citations).
 - Org-scoped tables get `orgScopeMixin()` (`orgId`, `workspaceId`, both required).
-- Hard deletes are prohibited on org-scoped tables — use `softDeleteMixin()` (`deletedAt`/`deletedByUserId`), never `DELETE FROM`.
+- Hard deletes are prohibited on org-scoped tables — use `softDeleteMixin()` (`deletedAt`/`deletedById`), never `DELETE FROM`.
 
 Migrations live under `packages/database/atlas/migrations/`, **never** under `apps/`. After adding/renaming a migration, regenerate the checksum: `atlas migrate hash --dir "file://atlas/migrations"` from `packages/database` (never hand-edit `atlas.sum`).
 
@@ -93,6 +93,6 @@ Event schemas favor short lowercase identifier tokens and explicit `BoolFlag` (0
 - Writing execution/telemetry events into Postgres instead of ClickHouse (or vice versa — never mutate/query ClickHouse for transactional truth).
 - Storing binary bytes (base64 blobs, file contents) in a Postgres column or a ClickHouse column instead of blob storage + a URL reference.
 - Exposing the raw internal `id` (UUID) to a client/API response instead of `public_id`.
-- Hard-deleting a row on an org-scoped table instead of setting `deletedAt`/`deletedByUserId`.
+- Hard-deleting a row on an org-scoped table instead of setting `deletedAt`/`deletedById`.
 - Importing the Neo4j driver directly from application/handler code instead of going through `ontology.*` contracts or `packages/ontology/src/mutations/*`.
 - Hand-editing `atlas.sum` instead of regenerating it with `atlas migrate hash`.

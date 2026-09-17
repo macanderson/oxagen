@@ -120,6 +120,26 @@ vi.mock("@oxagen/plugins", () => ({
   ),
 }));
 
+// The kill-switch gate (spec §6.11) is a seam: the default gate reads Postgres
+// through withTenantDb, which this file's db double does not model. Tests that
+// exercise the gate pass their own through `opts.killSwitchGate`; every other
+// test gets a gate that finds every call open, so the fixture registry above
+// behaves as an unswitched workspace. The real gate is tested in
+// kill-switch-gate.test.ts.
+const killSwitchMocks = vi.hoisted(() => ({
+  check: vi.fn(
+    async (_facts: { capabilityId: string; readOnly: boolean }) =>
+      null as unknown,
+  ),
+}));
+vi.mock("./kill-switch-gate", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./kill-switch-gate")>();
+  return {
+    ...real,
+    createKillSwitchGate: () => ({ check: killSwitchMocks.check }),
+  };
+});
+
 vi.mock("@oxagen/oxagen/kernel", () => ({
   invoke: vi.fn(async () => ({ ok: true })),
   authorizeExternalCapability: vi.fn(async () => ({
@@ -278,7 +298,11 @@ vi.mock("@oxagen/iam", async () => {
   };
 });
 
-import { materializeTools, type MaterializeOptions } from "./materialize-tools";
+import {
+  materializeTools,
+  digestInputFor,
+  type MaterializeOptions,
+} from "./materialize-tools";
 import { decideCapabilityForBelt } from "./toolbelt";
 import type { ActiveEmergencyDeny } from "@oxagen/iam";
 import type { RegistryCapability } from "../registry-loader";
@@ -293,6 +317,10 @@ import {
 import { connectMcp, listMcpToolDescriptors } from "../dispatch/mcp-client";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
+import {
+  EXTERNAL_TOOL_SEGMENT_MAX,
+  isAdmissibleToolIdentity,
+} from "@oxagen/run-ledger";
 // Note: the @oxagen/database `db` is driven via `dbMocks.db` (hoisted above) —
 // we do not import the banned raw `db` symbol directly into the test.
 
@@ -415,6 +443,89 @@ describe("materializeTools", () => {
     ).execute({ y: 1 });
     expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
     expect(mocks.waitForApproval).toHaveBeenCalledTimes(1);
+  });
+
+  it("digests the validated input, not the raw tool arguments, so the standing window can match the invocation", async () => {
+    // capB's schema is widened here with a default and a coercion. The tool is
+    // called without the defaulted key and with the coerced one as a string,
+    // which is what an AI SDK tool call looks like. invoke() digests
+    // cap.input.safeParse(raw).data, so the approval row has to store that same
+    // parsed value or the window keys on something the invocation never asks
+    // for.
+    mocks.createApprovalRequest.mockClear();
+    mocks.waitForApproval.mockClear();
+    const fixtureGated = [
+      {
+        ...FIXTURE[2],
+        agent: { riskLevel: "high" as const, requiresApproval: true },
+        input: z.object({
+          y: z.coerce.number(),
+          mode: z.string().default("safe"),
+        }),
+      },
+    ];
+    vi.doMock("@oxagen/oxagen", () => ({
+      listCapabilities: () => fixtureGated,
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
+    }));
+    vi.resetModules();
+    const { materializeTools: mt } = await import("./materialize-tools");
+    const { tools } = await mt({ ...CTX, messageId: "msg_43" });
+    await (
+      tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }
+    ).execute({ y: "1" });
+
+    const call = mocks.createApprovalRequest.mock.calls.at(0)?.at(0) as
+      | { digestInput: unknown; inputPreview: unknown }
+      | undefined;
+    expect(call).toBeDefined();
+    expect(call?.digestInput).toEqual({ y: 1, mode: "safe" });
+    // The preview stays raw on purpose: it is what the person is shown, and
+    // showing them a value the model did not send would misreport the request.
+    expect(call?.inputPreview).toEqual({ y: "1" });
+  });
+
+  it("parks the call under approvalMode park: the request is created, the event fires, nothing waits and the handler never runs", async () => {
+    mocks.createApprovalRequest.mockClear();
+    mocks.waitForApproval.mockClear();
+    vi.mocked(invoke).mockClear();
+    const fixtureGated = [
+      {
+        ...FIXTURE[2],
+        agent: { riskLevel: "high" as const, requiresApproval: true },
+      },
+    ];
+    vi.doMock("@oxagen/oxagen", () => ({
+      listCapabilities: () => fixtureGated,
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
+    }));
+    vi.resetModules();
+    const { materializeTools: mt, ApprovalPendingError } = await import(
+      "./materialize-tools"
+    );
+    const events: unknown[] = [];
+    const { tools } = await mt(
+      { ...CTX, messageId: "msg_42" },
+      { approvalMode: "park", onApprovalRequired: (e) => events.push(e) },
+    );
+    await expect(
+      (
+        tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }
+      ).execute({ y: 1 }),
+    ).rejects.toSatisfy(
+      (e) =>
+        e instanceof ApprovalPendingError &&
+        e.code === "pending_approval" &&
+        e.capability === FIXTURE[2]!.name,
+    );
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.waitForApproval).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+    expect(events).toHaveLength(1);
   });
 
   it("denied approval throws and the handler never runs", async () => {
@@ -792,7 +903,61 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     await mt(CTX, { serverAllowlist: allowlist });
     expect(mod.__spyContributor?.contributeTools).toHaveBeenCalledWith(CTX, {
       serverAllowlist: allowlist,
+      killSwitches: expect.objectContaining({ check: expect.any(Function) }),
     });
+  });
+
+  it("drops an external tool whose governed identity a run spec cannot carry, and keeps its siblings", async () => {
+    // A contributor's names are a third party's: an MCP server's `tools/list`
+    // or a `.oxagen/settings.json` server key. `openAssistantRun` pins EVERY
+    // materialized tool into `tool_policy.allowlist`, so one identity the
+    // spec refuses does not fail that tool — it fails admission, and with it
+    // every assistant turn in the workspace, including turns that would never
+    // have called it. One tool missing from the belt is the cheap failure.
+    const serverId = "0192d4a8-7c1e-7a00-8000-0000000000aa";
+    const ok = `mcp.${serverId}.list_pull_requests`;
+    const overLong = `mcp.${serverId}.${"z".repeat(EXTERNAL_TOOL_SEGMENT_MAX + 1)}`;
+    // The premise, not assumed: the short one is carryable and the long one
+    // is not. Without this the test would pass on both being dropped.
+    expect(isAdmissibleToolIdentity(ok)).toBe(true);
+    expect(isAdmissibleToolIdentity(overLong)).toBe(false);
+
+    const raw = (realName: string, toolName: string) => ({
+      realName,
+      description: "d",
+      execute: async () => "ok",
+      externalServerId: serverId,
+      externalServerName: "GitHub",
+      externalToolName: toolName,
+    });
+    vi.doMock("./plugin-type", async (importOriginal) => {
+      const real = await importOriginal<typeof import("./plugin-type")>();
+      return {
+        ...real,
+        getPluginTypeContributors: vi.fn(() => [
+          {
+            type: "mcp_server" as const,
+            contributeTools: vi.fn(async () => [
+              raw(ok, "list_pull_requests"),
+              raw(overLong, "z".repeat(EXTERNAL_TOOL_SEGMENT_MAX + 1)),
+            ]),
+          },
+        ]),
+      };
+    });
+    vi.resetModules();
+    const { materializeTools: mt } = await import("./materialize-tools");
+
+    const { nameMap } = await mt(CTX, {});
+    const canonical = Object.values(nameMap);
+
+    expect(canonical).toContain(ok);
+    expect(canonical).not.toContain(overLong);
+    // Dropped, never truncated: a truncated identity is a different tool as
+    // far as governance is concerned, and two long names could collide on one.
+    expect(canonical.some((c) => c.startsWith(`mcp.${serverId}.z`))).toBe(
+      false,
+    );
   });
 });
 
@@ -800,6 +965,207 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
 // These tests verify the external-MCP consent gate runs AFTER the IAM gate and
 // BEFORE the transport: a first-use call (no grant) solicits consent + blocks;
 // a denied grant short-circuits; a pre-existing grant runs inline.
+describe("materializeTools — kill switches (spec §6.11)", () => {
+  const MCP_SERVER = {
+    id: "srv_abc",
+    name: "GitHub",
+    orgId: "ten_1",
+    workspaceId: "ws_1",
+    endpointUrl: "https://github.mcp.example.com",
+    authStrategy: "bearer",
+    authConfig: { token: "tok_test" },
+    healthStatus: "healthy",
+    authKind: "secret",
+  };
+  const fakeExecute = vi.fn(async () => ({ content: { data: "result" } }));
+  const hit = {
+    id: "id_1",
+    publicId: "emd_1",
+    targetKind: "class" as const,
+    targetId: "moves_money",
+    scopeKind: "org" as const,
+    workspaceId: null,
+    capabilityId: null,
+    resourceScopeDigest: "sha256:" + "0".repeat(64),
+    principalId: null,
+    reason: "processor incident",
+    active: true,
+    activatedAt: new Date("2026-09-15T00:00:00Z"),
+    deactivatedAt: null,
+    flippedByUserId: "u_2",
+    updatedById: "u_2",
+  };
+
+  beforeEach(() => {
+    killSwitchMocks.check.mockReset().mockResolvedValue(null);
+    vi.mocked(invoke).mockClear();
+    vi.mocked(authorizeExternalCapability).mockClear();
+    fakeExecute.mockClear();
+    mocks.insertToolInvocation.mockClear();
+    mocks.insertToolInvocation.mockResolvedValue(undefined);
+    dbMocks.rowsByTable.clear();
+    dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [MCP_SERVER]);
+    vi.mocked(connectMcp).mockResolvedValue({
+      callTool: fakeExecute,
+    } as unknown as Awaited<ReturnType<typeof connectMcp>>);
+    vi.mocked(listMcpToolDescriptors).mockResolvedValue([
+      {
+        name: "list_pull_requests",
+        description: "List PRs",
+        inputSchema: { type: "object" },
+      },
+    ]);
+  });
+
+  // The gate is asked at materialization too (the contributor asks about
+  // each server), so a switched call is keyed by its facts; the open gate is
+  // restored for the describes that follow.
+  afterEach(() => {
+    killSwitchMocks.check.mockReset().mockResolvedValue(null);
+  });
+
+  it("asks the gate before every capability call with the call's facts", async () => {
+    const { tools } = await materializeTools(CTX);
+    await (
+      tools.capA as unknown as { execute: (i: unknown) => Promise<unknown> }
+    ).execute({ x: "hi" });
+    expect(killSwitchMocks.check).toHaveBeenCalledWith({
+      capabilityId: "capA",
+      readOnly: expect.any(Boolean),
+    });
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("a switched capability never reaches the kernel and fails with the switch's reason", async () => {
+    killSwitchMocks.check.mockImplementation(async (facts) =>
+      facts.capabilityId === "capA" ? hit : null,
+    );
+    const { tools } = await materializeTools(CTX);
+    await expect(
+      (
+        tools.capA as unknown as { execute: (i: unknown) => Promise<unknown> }
+      ).execute({ x: "hi" }),
+    ).rejects.toThrow(/kill switch \(class moves_money\): processor incident/);
+    expect(invoke).not.toHaveBeenCalled();
+    const call = (
+      mocks.insertToolInvocation.mock.calls[0] as unknown as [unknown]
+    )?.[0] as Record<string, unknown>;
+    expect(call.status).toBe("failed");
+    expect(call.error_class).toBe("KillSwitchDeniedError");
+  });
+
+  it("asks the gate for an external tool with its server and connection, before IAM and the transport", async () => {
+    const capabilityId = `mcp.${MCP_SERVER.id}.list_pull_requests`;
+    killSwitchMocks.check.mockImplementation(async (facts) =>
+      facts.capabilityId === capabilityId ? hit : null,
+    );
+    const { tools } = await materializeTools(CTX);
+    // The contributor asked the same gate about the server when the turn was
+    // materialized, before the server was reached.
+    expect(killSwitchMocks.check).toHaveBeenCalledWith({
+      capabilityId: `mcp.${MCP_SERVER.id}`,
+      serverId: MCP_SERVER.id,
+      connectionId: null,
+      readOnly: false,
+    });
+    const t = tools[`mcp_${MCP_SERVER.id}_list_pull_requests`] as {
+      execute?: (i: unknown) => Promise<unknown>;
+    };
+    const result = await t.execute!({});
+    expect(killSwitchMocks.check).toHaveBeenCalledWith({
+      capabilityId: `mcp.${MCP_SERVER.id}.list_pull_requests`,
+      serverId: MCP_SERVER.id,
+      connectionId: null,
+      readOnly: false,
+    });
+    expect(authorizeExternalCapability).not.toHaveBeenCalled();
+    expect(fakeExecute).not.toHaveBeenCalled();
+    expect(result).toMatch(/blocked by kill switch/);
+    const call = (
+      mocks.insertToolInvocation.mock.calls[0] as unknown as [unknown]
+    )?.[0] as Record<string, unknown>;
+    expect(call.status).toBe("failed");
+    expect(call.error_class).toBe("KillSwitchDeniedError");
+  });
+
+  /** A gate that finds `capabilityId` open on its first call and switched from the second on. */
+  const switchedDuringWait = (capabilityId: string) => {
+    let calls = 0;
+    killSwitchMocks.check.mockImplementation(async (facts) =>
+      facts.capabilityId === capabilityId && ++calls > 1 ? hit : null,
+    );
+    return () => calls;
+  };
+
+  it("a switch flipped while an approval card is open stops the capability once approved", async () => {
+    const callsFor = switchedDuringWait("capB");
+    mocks.createApprovalRequest.mockClear();
+    mocks.waitForApproval.mockClear();
+    mocks.waitForApproval.mockResolvedValueOnce({
+      approvalId: "appr_x",
+      resolution: "approved",
+      note: null,
+    });
+    const fixtureGated = [
+      {
+        ...FIXTURE[2],
+        agent: { riskLevel: "high" as const, requiresApproval: true },
+      },
+    ];
+    vi.doMock("@oxagen/oxagen", () => ({
+      listCapabilities: () => fixtureGated,
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
+    }));
+    vi.resetModules();
+    const { materializeTools: mt } = await import("./materialize-tools");
+    const kernel = await import("@oxagen/oxagen/kernel");
+    vi.mocked(kernel.invoke).mockClear();
+    const { tools } = await mt({ ...CTX, messageId: "msg_42" });
+    await expect(
+      (
+        tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }
+      ).execute({ y: 1 }),
+    ).rejects.toThrow(/kill switch \(class moves_money\)/);
+    expect(mocks.waitForApproval).toHaveBeenCalledTimes(1);
+    expect(callsFor()).toBe(2);
+    expect(kernel.invoke).not.toHaveBeenCalled();
+    vi.doUnmock("@oxagen/oxagen");
+  });
+
+  it("a switch flipped while a consent card is open stops the external tool once consent is granted", async () => {
+    const capabilityId = `mcp.${MCP_SERVER.id}.list_pull_requests`;
+    const callsFor = switchedDuringWait(capabilityId);
+    consentMocks.checkConsent.mockClear();
+    consentMocks.checkConsent.mockResolvedValue(null);
+    mocks.createApprovalRequest.mockClear();
+    mocks.waitForApproval.mockClear();
+    mocks.waitForApproval.mockResolvedValueOnce({
+      approvalId: "appr_x",
+      resolution: "approved",
+      note: null,
+    });
+    const { tools } = await materializeTools({
+      ...CTX,
+      messageId: "msg_42",
+      userId: "u_1",
+    });
+    const t = tools[`mcp_${MCP_SERVER.id}_list_pull_requests`] as {
+      execute?: (i: unknown) => Promise<unknown>;
+    };
+    const result = await t.execute!({});
+    expect(mocks.waitForApproval).toHaveBeenCalledTimes(1);
+    expect(callsFor()).toBe(2);
+    expect(fakeExecute).not.toHaveBeenCalled();
+    expect(result).toMatch(/blocked by kill switch/);
+    const failed = mocks.insertToolInvocation.mock.calls.map(
+      (c) => (c as unknown as [Record<string, unknown>])[0],
+    );
+    expect(failed.map((r) => r.error_class)).toEqual(["KillSwitchDeniedError"]);
+  });
+});
+
 describe("materializeTools — first-use consent gate", () => {
   const MCP_SERVER = {
     id: "srv_abc",
@@ -1864,5 +2230,54 @@ describe("materializeTools — agent RBAC MCP rules (Phase 4a, spec §3.7)", () 
     expect(fakeExecute).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ data: "result" });
     expect(iamMocks.emitAudit).not.toHaveBeenCalled();
+  });
+});
+
+describe("digestInputFor", () => {
+  // The approval row and the ensuing invocation must key on the SAME value.
+  // invoke() digests cap.input.safeParse(raw).data, so an approval digested
+  // from the raw tool arguments keys on a different value whenever the schema
+  // changes the input at all -- and standingWindowMs then matches nothing, so
+  // a second person is asked to approve a call that was just approved.
+  //
+  // Each case below is a way a Zod schema changes its input. They are listed
+  // one per kind rather than as "schemas that transform", because the first
+  // version of this reasoning said "the same object is handed to invoke()"
+  // and that is true and beside the point: the kernel parses in between, so
+  // object identity at the call site says nothing about value identity at
+  // the gate.
+  const cap = (input: unknown) => ({ input }) as never;
+
+  it("applies a default the raw arguments omit", () => {
+    const schema = z.object({ a: z.string(), n: z.number().default(7) });
+    expect(digestInputFor(cap(schema), { a: "x" })).toEqual({ a: "x", n: 7 });
+  });
+
+  it("applies a coercion", () => {
+    const schema = z.object({ n: z.coerce.number() });
+    expect(digestInputFor(cap(schema), { n: "42" })).toEqual({ n: 42 });
+  });
+
+  it("applies a transform", () => {
+    const schema = z.object({ s: z.string().transform((v) => v.trim()) });
+    expect(digestInputFor(cap(schema), { s: "  hi  " })).toEqual({ s: "hi" });
+  });
+
+  it("strips a key the schema does not declare", () => {
+    const schema = z.object({ a: z.string() });
+    expect(digestInputFor(cap(schema), { a: "x", extra: 1 })).toEqual({
+      a: "x",
+    });
+  });
+
+  it("passes an already-canonical input through unchanged", () => {
+    const schema = z.object({ a: z.string() });
+    expect(digestInputFor(cap(schema), { a: "x" })).toEqual({ a: "x" });
+  });
+
+  it("falls back to the raw value when the input does not parse", () => {
+    // invoke() refuses this input, so no window is ever read for its digest.
+    const schema = z.object({ a: z.string() });
+    expect(digestInputFor(cap(schema), { a: 1 })).toEqual({ a: 1 });
   });
 });

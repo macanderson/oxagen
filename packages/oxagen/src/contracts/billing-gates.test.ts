@@ -12,13 +12,13 @@
  * unregistered fails here rather than silently leaving the list. The INV-27
  * list is complete for the billing page: WL-27, WL-28, WL-29 and WL-30 have
  * all landed (`get_gau_bucket`, `purchase_gau_bucket`, `list_invoices`,
- * `set_auto_topup`).
+ * `set_auto_topup`), and WL-67 adds the second meter's `purchase_credits`.
  */
 import { describe, expect, it } from "vitest";
 import { getCapability } from "../registry";
 import "./index";
 
-/** INV-27: the billing-page reads and the two billing writes. */
+/** INV-27: the billing-page reads and the three billing writes. */
 const BILLING_PAGE_CONTRACTS = [
   "get_subscription",
   "get_contract_rate",
@@ -26,6 +26,9 @@ const BILLING_PAGE_CONTRACTS = [
   "purchase_gau_bucket",
   "list_invoices",
   "set_auto_topup",
+  // WL-67, the second meter (§3.9): the in-app AI usage credit top-up. A
+  // prepaid org whose GAU bucket is empty must still be able to buy credits.
+  "purchase_credits",
 ] as const;
 
 /** INV-28: the §1.5 list — every rev1 invoke that is not a governed action. */
@@ -58,6 +61,16 @@ const CONSOLE_CONTRACTS = [
   "create_workspace",
   "update_workspace_settings",
   "archive_workspace",
+  // The shell's reads and its one settings write (#2968): the engine probe,
+  // the command menu, the sidebar counts, the account preferences.
+  "get_assistant_engine",
+  "search_tools",
+  "load_tools",
+  "get_nav_counts",
+  "list_recent_runs",
+  "list_notifications",
+  "mark_notification",
+  "set_preferences",
   // The #2962 lane: the Spend page's reads, its ceiling write and its
   // statement export (ADR-052 exclusion 2: reading and capping your own spend).
   "get_spend",
@@ -66,6 +79,12 @@ const CONSOLE_CONTRACTS = [
   "get_spend_budget",
   "set_spend_budget",
   "export_statement",
+  // The Audit page (#3097): reading and exporting the organization's own
+  // record. An audit trail that goes dark when the balance does is not one.
+  "query_audit_log",
+  "export_audit_events",
+  // The #3098 lane: the Skills page's one read (ADR-052 exclusion 2).
+  "list_skills",
 ] as const;
 
 /** The one rev1 governed action. */
@@ -90,6 +109,10 @@ describe("INV-28 — no console read is a governed action", () => {
 
   it(`${GOVERNED_ACTION} does not declare the flag: it is the governed action`, () => {
     expect(flagOf(GOVERNED_ACTION)).not.toBe(true);
+  });
+
+  it("ask_assistant declares the flag: the turn is free to the customer (#2968 decision 3), and each tool call inside it is its own governed action (kernel.usage-recorder.test.ts)", () => {
+    expect(flagOf("ask_assistant")).toBe(true);
   });
 
   it("the lists and the governed action are disjoint", () => {

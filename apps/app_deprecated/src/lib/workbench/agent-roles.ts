@@ -83,8 +83,6 @@ export type AgentRoleOption = {
 
 export type AgentRoleOptionsResult = {
   options: AgentRoleOption[];
-  /** True when the org tier allows custom (non-system) agent roles. */
-  customRolesAvailable: boolean;
 };
 
 // ── Candidate roles ───────────────────────────────────────────────────────────
@@ -111,18 +109,24 @@ export function fallbackSystemRoleOptions(): AgentRoleOption[] {
 }
 
 /**
- * Build the role picker's candidate list: the three system agent roles (all
- * tiers) plus the org's custom roles where the tier allows (enterprise —
- * the same canAccessACL check assign_agent_role enforces). On enterprise
- * orgs each candidate is pre-checked against the viewer's delegation
- * ceiling; on lower tiers checkIAM's human fast-path makes the ceiling
- * vacuously satisfied, mirroring the handler (not a new policy).
+ * Build the role picker's candidate list: the three system agent roles plus
+ * the org's custom roles, on every tier (ADR-069 — `assign_agent_role` no
+ * longer gates the bind on canAccessACL, so a picker that hid custom roles
+ * below enterprise would offer less than the handler accepts).
+ *
+ * The delegation-ceiling pre-check is a SEPARATE question and stays gated:
+ * `assertWithinDelegationCeiling` reads no tier and resolves the viewer
+ * through the pure resolver, so below enterprise — where checkIAM's human
+ * fast-path allows everything without consulting a grant — it would resolve
+ * an unseeded viewer to nothing and disable every option. Gating it mirrors
+ * the handler, which wraps the same call in the same check.
  */
 export async function listAgentRoleOptions(
   ctx: WorkbenchCtx,
 ): Promise<AgentRoleOptionsResult> {
   const tier = await resolveOrgTier(ctx.orgId);
-  const customRolesAvailable = canAccessACL(tier);
+  /** Only the ceiling pre-check is tier-dependent now; the options are not. */
+  const ceilingPrecheckRuns = canAccessACL(tier);
 
   const out = (await invoke(
     "list_iam_roles",
@@ -152,28 +156,27 @@ export async function listAgentRoleOptions(
     });
   }
 
-  if (customRolesAvailable) {
-    for (const row of out.roles) {
-      if (row.isSystemDefault) continue;
-      options.push({
-        roleName: row.name,
-        description:
-          row.description ??
-          "Custom role — review its grants before assigning.",
-        isSystemDefault: false,
-        scopeKind: row.scopeKind,
-        grants: row.grants,
-        grantsKnown: true,
-        resourceScope: null,
-        withinCeiling: true,
-        exceededCapabilities: [],
-      });
-    }
+  for (const row of out.roles) {
+    if (row.isSystemDefault) continue;
+    options.push({
+      roleName: row.name,
+      description:
+        row.description ?? "Custom role — review its grants before assigning.",
+      isSystemDefault: false,
+      scopeKind: row.scopeKind,
+      grants: row.grants,
+      grantsKnown: true,
+      resourceScope: null,
+      withinCeiling: true,
+      exceededCapabilities: [],
+    });
+  }
 
-    // Delegation-ceiling pre-check (enterprise only — see docstring). Uses the
-    // handler's own exported check so the disabled state can never drift from
-    // what assign_agent_role would reject. Non-fatal: an unexpected failure
-    // leaves the option enabled and lets the contract be the authority.
+  // Delegation-ceiling pre-check (enterprise only — see docstring). Uses the
+  // handler's own exported check so the disabled state can never drift from
+  // what assign_agent_role would reject. Non-fatal: an unexpected failure
+  // leaves the option enabled and lets the contract be the authority.
+  if (ceilingPrecheckRuns) {
     await runInTenantScope(
       { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
       () =>
@@ -205,7 +208,7 @@ export async function listAgentRoleOptions(
     );
   }
 
-  return { options, customRolesAvailable };
+  return { options };
 }
 
 // ── Current assignment ────────────────────────────────────────────────────────

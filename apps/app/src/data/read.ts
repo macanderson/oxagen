@@ -41,9 +41,15 @@ export type PageKey =
   | "fleet"
   | "run"
   | "agents"
+  | "onboarding"
   | "organization"
   | "billing"
   | "spend"
+  | "audit"
+  | "skills"
+  | "steering"
+  | "mandates"
+  | "tools"
   | "shell";
 
 type PageFailure = {
@@ -69,6 +75,13 @@ export const PAGE_FAILURES = {
     error: { code: "iam_principals_unavailable", status: 503 },
     permission: "agent.read",
   },
+  // The gate is a row on the organization and the first frame is the ingest's:
+  // a read that cannot answer says so rather than holding the page that
+  // carries it (#2967).
+  onboarding: {
+    error: { code: "onboarding_state_unavailable", status: 503 },
+    permission: "agent.register",
+  },
   organization: { error: CONTROL_PLANE_DOWN, permission: "org.admin" },
   billing: {
     error: { code: "stripe_unreachable", status: 502 },
@@ -79,6 +92,37 @@ export const PAGE_FAILURES = {
   spend: {
     error: { code: "rollup_rebuild_in_progress", status: 504 },
     permission: "spend.read",
+  },
+  // The organization's audit record: a member without an owner or admin role
+  // is denied rather than shown an empty record.
+  audit: {
+    error: { code: "audit_store_unavailable", status: 503 },
+    permission: "org.admin",
+  },
+  // The session inventory is a control-plane table read (tacho.sessions).
+  skills: {
+    error: { code: "session_store_unavailable", status: 503 },
+    permission: "skills.read",
+  },
+  // The published records and the proposals are one record index; a member
+  // without the workspace's steering read is denied on it.
+  steering: {
+    error: { code: "record_index_unavailable", status: 503 },
+    permission: "steering.read",
+  },
+  // The mandate ledger is read on three pages — Tools, Agents and the Fleet
+  // approval card — and names its own failure wherever it is read: a member
+  // without a finance role is denied on it, and the ledger is what is down.
+  mandates: {
+    error: { code: "mandate_ledger_unavailable", status: 503 },
+    permission: "org.billing",
+  },
+  // The registry, the credential grants and the kill switches are one read
+  // path: a member whose roles do not carry the workspace's tool read is
+  // denied on it rather than shown an empty registry (#2958).
+  tools: {
+    error: { code: "tool_registry_unavailable", status: 503 },
+    permission: "tools.read",
   },
   // The shell's one read fails with the control plane and needs organization
   // membership alone.

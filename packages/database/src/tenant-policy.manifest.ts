@@ -185,6 +185,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Both carry orgScopeMixin (org_id + workspace_id NOT NULL) → standard.
   { table: "mcp.consents", policyClass: "standard" },
   { table: "mcp.tool_snapshots", policyClass: "standard" },
+  // The credential broker's grant log (#2958): orgScopeMixin → standard.
+  { table: "mcp.credential_grants", policyClass: "standard" },
 
   // ── notification.* (org_id NOT NULL, workspace_id nullable) ──────────────
   { table: "notification.notifications", policyClass: "workspace_nullable" },
@@ -278,6 +280,11 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "evidence.retention_policy_versions", policyClass: "standard" },
   // The export job `export_run` queues (ADR-058): org_id + workspace_id NOT NULL.
   { table: "evidence.run_exports", policyClass: "standard" },
+  // Proof (ADR-064): witnesses and their verdicts, written by tacho ingest, and
+  // the workspace's disclosure grain. org_id + workspace_id NOT NULL.
+  { table: "evidence.witnesses", policyClass: "standard" },
+  { table: "evidence.verdicts", policyClass: "standard" },
+  { table: "evidence.disclosure_policies", policyClass: "standard" },
 
   // ── tools.* — mandates and their append-only ledger (ADR-059,
   //   20260915202300_mandates_and_ledger.sql). Both carry orgScopeMixin.

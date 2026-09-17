@@ -13,7 +13,9 @@
 // A run the caller's workspace does not hold is `not_found`, whichever store
 // minted its id: the ledger store fences the org through RLS and the identity
 // query fences the workspace as well, which also holds on a stack that runs
-// with the RLS bypass on.
+// with the RLS bypass on. A witness run is `not_found` to an API-key caller
+// (ADR-064): a worker holds API keys and never sees a witness or its run.
+import type { CapabilityContext } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import type { RunItem } from "@oxagen/oxagen/contracts/run.list";
 import {
@@ -29,21 +31,22 @@ import {
   ledgerEnrichment,
   type LedgerRunRecord,
   type LedgerRunRow,
-  postgresReadRunCosts,
+  postgresReadRunRollups,
   postgresRunQueries,
-  type ReadRunCosts,
-  rollupCost,
+  type ReadRunRollups,
   type RunQueries,
+  runScope,
   type RunScope,
   type TachoSessionRow,
   toLedgerRunItem,
   toTachoRunItem,
 } from "../run.list";
+import { readWitnessFor } from "./proof";
 
 /** The most frames one read of either store returns. */
 const FRAME_READ_MAX = 500;
 
-export type ResolvedRun =
+type ResolvedSource =
   | {
       source: "ledger";
       /** `agent_runs.id`. */
@@ -59,6 +62,11 @@ export type ResolvedRun =
       item: RunItem;
     };
 
+export type ResolvedRun = ResolvedSource & {
+  /** The worker run this run witnessed (ADR-064); null for any other run. */
+  witnessFor: string | null;
+};
+
 type TachoFrameReader = typeof selectTachoEvents;
 
 export type RunReadDeps = {
@@ -67,28 +75,46 @@ export type RunReadDeps = {
     "ledgerIdentity" | "ledgerRollups" | "ledgerSeals" | "tachoSession"
   >;
   store: Pick<RunStore, "getRunByPublicId" | "readAttemptEventsSince">;
-  readRunCosts: ReadRunCosts;
+  readRunRollups: ReadRunRollups;
+  /** The worker run a witness run was for (ADR-064); null for any other run. */
+  readWitnessFor: (scope: RunScope, runId: string) => Promise<string | null>;
   tachoFrames: TachoFrameReader;
 };
 
 export const runNotFound = () =>
   new HandlerError({ code: "not_found", reason: "run_not_found" });
 
-/** The run behind a public id, with its header, or `not_found`. */
+/**
+ * The run behind a public id, with its header and its witness link, or
+ * `not_found`: for a run outside the caller's workspace, and for a witness run
+ * when the caller holds an API key.
+ */
 export async function resolveRun(
+  deps: RunReadDeps,
+  ctx: CapabilityContext,
+  publicId: string,
+): Promise<ResolvedRun> {
+  const scope = runScope(ctx);
+  const run = await resolveSource(deps, scope, publicId);
+  const witnessFor = await deps.readWitnessFor(scope, publicId);
+  if (witnessFor !== null && ctx.apiKeyId !== null) throw runNotFound();
+  return { ...run, witnessFor };
+}
+
+async function resolveSource(
   deps: RunReadDeps,
   scope: RunScope,
   publicId: string,
-): Promise<ResolvedRun> {
+): Promise<ResolvedSource> {
   if (publicId.startsWith("tse_")) {
     const row = await deps.queries.tachoSession(scope, publicId);
     if (!row) throw runNotFound();
-    const costs = await deps.readRunCosts(scope, [publicId]);
+    const costs = await deps.readRunRollups(scope, [publicId]);
     return {
       source: "tacho",
       sessionUuid: row.session.sessionUuid,
       row,
-      item: toTachoRunItem(row, rollupCost(costs.get(publicId))),
+      item: toTachoRunItem(row, costs.get(publicId)),
     };
   }
   const summary = await deps.store.getRunByPublicId(publicId);
@@ -97,7 +123,7 @@ export async function resolveRun(
   if (!row) throw runNotFound();
   const [enrich, costs] = await Promise.all([
     ledgerEnrichment(deps, scope, [summary.runId]),
-    deps.readRunCosts(scope, [publicId]),
+    deps.readRunRollups(scope, [publicId]),
   ]);
   const record = enrich(row);
   return {
@@ -105,7 +131,7 @@ export async function resolveRun(
     runId: summary.runId,
     row,
     record,
-    item: toLedgerRunItem(record, rollupCost(costs.get(publicId))),
+    item: toLedgerRunItem(record, costs.get(publicId)),
   };
 }
 
@@ -198,7 +224,8 @@ export function defaultRunReadDeps(): RunReadDeps {
       readAttemptEventsSince: (id, after, limit) =>
         ledger.readAttemptEventsSince(id, after, limit),
     },
-    readRunCosts: postgresReadRunCosts,
+    readRunRollups: postgresReadRunRollups,
+    readWitnessFor,
     tachoFrames: selectTachoEvents,
   };
 }

@@ -7,6 +7,47 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@oxagen/handlers/register", () => ({}));
+
+// `auth.api_keys` is policy class `standard`, so a key minted into a real
+// workspace — every key `oxagen login` mints — was outside the org-only
+// sentinel scope these actions used to invoke with, and the handler's
+// withTenantDb lookup resolved it to undefined. The action now resolves the
+// key's own workspace first, which is what this seam answers.
+const { dbState } = vi.hoisted(() => ({
+  dbState: { rows: [] as Array<Record<string, unknown>> },
+}));
+vi.mock("@oxagen/database", () => {
+  const chain = () => {
+    const self: Record<string, unknown> = {};
+    for (const m of ["from", "innerJoin", "where", "orderBy"]) {
+      self[m] = () => self;
+    }
+    self.limit = () => Promise.resolve(dbState.rows);
+    return self;
+  };
+  return {
+    withSystemDb: vi.fn((fn: (tx: unknown) => unknown) =>
+      fn({ select: () => chain() }),
+    ),
+    schema: {
+      apiKeys: {
+        orgId: "orgId",
+        publicId: "publicId",
+        workspaceId: "workspaceId",
+        deletedAt: "deletedAt",
+      },
+      workspaces: { id: "id", orgId: "orgId", createdAt: "createdAt" },
+      workspaceUsers: { workspaceId: "workspaceId", userId: "userId" },
+    },
+  };
+});
+vi.mock("drizzle-orm", () => ({
+  and: (...a: unknown[]) => a,
+  asc: (a: unknown) => a,
+  eq: (a: unknown, b: unknown) => [a, b],
+  isNull: (a: unknown) => a,
+}));
+
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@oxagen/oxagen", () => ({ invoke: vi.fn() }));
 vi.mock("@/lib/session", () => ({ getSessionOrRedirect: vi.fn() }));
@@ -51,6 +92,7 @@ beforeEach(() => {
     slug: "acme",
   } as never);
   vi.mocked(assertOrgAdmin).mockResolvedValue(undefined);
+  dbState.rows = [{ workspaceId: "ws-1" }];
 });
 
 describe("revokeApiKeyAction", () => {
@@ -71,6 +113,26 @@ describe("revokeApiKeyAction", () => {
     );
     expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/developer/tokens");
     expect(result).toEqual({ ok: true });
+  });
+
+  it("invokes inside the key's own workspace, not the org-only sentinel", async () => {
+    mockInvoke.mockResolvedValue({ ok: true });
+    dbState.rows = [{ workspaceId: "ws-of-the-key" }];
+
+    await revokeApiKeyAction({ orgSlug: "acme", keyPublicId: "key_1" });
+
+    const ctx = mockInvoke.mock.calls[0]![2] as { workspaceId: string };
+    expect(ctx.workspaceId).toBe("ws-of-the-key");
+    expect(ctx.workspaceId).not.toBe("00000000-0000-0000-0000-000000000000");
+  });
+
+  it("reports a key that is not in this org as not found, without invoking", async () => {
+    dbState.rows = [];
+
+    await expect(
+      revokeApiKeyAction({ orgSlug: "acme", keyPublicId: "key_1" }),
+    ).rejects.toThrow(/Not found/);
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   it("denies a non-admin caller and never reaches invoke", async () => {
@@ -114,5 +176,24 @@ describe("rotateApiKeyAction", () => {
       expect.anything(),
       { surface: "agent" },
     );
+  });
+
+  it("rotates inside the rotated key's workspace, so the replacement keeps its scope", async () => {
+    mockInvoke.mockResolvedValue({ publicId: "key_2", secret: "sk_live_new" });
+    dbState.rows = [{ workspaceId: "ws-of-the-key" }];
+
+    await rotateApiKeyAction({ orgSlug: "acme", keyPublicId: "key_1" });
+
+    const ctx = mockInvoke.mock.calls[0]![2] as { workspaceId: string };
+    expect(ctx.workspaceId).toBe("ws-of-the-key");
+  });
+
+  it("reports a key that is not in this org as not found, without invoking", async () => {
+    dbState.rows = [];
+
+    await expect(
+      rotateApiKeyAction({ orgSlug: "acme", keyPublicId: "key_1" }),
+    ).rejects.toThrow(/Not found/);
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 });

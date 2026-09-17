@@ -444,3 +444,30 @@ describe("dailyTotalsFromRuns", () => {
     expect(rows.some((r) => r.groupKind === "model")).toBe(false);
   });
 });
+
+describe("proven spend by verdict (ADR-064)", () => {
+  const priced = (runId: string, verdict: string | null): RunTotalsRecord => ({
+    ...rollupRun({
+      meta: { ...meta, runId },
+      book: BOOK,
+      toolCalls: [],
+      modelCalls: [frame()],
+    }),
+    verdict,
+  });
+
+  it("credits a flipped run's spend and nothing of a tampered or failing one", () => {
+    const agentRow = (runs: RunTotalsRecord[]) =>
+      dailyTotalsFromRuns(runs).find(
+        (r) => r.groupKind === "agent" && r.groupKey === "acme.core.cc",
+      )!;
+    const flipped = priced("tse_flipped", "flipped");
+    expect(agentRow([flipped]).provenMicros).toBe(flipped.costMicros);
+    // A verdict makes the proven figure exist; only `flipped` adds to it.
+    expect(agentRow([priced("tse_tampered", "tampered")]).provenMicros).toBe(
+      0n,
+    );
+    expect(agentRow([priced("tse_failing", "failing")]).provenMicros).toBe(0n);
+    expect(agentRow([priced("tse_none", null)]).provenMicros).toBeNull();
+  });
+});

@@ -2,6 +2,7 @@
 // first, cursor-paged. The row-level mapping and the reasons every null is
 // null are on the contract (packages/oxagen/src/contracts/agent.approval.list.ts).
 import { schema, withTenantDb } from "@oxagen/database";
+import { isFloorReason } from "@oxagen/rules";
 import { and, asc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import type {
   AgentApprovalListInput,
@@ -22,6 +23,8 @@ export type ApprovalListRow = {
   requesterPublicId: string | null;
   mandatePublicId: string | null;
   ruleIds: string[];
+  autoRuleId: string | null;
+  resolvedReasons: string[];
 };
 
 /**
@@ -63,6 +66,19 @@ export function toApprovalListItem(row: ApprovalListRow): ApprovalListItem {
     createdAt: row.createdAt.toISOString(),
     expiresAt: row.expiresAt.toISOString(),
     mandateId: row.mandatePublicId,
+    // The evaluation recorded when the call was parked (ADR-070). `ok` is the
+    // evaluator's verdict, not whether the call was released: a mandate's own
+    // approval rule outranks any workspace rule, so a row here can carry
+    // `ok: true` and still be waiting for a person.
+    autoEligibility:
+      row.autoRuleId === null
+        ? null
+        : {
+            ruleId: row.autoRuleId,
+            ok: row.resolvedReasons.length === 0,
+            reasons: row.resolvedReasons,
+            floor: row.resolvedReasons.some(isFloorReason),
+          },
     chain: { agentKey: null, rule: row.ruleIds[0] ?? null },
   };
 }
@@ -100,6 +116,8 @@ export async function agentApprovalListHandler(
         requesterPublicId: schema.users.publicId,
         mandatePublicId: schema.mandates.publicId,
         ruleIds: ar.ruleIds,
+        autoRuleId: ar.autoRuleId,
+        resolvedReasons: ar.resolvedReasons,
       })
       .from(ar)
       .leftJoin(schema.mandates, eq(schema.mandates.id, ar.mandateId))

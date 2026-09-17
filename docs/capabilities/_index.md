@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**286 capabilities across 42 domains.**
+**302 capabilities across 47 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -82,6 +82,19 @@ Capabilities granted to an agent as a set have a page of their own:
 - [api.key.revoke](api.key.revoke.md) — Revoke an API key by its public ID; the key is soft-deleted and immediately invalid for all subsequent requests
 - [api.key.rotate](api.key.rotate.md) — Atomically issue a replacement API key and revoke the old one; the new raw key is shown once
 
+## Approval_rule (5)
+
+- [delete_approval_rule](delete_approval_rule.md) — Remove one auto-approval rule from the workspace's rule set
+- [get_auto_eligibility](get_auto_eligibility.md) — The auto-approval evaluation recorded for one approval request, and who resolved it
+- [list_approval_rules](list_approval_rules.md) — List the workspace's auto-approval rules, with the calls each released and held in the last 30 days
+- [set_approval_rule_enabled](set_approval_rule_enabled.md) — Switch one auto-approval rule on or off
+- [set_approval_rules](set_approval_rules.md) — Replace the workspace's auto-approval rules — the conditions under which a call a policy sent to a person may skip them
+
+## Assistant (2)
+
+- [assistant.ask](assistant.ask.md) — Take one turn with the in-app agent on stella-serve: the message appended to a conversation, the turn recorded and sealed as a run of its own, the reply returned with its run id and any governed write parked for a person
+- [assistant.engine.get](assistant.engine.get.md) — Probe the in-app agent's engine: the readiness state it reported, or unreachable after three attempts, with the host the probe was aimed at
+
 ## Asset (1)
 
 - [asset.upload](asset.upload.md) — Ingest a binary asset from a publicly reachable source URL into object storage
@@ -90,9 +103,10 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [auth.cli.authorize](auth.cli.authorize.md) — Mint the single-use PKCE authorization code that lets the Oxagen CLI obtain an API key for one org and workspace after the signed-in person consents
 
-## Audit (1)
+## Audit (2)
 
-- [audit.log.query](audit.log.query.md) — Query the org's security and automation audit events with structured filters, newest-first
+- [audit.events.export](audit.events.export.md) — Export the org's security audit events as CSV or NDJSON over the query_audit_log filters, signed with HMAC-SHA256; up to 50,000 events
+- [audit.log.query](audit.log.query.md) — Query the org's security audit events with structured filters, newest first
 
 ## Billing (15)
 
@@ -184,6 +198,10 @@ Capabilities granted to an agent as a set have a page of their own:
 - [environment.list](environment.list.md) — List the environments configured in the active workspace
 - [environment.set_default](environment.set_default.md) — Promote an environment to the workspace default via an atomic swap
 - [environment.update](environment.update.md) — Update a workspace environment's name, slug, description, or active state; the default cannot be deactivated
+
+## Evidence (1)
+
+- [evidence.disclosure_grain.set](evidence.disclosure_grain.set.md) — Set the workspace's witness disclosure grain, from L0 (the worker hears only pass or fail) to L3, recorded as a security event
 
 ## Finding (4)
 
@@ -320,7 +338,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [router.policy.set](router.policy.set.md) — Set the market-router policy for this org or workspace (partial update) — mode, thresholds, and tier-escalation; changes model spend behavior, Owner/Admin only
 - [router.stats.list](router.stats.list.md) — List observed outcomes per (task class, model) — samples, verified rate, cost, latency — plus the cheapest model currently clearing the bar per class
 
-## Run (9)
+## Run (11)
 
 - [run.bisect](run.bisect.md) — Align two runs frame by frame on each frame's kind and call identity and answer the first sequence at which they diverge, with both keys there; null when they agree throughout
 - [run.cost](run.cost.md) — Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps, model and tool calls, and the per-model and per-tool breakdown; null until the rollup has rebuilt the run from its frames
@@ -329,6 +347,8 @@ Capabilities granted to an agent as a set have a page of their own:
 - [run.frame_body.get](run.frame_body.get.md) — Read the redacted body of one frame of a run by its sequence: the content type and bytes when the workspace retained bodies, the digest and no bytes under digest_only
 - [run.get](run.get.md) — Read one run's header and one page of its frames, each with its body reference, from an opaque cursor, optionally waiting for a new frame
 - [run.list](run.list.md) — List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, status, counts and metered cost each row recorded
+- [run.proof.get](run.proof.get.md) — Read one run's proof record: every witness that reported on it with each attempt's target and head results, fingerprints and attestation, the run's verdict, the cost of each witness run, and the workspace's disclosure grain
+- [run.recent.list](run.recent.list.md) — The newest runs of this workspace for the command menu: id, agent key, status and start time, the in-app agent's own turns excluded
 - [run.summarize](run.summarize.md) — Queue a fast-tier model to read a sealed run's transcript and write its generated name and summary; refused on a live run and on a digest_only recording
 - [run.transcript.get](run.transcript.get.md) — Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies, with the cost each entry folds
 
@@ -357,6 +377,14 @@ Capabilities granted to an agent as a set have a page of their own:
 - [schema.version.diff](schema.version.diff.md) — Structural diff of two schema versions: added/removed/changed schemas, labels, types, and properties
 - [schema.version.list](schema.version.list.md) — List all schema versions with status, label, and change summary
 - [schema.version.pin](schema.version.pin.md) — Pin the workspace to a specific published schema version
+
+## Shell (1)
+
+- [shell.nav_counts.get](shell.nav_counts.get.md) — The sidebar's counts for this workspace: pending approvals, open proposals and open critical incidents, each null when its store does not exist
+
+## Skill (1)
+
+- [skill.list](skill.list.md) — List the skills this workspace's harness sessions reported when they started, over a window of session start times: each name with the sessions that reported it, their harnesses and when it was first and last seen, plus the window's session count and how many sessions reported no inventory
 
 ## Spend (4)
 
@@ -401,17 +429,25 @@ Capabilities granted to an agent as a set have a page of their own:
 - [telemetry.error.cluster](telemetry.error.cluster.md) — Cluster recent captured errors by fingerprint to see which error classes are recurring and how often across the org — the triage overview
 - [telemetry.stella.ingest](telemetry.stella.ingest.md) — Ingest an authenticated, content-free batch of Stella operational execution rollups for an explicitly enrolled Enterprise workspace
 
-## Tool (2)
+## Tool (10)
 
 - [tool.declaration.list](tool.declaration.list.md) — List the tool declarations registered in the active workspace with their pinned version facts
 - [tool.declaration.publish](tool.declaration.publish.md) — Publish a tool declaration into the workspace agent-asset registry, versioned and idempotent
+- [tool.version.list](tool.version.list.md) — List the workspace registry's active tool versions with classification, schema origin and digest, the kill switch that stops each one today, and 30-day calls; cursor-paged, filterable by consequence tag
+- [tool.classification.set](tool.classification.set.md) — Set a tool version's safety classification (risk grade, side-effect class, egress class, consequence tags, measures, data classes), recording who and why
+- [tool.import](tool.import.md) — Import a registered MCP server's pinned tools into the registry, or publish declarations against it; one immutable version per changed manifest
+- [credential.grant.list](credential.grant.list.md) — List the credential broker's grants: every credential put to use for a tool server on behalf of a run, with scope, TTL and status; never a secret
+- [kill_switch.set](kill_switch.set.md) — Flip a kill switch on or off at any level of spec §6.11; bumps the deny generation in the same transaction; a security event
+- [kill_switch.list](kill_switch.list.md) — List the kill switches reaching this workspace with the current deny generation
+- [tools.load](tools.load.md) — Return the full definitions of capabilities the in-app agent may call, by name; a name outside that set is reported as unknown
+- [tools.search](tools.search.md) — Rank-search the capabilities the in-app agent may call and the workspace's runs, agents and pending approvals; at most eight rows with ids
 
 ## User (4)
 
 - [get_workspace_user_preferences](get_workspace_user_preferences.md) — Read the calling user's per-workspace coding-agent defaults: default repo connection/slug, default environment, and whether the one-time repo-default prompt has been shown
 - [update_workspace_user_preferences](update_workspace_user_preferences.md) — Update the calling user's per-workspace coding-agent defaults (partial update); app-only surface
 - [user.preferences.read](user.preferences.read.md) — Read the calling user's UI and model preferences
-- [user.preferences.write](user.preferences.write.md) — Update the calling user's UI and model preferences (partial update)
+- [user.preferences.set](user.preferences.set.md) — Set the calling user's account preferences (locale, theme, timezone) as a partial write and return the whole set
 
 ## Workspace (11)
 

@@ -8,6 +8,7 @@ import type {
   IncidentPage,
   Toolbelt,
 } from "@/data/contracts/agents";
+import type { MandateList } from "@/data/contracts/mandates";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
 
@@ -67,7 +68,7 @@ export function agentDetail(overrides: DetailOverrides = {}): AgentDetail {
         name: "release-bot run key",
         prefix: "oxa_ag_7f",
         createdAt: "2026-09-01T10:00:00.000Z",
-        expiresAt: "2027-03-01T10:00:00.000Z",
+        expiresAt: "2099-03-01T10:00:00.000Z",
         lastUsedAt: null,
         revokedAt: null,
       },
@@ -93,7 +94,7 @@ export function agentDetail(overrides: DetailOverrides = {}): AgentDetail {
         hooksOk: null,
         bundleVersionServed: null,
         lastSeenAt: null,
-        expiresAt: "2027-09-01T10:00:00.000Z",
+        expiresAt: "2099-09-01T10:00:00.000Z",
         revokedAt: null,
       },
     ],
@@ -205,6 +206,7 @@ type AgentReads = {
   get?: Read<AgentDetail>;
   toolbelt?: Read<Toolbelt>;
   incidents?: Read<IncidentPage>;
+  mandates?: Read<MandateList>;
 };
 
 /** A DataSource answering the agents reads it was handed; `calls` records each read's arguments. */
@@ -214,6 +216,7 @@ export function agentsSource(reads: AgentReads) {
     get: [],
     toolbelt: [],
     incidents: [],
+    mandates: [],
   };
   const refuse = () => Promise.reject(new Error("not an Agents read"));
   const answer =
@@ -229,6 +232,7 @@ export function agentsSource(reads: AgentReads) {
     shell: { context: refuse },
     billing: {
       plan: refuse,
+      usageCredits: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,
@@ -241,14 +245,27 @@ export function agentsSource(reads: AgentReads) {
       toolbelt: answer(reads.toolbelt, "toolbelt"),
       incidents: answer(reads.incidents, "incidents"),
     },
+    mandates: { list: answer(reads.mandates, "mandates") },
     spend: {
       byGroup: refuse,
       fleet: refuse,
       drill: refuse,
       waste: refuse,
       budgets: refuse,
+      findings: refuse,
+      findingEvidence: refuse,
     },
-    org: { members: refuse },
+    onboarding: { state: refuse, firstFrame: refuse },
+    org: {
+      members: refuse,
+      roles: refuse,
+      workspaces: refuse,
+      apiKeys: refuse,
+    },
+    audit: { events: refuse, exportEvents: refuse },
+    skills: { inventory: refuse },
+    steering: { records: refuse, proposals: refuse, contextPr: refuse },
+    tools: { versions: refuse, grants: refuse, killSwitches: refuse },
   };
   return { source, calls };
 }

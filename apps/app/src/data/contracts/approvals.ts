@@ -12,6 +12,11 @@ export const ApprovalItem = z.object({
   agentKey: z.string().min(1).nullable(),
   /** The person whose turn parked the call. */
   requester: PublicId.nullable(),
+  /**
+   * The mandate the parked call drew on (`mnd_…`); null on a row the chat
+   * approval gate wrote, which draws on no mandate.
+   */
+  mandateId: PublicId.nullable(),
   createdAt: z.iso.datetime({ offset: true }),
   expiresAt: z.iso.datetime({ offset: true }),
 });

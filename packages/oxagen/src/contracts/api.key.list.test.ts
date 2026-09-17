@@ -67,22 +67,29 @@ describe("api.key.list capability", () => {
     expect(apiKeyList.input.parse({})).toEqual({});
   });
 
+  /** A whole item, as the contract requires every field of one. */
+  const ITEM = {
+    publicId: "aky_live",
+    name: "ci",
+    prefix: "ox_abcdefghi",
+    createdAt: "2026-09-13T10:00:00.000Z",
+    lastUsedAt: null,
+    expiresAt: null,
+    revokedAt: null,
+    rotatable: true,
+  };
+
   it("parses an item with every nullable field null and one with them set", () => {
-    const live = {
-      publicId: "aky_live",
-      name: "ci",
-      prefix: "ox_abcdefghi",
-      createdAt: "2026-09-13T10:00:00.000Z",
-      lastUsedAt: null,
-      expiresAt: null,
-      revokedAt: null,
-    };
+    const live = ITEM;
     const revoked = {
       ...live,
       publicId: "aky_old",
       lastUsedAt: "2026-09-13T11:00:00.000Z",
       expiresAt: "2027-01-01T00:00:00.000Z",
       revokedAt: "2026-09-13T12:00:00.000Z",
+      // A revoked key is never rotatable: rotate_api_key answers not-found for
+      // one, and the predicate both capabilities read says so.
+      rotatable: false,
     };
     expect(apiKeyList.output.parse({ items: [live, revoked] })).toEqual({
       items: [live, revoked],
@@ -90,15 +97,16 @@ describe("api.key.list capability", () => {
   });
 
   it("rejects an item that omits revokedAt", () => {
-    const { revokedAt: _omitted, ...missing } = {
-      publicId: "aky_live",
-      name: "ci",
-      prefix: "ox_abcdefghi",
-      createdAt: "2026-09-13T10:00:00.000Z",
-      lastUsedAt: null,
-      expiresAt: null,
-      revokedAt: null,
-    };
+    const { revokedAt: _omitted, ...missing } = ITEM;
+    expect(() => apiKeyList.output.parse({ items: [missing] })).toThrow();
+  });
+
+  it("rejects an item that omits rotatable (negative)", () => {
+    // Every field of the item is required, so a surface cannot answer a
+    // partial row and leave a caller to guess the rest. This is the test that
+    // would have caught `rotatable` arriving in the contract without reaching
+    // this file.
+    const { rotatable: _omitted, ...missing } = ITEM;
     expect(() => apiKeyList.output.parse({ items: [missing] })).toThrow();
   });
 });

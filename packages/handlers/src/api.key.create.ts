@@ -11,11 +11,12 @@
 //   5. Emit api_key.created security event (fire-and-forget).
 //   6. Return the rawKey — it will never be recoverable again.
 
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { apiKeyCreate } from "@oxagen/oxagen/contracts/api.key.create";
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
+import { and, eq } from "drizzle-orm";
 import {
   API_KEY_AUTHORIZED_ROLES as AUTHORIZED_ROLES,
   resolveActorOrgRole as resolveActorRole,
@@ -136,8 +137,77 @@ export const apiKeyCreateHandler: CapabilityHandler<
     );
   }
 
-  const [inserted] = await withTenantDb((tx) =>
-    tx
+  // Audited when the workspace lock below was added, because a blocking lock
+  // turns every check that precedes it into a check-before-wait. `rotate_api_key`
+  // needed a re-check after the lock for exactly that reason. This handler does
+  // not, and the enumeration is the argument:
+  //
+  //   - the principal, `orgId` and `workspaceId` guards read `ctx`, which is
+  //     fixed for the request;
+  //   - the four reserved-purpose refusals read `input.scope`, also fixed;
+  //   - `expiresAt` is parsed from input and never compared to the clock here,
+  //     so unlike a rotation there is no time-dependent precondition to go
+  //     stale while this transaction queues;
+  //   - the key material above is random bytes, and nothing is persisted or
+  //     returned unless the insert commits.
+  //
+  // That leaves the org role, which is read before the transaction. It can be
+  // revoked mid-request here as in every other handler in this package; the wait
+  // widens that window rather than creating it, and narrowing it belongs to
+  // whatever makes role checks transactional everywhere, not to this capability.
+  const [inserted] = await withTenantDb(async (tx) => {
+    // An archived workspace is wound down. Its existing keys keep
+    // authenticating — `resolveApiKey` never consults archival — and the
+    // Organization › API keys page lists them for exactly one reason, which it
+    // states: so they can be revoked. Minting a new one there would be fresh
+    // machine access introduced after the workspace was closed, against a page
+    // that promises the opposite.
+    //
+    // Refused the way `workspace.settings.write` refuses an edit to an
+    // archived workspace.
+    //
+    // The `.for("update")` is load-bearing; do not remove it as redundant.
+    // Being inside one transaction makes these two statements atomic with
+    // respect to *failure* — it does nothing about a concurrent writer to a
+    // row nobody locked. Postgres runs READ COMMITTED here, so an unlocked
+    // SELECT takes its snapshot at statement start and `archive_workspace`
+    // could commit in the window before the insert, which would then land in a
+    // workspace that is archived by the time it commits.
+    //
+    // The row lock closes exactly that: `archive_workspace` updates this row
+    // (`workspace.archive.ts`), so it either blocks until this transaction
+    // commits — archiving a workspace that has just issued a key, which is the
+    // honest ordering — or commits first, and this select re-reads the latest
+    // committed version, sees `archived_at` and refuses.
+    const [workspace] = await tx
+      .select({
+        name: schema.workspaces.name,
+        archivedAt: schema.workspaces.archivedAt,
+      })
+      .from(schema.workspaces)
+      .where(
+        and(
+          eq(schema.workspaces.id, ctx.workspaceId),
+          eq(schema.workspaces.orgId, ctx.orgId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!workspace) {
+      throw new HandlerError({
+        code: "not_found",
+        reason: "workspace_not_found",
+        message: "Not found: this workspace does not exist in this org",
+      });
+    }
+    if (workspace.archivedAt !== null) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "workspace_archived",
+        message: `${workspace.name} was archived on ${workspace.archivedAt.toISOString()}; a key cannot be created in an archived workspace`,
+      });
+    }
+    return tx
       .insert(schema.apiKeys)
       .values({
         orgId: ctx.orgId,
@@ -157,8 +227,8 @@ export const apiKeyCreateHandler: CapabilityHandler<
         keyPrefix: schema.apiKeys.keyPrefix,
         expiresAt: schema.apiKeys.expiresAt,
         createdAt: schema.apiKeys.createdAt,
-      }),
-  );
+      });
+  });
 
   if (!inserted) {
     throw new Error("Internal error: failed to create API key row");

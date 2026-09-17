@@ -12,8 +12,31 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { controlEnvelopeSchema, tachoBatchSchema } from "../tacho/schemas";
+import {
+  PROOF_OBSERVED_KIND,
+  proofObservedBodySchema,
+} from "@oxagen/run-evidence";
 
 const MAX_BATCH = 200;
+
+/**
+ * The batch as the host ships it, with every `proof.observed` body held to
+ * its schema (@oxagen/run-evidence, ADR-064): the leaf tacho package carries
+ * that body opaquely, so the control plane is where a malformed verdict is
+ * refused, and it refuses the whole batch at the input parse. The refinement
+ * sits on `events` so the input stays an object (v2 `ingest_frames` unions it).
+ */
+const ingestBatchSchema = tachoBatchSchema.extend({
+  events: tachoBatchSchema.shape.events.superRefine((events, ctx) => {
+    events.forEach((event, index) => {
+      if (event.kind !== PROOF_OBSERVED_KIND) return;
+      const parsed = proofObservedBodySchema.safeParse(event.body);
+      if (parsed.success) return;
+      for (const issue of parsed.error.issues)
+        ctx.addIssue({ ...issue, path: [index, "body", ...issue.path] });
+    });
+  }),
+});
 
 export const tachoEventsIngest = registerCapability({
   name: "ingest_tacho_events",
@@ -36,7 +59,7 @@ export const tachoEventsIngest = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: {},
   },
-  input: tachoBatchSchema,
+  input: ingestBatchSchema,
   output: z
     .object({
       accepted: z.number().int().min(1).max(MAX_BATCH),
