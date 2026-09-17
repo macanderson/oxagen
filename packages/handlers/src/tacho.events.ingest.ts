@@ -196,19 +196,36 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
 }
 
 /**
+ * Whether this batch carries a call made through the local MCP gateway.
+ *
+ * `recordGatewayCall` puts `oxagen.enforcement_tier: "gateway"` in the event
+ * `attrs`; the daemon's host recorder sets no identity tier, so the envelope
+ * field is empty for these (#3161, discussion_r4033641270).
+ */
+export function carriesGatewayCall(events: TachoEvent[]): boolean {
+  return events.some(
+    (event) => event.attrs?.["oxagen.enforcement_tier"] === "gateway",
+  );
+}
+
+/**
  * The enforcement tier a batch of events was produced under.
  *
  * `agent.enforcement_tier` is the envelope's own field and wins when a recorder
- * sets it. The gateway's recorder does not: `recordGatewayCall` puts
- * `oxagen.enforcement_tier: "gateway"` in the event `attrs` instead, and the
- * daemon's host recorder carries no identity tier at all — so a connected app's
- * calls were labelled with the HOST's observe/harness mode, which is the wrong
- * enforcement semantics for the one kind of call Oxagen saw directly (#3161,
- * discussion_r4033641270).
+ * sets it. Otherwise a batch carrying any gateway call is gateway-enforced.
  *
- * Reading the attr closes that without changing what any recorder signs, and it
- * stays conservative: every event in the batch must agree, so a mixed chain
- * falls through to the host's mode rather than being relabelled by one call.
+ * ## Why ANY rather than ALL
+ *
+ * The first version of this required every event in the batch to agree, which
+ * read as conservative and was in fact the bug (discussion_r4034318913). A
+ * gateway call is sealed onto the daemon's own `tachod-*` chain, whose genesis
+ * is the daemon's `agent_start` — so the batch is mixed by construction and
+ * unanimity always fell back to the host's observe/harness mode. Nothing was
+ * ever labelled `gateway`.
+ *
+ * Requiring agreement is also the wrong question. A wrapped agent's chain never
+ * carries a gateway event at all, so it keeps its harness tier either way; the
+ * only chain this can promote is one that really did serve a connected app.
  */
 export function enforcementTierOf(
   events: TachoEvent[],
@@ -216,13 +233,7 @@ export function enforcementTierOf(
 ): string {
   const declared = events[0]?.agent.enforcement_tier;
   if (declared) return declared;
-  const attrTiers = new Set(
-    events.map((event) => event.attrs?.["oxagen.enforcement_tier"]),
-  );
-  if (attrTiers.size === 1) {
-    const only = [...attrTiers][0];
-    if (only === "gateway") return only;
-  }
+  if (carriesGatewayCall(events)) return "gateway";
   return hostMode === "enforce" ? "harness" : "observe";
 }
 
@@ -546,6 +557,19 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         modelFinal: lastContext.model ?? null,
         permissionModeFinal: lastContext.permission_mode ?? null,
         gitHeadShaEnd: lastContext.git_head_sha ?? null,
+        // Carried on EVERY batch, not only the one that opened the chain.
+        //
+        // A gateway call joins the daemon's long-lived `tachod-*` chain, whose
+        // genesis row was written when the daemon started and long before any
+        // connected app called anything. Computing the tier at insert therefore
+        // never reached the row: the existing-session branch applies `common`
+        // and nothing else. The promotion belongs here, where it is applied to
+        // the chain that actually carries the call.
+        //
+        // Monotonic on purpose. Once a chain has served a connected app that
+        // fact does not stop being true, so a later batch of daemon bookkeeping
+        // must not demote it back to the host's mode.
+        ...(carriesGatewayCall(events) ? { enforcementTier: "gateway" } : {}),
         updatedAt: now,
         ...terminalColumns,
         ...increments,

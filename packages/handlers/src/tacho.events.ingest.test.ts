@@ -31,6 +31,7 @@ vi.mock("./logger", () => ({
 }));
 
 import {
+  carriesGatewayCall,
   enforcementTierOf,
   foldDelta,
   tachoEventsIngestHandler,
@@ -60,8 +61,10 @@ function unsealed(
   body: Record<string, unknown>,
   source: TachoEvent["source"] = "hook",
   label: AgentLabel = CLAUDE_CODE,
+  attrs?: Record<string, string>,
 ): UnsealedTachoEvent {
   return {
+    ...(attrs === undefined ? {} : { attrs }),
     v: "tacho/1.0",
     event_id: "evt_01ARZ3NDEKTSV4RRFFQ69G5FAV",
     session_id: "sess-1",
@@ -145,6 +148,42 @@ function session(): TachoEvent[] {
       total_cost_usd_micros: 1500,
       duration_ms: 900,
     }),
+  ]) {
+    const sealed = sealEvent(draft, cursor);
+    cursor = sealed.next;
+    out.push(sealed.event);
+  }
+  return out;
+}
+
+/**
+ * The batch shape a connected app actually produces: the daemon's own chain,
+ * with a gateway tool call sealed onto it.
+ *
+ * Mixed by construction, which is the point — the daemon's `agent_start` opens
+ * the chain long before any app calls anything.
+ */
+function gatewayBatch(): TachoEvent[] {
+  let cursor: ChainCursor = GENESIS_CURSOR;
+  const out: TachoEvent[] = [];
+  for (const draft of [
+    unsealed("agent_start", { session_start_source: "startup" }),
+    unsealed(
+      "tool_call",
+      {
+        tool_name: "query_ontology",
+        tool_use_id: "toolu_gw",
+        tool_status: "ok",
+        tool_source: "mcp",
+        mcp_server_name: "oxagen",
+      },
+      "hook",
+      CLAUDE_CODE,
+      {
+        "oxagen.connected_app": "claude-desktop",
+        "oxagen.enforcement_tier": "gateway",
+      },
+    ),
   ]) {
     const sealed = sealEvent(draft, cursor);
     cursor = sealed.next;
@@ -649,18 +688,110 @@ describe("enforcementTierOf", () => {
     ).toBe("gateway");
   });
 
-  it("falls back to the host mode for a mixed batch", () => {
-    // One gateway call does not relabel a chain that also carries hook events.
+  it("labels a MIXED batch gateway", () => {
+    // The case the first version got wrong (discussion_r4034318913). A gateway
+    // call is sealed onto the daemon's own tachod-* chain, whose genesis is the
+    // daemon's agent_start — so the batch is mixed by construction, and
+    // requiring every event to agree meant nothing was ever labelled gateway.
     expect(
       enforcementTierOf(
         [event({ attrs: { "oxagen.enforcement_tier": "gateway" } }), event()],
         "enforce",
       ),
-    ).toBe("harness");
+    ).toBe("gateway");
+  });
+
+  it("leaves a chain that carries no gateway call alone", () => {
+    // A wrapped agent's chain never carries one, so promotion cannot reach it.
+    expect(enforcementTierOf([event(), event()], "enforce")).toBe("harness");
   });
 
   it("falls back to the host mode when nothing says otherwise", () => {
     expect(enforcementTierOf([event()], "observe")).toBe("observe");
     expect(enforcementTierOf([event()], "enforce")).toBe("harness");
+  });
+});
+
+describe("carriesGatewayCall", () => {
+  const ev = (attrs: Record<string, string> = {}) =>
+    ({ agent: {}, attrs }) as never;
+
+  it("is what the existing-chain update keys on", () => {
+    // The promotion has to be applied on every batch, not computed at insert:
+    // the daemon chain's genesis row is written when the daemon starts, long
+    // before any connected app calls anything, and the existing-session branch
+    // applies only `common`. See the comment beside `common` in the handler.
+    expect(
+      carriesGatewayCall([ev(), ev({ "oxagen.enforcement_tier": "gateway" })]),
+    ).toBe(true);
+    expect(carriesGatewayCall([ev(), ev()])).toBe(false);
+    expect(carriesGatewayCall([])).toBe(false);
+  });
+
+  it("ignores a tier attr that is not the gateway's", () => {
+    expect(
+      carriesGatewayCall([ev({ "oxagen.enforcement_tier": "harness" })]),
+    ).toBe(false);
+  });
+});
+
+describe("gateway attribution reaches the chain that carries the call", () => {
+  // The finding this closes (discussion_r4034318913): computing the tier at
+  // insert never reached the row. A gateway call joins the daemon's long-lived
+  // tachod-* chain, whose genesis was written when the daemon started, so the
+  // handler takes its existing-session branch and applies only `common`.
+  it("promotes an EXISTING session's tier on the update path", async () => {
+    const db = fakeDb();
+    // The chain already exists, opened before any connected app called anything.
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "observe",
+    });
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: gatewayBatch(),
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+
+    const sessionUpdate = db.updates.find(
+      (u) => u.table === "sessions" && "enforcementTier" in u.values,
+    );
+    expect(sessionUpdate?.values["enforcementTier"]).toBe("gateway");
+    expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("gateway");
+  });
+
+  it("leaves an existing wrapped-agent chain at its own tier", async () => {
+    // No gateway event, so nothing to promote and nothing to demote.
+    const db = fakeDb();
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "harness",
+    });
+    wire(db);
+
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: session(),
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+
+    for (const update of db.updates.filter((u) => u.table === "sessions")) {
+      expect(update.values).not.toHaveProperty("enforcementTier");
+    }
+    expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("harness");
   });
 });
