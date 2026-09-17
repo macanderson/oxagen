@@ -99,6 +99,27 @@ const CLEANUP_SAMPLE_RATE = 0.01;
 const LOCAL_DENY_CACHE_MAX = 10_000;
 
 /**
+ * Whether the edge-written `x-oxagen-client-ip` header is believed, resolved
+ * from the validated env once and memoized, and read lazily for the same reason
+ * as `rateLimitBudgets()` below: importing the app must not trigger env access.
+ *
+ * Off by default. The header is trustworthy only because Caddy SETS it, and
+ * that config ships through the infra pipeline while this code ships through
+ * the application one. Until the flag is on, a caller-supplied copy of the
+ * header cannot mint a bucket of its own — every such caller collapses into the
+ * shared `ip:unverified` bucket, which is a smaller ceiling and not a larger
+ * one. See packages/oxagen/src/client-ip.ts.
+ */
+let cachedTrustEdgeHeader: boolean | null = null;
+function trustEdgeHeader(): boolean {
+  if (cachedTrustEdgeHeader !== null) return cachedTrustEdgeHeader;
+  cachedTrustEdgeHeader = requireEnv([
+    "TRUST_EDGE_CLIENT_IP_HEADER",
+  ] as const).TRUST_EDGE_CLIENT_IP_HEADER;
+  return cachedTrustEdgeHeader;
+}
+
+/**
  * Client IP for the last-resort bucket, through the shared derivation so this
  * file has no second opinion about who a caller is. It read the leftmost
  * `x-forwarded-for` entry and then `x-real-ip`, both caller-written, which let
@@ -113,6 +134,7 @@ function clientIp(c: Context<AppEnv>): string {
   return (
     extractTrustedClientIp((name) => c.req.header(name), {
       trustedProxyHops: 0,
+      trustEdgeHeader: trustEdgeHeader(),
       onVercel: process.env.VERCEL === "1",
     }) ?? "unknown"
   );
@@ -187,6 +209,7 @@ export function enrolledMachineBucketKey(c: Context<AppEnv>): string {
 export function trustedClientIpBucketKey(c: Context<AppEnv>): string {
   const ip = extractTrustedClientIp((name) => c.req.header(name), {
     trustedProxyHops: 0,
+    trustEdgeHeader: trustEdgeHeader(),
     onVercel: process.env.VERCEL === "1",
   });
   return `ip:${ip ?? "unverified"}`;
@@ -485,4 +508,14 @@ export function rateLimitBudgets(): { chat: number } {
   const env = requireEnv(["RATE_LIMIT_CHAT_PER_MIN"] as const);
   cachedBudgets = { chat: env.RATE_LIMIT_CHAT_PER_MIN };
   return cachedBudgets;
+}
+
+/**
+ * Test seam: drop the memoized env reads so a case can set a different value.
+ * The edge-header flag is the one that matters here — a case asserting the
+ * forged-header behaviour has to be able to turn it on and off.
+ */
+export function __resetRateLimitEnvForTests(): void {
+  cachedBudgets = null;
+  cachedTrustEdgeHeader = null;
 }

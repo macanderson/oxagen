@@ -52,6 +52,48 @@ caller-written copy of either exists inside the perimeter.
 
 Both, not either.
 
+**And the new header is off by default until the edge that writes it exists.**
+`TRUST_EDGE_CLIENT_IP_HEADER` defaults to `false`, and while it is false
+`x-oxagen-client-ip` is not read at all. This was added after a second review
+finding on PR #3183, described below.
+
+## Amendment, same day: the header this ADR introduced was itself spoofable
+
+The first version of this decision said the application had to be safe before
+the proxy deploy, and then shipped a reader that trusted `x-oxagen-client-ip`
+the moment it was present. Those are not compatible, and the gap between them
+was worse than the defect the ADR was written to close.
+
+The reasoning that was wrong, stated as it was stated: *config and code can land
+in either order with no regression window, because when the header is absent the
+code falls back to the hop-count walk.* That covers **absent**. It does not
+cover **present and forged**, and those are different states. The previous
+Caddyfile has no rule for `x-oxagen-client-ip` at all, so it forwards a
+caller-supplied copy straight through to the upstream — and the trusted-header
+branch runs before the fallback ever would.
+
+A forged `x-oxagen-client-ip` is a strictly worse bypass than the leftmost
+`x-forwarded-for` read this ADR replaced. The old bug at least required the
+attacker to know the proxy topology and construct a chain. The new one is
+trusted unconditionally, by name, with no chain to get right.
+
+Two shapes of fix were available. **Deploy Caddy first** is an ordering
+instruction to a human: nothing enforces it, nothing detects the other order,
+and it fails silently. That is the same class of guarantee whose loss #3186
+exists because of. **Gate the header behind a flag that is off by default** puts
+the safe state on the default path and makes the unsafe state require a
+deliberate act. We took the flag.
+
+The rollout is therefore two steps in a fixed order, with the code safe at every
+point in between and after:
+
+1. Upload and reload the Caddy config that SETS `X-Oxagen-Client-Ip`.
+2. Set `TRUST_EDGE_CLIENT_IP_HEADER=true`.
+
+Between the two, and before either, the hop-count walk decides, which is where
+the deployment already was. If the flag is never set, nothing breaks: Caddy
+rewrites `X-Forwarded-For` to a single trusted entry and the walk clamps to it.
+
 ## Alternatives
 
 **Only teach the consumers.** Narrower and it matches what the rate limiter
@@ -65,6 +107,14 @@ file that deploys through a different pipeline from the code: the Caddy config
 is uploaded by `infra/tools/install-node-scripts.sh` by hand, so there is a real
 window in which the application has shipped and the proxy has not. A mandate
 decision that is only safe when an unrelated deploy has happened is not safe.
+This paragraph was already in the first version of this ADR, and the first
+version shipped the reader it argues against.
+
+**Deploy the Caddy config before the application, as a documented order.** No
+code, no flag, and it is what the two pipelines would do if anyone remembered.
+It is a promise rather than a mechanism: nothing enforces the order, nothing
+notices the other order, and the failure is silent and exploitable for as long
+as it lasts. Rejected for the reason in the amendment above.
 
 **Rewriting the chain loses the forwarded hops.** It does. Nothing in this repo
 walks them — all four readers want a single client address — and the ALB access
@@ -84,3 +134,22 @@ logs keep the full chain for anything that later does.
   the deploy-skew window.
 - An IP-scoped mandate now denies when the caller cannot be identified. That is
   a behaviour change and the intended one.
+- `TRUST_EDGE_CLIENT_IP_HEADER` is a flag the operator must set, and until it is
+  set the edge header this ADR introduced does nothing. That is the cost of the
+  mechanical version of the invariant, and it is cheaper than a header nobody
+  can tell is forged.
+- On the pre-authentication rate-limit mounts, an ungated edge header means
+  every caller that supplies one collapses into the shared `ip:unverified`
+  bucket rather than minting a bucket per forged address. A smaller ceiling for
+  everyone, never a larger one for anybody — the same trade the fallback makes.
+- The `trustedProxyHops: 0` mounts in `distributed-rate-limit.ts` trust nothing
+  at all while the flag is off. That is deliberate: a bucket is a partition
+  rather than a permission.
+- The regression tests for this are the forged-header cases, one per surface, in
+  `packages/oxagen/src/client-ip.test.ts`, `apps/api/src/__tests__/context.test.ts`,
+  `apps/api/src/middleware/distributed-rate-limit.test.ts`,
+  `apps/mcp/src/context.test.ts`, `packages/auth/src/auth-route.test.ts` and
+  `apps/app_deprecated/src/lib/client-ip.test.ts`. Each one forges the header
+  and asserts the forged value does not reach the decision. A case asserting
+  only that the header is preferred when present passes against the
+  implementation this amendment replaced.

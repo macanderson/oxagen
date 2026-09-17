@@ -217,6 +217,17 @@ of a counter-store outage and not before. Same for Better Auth's `rateLimits`
 table usage — note the plural-table gotcha when validating against a
 prod-equivalent env.
 
+**Client-address rollout (ADR-083), two steps in this order.** The application
+believes `X-Oxagen-Client-Ip` only when `TRUST_EDGE_CLIENT_IP_HEADER=true`, and
+that header is only trustworthy once Caddy is SETting it. So: (1) upload and
+reload the Caddy config from `infra/tools/caddy/Caddyfile.alb`; (2) set
+`TRUST_EDGE_CLIENT_IP_HEADER=true` on app, api and mcp. Before either step, and
+between them, the hop-count walk of `X-Forwarded-For` decides, which is correct
+at the `TRUSTED_PROXY_HOP_COUNT` default of 2 for the ALB → Caddy shape. Doing
+step 2 first is the failure mode the flag exists to prevent: the old Caddy
+config forwards a caller-supplied copy of that header unchanged, and it feeds
+IAM `ip_ranges` evaluation.
+
 ### 4.7 Secrets — amend ADR-004
 ADR-004 chose env vars over a secret manager because there was "no GCP
 footprint elsewhere." With an AWS footprint, that reasoning inverts: use

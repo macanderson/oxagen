@@ -95,6 +95,10 @@ describe("handleAuthRequest without deps", () => {
   it("loads Better Auth and the security emitter itself", async () => {
     // The edge header, not x-real-ip: nothing in front of this process sets
     // x-real-ip, so a value under that name came from the caller (ADR-083).
+    // The header is believed only with the gate on, which is the state after
+    // the operator has deployed the Caddy config that SETS it.
+    __resetTrustedProxyHopsForTests();
+    vi.stubEnv("TRUST_EDGE_CLIENT_IP_HEADER", "true");
     const res = await handleAuthRequest(
       post("/sign-in/social", { "x-oxagen-client-ip": "198.51.100.7" }),
     );
@@ -103,6 +107,8 @@ describe("handleAuthRequest without deps", () => {
     expect(emitSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({ ip: "198.51.100.7", userAgent: null }),
     );
+    __resetTrustedProxyHopsForTests();
+    vi.unstubAllEnvs();
   });
 });
 
@@ -117,6 +123,8 @@ describe("clientAddress", () => {
   });
 
   it("prefers the address the edge wrote", () => {
+    __resetTrustedProxyHopsForTests();
+    vi.stubEnv("TRUST_EDGE_CLIENT_IP_HEADER", "true");
     expect(
       clientAddress(
         new Headers({
@@ -125,6 +133,29 @@ describe("clientAddress", () => {
         }),
       ),
     ).toBe("198.51.100.1");
+  });
+
+  // The #3183 second P1. The Caddy config that SETS this header ships through
+  // the infra pipeline; this code ships through the application one. Until it
+  // lands, the old Caddyfile has no rule for the header name and forwards a
+  // caller-supplied copy unchanged — and this value goes into an audit record
+  // naming who tried to sign in.
+  //
+  // Asserting only "the edge header wins when present" passes against the
+  // flagged implementation, so this forges it and asserts it does not land.
+  it("does not believe a forged edge header before the gate is turned on", () => {
+    expect(
+      clientAddress(new Headers({ "x-oxagen-client-ip": "198.51.100.1" })),
+    ).toBeNull();
+
+    expect(
+      clientAddress(
+        new Headers({
+          "x-oxagen-client-ip": "198.51.100.1",
+          "x-forwarded-for": "203.0.113.9, 192.0.2.5",
+        }),
+      ),
+    ).toBe("203.0.113.9");
   });
 
   // ADR-083. This stamps an auth.sign_in_failed audit record, and it read the

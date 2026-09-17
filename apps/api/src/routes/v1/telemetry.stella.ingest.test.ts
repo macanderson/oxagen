@@ -55,6 +55,7 @@ vi.mock("../../middleware/logger", () => ({
 }));
 
 import { app } from "../../app";
+import { __resetTrustedProxyHopsForTests } from "../../lib/context";
 
 const PATH = "/v1/telemetry/stella/operational";
 const KEY_ORG_ID = "11111111-1111-4111-8111-111111111111";
@@ -126,6 +127,9 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
+  // The client-IP env reads are memoized on first use; drop them so a stubbed
+  // value never leaks into the next case.
+  __resetTrustedProxyHopsForTests();
 });
 
 describe("POST /v1/telemetry/stella/operational", () => {
@@ -462,6 +466,12 @@ describe("POST /v1/telemetry/stella/operational", () => {
     // `header_up`, which replaces any copy the caller sent, and rewrites
     // x-forwarded-for to the same single value. The caller-supplied entry here
     // is what the old leftmost-entry read would have picked.
+    //
+    // The gate is on because this case models the state AFTER the Caddy config
+    // is deployed; with it off the header is ignored entirely, which is the
+    // safe default and is covered in __tests__/context.test.ts.
+    __resetTrustedProxyHopsForTests();
+    vi.stubEnv("TRUST_EDGE_CLIENT_IP_HEADER", "true");
     const response = await post(VALID_BATCH, {
       authorization: "Bearer ox_test_key",
       "x-oxagen-client-ip": "10.0.0.1",

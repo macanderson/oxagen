@@ -26,9 +26,59 @@ describe("extractTrustedClientIp", () => {
           "x-forwarded-for": "203.0.113.9, 192.0.2.5",
           "x-real-ip": "203.0.113.8",
         }),
-        { trustedProxyHops: 2 },
+        { trustedProxyHops: 2, trustEdgeHeader: true },
       ),
     ).toBe("198.51.100.1");
+  });
+
+  // The #3183 second P1. The edge header is trustworthy only because Caddy SETS
+  // it, and Caddy's config deploys through a different pipeline than this code.
+  // In the skew window the old Caddyfile has no rule for that header name and
+  // forwards a caller-supplied copy straight through.
+  //
+  // What this case has to discriminate: an implementation that reads the header
+  // whenever it is present passes a test asserting "the header is preferred".
+  // So the header here carries an address a caller would want an IAM ip_ranges
+  // allowlist to match, the flag is off, and the assertion is that the value
+  // does not come back — not merely that some other value is preferred.
+  it("does not believe a forged edge header while the gate is off", () => {
+    const forged = "198.51.100.1";
+    expect(
+      extractTrustedClientIp(reader({ [EDGE_CLIENT_IP_HEADER]: forged }), {
+        trustedProxyHops: 2,
+      }),
+    ).toBeNull();
+
+    // With a chain present the caller does not get to jump the queue either:
+    // the hop-count walk answers, and it lands on what the proxies wrote.
+    expect(
+      extractTrustedClientIp(
+        reader({
+          [EDGE_CLIENT_IP_HEADER]: forged,
+          "x-forwarded-for": "203.0.113.9, 172.31.0.4",
+        }),
+        { trustedProxyHops: 2 },
+      ),
+    ).toBe("203.0.113.9");
+
+    // Same request, gate on: this is what the operator opts into once the edge
+    // is actually replacing the header.
+    expect(
+      extractTrustedClientIp(reader({ [EDGE_CLIENT_IP_HEADER]: forged }), {
+        trustedProxyHops: 2,
+        trustEdgeHeader: true,
+      }),
+    ).toBe(forged);
+  });
+
+  // Omitting the option must be the safe state, not an unset one.
+  it("defaults the edge-header gate to off", () => {
+    expect(
+      extractTrustedClientIp(
+        reader({ [EDGE_CLIENT_IP_HEADER]: "198.51.100.1" }),
+        { trustedProxyHops: 0 },
+      ),
+    ).toBeNull();
   });
 
   // The #3183 P1 regression. Behind the ALB the leftmost x-forwarded-for entry
@@ -122,12 +172,16 @@ describe("extractTrustedClientIp", () => {
     // There is no Caddy in front of a Vercel deployment, so an edge header
     // arriving there came from the caller.
     expect(
-      extractTrustedClientIp(headers, { trustedProxyHops: 2, onVercel: true }),
+      extractTrustedClientIp(headers, {
+        trustedProxyHops: 2,
+        trustEdgeHeader: true,
+        onVercel: true,
+      }),
     ).toBe("198.51.100.1");
     expect(
       extractTrustedClientIp(
         reader({ [EDGE_CLIENT_IP_HEADER]: "203.0.113.9" }),
-        { trustedProxyHops: 2, onVercel: true },
+        { trustedProxyHops: 2, trustEdgeHeader: true, onVercel: true },
       ),
     ).toBeNull();
   });
@@ -143,6 +197,7 @@ describe("extractTrustedClientIp", () => {
       expect(
         extractTrustedClientIp(reader({ [EDGE_CLIENT_IP_HEADER]: value }), {
           trustedProxyHops: 0,
+          trustEdgeHeader: true,
         }),
       ).toBeNull();
     }

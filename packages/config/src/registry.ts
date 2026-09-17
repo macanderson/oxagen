@@ -309,13 +309,30 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "to x-forwarded-for. The client IP the IAM ip_ranges allowlist checks is the " +
       "Nth entry from the right; entries left of it are caller-supplied. Optional " +
       "— defaults to 2 (the ALB, then Caddy) in packages/config/src/env.ts. " +
-      "0 trusts only x-oxagen-client-ip.",
+      "0 trusts only x-oxagen-client-ip, and only while " +
+      "TRUST_EDGE_CLIENT_IP_HEADER is true.",
     secret: false,
     clientExposed: false,
     services: ["app", "api", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "2",
+  },
+
+  TRUST_EDGE_CLIENT_IP_HEADER: {
+    group: "Rate limiting",
+    description:
+      "Whether the x-oxagen-client-ip header written by the edge is believed. " +
+      'Optional — defaults to false. Set to "true" only AFTER the Caddy config ' +
+      "that SETS that header (infra/tools/caddy/Caddyfile.alb) is uploaded and " +
+      "reloaded; until then the old config forwards a caller-supplied copy of it " +
+      "unchanged and the value would be attacker-controlled (ADR-083).",
+    secret: false,
+    clientExposed: false,
+    services: ["app", "api", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "false",
   },
 
   // ── Error alerting (vendor-neutral outbound webhook) ────────────────────────

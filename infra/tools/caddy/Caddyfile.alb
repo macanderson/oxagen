@@ -34,7 +34,16 @@
 # `header_up` rather than appended to.
 #
 # The application reads `X-Oxagen-Client-Ip` (`extractTrustedClientIp`,
-# packages/oxagen/src/client-ip.ts). `X-Forwarded-For` is rewritten to the same
+# packages/oxagen/src/client-ip.ts) — but only once an operator has set
+# `TRUST_EDGE_CLIENT_IP_HEADER=true`, which is step 2 of the rollout and comes
+# AFTER this file is uploaded and reloaded. The flag exists because the previous
+# version of this file has no rule for that header name and forwards a
+# caller-supplied copy straight through; a reader that trusted it on sight would
+# be handed a forged address by name. Until the flag is set the application
+# falls back to the hop-count walk of `X-Forwarded-For`, which is where it
+# already was. ADR-083 carries the reasoning.
+#
+# `X-Forwarded-For` is rewritten to the same
 # value because the chain itself was the vulnerability: the ALB appends and
 # Caddy appends, neither strips an inbound copy, so the LEFTMOST entry reaching
 # an upstream is whatever the caller typed. Anything reading that entry — and

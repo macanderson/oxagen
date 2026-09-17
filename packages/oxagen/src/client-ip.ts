@@ -11,9 +11,20 @@
  *
  * Two headers are trusted, and only in the deployment shape that writes them:
  *
- *  - `x-oxagen-client-ip` on AWS. Caddy sets it with `header_up`, which
- *    REPLACES the field, so a copy the caller sent under the same name never
- *    reaches the process. See `infra/tools/caddy/Caddyfile.alb`.
+ *  - `x-oxagen-client-ip` on AWS, and only when `trustEdgeHeader` is true.
+ *    Caddy sets it with `header_up`, which REPLACES the field, so a copy the
+ *    caller sent under the same name never reaches the process. See
+ *    `infra/tools/caddy/Caddyfile.alb`. The flag exists because that Caddy
+ *    config ships through the infra pipeline and this code ships through the
+ *    application one: in the window where the code has deployed and the config
+ *    has not, the OLD Caddyfile has no rule for this header name and forwards a
+ *    caller-supplied copy unchanged. Trusting it unconditionally would hand an
+ *    attacker a by-name route into an IAM `ip_ranges` decision and into
+ *    pre-authentication rate-limit bucket keys — strictly worse than the
+ *    leftmost-`x-forwarded-for` defect this file was written to close, because
+ *    that one at least required guessing the topology. Defaulting the flag off
+ *    puts the safe state on the default path and makes enabling the header a
+ *    deliberate act the operator performs after the edge is in place.
  *  - `x-vercel-forwarded-for` on Vercel, which Vercel replaces at its own
  *    boundary. Not consulted off Vercel: there is no Caddy in front of a Vercel
  *    deployment and no Vercel edge in front of an AWS one, so each header is
@@ -81,6 +92,12 @@ export interface TrustedClientIpOptions {
    * this process rewrote the header, so no entry in it is usable.
    */
   trustedProxyHops: number;
+  /**
+   * Whether `x-oxagen-client-ip` is believed. Defaults to FALSE: the header is
+   * only trustworthy once the edge that SETS it is deployed, and that deploy is
+   * a separate manual pipeline. See the note on that header above.
+   */
+  trustEdgeHeader?: boolean;
   /** True only when running on Vercel. */
   onVercel?: boolean;
 }
@@ -91,7 +108,11 @@ export interface TrustedClientIpOptions {
  */
 export function extractTrustedClientIp(
   getHeader: HeaderReader,
-  { trustedProxyHops, onVercel = false }: TrustedClientIpOptions,
+  {
+    trustedProxyHops,
+    trustEdgeHeader = false,
+    onVercel = false,
+  }: TrustedClientIpOptions,
 ): string | null {
   if (onVercel) {
     return sanitizeClientIp(
@@ -99,8 +120,13 @@ export function extractTrustedClientIp(
     );
   }
 
-  const edge = sanitizeClientIp(getHeader(EDGE_CLIENT_IP_HEADER));
-  if (edge) return edge;
+  // Not read at all when the flag is off — not read-and-discarded. A forged
+  // `x-oxagen-client-ip` must not reach a decision, and the branch that would
+  // take it runs before the fallback.
+  if (trustEdgeHeader) {
+    const edge = sanitizeClientIp(getHeader(EDGE_CLIENT_IP_HEADER));
+    if (edge) return edge;
+  }
 
   if (trustedProxyHops > 0) {
     const chain = (getHeader("x-forwarded-for") ?? "")

@@ -17,6 +17,22 @@ function trustedProxyHops(): number {
 }
 
 /**
+ * Whether the edge-written `x-oxagen-client-ip` header is believed, resolved
+ * from the validated env once and memoized alongside the hop count. Off by
+ * default: the header is only trustworthy once the Caddy config that SETS it is
+ * deployed, and that ships through a different pipeline than this code. See
+ * packages/oxagen/src/client-ip.ts.
+ */
+let cachedTrustEdgeHeader: boolean | null = null;
+function trustEdgeHeader(): boolean {
+  if (cachedTrustEdgeHeader !== null) return cachedTrustEdgeHeader;
+  cachedTrustEdgeHeader = requireEnv([
+    "TRUST_EDGE_CLIENT_IP_HEADER",
+  ] as const).TRUST_EDGE_CLIENT_IP_HEADER;
+  return cachedTrustEdgeHeader;
+}
+
+/**
  * The client address this deployment is willing to make a decision on, read
  * from a Next.js request through the one shared derivation
  * (`@oxagen/oxagen/client-ip`, which carries the reasoning about which headers
@@ -32,6 +48,7 @@ export function requestClientIp(request: {
 }): string | null {
   return extractTrustedClientIp((name) => request.headers.get(name), {
     trustedProxyHops: trustedProxyHops(),
+    trustEdgeHeader: trustEdgeHeader(),
     onVercel: process.env.VERCEL === "1",
   });
 }
@@ -39,4 +56,5 @@ export function requestClientIp(request: {
 /** Test seam: drop the memoized hop count so a case can set a different env. */
 export function __resetTrustedProxyHopsForTests(): void {
   cachedTrustedProxyHops = null;
+  cachedTrustEdgeHeader = null;
 }

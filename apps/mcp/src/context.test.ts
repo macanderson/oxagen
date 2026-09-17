@@ -399,12 +399,40 @@ describe("extractClientIp (via buildContext clientIp extraction)", () => {
   });
 
   it("prefers the address the edge wrote", async () => {
+    // Believed only once the operator has turned the gate on, after the Caddy
+    // config that SETS the header is deployed (ADR-083).
+    vi.stubEnv("TRUST_EDGE_CLIENT_IP_HEADER", "true");
+    __resetTrustedProxyHopsForTests();
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
       "x-oxagen-client-ip": "198.51.100.1",
       "x-forwarded-for": "203.0.113.9, 192.0.2.5",
     });
     expect(ctx.clientIp).toBe("198.51.100.1");
+  });
+
+  // The #3183 second P1. Caddy's config ships through the infra pipeline and
+  // this code through the application one. Until the config lands, the old
+  // Caddyfile has no rule for x-oxagen-client-ip and forwards a caller's copy
+  // straight through, and ctx.clientIp is what the IAM ip_ranges condition
+  // ALLOWS on.
+  //
+  // A test asserting only "the edge header is preferred when present" passes
+  // against the implementation being flagged, so this one forges the header and
+  // asserts the forged value does not come back.
+  it("does not believe a forged edge header before the gate is turned on", async () => {
+    const alone = await buildContext({
+      authorization: "Bearer ox_valid",
+      "x-oxagen-client-ip": "198.51.100.1",
+    });
+    expect(alone.clientIp).toBeNull();
+
+    const withChain = await buildContext({
+      authorization: "Bearer ox_valid",
+      "x-oxagen-client-ip": "198.51.100.1",
+      "x-forwarded-for": "203.0.113.9, 172.31.0.4",
+    });
+    expect(withChain.clientIp).toBe("203.0.113.9");
   });
 
   // #3183 P1. ctx.clientIp feeds the IAM ip_ranges condition, which ALLOWS on a

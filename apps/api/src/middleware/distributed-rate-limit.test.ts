@@ -36,6 +36,7 @@ import {
   deriveBucketKey,
   rateLimitBudgets,
   trustedClientIpBucketKey,
+  __resetRateLimitEnvForTests,
 } from "./distributed-rate-limit";
 
 type FakeContextOpts = {
@@ -77,6 +78,14 @@ function scriptCount(count: number): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  __resetRateLimitEnvForTests();
+  // Most cases here model the deployment AFTER the edge is in place and the
+  // operator has turned the flag on, because that is the state the per-address
+  // bucketing is for. The gate-off state has its own block below.
+  mocks.requireEnv.mockReturnValue({
+    TRUST_EDGE_CLIENT_IP_HEADER: true,
+    RATE_LIMIT_CHAT_PER_MIN: 60,
+  });
   // Keep the opportunistic cleanup (Math.random < 0.01) from firing so
   // withSystemDb is called exactly once per counted request.
   vi.spyOn(Math, "random").mockReturnValue(0.5);
@@ -185,6 +194,54 @@ describe("pre-authentication bucket keys", () => {
     expect(compact).toBe(padded);
     expect(compact).toMatch(/^credential:[a-f0-9]{64}$/);
     expect(compact).not.toContain("secret-key");
+  });
+});
+
+// The #3183 second P1. The edge header is believed only because Caddy SETS it,
+// and Caddy's config deploys through the infra pipeline while this code deploys
+// through the application one. In the skew window the old Caddyfile has no rule
+// for that header name and forwards a caller-supplied copy unchanged.
+//
+// What these cases have to discriminate: an implementation that reads the
+// header whenever it is present passes every assertion above, because every
+// assertion above is about a header that is genuinely from the edge. So here
+// the header is forged, the flag is off, and the assertion is that the forged
+// value does NOT become a bucket of its own.
+describe("pre-authentication bucket keys with the edge header ungated", () => {
+  beforeEach(() => {
+    __resetRateLimitEnvForTests();
+    mocks.requireEnv.mockReturnValue({
+      TRUST_EDGE_CLIENT_IP_HEADER: false,
+      RATE_LIMIT_CHAT_PER_MIN: 60,
+    });
+  });
+
+  it("does not let a forged edge header mint its own bucket", () => {
+    vi.stubEnv("VERCEL", "");
+
+    // Two callers, two forged addresses, one shared ceiling — a smaller
+    // ceiling for everyone, never a larger one for anybody.
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.1" } }),
+      ),
+    ).toBe("ip:unverified");
+    expect(
+      trustedClientIpBucketKey(
+        fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.2" } }),
+      ),
+    ).toBe("ip:unverified");
+  });
+
+  it("keeps the forged header out of the deriveBucketKey fallback too", () => {
+    vi.stubEnv("VERCEL", "");
+
+    expect(
+      deriveBucketKey(
+        fakeContext({ headers: { "x-oxagen-client-ip": "198.51.100.1" } }),
+        "chat",
+      ),
+    ).toBe("chat:ip:unknown");
   });
 });
 

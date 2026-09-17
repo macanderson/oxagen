@@ -126,6 +126,7 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
   };
 
   const originalHopCount = process.env.TRUSTED_PROXY_HOP_COUNT;
+  const originalTrustEdge = process.env.TRUST_EDGE_CLIENT_IP_HEADER;
 
   /** The hop count is memoized on first read, so set it and drop the cache. */
   function setTrustedProxyHops(count: string): void {
@@ -133,14 +134,27 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
     __resetTrustedProxyHopsForTests();
   }
 
+  /** Same memoization for the edge-header gate (ADR-083). */
+  function setTrustEdgeHeader(value: "true" | "false"): void {
+    process.env.TRUST_EDGE_CLIENT_IP_HEADER = value;
+    __resetTrustedProxyHopsForTests();
+  }
+
   beforeEach(() => {
     setTrustedProxyHops("1");
+    // Default OFF, matching the env default, so every chain case below is
+    // exercised in the state the deployment is actually in before the operator
+    // turns the header on.
+    setTrustEdgeHeader("false");
   });
 
   afterEach(() => {
     if (originalHopCount === undefined)
       delete process.env.TRUSTED_PROXY_HOP_COUNT;
     else process.env.TRUSTED_PROXY_HOP_COUNT = originalHopCount;
+    if (originalTrustEdge === undefined)
+      delete process.env.TRUST_EDGE_CLIENT_IP_HEADER;
+    else process.env.TRUST_EDGE_CLIENT_IP_HEADER = originalTrustEdge;
     __resetTrustedProxyHopsForTests();
   });
 
@@ -231,7 +245,9 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
   it("prefers the address the edge wrote over any chain", async () => {
     // Caddy sets this with `header_up`, which REPLACES the field, so a copy the
     // caller sent under the same name never arrives — see ADR-083 and
-    // infra/tools/caddy/Caddyfile.alb.
+    // infra/tools/caddy/Caddyfile.alb. Believed only once the operator has
+    // turned the gate on, which is what this line represents.
+    setTrustEdgeHeader("true");
     expect(
       await clientIpFor({
         "x-oxagen-client-ip": "198.51.100.1",
@@ -239,6 +255,27 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
         "x-real-ip": "203.0.113.8",
       }),
     ).toBe("198.51.100.1");
+  });
+
+  // The #3183 second P1. Before the Caddy config lands, the OLD Caddyfile has
+  // no rule for x-oxagen-client-ip and forwards a caller's copy unchanged. This
+  // is the IAM path, so a forged value here decides an ip_ranges allowlist.
+  //
+  // The discriminating shape: the forged header names an address a caller would
+  // want allowlisted, and the chain names a different one. A test asserting only
+  // "the edge header wins when present" passes against the code being flagged;
+  // this one asserts the forged value never comes back.
+  it("does not believe a forged edge header before the gate is turned on", async () => {
+    expect(
+      await clientIpFor({ "x-oxagen-client-ip": "198.51.100.1" }),
+    ).toBeNull();
+
+    expect(
+      await clientIpFor({
+        "x-oxagen-client-ip": "198.51.100.1",
+        "x-forwarded-for": "203.0.113.9",
+      }),
+    ).toBe("203.0.113.9");
   });
 
   it("returns null when no header names the caller", async () => {
