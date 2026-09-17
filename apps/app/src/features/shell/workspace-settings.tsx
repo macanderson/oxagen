@@ -19,7 +19,7 @@
 // Every state it can be in is drawn, and none is faked: reading, no
 // installation, an unconfigured deployment, a picker over a live GitHub list,
 // a bound repository, and each refusal the three capabilities can give.
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   type SyntheticEvent,
@@ -31,9 +31,9 @@ import {
 } from "react";
 import type {
   InstallationRepositories,
-  InstallationRepository,
   WorkspaceRepository,
 } from "@/data/contracts/repository";
+import type { GitHubUrl } from "@/shared/github-url";
 import { routes, sanitizeNext } from "@/shared/safe-path";
 import {
   buttonSecondary,
@@ -251,7 +251,7 @@ function MainRepositoryPanel({
 }
 
 /** No installation is attached: the App's install door, or the honest reason there is none. */
-function InstallPanel({ installUrl }: { installUrl: string | null }) {
+function InstallPanel({ installUrl }: { installUrl: GitHubUrl | null }) {
   const t = useTranslations("workspaceSettings.mainRepository");
   return (
     <div data-testid="workspace-repository-install" className={`${panel} p-4`}>
@@ -266,7 +266,7 @@ function InstallPanel({ installUrl }: { installUrl: string | null }) {
         </p>
       ) : (
         <GitHubLink
-          to={installUrl as never}
+          to={installUrl}
           data-testid="workspace-github-install"
           data-touch-target=""
           className={`mt-3 ${buttonSecondary}`}
@@ -284,7 +284,7 @@ function BoundRepositoryPanel({
   manageUrl,
 }: {
   repository: NonNullable<WorkspaceRepository["repository"]>;
-  manageUrl: string | null;
+  manageUrl: GitHubUrl | null;
 }) {
   const t = useTranslations("workspaceSettings.mainRepository");
   return (
@@ -297,7 +297,7 @@ function BoundRepositoryPanel({
         {t("bound.defaultRef")}: <code>{repository.defaultRef}</code>
       </p>
       <p className={`mt-1 ${prose}`}>
-        <RelativeInstant iso={repository.boundAt} />
+        <BoundAt iso={repository.boundAt} />
       </p>
       {repository.htmlUrl === null ? null : (
         <GitHubLink
@@ -314,16 +314,20 @@ function BoundRepositoryPanel({
   );
 }
 
-function RelativeInstant({ iso }: { iso: string }) {
+/** When the binding was written, as a date a person reads; the machine value stays in `dateTime`. */
+function BoundAt({ iso }: { iso: string }) {
   const t = useTranslations("workspaceSettings.mainRepository");
+  const format = useFormatter();
   return (
     <time dateTime={iso} data-testid="workspace-repository-bound-at">
-      {t("bound.boundAt", { date: iso.slice(0, 10) })}
+      {t("bound.boundAt", {
+        date: format.dateTime(new Date(iso), { dateStyle: "medium" }),
+      })}
     </time>
   );
 }
 
-function ManageLink({ manageUrl }: { manageUrl: string | null }) {
+function ManageLink({ manageUrl }: { manageUrl: GitHubUrl | null }) {
   const t = useTranslations("workspaceSettings.mainRepository");
   if (manageUrl === null) return null;
   return (
@@ -348,7 +352,7 @@ function RepositoryPicker({
   org: string;
   ws: string;
   listing: Load<InstallationRepositories> | null;
-  manageUrl: string | null;
+  manageUrl: GitHubUrl | null;
   onBound: () => void;
 }) {
   const t = useTranslations("workspaceSettings.mainRepository");
@@ -362,7 +366,11 @@ function RepositoryPicker({
 
   if (listing === null || listing.kind === "loading") {
     return (
-      <p role="status" data-testid="workspace-repositories-loading" className={prose}>
+      <p
+        role="status"
+        data-testid="workspace-repositories-loading"
+        className={prose}
+      >
         {t("picker.loading")}
       </p>
     );
@@ -387,9 +395,7 @@ function RepositoryPicker({
   async function bind(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
-    const chosen = repositories.find(
-      (repository) => repository.id === picked,
-    ) as InstallationRepository | undefined;
+    const chosen = repositories.find((repository) => repository.id === picked);
     if (chosen === undefined) {
       setFailure(t("picker.none"));
       return;
@@ -423,7 +429,10 @@ function RepositoryPicker({
     >
       <h4 className={sectionTitle}>{t("picker.heading")}</h4>
       {repositories.length === 0 ? (
-        <p data-testid="workspace-repositories-empty" className={`mt-2 ${prose}`}>
+        <p
+          data-testid="workspace-repositories-empty"
+          className={`mt-2 ${prose}`}
+        >
           {t("picker.empty")}
         </p>
       ) : (
@@ -489,7 +498,10 @@ function RepositoryPicker({
         </>
       )}
       {truncated ? (
-        <p data-testid="workspace-repositories-truncated" className={`mt-3 ${prose}`}>
+        <p
+          data-testid="workspace-repositories-truncated"
+          className={`mt-3 ${prose}`}
+        >
           {t("picker.truncated")}
         </p>
       ) : null}

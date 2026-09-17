@@ -2,6 +2,7 @@
 // The sidebar (mockup `sidebar()`): brand, the organization and workspace
 // tiles, and the Workspace and Organization sections.
 import { OxagenWordmark } from "@oxagen/ui";
+import { Settings } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useId } from "react";
@@ -13,6 +14,7 @@ import {
 } from "./nav";
 import { NAV_ICONS } from "./nav-icons";
 import type { ShellData } from "./shell-data";
+import { useShellState } from "./shell-state";
 import { OrgSwitcher, WorkspaceSwitcher } from "./switchers";
 import { routes } from "@/shared/safe-path";
 import { SafeLink } from "@/ui/navigation";
@@ -89,6 +91,35 @@ export function SidebarNav({
   );
 }
 
+/**
+ * Workspace settings, beside the workspace tile it settles. The dialog it
+ * opens carries the workspace's main repository — the repository `.oxagen/`
+ * is read from — and until that is bound the workspace is provisional, so the
+ * control sits with the workspace switcher rather than in a menu. It is hidden
+ * without a workspace, exactly as the switcher is, because there would be
+ * nothing to settle.
+ */
+function WorkspaceSettingsButton({ ws }: { ws: string | null }) {
+  const t = useTranslations("workspaceSettings");
+  const { setWorkspaceSettingsOpen } = useShellState();
+  if (ws === null) return null;
+  return (
+    <button
+      type="button"
+      data-testid="open-workspace-settings"
+      data-touch-target=""
+      aria-haspopup="dialog"
+      onClick={() => {
+        setWorkspaceSettingsOpen(true);
+      }}
+      className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] font-medium text-sidebar-nav-link-fg hover:bg-sidebar-nav-link-hover-bg hover:text-sidebar-nav-link-hover-fg focus-visible:outline-2 focus-visible:outline-ring"
+    >
+      <Settings aria-hidden="true" className="size-4 flex-none opacity-85" />
+      <span className="flex-1 truncate">{t("open")}</span>
+    </button>
+  );
+}
+
 export function SidebarHeader({ data }: { data: ShellData }) {
   const { ws } = useSidebarSections(data);
   const tApp = useTranslations("app");
@@ -103,6 +134,7 @@ export function SidebarHeader({ data }: { data: ShellData }) {
       </SafeLink>
       <OrgSwitcher data={data} />
       <WorkspaceSwitcher data={data} ws={ws} />
+      <WorkspaceSettingsButton ws={ws} />
     </div>
   );
 }

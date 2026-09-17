@@ -11,6 +11,7 @@ import type { ShellData } from "./shell-data";
 import { ShellStateProvider } from "./shell-state";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
+import { WorkspaceSettingsDialog } from "./workspace-settings";
 
 export function ShellClient({ data }: { data: ShellData }) {
   useCardTables();
@@ -22,6 +23,7 @@ export function ShellClient({ data }: { data: ShellData }) {
       <NavDrawer data={data} />
       <CommandMenu data={data} />
       <AccountDialog data={data} />
+      <WorkspaceSettingsDialog data={data} />
     </ShellStateProvider>
   );
 }

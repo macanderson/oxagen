@@ -2364,6 +2364,55 @@ type Messages = {
       };
     };
   };
+  workspaceSettings: {
+    open: string;
+    title: string;
+    mainRepository: {
+      heading: string;
+      about: string;
+      loading: string;
+      connected: string;
+      install: {
+        heading: string;
+        body: string;
+        action: string;
+      };
+      unconfigured: string;
+      picker: {
+        heading: string;
+        loading: string;
+        filterLabel: string;
+        filterPlaceholder: string;
+        listLabel: string;
+        empty: string;
+        noMatch: string;
+        private: string;
+        defaultBranch: string;
+        truncated: string;
+        bind: string;
+        binding: string;
+        none: string;
+      };
+      bound: {
+        heading: string;
+        defaultRef: string;
+        boundAt: string;
+        open: string;
+        fixed: string;
+      };
+      manage: string;
+    };
+    failure: {
+      denied: string;
+      githubNotConnected: string;
+      repositoryNotInstalled: string;
+      mainRepoBound: string;
+      invalid: string;
+      pendingApproval: string;
+      refused: string;
+      unavailable: string;
+    };
+  };
 };
 
 declare module "next-intl" {
