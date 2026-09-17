@@ -761,7 +761,7 @@ describe("GET /oauth/github/callback", () => {
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
-  it("settings connect (null connectionId): stores the org token and redirects to settings/github", async () => {
+  it("settings connect (null connectionId): stores the org token and redirects to the workspace landing with the dialog params", async () => {
     mocks.fetch
       .mockResolvedValueOnce({
         ok: true,
@@ -800,8 +800,14 @@ describe("GET /oauth/github/callback", () => {
 
     expect(res.status).toBe(302);
     const location = res.headers.get("location") ?? "";
-    expect(location).toContain("/my-org/my-ws/settings/github");
-    expect(location).toContain("github_connected=1");
+    // NOT /{org}/{ws}/settings/github: apps/app has no such route, and the 308
+    // that legacy-routes.ts answers with drops the query string — a completed
+    // install used to land on Fleet with no acknowledgement. The landing route
+    // carries the params the Workspace settings dialog opens on.
+    expect(location).toBe(
+      `${APP_URL}/my-org/my-ws?settings=repository&github=connected`,
+    );
+    expect(location).not.toContain("settings/github");
     expect(location).not.toContain("connectionId");
     // Token was stored even though no connection was attached.
     expect(mocks.encrypt).toHaveBeenCalled();

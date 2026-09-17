@@ -1,0 +1,51 @@
+{
+  "workspaceSettings": {
+    "open": "Workspace settings",
+    "title": "Workspace settings",
+    "mainRepository": {
+      "heading": "Main repository",
+      "about": "The main repository is where this workspace keeps .oxagen/ — its published steering records, the promotion ledger, and every agent definition. A workspace has one, and until it is bound the workspace is provisional: runs are still recorded and spend still counts, but steering and agent definitions stay off.",
+      "loading": "Reading this workspace's main repository…",
+      "connected": "Returned from GitHub. The installation is attached to this workspace.",
+      "install": {
+        "heading": "Oxagen reaches a repository through its GitHub App",
+        "body": "No installation is attached to this workspace yet, so there is nothing to pick from. Install the App on the account that owns the repository and grant it access to that repository; GitHub sends you back here when it is done.",
+        "action": "Install the GitHub App"
+      },
+      "unconfigured": "This deployment has no GitHub App configured, so the App cannot be installed from here. An operator sets the App up before a repository can be bound.",
+      "picker": {
+        "heading": "Pick this workspace's main repository",
+        "loading": "Listing the repositories the installation reaches…",
+        "filterLabel": "Filter repositories",
+        "filterPlaceholder": "owner/name",
+        "listLabel": "Repositories the installation reaches",
+        "empty": "The installation reaches no repositories. Grant it access to one on GitHub, then reopen this panel.",
+        "noMatch": "No repository matches “{query}”.",
+        "private": "Private",
+        "defaultBranch": "default branch {ref}",
+        "truncated": "The installation reaches more repositories than this list holds, so the one you want may not be here. Narrow the App's repository access on GitHub and reopen this panel.",
+        "bind": "Bind as main repo",
+        "binding": "Binding…",
+        "none": "Choose a repository first."
+      },
+      "bound": {
+        "heading": "Bound",
+        "defaultRef": "Default branch",
+        "boundAt": "Bound {date}",
+        "open": "Open on GitHub",
+        "fixed": "Which repository is main cannot be changed here. Moving a workspace to another repository is an org owner's decision and is recorded as a security event, so it is done with the people accountable for this workspace rather than from a settings panel."
+      },
+      "manage": "Change which repositories the App reaches"
+    },
+    "failure": {
+      "denied": "Only an organization Owner or Admin can read or change this workspace's main repository.",
+      "githubNotConnected": "No GitHub App installation is attached to this workspace, so there is nothing to bind. Install the App first.",
+      "repositoryNotInstalled": "The installation cannot read that repository. Grant it access on GitHub, then try again.",
+      "mainRepoBound": "This workspace already binds a different main repository. Changing it is an org owner's decision, recorded as a security event.",
+      "invalid": "That repository name is not one GitHub accepts.",
+      "pendingApproval": "This needs a person to approve it. Request {accessRequestId} is waiting.",
+      "refused": "This was refused: {code}.",
+      "unavailable": "This could not be read from GitHub ({code}). Reopen this panel to try again."
+    }
+  }
+}

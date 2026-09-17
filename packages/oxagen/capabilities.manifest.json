@@ -3953,6 +3953,24 @@
       }
     },
     {
+      "name": "list_installation_repositories",
+      "file": "repository.installation.list.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "bind_main_repository",
       "file": "repository.main.bind.ts",
       "domain": "repository",
@@ -3963,6 +3981,24 @@
       "layers": {
         "schema": true,
         "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "get_main_repository",
+      "file": "repository.main.get.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
         "unit": true,
         "docs": true,
         "app": true

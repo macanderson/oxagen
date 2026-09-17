@@ -92,11 +92,27 @@ const ALLOWED: Record<
     if (under(target, "ui") || under(target, "shared")) return true;
     if (isVocabulary(target) || target === "data/ports") return true;
     if (target === "server/viewer" || target === "server/session") return true;
-    // `kernelWrite`, only from a "use server" module; its types from anywhere.
+    // `kernelWrite` and `kernelRead`, only from a "use server" module; their
+    // types from anywhere.
+    //
+    // `kernelRead` is here because a read that must happen ON DEMAND has
+    // nowhere else to live. A page or layout read goes through a DataSource
+    // port (§3.3) and is made when the route renders; the Workspace settings
+    // dialog is in the shell chrome, which the organization layout renders
+    // above every page, and its read is a live call to GitHub
+    // (`list_installation_repositories`). Putting that on the layout would
+    // charge every workspace page for a network round trip nobody asked for,
+    // and the shell has no ctx for a workspace-scoped contract anyway — the
+    // workspace is in the URL, which only the client knows. So the dialog asks
+    // for the record when a person opens it, through a "use server" module
+    // that resolves its own viewer, exactly as a write does. A read from a
+    // module with no directive is still refused, and so is a read that is not
+    // preceded by `requireViewer` (INV-19, actions.test.ts).
     if (target === "server/kernel") {
       return (
         edge.typeOnly ||
-        (from.directive === "use server" && onlyNames(edge, ["kernelWrite"]))
+        (from.directive === "use server" &&
+          onlyNames(edge, ["kernelWrite", "kernelRead"]))
       );
     }
     // The stream handler alone (§3.5).
