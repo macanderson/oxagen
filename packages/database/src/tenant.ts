@@ -169,10 +169,13 @@ export async function withTenantDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
  * Three properties, each of which the generated policies enforce rather than
  * this function:
  *
- *  - **Reads widen, writes do not.** `app.org_wide` appears in USING and never
- *    in WITH CHECK. The workspace GUC is empty here, so a write of a
- *    workspace-scoped row inside this seam is refused with SQLSTATE 42501. Use
- *    `withTenantDb` in the workspace's scope to write.
+ *  - **Reads widen, writes are judged by the unchanged WITH CHECK.**
+ *    `app.org_wide` appears in USING and never in WITH CHECK, and the workspace
+ *    GUC is empty here, so the only rows this seam can write are the ones whose
+ *    own `workspace_id` is NULL — an org-wide role assignment on a
+ *    `workspace_nullable` table. A row naming a workspace, or any row on a
+ *    `standard` table, is refused with SQLSTATE 42501. Write those in the
+ *    workspace's own scope through `withTenantDb`.
  *  - **The org fence is still the database's.** A row belonging to another
  *    organisation is invisible here for the same reason it is invisible in
  *    `withTenantDb`, and an omitted `eq(orgId)` predicate cannot change that.

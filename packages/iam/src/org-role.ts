@@ -15,7 +15,7 @@
 // can run the same check. `packages/handlers/src/lib/api-key-authz.ts`
 // re-exports `resolveActorOrgRole` for its existing callers.
 
-import { schema, withTenantDb, type Tx } from "@oxagen/database";
+import { schema, withOrgDb, type Tx } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import { and, eq, gt, isNull, or } from "drizzle-orm";
 
@@ -127,8 +127,16 @@ async function findAssignedRoles(
  * honors them (`isExpired` in packages/oxagen/src/iam/resolve.ts): an
  * assignment whose `expires_at` is in the past no longer grants its role.
  *
- * Runs inside the caller's tenant scope (`withTenantDb`): the kernel enters it
- * before a scoped handler runs.
+ * Runs inside the caller's tenant scope, reading ORGANISATION-WIDE
+ * (`withOrgDb`, ADR-075). Every one of the three reads below runs on org-level
+ * surfaces that carry no workspace, where `withTenantDb` now refuses a read of
+ * `iam.principals` (`workspace_nullable`) or `auth.api_keys` (`standard`)
+ * outright rather than narrowing it. The narrowing that matters is in the
+ * queries: `findActivePrincipalId` matches (org, parent_user_id,
+ * kind='human', active), which a workspace-scoped agent principal cannot
+ * satisfy, and `findAssignedRoles` pins `workspace_id IS NULL` for an org scope
+ * and `workspace_id = <the workspace>` for a workspace one. `withOrgDb`
+ * resolves the same data plane `withTenantDb` would, so nothing moves database.
  */
 export async function resolveActorOrgRole(
   orgId: string,
@@ -148,7 +156,7 @@ export async function resolveActorOrgRoles(
   orgId: string,
   userId: string,
 ): Promise<string[]> {
-  return withTenantDb(async (tx) => {
+  return withOrgDb(async (tx) => {
     const principalId = await findActivePrincipalId(tx, orgId, userId);
     if (principalId === null) return [];
     return findAssignedRoles(tx, principalId, orgId, { kind: "org" });
@@ -176,7 +184,13 @@ export async function resolveActorWorkspaceRoles(
   workspaceId: string,
   userId: string,
 ): Promise<string[]> {
-  return withTenantDb(async (tx) => {
+  // Org-wide for the same reason, and for one more: `assertOrgRole` asks for
+  // workspace roles whenever the required set names any, and an org-only ctx
+  // carries ORG_ONLY_WORKSPACE_ID rather than nothing. So this runs under an
+  // org-only scope in ordinary service. The `workspace_id = <sentinel>`
+  // predicate matches no assignment, which is the right answer — an org-only
+  // call holds no workspace role — and it is the query that says so, not RLS.
+  return withOrgDb(async (tx) => {
     const principalId = await findActivePrincipalId(tx, orgId, userId);
     if (principalId === null) return [];
     return findAssignedRoles(tx, principalId, orgId, {
@@ -205,8 +219,13 @@ export interface ActingCredential {
  * creator's current org role and no more (apps/app/ARCHITECTURE.md §9,
  * 2026-09-15; packages/handlers/src/role-check.test.ts enforces the call).
  *
- * Runs inside the caller's tenant scope: `api_keys` carries the org and
- * workspace RLS policy, and a key's context names the key's own workspace.
+ * Runs inside the caller's tenant scope, reading organisation-wide
+ * (`withOrgDb`). `auth.api_keys` is `standard`, so under an org-only scope the
+ * old tenant read answered EMPTILY and every API-key call on an org-level
+ * surface resolved to no principal and was refused `no_principal` — silently,
+ * because an empty result and a genuinely unknown key are the same answer. The
+ * key is matched on its own id with the org fence written out, and RLS still
+ * holds the org boundary.
  */
 export async function resolveActingUserId(
   ctx: ActingCredential,
@@ -214,7 +233,7 @@ export async function resolveActingUserId(
   if (ctx.userId) return ctx.userId;
   const apiKeyId = ctx.apiKeyId;
   if (!apiKeyId) return null;
-  return withTenantDb(async (tx) => {
+  return withOrgDb(async (tx) => {
     const [keyRow] = await tx
       .select({ createdById: schema.apiKeys.createdById })
       .from(schema.apiKeys)

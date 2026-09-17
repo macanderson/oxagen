@@ -19,7 +19,7 @@
 // must fail closed the same way. Run `pnpm db:migrate` to apply the IAM
 // foundation migration and clear the alert.
 
-import { withTenantDb } from "@oxagen/database";
+import { withOrgDb } from "@oxagen/database";
 import { eq, and, inArray, isNull, or, gt, sql } from "drizzle-orm";
 import { schema } from "@oxagen/database";
 import type { Grant, Role, RoleGrant, Policy } from "@oxagen/oxagen/iam";
@@ -167,12 +167,26 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
   // (principal_role_assignments) can THEMSELVES be workspace-scoped, however,
   // so we must filter those by workspaceId here — see the PRA query below.
   //
-  // IAM tables (principals, grants, roles, role_grants, policies,
-  // principal_role_assignments) have workspace_nullable RLS policies — rows
-  // where workspace_id IS NULL (org-wide IAM rows) pass through alongside
-  // current-workspace rows. All cross-workspace org-wide IAM reads (roles,
-  // policies, org-wide PRAs) therefore remain correctly visible inside
-  // withTenantDb. No query is over-filtered.
+  // The read is ORGANISATION-WIDE (withOrgDb, ADR-075), and every query below
+  // carries its own org fence or is keyed off rows that do. It has to be: this
+  // function runs on EVERY invoke(), including the org-level surfaces that
+  // carry no workspace at all, and under an org-only scope `withTenantDb` now
+  // refuses a read of any table whose policy names the workspace GUC —
+  // `iam.principals` and `iam.principal_role_assignments` are
+  // `workspace_nullable`, `auth.api_keys` is `standard`.
+  //
+  // Widening is not a behaviour change here. The workspace half of the answer
+  // is decided by the PRA query's own `workspace_id IS NULL OR workspace_id =
+  // <ctx>` predicate, which is what actually scopes a role assignment; RLS was
+  // restating it. `principals` is matched on (org, parent_user_id,
+  // kind='human'), which a workspace-scoped agent principal cannot satisfy, and
+  // `auth.api_keys` is matched on the key's own id. `iam.roles` and
+  // `iam.role_grants` are `org_only` and were never narrowed.
+  //
+  // `withOrgDb` resolves the SAME data plane `withTenantDb` would and asserts
+  // the binding the same way, so this conversion cannot move the read to a
+  // different database — the thing a conversion to `withSystemDb` silently
+  // does (ADR-074, coverage gap 4).
   const { userId, apiKeyId, orgId, workspaceId, capability } = args;
 
   // An API-key request authenticates with no session user (userId null,
@@ -182,7 +196,7 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
   // Neither a human session nor an API key — nothing to resolve.
   if (!userId && !apiKeyId) return EMPTY_AUTHZ;
 
-  return withTenantDb(async (tx) => {
+  return withOrgDb(async (tx) => {
     // ── Resolve the EFFECTIVE acting user ─────────────────────────────────────
     // Human session → the session user. API key → the user who CREATED the key
     // (api_keys.created_by_id): the key inherits its creator's role grants.

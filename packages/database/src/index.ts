@@ -16,7 +16,11 @@ export {
   ORG_ONLY_WORKSPACE_GUC,
   type Tx,
 } from "./tenant";
-export { makeWithTenantDbMock, makeWithSystemDbMock } from "./tenant.mock";
+export {
+  makeWithTenantDbMock,
+  makeWithSystemDbMock,
+  makeWithOrgDbMock,
+} from "./tenant.mock";
 // ADR-042 dedicated-plane pool lifecycle. The RESOLVER itself is not re-exported
 // here on purpose: data-plane-resolver.ts imports `schema` from this barrel, so
 // pulling it into the barrel would make the module graph cyclic. Import it from
