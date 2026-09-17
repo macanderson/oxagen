@@ -695,7 +695,7 @@ export function buildProgram(): Command {
     .option("--force", "Enroll again even if already enrolled")
     .option(
       "--harness <list>",
-      "Harnesses to hook: claude-code, codex, or claude-code,codex",
+      "Harnesses to hook: claude-code, codex, stella, or a comma list such as claude-code,stella",
     )
     .option("--verify", "Run a headless Claude Code turn afterwards")
     .action(
@@ -800,6 +800,25 @@ export function buildProgram(): Command {
       const { handleTachoVerify } = await import("./commands/tacho.js");
       if (!(await handleTachoVerify())) process.exitCode = 1;
     });
+
+  tacho
+    .command("hosts")
+    .description(
+      "Every machine enrolled in this workspace, with the enforcement tier each of its apps reaches",
+    )
+    .option("--status <state>", "active | paused | suspended | revoked")
+    .option("--limit <n>", "How many to return", (v: string) => Number(v))
+    .option("--json", "Machine-readable output")
+    .action(
+      async (opts: {
+        status?: "active" | "paused" | "suspended" | "revoked";
+        limit?: number;
+        json?: boolean;
+      }) => {
+        const { handleTachoHosts } = await import("./commands/tacho.js");
+        if (!(await handleTachoHosts(opts))) process.exitCode = 1;
+      },
+    );
 
   // ── login / logout: platform authentication ─────────────────────────────────
 

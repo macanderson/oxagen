@@ -117,6 +117,8 @@ export const workspace = {
 
   // Sessions — the chat front door (full-page conversation-sessions surface).
   sessions: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/sessions`,
+  /** The machines reporting to this workspace, and the tier of each app on them. */
+  fleet: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/fleet`,
 
   // Agents — the governed agent registry and everything an agent is bound to.
   // Three first-class pages, each a sidebar destination: Agents (the registry +

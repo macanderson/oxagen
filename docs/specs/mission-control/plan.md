@@ -8,6 +8,7 @@
 | **Builds** | a new `apps/app` (`@oxagen/app`) in `~/Projects/oxagen`; today's app moves to `apps/app_deprecated` (`@oxagen/app-deprecated`) |
 | **Source** | `2026-09-11-oxagen-mission-control-spec.md` (§3, §4, §14, §15, §19, App. A, B, F) · mockups `~/Documents/Oxagen/Mockups` (`mc.html` @ tag `mc-baseline-w3`, W1–W12) · `docs/feedback-mockups.md` · the repo at `origin/main` |
 | **Optimised for** | parallel agents: every lane owns a disjoint set of paths, and every batch lists what it waits on |
+| **Deletes** | nothing outside the new `apps/app`'s own scaffolding. Every feature spec §2.2 and App. E take off the surfaces is **de-registered, not deleted**: `DEREGISTERED.md` at the repo root records each one with its file paths, and `pnpm check:deregistered` fails the build if one of them disappears |
 
 ---
 
@@ -906,6 +907,9 @@ import { NextResponse, type NextRequest } from "next/server";
 const PUBLIC = [/^\/(login|signup|verify|two-factor|forgot-password|reset-password)(\/|$)/, /^\/invite\//, /^\/api\/auth\//, /^\/cli\/authorize/, /^\/github\/setup/];
 
 // Appendix F: every old route → the page that absorbed it, for one release. [pattern, target]
+// The redirect is what gets removed after that release, never the page file behind it:
+// `/{org}/{ws}/marketplace` and `workbench/environments` point at de-registered features
+// whose screens stay in apps/app_deprecated on purpose (spec §2.2, DEREGISTERED.md).
 const LEGACY: Array<[RegExp, (m: RegExpMatchArray) => string]> = [
   [/^\/([^/]+)\/([^/]+)\/(sessions|workbench|dashboard)\/?$/, (m) => `/${m[1]}/${m[2]}`],
   [/^\/([^/]+)\/([^/]+)\/sessions\/([^/]+)/, (m) => `/${m[1]}/${m[2]}/runs/${m[3]}`],
@@ -1018,7 +1022,7 @@ flowchart LR
 
 | Step | Work | Files |
 |---|---|---|
-| 0.1 | `git mv apps/app apps/app_deprecated`; package name `@oxagen/app-deprecated`; remove its `vercel.json` and its `test:e2e` script (the deprecated app is no longer deployed, so its e2e does not gate). | `apps/app_deprecated/**` |
+| 0.1 | `git mv apps/app apps/app_deprecated`; package name `@oxagen/app-deprecated`; remove its `vercel.json` and its `test:e2e` script (the deprecated app is no longer deployed, so its e2e does not gate). Keep its `lint` and `typecheck` tasks: it is a permanent, unrouted archive of the de-registered screens (§5 Batch 5.5, `DEREGISTERED.md`), and an archive that stops compiling is an archive nobody can restore from. | `apps/app_deprecated/**` |
 | 0.2 | Scaffold `apps/app` from §4.2–4.4; copy `turbo.json` (the build env contract) and `instrumentation.ts`; copy `serverExternalPackages` + turbopack aliases; route skeletons that render `PageState not_backed`. | `apps/app/**` |
 | 0.3 | Shared enums (`src/data/contracts/common.ts`) and the `Read<T>` type land here, so B1's L2 and L3 can start without waiting on L1. | `apps/app/src/data/**` |
 | 0.4 | Path-keyed references (verified): `vitest.workspace.ts:18` (drop `apps/app`, the app runs Vitest 5 itself); `eslint.config.mjs:28` (also ignore `apps/app_deprecated/**`); `tools/scripts/lib/next-cache-guard.ts:20` and its test; `tools/scripts/lib/env-targets.ts:32` (same Vercel project `oxagen-v2-app`); `rotate-ai-gateway-key.ts:59`; `pipeline.yml:516`, `nightly.yml:363` artifact paths. | root + `tools/**` + `.github/**` |
@@ -1097,7 +1101,7 @@ Each wired action updates `apps/app/capability-ui-map.json` with its binding, wh
 2. Flip `APP_DIR` in the three gates to `apps/app`; commit the new `capability-ui-map.json`, a regenerated `capability-ui-parity-baseline.json`, and `mobile-parity.json`; `check_manifest` e2e expectations point at the new per-page specs (§6 Q2).
 3. `pnpm gate` green; e2e green on the **live** adapter against a seeded local stack (`pnpm db:migrate`, `db:seed-platform`).
 4. Merge `app-rebuild` → `main`. The deploy pipeline builds `@oxagen/app` from `apps/app` exactly as before. Verify `app.oxagen.sh` serves `/login` and a seeded org's Fleet.
-5. One release later: delete `apps/app_deprecated`, drop its ESLint ignore and `APP_DIR` history.
+5. One release later: drop the Appendix F redirects and the `APP_DIR` history. **`apps/app_deprecated` is not deleted.** It is the only place today's marketplace, connector-setup and workbench-environments screens exist, and spec §2.2 de-registers those features without deleting them. The deprecated app stays in the workspace, unbuilt and undeployed (no `vercel.json`, no `test:e2e`), but still linted and typechecked — an excluded package rots silently, and a screen that no longer compiles has been deleted in every way that matters. `DEREGISTERED.md` records why it is there. Removing it takes an ADR that names it.
 
 ### Sizing (agent-days, rough)
 

@@ -279,6 +279,57 @@ describe("tachod", () => {
     return { handle, paths, host, log, signer };
   }
 
+  it("answers a hook while a gateway forward is still in flight", async () => {
+    // The regression this guards: every gateway call used to sit on the same
+    // serial queue as PreToolUse hooks, OTel ingestion and spool draining, and
+    // the queued task wrapped the whole remote fetch with its 30-second
+    // timeout. One connected app's slow tool call therefore stalled every
+    // wrapped agent on the machine past its 5-10 second decision budget. Put
+    // the line back on `serial.run` and this test hangs until the test timeout.
+    const plane = fakeControlPlane("etag-3");
+    let releaseForward: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      releaseForward = resolve;
+    });
+    const { handle, host } = await boot(plane, scratchPaths(), {
+      fetch: async (url, init) => {
+        if (url.includes("/mcp")) {
+          await held;
+          return {
+            ok: true,
+            status: 200,
+            text: async () =>
+              JSON.stringify({ jsonrpc: "2.0", id: 1, result: { tools: [] } }),
+          };
+        }
+        return plane.fetch(url, init);
+      },
+    });
+    const port = handle.port as number;
+
+    const forward = postHttp(port, host.local_token, "/mcp", {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/list",
+    });
+    let forwardDone = false;
+    void forward.then(() => {
+      forwardDone = true;
+    });
+
+    // The hook has to come back on its own while the forward is parked.
+    const hook = await postHttp(port, host.local_token, "/hook", {
+      session_id: "sess-concurrent",
+      hook_event_name: "SessionStart",
+      cwd: "/tmp",
+    });
+    expect(hook.status).toBe(200);
+    expect(forwardDone).toBe(false);
+
+    releaseForward?.();
+    expect((await forward).status).toBe(200);
+  });
+
   it("records a full session over http hooks and the socket, ships it, and the chains verify", async () => {
     const plane = fakeControlPlane("etag-3");
     const { handle, paths, host } = await boot(plane);

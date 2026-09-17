@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   check,
   index,
@@ -30,6 +31,19 @@ export const organizations = orgSchema.table(
     // Stores the public blob URL returned by the storage adapter (Vercel Blob).
     avatarUrl: text("avatar_url"),
     planType: text("plan_type").notNull(),
+    /**
+     * The governed-action commitment for an org with no `billing.plans` row to
+     * carry one (ADR-052 §4.2). NULL keeps the tier default — for enterprise
+     * that is `resolveActionAllowance`'s scale fallback plus its
+     * `billing_enterprise_allowance_missing` alert, because "negotiated" must
+     * never be read as "unlimited". The plan row still wins when an entitled
+     * subscription points at one; this is only the legacy tier leg's way to
+     * record a figure for an org that never went through Stripe checkout.
+     * CHECK: NULL OR >= 0.
+     */
+    negotiatedActionsAnnual: bigint("negotiated_actions_annual", {
+      mode: "bigint",
+    }),
     status: text("status").notNull(),
     // Discriminator: 'personal' = solo user, 'business' = team/company.
     // Business orgs unlock team features, billing profiles, and enterprise
@@ -56,6 +70,12 @@ export const organizations = orgSchema.table(
     typeCheck: check(
       "organizations_type_check",
       sql`${t.type} IN ('personal','business')`,
+    ),
+    // Mirrors billing.plans.included_actions_annual's own bound: a negative
+    // commitment is not a smaller one, it is a corrupt row.
+    negotiatedActionsAnnualCheck: check(
+      "organizations_negotiated_actions_annual_check",
+      sql`${t.negotiatedActionsAnnual} IS NULL OR ${t.negotiatedActionsAnnual} >= 0`,
     ),
     // NULL is valid (personal orgs and business orgs that skipped the field).
     employeeSizeCheck: check(

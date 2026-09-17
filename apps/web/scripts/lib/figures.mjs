@@ -463,6 +463,31 @@ function statusAt(row, marker, end) {
   return to <= marker.at ? "No longer holds" : "Not yet";
 }
 
+/**
+ * How close, in percent of the track, a tick may sit to the marker before its
+ * label collides with the marker's. Both labels are centred on their position
+ * and the axis is one absolutely positioned row, so nothing pushes them apart:
+ * a "Today" marker 4 percent from an "Oct" tick renders as "TodayOct". The
+ * marker wins, because it is the instant the rest of the figure is read at.
+ */
+export const MARKER_CLEARANCE = 8;
+
+/**
+ * The ticks to draw under a track: the author's, less any the marker's own
+ * label would overlap.
+ * @param {Array<{ at: number, label: string }>} ticks
+ * @param {{ at: number, label: string } | undefined} marker
+ * @param {number} start
+ * @param {number} end
+ */
+export function visibleTicks(ticks, marker, start, end) {
+  if (!marker) return ticks;
+  const markerAt = scale(marker.at, start, end);
+  return ticks.filter(
+    (t) => Math.abs(scale(t.at, start, end) - markerAt) >= MARKER_CLEARANCE,
+  );
+}
+
 export function Timeline({
   title,
   caption,
@@ -514,7 +539,7 @@ export function Timeline({
         h(
           "span",
           { className: "fig-axis" },
-          ...ticks.map((t) =>
+          ...visibleTicks(ticks, marker, start, end).map((t) =>
             h(Tick, { left: scale(t.at, start, end) }, t.label),
           ),
           marker

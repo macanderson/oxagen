@@ -1,6 +1,6 @@
 # ADR-066: Oxagen has two names, the agent control plane and agent fleet management, and the agent asks for the keys
 
-- **Status:** Accepted
+- **Status:** Accepted; the two names are superseded by ADR-067, the access rule stands
 - **Date:** 2026-09-15
 - **Owners:** Mac (positioning), platform
 - **Related:** `docs/VISION.md`, ADR-043 (Oxagen governs agents, it does not run

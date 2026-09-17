@@ -146,6 +146,10 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // Codex CLI's equivalent of CLAUDE_CONFIG_DIR: where it keeps hooks.json
   // (packages/tacho/src/host/paths.ts). That tool's contract, not ours.
   "CODEX_HOME",
+  // Stella's equivalent: the directory holding stella.toml / settings.json,
+  // where `tacho enroll --harness stella` writes its hook block
+  // (packages/tacho/src/host/paths.ts). Stella's contract, not ours.
+  "STELLA_HOME",
   "CLAUDE_CODE_BRIDGE_SESSION_ID",
   "CLAUDE_CODE_ENTRYPOINT",
   "CLAUDE_EFFORT",
@@ -178,6 +182,7 @@ export const SCHEMA_EXEMPT = new Set<string>([
   "OXAGEN_API_URL",
   "OXAGEN_APP_URL",
   "OXAGEN_DEBUG",
+  "OXAGEN_CLI_DEBUG",
   // CLI local pipeline knobs — read via process.env in the CLI turn pipeline
   // and local tooling; never validated by deployed services
   "OXAGEN_ALLOW_STDIO_MCP",
@@ -316,6 +321,27 @@ const RE_ENV_MEMBER =
 const RE_ENV_SUBSCRIPT =
   /(?:^|[^\w$])[\w$]*[Ee]nv(?:\([^()]*\))?\[\s*['"]([A-Z][A-Z0-9_]+)['"]\s*\]/g;
 
+/**
+ * `const SIGNING_SECRET_ENV = "TACHO_ENROLLMENT_SIGNING_SECRET"` — a module
+ * constant holding an env-var name, so the read below is `process.env[IDENT]`.
+ * The name is exported and reused (a handler returns it to the host as
+ * `verification_secret_env`), which is why it is a constant rather than a
+ * literal at the read. Resolving it is still static and file-local: the key is
+ * only recorded once the identifier is actually used as an env subscript, so a
+ * plain string constant that names nothing is not mistaken for a read.
+ */
+const RE_ENV_NAME_CONST =
+  /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::\s*[^=]+)?=\s*['"]([A-Z][A-Z0-9_]+)['"]/g;
+
+/**
+ * `process.env[IDENT]` — the indirect read the constant above feeds. Spelled
+ * out rather than reusing the loose `*[Ee]nv[...]` shape of the literal
+ * pattern: any object named `env` would otherwise match, and one does — the
+ * Tacho settings writer checks `settings.env[TACHO_ENROLLMENT_ENV]`, whose
+ * keys are the harness's variables, not this deployment's.
+ */
+const RE_ENV_SUBSCRIPT_IDENT = /\bprocess\.env\[\s*([A-Za-z_$][\w$]*)\s*\]/g;
+
 /** os.environ["KEY"], os.environ.get("KEY"), os.getenv("KEY"). */
 const RE_PYTHON_ENV =
   /os\.(?:environ(?:\.get)?\(?\[?|getenv\()\s*['"]([A-Z][A-Z0-9_]+)['"]/g;
@@ -432,6 +458,13 @@ export function scanSourceReferences(roots: string[]): ScanResult {
 
       const isShell = file.endsWith(".sh");
       const isPython = file.endsWith(".py");
+      // ident → env-var name, for reads that go through a module constant.
+      const envNameConsts = new Map<string, string>();
+      if (!isShell && !isPython) {
+        for (const m of content.matchAll(RE_ENV_NAME_CONST)) {
+          envNameConsts.set(m[1]!, m[2]!);
+        }
+      }
       const assigned = isShell
         ? shellAssignedNames(content)
         : new Set<string>();
@@ -459,6 +492,10 @@ export function scanSourceReferences(roots: string[]): ScanResult {
         }
         for (const m of line.matchAll(RE_ENV_MEMBER)) record(m[1]!, loc);
         for (const m of line.matchAll(RE_ENV_SUBSCRIPT)) record(m[1]!, loc);
+        for (const m of line.matchAll(RE_ENV_SUBSCRIPT_IDENT)) {
+          const key = envNameConsts.get(m[1]!);
+          if (key) record(key, loc);
+        }
       }
 
       if (isShell || isPython) continue;

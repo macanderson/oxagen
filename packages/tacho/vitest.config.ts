@@ -29,13 +29,13 @@ export default defineConfig({
       ],
       // Ratchet only: never lowered, capped at 90, with headroom below the
       // measured figure so environment noise cannot fail CI. Measured
-      // 2026-09-14 after the Codex writer, reassign, Windows service and
-      // loopback-hook tests: 95.0% lines/statements, 85.3% branches, 95.4%
+      // 2026-09-15 after the Stella writer and adapter, custom agents and
+      // the agent roster: 95.3% lines/statements, 87.3% branches, 95.7%
       // functions; lines, statements and functions sit at the cap, branches
-      // at floor(85.3 - 2.5).
+      // at floor(87.3 - 2.5).
       thresholds: {
         lines: 90,
-        branches: 82,
+        branches: 84,
         functions: 90,
         statements: 90,
       },

@@ -19,6 +19,10 @@ import {
   solveMeterMarkup,
   derivePricing,
 } from "./pricing";
+import {
+  TIER_ACTION_ALLOWANCES,
+  ENTERPRISE_FALLBACK_ALLOWANCE,
+} from "./action-metering";
 
 describe("resolveRate", () => {
   it("returns the exact rate for a known model id", () => {
@@ -293,5 +297,61 @@ describe("published GAU terms (ADR-055 §2)", () => {
     );
     expect(byTier["build"]).toBeLessThan(byTier["scale"]!);
     expect(byTier["enterprise"]).toBeGreaterThanOrEqual(byTier["scale"]!);
+  });
+});
+
+/**
+ * The governed action is the PRIMARY meter under ADR-052, and
+ * `billing.plans.included_actions_annual` is `NOT NULL DEFAULT 25000` — the
+ * FREE allowance. `billing:stripe-sync` builds its plan rows from
+ * SUBSCRIPTION_PLANS, so a plan definition that omits the figure does not fail
+ * anything: it silently creates a paid plan priced at one fifteenth of Scale's
+ * allowance, billing overage from action 25,001. These tests exist so that
+ * omission cannot happen twice.
+ */
+describe("SUBSCRIPTION_PLANS — governed-action allowances", () => {
+  it("states an allowance for every plan", () => {
+    for (const plan of SUBSCRIPTION_PLANS) {
+      expect(
+        Number.isSafeInteger(plan.includedActionsAnnual),
+        `${plan.slug} must state includedActionsAnnual`,
+      ).toBe(true);
+      expect(plan.includedActionsAnnual).toBeGreaterThan(0);
+    }
+  });
+
+  it("never leaves a paid plan on the free-tier default", () => {
+    const FREE_DEFAULT = 25_000;
+    for (const plan of SUBSCRIPTION_PLANS) {
+      expect(
+        plan.includedActionsAnnual,
+        `${plan.slug} is on the column's free-tier default`,
+      ).not.toBe(FREE_DEFAULT);
+    }
+  });
+
+  it("matches the published tier allowances, and seeds enterprise at Scale's", () => {
+    const bySlug = new Map(
+      SUBSCRIPTION_PLANS.map((p) => [p.slug, p.includedActionsAnnual]),
+    );
+    expect(bySlug.get("build-v2")).toBe(TIER_ACTION_ALLOWANCES.build);
+    expect(bySlug.get("scale-v2")).toBe(TIER_ACTION_ALLOWANCES.scale);
+    // Enterprise is negotiated per contract (spec §7.3), so the tier table
+    // carries null. The plan row seeds at Scale's figure — an unset commitment
+    // must read as neither unlimited nor free — until a signed one overwrites it.
+    expect(TIER_ACTION_ALLOWANCES.enterprise).toBeNull();
+    expect(bySlug.get("enterprise-v2")).toBe(ENTERPRISE_FALLBACK_ALLOWANCE);
+  });
+
+  it("does not shrink as the tier climbs", () => {
+    const order = ["build-v2", "scale-v2", "enterprise-v2"];
+    const figures = order.map(
+      (slug) =>
+        SUBSCRIPTION_PLANS.find((p) => p.slug === slug)
+          ?.includedActionsAnnual ?? 0,
+    );
+    for (let i = 1; i < figures.length; i += 1) {
+      expect(figures[i]).toBeGreaterThanOrEqual(figures[i - 1] as number);
+    }
   });
 });

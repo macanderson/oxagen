@@ -25,12 +25,22 @@ function isTier(value: unknown): value is PlanTier {
 export interface OrgActionEntitlement {
   tier: PlanTier;
   /**
-   * The organisation's entitled plan row as an annual figure:
-   * `included_gau_per_month × 12` (ADR-055 §2 made the published allowance
-   * monthly and WL-27 dropped `included_actions_annual` with the annual
-   * counter). Null when no subscription row answered, which means "fall back
-   * to the tier default" — never "unlimited"; `resolveActionAllowance`
-   * enforces that distinction.
+   * The organisation's entitled governed-action allowance as an annual figure,
+   * from whichever of two legs answers.
+   *
+   * The subscription leg computes `included_gau_per_month × 12`: ADR-055 §2
+   * made the published allowance monthly and WL-27 dropped
+   * `included_actions_annual` along with the annual counter, so the plan row no
+   * longer carries an annual figure to read.
+   *
+   * The legacy leg falls back to `org.organizations.negotiated_actions_annual`,
+   * which is where an enterprise organisation that never went through Stripe
+   * checkout records its commitment. Without it such an org had nowhere to put
+   * one and fell to the scale default, logging
+   * `billing_enterprise_allowance_missing` on every governed action.
+   *
+   * Null from either leg means "fall back to the tier default" — never
+   * "unlimited"; `resolveActionAllowance` enforces that distinction.
    */
   includedActionsAnnual: number | null;
 }
@@ -75,7 +85,12 @@ export async function resolveOrgActionEntitlement(
       )
       .limit(1);
     const o = await tx
-      .select({ planType: schema.organizations.planType })
+      .select({
+        planType: schema.organizations.planType,
+        // Selected from a row this query already reads, so the legacy leg costs
+        // no extra round trip on the accrual path.
+        negotiatedActionsAnnual: schema.organizations.negotiatedActionsAnnual,
+      })
       .from(schema.organizations)
       .where(eq(schema.organizations.id, orgId))
       .limit(1);
@@ -90,9 +105,35 @@ export async function resolveOrgActionEntitlement(
     };
   }
 
-  const planType = org[0]?.planType;
-  if (isTier(planType)) {
-    return { tier: planType, includedActionsAnnual: null };
+  const orgRow = org[0];
+  if (isTier(orgRow?.planType)) {
+    // `negotiated_actions_annual` is this leg's equivalent of the annual figure
+    // the subscription leg derives from `included_gau_per_month`. (It was
+    // written against the plan row's `included_actions_annual`, which WL-27
+    // dropped; the leg above now computes the annual figure from the monthly
+    // GAU allowance instead.) Without this column an enterprise organisation
+    // that never went through Stripe checkout had NOWHERE to record its
+    // commitment,
+    // so `resolveActionAllowance` fell to the scale figure and logged
+    // `billing_enterprise_allowance_missing` on every governed action —
+    // permanently, with no action an operator could take to clear it. NULL
+    // still means "fall back to the tier default", never "unlimited".
+    const negotiated = orgRow.negotiatedActionsAnnual;
+    const parsed =
+      negotiated === null || negotiated === undefined
+        ? Number.NaN
+        : Number(negotiated);
+    return {
+      tier: orgRow.planType,
+      // A non-finite or negative figure is a corrupt row, not a smaller
+      // commitment, and handing it on would put NaN into the allowance the
+      // meter compares an action count against. The DB CHECK forbids negatives;
+      // this is the belt to its braces, and it lands on the tier default —
+      // which for enterprise is the bounded fallback plus its alert, so a
+      // corrupt row under-bills visibly rather than running free.
+      includedActionsAnnual:
+        Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : null,
+    };
   }
   return { tier: "free", includedActionsAnnual: null };
 }

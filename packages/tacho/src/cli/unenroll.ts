@@ -11,9 +11,12 @@
  * idempotently for one that already went through.
  */
 import { existsSync, rmSync, unlinkSync } from "node:fs";
+import { stripClaudeDesktopConfig } from "../host/claude-desktop-writer";
 import { stripCodexHooks } from "../host/codex-writer";
+import type { McpServerEntry } from "../host/mcp-config-writer";
 import { type HostFile, readHostFile, writeHostFile } from "../host/host-file";
 import { stripTachoSettings } from "../host/settings-writer";
+import { stripStellaHooks } from "../host/stella-writer";
 import { toProtocolTimestamp } from "../timestamp";
 import {
   type CliDeps,
@@ -113,13 +116,28 @@ export async function revokeAndMark(
 
 /**
  * Remove one enrollment's hook entries from every harness file, keeping
- * every foreign entry. Codex is stripped whether or not host.json lists it:
- * a host.json lost mid-way must not leave hooks behind.
+ * every foreign entry. Codex and Stella are stripped whether or not
+ * host.json lists them: a host.json lost mid-way must not leave hooks
+ * behind. Both of Stella's files are stripped, because a `stella.toml`
+ * created after enrollment makes Stella ignore the `settings.json` Tacho
+ * wrote to, without removing the hooks from it.
  */
 export function stripEnrollmentHooks(
-  host: Pick<HostFile, "host_enrollment_id" | "displaced_env"> | undefined,
+  host:
+    | Pick<
+        HostFile,
+        "host_enrollment_id" | "displaced_env" | "displaced_mcp_servers"
+      >
+    | undefined,
   deps: CliDeps,
-): { settingsChanged: boolean; codexChanged: boolean } {
+): {
+  settingsChanged: boolean;
+  codexChanged: boolean;
+  /** The Stella files Tacho's hooks were removed from. */
+  stellaChanged: string[];
+  /** Claude Desktop's config, when our MCP server entry was removed from it. */
+  claudeDesktopChanged?: string;
+} {
   const stripped = stripTachoSettings(
     deps.readSettings(),
     host?.host_enrollment_id,
@@ -138,7 +156,44 @@ export function stripEnrollmentHooks(
       codexChanged = true;
     }
   }
-  return { settingsChanged: stripped.changed, codexChanged };
+  const stellaChanged: string[] = [];
+  for (const format of ["toml", "json"] as const) {
+    const file = deps.readStellaHooks(format);
+    if (file.text === undefined) continue;
+    const stellaStripped = stripStellaHooks(file, host?.host_enrollment_id);
+    if (stellaStripped.changed) {
+      deps.writeStellaHooks(stellaStripped.file);
+      stellaChanged.push(file.path);
+    }
+  }
+  // The connected tier (ADR-078). Removes exactly the entry enroll wrote and
+  // puts back whatever it displaced; every other MCP server the user has is
+  // left alone, including one that took our key after we wrote ours.
+  let claudeDesktopChanged: string | undefined;
+  const desktopPath = deps.paths.claudeDesktopConfig;
+  if (desktopPath !== undefined) {
+    const current = deps.readClaudeDesktopConfig();
+    if (current !== undefined) {
+      const desktopStripped = stripClaudeDesktopConfig(
+        current,
+        host?.host_enrollment_id,
+        (host?.displaced_mcp_servers?.["claude-desktop"] ?? {}) as Record<
+          string,
+          McpServerEntry
+        >,
+      );
+      if (desktopStripped.changed) {
+        deps.writeClaudeDesktopConfig(desktopStripped.config);
+        claudeDesktopChanged = desktopPath;
+      }
+    }
+  }
+  return {
+    settingsChanged: stripped.changed,
+    codexChanged,
+    stellaChanged,
+    claudeDesktopChanged,
+  };
 }
 
 export async function unenroll(
@@ -157,6 +212,15 @@ export async function unenroll(
   }
   if (stripped.codexChanged) {
     deps.out(`      removed from ${deps.paths.codexHooks} too`);
+  }
+  for (const path of stripped.stellaChanged) {
+    deps.out(`      removed from ${path} too`);
+  }
+  if (stripped.claudeDesktopChanged !== undefined) {
+    deps.out(`      removed from ${stripped.claudeDesktopChanged} too`);
+    deps.out(
+      "      Quit Claude Desktop and open it again for the change to take effect",
+    );
   }
 
   deps.out(`[2/4] Stopping the ${deps.serviceManager.kind} service`);

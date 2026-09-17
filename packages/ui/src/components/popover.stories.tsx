@@ -38,3 +38,29 @@ export const Default: Story = {
     </Popover>
   ),
 };
+
+/**
+ * Open by default, so the popup, title, description and field row are visible
+ * in the catalog and verifiable by design-sync's oracle.
+ */
+export const Open: Story = {
+  render: () => (
+    <Popover defaultOpen>
+      <PopoverTrigger
+        render={<Button variant="outline">Open popover</Button>}
+      />
+      <PopoverPopup className="w-72">
+        <PopoverTitle>Dimensions</PopoverTitle>
+        <PopoverDescription>Set the layout dimensions.</PopoverDescription>
+        <div className="mt-3 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="width-open" className="w-16">
+              Width
+            </Label>
+            <Input id="width-open" defaultValue="100%" size="sm" />
+          </div>
+        </div>
+      </PopoverPopup>
+    </Popover>
+  ),
+};

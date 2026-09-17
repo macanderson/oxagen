@@ -13,7 +13,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 interface TxState {
   subRows: { tier: string; includedGauPerMonth: number }[];
-  orgRows: { planType: string | null }[];
+  orgRows: {
+    planType: string | null;
+    negotiatedActionsAnnual?: bigint | number | null;
+  }[];
   dbCalls: number;
 }
 
@@ -58,7 +61,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 const { resolveOrgActionEntitlement, publishedAllowanceForTier } = await import(
   "./plan-allowance"
 );
-const { TIER_ACTION_ALLOWANCES } = await import("./action-metering");
+const {
+  TIER_ACTION_ALLOWANCES,
+  resolveActionAllowance,
+  ENTERPRISE_FALLBACK_ALLOWANCE,
+} = await import("./action-metering");
 const { ENTITLED_SUBSCRIPTION_STATUSES } = await import("./tier");
 
 beforeEach(() => {
@@ -111,6 +118,77 @@ describe("resolveOrgActionEntitlement", () => {
     txState.orgRows = [{ planType: "scale" }];
     const result = await resolveOrgActionEntitlement("org-1");
     expect(result).toEqual({ tier: "scale", includedActionsAnnual: null });
+  });
+
+  // ── The legacy leg's own allowance column ────────────────────────────────
+  //
+  // Before this column existed the legacy leg returned null unconditionally, so
+  // an enterprise org that never went through Stripe checkout had no way at all
+  // to record its commitment: resolveActionAllowance fell to the scale figure
+  // and logged `billing_enterprise_allowance_missing` on EVERY governed action,
+  // permanently, with nothing an operator could do about it.
+
+  it("reads negotiated_actions_annual on the legacy leg", async () => {
+    txState.subRows = [];
+    txState.orgRows = [
+      { planType: "enterprise", negotiatedActionsAnnual: 25_000_000n },
+    ];
+    const result = await resolveOrgActionEntitlement("org-1");
+    expect(result).toEqual({
+      tier: "enterprise",
+      includedActionsAnnual: 25_000_000,
+    });
+  });
+
+  it("treats a null negotiated figure as 'use the tier default', never 'unlimited'", async () => {
+    txState.subRows = [];
+    txState.orgRows = [
+      { planType: "enterprise", negotiatedActionsAnnual: null },
+    ];
+    const result = await resolveOrgActionEntitlement("org-1");
+    expect(result).toEqual({ tier: "enterprise", includedActionsAnnual: null });
+    // And the allowance resolver still refuses to read that as unlimited.
+    expect(
+      resolveActionAllowance("enterprise", result.includedActionsAnnual),
+    ).toBe(ENTERPRISE_FALLBACK_ALLOWANCE);
+  });
+
+  it("accepts a recorded zero — a commitment of no included actions is a real one", async () => {
+    txState.subRows = [];
+    txState.orgRows = [{ planType: "enterprise", negotiatedActionsAnnual: 0n }];
+    const result = await resolveOrgActionEntitlement("org-1");
+    expect(result).toEqual({ tier: "enterprise", includedActionsAnnual: 0 });
+  });
+
+  it("lands on the tier default when the column is absent from the row", async () => {
+    // A row shape missing the column (an older read path, a partial select)
+    // must not become NaN in the figure the meter compares an action count to.
+    txState.subRows = [];
+    txState.orgRows = [{ planType: "enterprise" }];
+    const result = await resolveOrgActionEntitlement("org-1");
+    expect(result).toEqual({ tier: "enterprise", includedActionsAnnual: null });
+  });
+
+  it("rejects a corrupt negative figure rather than passing it to the meter", async () => {
+    txState.subRows = [];
+    txState.orgRows = [
+      { planType: "enterprise", negotiatedActionsAnnual: -5n },
+    ];
+    const result = await resolveOrgActionEntitlement("org-1");
+    expect(result).toEqual({ tier: "enterprise", includedActionsAnnual: null });
+  });
+
+  it("does not let the legacy allowance override a plan row a customer is paying for", async () => {
+    // 125,000 GAU/month is 1,500,000 a year: the subscription leg derives the
+    // annual figure from the monthly allowance since WL-27 dropped
+    // `included_actions_annual`. The figure is what this test is about, so it
+    // is stated as the monthly one that produces the same annual total.
+    txState.subRows = [{ tier: "scale", includedGauPerMonth: 125_000 }];
+    txState.orgRows = [
+      { planType: "enterprise", negotiatedActionsAnnual: 99_000_000n },
+    ];
+    const result = await resolveOrgActionEntitlement("org-1");
+    expect(result).toEqual({ tier: "scale", includedActionsAnnual: 1_500_000 });
   });
 
   it("falls through to free when the subscription's tier is unrecognised, rather than trusting it", async () => {

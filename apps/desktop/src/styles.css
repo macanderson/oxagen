@@ -87,6 +87,11 @@ code,
   font-size: 12px;
 }
 
+.guide-link {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 /* The update control: a caption ("up to date", "v2.2.0 available") and one
    small button, on the masthead so it never competes with a panel's action. */
 .masthead .updates {
@@ -382,6 +387,7 @@ a {
 
 .agent {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 9px 12px;
@@ -400,10 +406,46 @@ a {
   color: var(--muted);
   font-size: 12.5px;
   flex: 1;
+  min-width: 160px;
 }
 
 .agent.absent .name {
   color: var(--dim);
+}
+
+/* Health is named, never colour-only: the badge's text is the state. Shape
+   (border style) is the second channel, so it still reads if colour fails. */
+.badge {
+  display: inline-block;
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 12px;
+  font-weight: var(--ox-weight-ui);
+  border: 1px solid var(--rule);
+  color: var(--muted);
+}
+
+.badge.health-healthy {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+.badge.health-idle,
+.badge.health-not_wrapped {
+  color: var(--dim);
+  border-style: dashed;
+}
+
+.badge.health-pending {
+  color: var(--muted);
+  border-style: dashed;
+}
+
+.badge.health-degraded,
+.badge.health-down {
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .result {

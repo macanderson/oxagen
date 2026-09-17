@@ -3,6 +3,15 @@
 import * as React from "react";
 import { CreditCard, CheckCircle2, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+// Deep subpath, not the "." barrel. `@oxagen/billing`'s index re-exports the
+// Stripe client, the dunning/receipt mailers and the DB-backed webhook surface,
+// so importing a VALUE from the barrel in a client component drags `postgres`
+// and `nodemailer` into the browser graph and the Next build fails to resolve
+// `tls` / `net` / `dns`. `src/pricing.ts` is a leaf — its only import is
+// `@oxagen/config/env`, which is zod and nothing else — so the catalogue can be
+// read here directly instead of being mirrored as a literal (which is the drift
+// this card is being fixed for).
+import { SUBSCRIPTION_PLANS } from "@oxagen/billing/pricing";
 import { changePlanAction } from "@/app/[orgSlug]/billing/actions";
 import { cn } from "@/lib/utils";
 
@@ -15,35 +24,65 @@ export interface BillingUpgradeInlineProps {
 
 type FormState = "idle" | "submitting" | "success" | "error";
 
-const PLANS = [
-  {
-    slug: "build",
-    label: "Build",
-    price: "$20/mo",
-    description: "For individuals and small teams",
-  },
-  {
-    slug: "scale",
-    label: "Scale",
-    price: "$99/mo",
-    description: "For growing teams",
-  },
-  {
-    slug: "enterprise",
-    label: "Enterprise",
-    price: "$500/mo",
-    description: "For large organizations with ACLs",
-  },
-] as const;
+/**
+ * Per-tier blurb. Keyed by `tier`, not by slug, so a versioned slug bump
+ * (`build-v2` → `build-v3`) does not silently drop a plan's description.
+ */
+const PLAN_DESCRIPTIONS: Record<string, string> = {
+  build: "For individuals and small teams",
+  scale: "For growing teams",
+  enterprise: "For large organizations with ACLs",
+};
 
-type PlanSlug = (typeof PLANS)[number]["slug"];
+/**
+ * The purchasable plans, derived from `SUBSCRIPTION_PLANS` in `@oxagen/billing`
+ * — the single source of truth `billing:stripe-sync` reconciles Stripe and
+ * `billing.plans` against.
+ *
+ * This list used to be hand-written, and both halves of it had gone stale: it
+ * offered the slugs `build` / `scale` / `enterprise`, which no `billing.plans`
+ * row has carried since the `-v2` catalog landed, so every submission from this
+ * card asked `changePlanAction` for a plan that does not exist and the upgrade
+ * failed. It also quoted $20 / $99 / $500 a month while the Stripe catalogue
+ * the app checks out against held the v1 GAU prices — the card advertised one
+ * number and Checkout charged another. Deriving both means neither can drift
+ * again: change `pricing.ts`, re-run the sync, and this card follows.
+ */
+const PLANS = SUBSCRIPTION_PLANS.map((plan) => ({
+  slug: plan.slug,
+  label: plan.displayName,
+  price: `$${(plan.monthlyCents / 100).toLocaleString("en-US")}/mo`,
+  description: PLAN_DESCRIPTIONS[plan.tier] ?? "",
+}));
+
+type PlanSlug = (typeof SUBSCRIPTION_PLANS)[number]["slug"];
+
+/**
+ * Resolve whatever the model inferred into a real catalog slug.
+ *
+ * `suggestedPlan` is free-form text produced by the agent, so it arrives as
+ * either the slug (`scale-v2`) or, far more often, the tier the plan is known
+ * by in conversation (`scale`). Matching on the slug alone dropped every
+ * tier-shaped suggestion on the floor and silently fell back to the cheapest
+ * plan, which is the quiet version of the bug this card already had. An
+ * unrecognised value still falls back rather than selecting nothing.
+ */
+function resolveSuggestedPlan(suggested: string | undefined): PlanSlug {
+  const fallback = SUBSCRIPTION_PLANS[0]?.slug as PlanSlug;
+  if (!suggested) return fallback;
+  const needle = suggested.trim().toLowerCase();
+  const match = SUBSCRIPTION_PLANS.find(
+    (plan) => plan.slug === needle || plan.tier === needle,
+  );
+  return (match?.slug as PlanSlug | undefined) ?? fallback;
+}
 
 export default function BillingUpgradeInline({
   orgSlug = "",
   suggestedPlan,
 }: BillingUpgradeInlineProps): React.ReactElement {
   const [selected, setSelected] = React.useState<PlanSlug>(
-    (suggestedPlan as PlanSlug | undefined) ?? "build",
+    resolveSuggestedPlan(suggestedPlan),
   );
   const [formState, setFormState] = React.useState<FormState>("idle");
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);

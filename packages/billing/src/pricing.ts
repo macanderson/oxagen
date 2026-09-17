@@ -765,6 +765,17 @@ export interface SubscriptionPlanDef {
   annualCents: number;
   /** Included seats. */
   seats: number;
+  /**
+   * Governed actions included per entitlement year (ADR-052 §4.2) — the figure
+   * written to `billing.plans.included_actions_annual` by `billing:stripe-sync`.
+   *
+   * Stated here rather than derived from the tier because the column is
+   * `NOT NULL DEFAULT 25000` (the FREE allowance), so a plan row created
+   * without it silently prices every paid tier at one fifteenth of Scale's
+   * allowance and bills overage from action 25,001. The governed action is the
+   * PRIMARY meter under ADR-052, so that default is not a small error.
+   */
+  includedActionsAnnual: number;
   /** Expected share of total credit revenue — used by the blended-margin solve. */
   weight: number;
   /** Display-only feature bullets for the plan card. See {@link PlanFeatures}. */
@@ -826,13 +837,18 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
     slug: "build-v2",
     displayName: "Build",
     tier: "build",
-    // v1 GAU pricing (2026-09-14): $199 / mo. Credits stay at 1.2 cr/¢ so the
-    // blended-margin solve is unchanged; the GAU terms (50,000 GAU / mo at
-    // 5,000 micros per GAU, 5,000-GAU blocks) are seeded by WL-24.
+    // v1 GAU pricing (maintainer, 2026-09-14; #2999): $199 / mo. Credits stay at
+    // 1.2 cr/¢ so the blended-margin solve is unchanged. These are the prices the
+    // shared Stripe sandbox (acct_1Ty2gjK5L8c4uZ0j) actually holds — the figures
+    // below are what `billing:stripe-sync` reconciles against, so a stale value
+    // here means the app quotes one price and Checkout charges another. The GAU
+    // terms (50,000 GAU / mo at 5,000 micros per GAU, 5,000-GAU blocks) are
+    // seeded by WL-24.
     includedCredits: 23_880, // $238.80 face value, sold for $199 → 16.7% discount
     monthlyCents: 19_900,
     annualCents: 199_000, // 2 months free
     seats: 5,
+    includedActionsAnnual: 250_000,
     weight: 0.35,
     features: {
       list: [
@@ -847,13 +863,15 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
     slug: "scale-v2",
     displayName: "Scale",
     tier: "scale",
-    // v1 GAU pricing (2026-09-14): $999 / mo. Credits stay at 1.33 cr/¢ so the
-    // blended-margin solve is unchanged; the GAU terms (300,000 GAU / mo at
-    // 5,000 micros per GAU, 5,000-GAU blocks) are seeded by WL-24.
+    // v1 GAU pricing (maintainer, 2026-09-14; #2999): $999 / mo. Credits stay at
+    // 1.33 cr/¢ so the blended-margin solve is unchanged. The GAU terms
+    // (300,000 GAU / mo at 5,000 micros per GAU, 5,000-GAU blocks) are seeded
+    // by WL-24.
     includedCredits: 133_200, // $1,332 face value, sold for $999 → 25% discount
     monthlyCents: 99_900,
     annualCents: 999_000, // 2 months free
     seats: 25,
+    includedActionsAnnual: 1_500_000,
     weight: 0.2,
     features: {
       list: [
@@ -877,6 +895,14 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
     monthlyCents: 50_000,
     annualCents: 500_000, // 2 months free
     seats: 5,
+    // Spec §7.3 negotiates the enterprise figure per contract, and the
+    // 2026-09-11 migration seeded existing enterprise rows at Scale's allowance
+    // for exactly this reason: an unset figure must not read as unlimited, and
+    // must not read as the free tier either. The signed commitment overwrites
+    // it — on the plan row for a Stripe customer, or on
+    // `org.organizations.negotiated_actions_annual` for one provisioned
+    // directly.
+    includedActionsAnnual: 1_500_000,
     weight: 0.1,
     // Display-only. The SOC2 surface below (ACLs/SSO/SCIM/audit) is gated by
     // `tier === "enterprise"`, not by these strings — they only describe it.

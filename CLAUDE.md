@@ -4,7 +4,7 @@
 
 ## Mission
 
-Oxagen is the platform that governs and operates the autonomous agents an enterprise runs. It has two names and owns both (ADR-066): the **agent control plane**, what it is to the enterprise, and **agent fleet management**, what an operator does with it all day, spend management included. Every agent operates under a **mandate** — its access, its budget, its tools, its rules — set by the teams accountable for it and enforced on every run. We sell to those teams (security, FinOps, engineering), not to resellers. The full positioning and drift tests live in `docs/VISION.md`, the reference for feature direction. A mandate has four clauses:
+Oxagen is **Mission Control for an autonomous agent workforce**: operators assign each agent an identity, set its authority and budget, equip it with tools and skills, and oversee its work through a shared **agent control plane** (ADR-067, which supersedes ADR-066's two names; the Fleet page and fleet vocabulary stay). Every agent operates under a **mandate** — its identity and access, its budget, its tools and skills, its rules — set by the teams accountable for it and enforced on the actions routed through Oxagen. Completion checks are an optional control for bounded tasks, not the definition of the product. We sell to those teams (security, FinOps, engineering), not to resellers. The full positioning and drift tests live in `docs/VISION.md`, the reference for feature direction. A mandate has four clauses:
 
 - **Access** (security sets it): the identity the agent acts as, the systems it is connected to, the data and graph scope it may read, the actions it is permitted.
 - **Budget & rules** (FinOps sets it): what it may spend, under which commercial terms, and the business rules it must obey.
@@ -26,6 +26,15 @@ Vendor-neutral BYOK (own model keys, own Neo4j endpoint) is a design constraint,
 ## Prime directive — fix every issue you encounter
 
 When you encounter a bug, broken path, dead value, mispriced meter, stale config, or any defect — **fix it now, in place, completely.** Investigate to root cause, fix every co-located instance, and verify with tests/typecheck before declaring done. The only acceptable deferral is a true external action you cannot perform (e.g. flipping a prod env var) — and even then, fix everything in code first.
+
+## De-registered is not deleted — read `DEREGISTERED.md` before removing anything
+
+`DEREGISTERED.md` at the repo root is the register of every feature Oxagen has taken **off its surfaces** while keeping the code in the tree: the marketplace and the whole plugin catalog, fourteen of the seventeen ingestion connectors, environments, prompt settings, memory import, the repo reads, and the narrow reads Appendix E folded into their objects. Each row carries the registered name, the file stem, which of contract/handler/route/tool exist, and what replaced it.
+
+- **A scope decision de-registers; only an ADR deletes.** When a spec says a feature is "dropped", "out of scope", or "does not survive", that means it loses `app` from its contract's `layers[]`, loses entries from `surfaces[]`, loses its registration in `packages/handlers/src/register.ts`, or loses its route. It does **not** authorise `git rm`. The registration is one line; the capability behind it is thousands.
+- **Before you delete any file, check `DEREGISTERED.md` §14.** `pnpm check:deregistered` (wired into `check:contracts`, so it runs in `pnpm gate`, on pre-push and in CI) fails the build naming any preserved path that went missing. If you hit it, you deleted something on purpose-kept-alive. Restore it, or write the ADR.
+- **De-registering something new is a four-part change in one PR:** drop the layer/surface/registration, add the redirect if a route goes away, add the row to the right section of `DEREGISTERED.md` with its stem and parity, and add its paths to the §14 block. Re-registering deletes the row.
+- **This does not weaken the prime directive.** A defect in de-registered code is still fixed in the PR that finds it. Unreachable is not the same as abandoned.
 
 ## Operating mode — branch early, commit often, push regularly, open a PR
 

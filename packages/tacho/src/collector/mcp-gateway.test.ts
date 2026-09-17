@@ -1,0 +1,574 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  ceilingOf,
+  createMcpGateway,
+  outcomeOf,
+  type GatewayAttribution,
+  type GatewayCallRecord,
+  type GatewayFetch,
+  type McpGatewayDeps,
+  parseJsonRpc,
+  readRpcBody,
+  RPC_INVALID_REQUEST,
+  RPC_REFUSED,
+  toolCountOf,
+  tooManyToolsMessage,
+} from "./mcp-gateway";
+import { policyBundleSchema, type PolicyBundle } from "../wire";
+import { unsignedBundle } from "../host/test-support";
+
+const ENROLLMENT = "tch_abcdefghijklmnopqrstuv";
+
+function attribution(
+  overrides: Partial<GatewayAttribution> = {},
+): GatewayAttribution {
+  return {
+    organizationId: "11111111-1111-4111-8111-111111111111",
+    workspaceId: "22222222-2222-4222-8222-222222222222",
+    orgSlug: "acme",
+    workspaceSlug: "core",
+    apiKey: "oxa_live_secretkey",
+    hostEnrollmentId: ENROLLMENT,
+    ...overrides,
+  };
+}
+
+/** A control plane that answers with whatever the test hands it. */
+function remote(
+  result: unknown,
+  status = 200,
+): {
+  fetch: GatewayFetch;
+  calls: Array<{ url: string; init: Parameters<GatewayFetch>[1] }>;
+} {
+  const calls: Array<{ url: string; init: Parameters<GatewayFetch>[1] }> = [];
+  const fetch: GatewayFetch = async (url, init) => {
+    calls.push({ url, init });
+    const body = JSON.parse(init.body) as { id?: unknown };
+    return {
+      ok: status < 400,
+      status,
+      text: async () =>
+        JSON.stringify({ jsonrpc: "2.0", id: body.id ?? null, result }),
+    };
+  };
+  return { fetch, calls };
+}
+
+function gateway(overrides: Partial<McpGatewayDeps> = {}) {
+  const records: GatewayCallRecord[] = [];
+  const logs: string[] = [];
+  const deps: McpGatewayDeps = {
+    attribution: () => attribution(),
+    endpoint: "https://mcp.oxagen.sh/mcp",
+    fetch: remote({}).fetch,
+    record: (event) => records.push(event),
+    log: (line) => logs.push(line),
+    now: () => 1_000,
+    ...overrides,
+  };
+  return { gw: createMcpGateway(deps), records, logs };
+}
+
+const CALL = {
+  jsonrpc: "2.0" as const,
+  id: 7,
+  method: "tools/call",
+  params: { name: "query_ontology", arguments: { q: "x" } },
+};
+
+const CTX = { sessionId: "sess-1" };
+
+describe("attribution is required, never defaulted", () => {
+  it("refuses a call when the machine is not enrolled", async () => {
+    const { gw, records, logs } = gateway({ attribution: () => undefined });
+    const response = await gw.handle(CALL, CTX);
+    expect(response.status).toBe(403);
+    const body = response.body as { error: { code: number; message: string } };
+    expect(body.error.code).toBe(RPC_REFUSED);
+    expect(body.error.message).toContain("no Oxagen mandate");
+    // Nothing was forwarded and nothing was recorded under nobody's name.
+    expect(records).toEqual([]);
+    expect(logs.join(" ")).toContain("no enrollment");
+    expect(logs.join(" ")).toContain("gateway credential");
+  });
+
+  it("never reaches the control plane without attribution", async () => {
+    const upstream = vi.fn();
+    const { gw } = gateway({
+      attribution: () => undefined,
+      fetch: upstream as unknown as GatewayFetch,
+    });
+    await gw.handle(CALL, CTX);
+    expect(upstream).not.toHaveBeenCalled();
+  });
+
+  it("re-reads attribution on every call, so a revoke takes effect at once", async () => {
+    let live = true;
+    const { fetch } = remote({ content: [] });
+    const { gw } = gateway({
+      fetch,
+      attribution: () => (live ? attribution() : undefined),
+    });
+    expect((await gw.handle(CALL, CTX)).status).toBe(200);
+    live = false;
+    expect((await gw.handle(CALL, CTX)).status).toBe(403);
+  });
+
+  it("refuses an entry left behind by an earlier enrollment", async () => {
+    const { gw } = gateway();
+    const response = await gw.handle(CALL, {
+      sessionId: "s",
+      enrollmentId: "tch_zyxwvutsrqponmlkjihgfe",
+    });
+    expect(response.status).toBe(403);
+    expect(
+      (response.body as { error: { message: string } }).error.message,
+    ).toContain("earlier enrollment");
+  });
+
+  it("accepts the scoped path when the enrollment matches", async () => {
+    const { fetch } = remote({ content: [] });
+    const { gw } = gateway({ fetch });
+    const response = await gw.handle(CALL, {
+      sessionId: "s",
+      enrollmentId: ENROLLMENT,
+    });
+    expect(response.status).toBe(200);
+  });
+});
+
+describe("the forward carries the host key, not the caller's", () => {
+  it("presents the host API key and never the local bearer", async () => {
+    const { fetch, calls } = remote({ content: [] });
+    const { gw } = gateway({ fetch });
+    await gw.handle(CALL, CTX);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe("https://mcp.oxagen.sh/mcp");
+    expect(calls[0]?.init.headers["Authorization"]).toBe(
+      "Bearer oxa_live_secretkey",
+    );
+    expect(calls[0]?.init.headers["X-Tacho-Host"]).toBe(ENROLLMENT);
+  });
+
+  it("forwards the JSON-RPC envelope unchanged", async () => {
+    const { fetch, calls } = remote({ content: [] });
+    const { gw } = gateway({ fetch });
+    await gw.handle(CALL, CTX);
+    expect(JSON.parse(calls[0]?.init.body ?? "{}")).toEqual(CALL);
+  });
+
+  it("surfaces an unreachable control plane as a transport failure", async () => {
+    const { gw, records } = gateway({
+      fetch: async () => {
+        throw new Error("ECONNREFUSED");
+      },
+    });
+    const response = await gw.handle(CALL, CTX);
+    expect(response.status).toBe(502);
+    expect(
+      (response.body as { error: { message: string } }).error.message,
+    ).toContain("ECONNREFUSED");
+    expect(records[0]?.status).toBe("error");
+  });
+});
+
+describe("the tool ceiling", () => {
+  /**
+   * Built through `policyBundleSchema.parse`, not cast past it. The test used
+   * to hand `ceilingOf` a bare `{ tool_ceiling }` object through
+   * `as unknown as PolicyBundle`, which is why the ceiling looked covered
+   * while the strict schema had no such field and rejected every real bundle
+   * that carried one. A fixture the schema accepts is the only one that
+   * proves anything here.
+   */
+  const bundle = (maxTools: number): PolicyBundle =>
+    policyBundleSchema.parse({
+      ...unsignedBundle({
+        tool_ceiling: {
+          model_id: "openai/gpt-5",
+          max_tools: maxTools,
+          source: "OpenAI function-calling limit of 128 tools per request",
+        },
+      }),
+      signature: { key_id: "k1", alg: "ed25519", sig: "sig" },
+    });
+
+  const listOf = (n: number) => ({
+    tools: Array.from({ length: n }, (_, i) => ({ name: `tool_${i}` })),
+  });
+
+  const LIST = { jsonrpc: "2.0" as const, id: 1, method: "tools/list" };
+
+  it("refuses a list that overflows, naming model, limit and count", async () => {
+    const { fetch } = remote(listOf(130));
+    const { gw, records } = gateway({ fetch, bundle: () => bundle(128) });
+    const response = await gw.handle(LIST, CTX);
+    const error = (
+      response.body as {
+        error: { code: number; message: string; data: unknown };
+      }
+    ).error;
+    expect(error.code).toBe(RPC_REFUSED);
+    expect(error.message).toContain("130 tools");
+    expect(error.message).toContain("openai/gpt-5");
+    expect(error.message).toContain("at most 128");
+    expect(error.message).toContain(
+      "OpenAI function-calling limit of 128 tools per request",
+    );
+    expect(error.data).toEqual({
+      modelId: "openai/gpt-5",
+      maxTools: 128,
+      toolCount: 130,
+    });
+    // A refusal is a decision, so it is evidence.
+    expect(records[0]?.status).toBe("rejected");
+    expect(records[0]?.refusedReason).toBe("tool ceiling");
+  });
+
+  it("is not a gateway error: the client gets 200 and a JSON-RPC error", async () => {
+    const { fetch } = remote(listOf(130));
+    const { gw } = gateway({ fetch, bundle: () => bundle(128) });
+    const response = await gw.handle(LIST, CTX);
+    expect(response.status).toBe(200);
+  });
+
+  it("serves a list that fits", async () => {
+    const { fetch } = remote(listOf(12));
+    const { gw } = gateway({ fetch, bundle: () => bundle(128) });
+    const response = await gw.handle(LIST, CTX);
+    expect((response.body as { result: unknown }).result).toEqual(listOf(12));
+  });
+
+  it("serves a list at exactly the limit", async () => {
+    const { fetch } = remote(listOf(128));
+    const { gw } = gateway({ fetch, bundle: () => bundle(128) });
+    expect((await gw.handle(LIST, CTX)).body).toHaveProperty("result");
+  });
+
+  it("serves any list when the mandate declares no ceiling", async () => {
+    const { fetch } = remote(listOf(500));
+    const { gw } = gateway({ fetch, bundle: () => undefined });
+    expect((await gw.handle(LIST, CTX)).body).toHaveProperty("result");
+  });
+
+  it("does not apply the ceiling to a tools/call", async () => {
+    const { fetch } = remote({ content: [] });
+    const { gw } = gateway({ fetch, bundle: () => bundle(0) });
+    expect((await gw.handle(CALL, CTX)).body).toHaveProperty("result");
+  });
+
+  it("reads the ceiling a bundle declares, and none when it declares none", () => {
+    expect(ceilingOf(undefined)).toBeUndefined();
+    expect(ceilingOf({} as PolicyBundle)).toBeUndefined();
+    expect(ceilingOf(bundle(128))).toEqual({
+      modelId: "openai/gpt-5",
+      maxTools: 128,
+      source: "OpenAI function-calling limit of 128 tools per request",
+    });
+  });
+
+  it("parses a signed bundle that declares a ceiling, and rejects a half-declared one", () => {
+    const signature = { key_id: "k1", alg: "ed25519", sig: "sig" } as const;
+    // The whole point of putting the field in the schema: before this, a
+    // control plane that started signing `tool_ceiling` would have had every
+    // enrolled host reject the entire mandate, because the schema is strict.
+    expect(() =>
+      policyBundleSchema.parse({
+        ...unsignedBundle({
+          tool_ceiling: {
+            model_id: "openai/gpt-5",
+            max_tools: 128,
+            source: "the OpenAI limit",
+          },
+        }),
+        signature,
+      }),
+    ).not.toThrow();
+    // And a ceiling missing its number is not a ceiling with an unknown
+    // number — the schema refuses it rather than leaving `ceilingOf` to guess.
+    expect(() =>
+      policyBundleSchema.parse({
+        ...unsignedBundle({
+          tool_ceiling: { model_id: "openai/gpt-5" },
+        } as never),
+        signature,
+      }),
+    ).toThrow();
+  });
+
+  it("words the refusal the way the control plane words it", () => {
+    const message = tooManyToolsMessage(
+      { modelId: "openai/gpt-5", maxTools: 128, source: "the OpenAI limit" },
+      200,
+    );
+    expect(message).toContain("200 tools");
+    expect(message).toContain("at most 128");
+    expect(message).toContain("the OpenAI limit");
+  });
+});
+
+describe("evidence", () => {
+  it("records a tool call with the connected app's name", async () => {
+    const { fetch } = remote({ content: [] });
+    const { gw, records } = gateway({ fetch });
+    await gw.handle(
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: { clientInfo: { name: "claude-desktop", version: "1.2.3" } },
+      },
+      CTX,
+    );
+    await gw.handle(CALL, CTX);
+    expect(records).toEqual([
+      {
+        sessionId: "sess-1",
+        client: "claude-desktop",
+        toolName: "query_ontology",
+        status: "ok",
+        durationMs: 0,
+      },
+    ]);
+  });
+
+  it("does not file protocol traffic as a step somebody took", async () => {
+    const { fetch } = remote({ tools: [] });
+    const { gw, records } = gateway({ fetch });
+    await gw.handle({ jsonrpc: "2.0", id: 1, method: "initialize" }, CTX);
+    await gw.handle({ jsonrpc: "2.0", id: 2, method: "tools/list" }, CTX);
+    await gw.handle({ jsonrpc: "2.0", id: 3, method: "ping" }, CTX);
+    expect(records).toEqual([]);
+  });
+
+  it("records a refused call as rejected, with the reason", async () => {
+    const fetch: GatewayFetch = async () => ({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 7,
+          error: { code: -32002, message: "Tool blocked by workspace policy" },
+        }),
+    });
+    const { gw, records } = gateway({ fetch });
+    await gw.handle(CALL, CTX);
+    expect(records[0]?.status).toBe("rejected");
+    expect(records[0]?.refusedReason).toBe("Tool blocked by workspace policy");
+  });
+
+  it("records an ordinary tool failure as an error, not as a refusal", async () => {
+    // The daemon seals `rejected` as a policy_decision / deny / kernel and the
+    // desktop counts it as refused, so only -32002 may earn it. An unknown tool
+    // (-32601) or bad arguments (-32602) is the tool failing, not the mandate
+    // speaking, and filing it as a refusal invents a governance decision nobody
+    // made.
+    for (const code of [-32601, -32602, -32603]) {
+      const fetch: GatewayFetch = async () => ({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: 7,
+            error: { code, message: "no such tool" },
+          }),
+      });
+      const { gw, records } = gateway({ fetch });
+      await gw.handle(CALL, CTX);
+      expect(records[0]?.status).toBe("error");
+    }
+  });
+
+  it("records a non-2xx answer with no rpc error as an error, not as a success", async () => {
+    // "no `error` member" used to read as success, so a control plane 502 that
+    // answered with a plain body was recorded as a tool call that worked.
+    const fetch: GatewayFetch = async () => ({
+      ok: false,
+      status: 502,
+      text: async () => JSON.stringify({ message: "bad gateway" }),
+    });
+    const { gw, records } = gateway({ fetch });
+    await gw.handle(CALL, CTX);
+    expect(records[0]?.status).toBe("error");
+  });
+
+  it("classifies an outcome from the status and the rpc error together", () => {
+    expect(outcomeOf(200, undefined)).toBe("ok");
+    expect(outcomeOf(202, undefined)).toBe("ok");
+    expect(outcomeOf(500, undefined)).toBe("error");
+    expect(
+      outcomeOf(200, {
+        jsonrpc: "2.0",
+        id: 1,
+        error: { code: RPC_REFUSED, message: "denied" },
+      }),
+    ).toBe("rejected");
+    expect(
+      outcomeOf(200, {
+        jsonrpc: "2.0",
+        id: 1,
+        error: { code: -32601, message: "no such method" },
+      }),
+    ).toBe("error");
+  });
+
+  it("falls back to unknown when the client never introduced itself", async () => {
+    const { fetch } = remote({ content: [] });
+    const { gw, records } = gateway({ fetch });
+    await gw.handle(CALL, CTX);
+    expect(records[0]?.client).toBe("unknown");
+  });
+
+  it("keeps one client name per session and forgets it on close", async () => {
+    const { fetch } = remote({ content: [] });
+    const { gw } = gateway({ fetch });
+    await gw.handle(
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: { clientInfo: { name: "cursor" } },
+      },
+      { sessionId: "a" },
+    );
+    expect(gw.clientOf("a")).toBe("cursor");
+    expect(gw.clientOf("b")).toBeUndefined();
+    gw.forget("a");
+    expect(gw.clientOf("a")).toBeUndefined();
+  });
+
+  it("times the call", async () => {
+    let clock = 1_000;
+    const { fetch } = remote({ content: [] });
+    const { gw, records } = gateway({
+      fetch,
+      now: () => {
+        const value = clock;
+        clock += 42;
+        return value;
+      },
+    });
+    await gw.handle(CALL, CTX);
+    expect(records[0]?.durationMs).toBe(42);
+  });
+});
+
+describe("JSON-RPC parsing", () => {
+  it("refuses a batch rather than half-supporting it", () => {
+    const parsed = parseJsonRpc([{ jsonrpc: "2.0", method: "ping" }]);
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) {
+      expect(parsed.error.code).toBe(RPC_INVALID_REQUEST);
+      expect(parsed.error.message).toContain("batches");
+    }
+  });
+
+  it("refuses anything that is not a 2.0 request", () => {
+    for (const body of [
+      null,
+      "x",
+      7,
+      {},
+      { jsonrpc: "1.0", method: "ping" },
+      { jsonrpc: "2.0" },
+      { jsonrpc: "2.0", method: "" },
+    ]) {
+      expect(parseJsonRpc(body).ok, JSON.stringify(body)).toBe(false);
+    }
+  });
+
+  it("returns a 400 with a null id for an unparseable message", async () => {
+    const { gw } = gateway();
+    const response = await gw.handle([{ jsonrpc: "2.0" }], CTX);
+    expect(response.status).toBe(400);
+    expect(response.body).toHaveProperty("id", null);
+  });
+
+  it("accepts a well-formed request", () => {
+    const parsed = parseJsonRpc(CALL);
+    expect(parsed.ok).toBe(true);
+  });
+});
+
+describe("reading the upstream body", () => {
+  it("parses a plain JSON response", () => {
+    expect(readRpcBody('{"jsonrpc":"2.0","id":1,"result":{}}')).toEqual({
+      jsonrpc: "2.0",
+      id: 1,
+      result: {},
+    });
+  });
+
+  it("reduces an SSE stream to its last data payload", () => {
+    const stream = [
+      "event: message",
+      'data: {"jsonrpc":"2.0","id":1,"result":{"a":1}}',
+      "",
+      "event: message",
+      'data: {"jsonrpc":"2.0","id":1,"result":{"a":2}}',
+      "",
+    ].join("\n");
+    expect(readRpcBody(stream)).toEqual({
+      jsonrpc: "2.0",
+      id: 1,
+      result: { a: 2 },
+    });
+  });
+
+  it("returns undefined for an empty body", () => {
+    expect(readRpcBody("")).toBeUndefined();
+    expect(readRpcBody("   ")).toBeUndefined();
+  });
+});
+
+describe("counting tools", () => {
+  it("counts a tools/list result and nothing else", () => {
+    expect(toolCountOf({ tools: [1, 2, 3] })).toBe(3);
+    expect(toolCountOf({ tools: [] })).toBe(0);
+    expect(toolCountOf({ content: [] })).toBeUndefined();
+    expect(toolCountOf(null)).toBeUndefined();
+    expect(toolCountOf("x")).toBeUndefined();
+  });
+});
+
+/**
+ * The gateway presents its own credential, never the host's. The host key
+ * reports events and fetches the mandate; it passes every role gate because an
+ * API-key principal has no org_users row to check. Forwarding a connected
+ * app's tool calls with it handed that app the enrolling admin's authority,
+ * which is what `machineKeyDenial` and this split close (ADR-078).
+ */
+describe("the gateway's credential is not the host's", () => {
+  it("presents the gateway key when the host has one", async () => {
+    const { fetch, calls } = remote({ content: [] });
+    const { gw } = gateway({
+      fetch,
+      attribution: () => attribution({ apiKey: "oxa_gateway_only" }),
+    });
+    await gw.handle(CALL, CTX);
+    expect(calls[0]?.init.headers["Authorization"]).toBe(
+      "Bearer oxa_gateway_only",
+    );
+  });
+
+  it("serves nothing rather than falling back to a host key", async () => {
+    // A host enrolled before the gateway existed has no gateway credential.
+    // The daemon returns no attribution for it, and the gateway refuses --
+    // it never reaches for whatever other key is lying around.
+    const upstream = vi.fn();
+    const { gw, records } = gateway({
+      attribution: () => undefined,
+      fetch: upstream as unknown as GatewayFetch,
+    });
+    const response = await gw.handle(CALL, CTX);
+    expect(response.status).toBe(403);
+    expect(upstream).not.toHaveBeenCalled();
+    expect(records).toEqual([]);
+    expect(
+      (response.body as { error: { message: string } }).error.message,
+    ).toContain("no Oxagen mandate");
+  });
+});

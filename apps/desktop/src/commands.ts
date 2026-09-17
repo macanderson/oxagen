@@ -3,12 +3,98 @@
  * sidecar, as pure functions of UI state. Kept apart from the React tree so
  * the mapping is testable without a webview.
  */
-export type Harness = "claude-code" | "codex";
+export type Harness = "claude-code" | "codex" | "stella" | "claude-desktop";
 
 export const HARNESS_LABEL: Record<Harness, string> = {
   "claude-code": "Claude Code",
   codex: "Codex",
+  stella: "Stella",
+  "claude-desktop": "Claude Desktop",
 };
+
+/** Every app the machine can put under Oxagen, in display order. */
+export const HARNESSES: Harness[] = [
+  "claude-code",
+  "codex",
+  "stella",
+  "claude-desktop",
+];
+
+/**
+ * Which enforcement tier each app can reach (ADR-078). Mirrors
+ * `TACHO_HARNESS_TIERS` in `packages/tacho/src/wire.ts`; the desktop app
+ * reads files the CLIs write and shares no runtime code with them, so the
+ * list is written twice and `commands.test.ts` is where the two meet.
+ *
+ * `harness` is **wrapped**: a PreToolUse hook sees every action, including
+ * the agent's own commands and file edits, but runs in a process Oxagen does
+ * not own, so the record is what the agent reported.
+ *
+ * `gateway` is **connected**: no hook exists, so Oxagen sees only the calls
+ * routed through its MCP gateway — and refuses those on the server.
+ *
+ * Neither is the better one. A row that reads as "more governed" or "less
+ * governed" is wrong in both directions.
+ */
+export type Tier = "harness" | "gateway";
+
+export const HARNESS_TIER: Record<Harness, Tier> = {
+  "claude-code": "harness",
+  codex: "harness",
+  stella: "harness",
+  "claude-desktop": "gateway",
+};
+
+/** The word for each tier on screen. */
+export const TIER_LABEL: Record<Tier, string> = {
+  harness: "Wrapped",
+  gateway: "Connected",
+};
+
+/** What each tier records, in the app's own words. */
+export const TIER_RECORDS: Record<Tier, string> = {
+  harness:
+    "Every action this agent takes, including the commands it runs and the files it changes.",
+  gateway: "The Oxagen tools this app calls, and the ones it was refused.",
+};
+
+/** What each tier does not record. Never omitted: this is the honesty rule. */
+export const TIER_OMITS: Record<Tier, string> = {
+  harness:
+    "Oxagen does not run this agent, so the record is what the agent reported. Remove its hooks and it stops reporting.",
+  gateway:
+    "Not your prompts, not the model's replies, and nothing this app does through any other tool.",
+};
+
+/** Whether a harness is wrapped through a hook. */
+export function isWrapped(harness: Harness): boolean {
+  return HARNESS_TIER[harness] === "harness";
+}
+
+/**
+ * The subset of a selection that `tacho verify` can actually run.
+ *
+ * `verify` drives one headless turn and waits for the hook chain it seals, so
+ * it has nothing to do for a connected app — a GUI bundle with no headless
+ * mode and no hook — and returns `ok: false` saying exactly that. Handing it
+ * one anyway turned the wizard's "record a first run" step into a red
+ * "failed · claude-desktop is a connected app" for the whole flow, and on a
+ * machine where Claude Desktop is the only registered app that was the only
+ * line the operator ever saw: a failure report for something that cannot
+ * succeed and did not go wrong.
+ *
+ * A connected app is not dropped from the screen — it is registered and the
+ * operator should see it — only from the list of things a first run is
+ * attempted on. It reports the first time they use it.
+ */
+export function verifiable(harnesses: readonly Harness[]): Harness[] {
+  return harnesses.filter(isWrapped);
+}
+
+/** Whether a harness is connected through the local MCP gateway. */
+export function isConnected(harness: Harness): boolean {
+  return HARNESS_TIER[harness] === "gateway";
+}
 
 export interface HostTarget {
   org_slug: string;
@@ -165,13 +251,18 @@ export function deregisterArgs(
   };
 }
 
-/** Mission Control for the workspace the host reports to. */
-export function missionControlUrl(
+/**
+ * The workspace root in the Oxagen app, where the host reports to. Not
+ * `/runs`: that route does not exist in `apps/app` (its workspace sections
+ * are `knowledge`, `marketplace`, `sessions`, `settings`, `workbench`, plus
+ * the workspace root itself), so a `/runs` link 404s.
+ */
+export function workspaceUrl(
   appUrl: string,
   org: string,
   workspace: string,
 ): string {
-  return `${appUrl.replace(/\/+$/, "")}/${encodeURIComponent(org)}/${encodeURIComponent(workspace)}/runs`;
+  return `${appUrl.replace(/\/+$/, "")}/${encodeURIComponent(org)}/${encodeURIComponent(workspace)}`;
 }
 
 export type WizardStep = 1 | 2 | 3 | 4 | 5;
@@ -197,6 +288,55 @@ export function defaultRegistration(
   detected: ReadonlyArray<{ harness: Harness; installed: boolean }>,
 ): Harness[] {
   return detected.filter((d) => d.installed).map((d) => d.harness);
+}
+
+/** What `DesktopState.cli_install` reports about the launch-time PATH link. */
+export interface CliInstallReport {
+  state: "linked" | "already" | "skipped" | "opted_out" | "failed" | "pending";
+  dir: string;
+  files: string[];
+  skipped: string[];
+  profile: string | null;
+  note: string;
+}
+
+/** The Command line panel's one line on what the launch-time auto-link did. */
+export function describeCliInstall(
+  install: CliInstallReport | null | undefined,
+): string | null {
+  if (!install) return null;
+  const files = install.files.length > 0 ? install.files.join(", ") : "nothing";
+  const profile = install.profile ? ` Updated ${install.profile}.` : "";
+  const skipped =
+    install.skipped.length > 0 ? ` Skipped ${install.skipped.join(", ")}.` : "";
+  switch (install.state) {
+    case "linked":
+      // "linked" with nothing in `files` means every link was already
+      // correct: there was nothing to do, so say that rather than
+      // "Linked nothing into ...". `profile` can still be set (the profile
+      // block is checked every launch regardless), so it still shows.
+      return install.files.length > 0
+        ? `Linked ${files} into ${install.dir} on launch.${profile}${skipped}`
+        : `Already on PATH in ${install.dir}.${profile}${skipped}`;
+    case "already":
+      // The Rust side leaves `files` empty here: nothing needed linking, so
+      // there is nothing to list. Say so plainly rather than "nothing
+      // already on PATH".
+      return `Already on PATH in ${install.dir}.${skipped}`;
+    case "skipped":
+      return `Skipped linking on launch: ${install.note}`;
+    case "opted_out":
+      // "Remove links" lands here, and it reports what it refused to delete
+      // (a binary of the same name that Oxagen did not create) the same way
+      // the install path reports what it refused to overwrite.
+      return `Not linked: you opted out. ${install.note}${skipped}`;
+    case "failed":
+      return `Could not link into ${install.dir}: ${install.note}`;
+    case "pending":
+      return "Linking on launch…";
+    default:
+      return install.note;
+  }
 }
 
 /** The one gold action on screen: the next step, never a destructive one. */

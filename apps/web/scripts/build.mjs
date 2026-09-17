@@ -51,6 +51,7 @@ import {
   withOgImage,
 } from "./lib/pages.mjs";
 import { renderPng } from "./lib/raster.mjs";
+import { withAnalytics } from "./lib/analytics.mjs";
 
 export const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -154,15 +155,19 @@ async function generateImages(o) {
   return { ...images, banner: url("banner.png"), thumb: url("thumb.png") };
 }
 
-/** Every .html under `dir` (relative paths), skipping the blog the build wrote itself. */
-async function htmlPages(dir, prefix = "") {
+/**
+ * Every .html under `dir` (relative paths). `skip` names top-level entries to
+ * leave out — the share-card pass skips the blog and the cards it just wrote.
+ * @param {string} dir @param {string} prefix @param {{ skip?: Set<string> }} o
+ */
+async function htmlPages(dir, prefix = "", { skip = new Set() } = {}) {
   const out = [];
   for (const entry of await readdir(path.join(dir, prefix), {
     withFileTypes: true,
   })) {
     const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
-    if (rel === "blog" || rel === "og") continue;
-    if (entry.isDirectory()) out.push(...(await htmlPages(dir, rel)));
+    if (skip.has(rel)) continue;
+    if (entry.isDirectory()) out.push(...(await htmlPages(dir, rel, { skip })));
     else if (entry.name.endsWith(".html")) out.push(rel);
   }
   return out.sort();
@@ -312,7 +317,9 @@ export async function build({ log = console.log } = {}) {
 
   // 3. a share card for every hand-authored page, from its own <title> and
   //    description; the page in dist/ is pointed at it, the source untouched
-  for (const rel of await htmlPages(DIST)) {
+  for (const rel of await htmlPages(DIST, "", {
+    skip: new Set(["blog", "og"]),
+  })) {
     const file = path.join(DIST, rel);
     const html = await readFile(file, "utf8");
     const { title, description } = pageMeta(html);
@@ -346,7 +353,16 @@ export async function build({ log = console.log } = {}) {
     );
   }
 
-  // 4. sitemap
+  // 4. the third-party tags, on every page the build is about to publish —
+  //    one pass over dist/ so no page can be authored without them
+  let tagged = 0;
+  for (const rel of await htmlPages(DIST)) {
+    const file = path.join(DIST, rel);
+    await writeFile(file, withAnalytics(await readFile(file, "utf8")));
+    tagged += 1;
+  }
+
+  // 5. sitemap
   const sitemap = await readFile(path.join(ROOT, "sitemap.xml"), "utf8");
   const entries = [
     { loc: SITE + urls.blog(), changefreq: "weekly" },
@@ -367,10 +383,11 @@ export async function build({ log = console.log } = {}) {
     pillars: pillars.length,
     posts: posts.length,
     images,
+    tagged,
     ms: Date.now() - started,
   };
   log(
-    `web: copied ${summary.copied} site entries, built ${summary.posts} posts across ${summary.pillars} pillars, drew ${summary.images} images in ${summary.ms}ms → ${path.relative(process.cwd(), DIST)}`,
+    `web: copied ${summary.copied} site entries, built ${summary.posts} posts across ${summary.pillars} pillars, drew ${summary.images} images, tagged ${summary.tagged} pages in ${summary.ms}ms → ${path.relative(process.cwd(), DIST)}`,
   );
   return summary;
 }

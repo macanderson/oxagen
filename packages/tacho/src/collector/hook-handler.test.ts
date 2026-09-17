@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { verifyChain } from "../chain";
 import type { ClaudeCodeContext } from "../claude-code/context";
 import { hookInputSchema } from "../claude-code/hooks";
+import { stellaToolUseId } from "../claude-code/stella-adapter";
 import type { TachoEvent } from "../envelope";
 import {
   bundleSigner,
@@ -18,7 +19,7 @@ import {
 import { toProtocolTimestamp } from "../timestamp";
 import type { CommandAcknowledgement, PolicyBundle } from "../wire";
 import { handleHookEvent, type PolicyView } from "./hook-handler";
-import { SessionRegistry } from "./registry";
+import { type QueuedPrompt, SessionRegistry } from "./registry";
 
 const FIXTURES = join(
   __dirname,
@@ -81,13 +82,60 @@ function harness(
     ...viewOverrides,
   };
   const acks: CommandAcknowledgement[] = [];
+  /**
+   * The messages that actually reached the agent. The tests below were written
+   * against an `onMessageDelivered(id, uuid, seq)` dep that the queued-prompt
+   * work replaced with `acknowledge`; a message that reaches the agent acks as
+   * `applied`, so this reads the same fact off the newer seam.
+   *
+   * It is an array the callback appends to rather than a getter over `acks`,
+   * because the tests destructure it: a getter is evaluated once at destructure
+   * time and would hand back an empty snapshot that never updates.
+   */
+  const delivered: { id: string }[] = [];
   const deps = {
     registry,
     policy: () => view,
-    acknowledge: (ack: CommandAcknowledgement) => acks.push(ack),
+    acknowledge: (ack: CommandAcknowledgement) => {
+      acks.push(ack);
+      if (ack.status === "applied") delivered.push({ id: ack.command_id });
+    },
     now,
   };
-  return { registry, view, deps, acks, now };
+  return {
+    registry,
+    view,
+    deps,
+    acks,
+    now,
+    delivered,
+  };
+}
+
+/**
+ * A queued operator message in the shape `QueuedPrompt` now requires. The
+ * fields beyond id and text describe a `steer`'s delivery mode, and a plain
+ * message carries none of them.
+ */
+function queuedMessage(id: string, text: string): QueuedPrompt {
+  return {
+    id,
+    text,
+    command: "message",
+    requestedMode: null,
+    deliveryMode: null,
+    degradedReason: null,
+    expiresAt: null,
+  };
+}
+
+/** The tool-use id the events carry, whichever kind ended up holding it. */
+function toolUseIdOf(events: TachoEvent[]): string | undefined {
+  for (const event of events) {
+    const id = (event.body as Record<string, unknown>)["tool_use_id"];
+    if (typeof id === "string") return id;
+  }
+  return undefined;
 }
 
 function chainsOf(events: TachoEvent[]): Map<string, TachoEvent[]> {
@@ -542,5 +590,121 @@ describe("handleHookEvent over the recorded session", () => {
     expect((later.events[0]?.agent as { harness: string }).harness).toBe(
       "codex",
     );
+  });
+
+  it("numbers each Stella invocation of one repeated call, and still pairs Pre with Post", async () => {
+    const { deps, registry } = harness({
+      permissions: { allow: ["Bash(ls*)"], deny: [], ask: [] },
+    });
+    const session = "stella-7-abcdef";
+    const derived = stellaToolUseId("Bash", { command: "ls" });
+    const call = {
+      session_id: session,
+      cwd: "/repo",
+      tool_name: "Bash",
+      tool_input: { command: "ls" },
+      tool_use_id: derived,
+    };
+    await handleHookEvent(
+      { session_id: session, hook_event_name: "SessionStart", cwd: "/repo" },
+      {},
+      deps,
+      undefined,
+      "stella",
+    );
+    const ids: Array<[string | undefined, string | undefined]> = [];
+    for (let round = 0; round < 2; round += 1) {
+      const pre = await handleHookEvent(
+        { ...call, hook_event_name: "PreToolUse" },
+        {},
+        deps,
+        undefined,
+        "stella",
+      );
+      const post = await handleHookEvent(
+        { ...call, hook_event_name: "PostToolUse", tool_response: "ok" },
+        {},
+        deps,
+        undefined,
+        "stella",
+      );
+      ids.push([toolUseIdOf(pre.events), toolUseIdOf(post.events)]);
+    }
+    // The pair still matches — that is what the derived digest buys — but the
+    // two invocations no longer share an id, so the trace oracles stop
+    // reading the second `ls` as a replay of the first.
+    expect(ids[0]?.[0]).toBeDefined();
+    expect(ids[0]?.[1]).toBe(ids[0]?.[0]);
+    expect(ids[1]?.[1]).toBe(ids[1]?.[0]);
+    expect(ids[1]?.[0]).not.toBe(ids[0]?.[0]);
+    expect(ids[0]?.[0]?.startsWith(`${derived}_`)).toBe(true);
+    // A closed pair leaves nothing open on the record.
+    expect(registry.get(session)?.toolUseIds).toEqual({});
+
+    // A harness that issues real tool-use ids keeps them byte for byte.
+    const claude = await handleHookEvent(
+      { ...call, session_id: "claude-9", hook_event_name: "PreToolUse" },
+      {},
+      deps,
+    );
+    expect(toolUseIdOf(claude.events)).toBe(derived);
+  });
+
+  it("keeps an operator message queued when Stella has nowhere to receive it", async () => {
+    const { deps, registry, delivered } = harness();
+    const session = "stella-9-fedcba";
+    const start = {
+      session_id: session,
+      hook_event_name: "SessionStart",
+      cwd: "/repo",
+    };
+    await handleHookEvent(start, {}, deps, undefined, "stella");
+    const record = registry.get(session);
+    if (record === undefined) throw new Error("no record");
+    record.control.messages.push(queuedMessage("cmd_1", "Wrap up and stop."));
+    // Stella answers UserPromptSubmit with a decision document, which has
+    // nowhere to carry additionalContext: draining there would seal
+    // `message_delivered` and drop the text on the floor.
+    const prompt = await handleHookEvent(
+      {
+        session_id: session,
+        hook_event_name: "UserPromptSubmit",
+        prompt: "hi",
+      },
+      {},
+      deps,
+      undefined,
+      "stella",
+    );
+    expect(prompt.response).toEqual({});
+    expect(delivered).toEqual([]);
+    expect(record.control.messages).toHaveLength(1);
+    expect(prompt.events.some((e) => e.kind === "oxagen:command_applied")).toBe(
+      false,
+    );
+    // It lands at the next boundary Stella does read.
+    const resumed = await handleHookEvent(start, {}, deps, undefined, "stella");
+    expect(resumed.response).toMatchObject({
+      hookSpecificOutput: {
+        hookEventName: "SessionStart",
+        additionalContext: "You are governed by Oxagen.\n\nWrap up and stop.",
+      },
+    });
+    expect(delivered.map((d) => d.id)).toEqual(["cmd_1"]);
+    expect(record.control.messages).toHaveLength(0);
+  });
+
+  it("holds an operator message back from a blocked session start", async () => {
+    const { deps, registry, delivered } = harness({}, { hostStatus: "paused" });
+    const start = loadFixtures()[0] as Fixture;
+    await handleHookEvent(start.stdin, start.env, deps);
+    const record = registry.get(String(start.stdin["session_id"]));
+    if (record === undefined) throw new Error("no record");
+    record.control.messages.push(queuedMessage("cmd_1", "Wrap up and stop."));
+    // A blocked start answers `continue: false` and carries no context.
+    const blocked = await handleHookEvent(start.stdin, start.env, deps);
+    expect(blocked.response).toMatchObject({ continue: false });
+    expect(delivered).toEqual([]);
+    expect(record.control.messages).toHaveLength(1);
   });
 });

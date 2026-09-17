@@ -24,3 +24,19 @@ export const Default: Story = {
     </TooltipProvider>
   ),
 };
+
+/**
+ * Open by default, so the tooltip bubble itself is visible in the catalog and
+ * verifiable by design-sync's oracle. The hover-driven `Default` story only
+ * ever proves the trigger renders.
+ */
+export const Open: Story = {
+  render: () => (
+    <TooltipProvider>
+      <Tooltip defaultOpen>
+        <TooltipTrigger render={<Button variant="outline">Hover me</Button>} />
+        <TooltipPopup>Add to library</TooltipPopup>
+      </Tooltip>
+    </TooltipProvider>
+  ),
+};

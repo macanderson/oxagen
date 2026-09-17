@@ -9,16 +9,21 @@ export const tachoHostList = registerCapability({
   description:
     "List the machines enrolled as Tacho hosts in this workspace with their status, liveness, and counters.",
   mode: "sync",
-  surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  surfaces: ["api", "mcp"],
+  layers: ["schema", "api", "mcp", "app", "unit", "e2e", "docs"],
   scoped: true,
   noBillingGate: true,
   mutates: false,
   sensitivity: "medium",
   defaultEffect: "deny",
+  // `Member` was on the org map, where it is not a role: SystemOrgRole is
+  // Owner | Admin | Compliance | Billing, and Member is a *workspace* role.
+  // It therefore granted nothing to anybody, and a workspace member -- the
+  // person who most needs to see which machines report to their workspace --
+  // was denied. Moved to the map it belongs on.
   defaultRoles: {
-    org: { Owner: "allow", Admin: "allow", Member: "allow" },
-    workspace: {},
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
   },
   input: z
     .object({
