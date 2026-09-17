@@ -313,6 +313,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "resolves to a proxy's own address, which puts every caller behind that " +
       "node in one rate-limit bucket that any of them can exhaust for the rest. " +
       "Those ceilings are enforced only where this is set explicitly; unset, " +
+      "they skip rather than pool callers. The upstream proxy must also be " +
+      "configured to preserve the chain — Caddy replaces x-forwarded-for " +
+      "unless trusted_proxies names its peer — or no depth is correct. " +
       "they skip rather than pool callers. 0 means nothing in front is trusted, " +
       "so x-forwarded-for AND x-real-ip are both refused. Optional — the schema " +
       "defaults to 1 (one ALB) in packages/config/src/env.ts, but that default " +

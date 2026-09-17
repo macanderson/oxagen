@@ -165,18 +165,28 @@ export function enrolledMachineBucketKey(c: Context<AppEnv>): string {
  * The ceiling is therefore enforced ONLY where the deployment has declared its
  * proxy depth, by setting TRUSTED_PROXY_HOP_COUNT explicitly. The schema
  * default of 1 is a guess, and a guessed depth here is not a smaller version of
- * the right answer — it is the same failure one step down. Production is
- * client -> ALB -> Caddy and both append, so the chain is two deep; at the
- * default of 1 this would resolve to the load balancer's own address and put
- * every caller behind one ALB node in a single bucket, which on a fail-closed
- * pre-auth mount one of them can exhaust for all the others. An undeclared
- * depth is an unattributable request, so it skips.
+ * the right answer — it is the same failure one step down: it resolves to a
+ * proxy's own address and puts every caller behind that node in one bucket,
+ * which on a fail-closed pre-auth mount any one of them can exhaust for all the
+ * others. An undeclared depth is an unattributable request, so it skips.
+ *
+ * Production needs a change OUTSIDE this file before any depth is correct.
+ * Caddy's `reverse_proxy` does not append to an inbound X-Forwarded-For unless
+ * the peer is a trusted proxy — it REPLACES it. Measured against `caddy:2`:
+ * a request arriving as `X-Forwarded-For: 203.0.113.99` reached the upstream as
+ * `172.17.0.1` with a plain `reverse_proxy`, and as `203.0.113.99, 172.17.0.1`
+ * once `trusted_proxies` was set. So until the Caddyfile change ships, the API
+ * sees only the load balancer and NO hop count recovers a client. The
+ * `trusted_proxies` block is in infra/tools/caddy/Caddyfile.alb; after it
+ * deploys the chain is two deep and the depth to declare is 2.
  *
  * That leaves an unconfigured deployment exactly where it is today — this
  * counter has never once incremented — rather than switching on a ceiling
  * nobody has told us how to attribute. Declaring the depth turns it on, and
- * `.env.example` ships the value. Confirming production's depth against a live
- * header capture is tracked on #3167.
+ * `.env.example` ships the value. Sequencing the Caddy deploy and the declared
+ * depth is tracked on #3167; nothing here enforces until both are done, and
+ * declaring the depth early is merely coarse rather than unsafe, because what
+ * Caddy hands over is its own peer rather than anything a caller chose.
  */
 export function trustedClientIpBucketKey(c: Context<AppEnv>): string | null {
   // Vercel replaces `x-vercel-forwarded-for` at its own trusted network
