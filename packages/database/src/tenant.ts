@@ -350,6 +350,43 @@ export async function withSystemDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
 }
 
 /**
+ * A system write to a table that lives on the ORGANISATION'S plane.
+ *
+ * `withSystemDb` always uses the shared plane, deliberately and for good
+ * reasons (see its comment). Those reasons are about PLATFORM tables. A
+ * tenant-data table on a dedicated plane is the case it does not cover: the
+ * statement runs, matches nothing, and reports success, because the rows it
+ * meant to touch are on another database entirely. That is how the Tacho
+ * gateway observation was written — `tacho.hosts` is read through
+ * `withTenantDb`, so for an organisation with a dedicated plane the write
+ * landed on the shared plane, the observation never arrived, and every genuine
+ * connected-app session stayed classified `observe`
+ * (discussion_r4040617216).
+ *
+ * So this resolves the plane the way `withTenantDb` does, and bypasses RLS the
+ * way `withSystemDb` does. It needs no ALS scope — the organisation is named
+ * outright — which is the whole point: the callers are authorisation-time
+ * paths that know their org and may have no scope yet.
+ *
+ * NARROW BY DESIGN. Reach for it only for a write to tenant-plane data from a
+ * platform path, and say at the callsite why RLS is being bypassed. Anything
+ * running inside a handler already has a scope and wants `withTenantDb`.
+ */
+export async function withOrgPlaneSystemDb<T>(
+  orgId: string,
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  // Counted like `withSystemDb`: this is an audited RLS bypass, and leaving it
+  // out of the meter would make the enforcement gate unreachable.
+  recordIfUnscoped("withOrgPlaneSystemDb");
+  const database = await tenantPlaneDb(orgId);
+  return database.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.rls_bypass', 'on', true)`);
+    return fn(tx);
+  });
+}
+
+/**
  * Fail-fast guard: a PRODUCTION runtime must never run with RLS enforcement
  * disabled. The env default is already fail-closed (ON in production), so the
  * only way to reach this state is an explicit TENANT_RLS_ENFORCEMENT_ENABLED=

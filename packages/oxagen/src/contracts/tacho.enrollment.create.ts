@@ -54,6 +54,19 @@ export const tachoEnrollmentCreate = registerCapability({
       claudeExecpath: z.string().max(1024).optional(),
       nodeVersion: z.string().max(32).optional(),
       wrapperVersion: z.string().max(32).optional(),
+      /**
+       * The bundle fields this host's parser understands
+       * (`TACHO_BUNDLE_FEATURES` in `@oxagen/tacho`).
+       *
+       * The enrollment response carries the host's first policy bundle, and
+       * the host parses it with a `.strict()` schema, so a field it does not
+       * name fails the whole enrollment. Declaring what it can read is what
+       * lets the control plane add a bundle field without breaking every
+       * installed CLI on the day it deploys. Optional and empty are the same
+       * answer: a client that does not send it predates the field it would be
+       * asking for.
+       */
+      bundleFeatures: z.array(z.string().max(64)).max(32).optional(),
       shell: z.string().max(128).optional(),
       managed: z.boolean().default(false),
       validityDays: z.number().int().min(1).max(MAX_VALIDITY_DAYS).default(180),

@@ -1961,6 +1961,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "10",
   },
+  MAIN_VERIFIED_MAX_WAIT_MINUTES: {
+    group: "Operator scripts",
+    description:
+      "Upper bound on how long check-main-verified.mjs sleeps waiting the grace out before re-reading. Must stay below the workflow job's timeout-minutes. Defaults to 12.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "12",
+  },
   SCR_OWNER: {
     group: "Operator scripts",
     description:

@@ -93,7 +93,10 @@ import {
   API_KEY_AUTHORIZED_ROLES as AUTHORIZED_ROLES,
   resolveActorOrgRole as resolveActorRole,
 } from "./lib/api-key-authz";
-import { requestsReservedTachoPurpose } from "./lib/tacho-enrollment";
+import {
+  requestsReservedTachoGatewayPurpose,
+  requestsReservedTachoPurpose,
+} from "./lib/tacho-enrollment";
 import { requestsReservedAgentCredentialPurpose } from "@oxagen/oxagen/agent-credential";
 import { logger } from "./logger";
 
@@ -187,6 +190,34 @@ export const apiKeyRevokeHandler: CapabilityHandler<
         "revoke_api_key",
         "authz_denied",
         "Forbidden: an enrolled Tacho host key is revoked through revoke_tacho_enrollment, which also marks the host revoked and queues the revoke command",
+      );
+    }
+
+    // The gateway key (ADR-078), refused HERE and not before this PR.
+    //
+    // The test this file's header sets is that the path a refusal names must
+    // achieve what the refused operation was for, and that being server-owned
+    // is not that test — two refusals added on server-owned reasoning had to
+    // be removed. `revoke_tacho_enrollment` only became that path in this
+    // change: `retireEnrollmentKeys` now selects on
+    // `purpose IN (tacho_host_v1, tacho_gateway_v1)`, so revoking the
+    // enrollment retires the gateway key with it. Before that, revoking the
+    // enrollment left this credential live, and a refusal pointing at it would
+    // have been correct only by merge order.
+    //
+    // A separate predicate rather than widening `requestsReservedTachoPurpose`:
+    // the shared one is consulted by three callers whose answers are not the
+    // same question, and widening it would change what they refuse without
+    // anyone reading the line that changed.
+    if (requestsReservedTachoGatewayPurpose(existing.scope)) {
+      logger.warn(
+        { orgId: ctx.orgId, keyPublicId: existing.publicId },
+        "api.key.revoke: rejected — reserved Tacho gateway purpose",
+      );
+      throw new CapabilityError(
+        "revoke_api_key",
+        "authz_denied",
+        "Forbidden: the local MCP gateway key belongs to a Tacho enrollment and is retired by revoke_tacho_enrollment, which also retires the host key, marks the host revoked and queues the revoke command",
       );
     }
 

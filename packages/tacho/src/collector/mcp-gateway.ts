@@ -335,6 +335,52 @@ export function toolCountOf(result: unknown): number | undefined {
   return Array.isArray(tools) ? tools.length : undefined;
 }
 
+/**
+ * The tools the mandate permits, or undefined when the bundle names none.
+ *
+ * Undefined is *not told*, not *none permitted*: a bundle signed by a control
+ * plane older than `gateway_tools` declares nothing, and filtering everything
+ * away on that basis would take a working machine's toolbelt to zero on a
+ * field it has never seen. A bundle that declares an empty list is a mandate
+ * that permits nothing, and that is served as nothing.
+ */
+export function gatewayToolsOf(
+  bundle: PolicyBundle | undefined,
+): ReadonlySet<string> | undefined {
+  const declared = bundle?.gateway_tools;
+  return declared === undefined ? undefined : new Set(declared);
+}
+
+/**
+ * A `tools/list` result with everything outside the mandate removed, or the
+ * result untouched when there is nothing to filter by.
+ *
+ * The gateway does not evaluate the mandate — `@oxagen/tacho` takes no
+ * `@oxagen/*` runtime dependency, so it cannot read a capability's surfaces,
+ * mutation or sensitivity, and a second copy of that rule living here is
+ * exactly the drift ADR-078 §4 keeps out. It applies the answer the signed
+ * bundle carries.
+ *
+ * This runs before the ceiling is counted. A toolbelt is measured as it will
+ * be served, so a list that fits once the forbidden tools are gone is served
+ * rather than refused for a size it never had.
+ */
+export function filterToolsByMandate(
+  result: unknown,
+  allowed: ReadonlySet<string> | undefined,
+): unknown {
+  if (allowed === undefined) return result;
+  if (result === null || typeof result !== "object") return result;
+  const tools = (result as { tools?: unknown }).tools;
+  if (!Array.isArray(tools)) return result;
+  const kept = tools.filter((tool) => {
+    const name = (tool as { name?: unknown } | null)?.name;
+    return typeof name === "string" && allowed.has(name);
+  });
+  if (kept.length === tools.length) return result;
+  return { ...(result as Record<string, unknown>), tools: kept };
+}
+
 export interface McpGateway {
   /**
    * Handle one JSON-RPC message. `sessionId` is the MCP session the transport
@@ -468,12 +514,32 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
 
       const rpc = response.body as JsonRpcResponse | undefined;
 
-      // A `tools/list` that overflows the mandate's ceiling is refused here,
-      // with the provider's own numbers, rather than served and refused later
-      // by a provider the user cannot see.
+      // A `tools/list` is cut down to the mandate before anything else looks
+      // at it. The control plane advertises the whole workspace toolbelt to
+      // any credential that can reach it, and the gateway key's mandate is
+      // narrower than that — read-only, non-sensitive `mcp` capabilities — so
+      // an unfiltered list shows a connected app tools that can only fail when
+      // selected, and counts tools the mandate forbids against the ceiling.
       if (request.method === "tools/list" && rpc?.result !== undefined) {
-        const ceiling = ceilingOf(deps.bundle?.());
-        const count = toolCountOf(rpc.result);
+        const bundle = deps.bundle?.();
+        const allowed = gatewayToolsOf(bundle);
+        const served = filterToolsByMandate(rpc.result, allowed);
+        if (served !== rpc.result) {
+          const before = toolCountOf(rpc.result);
+          const after = toolCountOf(served);
+          log(
+            `mcp gateway filtered tools/list to the mandate: ${after ?? 0} of ${before ?? 0} tools`,
+          );
+          response = {
+            status: response.status,
+            body: { ...rpc, result: served } satisfies JsonRpcResponse,
+          };
+        }
+        // A `tools/list` that overflows the mandate's ceiling is refused here,
+        // with the provider's own numbers, rather than served and refused
+        // later by a provider the user cannot see.
+        const ceiling = ceilingOf(bundle);
+        const count = toolCountOf(served);
         if (
           ceiling !== undefined &&
           count !== undefined &&

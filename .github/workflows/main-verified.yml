@@ -44,7 +44,12 @@ permissions:
 jobs:
   verified:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Longer than the grace, because the guard now waits the grace out rather
+    # than reporting `pending` and leaving a genuinely missing run unreported
+    # until the next push or the daily cron. The wait itself is bounded by
+    # MAIN_VERIFIED_MAX_WAIT_MINUTES, and only happens when a commit in the
+    # window is actually inside the grace.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v4

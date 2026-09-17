@@ -435,4 +435,57 @@ describe("OpenTelemetry normalization", () => {
       attrs: { type: "input" },
     });
   });
+
+  // -------------------------------------------------------------------------
+  // The reserved namespace is not a place a submitter may write
+  // -------------------------------------------------------------------------
+  //
+  // discussion_r4036718127 (P1). Verbatim passthrough is what makes `attrs`
+  // worth having — a new upstream attribute is captured the day it appears —
+  // and it was also the mechanism: anything that can submit OTLP for an
+  // enrolled host could set `oxagen.enforcement_tier=gateway` on an ordinary
+  // record, the daemon sealed it onto a chain that verifies, and the control
+  // plane read the tier off it.
+  //
+  // `enforcement_tier` was the instance. The namespace is the class, so the
+  // rule is about the namespace: `oxagen.*` is how a sealed record says what
+  // the COLLECTOR did, and nothing arriving over OTLP writes into it.
+  it("re-keys a submitted oxagen.* attribute as the claim it is", () => {
+    const { drafts } = normalizeOtlp(
+      log("api_request", {
+        model: "m",
+        duration_ms: 1,
+        "oxagen.enforcement_tier": "gateway",
+        "oxagen.connected_app": "not-an-app",
+        custom_attr: "keep",
+      }),
+    );
+    // Renamed, not dropped: an operator wants to see that something tried, and
+    // a key that begins `client_claimed.` cannot be mistaken downstream for a
+    // value the platform derived.
+    expect(drafts[0]?.attrs).toEqual({
+      "client_claimed.oxagen.enforcement_tier": "gateway",
+      "client_claimed.oxagen.connected_app": "not-an-app",
+      custom_attr: "keep",
+    });
+    expect(drafts[0]?.attrs).not.toHaveProperty("oxagen.enforcement_tier");
+  });
+
+  it("leaves every other attribute exactly where it was", () => {
+    // The quarantine must not cost the passthrough the `attrs` bag is for.
+    const { drafts } = normalizeOtlp(
+      log("api_request", {
+        model: "m",
+        duration_ms: 1,
+        "oxagenic.sounds_close": "kept",
+        "vendor.oxagen.enforcement_tier": "kept",
+        brand_new_upstream_attr: "kept",
+      }),
+    );
+    expect(drafts[0]?.attrs).toEqual({
+      "oxagenic.sounds_close": "kept",
+      "vendor.oxagen.enforcement_tier": "kept",
+      brand_new_upstream_attr: "kept",
+    });
+  });
 });

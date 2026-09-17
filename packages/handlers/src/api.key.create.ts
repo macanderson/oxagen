@@ -23,7 +23,10 @@ import {
   generateApiKey,
 } from "./lib/api-key-authz";
 import { requestsReservedStellaTelemetryPurpose } from "./lib/stella-telemetry-enrollment";
-import { requestsReservedTachoPurpose } from "./lib/tacho-enrollment";
+import {
+  requestsReservedTachoGatewayPurpose,
+  requestsReservedTachoPurpose,
+} from "./lib/tacho-enrollment";
 import { requestsReservedCliSessionPurpose } from "@oxagen/auth/cli-auth";
 import { requestsReservedAgentCredentialPurpose } from "@oxagen/oxagen/agent-credential";
 import { logger } from "./logger";
@@ -55,7 +58,10 @@ export const apiKeyCreateHandler: CapabilityHandler<
   // The generic key-management capability must never mint the server-owned
   // enrollment marker. Provisioning is a separate operator workflow; allowing
   // callers to self-assert this purpose would bypass the intake trust boundary.
-  if (requestsReservedTachoPurpose(input.scope)) {
+  if (
+    requestsReservedTachoPurpose(input.scope) ||
+    requestsReservedTachoGatewayPurpose(input.scope)
+  ) {
     logger.warn(
       { orgId: ctx.orgId },
       "api.key.create: rejected — reserved Tacho host purpose",

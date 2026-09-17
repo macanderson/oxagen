@@ -1361,6 +1361,9 @@ importers:
 
   packages/iam:
     dependencies:
+      '@oxagen/auth':
+        specifier: workspace:*
+        version: link:../auth
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../billing
@@ -2058,6 +2061,9 @@ importers:
       '@oxagen/handlers':
         specifier: workspace:*
         version: link:../../packages/handlers
+      '@oxagen/iam':
+        specifier: workspace:*
+        version: link:../../packages/iam
       '@oxagen/ontology':
         specifier: workspace:*
         version: link:../../packages/ontology

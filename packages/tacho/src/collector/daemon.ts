@@ -38,10 +38,13 @@ import type { Exec } from "../host/service";
 import { Wal } from "../host/wal";
 import { ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
-import type {
-  CommandAcknowledgement,
-  ControlEnvelope,
-  DaemonHealth,
+import {
+  TACHO_ENFORCEMENT_TIER_ATTR,
+  TACHO_GATEWAY_TIER,
+  type CommandAcknowledgement,
+  type ControlEnvelope,
+  type DaemonHealth,
+  TACHO_BUNDLE_FEATURES,
 } from "../wire";
 import { Detector } from "./detector";
 import { exportSession, type ExportFormat } from "./exporters";
@@ -287,6 +290,11 @@ export async function startDaemon(
         : {}),
       otel_ok: lastOtlpAt !== undefined && now() - lastOtlpAt < 10 * 60_000,
       bundle_etag: host.bundle.etag,
+      // What this daemon's `policyBundleSchema` names, so the control plane
+      // can send a gated bundle field without breaking hosts that predate it.
+      // Reported from the running code rather than from `host.json`, which
+      // `enroll` writes once and no upgrade rewrites.
+      bundle_features: [...TACHO_BUNDLE_FEATURES],
     };
   }
 
@@ -587,7 +595,7 @@ export async function startDaemon(
           attrs: {
             "oxagen.connected_app": call.client,
             "oxagen.mcp_session": call.sessionId,
-            "oxagen.enforcement_tier": "gateway",
+            [TACHO_ENFORCEMENT_TIER_ATTR]: TACHO_GATEWAY_TIER,
           },
         },
       ),

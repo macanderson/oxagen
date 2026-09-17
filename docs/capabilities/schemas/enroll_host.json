@@ -79,6 +79,13 @@
         "type": "string",
         "maxLength": 32
       },
+      "bundleFeatures": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "maxLength": 64
+        }
+      },
       "shell": {
         "type": "string",
         "maxLength": 128
@@ -454,6 +461,13 @@
               "source"
             ],
             "additionalProperties": false
+          },
+          "gateway_tools": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 256
+            }
           },
           "signature": {
             "type": "object",
