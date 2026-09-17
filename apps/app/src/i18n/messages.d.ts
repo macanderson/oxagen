@@ -2403,6 +2403,7 @@ type Messages = {
         heading: string;
         body: string;
         action: string;
+        connect: string;
       };
       unconfigured: string;
       picker: {
@@ -2428,6 +2429,19 @@ type Messages = {
         fixed: string;
       };
       manage: string;
+      installChoose: string;
+      installNone: string;
+      installations: {
+        heading: string;
+        about: string;
+        loading: string;
+        listLabel: string;
+        allRepositories: string;
+        selectedRepositories: string;
+        attach: string;
+        attaching: string;
+        none: string;
+      };
     };
     failure: {
       denied: string;
@@ -2438,6 +2452,8 @@ type Messages = {
       pendingApproval: string;
       refused: string;
       unavailable: string;
+      githubNotAuthorized: string;
+      installationUnreachable: string;
     };
   };
 };
