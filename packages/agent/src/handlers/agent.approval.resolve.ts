@@ -39,7 +39,7 @@ import { HandlerError, type CheckedContext } from "@oxagen/oxagen";
 import { lockMandate, parseMandateRow, release } from "@oxagen/rules";
 import { and, eq, sql } from "drizzle-orm";
 import { notifyResolution } from "../runtime/approval";
-import { APPROVAL_RESOLVER_ROLES } from "../runtime/approval-roles";
+import { APPROVAL_RESOLVER_ROLES } from "@oxagen/rules/approval-notify";
 import { approvalIdCondition } from "../runtime/approval-id";
 import type {
   AgentApprovalResolveInput,

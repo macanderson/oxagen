@@ -5,6 +5,23 @@ import {
   measureDeclarationsSchema,
 } from "../mandates/schemas";
 
+/**
+ * The longest a tool's name may be.
+ *
+ * Not cosmetic, and not a guess. A tool imported from an MCP server is
+ * GOVERNED under the synthetic identity `mcp.<server uuid>.<name>`, and that
+ * identity is what `openAssistantRun` pins into the run spec's tool policy —
+ * where `@oxagen/run-ledger`'s `EXTERNAL_TOOL_SEGMENT_MAX` bounds each
+ * segment. A name the registry accepts but the run spec refuses does not fail
+ * the tool: the spec pins EVERY materialized tool, so it fails admission for
+ * every assistant turn in the workspace, including turns that never mention
+ * it. The two bounds are therefore one decision written in two packages that
+ * cannot import each other, and
+ * `packages/agent/src/runtime/tool-identity-bounds.test.ts` is the test that
+ * holds them equal.
+ */
+export const TOOL_NAME_MAX_LENGTH = 128;
+
 export const toolDeclarationPublish = registerCapability({
   name: "publish_tool_declaration",
   domain: "tool",
@@ -27,6 +44,7 @@ export const toolDeclarationPublish = registerCapability({
       name: z
         .string()
         .min(1)
+        .max(TOOL_NAME_MAX_LENGTH)
         .describe(
           "Tool name (snake_case identifier, e.g. read_file) — the workspace-unique key",
         ),

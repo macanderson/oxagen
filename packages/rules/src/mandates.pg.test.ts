@@ -62,6 +62,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const versionId = randomUUID();
     const plainToolId = randomUUID();
     const plainVersionId = randomUUID();
+    // One person who may resolve an approval in this org, seeded for real so
+    // the mandate gate's `approval.requested` fan-out has somebody to reach.
+    // Without it the fan-out writes nothing and a test asserting it would
+    // pass on an empty result — which is the shape of the bug it guards.
+    const approverUserId = randomUUID();
+    const approverPrincipalId = randomUUID();
+    const approverRoleId = randomUUID();
     const NOW = new Date("2026-09-14T12:00:00Z");
     const NEXT_MONTH = new Date("2026-10-02T12:00:00Z");
     const mandateIds: string[] = [];
@@ -123,6 +130,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .where(eq(schema.mandates.id, id));
         return parseMandateRow(row!);
       });
+
+    const notificationsForOrg = () =>
+      withSystemDb((tx) =>
+        tx
+          .select()
+          .from(schema.notifications)
+          .where(eq(schema.notifications.orgId, orgId)),
+      );
 
     const ledgerOf = (mandateId: string) =>
       withSystemDb((tx) =>
@@ -198,6 +213,29 @@ describe.skipIf(!process.env.DATABASE_URL)(
             .set({ activeVersionId: vid })
             .where(eq(schema.tools.id, id));
         }
+        // An org-scoped Owner — one of the roles `resolve_approval` admits —
+        // held by an active human principal.
+        await tx.insert(schema.roles).values({
+          id: approverRoleId,
+          orgId,
+          scopeKind: "org",
+          name: "Owner",
+          isSystemDefault: true,
+        });
+        await tx.insert(schema.principals).values({
+          id: approverPrincipalId,
+          orgId,
+          kind: "human",
+          displayName: "Approver",
+          status: "active",
+          parentUserId: approverUserId,
+        });
+        await tx.insert(schema.principalRoleAssignments).values({
+          principalId: approverPrincipalId,
+          roleId: approverRoleId,
+          orgId,
+          workspaceId: null,
+        });
       });
     });
 
@@ -220,6 +258,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await tx
           .delete(schema.toolVersions)
           .where(eq(schema.toolVersions.workspaceId, workspaceId));
+        await tx
+          .delete(schema.notifications)
+          .where(eq(schema.notifications.orgId, orgId));
+        await tx
+          .delete(schema.principalRoleAssignments)
+          .where(eq(schema.principalRoleAssignments.orgId, orgId));
+        await tx
+          .delete(schema.principals)
+          .where(eq(schema.principals.orgId, orgId));
+        await tx.delete(schema.roles).where(eq(schema.roles.orgId, orgId));
       });
     });
 
@@ -614,6 +662,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
         },
       });
       const input = { amount: { value: "150.00" }, vendor: "vendor:aws" };
+      // Counted before, not asserted as a total: other cases in this file park
+      // approvals against the same org, so a fixed expected count would make
+      // this pass or fail on test order rather than on the fan-out.
+      const feedBefore = await notificationsForOrg();
 
       const parked = await decide(checkArgs(agent, input, { userId: null }));
       expect(parked.kind).toBe("pending");
@@ -636,6 +688,32 @@ describe.skipIf(!process.env.DATABASE_URL)(
         messageId: null,
       });
       expect(approval!.inputDigest).toMatch(/^[0-9a-f]{64}$/);
+
+      // MC spec §7.7. A mandate parks a call precisely because a rule decided
+      // a person must see it, so the approval and the feed row that tells
+      // somebody about it are written together. The fan-out used to live
+      // inside the runtime's createApprovalRequest, which this path does not
+      // call — so these approvals notified nobody and could only expire,
+      // which reads in the record exactly like a considered refusal.
+      const feedAfter = await notificationsForOrg();
+      const notified = feedAfter.filter(
+        (n) => !feedBefore.some((b) => b.id === n.id),
+      );
+      // Exactly one: the org has exactly one person who may resolve it, and a
+      // second row would mean the same card twice in their feed.
+      expect(notified).toHaveLength(1);
+      expect(notified[0]).toMatchObject({
+        userId: approverUserId,
+        workspaceId,
+        kind: "approval",
+        event: "approval.requested",
+        title: "Approval requested: stripe__create_payment",
+      });
+      // The risk and the window are what the card has to show to be actable.
+      expect(notified[0]!.body).toContain("Risk high");
+      expect(notified[0]!.body).toContain(
+        new Date(NOW.getTime() + MANDATE_APPROVAL_TTL_MS).toISOString(),
+      );
       // Retried while a person has not looked: the same row, the same held
       // reservation, no more authority drawn.
       await expect(check(checkArgs(agent, input))).rejects.toMatchObject({

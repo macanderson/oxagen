@@ -334,6 +334,40 @@ const modelEngineCallCompletedSchema = z
   .strict();
 
 /**
+ * Write-ahead intention: the host is about to contact the provider for a
+ * completion. Appended BEFORE the request leaves the process, so a completion
+ * whose tokens are incurred and metered can never be absent from the record.
+ *
+ * The same reasoning as `tool.engine_call_started`, applied to the other side
+ * of the turn. If `model.engine_call_completed` is the ONLY append for a
+ * completion, then a provider that answers successfully and a ledger append
+ * that then fails leaves a run sealed `failed` whose evidence shows no model
+ * call at all — while the vendor has been paid and the customer metered for
+ * it. Evidence that omits a billed completion is evidence an invoice dispute
+ * cannot be settled from.
+ *
+ * `model` is the CONFIGURED model id, not the resolved one: the request has
+ * not been answered yet, so the model the provider actually served is not
+ * knowable here. The completed event carries the resolved id, and the pair
+ * read together is what shows a gateway substitution.
+ *
+ * It carries NO `outcome` and NO token counts, deliberately: a started event
+ * with no matching `model.engine_call_completed` is a dangling intention, and
+ * nothing can read it as a completed call because the fields a reader would
+ * test do not exist and the event type differs.
+ */
+const modelEngineCallStartedSchema = z
+  .object({
+    engine_seq: countSchema,
+    model_call_id: shortLabelSchema,
+    role: shortLabelSchema,
+    provider: shortLabelSchema,
+    /** The configured model id, before the provider resolves one. */
+    model: shortLabelSchema,
+  })
+  .strict();
+
+/**
  * A tool call the host answered for the in-app agent's engine (`tool_request`
  * frame with a `seq`): the tool's model-facing name, how it ended and the
  * digests of what went in and came out. `search_tools` and `load_tools`, the
@@ -527,6 +561,11 @@ export const EVENT_TYPE_REGISTRY = {
     stage: "tool",
     contentClass: "tool_call",
     schema: toolEngineCallCompletedSchema,
+  },
+  "model.engine_call_started": {
+    stage: "model",
+    contentClass: "model_call",
+    schema: modelEngineCallStartedSchema,
   },
   "tool.engine_call_started": {
     stage: "tool",
