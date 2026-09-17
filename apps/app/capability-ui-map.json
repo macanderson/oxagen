@@ -37,7 +37,7 @@
     "ask_assistant": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Ask the assistant at the foot of the sidebar — the shell's assistant flyout, whose composer invokes ask_assistant inside a workspace (features/shell/assistant-flyout.tsx, features/shell/assistant-actions.ts)",
+      "entry": "Ask the assistant at the foot of the sidebar, and of the phone's nav drawer — the shell's assistant flyout, whose composer invokes ask_assistant inside a workspace (features/shell/assistant-flyout.tsx, features/shell/assistant-actions.ts)",
       "testid": "assistant-send",
       "proof": "apps/app/src/features/shell/assistant-flyout.test.tsx",
       "verifiedAt": "2026-09-17",

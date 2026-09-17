@@ -15,6 +15,47 @@
 // the shell mounts at organization scope, so the composer is offered only
 // inside a workspace. On an organization page it says so rather than posting a
 // question that the kernel would refuse for want of a scope.
+//
+// The conversation belongs to the workspace it was opened in: the turn handler
+// matches the conversation on `(id, orgId, workspaceId)` and raises
+// ConversationNotFoundError otherwise. The chrome lives in the organization
+// layout and survives a workspace switch, so the transcript and the
+// conversation id are keyed to the workspace here — a switch clears them, and
+// a reply that lands after the switch is dropped rather than shown under the
+// workspace it does not belong to. Standing on an organization page is not a
+// switch: it has no workspace of its own, so the transcript waits.
+//
+// A turn in flight is invalidated by the occasion it was asked on, not by the
+// place. "org/ws" names a place: A → B → A puts the same string back, so a
+// comparison on it cannot tell "still the turn I started" from "back where I
+// started", and a slow A turn would land in the transcript the return to A had
+// just cleared. The reset bumps a generation instead — a return included — and
+// a turn compares the generation it was asked on, so its reply, its run and
+// its conversation id reach only the transcript that asked for them.
+//
+// Each answer names the run it was recorded as, and names it as text, not as a
+// link. `list_runs` excludes the `chat` and `api-chat` surfaces — the
+// assistant is Oxagen's, and its turns are recorded but never listed as the
+// customer's own runs (`packages/handlers/src/run.list.ts`) — so a link here
+// would be the only claimed way to the evidence, and there is nothing at the
+// other end of it yet: `app/[org]/[ws]/runs/[run]/page.tsx` renders a title
+// and reads nothing until WL-35 builds the Run page, and `get_run` declares
+// `layers: [schema, api, mcp, unit, docs]` with no `app`, so the contract
+// itself makes no app promise to bind. A link to a page that shows a title is
+// the same dead end with an anchor on it, and this is the one surface where
+// the link would be the whole claim rather than a convenience beside a row
+// that is already on screen.
+//
+// The id stays, in mono, because it is true and it is the handle: `get_run` is
+// implemented on the API, MCP and CLI surfaces, so an operator can inspect the
+// run today with the id this prints. The link belongs in the change that gives
+// it somewhere to go.
+//
+// Closing returns focus where it came from. The host is always mounted and
+// goes `inert` when it closes, so focus left on a control inside it would land
+// on an unavailable element or fall to the body; every close path — Escape,
+// the close button, the launcher toggling it shut — goes through the one
+// effect below.
 import { CircleAlert, Send, Sparkles } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -23,6 +64,7 @@ import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
 import { parseShellPath } from "./nav";
 import { useShellState } from "./shell-state";
+import { useNavigate } from "@/ui/navigation";
 
 type Entry =
   | { kind: "asked"; id: string; text: string }
@@ -74,6 +116,7 @@ export function AssistantFlyout() {
   const { assistantOpen, setAssistantOpen } = useShellState();
   const pathname = usePathname();
   const { org, ws, rest } = parseShellPath(pathname);
+  const panelRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   // A monotonic key per entry: two turns in the same millisecond would collide
@@ -84,8 +127,61 @@ export function AssistantFlyout() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  // The workspace the transcript belongs to, "org/ws". Null on an
+  // organization page, which owns no conversation and so changes nothing.
+  const scope = org === null || ws === null ? null : `${org}/${ws}`;
+  const [scopeShown, setScopeShown] = useState(scope);
+  // Which visit to a workspace the transcript belongs to. Every transition
+  // bumps it, a return to a workspace included, which is the whole point: a
+  // turn started on the first visit to A must not land on the second.
+  const [generation, setGeneration] = useState(0);
+  if (scope !== null && scope !== scopeShown) {
+    // Adjusting state during render rather than in an effect: the stale
+    // transcript never paints under the new workspace.
+    setScopeShown(scope);
+    setGeneration((n) => n + 1);
+    setEntries([]);
+    setConversationId(null);
+    setDraft("");
+    setPending(false);
+  }
+  // Read by a turn that is still in flight when the person moves: the reply
+  // resolves outside the render that started it and must compare against now,
+  // not against then.
+  const generationRef = useRef(generation);
   useEffect(() => {
-    if (assistantOpen) closeRef.current?.focus();
+    generationRef.current = generation;
+  }, [generation]);
+
+  // Where focus came from, so closing can give it back. Captured at the open,
+  // which is the launcher that was tapped — the rail's on a desktop, or, on a
+  // phone, whatever the drawer handed focus to as it closed itself.
+  const openedFromRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (assistantOpen) {
+      const active = document.activeElement;
+      openedFromRef.current = active instanceof HTMLElement ? active : null;
+      closeRef.current?.focus();
+      return;
+    }
+    const openedFrom = openedFromRef.current;
+    openedFromRef.current = null;
+    // On a phone this is `document.body`: the drawer had already unmounted the
+    // launcher that was tapped by the time the open ran, so there is no control
+    // to go back to and focusing the body is the drop, not a restore.
+    if (openedFrom !== null && openedFrom.isConnected) {
+      openedFrom.focus();
+      return;
+    }
+    // Nothing to give it back to — the control that opened this is gone, which
+    // is the phone case: the drawer's launcher unmounted with the drawer. Take
+    // focus off the panel that has just gone `inert` anyway, so the next Tab
+    // starts from the top of the document instead of from a control no one can
+    // reach. A browser blurs an inert subtree by itself; doing it here is what
+    // makes that true in a test too.
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && panelRef.current?.contains(active))
+      active.blur();
   }, [assistantOpen]);
 
   // Keep the newest turn in view. Guarded because scrollTo is a browser
@@ -97,7 +193,8 @@ export function AssistantFlyout() {
     log.scrollTo({ top: log.scrollHeight });
   }, [entries]);
 
-  const inWorkspace = org !== null && ws !== null;
+  const navigate = useNavigate();
+  const inWorkspace = scope !== null;
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -108,6 +205,21 @@ export function AssistantFlyout() {
     setEntries((prior) => [...prior, { kind: "asked", id, text: content }]);
     setDraft("");
     setPending(true);
+    const asked = generationRef.current;
+    /**
+     * This turn still owns the transcript: the person has not left the
+     * workspace, nor left it and come back, since it was asked. Either would
+     * make its reply, its run and its conversation id belong to a transcript
+     * that is no longer this one.
+     *
+     * One generation holds at most one turn in flight, so nothing else can be
+     * racing this one for `conversationId`: a second turn needs a second
+     * submit, `onSubmit` refuses one while `pending`, and the only thing that
+     * clears `pending` early is the reset — which bumps the generation and
+     * discards this turn on its way past. The test named "refuses a second
+     * question while a turn is in flight" is what keeps that true.
+     */
+    const stillOurs = () => generationRef.current === asked;
     try {
       const result = await askAssistant(org, ws, {
         conversationId,
@@ -115,6 +227,7 @@ export function AssistantFlyout() {
         route: rest[0] ?? "fleet",
         entityId: rest[1] ?? null,
       });
+      if (!stillOurs()) return;
       if (result.ok) {
         setConversationId(result.value.conversationId);
         setEntries((prior) => [
@@ -127,6 +240,16 @@ export function AssistantFlyout() {
             parked: result.value.parkedCards,
           },
         ]);
+        // A parked write is a new approval on the record, created after Fleet
+        // and the shell's waiting count were server-rendered
+        // (`features/fleet/fleet.tsx` reads `approvals.pending` once per
+        // render, and there is no poll). The sentence beside this sends the
+        // person to Fleet to approve them and they expire, so a stale view has
+        // a deadline on it. `navigate.refresh()` re-renders the server
+        // components at the URL already showing, without a history entry —
+        // only when something actually parked, because an ordinary turn
+        // changes nothing either surface reads.
+        if (result.value.parkedCards.length > 0) navigate.refresh();
       } else {
         setEntries((prior) => [
           ...prior,
@@ -134,17 +257,19 @@ export function AssistantFlyout() {
         ]);
       }
     } catch {
+      if (!stillOurs()) return;
       setEntries((prior) => [
         ...prior,
         { kind: "refused", id: `${id}-a`, code: "unavailable" },
       ]);
     } finally {
-      setPending(false);
+      if (stillOurs()) setPending(false);
     }
   }
 
   return (
     <aside
+      ref={panelRef}
       id={ASSISTANT_PANEL_ID}
       aria-labelledby={`${ASSISTANT_PANEL_ID}-title`}
       inert={!assistantOpen}
@@ -183,7 +308,10 @@ export function AssistantFlyout() {
 
       <div ref={logRef} className="min-h-0 flex-1 overflow-y-auto p-4">
         {entries.length === 0 ? (
-          <div className="flex flex-col gap-2 py-6" data-testid="assistant-intro">
+          <div
+            className="flex flex-col gap-2 py-6"
+            data-testid="assistant-intro"
+          >
             <h3 className="text-sm font-semibold">{t("intro.title")}</h3>
             <p className="text-sm text-muted-foreground">{t("intro.body")}</p>
           </div>
@@ -198,7 +326,10 @@ export function AssistantFlyout() {
                 ) : entry.kind === "answered" ? (
                   <div data-testid="assistant-answer">
                     <p className="whitespace-pre-wrap text-sm">{entry.text}</p>
-                    <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+                    <p
+                      data-testid="assistant-recorded-as"
+                      className="mt-1 font-mono text-[11px] text-muted-foreground"
+                    >
                       {t("recordedAs", { run: entry.runId })}
                     </p>
                     {entry.parked.length === 0 ? null : (
