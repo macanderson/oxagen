@@ -182,7 +182,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             name: "Invoice bot",
             agentType: "custom",
             principalId: invoiceBotPrincipal,
-            createdByUserId: operatorUserId,
+            createdById: operatorUserId,
           })
           .returning({ publicId: schema.agents.publicId });
         invoiceBotId = bot!.publicId;
@@ -195,7 +195,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             name: "Other bot",
             agentType: "custom",
             principalId: otherBotPrincipal,
-            createdByUserId: otherOperatorUserId,
+            createdById: otherOperatorUserId,
           })
           .returning({ publicId: schema.agents.publicId });
         otherBotId = other!.publicId;

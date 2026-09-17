@@ -34,7 +34,7 @@ An operator capability resolves the person it acts for with
 `resolveOperatorUserId`:
 
 - a session acts for its user;
-- an API key acts for `api_keys.created_by_user_id`, the person who minted it.
+- an API key acts for `api_keys.created_by_id`, the person who minted it.
   The CLI authorize page approves only an Owner or Admin;
 - a key whose `scope` names any `purpose`, or that carries
   `stella_telemetry_enrollment_id`, is a machine credential and acts for no one.

@@ -146,7 +146,7 @@ const moneySwitch: KillSwitchRow = {
   activatedAt: new Date("2026-09-15T00:00:00Z"),
   deactivatedAt: null,
   flippedByUserId: ADMIN,
-  updatedByUserId: ADMIN,
+  updatedById: ADMIN,
 };
 
 beforeEach(() => {

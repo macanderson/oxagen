@@ -217,8 +217,8 @@ export const apiKeyCreateHandler: CapabilityHandler<
         name: input.name,
         scope: input.scope ?? {},
         ...(expiresAt ? { expiresAt } : {}),
-        createdByUserId: ctx.userId ?? undefined,
-        updatedByUserId: ctx.userId ?? undefined,
+        createdById: ctx.userId ?? undefined,
+        updatedById: ctx.userId ?? undefined,
       })
       .returning({
         id: schema.apiKeys.id,

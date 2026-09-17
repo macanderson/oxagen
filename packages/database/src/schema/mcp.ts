@@ -43,8 +43,7 @@ export const mcpRegistries = mcpSchema.table(
   {
     ...idMixin("mreg"),
     ...auditMixin(),
-    orgId: uuid("org_id").notNull(),
-    workspaceId: uuid("workspace_id").notNull(),
+    ...orgScopeMixin(),
     name: text("name").notNull(),
     baseUrl: text("base_url").notNull(),
     enabled: boolean("enabled").notNull().default(true),

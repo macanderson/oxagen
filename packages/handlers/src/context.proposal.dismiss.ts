@@ -84,7 +84,7 @@ export function createDismissProposalHandler(
           status: "rejected",
           dismissedAt: deps.now(),
           dismissedReason: input.reason,
-          updatedByUserId: actingUserId,
+          updatedById: actingUserId,
         },
         DISMISSABLE,
       );

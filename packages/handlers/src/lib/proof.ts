@@ -370,12 +370,12 @@ export function writeDisclosureGrain(
         grain,
         createdAt: now,
         updatedAt: now,
-        createdByUserId: userId,
-        updatedByUserId: userId,
+        createdById: userId,
+        updatedById: userId,
       })
       .onConflictDoUpdate({
         target: [policies.orgId, policies.workspaceId],
-        set: { grain, updatedAt: now, updatedByUserId: userId },
+        set: { grain, updatedAt: now, updatedById: userId },
       });
     return { previous, grain, changedAt: now, changed: true };
   });

@@ -137,7 +137,7 @@ export async function updateOrgGeneralAction(
               name,
               slug,
               avatarUrl: avatarUrl || null,
-              updatedByUserId: session.user.id,
+              updatedById: session.user.id,
             })
             .where(eq(schema.organizations.id, org.id));
 

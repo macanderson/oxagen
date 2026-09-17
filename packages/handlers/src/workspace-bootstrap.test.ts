@@ -83,7 +83,7 @@ describe("bootstrapWorkspace", () => {
         name: "Core",
         slug: "core",
         namespace: "core",
-        createdByUserId: "u_1",
+        createdById: "u_1",
       }),
     );
     expect(inserts[1]).toEqual(

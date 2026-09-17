@@ -113,7 +113,7 @@ export const conversationAttachmentAddHandler: CapabilityHandler<
   await withTenantDb((tx) =>
     tx
       .update(schema.generatedAssets)
-      .set({ conversationId: conv.id, updatedByUserId: ctx.userId })
+      .set({ conversationId: conv.id, updatedById: ctx.userId })
       .where(
         and(
           eq(schema.generatedAssets.id, asset.id),

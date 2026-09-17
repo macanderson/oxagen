@@ -186,8 +186,8 @@ export async function publishTool(
     effectIdPath: args.effectIdPath ?? null,
     isLatest: true,
     publishedAt: sql`now()`,
-    createdByUserId: args.userId ?? undefined,
-    updatedByUserId: args.userId ?? undefined,
+    createdById: args.userId ?? undefined,
+    updatedById: args.userId ?? undefined,
   };
 
   const identityValues = {
@@ -195,7 +195,7 @@ export async function publishTool(
     description: args.description,
     source: args.source,
     mcpServerId: args.mcpServerId,
-    updatedByUserId: args.userId ?? undefined,
+    updatedById: args.userId ?? undefined,
     updatedAt: sql`now()`,
   };
 
@@ -333,7 +333,7 @@ export async function publishTool(
           workspaceId,
           slug,
           enabled: true,
-          createdByUserId: args.userId ?? undefined,
+          createdById: args.userId ?? undefined,
           ...identityValues,
         })
         .returning({

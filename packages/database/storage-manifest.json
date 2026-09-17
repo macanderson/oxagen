@@ -3343,7 +3343,7 @@
       "writes": []
     }
   ],
-  "contentHash": "29c884149507b7c79ae8f997aa188c051254986eed6b6948fd0cc9489ac5cf52",
+  "contentHash": "7b133aa537f24e72b06eef8e9259d2170516a1bfc0d80858a3ff2d21009be000",
   "domains": [
     {
       "name": "agent",
@@ -5760,13 +5760,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -5909,13 +5909,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -6219,7 +6219,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -6485,7 +6485,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -6655,13 +6655,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -6911,13 +6911,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -7037,7 +7037,7 @@
           "type": "jsonb"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": false,
           "primaryKey": false,
           "type": "uuid"
@@ -7118,13 +7118,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -7148,7 +7148,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -7266,13 +7266,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -7426,7 +7426,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -7520,7 +7520,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -7620,13 +7620,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -7864,13 +7864,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -7970,13 +7970,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -8000,7 +8000,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -8125,13 +8125,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -8303,13 +8303,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -8333,7 +8333,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -8428,13 +8428,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -8458,7 +8458,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -8675,13 +8675,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -8705,7 +8705,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -8922,13 +8922,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -8940,7 +8940,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -9070,13 +9070,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -9088,7 +9088,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -9208,13 +9208,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -9238,7 +9238,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -9315,13 +9315,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -9499,13 +9499,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -9577,7 +9577,7 @@
           "type": "uuid"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -9623,13 +9623,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -9897,13 +9897,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -10162,13 +10162,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -10208,13 +10208,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -10226,7 +10226,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -10321,13 +10321,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -10462,13 +10462,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -10682,13 +10682,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -10802,13 +10802,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -10874,7 +10874,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -10914,13 +10914,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -11014,13 +11014,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -11044,7 +11044,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -11428,13 +11428,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -11767,13 +11767,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -11843,13 +11843,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -11873,7 +11873,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -12001,13 +12001,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -12031,7 +12031,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -12107,13 +12107,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -12201,13 +12201,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -12259,7 +12259,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -12347,13 +12347,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -12449,7 +12449,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -12610,7 +12610,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -12674,13 +12674,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -12774,7 +12774,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -12980,7 +12980,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -13086,13 +13086,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -13222,13 +13222,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -13240,7 +13240,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -13322,13 +13322,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -13416,13 +13416,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -13492,13 +13492,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -14196,7 +14196,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -14372,14 +14372,38 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "workspace_id",
-          "nullable": false,
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
           "name": "org_id",
           "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "deleted_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "deleted_by_id",
+          "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
@@ -14474,31 +14498,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
           "name": "oauth_account_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -14631,13 +14631,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -14778,13 +14778,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -14984,13 +14984,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -15114,13 +15114,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -15132,7 +15132,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -15256,13 +15256,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -15350,13 +15350,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -15432,13 +15432,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -15544,13 +15544,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -15562,7 +15562,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -15663,13 +15663,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -15751,13 +15751,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -15769,7 +15769,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -15986,13 +15986,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -16056,13 +16056,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -16167,13 +16167,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -16185,7 +16185,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -16309,13 +16309,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -16397,13 +16397,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -16512,13 +16512,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -16542,7 +16542,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -16618,13 +16618,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -16648,7 +16648,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -16754,13 +16754,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -16784,7 +16784,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -16848,13 +16848,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -16878,7 +16878,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -16966,13 +16966,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -16996,7 +16996,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -17048,13 +17048,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -17148,13 +17148,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -17178,7 +17178,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "deleted_by_user_id",
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -17300,7 +17300,7 @@
           "type": "integer"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -17422,7 +17422,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -17546,13 +17546,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -17718,7 +17718,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -17812,13 +17812,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -18164,13 +18164,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -18288,7 +18288,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -18418,13 +18418,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -18566,13 +18566,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -18720,13 +18720,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -19756,7 +19756,7 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -19863,13 +19863,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -20285,13 +20285,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -20355,13 +20355,13 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
+          "name": "created_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"

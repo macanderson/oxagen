@@ -615,7 +615,7 @@ describe("contributeMcpTools — the credential broker's grant log (spec §6.8) 
     activatedAt: new Date("2026-09-15T10:00:00.000Z"),
     deactivatedAt: null,
     flippedByUserId: "u_1",
-    updatedByUserId: "u_1",
+    updatedById: "u_1",
   };
 
   beforeEach(async () => {

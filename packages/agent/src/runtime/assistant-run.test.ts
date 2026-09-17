@@ -377,7 +377,7 @@ describe("resolveAssistantRunIdentity", () => {
       version: 1,
       mode: "content_exact",
       ttlDays: 2555,
-      createdByUserId: USER,
+      createdById: USER,
     });
     // Every content class, so `readWorkspaceRetention` answers exactly what a
     // workspace with no row answers.

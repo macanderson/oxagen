@@ -309,7 +309,7 @@ describe("orgMemberRemoveHandler", () => {
     expect(updateSet).toHaveBeenCalledWith(
       expect.objectContaining({
         deletedAt: expect.any(Date),
-        deletedByUserId: "actor-user-id",
+        deletedById: "actor-user-id",
       }),
     );
   });

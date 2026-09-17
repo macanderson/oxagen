@@ -71,7 +71,7 @@ const on: KillSwitchRow = {
   activatedAt: new Date("2026-09-15T00:00:00.000Z"),
   deactivatedAt: null,
   flippedByUserId: USER,
-  updatedByUserId: USER,
+  updatedById: USER,
 };
 const off: KillSwitchRow = {
   ...on,
@@ -83,7 +83,7 @@ const off: KillSwitchRow = {
   workspaceId: WS,
   active: false,
   deactivatedAt: new Date("2026-09-15T02:00:00.000Z"),
-  updatedByUserId: OTHER,
+  updatedById: OTHER,
 };
 
 function handlerOver(rows: KillSwitchRow[]) {

@@ -46,7 +46,7 @@ interface AgentRef {
   publicId: string;
   slug: string;
   principalId: string;
-  createdByUserId: string | null;
+  createdById: string | null;
 }
 
 /** The agent an `agt_…` id names in this workspace, with its delegated principal. */
@@ -61,7 +61,7 @@ export async function resolveAgent(
       publicId: schema.agents.publicId,
       slug: schema.agents.slug,
       principalId: schema.agents.principalId,
-      createdByUserId: schema.agents.createdByUserId,
+      createdById: schema.agents.createdById,
     })
     .from(schema.agents)
     .where(

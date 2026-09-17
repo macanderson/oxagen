@@ -43,8 +43,8 @@ export const chatMessageSendHandler: CapabilityHandler<
           userId: ctx.userId!,
           title: null,
           status: "active",
-          createdByUserId: ctx.userId,
-          updatedByUserId: ctx.userId,
+          createdById: ctx.userId,
+          updatedById: ctx.userId,
         })
         .returning({ id: schema.conversations.id });
       if (!conv) throw new Error("conversation insert returned no row");
@@ -76,8 +76,8 @@ export const chatMessageSendHandler: CapabilityHandler<
         contentBlocks: input.contentBlocks,
         branchReason: input.branchReason,
         metadata: {},
-        createdByUserId: ctx.userId,
-        updatedByUserId: ctx.userId,
+        createdById: ctx.userId,
+        updatedById: ctx.userId,
       })
       .returning({ id: schema.messages.id });
     if (!userMessage) throw new Error("user message insert returned no row");
@@ -97,8 +97,8 @@ export const chatMessageSendHandler: CapabilityHandler<
         contentBlocks: [],
         branchReason: null,
         metadata: { status: "pending" },
-        createdByUserId: ctx.userId,
-        updatedByUserId: ctx.userId,
+        createdById: ctx.userId,
+        updatedById: ctx.userId,
       })
       .returning({ id: schema.messages.id });
     if (!assistantMessage)
@@ -193,7 +193,7 @@ async function generateConversationTitleAsync(
         .update(schema.conversations)
         .set({
           title: object.title,
-          updatedByUserId: userId,
+          updatedById: userId,
           updatedAt: new Date(),
         })
         .where(eq(schema.conversations.id, conversationId));

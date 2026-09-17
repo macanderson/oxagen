@@ -909,7 +909,7 @@ async function saveCheckoutCard(
           expMonth: pm.expMonth,
           expYear: pm.expYear,
           deletedAt: null,
-          deletedByUserId: null,
+          deletedById: null,
           updatedAt: new Date(),
           ...(isDefault ? { isDefault: true } : {}),
         },

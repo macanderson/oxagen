@@ -21,7 +21,7 @@ export interface CreateCreditLotArgs {
   reason: string;
   referenceType?: string;
   referenceId?: string;
-  createdByUserId?: string;
+  createdById?: string;
 }
 
 export interface CreateCreditLotResult {
@@ -61,8 +61,8 @@ export async function createCreditLot(
         remainingCents: args.amountCents,
         grantedAt: new Date(),
         expiresAt: args.expiresAt ?? null,
-        createdByUserId: args.createdByUserId ?? null,
-        updatedByUserId: args.createdByUserId ?? null,
+        createdById: args.createdById ?? null,
+        updatedById: args.createdById ?? null,
       })
       .returning({ id: schema.creditLots.id });
 
@@ -76,7 +76,7 @@ export async function createCreditLot(
       reason: args.reason,
       referenceType: args.referenceType ?? null,
       referenceId: args.referenceId ?? null,
-      createdByUserId: args.createdByUserId ?? null,
+      createdById: args.createdById ?? null,
     });
 
     // 3. Mirror into credit_balances (cached derived value).
@@ -137,7 +137,7 @@ export interface GrantCreditsArgs {
   reason: string;
   referenceType?: string;
   referenceId?: string;
-  createdByUserId?: string;
+  createdById?: string;
 }
 
 /**
@@ -161,7 +161,7 @@ export async function grantCredits(
       reason: args.reason,
       referenceType: args.referenceType,
       referenceId: args.referenceId,
-      createdByUserId: args.createdByUserId,
+      createdById: args.createdById,
     });
     return { balanceCents: effectiveBalanceCents };
   }

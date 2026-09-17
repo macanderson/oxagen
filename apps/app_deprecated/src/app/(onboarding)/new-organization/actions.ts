@@ -162,8 +162,8 @@ export async function createOrgAction(
           industry: org.industry ?? null,
           employeeSize: org.employeeSize ?? null,
           avatarUrl: resolvedAvatarUrl,
-          createdByUserId: session.user.id,
-          updatedByUserId: session.user.id,
+          createdById: session.user.id,
+          updatedById: session.user.id,
         })
         .returning();
       if (!tenant) throw new Error("Insert failed");
@@ -173,8 +173,8 @@ export async function createOrgAction(
         userId: session.user.id,
         role: "owner",
         joinedAt: new Date(),
-        createdByUserId: session.user.id,
-        updatedByUserId: session.user.id,
+        createdById: session.user.id,
+        updatedById: session.user.id,
       });
 
       // The org was just created, so it has no other workspaces yet — the
@@ -191,8 +191,8 @@ export async function createOrgAction(
           name: workspaceInput.data.name,
           slug: workspaceInput.data.slug,
           namespace: workspaceNamespace,
-          createdByUserId: session.user.id,
-          updatedByUserId: session.user.id,
+          createdById: session.user.id,
+          updatedById: session.user.id,
         })
         .returning();
       if (!workspace) throw new Error("Workspace insert failed");
@@ -202,8 +202,8 @@ export async function createOrgAction(
         userId: session.user.id,
         role: "owner",
         joinedAt: new Date(),
-        createdByUserId: session.user.id,
-        updatedByUserId: session.user.id,
+        createdById: session.user.id,
+        updatedById: session.user.id,
       });
 
       // Bootstrap full IAM state atomically with org creation: system roles,

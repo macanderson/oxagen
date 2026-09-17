@@ -486,7 +486,7 @@ describe("set_kill_switch", () => {
     expect(update && update.op === "update" ? update.set : null).toMatchObject({
       active: false,
       clearedReason: "resolved",
-      updatedByUserId: USER,
+      updatedById: USER,
     });
     expect(flip.ops.some((o) => o.op === "insert")).toBe(false);
     expect(mocks.emitSecurityEvent).toHaveBeenCalledTimes(1);

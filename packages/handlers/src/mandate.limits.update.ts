@@ -76,7 +76,7 @@ export const mandateLimitsUpdateHandler: CapabilityHandler<
             ? new Date(input.validTo)
             : locked.validTo,
         updatedAt: new Date(),
-        updatedByUserId: actingUserId ?? undefined,
+        updatedById: actingUserId ?? undefined,
       })
       .where(eq(schema.mandates.id, locked.id))
       .returning();

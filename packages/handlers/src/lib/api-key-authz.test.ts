@@ -80,7 +80,7 @@ describe("resolveOperatorUserId", () => {
   /** The row `oxagen login` writes: empty scope, its approver as creator. */
   const CLI_KEY = {
     scope: {},
-    createdByUserId: "user_cli",
+    createdById: "user_cli",
     stellaTelemetryEnrollmentId: null,
   };
   const KEY_CTX = { orgId: ORG, userId: null, apiKeyId: "key_1" };
@@ -126,7 +126,7 @@ describe("resolveOperatorUserId", () => {
   it("returns null for an unknown or revoked key, a key with no creator, or no credential", async () => {
     stubKey(undefined);
     expect(await resolveOperatorUserId(KEY_CTX)).toBeNull();
-    stubKey({ ...CLI_KEY, createdByUserId: null });
+    stubKey({ ...CLI_KEY, createdById: null });
     expect(await resolveOperatorUserId(KEY_CTX)).toBeNull();
     const findFirst = stubKey(CLI_KEY);
     expect(

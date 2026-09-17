@@ -81,7 +81,7 @@ function tenant(
               limit: () => {
                 if (table === schema.apiKeys)
                   return Promise.resolve(
-                    keyCreator ? [{ createdByUserId: keyCreator }] : [],
+                    keyCreator ? [{ createdById: keyCreator }] : [],
                   );
                 if (table === schema.principals)
                   return Promise.resolve([{ id: "prn_1" }]);

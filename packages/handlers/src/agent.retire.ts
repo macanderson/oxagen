@@ -56,7 +56,7 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
         status: "archived",
         deploymentStatus: "inactive",
         updatedAt: now,
-        updatedByUserId: userId,
+        updatedById: userId,
       })
       .where(eq(schema.agents.id, agent.id));
     if (agent.principalId) {
@@ -65,7 +65,7 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
         .set({
           status: "suspended",
           updatedAt: now,
-          updatedByUserId: userId,
+          updatedById: userId,
           metadata: { retired_at: now.toISOString(), retire_reason: reason },
         })
         .where(eq(schema.principals.id, agent.principalId));

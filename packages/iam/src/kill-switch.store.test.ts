@@ -79,7 +79,7 @@ function dbRow(over: Record<string, unknown> = {}) {
     activatedAt: new Date("2026-09-15T00:00:00Z"),
     deactivatedAt: null,
     flippedByUserId: USER,
-    updatedByUserId: USER,
+    updatedById: USER,
     ...over,
   };
 }
@@ -259,7 +259,7 @@ describe("flipKillSwitchOff", () => {
     expect(argsOf("set")).toMatchObject({
       active: false,
       clearedReason: "vendor patched",
-      updatedByUserId: USER,
+      updatedById: USER,
     });
   });
 

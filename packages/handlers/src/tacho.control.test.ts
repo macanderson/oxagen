@@ -165,7 +165,7 @@ function tableName(table: unknown): string {
 const HOST_KEY = {
   id: "aky_host",
   scope: { purpose: "tacho_host_v1", host_enrollment_id: HOST_PUBLIC },
-  createdByUserId: OPERATOR.userId,
+  createdById: OPERATOR.userId,
   stellaTelemetryEnrollmentId: null,
 };
 
@@ -527,7 +527,7 @@ describe("revoke_tacho_enrollment", () => {
     wire(db, {
       id: "aky_cli",
       scope: {},
-      createdByUserId: OPERATOR.userId,
+      createdById: OPERATOR.userId,
       stellaTelemetryEnrollmentId: null,
     });
     const revoked = await tachoEnrollmentRevokeHandler(
@@ -536,7 +536,7 @@ describe("revoke_tacho_enrollment", () => {
     );
     expect(revoked.status).toBe("revoked");
     expect(db.updates.find((u) => u.table === "hosts")?.values).toMatchObject({
-      updatedByUserId: OPERATOR.userId,
+      updatedById: OPERATOR.userId,
     });
   });
 });

@@ -56,8 +56,8 @@ export const agentRegisterHandler: CapabilityHandler<
           harness: input.harness,
           status: "draft",
           deploymentStatus: "inactive",
-          createdByUserId: userId,
-          updatedByUserId: userId,
+          createdById: userId,
+          updatedById: userId,
         })
         .returning({
           id: schema.agents.id,
@@ -117,8 +117,8 @@ export const agentRegisterHandler: CapabilityHandler<
           workspaceId:
             defaultRole.scopeKind === "workspace" ? ctx.workspaceId : null,
           assignedBy: userId,
-          createdByUserId: userId,
-          updatedByUserId: userId,
+          createdById: userId,
+          updatedById: userId,
         })
         .onConflictDoNothing();
     } else {

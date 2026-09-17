@@ -83,7 +83,7 @@ const postgresToolClassificationDeps: ToolClassificationDeps = {
           classifiedAt: args.at,
           classificationReason: args.reason,
           updatedAt: args.at,
-          updatedByUserId: args.userId ?? undefined,
+          updatedById: args.userId ?? undefined,
         })
         .where(eq(schema.toolVersions.id, args.versionId)),
     );

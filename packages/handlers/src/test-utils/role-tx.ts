@@ -35,7 +35,7 @@ function rowsFor(
   roles: RoleFixture,
 ): unknown[] {
   if (table === schema.apiKeys) {
-    return roles.keyCreator ? [{ createdByUserId: roles.keyCreator }] : [];
+    return roles.keyCreator ? [{ createdById: roles.keyCreator }] : [];
   }
   if (table === schema.principals) return [{ id: "prn_1" }];
   if (table === schema.principalRoleAssignments) {

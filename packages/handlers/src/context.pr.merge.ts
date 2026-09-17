@@ -97,7 +97,7 @@ export function createMergeContextPrHandler(
           userId,
         ),
       },
-      row.createdByUserId,
+      row.createdById,
     );
     if (refusal) {
       throw new HandlerError({

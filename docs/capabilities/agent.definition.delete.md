@@ -29,7 +29,7 @@ Org Owner, Org Admin, Workspace Owner, Workspace Member.
 
 ## Side effects
 
-- Postgres: sets `deletedAt`/`deletedByUserId` on the `agent.agents` row (soft delete; row retained for audit).
+- Postgres: sets `deletedAt`/`deletedById` on the `agent.agents` row (soft delete; row retained for audit).
 - Postgres: sets `status='deleted'` on the agent's delegated `iam.principals` row (same tx).
 - Managed (product built-in) agents cannot be deleted — throws `AgentManagedReadOnlyError`.
 

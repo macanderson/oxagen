@@ -357,7 +357,7 @@ describe("resolveActingUserId", () => {
   });
 
   /** Answers the api_keys lookup with the given creator, or no row. */
-  function stubKeyLookup(createdByUserId: string | null) {
+  function stubKeyLookup(createdById: string | null) {
     mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
       Promise.resolve(
         fn({
@@ -367,9 +367,7 @@ describe("resolveActingUserId", () => {
               return {
                 where: () => ({
                   limit: () =>
-                    Promise.resolve(
-                      createdByUserId ? [{ createdByUserId }] : [],
-                    ),
+                    Promise.resolve(createdById ? [{ createdById }] : []),
                 }),
               };
             },

@@ -29,8 +29,8 @@ export const userPreferencesSetHandler: CapabilityHandler<
   // are set only when the caller named them, so an omitted field leaves NULL.
   const insertValues: NewUserPreferences = {
     userId,
-    createdByUserId: userId,
-    updatedByUserId: userId,
+    createdById: userId,
+    updatedById: userId,
     language: input.locale ?? "en",
     theme: input.theme ?? "system",
     timezone: input.timezone ?? "UTC",
@@ -49,8 +49,8 @@ export const userPreferencesSetHandler: CapabilityHandler<
   // The update half is strictly the fields the caller named. `in input` rather
   // than `!== undefined` for the nullable pair: null is a value (clear it),
   // undefined is an absence (leave it), and the two must not collapse.
-  const updateSet: Partial<NewUserPreferences> & { updatedByUserId: string } = {
-    updatedByUserId: userId,
+  const updateSet: Partial<NewUserPreferences> & { updatedById: string } = {
+    updatedById: userId,
     ...(input.locale !== undefined ? { language: input.locale } : {}),
     ...(input.theme !== undefined ? { theme: input.theme } : {}),
     ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),

@@ -103,7 +103,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     const w = here();
     log.tablesRead.push(nameOf(table));
     if (table === real.schema.apiKeys)
-      return key.creator ? [{ createdByUserId: key.creator }] : [];
+      return key.creator ? [{ createdById: key.creator }] : [];
     if (table === real.schema.principals) return [{ id: PRINCIPAL_ID }];
     if (table === real.schema.principalRoleAssignments)
       return w.role ? [{ roleName: w.role }] : [];

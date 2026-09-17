@@ -207,8 +207,8 @@ export async function seedDev(): Promise<void> {
         name: "QA Chat Agent",
         agentType: "interactive_chat",
         status: "active",
-        createdByUserId: userRow.id,
-        updatedByUserId: userRow.id,
+        createdById: userRow.id,
+        updatedById: userRow.id,
       })
       .onConflictDoNothing();
 
@@ -236,7 +236,7 @@ export async function seedDev(): Promise<void> {
           isPublished: true,
           checksum: null,
           config: {},
-          createdByUserId: userRow.id,
+          createdById: userRow.id,
         })
         .onConflictDoNothing();
 
@@ -257,7 +257,7 @@ export async function seedDev(): Promise<void> {
 
       await tx
         .update(agents)
-        .set({ activeVersionId: versionRow.id, updatedByUserId: userRow.id })
+        .set({ activeVersionId: versionRow.id, updatedById: userRow.id })
         .where(eq(agents.id, agentRow.id));
     }
   });

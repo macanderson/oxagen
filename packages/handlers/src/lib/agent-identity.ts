@@ -94,8 +94,8 @@ export async function mintAgentCredential(
       name: `agent credential ${args.agent.slug}`,
       scope,
       expiresAt,
-      createdByUserId: args.userId,
-      updatedByUserId: args.userId,
+      createdById: args.userId,
+      updatedById: args.userId,
     })
     .returning({ id: schema.apiKeys.id, publicId: schema.apiKeys.publicId });
   if (!key) throw new Error("api_keys insert returned no row");
@@ -117,9 +117,9 @@ export async function revokeAgentCredentials(
     .update(schema.apiKeys)
     .set({
       deletedAt: args.now,
-      deletedByUserId: args.userId,
+      deletedById: args.userId,
       updatedAt: args.now,
-      updatedByUserId: args.userId,
+      updatedById: args.userId,
     })
     .where(
       and(

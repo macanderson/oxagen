@@ -349,8 +349,8 @@ function postgresCommandStore(tx: Tx): CommandStore {
           expiresAt: row.expiresAt,
           outcome: row.outcome,
           outcomeDetail: row.outcomeDetail,
-          createdByUserId: row.issuedByUserId,
-          updatedByUserId: row.issuedByUserId,
+          createdById: row.issuedByUserId,
+          updatedById: row.issuedByUserId,
         })
         .returning({ publicId: commands.publicId });
       if (!inserted)

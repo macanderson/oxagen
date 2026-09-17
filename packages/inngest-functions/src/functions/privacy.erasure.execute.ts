@@ -34,7 +34,7 @@ import { logger } from "../logger";
  *   3. Blob storage (`@oxagen/storage`) cascade is still pending (SOP §7): the
  *      subject's `content.generated_assets` blobs are enumerable by `storageKey`
  *      but there is no wired enumerate-by-user + delete path.
- *   4. Postgres residual: `created_by_user_id` / `updated_by_user_id`
+ *   4. Postgres residual: `created_by_id` / `updated_by_id`
  *      (`auditMixin`) exist on nearly every table, and org-scope erasure
  *      cascades across workspaces, plugins, billing, agents, chat and content
  *      with no defined FK-safe order or member-vs-org boundary. Org-scope

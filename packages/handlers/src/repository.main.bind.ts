@@ -206,7 +206,7 @@ export function createMainRepositoryBindHandler(
             version: 1,
             supersedesBindingId: null,
             createdAt: now,
-            createdByUserId: userId,
+            createdById: userId,
           })
           .returning({
             id: schema.repositoryBindings.id,

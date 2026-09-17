@@ -56,7 +56,7 @@ export const schemaLabelUpsertHandler: CapabilityHandler<
           displayName: input.displayName,
           description: input.description ?? existing.description,
           naturalKeyProps: input.naturalKeyProps ?? existing.naturalKeyProps,
-          updatedByUserId: ctx.userId,
+          updatedById: ctx.userId,
         })
         .where(eq(db.nodeLabels.id, existing.id))
         .returning();
@@ -74,8 +74,8 @@ export const schemaLabelUpsertHandler: CapabilityHandler<
           displayName: input.displayName,
           description: input.description,
           naturalKeyProps: input.naturalKeyProps ?? [],
-          createdByUserId: ctx.userId,
-          updatedByUserId: ctx.userId,
+          createdById: ctx.userId,
+          updatedById: ctx.userId,
         })
         .returning();
       if (!inserted)
@@ -119,7 +119,7 @@ export const schemaLabelUpsertHandler: CapabilityHandler<
               itemType: prop.itemType ?? existingProp.itemType,
               constraints: prop.constraints ?? existingProp.constraints,
               example: prop.example ?? existingProp.example,
-              updatedByUserId: ctx.userId,
+              updatedById: ctx.userId,
             })
             .where(eq(db.schemaProperties.id, existingProp.id));
         } else {
@@ -136,8 +136,8 @@ export const schemaLabelUpsertHandler: CapabilityHandler<
             itemType: prop.itemType,
             constraints: prop.constraints ?? {},
             example: prop.example,
-            createdByUserId: ctx.userId,
-            updatedByUserId: ctx.userId,
+            createdById: ctx.userId,
+            updatedById: ctx.userId,
           });
         }
       }

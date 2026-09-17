@@ -386,8 +386,8 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
           name: "Release manager",
           agentType: "custom",
           principalId: principal?.id ?? null,
-          createdByUserId: ownerId,
-          updatedByUserId: ownerId,
+          createdById: ownerId,
+          updatedById: ownerId,
         })
         .returning({
           id: schema.agents.id,

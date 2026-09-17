@@ -67,7 +67,7 @@ export interface KillSwitchRow {
   readonly activatedAt: Date;
   readonly deactivatedAt: Date | null;
   readonly flippedByUserId: string | null;
-  readonly updatedByUserId: string | null;
+  readonly updatedById: string | null;
 }
 
 const KINDS = new Set<string>(KILL_SWITCH_PRECEDENCE);
@@ -87,7 +87,7 @@ function rowOf(r: {
   activatedAt: Date;
   deactivatedAt: Date | null;
   flippedByUserId: string | null;
-  updatedByUserId: string | null;
+  updatedById: string | null;
 }): KillSwitchRow {
   if (
     r.targetKind === null ||
@@ -114,7 +114,7 @@ function rowOf(r: {
     activatedAt: r.activatedAt,
     deactivatedAt: r.deactivatedAt,
     flippedByUserId: r.flippedByUserId,
-    updatedByUserId: r.updatedByUserId,
+    updatedById: r.updatedById,
   };
 }
 
@@ -133,7 +133,7 @@ const columns = {
   activatedAt: schema.emergencyDenies.activatedAt,
   deactivatedAt: schema.emergencyDenies.deactivatedAt,
   flippedByUserId: schema.emergencyDenies.flippedByUserId,
-  updatedByUserId: schema.emergencyDenies.updatedByUserId,
+  updatedById: schema.emergencyDenies.updatedById,
 };
 
 /** The org-wide rows and this workspace's rows. */
@@ -293,8 +293,8 @@ export async function flipKillSwitchOn(
       flippedByUserId: args.userId,
       reason: args.reason,
       active: true,
-      createdByUserId: args.userId,
-      updatedByUserId: args.userId,
+      createdById: args.userId,
+      updatedById: args.userId,
     })
     .onConflictDoNothing(
       args.workspaceId === null
@@ -344,7 +344,7 @@ export async function flipKillSwitchOff(
       clearedReason: args.reason,
       deactivatedAt: sql`now()`,
       updatedAt: sql`now()`,
-      updatedByUserId: args.userId,
+      updatedById: args.userId,
     })
     .where(activeTarget(args))
     .returning({ publicId: schema.emergencyDenies.publicId });

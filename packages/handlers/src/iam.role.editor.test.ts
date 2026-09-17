@@ -19,7 +19,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   const rowsFor = (table: unknown): unknown[] => {
     if (table === real.schema.apiKeys)
-      return tenant.keyCreator ? [{ createdByUserId: tenant.keyCreator }] : [];
+      return tenant.keyCreator ? [{ createdById: tenant.keyCreator }] : [];
     if (table === real.schema.principals)
       return tenant.principalId ? [{ id: tenant.principalId }] : [];
     if (table === real.schema.principalRoleAssignments)
@@ -149,7 +149,7 @@ function fakeStore() {
         isSystemDefault: false,
         version: "1",
         createdAt: new Date("2026-09-15T00:00:00.000Z"),
-        createdByUserId: row.createdByUserId,
+        createdById: row.createdById,
       };
       roles.set(role.id, role);
       return role;
@@ -179,7 +179,7 @@ function fakeStore() {
       isSystemDefault: false,
       version: "1",
       createdAt: new Date("2026-09-01T00:00:00.000Z"),
-      createdByUserId: USER,
+      createdById: USER,
       ...role,
     });
   };
@@ -323,7 +323,7 @@ describe("create_role", () => {
   it("acts as the API key's creator on an MCP call: an Owner creator creates the role as that user", async () => {
     const out = await handler()(createInput(), keyCtx);
     expect(out.role.createdBy).toBe("Priya Natarajan");
-    expect([...fake.roles.values()][0]?.createdByUserId).toBe(USER);
+    expect([...fake.roles.values()][0]?.createdById).toBe(USER);
   });
 
   it("refuses an MCP call whose key creator is an org Member (negative)", async () => {

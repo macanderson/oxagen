@@ -106,7 +106,7 @@ export const workspaceArchiveHandler: CapabilityHandler<
             archivedAt,
             archivedByUserId: userId,
             updatedAt: archivedAt,
-            updatedByUserId: userId,
+            updatedById: userId,
           })
           .where(
             and(

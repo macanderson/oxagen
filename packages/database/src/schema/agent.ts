@@ -127,7 +127,7 @@ export const agentVersions = agentSchema.table(
     // checksum: SHA-256 over canonical config — immutability contract.
     checksum: text("checksum"),
     config: jsonb("config").notNull().default(sql`'{}'::jsonb`),
-    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdById: uuid("created_by_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),

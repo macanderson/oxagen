@@ -114,7 +114,7 @@ export async function autoApproveParkedCall(
           // an approval nobody has to act on never waits.
           tokenUsedAt: at,
           expiresAt: at,
-          createdByUserId: args.ctx.userId ?? undefined,
+          createdById: args.ctx.userId ?? undefined,
         }),
       );
       emitAutoApproved(args);

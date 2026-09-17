@@ -180,9 +180,7 @@ function makeTx(tenant: Tenant, captured: Captured) {
           limit: () => {
             if (table === schema.apiKeys) {
               return Promise.resolve(
-                tenant.keyCreator
-                  ? [{ createdByUserId: tenant.keyCreator }]
-                  : [],
+                tenant.keyCreator ? [{ createdById: tenant.keyCreator }] : [],
               );
             }
             if (table === schema.principals) {

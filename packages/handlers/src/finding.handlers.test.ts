@@ -45,7 +45,7 @@ const ctx = () =>
 /** Answers the role gate by the table asked for, so query order does not matter. */
 function stubRole(roleName: string | null) {
   const rowsFor = (table: unknown): unknown[] => {
-    if (table === schema.apiKeys) return [{ createdByUserId: USER }];
+    if (table === schema.apiKeys) return [{ createdById: USER }];
     if (table === schema.principals) return [{ id: "prn_1" }];
     if (table === schema.principalRoleAssignments)
       return roleName ? [{ roleName }] : [];

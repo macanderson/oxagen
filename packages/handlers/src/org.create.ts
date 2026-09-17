@@ -86,8 +86,8 @@ export const organizationCreateHandler: CapabilityHandler<
           industry: input.type === "business" ? (input.industry ?? null) : null,
           employeeSize:
             input.type === "business" ? (input.employeeSize ?? null) : null,
-          createdByUserId: userId,
-          updatedByUserId: userId,
+          createdById: userId,
+          updatedById: userId,
         })
         .returning({
           publicId: schema.organizations.publicId,
@@ -107,8 +107,8 @@ export const organizationCreateHandler: CapabilityHandler<
         userId,
         role: "owner",
         joinedAt: new Date(),
-        createdByUserId: userId,
-        updatedByUserId: userId,
+        createdById: userId,
+        updatedById: userId,
       });
 
       // Bootstrap full IAM state for the org — system roles, owner principal,

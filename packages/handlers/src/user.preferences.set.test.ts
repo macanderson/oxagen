@@ -60,7 +60,7 @@ describe("set_preferences", () => {
     );
     expect(mocks.onConflictDoUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        set: { updatedByUserId: "u_1", theme: "dark" },
+        set: { updatedById: "u_1", theme: "dark" },
       }),
     );
     expect(out).toEqual({
@@ -97,7 +97,7 @@ describe("set_preferences", () => {
     expect(mocks.onConflictDoUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         set: {
-          updatedByUserId: "u_1",
+          updatedById: "u_1",
           language: "fr",
           theme: "light",
           timezone: "Europe/Paris",
@@ -124,8 +124,8 @@ describe("set_preferences", () => {
     await userPreferencesSetHandler({}, CTX);
     expect(mocks.values).toHaveBeenCalledWith({
       userId: "u_1",
-      createdByUserId: "u_1",
-      updatedByUserId: "u_1",
+      createdById: "u_1",
+      updatedById: "u_1",
       language: "en",
       theme: "system",
       timezone: "UTC",
@@ -146,7 +146,7 @@ describe("set_preferences", () => {
     expect(mocks.onConflictDoUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         set: {
-          updatedByUserId: "u_1",
+          updatedById: "u_1",
           defaultTextTier: null,
           defaultTextModel: null,
         },
@@ -164,7 +164,7 @@ describe("set_preferences", () => {
   it("an empty write changes nothing but the audit column (negative)", async () => {
     await userPreferencesSetHandler({}, CTX);
     expect(mocks.onConflictDoUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ set: { updatedByUserId: "u_1" } }),
+      expect.objectContaining({ set: { updatedById: "u_1" } }),
     );
   });
 

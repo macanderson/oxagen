@@ -154,7 +154,7 @@ function switchRow(
     activatedAt: new Date("2026-09-15T00:00:00.000Z"),
     deactivatedAt: null,
     flippedByUserId: USER,
-    updatedByUserId: USER,
+    updatedById: USER,
     ...over,
   };
 }

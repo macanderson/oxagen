@@ -75,7 +75,7 @@ export function createKillSwitchListHandler(
         flippedBy: row.flippedByUserId,
         flippedAt: row.activatedAt.toISOString(),
         clearedAt: row.deactivatedAt?.toISOString() ?? null,
-        clearedBy: row.active ? null : row.updatedByUserId,
+        clearedBy: row.active ? null : row.updatedById,
       })),
     };
   };

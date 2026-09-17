@@ -59,8 +59,8 @@ export const chatMessageExecutionHandler: CapabilityHandler<
           input.estimatedCostUsd != null
             ? String(input.estimatedCostUsd)
             : null,
-        createdByUserId: ctx.userId ?? null,
-        updatedByUserId: ctx.userId ?? null,
+        createdById: ctx.userId ?? null,
+        updatedById: ctx.userId ?? null,
       })
       .returning({
         id: schema.agentExecutions.id,
@@ -91,8 +91,8 @@ export const chatMessageExecutionHandler: CapabilityHandler<
             latencyMs: step.latencyMs ?? null,
             inputTokens: step.inputTokens ?? null,
             outputTokens: step.outputTokens ?? null,
-            createdByUserId: ctx.userId ?? null,
-            updatedByUserId: ctx.userId ?? null,
+            createdById: ctx.userId ?? null,
+            updatedById: ctx.userId ?? null,
           })),
         )
         .returning({ id: schema.agentExecutionSteps.id });
@@ -143,7 +143,7 @@ export const chatMessageExecutionHandler: CapabilityHandler<
             status: input.status,
             completedAt: execution.createdAt,
           },
-          updatedByUserId: ctx.userId ?? null,
+          updatedById: ctx.userId ?? null,
         })
         .where(eq(schema.messages.id, input.messageId));
     }

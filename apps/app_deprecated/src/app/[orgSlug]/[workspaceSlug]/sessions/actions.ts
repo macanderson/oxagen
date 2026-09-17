@@ -144,8 +144,8 @@ export async function sendMessageAction(
                   workspaceId: ctx.workspaceId,
                   userId: session.user.id,
                   status: "active",
-                  createdByUserId: session.user.id,
-                  updatedByUserId: session.user.id,
+                  createdById: session.user.id,
+                  updatedById: session.user.id,
                 })
                 .returning();
               if (!conv) throw new Error("Conversation insert failed");
@@ -188,8 +188,8 @@ export async function sendMessageAction(
                   parsed.data.attachments.length > 0
                     ? { attachments: parsed.data.attachments }
                     : {},
-                createdByUserId: session.user.id,
-                updatedByUserId: session.user.id,
+                createdById: session.user.id,
+                updatedById: session.user.id,
               })
               .returning();
             if (!userMsg) throw new Error("Message insert failed");

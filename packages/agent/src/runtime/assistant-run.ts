@@ -388,7 +388,7 @@ async function resolveRetentionPolicy(
       ],
       ttlDays: ASSISTANT_RETENTION_POLICY.ttl_days,
       policyDigest: digestJcs(ASSISTANT_RETENTION_POLICY),
-      createdByUserId: userId,
+      createdById: userId,
     })
     .onConflictDoNothing();
   const created = await read();

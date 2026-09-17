@@ -59,7 +59,7 @@ export const mandateRevokeHandler: CapabilityHandler<
         revokedReason: input.reason,
         revokedAt: new Date(),
         updatedAt: new Date(),
-        updatedByUserId: actingUserId ?? undefined,
+        updatedById: actingUserId ?? undefined,
       })
       .where(eq(schema.mandates.id, locked.id))
       .returning();

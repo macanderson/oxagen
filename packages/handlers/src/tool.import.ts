@@ -121,7 +121,7 @@ const postgresToolImportDeps: ToolImportDeps = {
           lastImportAt: sql`now()`,
           lastImportDigest: args.digest,
           updatedAt: sql`now()`,
-          updatedByUserId: args.userId ?? undefined,
+          updatedById: args.userId ?? undefined,
         })
         .where(eq(schema.mcpServers.id, args.serverId)),
     );

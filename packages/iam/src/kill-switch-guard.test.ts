@@ -55,7 +55,7 @@ function switchRow(over: Partial<Record<string, unknown>>) {
     activatedAt: new Date("2026-09-16T00:00:00Z"),
     deactivatedAt: null,
     flippedByUserId: null,
-    updatedByUserId: null,
+    updatedById: null,
     ...over,
   };
 }

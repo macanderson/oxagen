@@ -27,7 +27,7 @@ export interface RoleRecord {
   readonly isSystemDefault: boolean;
   readonly version: string;
   readonly createdAt: Date;
-  readonly createdByUserId: string | null;
+  readonly createdById: string | null;
 }
 
 export interface RoleGrantRecord {
@@ -44,7 +44,7 @@ export interface RoleStore {
     name: string;
     scopeKind: "org" | "workspace";
     description: string | null;
-    createdByUserId: string;
+    createdById: string;
   }): Promise<RoleRecord>;
   /** Every grant of the role goes; one `allow` per capability is written. */
   replaceGrants(
@@ -115,7 +115,7 @@ const ROLE_COLUMNS = {
   isSystemDefault: schema.roles.isSystemDefault,
   version: schema.roles.version,
   createdAt: schema.roles.createdAt,
-  createdByUserId: schema.roles.createdByUserId,
+  createdById: schema.roles.createdById,
 };
 
 function asRecord(row: {
@@ -127,7 +127,7 @@ function asRecord(row: {
   isSystemDefault: boolean;
   version: string;
   createdAt: Date;
-  createdByUserId: string | null;
+  createdById: string | null;
 }): RoleRecord {
   return { ...row, scopeKind: row.scopeKind as RoleRecord["scopeKind"] };
 }
@@ -157,8 +157,8 @@ export function postgresRoleStore(tx: Tx): RoleStore {
           scopeKind: row.scopeKind,
           description: row.description,
           isSystemDefault: false,
-          createdByUserId: row.createdByUserId,
-          updatedByUserId: row.createdByUserId,
+          createdById: row.createdById,
+          updatedById: row.createdById,
         })
         .returning(ROLE_COLUMNS);
       if (!inserted) throw new Error("iam.roles insert returned no row");
@@ -180,14 +180,14 @@ export function postgresRoleStore(tx: Tx): RoleStore {
             roleId,
             capabilityId,
             effect: "allow" as const,
-            createdByUserId: actorUserId,
-            updatedByUserId: actorUserId,
+            createdById: actorUserId,
+            updatedById: actorUserId,
           })),
         );
       }
       await tx
         .update(schema.roles)
-        .set({ updatedAt: new Date(), updatedByUserId: actorUserId })
+        .set({ updatedAt: new Date(), updatedById: actorUserId })
         .where(and(eq(schema.roles.orgId, orgId), eq(schema.roles.id, roleId)));
     },
     async activeAssignmentCount(orgId, roleId) {

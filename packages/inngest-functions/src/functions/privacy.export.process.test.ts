@@ -40,7 +40,7 @@ const schema = {
     scope: "apiKeys.scope",
     expiresAt: "apiKeys.expiresAt",
     orgId: "apiKeys.orgId",
-    createdByUserId: "apiKeys.createdByUserId",
+    createdById: "apiKeys.createdById",
   },
   securityEvents: {
     orgId: "securityEvents.orgId",

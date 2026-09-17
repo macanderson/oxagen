@@ -53,9 +53,7 @@ export function createSetRoleGrantsHandler(
         role,
         capabilityIds.map((capability) => ({ capability, effect: "allow" })),
         await store.activeAssignmentCount(ctx.orgId, role.id),
-        role.createdByUserId
-          ? await store.userName(role.createdByUserId)
-          : null,
+        role.createdById ? await store.userName(role.createdById) : null,
       );
     });
 

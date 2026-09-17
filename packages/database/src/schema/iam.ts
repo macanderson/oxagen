@@ -444,7 +444,7 @@ export const emergencyDenies = iamSchema.table(
     // public id (or the consequence tag for a class). A row with no target is
     // an operator deny written by another path. flipped_by_user_id is who
     // flipped it on and reason why; the clearing user lands on
-    // updated_by_user_id and why on cleared_reason.
+    // updated_by_id and why on cleared_reason.
     targetKind: text("target_kind"),
     targetId: text("target_id"),
     flippedByUserId: uuid("flipped_by_user_id"),

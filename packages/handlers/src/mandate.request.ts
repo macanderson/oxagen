@@ -49,8 +49,8 @@ export const mandateRequestHandler: CapabilityHandler<
         validFrom: new Date(input.validFrom),
         validTo: new Date(input.validTo),
         status: "draft",
-        createdByUserId: actingUserId ?? undefined,
-        updatedByUserId: actingUserId ?? undefined,
+        createdById: actingUserId ?? undefined,
+        updatedById: actingUserId ?? undefined,
       })
       .returning();
   });

@@ -55,7 +55,7 @@ export async function resolveOperatorUserId(
       ),
       columns: {
         scope: true,
-        createdByUserId: true,
+        createdById: true,
         stellaTelemetryEnrollmentId: true,
       },
     }),
@@ -63,7 +63,7 @@ export async function resolveOperatorUserId(
   if (!key) return null;
   if (key.stellaTelemetryEnrollmentId) return null;
   if (isMachineBoundScope(key.scope)) return null;
-  return key.createdByUserId ?? null;
+  return key.createdById ?? null;
 }
 
 function isMachineBoundScope(scope: unknown): boolean {

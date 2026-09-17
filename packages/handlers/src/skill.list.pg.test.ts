@@ -149,7 +149,7 @@ describe.skipIf(!enabled)("list_skills against Postgres", () => {
             ["billing", billingId],
             ["orphan", null],
           ] as const
-        ).map(([name, createdByUserId]) => ({
+        ).map(([name, createdById]) => ({
           id: keys[name],
           orgId,
           workspaceId,
@@ -157,7 +157,7 @@ describe.skipIf(!enabled)("list_skills against Postgres", () => {
           keyHash: `hash-${tag}-${name}`,
           name: `skills ${name} ${tag}`,
           scope: {},
-          createdByUserId,
+          createdById,
         })),
       );
       await tx.insert(schema.tachoSessions).values([

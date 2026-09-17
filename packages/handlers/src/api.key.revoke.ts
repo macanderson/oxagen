@@ -11,7 +11,7 @@
 //      revoking a key twice read as an outage.
 //   4. Reserved-purpose guard — refuse a server-owned credential, naming the
 //      capability that owns its lifecycle.
-//   5. Soft-delete: set deletedAt = now(), deletedByUserId = actorId.
+//   5. Soft-delete: set deletedAt = now(), deletedById = actorId.
 //   6. Emit api_key.revoked security event (fire-and-forget).
 //
 // WHY STEP 4 EXISTS. `auth.api_keys` holds two kinds of row: keys an operator
@@ -220,9 +220,9 @@ export const apiKeyRevokeHandler: CapabilityHandler<
       .update(schema.apiKeys)
       .set({
         deletedAt: revokedAt,
-        deletedByUserId: ctx.userId ?? undefined,
+        deletedById: ctx.userId ?? undefined,
         updatedAt: revokedAt,
-        updatedByUserId: ctx.userId ?? undefined,
+        updatedById: ctx.userId ?? undefined,
       })
       .where(eq(schema.apiKeys.id, existing.id));
 

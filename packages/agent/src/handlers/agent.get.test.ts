@@ -81,14 +81,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
             version: 1,
             isPublished: true,
             config: { legacy: true },
-            createdByUserId: tenant.userId,
+            createdById: tenant.userId,
           },
           {
             agentId: alpha.id,
             version: 2,
             isPublished: false,
             config: { legacy: true },
-            createdByUserId: tenant.userId,
+            createdById: tenant.userId,
             definitionPath: ".oxagen/agents/alpha.toml",
             definitionDigest: "a".repeat(64),
             definitionSource:

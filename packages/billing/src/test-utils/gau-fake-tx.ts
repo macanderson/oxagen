@@ -349,7 +349,7 @@ export function fakeGauExecutor(store: FakeGauStore) {
                 const row: Row = {
                   id: crypto.randomUUID(),
                   deletedAt: null,
-                  deletedByUserId: null,
+                  deletedById: null,
                   createdAt: new Date(),
                   updatedAt: new Date(),
                   ...v,

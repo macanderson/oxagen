@@ -302,9 +302,9 @@ export const orgMemberRemoveHandler: CapabilityHandler<
         .update(schema.principalRoleAssignments)
         .set({
           deletedAt: new Date(),
-          deletedByUserId: actorId,
+          deletedById: actorId,
           updatedAt: new Date(),
-          updatedByUserId: actorId,
+          updatedById: actorId,
         })
         .where(
           and(
@@ -335,7 +335,7 @@ export const orgMemberRemoveHandler: CapabilityHandler<
         .set({
           status: "deleted",
           updatedAt: new Date(),
-          updatedByUserId: actorId,
+          updatedById: actorId,
         })
         .where(eq(schema.principals.id, targetPrincipal.id));
     }
@@ -392,14 +392,14 @@ export const orgMemberRemoveHandler: CapabilityHandler<
       .update(schema.apiKeys)
       .set({
         deletedAt: revokedAt,
-        deletedByUserId: actorId,
+        deletedById: actorId,
         updatedAt: revokedAt,
-        updatedByUserId: actorId,
+        updatedById: actorId,
       })
       .where(
         and(
           eq(schema.apiKeys.orgId, ctx.orgId),
-          eq(schema.apiKeys.createdByUserId, target),
+          eq(schema.apiKeys.createdById, target),
           sql`${schema.apiKeys.scope}->>'purpose' = ${CLI_SESSION_SCOPE_PURPOSE}`,
           isNull(schema.apiKeys.deletedAt),
         ),

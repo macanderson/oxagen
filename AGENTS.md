@@ -36,7 +36,7 @@ docs/       VISION.md, capability specs, ADRs, SCRs (docs/scr), specs (docs/spec
 | `handlers` | `src/register.ts` | All built-in capability handler registrations (lazy-loaded) |
 | `agent` | `src/runtime/materialize-tools.ts` | Governed tool materialisation (IAM → entitlement → tool RBAC → consent → approval → telemetry per call), MCP gateway auth, `runGovernedTurn` for the in-app agent |
 | `agent` | `src/handlers/` | Agent registry, approval, MCP, memory, role, trace handlers |
-| `database` | `src/schema/` | 21 Drizzle Postgres domain schema files (org, auth, workspace, agent, chat, content, billing, reseller, security, iam, mcp, plugin, notification, privacy, ingestion, run-evidence-foundation, schema-registry, environments, ai, ratelimit, tacho) plus `_mixins.ts`, `_schemas.ts`, `index.ts` |
+| `database` | `src/schema/` | 21 Drizzle Postgres domain schema files (org, auth, workspace, agent, chat, content, billing, security, iam, mcp, plugin, notification, privacy, ingestion, run-evidence-foundation, schema-registry, environments, ai, ratelimit, tacho, cost) plus `_mixins.ts`, `_schemas.ts`, `index.ts` |
 | `tacho` | `src/` | Leaf package (no `@oxagen/*` runtime dep) that records, gates and evidences agents Oxagen does not run — Claude Code, Agent SDK, custom agents; spec in `docs/specs/tacho/` |
 | `context-provider` | `src/frames.ts` | Serves one workspace's engram memory as budgeted, scored Context Graph Protocol frames |
 | `inngest-functions` | `src/functions/` | Durable background jobs |

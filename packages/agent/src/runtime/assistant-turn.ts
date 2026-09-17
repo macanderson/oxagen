@@ -739,8 +739,8 @@ async function appendUserMessage(
         userId,
         title: null,
         status: "active",
-        createdByUserId: userId,
-        updatedByUserId: userId,
+        createdById: userId,
+        updatedById: userId,
       })
       .returning({ id: schema.conversations.id });
     if (!created) throw new Error("conversation insert returned no row");
@@ -779,8 +779,8 @@ async function appendUserMessage(
         surface,
         ...(request.pageContext ? { pageContext: request.pageContext } : {}),
       },
-      createdByUserId: userId,
-      updatedByUserId: userId,
+      createdById: userId,
+      updatedById: userId,
     })
     .returning({ id: schema.messages.id });
   if (!userMessage) throw new Error("message insert returned no row");
@@ -804,8 +804,8 @@ async function appendAssistantMessage(
       content: reply,
       contentBlocks: [],
       metadata: { status: "complete", ...metadata },
-      createdByUserId: userId,
-      updatedByUserId: userId,
+      createdById: userId,
+      updatedById: userId,
     })
     .returning({ id: schema.messages.id });
   if (!assistantMessage) throw new Error("message insert returned no row");

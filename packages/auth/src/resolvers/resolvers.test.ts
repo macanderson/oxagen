@@ -401,14 +401,14 @@ describe("resolveApiKey", () => {
   // -------------------------------------------------------------------------
   // The scope purpose decides who the bearer is.
   // -------------------------------------------------------------------------
-  const cliKeyRow = (createdByUserId: string | null = "user_approver") => ({
+  const cliKeyRow = (createdById: string | null = "user_approver") => ({
     id: "aky_cli",
     keyHash: sha256hex(RAW_KEY),
     orgId: "org_abc",
     workspaceId: "wrk_xyz",
     expiresAt: null,
     scope: { purpose: "cli_session_v1" },
-    createdByUserId,
+    createdById,
   });
 
   it("a CLI session key authenticates as the user who approved the authorize flow", async () => {
@@ -456,7 +456,7 @@ describe("resolveApiKey", () => {
       workspaceId: "wrk_xyz",
       expiresAt: null,
       scope: { purpose: "tacho_host_v1", host_enrollment_id: "tch_x" },
-      createdByUserId: "user_operator",
+      createdById: "user_operator",
     });
     const result = await resolveApiKey(RAW_KEY);
     expect(result).toMatchObject({ ok: true, userId: null });
@@ -474,7 +474,7 @@ describe("resolveApiKey", () => {
         agent_id: "agt_x",
         principal_id: "prn_x",
       },
-      createdByUserId: "user_admin",
+      createdById: "user_admin",
     });
     const result = await resolveApiKey(RAW_KEY);
     expect(result).toEqual({ ok: false, kind: "purpose_locked" });

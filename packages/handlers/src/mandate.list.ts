@@ -33,7 +33,7 @@ export const mandateListHandler: CapabilityHandler<typeof mandateList> = async (
               ? eq(schema.agents.publicId, input.agentId)
               : undefined,
             operatorId !== null
-              ? eq(schema.agents.createdByUserId, operatorId)
+              ? eq(schema.agents.createdById, operatorId)
               : undefined,
           ),
         );

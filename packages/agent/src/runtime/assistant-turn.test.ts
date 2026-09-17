@@ -392,7 +392,7 @@ describe("prepareAssistantTurn", () => {
     );
     expect(
       captured.inserts.find((i) => i.table === schema.messages)!.values,
-    ).toMatchObject({ createdByUserId: "creator-1" });
+    ).toMatchObject({ createdById: "creator-1" });
 
     setup({ apiKeyCreator: null });
     await expect(

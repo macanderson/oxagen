@@ -246,8 +246,8 @@ export const apiKeyRotateHandler: CapabilityHandler<
         name: input.name ?? oldKey.name,
         scope: oldKey.scope ?? {},
         ...(oldKey.expiresAt ? { expiresAt: oldKey.expiresAt } : {}),
-        createdByUserId: ctx.userId ?? undefined,
-        updatedByUserId: ctx.userId ?? undefined,
+        createdById: ctx.userId ?? undefined,
+        updatedById: ctx.userId ?? undefined,
       })
       .returning({
         id: schema.apiKeys.id,
@@ -268,9 +268,9 @@ export const apiKeyRotateHandler: CapabilityHandler<
       .update(schema.apiKeys)
       .set({
         deletedAt: now,
-        deletedByUserId: ctx.userId ?? undefined,
+        deletedById: ctx.userId ?? undefined,
         updatedAt: now,
-        updatedByUserId: ctx.userId ?? undefined,
+        updatedById: ctx.userId ?? undefined,
       })
       .where(eq(schema.apiKeys.id, oldKey.id));
 

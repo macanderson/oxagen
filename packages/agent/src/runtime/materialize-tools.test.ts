@@ -993,7 +993,7 @@ describe("materializeTools — kill switches (spec §6.11)", () => {
     activatedAt: new Date("2026-09-15T00:00:00Z"),
     deactivatedAt: null,
     flippedByUserId: "u_2",
-    updatedByUserId: "u_2",
+    updatedById: "u_2",
   };
 
   beforeEach(() => {

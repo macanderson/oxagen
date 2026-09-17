@@ -48,7 +48,7 @@ export const agentSuspendHandler: CapabilityHandler<
       .set({
         status: target,
         updatedAt: now,
-        updatedByUserId: userId,
+        updatedById: userId,
         ...(input.reason !== undefined
           ? { metadata: { suspend_reason: input.reason } }
           : {}),

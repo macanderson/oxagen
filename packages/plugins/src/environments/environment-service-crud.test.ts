@@ -468,7 +468,7 @@ describe("deleteEnvironment", () => {
     ).rejects.toThrow(/environment not found/);
   });
 
-  it("sets deletedByUserId to null when actor has no userId", async () => {
+  it("sets deletedById to null when actor has no userId", async () => {
     const { deleteEnvironment } = await import("./environment-service");
 
     const actorNoUser = { orgId: "org-1", workspaceId: "ws-1" };
@@ -476,8 +476,8 @@ describe("deleteEnvironment", () => {
 
     await deleteEnvironment(actorNoUser, { environmentId: "env_pub_1" });
 
-    // actor.userId is undefined → ?? null → deletedByUserId should be null
-    expect(state.updates[0]!.set.deletedByUserId).toBeNull();
+    // actor.userId is undefined → ?? null → deletedById should be null
+    expect(state.updates[0]!.set.deletedById).toBeNull();
   });
 });
 
@@ -486,7 +486,7 @@ describe("deleteEnvironment", () => {
 describe("actor.userId ?? null branches", () => {
   beforeEach(resetState);
 
-  it("createEnvironment sets createdByUserId to null when userId is absent", async () => {
+  it("createEnvironment sets createdById to null when userId is absent", async () => {
     const { createEnvironment } = await import("./environment-service");
 
     const actorNoUser = { orgId: "org-1", workspaceId: "ws-1" };
@@ -500,7 +500,7 @@ describe("actor.userId ?? null branches", () => {
     expect(result.id).toBe("env_no_user");
   });
 
-  it("updateEnvironment sets updatedByUserId to null when userId is absent", async () => {
+  it("updateEnvironment sets updatedById to null when userId is absent", async () => {
     const { updateEnvironment } = await import("./environment-service");
 
     const actorNoUser = { orgId: "org-1", workspaceId: "ws-1" };
@@ -512,7 +512,7 @@ describe("actor.userId ?? null branches", () => {
       name: "Updated",
     });
 
-    expect(state.updates[0]!.set.updatedByUserId).toBeNull();
+    expect(state.updates[0]!.set.updatedById).toBeNull();
   });
 
   it("listEnvironments works without actor userId", async () => {
