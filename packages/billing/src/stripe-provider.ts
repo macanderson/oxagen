@@ -9,6 +9,7 @@
 
 import Stripe from "stripe";
 import { requireEnv } from "@oxagen/config/env";
+import { logger } from "./logger";
 import type {
   BillingCreditPackLineItem,
   BillingCheckoutDynamicCreditInput,
@@ -120,7 +121,111 @@ function stripeChargeToNeutral(c: Stripe.Charge): BillingRefundedCharge {
     amountRefundedCents: c.amount_refunded,
     currency: c.currency,
     orgId: (c.metadata?.org_id as string | undefined) ?? null,
+    metadata: (c.metadata as Record<string, string>) ?? {},
   };
+}
+
+/**
+ * What a failed Stripe read establishes.
+ *
+ * "definitive" — Stripe looked and answered about the resource, and the answer
+ * cannot change on its own. The identical call returns the identical thing on
+ * the redelivery, so the caller's "no metadata" branch is the correct one.
+ *
+ * "retry" — the call established nothing about the resource. Either it never
+ * reached Stripe, or it failed on a condition someone can CORRECT, after which
+ * the unchanged call returns real data.
+ *
+ * The test is not "did Stripe answer" but "can this answer change on its own?"
+ * — which is why a permission error is not definitive: an operator grants the
+ * key `charges:read` and the same request then succeeds. That is a fact about
+ * our configuration, not about the charge.
+ *
+ * The two costs are not symmetric and the asymmetry is what decides every
+ * doubtful case. Wrongly retrying costs a redelivery. Wrongly finalising costs
+ * the units: no metadata means no organisation, so the dispute is not parked,
+ * the handler RETURNS, `processStripeEvent` marks the event processed for ever,
+ * and the retried checkout grants every disputed unit. Unknown therefore
+ * resolves to "retry", never to "definitive".
+ */
+type StripeReadDisposition = "definitive" | "retry";
+
+/**
+ * The error types this build's Stripe SDK DECLARES it can tag a thrown error
+ * with. An upgrade that adds a declared type widens this union, and the
+ * `satisfies` below then fails to compile until the new type is classified.
+ *
+ * It is narrower than what the SDK can actually throw, and the gap is the case
+ * the check exists for. In stripe@17.7.0 `generateV1Error`'s DEFAULT branch
+ * constructs `StripeUnknownError` (`cjs/Error.js`), and that name appears
+ * nowhere in `types/Errors.d.ts` — so the compiler cannot see the SDK's own
+ * fallback class. Whatever this union is missing reaches `stripeReadDisposition`
+ * as a string with no entry, which is why the runtime fallback below is doing
+ * real work rather than belt-and-braces: it, not the compiler, is what keeps an
+ * unrecognised error on the retry side.
+ */
+type StripeErrorType = Stripe.errors.StripeError["type"];
+
+/**
+ * The fork as a TOTAL mapping rather than a pair of lists.
+ *
+ * A list-shaped classifier is cheap to extend and silent when extended wrongly:
+ * an error absent from both lists, or added to the wrong one, fails in the
+ * direction of granting units and nothing says so. A total map over the SDK's
+ * own union makes the next error type a COMPILE error instead of a default —
+ * whoever upgrades the SDK has to answer the question rather than inherit an
+ * answer. `stripeReadDisposition` keeps a runtime fallback as well, because the
+ * value arrives as `unknown` and a string this build has never heard of is
+ * exactly the case a compiler cannot see.
+ */
+const STRIPE_READ_DISPOSITION = {
+  // The one fact here that cannot change on its own. Narrowed further by code
+  // below: only `resource_missing` is "Stripe looked and there is no such
+  // charge". Every other invalid request is a bug or a misconfiguration on our
+  // side — a bad expand, a wrong API version — which someone corrects and
+  // redeploys, so it belongs with the correctable ones.
+  StripeInvalidRequestError: "definitive",
+
+  // Correctable by an operator, without any change to this call.
+  StripePermissionError: "retry",
+  StripeAuthenticationError: "retry",
+  StripeInvalidGrantError: "retry",
+  TemporarySessionExpiredError: "retry",
+
+  // Never reached Stripe, or Stripe could not answer.
+  StripeConnectionError: "retry",
+  StripeAPIError: "retry",
+  StripeRateLimitError: "retry",
+
+  // Cannot arise from a charge read. Mapped anyway so the table stays total,
+  // and mapped to the safe side so that if one ever does, it costs a
+  // redelivery rather than the units.
+  StripeError: "retry",
+  StripeCardError: "retry",
+  StripeIdempotencyError: "retry",
+  StripeSignatureVerificationError: "retry",
+} satisfies Record<StripeErrorType, StripeReadDisposition>;
+
+/** Stripe's code for "I looked, and there is no such object." */
+const STRIPE_RESOURCE_MISSING = "resource_missing";
+
+function stripeReadDisposition(err: unknown): StripeReadDisposition {
+  const fields = err as { type?: unknown; code?: unknown } | null;
+  const type = fields?.type;
+  if (typeof type !== "string") return "retry";
+
+  // Deliberately indexed as a plain record rather than asserted to
+  // `StripeErrorType`: at runtime the string can be a type this build's SDK
+  // does not have, and that is the case the compiler cannot reach.
+  const disposition = (
+    STRIPE_READ_DISPOSITION as Record<string, StripeReadDisposition | undefined>
+  )[type];
+  if (disposition !== "definitive") return "retry";
+
+  // "Definitive" means the object is gone, not merely that the request was
+  // rejected. An invalid request for any other reason is our defect, and our
+  // defects get corrected.
+  return fields?.code === STRIPE_RESOURCE_MISSING ? "definitive" : "retry";
 }
 
 /** Micro-dollars in one cent. */
@@ -252,6 +357,8 @@ function checkoutSessionToNeutral(
     metadata: (sess.metadata as Record<string, string>) ?? {},
     subscriptionId: resolveSubscriptionRef(sess.subscription),
     invoiceId: resolveRef(sess.invoice),
+    paymentIntentId: resolveRef(sess.payment_intent),
+    amountTotalCents: sess.amount_total ?? null,
   };
 }
 
@@ -909,7 +1016,15 @@ export class StripeProvider implements BillingProvider {
       // attached to the customer for the recorder's off-session auto top-up;
       // Checkout tells the customer so.
       payment_method_types: ["card"],
-      payment_intent_data: { setup_future_usage: "off_session" },
+      // The same metadata on the PaymentIntent, which copies it onto the
+      // Charge. A `charge.refunded` reads the charge and nothing else, so
+      // without this the refund cannot name the organisation that was paid —
+      // the credit-pack checkout has carried it since it was written
+      // (createDynamicCreditCheckout above), and this one did not (ADR-085).
+      // It is not sufficient on its own: a Stripe Dispute carries its own
+      // metadata, not the charge's, which is why the grant also records the
+      // PaymentIntent id on the settlement.
+      payment_intent_data: { setup_future_usage: "off_session", metadata },
       success_url: input.successUrl,
       cancel_url: input.cancelUrl,
       automatic_tax: { enabled: taxEnabled },
@@ -917,6 +1032,38 @@ export class StripeProvider implements BillingProvider {
     });
     if (!session.url) throw new Error("Stripe did not return a checkout URL");
     return { sessionId: session.id, url: session.url };
+  }
+
+  async getChargeMetadata(chargeId: string): Promise<Record<string, string>> {
+    try {
+      const charge = await this.client().charges.retrieve(chargeId);
+      return (charge.metadata as Record<string, string>) ?? {};
+    } catch (err) {
+      if (stripeReadDisposition(err) === "definitive") {
+        // Stripe answered: there is no such charge. Retrying cannot change
+        // that, and the caller's "no metadata" branch is the correct one.
+        logger.warn(
+          { chargeId, err: err instanceof Error ? err.message : String(err) },
+          "billing: charge cannot be read; treating as no metadata",
+        );
+        return {};
+      }
+      // A timeout, a 5xx, a rate limit or a permission we have not been granted
+      // yet is NOT an answer about the charge. Returning `{}` here
+      // would tell the dispute handler the charge has no organisation and
+      // nothing was bought, so the dispute would be dropped and the webhook
+      // marked processed for ever — the exact defect ADR-085 §5 and §8 exist
+      // to prevent, reached through a failed read instead of a missing field.
+      //
+      // Throwing is how this codebase asks for a retry: processStripeEvent
+      // re-dispatches only an event whose handler threw, and Stripe's own
+      // backoff is a better retry loop than one held open inside a webhook.
+      logger.error(
+        { chargeId, err: err instanceof Error ? err.message : String(err) },
+        "billing: charge read failed transiently; failing the webhook so it is retried",
+      );
+      throw err;
+    }
   }
 
   async getCheckoutPaymentMethod(

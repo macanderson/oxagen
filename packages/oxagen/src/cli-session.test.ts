@@ -32,9 +32,9 @@ describe("requestsReservedCliSessionPurpose", () => {
   });
 
   it("does not recognise another purpose, or none", () => {
-    expect(requestsReservedCliSessionPurpose({ purpose: "tacho_host_v1" })).toBe(
-      false,
-    );
+    expect(
+      requestsReservedCliSessionPurpose({ purpose: "tacho_host_v1" }),
+    ).toBe(false);
     expect(requestsReservedCliSessionPurpose({ note: "cli" })).toBe(false);
   });
 
