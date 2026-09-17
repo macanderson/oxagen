@@ -336,6 +336,12 @@ export async function enroll(
       api_url: credentials.apiUrl,
       api_key: response.apiKey,
       api_key_public_id: response.apiKeyPublicId,
+      ...(response.gatewayApiKey !== undefined
+        ? { gateway_api_key: response.gatewayApiKey }
+        : {}),
+      ...(response.gatewayApiKeyPublicId !== undefined
+        ? { gateway_api_key_public_id: response.gatewayApiKeyPublicId }
+        : {}),
       endpoints: {
         ingest: response.enrollment.claims.ingest_endpoint,
         bundle: response.enrollment.claims.bundle_endpoint,

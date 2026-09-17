@@ -118,10 +118,33 @@ control is worse than not having it.
 (`packages/tacho/package.json`), and that constraint is kept. The collector's
 gateway therefore does **not** import `materializeTools`, `mcp-rbac` or
 `tool-budget`. It forwards the MCP JSON-RPC envelope to the workspace MCP
-endpoint over HTTPS, carrying the host's own API key — which is already a
-first-class Oxagen API key bound to the enrolling org and workspace
-(`packages/handlers/src/tacho.enrollment.create.ts`), and already resolves
-through the remote MCP context path (`apps/mcp/src/context.ts`).
+endpoint over HTTPS, carrying a credential minted for exactly this job.
+
+**Not the host key.** The first draft of this ADR said attribution rode the
+host's own API key, on the grounds that it is already an Oxagen key bound to
+the enrolling org and workspace. That was wrong, in the direction that matters.
+An API-key principal has no `org_users` row, so `assertCallerRole` returns
+early for one and every role gate passes; `checkIAM` then allows every
+non-enterprise org through a tier fast-path; and the host key's creator is the
+enrolling Owner or Admin. A connected app forwarding through the gateway
+therefore held **owner authority over the workspace** and could call MCP-only
+operations such as `set_model_credential`. The mandate this ADR is about was
+decoration.
+
+Two things fix it, and both are load-bearing:
+
+1. **A key's purpose is enforced.** `machineKeyDenial`
+   (`packages/iam/src/machine-key-scope.ts`) runs in the kernel's IAM adapter
+   *before* `checkIAM`, so it sits ahead of the tier fast-path and on the
+   single `invoke()` path rather than in each handler — the pattern that
+   produced the bug. A key whose scope names a purpose may invoke only what
+   that purpose is for, and an unrecognised purpose is allowed nothing.
+   `tacho_host_v1` is held to the three calls the control client makes.
+2. **The gateway has its own credential.** Enrollment mints a second key with
+   purpose `tacho_gateway_v1`, and the gateway presents that. Its mandate is a
+   rule rather than a list: a capability on the `mcp` surface that does not
+   mutate and is not high-sensitivity. A host with no gateway key serves no
+   tools and never falls back to the host key.
 
 Consequences, all of them intended:
 
@@ -130,8 +153,8 @@ Consequences, all of them intended:
 - the gateway runs no turn, calls no model and spawns no worker, so ADR-043
   holds without an exception;
 - a call that cannot be attributed to an org and a workspace is refused rather
-  than defaulted, because attribution rides the key and a gateway with no
-  loadable `host.json` has no key to present;
+  than defaulted, because attribution rides the gateway key and a host without
+  one has nothing to present;
 - when the control plane refuses a turn for exceeding a provider's tool cap,
   the gateway surfaces that message — which names the model, the limit and the
   count — rather than replacing it with a gateway error.

@@ -8,6 +8,14 @@ import { z } from "zod";
 
 export const TACHO_HOST_SCOPE_PURPOSE = "tacho_host_v1" as const;
 
+/**
+ * The scope purpose on the second key an enrollment mints: the one the local
+ * MCP gateway serves a connected app's tools with (ADR-078). Separate from the
+ * host key because the two jobs have different blast radii; `machineKeyDenial`
+ * in `@oxagen/iam` is what holds each to its own.
+ */
+export const TACHO_GATEWAY_SCOPE_PURPOSE = "tacho_gateway_v1" as const;
+
 export const tachoHostApiKeyScopeSchema = z
   .object({
     purpose: z.literal(TACHO_HOST_SCOPE_PURPOSE),

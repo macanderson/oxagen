@@ -28,6 +28,15 @@ export const hostFileSchema = z
     api_url: z.string().url(),
     api_key: z.string().min(1),
     api_key_public_id: z.string().min(1),
+    /**
+     * The credential the local MCP gateway presents (ADR-078), distinct from
+     * `api_key`. Optional: a host enrolled before the gateway existed has
+     * none, and one that has none serves no tools -- it never falls back to
+     * `api_key`, because a connected app holding the host's authority is the
+     * escalation the split exists to prevent.
+     */
+    gateway_api_key: z.string().min(1).optional(),
+    gateway_api_key_public_id: z.string().min(1).optional(),
     endpoints: z
       .object({
         ingest: z.string().url(),

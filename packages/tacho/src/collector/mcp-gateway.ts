@@ -381,13 +381,15 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
         // Never defaulted. A call Oxagen cannot attribute is a call it cannot
         // govern, meter or record, and serving it would put an ungoverned
         // action in the ledger under nobody's name.
-        log("mcp gateway refused a call: this machine has no enrollment");
+        log(
+          "mcp gateway refused a call: no enrollment, or no gateway credential on it",
+        );
         return {
           status: 403,
           body: rpcError(
             id,
             RPC_REFUSED,
-            "this machine is not enrolled, so a call cannot be attributed to an organization and workspace. Sign in and enroll in the Oxagen app, then restart this app.",
+            "this machine has no Oxagen mandate to serve tools under. Open the Oxagen app: if it is signed in and connected, reconnect this app to refresh its credential, then restart it.",
           ),
         };
       }

@@ -159,6 +159,8 @@ export function testHostFile(
     daemon_command: ["node", "/opt/tacho/tachod.mjs"],
     displaced_env: {},
     displaced_mcp_servers: {},
+    gateway_api_key: "oxa_test_gateway_key",
+    gateway_api_key_public_id: "akp_gateway",
     enrolled_at: "2026-09-10T00:00:00.000Z",
     expires_at: "2027-03-09T00:00:00.000Z",
     revoked_at: null,

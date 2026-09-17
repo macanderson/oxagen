@@ -390,6 +390,15 @@ export const enrollmentResponseSchema = z
     agentKey: z.string().min(1),
     apiKeyPublicId: z.string().min(1),
     apiKey: z.string().min(1),
+    /**
+     * The credential the local MCP gateway serves a connected app with
+     * (ADR-078). Optional: a control plane older than the gateway mints only
+     * the host key, and a host that gets none serves no tools rather than
+     * falling back to the host key -- which is the escalation this exists to
+     * prevent.
+     */
+    gatewayApiKeyPublicId: z.string().min(1).optional(),
+    gatewayApiKey: z.string().min(1).optional(),
     enrollment: z
       .object({
         claims: enrollmentClaimsSchema,

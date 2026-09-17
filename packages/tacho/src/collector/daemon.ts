@@ -551,13 +551,20 @@ export async function startDaemon(
       if (host.revoked_at !== null) return undefined;
       if (host.host_status === "revoked" || host.host_status === "suspended")
         return undefined;
-      if (host.api_key.length === 0) return undefined;
+      // The gateway presents its OWN key, never the host key. The host key
+      // reports events and fetches the mandate; a connected app's tool calls
+      // must not carry that authority (ADR-078, and the escalation
+      // `machineKeyDenial` closes). A host enrolled before the gateway existed
+      // has no such key, and then the gateway serves nothing rather than
+      // falling back -- which is the whole point of the split.
+      const gatewayKey = host.gateway_api_key;
+      if (gatewayKey === undefined || gatewayKey.length === 0) return undefined;
       return {
         organizationId: host.organization_id,
         workspaceId: host.workspace_id,
         orgSlug: host.org_slug,
         workspaceSlug: host.workspace_slug,
-        apiKey: host.api_key,
+        apiKey: gatewayKey,
         hostEnrollmentId: host.host_enrollment_id,
       };
     },
