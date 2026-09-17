@@ -131,6 +131,9 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
+  // The client-IP env reads are memoized on first use; drop them so a stubbed
+  // value never leaks into the next case.
+  __resetTrustedProxyHopsForTests();
 });
 
 describe("POST /v1/telemetry/stella/operational", () => {
@@ -388,20 +391,24 @@ describe("POST /v1/telemetry/stella/operational", () => {
     },
   );
 
-  it("fails closed before authentication when the pre-auth counter store degrades", async () => {
+  // ADR-082: the pre-auth ceilings degrade to the per-instance limiter rather
+  // than answering 503. #3167 is the outage the old policy caused — every
+  // enrolled host got a 503 on every request for as long as the counter
+  // statement was broken.
+  it("serves the request from the per-instance ceiling when the pre-auth counter store degrades", async () => {
     mocks.withSystemDb.mockRejectedValue(
       new Error("counter store unavailable"),
     );
 
     const response = await post(VALID_BATCH, {
       authorization: "Bearer counter_store_failure_key",
-      "x-vercel-forwarded-for": "203.0.113.60",
+      "x-oxagen-client-ip": "198.51.100.60",
     });
 
-    expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ error: "rate_limit_unavailable" });
-    expect(mocks.resolveApiKey).not.toHaveBeenCalled();
-    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(OUTPUT);
+    expect(mocks.resolveApiKey).toHaveBeenCalled();
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
   });
 
   it("runs both distributed pre-auth counters before auth middleware", async () => {
@@ -520,10 +527,18 @@ describe("POST /v1/telemetry/stella/operational", () => {
     // 10.0.0.1 is the proxy this deployment names; 203.0.113.9 is the address
     // it vouched for. clientIp is the CLIENT, 203.0.113.9 — it used to be the
     // proxy, which is what made an IP allowlist judge the load balancer.
+    //
+    // The request also carries a forged `x-oxagen-client-ip` naming the proxy's
+    // address. The gate is OFF here, which is the default and the state before
+    // the Caddy config that SETS that header is deployed (ADR-083), so it must
+    // not be read at all — if it were, clientIp would come back 10.0.0.1 and a
+    // caller would have chosen the address an ip_ranges allowlist judges.
     vi.stubEnv("TRUSTED_PROXY_CIDRS", "10.0.0.0/8");
+    vi.stubEnv("TRUST_EDGE_CLIENT_IP_HEADER", "false");
     __resetTrustedProxyHopsForTests();
     const response = await post(VALID_BATCH, {
       authorization: "Bearer ox_test_key",
+      "x-oxagen-client-ip": "10.0.0.1",
       "x-forwarded-for": "203.0.113.9, 10.0.0.1",
     });
 

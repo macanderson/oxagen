@@ -281,13 +281,36 @@ resource "aws_instance" "node" {
     encrypted   = true
   }
 
-  user_data = templatefile("${path.module}/user-data.sh.tftpl", {
+  # Compressed, because the bootstrap outgrew EC2's 16 KiB user-data cap.
+  #
+  # The cap is the EC2 API's and applies to the DECODED bytes; the provider
+  # front-runs it with a length validation on `user_data`, which is where this
+  # surfaced — `plan` on the oxagen stack failed outright, with the whole
+  # rendered script as the body of the error. `base64gzip` sends 9,256 bytes
+  # where the rendered template is 19,299, and cloud-init decompresses gzipped
+  # user-data before it reads the shebang, so nothing in the script changes.
+  # (Amazon Linux 2023 — the bootstrap installs with `dnf` — ships cloud-init,
+  # and AWS documents gzip as the remedy for exactly this limit.)
+  #
+  # The alternative was to delete comments from `user-data.sh.tftpl`, and that
+  # file's header is an argument for why its reasoning has to sit beside the code
+  # it defends. Compression keeps both. It does not make the ceiling go away: at
+  # roughly 2:1 on prose there is now room for about 13 KB more template, and
+  # `tools/scripts/check-user-data-size.mjs` fails `check:contracts` with the
+  # number long before a `plan` does — because the budget being invisible is what
+  # let it be spent. The next step past compression is a stub that fetches the
+  # bootstrap from the deploy bucket, which retires the ceiling and buys a boot
+  # that can fail to find its own script; not worth it while 6 KB are free.
+  user_data_base64 = base64gzip(templatefile("${path.module}/user-data.sh.tftpl", {
     name             = var.name
     region           = var.region
     neo4j_version    = var.neo4j_version
     clickhouse_image = var.clickhouse_image
     deploy_bucket    = var.deploy_bucket
-  })
+  }))
+  # Applies to user_data_base64 as it did to user_data: a changed bootstrap
+  # replaces the instance rather than leaving a node running a script that is no
+  # longer what this module says it runs.
   user_data_replace_on_change = true
 
   tags = merge(local.tags, { Name = var.name })

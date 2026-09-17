@@ -3,7 +3,7 @@
  *
  * Covers:
  * - extractClientIp: which x-forwarded-for hop is taken for a given
- *   TRUSTED_PROXY_HOP_COUNT, that a caller-supplied prefix cannot move it,
+ *   TRUSTED_PROXY_CIDRS, that a caller-supplied prefix cannot move it,
  *   x-real-ip fallback, and both absent → null
  * - capabilityContext: requireOrg default true throws 400 when orgId or workspaceId null,
  *   requireOrg false does not throw, requestId fallback is UUID-shaped
@@ -126,6 +126,7 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
   };
 
   const originalCidrs = process.env.TRUSTED_PROXY_CIDRS;
+  const originalTrustEdge = process.env.TRUST_EDGE_CLIENT_IP_HEADER;
 
   /** The proxy list is memoized on first read, so set it and drop the cache. */
   function setTrustedProxyCidrs(cidrs: string): void {
@@ -133,15 +134,28 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
     __resetTrustedProxyHopsForTests();
   }
 
+  /** Same memoization for the edge-header gate (ADR-083). */
+  function setTrustEdgeHeader(value: "true" | "false"): void {
+    process.env.TRUST_EDGE_CLIENT_IP_HEADER = value;
+    __resetTrustedProxyHopsForTests();
+  }
+
   beforeEach(() => {
     // Empty is the default, and a case that names proxies must not change how
     // the next one attributes an address.
     setTrustedProxyCidrs("");
+    // Default OFF, matching the env default, so every case below is exercised
+    // in the state the deployment is actually in before the operator turns the
+    // header on.
+    setTrustEdgeHeader("false");
   });
 
   afterEach(() => {
     if (originalCidrs === undefined) delete process.env.TRUSTED_PROXY_CIDRS;
     else process.env.TRUSTED_PROXY_CIDRS = originalCidrs;
+    if (originalTrustEdge === undefined)
+      delete process.env.TRUST_EDGE_CLIENT_IP_HEADER;
+    else process.env.TRUST_EDGE_CLIENT_IP_HEADER = originalTrustEdge;
     __resetTrustedProxyHopsForTests();
   });
 
@@ -236,6 +250,73 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
         "x-forwarded-for": "198.51.100.1",
       }),
     ).toBeNull();
+  });
+
+  // ── the edge header (ADR-083) ─────────────────────────────────────────────
+
+  it("prefers the address the edge wrote over any chain", async () => {
+    // Caddy sets this with `header_up`, which REPLACES the field, so a copy the
+    // caller sent under the same name never arrives — see ADR-083 and
+    // infra/tools/caddy/Caddyfile.alb. Believed only once the operator has
+    // turned the gate on, which is what this line represents.
+    setTrustEdgeHeader("true");
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(
+      await clientIpFor({
+        "x-oxagen-client-ip": "198.51.100.1",
+        "x-forwarded-for": "203.0.113.9, 10.0.0.5",
+        "x-real-ip": "203.0.113.8",
+      }),
+    ).toBe("198.51.100.1");
+  });
+
+  it("attributes by edge header alone once the proxy chain is rewritten", async () => {
+    // The post-rewrite shape: Caddy SETS x-forwarded-for to the single client
+    // address, so no proxy entry remains to vouch for anything and the identity
+    // walk yields nothing. The edge header is what names the caller there —
+    // which is why TRUSTED_PROXY_CIDRS must NOT be set in that shape.
+    setTrustEdgeHeader("true");
+    setTrustedProxyCidrs("");
+    expect(
+      await clientIpFor({
+        "x-oxagen-client-ip": "198.51.100.1",
+        "x-forwarded-for": "198.51.100.1",
+      }),
+    ).toBe("198.51.100.1");
+  });
+
+  // The #3183 second P1. Before the Caddy config lands, the OLD Caddyfile has
+  // no rule for x-oxagen-client-ip and forwards a caller's copy unchanged. This
+  // is the IAM path, so a forged value here decides an ip_ranges allowlist.
+  //
+  // The discriminating shape: the forged header names an address a caller would
+  // want allowlisted, and the chain names a different one. A test asserting only
+  // "the edge header wins when present" passes against the code being flagged;
+  // this one asserts the forged value never comes back.
+  it("does not believe a forged edge header before the gate is turned on", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(
+      await clientIpFor({ "x-oxagen-client-ip": "198.51.100.1" }),
+    ).toBeNull();
+
+    expect(
+      await clientIpFor({
+        "x-oxagen-client-ip": "198.51.100.1",
+        "x-forwarded-for": "203.0.113.9, 10.0.0.5",
+      }),
+    ).toBe("203.0.113.9");
+  });
+
+  it("bounds what the edge header can become downstream", async () => {
+    setTrustEdgeHeader("true");
+    for (const value of [
+      "not-an-ip",
+      "1.2.3.4, 5.6.7.8",
+      " ",
+      "f".repeat(46),
+    ]) {
+      expect(await clientIpFor({ "x-oxagen-client-ip": value })).toBeNull();
+    }
   });
 
   it("returns null when no forwarding header is present", async () => {

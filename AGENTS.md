@@ -234,11 +234,15 @@ is unambiguous.
 
 ### UI Component Import Convention
 
-**Never import `@oxagen/ui/components/*` directly in app code.** All Next.js apps (`apps/app`, `apps/docs`, …) must import UI components through their local re-export layer at `src/components/ui/<name>.tsx`. (`apps/admin` and `apps/website` do not exist in this monorepo — the 6 apps are `api`, `app`, `cli`, `docs`, `mcp`, `web`.)
+**Never import `@oxagen/ui/components/*` directly in app code.** Each app imports UI through its own local layer, and which layer that is differs per app. (`apps/admin` and `apps/website` do not exist in this monorepo — the 6 apps are `api`, `app`, `cli`, `docs`, `mcp`, `web`.)
+
+- **`apps/app`** — `@/ui/<name>`, backed by `apps/app/src/ui/`. These are original components, not re-exports; the app imports no `@oxagen/ui/components/*` and has **no** `src/components/` directory. It carries its own ESLint 10 config.
+- **`apps/docs`, `apps/app_deprecated`** — `@/components/ui/<name>`, a genuine re-export layer over `@oxagen/ui/components/*`, enforced by `eslint.next.mjs`.
 
 ```ts
 // ✅ Correct — uses the app's re-export layer
-import { Button } from "@/components/ui/button";
+import { Button } from "@/ui/button";           // apps/app
+import { Button } from "@/components/ui/button"; // apps/docs, app_deprecated
 
 // ❌ Forbidden — bypasses the indirection
 import { Button } from "@oxagen/ui/components/button";
@@ -248,11 +252,13 @@ import { Button } from "@oxagen/ui/components/button";
 
 **Exceptions:** The re-export files themselves (`src/components/ui/*.tsx`) legitimately import from `@oxagen/ui/components/*`. Importing `@oxagen/ui` (barrel), `@oxagen/ui/styles/*`, and `@oxagen/ui/lib/*` is allowed everywhere.
 
-**Enforcement:** `no-restricted-imports` rule in `eslint.next.mjs` — errors on any `@oxagen/ui/components/*` import outside the `src/components/ui/` layer.
+**Enforcement:** `no-restricted-imports` in `eslint.next.mjs` — errors on any `@oxagen/ui/components/*` import outside the `src/components/ui/` layer. Its first line names its scope: `apps/app_deprecated` and `apps/docs`.
+
+**`apps/app` is not enforced.** Its standalone `apps/app/eslint.config.mjs` restricts the tenancy seams, the `next/navigation` names INV-13 routes, and cross-lane `@/features/*/*` imports — and nothing else. There is no `@oxagen/ui/components/*` pattern in it, so a direct shared-component import there lints clean. The rule holds in `apps/app` because the app has its own components and imports that path zero times, not because anything refuses it. Treat it as a convention there until a rule and its `src/test/arch/probes/lint` probe exist.
 
 ### UI Component Test Placement
 
-Tests for shared components (`@oxagen/ui`) live in `packages/ui/src/components/<name>.test.tsx`. Tests for app-specific UI components (e.g. `breadcrumb`, `page-header`, `page-tabs`, `field-fill-transition`) stay in `apps/app/src/components/ui/`.
+Tests for shared components (`@oxagen/ui`) live in `packages/ui/src/components/<name>.test.tsx`. Tests for `apps/app`'s own components sit beside them in `apps/app/src/ui/` (e.g. `avatar.test.tsx` next to `avatar.tsx`).
 
 **Rule of thumb:** if the component's source is a re-export (`export * from "@oxagen/ui/components/..."`) → the test belongs in `packages/ui`. If the component is an original implementation that lives only in the app → the test stays in the app.
 

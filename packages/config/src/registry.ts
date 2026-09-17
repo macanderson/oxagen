@@ -306,21 +306,47 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "Rate limiting",
     description:
       "Comma-separated CIDRs or addresses of the proxies in front of apps/api. " +
-      "This is the ONLY way a client address is attributed: the walk goes right " +
-      "through x-forwarded-for while each entry is a named proxy and stops at " +
-      "the first that is not, so a caller padding the header cannot move the " +
-      "result. Unset, no client address is derived at all, and the two things " +
-      "that read one both fail safe — the IAM ip_ranges / ip_allow conditions " +
-      "deny, and the pre-authentication IP ceilings on the Tacho and Stella " +
-      "machine routes skip rather than pooling every caller into one bucket. " +
-      "Set it to the range the proxies sit in, not to the clients. Empty by " +
+      "With the edge header (TRUST_EDGE_CLIENT_IP_HEADER) this is how a client " +
+      "address is attributed: the walk goes right through x-forwarded-for while " +
+      "each entry is a named proxy and stops at the first that is not, so a " +
+      "caller padding the header cannot move the result. " +
+      "NAME THE PROXIES' OWN SUBNETS, never an RFC1918 supernet like " +
+      "10.0.0.0/8: a list wide enough to contain a caller makes the walk skip " +
+      "that caller as though it were a proxy and return an entry further left, " +
+      "which is one the caller wrote — the exact bypass this form exists to " +
+      "close. Once set it decides alone, and it returns nothing when no named " +
+      "proxy vouched for an entry, so it does not belong in a deployment whose " +
+      "edge rewrites x-forwarded-for to a single client address (ADR-083). " +
+      "Unset, no client address is derived at all, and the two things that read " +
+      "one both fail safe — the IAM ip_ranges / ip_allow conditions deny, and " +
+      "the pre-authentication IP ceilings on the Tacho and Stella machine " +
+      "routes skip rather than pooling every caller into one bucket. Empty by " +
       "default, which means those IP controls are OFF and say so in the log.",
     secret: false,
     clientExposed: false,
-    services: ["api"],
+    services: ["app", "api", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
-    placeholder: "10.0.0.0/8",
+    placeholder: "10.60.0.0/20,10.60.16.0/20",
+  },
+
+  TRUST_EDGE_CLIENT_IP_HEADER: {
+    group: "Rate limiting",
+    description:
+      "Whether the x-oxagen-client-ip header written by the edge is believed. " +
+      'Optional — defaults to false. Set to "true" only AFTER the Caddy config ' +
+      "that SETS that header (infra/tools/caddy/Caddyfile.alb) is uploaded and " +
+      "reloaded; until then the old config forwards a caller-supplied copy of it " +
+      "unchanged and the value would be attacker-controlled (ADR-083). Once that " +
+      "config is live it is what attributes the caller, because the same config " +
+      "rewrites x-forwarded-for to a single client address and leaves no proxy " +
+      "entry for TRUSTED_PROXY_CIDRS to vouch with.",
+    secret: false,
+    clientExposed: false,
+    services: ["app", "api", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "false",
   },
 
   // ── Error alerting (vendor-neutral outbound webhook) ────────────────────────
