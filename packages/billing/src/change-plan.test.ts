@@ -199,6 +199,51 @@ const ENTERPRISE_PLAN = {
   annualCents: ENTERPRISE_CATALOG.annualCents,
 };
 
+/**
+ * Which price the PROVIDER reports the subscription as being on, before any
+ * swap this test issues. The local `stripe_price_id` column is a cache of the
+ * last sync; the already-applied guard asks the provider, because the one
+ * failure it exists to survive — a swap that reached Stripe and whose
+ * response was lost — is exactly the one that leaves the cache stale.
+ *
+ * They are therefore two different stubs on purpose, and {@link onPrice} sets
+ * both so a test does not accidentally describe a subscription that cannot
+ * exist. A test that wants them to DISAGREE (the lost-sync case) sets them
+ * apart deliberately.
+ */
+let providerActivePriceId: string | null = "price_build_m";
+
+/**
+ * The provider's view of the subscription, which reports the NEW price once a
+ * swap has been issued — as the real one does. Static stubs could not express
+ * that: the same call is made before the swap (to decide whether it already
+ * happened) and after it (by the sync), and those two want different answers.
+ */
+function stubProviderSubscription(productId: string) {
+  getSubscriptionMock.mockImplementation(async () => ({
+    id: "sub_active_001",
+    customerId: "cus_001",
+    metadata: { org_id: "org-abc" },
+    status: "active",
+    billingInterval: "month",
+    currentPeriodStart: new Date(),
+    currentPeriodEnd: new Date(),
+    cancelAtPeriodEnd: false,
+    canceledAt: null,
+    trialEnd: null,
+    productId,
+    priceId:
+      upgradeSubscriptionMock.mock.calls.length > 0
+        ? ((
+            upgradeSubscriptionMock.mock.calls.at(-1)?.[1] as
+              | { newPriceId?: string }
+              | undefined
+          )?.newPriceId ?? providerActivePriceId)
+        : providerActivePriceId,
+    seatCount: 1,
+  }));
+}
+
 function makeActiveSub(
   overrides: Partial<{
     stripeSubscriptionId: string;
@@ -230,6 +275,23 @@ function makeActiveSub(
 }
 
 /**
+ * Put the subscription on a price in BOTH places that answer for it — the
+ * local row and the provider — because in production they are two sources and
+ * only one of them is authoritative. Setting only the local one describes a
+ * subscription that does not exist, which is what the fixtures did before the
+ * guard started asking the provider.
+ */
+function onPrice(
+  priceId: string | null,
+  overrides: Parameters<typeof makeActiveSub>[0] = {},
+) {
+  providerActivePriceId = priceId;
+  dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+    makeActiveSub({ stripePriceId: priceId, ...overrides }),
+  );
+}
+
+/**
  * changeOrgPlan reads `billing.plans` twice before the swap — the target by
  * slug, then the plan the org is on by id — and `syncSubscriptionFromStripe`
  * reads it once more afterwards by product id.
@@ -247,20 +309,7 @@ describe("changeOrgPlan", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // syncSubscriptionFromStripe uses billingProvider().getSubscription and db().insert
-    getSubscriptionMock.mockResolvedValue({
-      id: "sub_active_001",
-      customerId: "cus_001",
-      metadata: { org_id: "org-abc" },
-      status: "active",
-      billingInterval: "month",
-      currentPeriodStart: new Date(),
-      currentPeriodEnd: new Date(),
-      cancelAtPeriodEnd: false,
-      canceledAt: null,
-      trialEnd: null,
-      productId: "prod_build",
-      seatCount: 1,
-    });
+    stubProviderSubscription("prod_build");
     dbQueryMocks.plans.findFirst.mockImplementation(() => {
       // sync uses stripeProductId; changeOrgPlan uses slug
       return Promise.resolve(BUILD_PLAN);
@@ -292,12 +341,10 @@ describe("changeOrgPlan", () => {
     // change billing more, whatever the catalogue or the price field says.
     previewingProration(80_000);
     stubPlanLookups(SCALE_PLAN, BUILD_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-build-id",
-        stripePriceId: "price_build_m",
-      }),
-    );
+    onPrice("price_build_m", {
+      planId: "plan-build-id",
+      stripePriceId: "price_build_m",
+    });
 
     const result = await changeOrgPlan("org-abc", "scale-v2", "month");
 
@@ -311,12 +358,10 @@ describe("changeOrgPlan", () => {
   it("bill falls → calls upgradeSubscription with 'none'", async () => {
     previewingProration(-80_000);
     stubPlanLookups(BUILD_PLAN, SCALE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-scale-id",
-        stripePriceId: "price_scale_m",
-      }),
-    );
+    onPrice("price_scale_m", {
+      planId: "plan-scale-id",
+      stripePriceId: "price_scale_m",
+    });
 
     const result = await changeOrgPlan("org-abc", "build-v2", "month");
 
@@ -364,21 +409,7 @@ describe("changeOrgPlan", () => {
 describe("changeOrgPlan proration direction (#3157)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getSubscriptionMock.mockResolvedValue({
-      id: "sub_active_001",
-      customerId: "cus_001",
-      metadata: { org_id: "org-abc" },
-      status: "active",
-      billingInterval: "month",
-      currentPeriodStart: new Date(),
-      currentPeriodEnd: new Date(),
-      cancelAtPeriodEnd: false,
-      canceledAt: null,
-      trialEnd: null,
-      productId: "prod_scale",
-      priceId: "price_scale_m",
-      seatCount: 1,
-    });
+    stubProviderSubscription("prod_scale");
     const upsertChain = {
       onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
     };
@@ -400,12 +431,10 @@ describe("changeOrgPlan proration direction (#3157)", () => {
   it("enterprise → scale: the preview says the bill rises, and the tier rank says downgrade", async () => {
     previewingProration(49_900); // $500 → $999, prorated
     stubPlanLookups(SCALE_PLAN, ENTERPRISE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-enterprise-id",
-        stripePriceId: "price_enterprise_m",
-      }),
-    );
+    onPrice("price_enterprise_m", {
+      planId: "plan-enterprise-id",
+      stripePriceId: "price_enterprise_m",
+    });
 
     await changeOrgPlan("org-abc", "scale-v2", "month");
 
@@ -418,12 +447,10 @@ describe("changeOrgPlan proration direction (#3157)", () => {
   it("scale → enterprise: the preview says the bill falls, and the tier rank says upgrade", async () => {
     previewingProration(-49_900);
     stubPlanLookups(ENTERPRISE_PLAN, SCALE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-scale-id",
-        stripePriceId: "price_scale_m",
-      }),
-    );
+    onPrice("price_scale_m", {
+      planId: "plan-scale-id",
+      stripePriceId: "price_scale_m",
+    });
 
     await changeOrgPlan("org-abc", "enterprise-v2", "month");
 
@@ -463,12 +490,10 @@ describe("changeOrgPlan proration direction (#3157)", () => {
     );
 
     stubPlanLookups(TARGET_150, DISCOUNTED_CURRENT);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-list200-id",
-        stripePriceId: "price_list_200",
-      }),
-    );
+    onPrice("price_list_200", {
+      planId: "plan-list200-id",
+      stripePriceId: "price_list_200",
+    });
 
     await changeOrgPlan("org-abc", "mid-v2", "month");
 
@@ -481,9 +506,7 @@ describe("changeOrgPlan proration direction (#3157)", () => {
   it("a change that moves no money ships 'none'", async () => {
     previewingProration(0);
     stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({ planId: "plan-scale-id", stripePriceId: "price_other" }),
-    );
+    onPrice("price_other", { planId: "plan-scale-id" });
 
     await changeOrgPlan("org-abc", "scale-v2", "month");
 
@@ -497,13 +520,11 @@ describe("changeOrgPlan proration direction (#3157)", () => {
     // The per-month rate falls (two months free) and the next invoice rises.
     previewingProration(899_100);
     stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-scale-id",
-        billingInterval: "month",
-        stripePriceId: "price_scale_m",
-      }),
-    );
+    onPrice("price_scale_m", {
+      planId: "plan-scale-id",
+      billingInterval: "month",
+      stripePriceId: "price_scale_m",
+    });
 
     await changeOrgPlan("org-abc", "scale-v2", "year");
 
@@ -518,12 +539,10 @@ describe("changeOrgPlan proration direction (#3157)", () => {
     // see and we can refund. A charge never raised is simply gone.
     previewPlanChangeMock.mockRejectedValue(new Error("stripe unavailable"));
     stubPlanLookups(SCALE_PLAN, ENTERPRISE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-enterprise-id",
-        stripePriceId: "price_enterprise_m",
-      }),
-    );
+    onPrice("price_enterprise_m", {
+      planId: "plan-enterprise-id",
+      stripePriceId: "price_enterprise_m",
+    });
 
     await changeOrgPlan("org-abc", "scale-v2", "month");
 
@@ -536,12 +555,10 @@ describe("changeOrgPlan proration direction (#3157)", () => {
   it("the preview is taken under create_prorations, so asking the question charges nobody", async () => {
     previewingProration(1_000);
     stubPlanLookups(SCALE_PLAN, ENTERPRISE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-enterprise-id",
-        stripePriceId: "price_enterprise_m",
-      }),
-    );
+    onPrice("price_enterprise_m", {
+      planId: "plan-enterprise-id",
+      stripePriceId: "price_enterprise_m",
+    });
 
     await changeOrgPlan("org-abc", "scale-v2", "month");
 
@@ -575,12 +592,8 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
     // Stripe rejects rather than replaying.
     previewingProration(0);
     stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-scale-id",
-        stripePriceId: "price_scale_m", // == SCALE_PLAN.stripePriceIdMonthly
-      }),
-    );
+    // == SCALE_PLAN.stripePriceIdMonthly
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
 
     const result = await changeOrgPlan("org-abc", "scale-v2", "month");
 
@@ -597,12 +610,10 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
     hasPlanUpgradeGrantMock.mockResolvedValue(false);
     previewingProration(0);
     stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-scale-id",
-        stripePriceId: "price_scale_m",
-      }),
-    );
+    onPrice("price_scale_m", {
+      planId: "plan-scale-id",
+      stripePriceId: "price_scale_m",
+    });
 
     await changeOrgPlan("org-abc", "scale-v2", "month");
 
@@ -629,13 +640,10 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
     hasPlanUpgradeGrantMock.mockResolvedValue(false);
     previewingProration(0);
     stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-scale-id",
-        stripePriceId: "price_scale_m",
-        pendingUpgradeFromPlanId: "plan-build-id",
-      }),
-    );
+    onPrice("price_scale_m", {
+      planId: "plan-scale-id",
+      pendingUpgradeFromPlanId: "plan-build-id",
+    });
 
     await changeOrgPlan("org-abc", "scale-v2", "month");
 
@@ -657,13 +665,10 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
     hasPlanUpgradeGrantMock.mockResolvedValue(true);
     previewingProration(0);
     stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-scale-id",
-        stripePriceId: "price_scale_m",
-        pendingUpgradeFromPlanId: "plan-build-id",
-      }),
-    );
+    onPrice("price_scale_m", {
+      planId: "plan-scale-id",
+      pendingUpgradeFromPlanId: "plan-build-id",
+    });
 
     await changeOrgPlan("org-abc", "scale-v2", "month");
 
@@ -681,13 +686,10 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
     );
     previewingProration(0);
     stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-scale-id",
-        stripePriceId: "price_scale_m",
-        pendingUpgradeFromPlanId: "plan-build-id",
-      }),
-    );
+    onPrice("price_scale_m", {
+      planId: "plan-scale-id",
+      pendingUpgradeFromPlanId: "plan-build-id",
+    });
 
     await expect(
       changeOrgPlan("org-abc", "scale-v2", "month"),
@@ -702,16 +704,71 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
     hasPlanUpgradeGrantMock.mockResolvedValue(true);
   });
 
+  it("a swap the provider applied but our sync never recorded is not swapped again", async () => {
+    // The guard used to read `subscriptions.stripe_price_id`, which is written
+    // by the sync that runs AFTER the provider mutation — so it was blind to
+    // the one failure it exists for. Provider swapped, DB write lost: the
+    // local row still says the old price, the retry re-issues the update as
+    // `none` under the key the first attempt used with `always_invoice`, and
+    // Stripe rejects the reused key. Every retry then fails identically.
+    //
+    // Local and provider deliberately DISAGREE here — that is the state under
+    // test, not a fixture mistake.
+    hasPlanUpgradeGrantMock.mockResolvedValue(false);
+    stubPlanLookups(SCALE_PLAN, ENTERPRISE_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({
+        planId: "plan-enterprise-id",
+        stripePriceId: "price_enterprise_m", // stale: the sync never landed
+        pendingUpgradeFromPlanId: "plan-enterprise-id",
+      }),
+    );
+    providerActivePriceId = "price_scale_m"; // the provider already moved
+
+    const result = await changeOrgPlan("org-abc", "scale-v2", "month");
+
+    expect(result).toBeNull();
+    expect(upgradeSubscriptionMock).not.toHaveBeenCalled();
+    // And the post-swap work still happens: the credits are owed either way.
+    expect(grantProratedPlanUpgradeCreditsMock).toHaveBeenCalledWith(
+      "org-abc",
+      "plan-enterprise-id",
+      SCALE_PLAN.id,
+    );
+    hasPlanUpgradeGrantMock.mockResolvedValue(true);
+  });
+
+  it("the stale row left by the lost sync is repaired rather than left wrong", async () => {
+    // Detecting it is not enough — the row would otherwise keep reporting the
+    // wrong plan and price to every later read.
+    hasPlanUpgradeGrantMock.mockResolvedValue(true);
+    stubPlanLookups(SCALE_PLAN, ENTERPRISE_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({
+        planId: "plan-enterprise-id",
+        stripePriceId: "price_enterprise_m",
+      }),
+    );
+    providerActivePriceId = "price_scale_m";
+
+    await changeOrgPlan("org-abc", "scale-v2", "month");
+
+    // syncSubscriptionFromStripe upserts the subscription row.
+    expect(dbMocks.insert).toHaveBeenCalled();
+    const warned = loggerMock.warn.mock.calls.find((c) =>
+      String(c[1]).includes("still holds the previous price"),
+    );
+    expect(warned).toBeDefined();
+  });
+
   it("a retry whose grant did land reports nothing", async () => {
     hasPlanUpgradeGrantMock.mockResolvedValue(true);
     previewingProration(0);
     stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-scale-id",
-        stripePriceId: "price_scale_m",
-      }),
-    );
+    onPrice("price_scale_m", {
+      planId: "plan-scale-id",
+      stripePriceId: "price_scale_m",
+    });
 
     await changeOrgPlan("org-abc", "scale-v2", "month");
 
@@ -725,12 +782,10 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
     hasPlanUpgradeGrantMock.mockRejectedValue(new Error("db unavailable"));
     previewingProration(0);
     stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-scale-id",
-        stripePriceId: "price_scale_m",
-      }),
-    );
+    onPrice("price_scale_m", {
+      planId: "plan-scale-id",
+      stripePriceId: "price_scale_m",
+    });
 
     // The retry still succeeds — the swap really is done — but not knowing
     // whether the grant landed is itself worth saying out loud.
@@ -744,6 +799,56 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
     hasPlanUpgradeGrantMock.mockResolvedValue(true);
   });
 
+  it("a swap whose preview failed still grants the credits the upgrade earns", async () => {
+    // A preview that could not be taken returns direction "unknown", which is
+    // not an answer to "did the allowance go up". Gating the grant on it meant
+    // a transient provider blip followed by a real Build→Scale swap charged
+    // the customer and withheld the credits — then cleared the durable intent,
+    // so the retry path built this round could not repair it either.
+    //
+    // Keyed on the VALUE: the grant must be called with the origin plan, and
+    // the change must still be billed as always_invoice.
+    previewPlanChangeMock.mockRejectedValue(new Error("stripe unavailable"));
+    stubPlanLookups(SCALE_PLAN, BUILD_PLAN);
+    onPrice("price_build_m", { planId: "plan-build-id" });
+
+    await changeOrgPlan("org-abc", "scale-v2", "month");
+
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({
+        newPriceId: "price_scale_m",
+        prorationBehavior: "always_invoice",
+      }),
+    );
+    expect(grantProratedPlanUpgradeCreditsMock).toHaveBeenCalledWith(
+      "org-abc",
+      "plan-build-id",
+      SCALE_PLAN.id,
+    );
+    // Settled, so the intent is retired rather than left to a retry.
+    expect(subscriptionUpdates).toContainEqual(
+      expect.objectContaining({ pendingUpgradeFromPlanId: null }),
+    );
+  });
+
+  it("a downgrade is offered to the grant too, and the grant declines it", async () => {
+    // The grant is delta-guarded, so the caller does not need to pre-judge
+    // which moves earn credits — and pre-judging is what went wrong. This
+    // pins that the decision now sits with the delta.
+    previewingProration(-80_000);
+    stubPlanLookups(BUILD_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    await changeOrgPlan("org-abc", "build", "month");
+
+    expect(grantProratedPlanUpgradeCreditsMock).toHaveBeenCalledWith(
+      "org-abc",
+      "plan-scale-id",
+      BUILD_PLAN.id,
+    );
+  });
+
   it("records the plan being left before the provider is asked to swap it", async () => {
     // Order is the whole point. `upgradeSubscription` syncs the subscription
     // synchronously, and that sync repoints planId at the target — so a record
@@ -751,12 +856,10 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
     // exists to close would still be open.
     previewingProration(49_900);
     stubPlanLookups(SCALE_PLAN, ENTERPRISE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-enterprise-id",
-        stripePriceId: "price_enterprise_m",
-      }),
-    );
+    onPrice("price_enterprise_m", {
+      planId: "plan-enterprise-id",
+      stripePriceId: "price_enterprise_m",
+    });
 
     await changeOrgPlan("org-abc", "scale-v2", "month");
 
@@ -783,12 +886,10 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
     );
     previewingProration(49_900);
     stubPlanLookups(SCALE_PLAN, ENTERPRISE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-enterprise-id",
-        stripePriceId: "price_enterprise_m",
-      }),
-    );
+    onPrice("price_enterprise_m", {
+      planId: "plan-enterprise-id",
+      stripePriceId: "price_enterprise_m",
+    });
 
     // The swap is real and must not be undone by a failed grant…
     await expect(
@@ -805,12 +906,10 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
   it("a subscription on a different price is still swapped", async () => {
     previewingProration(49_900);
     stubPlanLookups(SCALE_PLAN, ENTERPRISE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({
-        planId: "plan-enterprise-id",
-        stripePriceId: "price_enterprise_m",
-      }),
-    );
+    onPrice("price_enterprise_m", {
+      planId: "plan-enterprise-id",
+      stripePriceId: "price_enterprise_m",
+    });
 
     await changeOrgPlan("org-abc", "scale-v2", "month");
 
@@ -823,9 +922,7 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
   it("a row with no recorded price id is swapped rather than assumed settled", async () => {
     previewingProration(49_900);
     stubPlanLookups(SCALE_PLAN, ENTERPRISE_PLAN);
-    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
-      makeActiveSub({ planId: "plan-enterprise-id", stripePriceId: null }),
-    );
+    onPrice(null, { planId: "plan-enterprise-id" });
 
     await changeOrgPlan("org-abc", "scale-v2", "month");
 

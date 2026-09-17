@@ -44,6 +44,7 @@ import type {
   BillingWebhookEvent,
   BillingWebhookEventType,
 } from "./provider";
+import { ProrationAttributionError } from "./provider";
 
 /** Wrap an optional Stripe idempotency key into request options. */
 function idempotency(
@@ -73,31 +74,70 @@ function automaticTaxEnabled(): boolean {
  * discounted increase a decrease and drop the charge. `allow_promotion_codes`
  * is set on both checkout paths, so discounted subscriptions are a state we
  * deliberately create.
+ *
+ * ONLY THIS PREVIEW'S PRORATIONS. `proration === true` selects every proration
+ * on the upcoming invoice, not the ones this simulation created. A seat
+ * decrease recorded earlier under `create_prorations` leaves a pending credit
+ * sitting on that invoice, and summing it here answers the wrong question: not
+ * *what does this change cost*, but *what is pending on this account*. A large
+ * enough pending credit makes a real upgrade sum nonpositive, the caller reads
+ * a decrease and ships `none`, and the upgrade charge is dropped — the same
+ * inversion as the tier rank, the catalogue row and the undiscounted amount,
+ * one level further in (#3157, PR #3171 review).
+ *
+ * The preview is still the money. Going to the real thing does not excuse you
+ * from asking which part of it answers your question. A preview anchors every
+ * proration it creates at the `proration_date` it was given, and Stripe sets
+ * each such line's `period.start` to that timestamp, so the anchor is what
+ * separates this change's lines from everything else on the invoice.
+ *
+ * Three cases, deliberately distinguished:
+ *
+ *  - No proration lines at all → this change prorates nothing. Zero is the
+ *    true answer.
+ *  - Some lines carry the anchor → sum those. They may legitimately net to
+ *    zero.
+ *  - Lines exist and none carry the anchor → the cost cannot be isolated.
+ *    {@link ProrationAttributionError} rather than a fabricated zero: the
+ *    lesson of the `?? 0` quote is that an unknown is not a nothing.
  */
 function summarizeProration(
   preview: Stripe.Invoice,
   prorationDate: number,
 ): BillingProrationPreview {
-  const prorationLines = (preview.lines?.data ?? [])
-    .filter((l) => l.proration === true)
-    .map((l) => {
-      const discounted = (l.discount_amounts ?? []).reduce(
-        (sum, d) => sum + d.amount,
-        0,
-      );
-      return {
-        description: l.description ?? "",
-        amountCents: l.amount - discounted,
-        proration: true,
-      };
-    });
+  const allProrations = (preview.lines?.data ?? []).filter(
+    (l) => l.proration === true,
+  );
+  // The anchor this preview was taken at is what makes a line ours.
+  const ownProrations = allProrations.filter(
+    (l) => l.period?.start === prorationDate,
+  );
+  if (allProrations.length > 0 && ownProrations.length === 0) {
+    throw new ProrationAttributionError(prorationDate, allProrations.length);
+  }
+  const prorationLines = ownProrations.map((l) => {
+    const discounted = (l.discount_amounts ?? []).reduce(
+      (sum, d) => sum + d.amount,
+      0,
+    );
+    return {
+      description: l.description ?? "",
+      amountCents: l.amount - discounted,
+      proration: true,
+    };
+  });
   const amountCents = prorationLines.reduce((sum, l) => sum + l.amountCents, 0);
   return {
     amountCents,
     isCharge: amountCents > 0,
     currency: preview.currency,
     prorationDate,
-    // Stripe's invoice `total` is already net of discounts.
+    // Stripe's invoice `total` is already net of discounts. It is deliberately
+    // NOT filtered to this preview's anchor: it is read only when the change
+    // resets the billing-cycle anchor, and the invoice that reset raises really
+    // does collect everything sitting on it, pending prorations included. The
+    // total is what the customer is charged, so quoting it is honest in a way
+    // that quoting a filtered subset of it would not be.
     totalCents: preview.total,
     lines: prorationLines,
   };

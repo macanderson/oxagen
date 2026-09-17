@@ -113,6 +113,37 @@ export interface BillingProrationLine {
  * The result of simulating a subscription change WITHOUT applying it. Drives
  * the "you will be charged $X now" confirmation step before any money moves.
  */
+/**
+ * Raised when a previewed invoice carries proration lines but none of them
+ * belong to the change being previewed.
+ *
+ * A preview anchors every proration it creates at the `proration_date` it was
+ * asked for, so that timestamp is what tells this change's money apart from
+ * money already pending on the account. If proration lines are present and
+ * none carry that anchor, the preview cannot be attributed — and an
+ * unattributable preview is not a preview of zero. Summing it anyway would
+ * report the balance pending on the subscription as though it were the cost of
+ * this change, which is the inversion this whole path exists to prevent
+ * (#3157, PR #3171 review).
+ *
+ * Callers that decide a proration behaviour treat this like any other failed
+ * preview: settle as `always_invoice`, which bills the true difference in
+ * whichever direction it falls. Callers that quote a figure to a person
+ * refuse to quote.
+ */
+export class ProrationAttributionError extends Error {
+  readonly code = "PRORATION_ATTRIBUTION_FAILED" as const;
+  constructor(
+    readonly prorationDate: number,
+    readonly unattributableLineCount: number,
+  ) {
+    super(
+      `Previewed invoice carries ${unattributableLineCount} proration line(s), none anchored at proration_date ${prorationDate}; the cost of this change cannot be isolated.`,
+    );
+    this.name = "ProrationAttributionError";
+  }
+}
+
 export interface BillingProrationPreview {
   /**
    * Net proration amount in cents for THIS change. Positive = the customer

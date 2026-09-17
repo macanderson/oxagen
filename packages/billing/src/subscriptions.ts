@@ -556,6 +556,44 @@ async function clearPlanUpgradeIntent(
   }
 }
 
+/**
+ * Which price the subscription is on **at the provider**, falling back to the
+ * local record only when the provider will not say.
+ *
+ * `subscriptions.stripe_price_id` is written by `syncSubscriptionFromStripe`,
+ * which runs AFTER the provider mutation. So the one failure the already-
+ * applied guard exists to survive — a swap that reached Stripe and whose
+ * response was lost — is exactly the one that can leave the local column
+ * holding the old price. The retry then reads "not yet swapped", previews a
+ * subscription that has already moved, measures no movement, and re-issues
+ * the update as `none` under the idempotency key the first attempt used with
+ * `always_invoice`. Stripe rejects a reused key whose parameters changed, so
+ * every retry fails identically and the customer cannot get past it.
+ *
+ * The provider knows. Ask it. This is the same correction the rest of #3157
+ * makes over and over: a local record of what happened is not what happened.
+ *
+ * The fallback is deliberate and does not reopen the hole it closes. If the
+ * provider cannot be reached, the swap cannot be issued either, so refusing
+ * here would only trade a wrong answer for an outage; falling back leaves the
+ * behaviour exactly as it was before this check existed, and says so.
+ */
+async function resolveActivePriceId(
+  stripeSubscriptionId: string,
+  localPriceId: string | null,
+): Promise<{ priceId: string | null; fromProvider: boolean }> {
+  try {
+    const sub = await billingProvider().getSubscription(stripeSubscriptionId);
+    return { priceId: sub.priceId, fromProvider: true };
+  } catch (err) {
+    logger.warn(
+      { stripeSubId: stripeSubscriptionId, err },
+      "billing: could not read the provider's active price for a plan change — falling back to the last synced price id",
+    );
+    return { priceId: localPriceId, fromProvider: false };
+  }
+}
+
 export async function changeOrgPlan(
   orgId: string,
   targetPlanSlug: string,
@@ -658,15 +696,50 @@ export async function changeOrgPlan(
   );
 
   // Already on the price being asked for — the swap has happened. This is the
-  // retry of a call whose response was lost: the provider applied the change
-  // and `syncSubscriptionFromStripe` recorded it, so re-issuing the update
-  // would compare a subscription against its own current price, read
-  // "unchanged", and send `none` where the first attempt sent
-  // `always_invoice`. Stripe rejects a reused idempotency key whose parameters
-  // changed rather than replaying the cached success, and the app action does
-  // not pass a requestId, so the key is identical across the two attempts.
-  // Returning here makes the retry the no-op it should be.
-  if (activeSubRow.stripePriceId && activeSubRow.stripePriceId === newPriceId) {
+  // retry of a call whose response was lost: re-issuing the update would
+  // compare a subscription against its own current price, read "unchanged",
+  // and send `none` where the first attempt sent `always_invoice`. Stripe
+  // rejects a reused idempotency key whose parameters changed rather than
+  // replaying the cached success, and the app action does not pass a
+  // requestId, so the key is identical across the two attempts. Returning
+  // here makes the retry the no-op it should be.
+  //
+  // Asked of the PROVIDER, not of our record of the provider — see
+  // resolveActivePriceId for why the local column is blind to exactly the
+  // failure this guard exists for.
+  const { priceId: activePriceId, fromProvider: priceConfirmed } =
+    await resolveActivePriceId(
+      activeSubRow.stripeSubscriptionId,
+      activeSubRow.stripePriceId,
+    );
+
+  if (activePriceId && activePriceId === newPriceId) {
+    // The provider has moved and our row has not: the first attempt's sync is
+    // the write that was lost. Repair it before anything reads the row again,
+    // so the stale price, plan and period do not outlive this call.
+    if (priceConfirmed && activeSubRow.stripePriceId !== newPriceId) {
+      logger.warn(
+        {
+          orgId,
+          stripeSubId: activeSubRow.stripeSubscriptionId,
+          recordedPriceId: activeSubRow.stripePriceId,
+          activePriceId,
+        },
+        "billing: the provider has already applied this plan change but the local subscription row still holds the previous price — resyncing",
+      );
+      try {
+        await syncSubscriptionFromStripe(activeSubRow.stripeSubscriptionId);
+      } catch (err) {
+        // The grant below keys on the period, which a failed resync leaves
+        // stale — but the grant ledger dedupes on the fresh row it reads for
+        // itself, so a stale period can only cause a redundant attempt.
+        logger.error(
+          { orgId, stripeSubId: activeSubRow.stripeSubscriptionId, err },
+          "billing: could not resync a subscription the provider has already swapped; the local row stays stale",
+        );
+      }
+    }
+
     // The swap is done; the rest of the operation may not be. The audit row is
     // reconstructible, so it is emitted rather than lost to the retry.
     emitSecurityEvent({
@@ -747,10 +820,11 @@ export async function changeOrgPlan(
       newPriceId,
       currentInterval !== interval,
     );
-  // The credit grant is delta-guarded and idempotent, so an interval change
-  // is offered to it too: moving to a plan with a larger allowance earns the
-  // prorated credits whether or not the interval moved with it.
-  const isUpgrade = direction === "increase" || direction === "interval_change";
+  // Reported, never used to decide the credit grant. Whether the customer owes
+  // money and whether their included allowance went up are different
+  // questions, and this one answers only the first — see the grant below.
+  const billsMoreNow =
+    direction === "increase" || direction === "interval_change";
 
   // Use activeSubRow from now on (renamed to avoid confusion).
   const activeSub = activeSubRow;
@@ -765,7 +839,7 @@ export async function changeOrgPlan(
       currentInterval,
       previewedProrationCents: amountCents,
       priceDirection: direction,
-      isUpgrade,
+      billsMoreNow,
       prorationBehavior,
     },
     "billing: changeOrgPlan — swapping price on active subscription",
@@ -809,28 +883,39 @@ export async function changeOrgPlan(
   // the price swap. upgradeSubscription keeps the same item, so quantity persists
   // through the price swap automatically — no extra call needed.
 
-  // After a successful in-place upgrade, grant prorated plan upgrade credits.
-  // The intent recorded before the swap is retired only once this has settled:
-  // if the grant throws, the intent stays, and the next call on this
-  // subscription finishes it from the already-applied branch.
-  let grantSettled = !isUpgrade;
-  if (isUpgrade) {
-    try {
-      const { grantProratedPlanUpgradeCredits } = await import("./grants");
-      await grantProratedPlanUpgradeCredits(
-        orgId,
-        activeSub.planId,
-        targetPlan.id,
-      );
-      grantSettled = true;
-    } catch (err) {
-      // Grant failure must never fail the plan swap — log and continue. The
-      // intent is deliberately left standing so the grant is recoverable.
-      logger.error(
-        { orgId, fromPlanId: activeSub.planId, toPlanId: targetPlan.id, err },
-        "billing: grantProratedPlanUpgradeCredits failed after plan swap — continuing; the recorded upgrade intent is left in place so a retry can finish it",
-      );
-    }
+  // Offer every completed swap to the grant, and let the grant decide.
+  //
+  // This used to run only when the previewed invoice said the bill went up,
+  // which conflated two questions. `planChangeDirection` answers *does the
+  // customer owe money now*; the grant answers *did the included allowance go
+  // up*, from `toPlan.includedCreditCents - fromPlan.includedCreditCents`. A
+  // preview that could not be taken returns `direction: "unknown"`, which is
+  // not an answer to either — and gating on it meant a transient provider
+  // blip followed by a successful Build→Scale swap charged the customer and
+  // withheld the credits, then cleared the durable intent so the retry path
+  // could not repair it. The mechanism built this round was walked around by
+  // the one branch it was built for (#3157, PR #3171 review).
+  //
+  // The grant is delta-guarded (`delta <= 0` returns without granting) and
+  // idempotent on (org, target plan, period), so handing it a downgrade or a
+  // lateral move costs one catalogue read and grants nothing. The fact that
+  // decides is the delta, so the delta is what is consulted.
+  let grantSettled = false;
+  try {
+    const { grantProratedPlanUpgradeCredits } = await import("./grants");
+    await grantProratedPlanUpgradeCredits(
+      orgId,
+      activeSub.planId,
+      targetPlan.id,
+    );
+    grantSettled = true;
+  } catch (err) {
+    // Grant failure must never fail the plan swap — log and continue. The
+    // intent is deliberately left standing so the grant is recoverable.
+    logger.error(
+      { orgId, fromPlanId: activeSub.planId, toPlanId: targetPlan.id, err },
+      "billing: grantProratedPlanUpgradeCredits failed after plan swap — continuing; the recorded upgrade intent is left in place so a retry can finish it",
+    );
   }
   if (grantSettled) {
     await clearPlanUpgradeIntent(activeSub.stripeSubscriptionId);
@@ -1178,7 +1263,9 @@ export async function previewPlanChange(
       newPriceId,
       currentInterval !== interval,
     );
-  const isUpgrade = direction === "increase" || direction === "interval_change";
+  // Log only. Not a statement about credits — see the grant in changeOrgPlan.
+  const billsMoreNow =
+    direction === "increase" || direction === "interval_change";
 
   // No preview, no quote. `changeOrgPlan` may settle an unknown direction as
   // always_invoice because the provider bills the true difference either way;
@@ -1206,7 +1293,7 @@ export async function previewPlanChange(
       currentInterval,
       previewedProrationCents: amountCents,
       priceDirection: direction,
-      isUpgrade,
+      billsMoreNow,
       amountCents: chargedNowCents,
       requiresCheckout: false,
       durationMs: Date.now() - start,
