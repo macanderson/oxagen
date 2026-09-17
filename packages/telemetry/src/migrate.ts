@@ -521,6 +521,25 @@ async function migrateOnce(): Promise<void> {
   // deliberately excluded and always executes for real below.
   if (decision.action === "bootstrap" && applied.size === 0) {
     const baseline = files.filter((f) => f <= PRE_LEDGER_BASELINE_CUTOVER);
+    // This filter is the ONE place in the runner that decides a file will be
+    // recorded as applied without being executed, and until now it decided it
+    // in silence: the deploy log showed a successful migration whether the
+    // baseline covered the 26 files it was pinned against or a 27th that
+    // nobody meant to skip. A guard on filenames
+    // (tools/scripts/check-ch-migration-ordinals.mjs) refuses the inputs we
+    // have thought of; this says out loud what the decision actually was, for
+    // the ones we have not. It runs at most once per database, so there is no
+    // volume argument against naming every file.
+    process.stdout.write(
+      JSON.stringify({
+        level: "info",
+        msg: "ClickHouse pre-ledger baseline: recording these migrations as applied WITHOUT executing them",
+        cutover: PRE_LEDGER_BASELINE_CUTOVER,
+        reason: decision.reason,
+        recordedWithoutExecuting: baseline,
+        willExecute: files.filter((f) => f > PRE_LEDGER_BASELINE_CUTOVER),
+      }) + "\n",
+    );
     await recordApplied(ch, baseline);
     for (const f of baseline) applied.add(f);
   }

@@ -30,7 +30,7 @@
  * renaming a shipped migration is the more dangerous operation of the two —
  * see GRANDFATHERED below. New duplicates are refused.
  */
-import { readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -86,6 +86,175 @@ export const GRANDFATHERED = Object.freeze([
   "0026_cache_write_tokens.sql",
   "0026_stella_operational_events.sql",
 ]);
+
+/**
+ * The pre-ledger baseline cutover, copied from `PRE_LEDGER_BASELINE_CUTOVER`
+ * in packages/telemetry/src/migrate.ts, and the ordinals the baseline covers.
+ *
+ * WHAT THE BASELINE DOES
+ *   On a pre-ledger deployment's first ledger-aware run, `migrateOnce()` takes
+ *   every `migrations/*.sql` at or below the cutover and RECORDS it in
+ *   `_migrations` without executing it. That is correct for the files the
+ *   cutover's author was looking at: those have already run, repeatedly, under
+ *   the old replay-everything semantics, and re-running them replays 0021's
+ *   `DROP TABLE schema_conformance_events`.
+ *
+ *   It is wrong for any file that arrives LATER under a low ordinal. The
+ *   migrations directory has holes in it — 0001 and 0018 are unused — and a
+ *   new `0018_new_table.sql` is four digits wide, collides with nothing, and
+ *   sorts exactly where its ordinal claims. Every other check in this file
+ *   passes it. The baseline then swallows it: recorded as applied, never
+ *   executed, its table absent for ever with nothing saying why. That is
+ *   recording-without-executing — the defect this guard's own PR exists to end
+ *   — reached through a filename rather than through a ledger state
+ *   (Codex, #3192 r4036723001).
+ *
+ * WHY A RECORDED ROSTER AND NOT A DIFF
+ *   The question is whether a file is NEW, and a check reading only the working
+ *   tree cannot tell a new `0018` from one that has been there for a year. A
+ *   diff against the merge base could, where the merge base is fetched — and
+ *   silently degrades to no check at all in a shallow clone, a tag build, or a
+ *   local run on a detached HEAD, which is the worst property a guard can have.
+ *   So newness is recorded instead of inferred: these are the ordinals the
+ *   baseline covers, and a file claiming one that is not listed is by
+ *   definition a file the cutover's author never saw.
+ *
+ * WHY ORDINALS AND NOT FILENAMES
+ *   A filename roster would have to be edited whenever a shipped migration is
+ *   renamed, which GRANDFATHERED above explains at length is the one operation
+ *   nobody may perform. Ordinals are the thing that is actually frozen. The
+ *   list never grows either: nothing may be added at or below the cutover, so
+ *   a new migration takes 0028, 0029, … and never touches this constant.
+ *
+ * THE FLOOR IS THE CUTOVER, NOT THE HIGHEST FILE ON DISK
+ *   0027 is on disk and sits above the cutover, so it is not in this list and
+ *   is not treated as swallowable — because it is not. A second file at 0027
+ *   is refused by `offendingDuplicates` for a different reason. Between the two
+ *   checks, every ordinal at or below the cutover is unreachable to a new
+ *   migration: free ones by this rule, taken ones by the duplicate rule. The
+ *   test asserts that exhaustively rather than by example.
+ */
+export const PRE_LEDGER_BASELINE_CUTOVER = "0026_stella_operational_events.sql";
+
+export const BASELINE_ORDINALS = Object.freeze([
+  "0002",
+  "0003",
+  "0004",
+  "0005",
+  "0006",
+  "0007",
+  "0008",
+  "0009",
+  "0010",
+  "0011",
+  "0012",
+  "0013",
+  "0014",
+  "0015",
+  "0016",
+  "0017",
+  "0019",
+  "0020",
+  "0021",
+  "0022",
+  "0023",
+  "0024",
+  "0025",
+  "0026",
+]);
+
+/** packages/telemetry/src/migrate.ts — the file the cutover above is copied from. */
+export const MIGRATE_TS = join(
+  repoRoot,
+  "packages",
+  "telemetry",
+  "src",
+  "migrate.ts",
+);
+
+/**
+ * The ordinal the baseline reaches: everything at or below it is swept into
+ * the ledger unexecuted on a pre-ledger bootstrap, so a new migration must
+ * sort above it.
+ */
+export function baselineOrdinalFloor(cutover = PRE_LEDGER_BASELINE_CUTOVER) {
+  return ordinalOf(cutover);
+}
+
+/**
+ * Files claiming an ordinal at or below the floor that the recorded roster
+ * does not cover — i.e. files the pre-ledger baseline would record without
+ * executing, having never been part of what it was pinned against.
+ *
+ * Returned as `{ file, ordinal }` so the report can name both: the ordinal is
+ * what makes it wrong and the filename is what has to change.
+ *
+ * @param {readonly string[]} filenames
+ * @param {readonly string[]} [recorded]
+ * @param {string} [cutover]
+ * @returns {{ file: string, ordinal: string }[]}
+ */
+export function baselineBackfills(
+  filenames,
+  recorded = BASELINE_ORDINALS,
+  cutover = PRE_LEDGER_BASELINE_CUTOVER,
+) {
+  const floor = Number(baselineOrdinalFloor(cutover));
+  const covered = new Set(recorded);
+  return filenames
+    .map((file) => ({ file, ordinal: ordinalOf(file) }))
+    .filter(
+      ({ ordinal }) =>
+        ordinal !== null && Number(ordinal) <= floor && !covered.has(ordinal),
+    )
+    .sort((a, b) => a.file.localeCompare(b.file));
+}
+
+/**
+ * Recorded baseline ordinals with no file on disk.
+ *
+ * The roster is a claim about which ordinals the baseline covers. Delete a
+ * migration under one of them and the claim stops being true: the ordinal
+ * becomes a hole, and `baselineBackfills` goes on guarding it as though it
+ * were occupied, which reads as protection and is really a stale note about a
+ * file nobody can find. Same failure mode as `staleExemptions`, and it is
+ * reported the same way rather than fixed silently.
+ *
+ * @param {readonly string[]} filenames
+ * @param {readonly string[]} [recorded]
+ * @returns {string[]}
+ */
+export function vacatedBaselineOrdinals(
+  filenames,
+  recorded = BASELINE_ORDINALS,
+) {
+  const onDisk = new Set(
+    filenames.map((f) => ordinalOf(f)).filter((o) => o !== null),
+  );
+  return recorded.filter((o) => !onDisk.has(o));
+}
+
+/** The `PRE_LEDGER_BASELINE_CUTOVER` literal in migrate.ts source, or null. */
+export function readCutover(source) {
+  const m = /PRE_LEDGER_BASELINE_CUTOVER\s*=\s*"([^"]+)"/.exec(source);
+  return m ? m[1] : null;
+}
+
+/**
+ * Disagreement between the cutover recorded here and the one migrate.ts uses,
+ * or null when they match.
+ *
+ * The floor above is only as good as that agreement. migrate.ts documents the
+ * cutover as a one-time marker that must never be bumped — "do NOT bump this
+ * constant when adding a new migration file" — and until now that was a
+ * comment. Bumping it to 0027 would widen what the baseline swallows while
+ * this guard went on checking the old width, which is the same silence one
+ * layer up. Reading the literal makes the comment enforceable.
+ */
+export function cutoverDrift(source, expected = PRE_LEDGER_BASELINE_CUTOVER) {
+  const found = readCutover(source);
+  return found === expected ? null : { found, expected };
+}
 
 /**
  * The ordinal width every migration uses, and the reason the width is fixed.
@@ -282,6 +451,41 @@ if (isEntrypoint) {
     );
   }
 
+  for (const { file, ordinal } of baselineBackfills(files)) {
+    problems.push(
+      `  ${file} claims ordinal ${ordinal}, at or below the pre-ledger baseline\n` +
+        `    cutover (${PRE_LEDGER_BASELINE_CUTOVER}).\n` +
+        "    On a pre-ledger deployment's first ledger-aware run, migrate() records\n" +
+        "    every file at or below the cutover in _migrations WITHOUT executing it.\n" +
+        "    This file was not there when the cutover was pinned, so it would be\n" +
+        "    recorded as applied and its statements would never run — on exactly the\n" +
+        "    deployments that already have data. Give it the next ordinal above the\n" +
+        "    cutover instead; the gaps below it are not free space.",
+    );
+  }
+
+  for (const ordinal of vacatedBaselineOrdinals(files)) {
+    problems.push(
+      `  ordinal ${ordinal} is recorded in BASELINE_ORDINALS but no file on disk\n` +
+        "    claims it. The roster describes what the pre-ledger baseline covers, so\n" +
+        "    a deleted migration has to come out of the roster in the same change —\n" +
+        "    otherwise the ordinal is a hole this guard still treats as occupied.",
+    );
+  }
+
+  const drift = cutoverDrift(readFileSync(MIGRATE_TS, "utf8"));
+  if (drift !== null) {
+    problems.push(
+      `  PRE_LEDGER_BASELINE_CUTOVER in packages/telemetry/src/migrate.ts reads\n` +
+        `    ${drift.found === null ? "(not found)" : drift.found}\n` +
+        `    but this guard is written against ${drift.expected}.\n` +
+        "    The cutover is a one-time marker for the pre-ledger backlog, not a\n" +
+        "    pointer at the latest migration, and moving it widens what the baseline\n" +
+        "    records without executing. If the move is deliberate, update\n" +
+        "    PRE_LEDGER_BASELINE_CUTOVER and BASELINE_ORDINALS here together.",
+    );
+  }
+
   for (const f of staleExemptions(files)) {
     problems.push(
       `  ${f} is grandfathered in check-ch-migration-ordinals.mjs but is not on disk.\n` +
@@ -291,19 +495,23 @@ if (isEntrypoint) {
 
   if (problems.length > 0) {
     console.error(
-      "check-ch-migration-ordinals: the ClickHouse migrations directory would not\napply in the order its filenames claim.\n\n" +
+      "check-ch-migration-ordinals: the ClickHouse migrations directory would not\nrun the way its filenames claim.\n\n" +
         problems.join("\n\n") +
         "\n\n" +
         "migrate() orders migrations/*.sql by sorting the full filename, so two\n" +
         "files under one ordinal run in whatever order their text happens to give.\n" +
-        `Give the new file the next free ordinal, ${ORDINAL_DIGITS} digits wide. Do NOT rename a migration that\n" +
-        "has shipped: \`_migrations.filename\` is the ledger's key, so a rename makes\nthe file unrecorded and it runs again on every existing deployment.\n`,
+        `Give the new file the next free ordinal, ${ORDINAL_DIGITS} digits wide, ABOVE\n` +
+        `the pre-ledger cutover (${PRE_LEDGER_BASELINE_CUTOVER}) — the gaps below it\n` +
+        "are not free space. Do NOT rename a migration that has shipped:\n" +
+        "`_migrations.filename` is the ledger's key, so a rename makes the file\n" +
+        "unrecorded and it runs again on every existing deployment.\n",
     );
     process.exit(1);
   }
 
   console.log(
     `check-ch-migration-ordinals: ${files.length} migration(s), ordinals unique ` +
-      `(${GRANDFATHERED.length} grandfathered).`,
+      `(${GRANDFATHERED.length} grandfathered), none at or below the pre-ledger ` +
+      `baseline cutover ${PRE_LEDGER_BASELINE_CUTOVER}.`,
   );
 }

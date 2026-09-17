@@ -579,6 +579,75 @@ describe("migrate() — applied-migrations ledger (#2632)", () => {
     expect(recorded).toEqual(["0001_a.sql", "0002_b.sql"]);
   });
 
+  it("says out loud which files the baseline records without executing, and which still run", async () => {
+    // The baseline filter is the single place that decides a file will be
+    // recorded and not run. #3192 r4036723001 arrived through a filename the
+    // ordinal guard accepted; a guard refuses the inputs we have thought of,
+    // and this line covers the ones we have not — the decision is in the
+    // deploy log either way, with both halves of it named.
+    const stdoutSpy = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+    readdirSyncMock.mockReturnValue(["0001_a.sql", "0027_new_thing.sql"]);
+    readFileSyncMock.mockImplementation((p: unknown) => {
+      const path = String(p);
+      if (path.endsWith("0027_new_thing.sql"))
+        return "ALTER TABLE t ADD COLUMN brand_new String;";
+      return SCHEMA_SQL;
+    });
+    chQueryMock.mockImplementation(async (opts: { query: string }) => {
+      if (opts.query.includes("system.tables")) return jsonResult([{ c: "5" }]);
+      return jsonResult([]);
+    });
+
+    await migrate();
+
+    const lines = stdoutSpy.mock.calls
+      .map((c) => String(c[0]).trim())
+      .filter((l) => l.startsWith("{"))
+      .map(
+        (l) =>
+          JSON.parse(l) as {
+            msg: string;
+            cutover?: string;
+            recordedWithoutExecuting?: string[];
+            willExecute?: string[];
+          },
+      );
+    stdoutSpy.mockRestore();
+
+    const announced = lines.find((l) =>
+      l.msg.includes("WITHOUT executing them"),
+    );
+    expect(announced).toBeDefined();
+    expect(announced!.cutover).toBe("0026_stella_operational_events.sql");
+    expect(announced!.recordedWithoutExecuting).toEqual(["0001_a.sql"]);
+    expect(announced!.willExecute).toEqual(["0027_new_thing.sql"]);
+  });
+
+  it("says nothing about a baseline on a run that does not bootstrap one", async () => {
+    // The mirror: an empty database runs every file, so there is no
+    // record-without-execute decision to announce and the line must not
+    // appear. A notice that fires on every run is one nobody reads.
+    const stdoutSpy = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+    readdirSyncMock.mockReturnValue(["0001_a.sql"]);
+    readFileSyncMock.mockImplementation(() => SCHEMA_SQL);
+    chQueryMock.mockImplementation(async (opts: { query: string }) => {
+      if (opts.query.includes("system.tables")) return jsonResult([{ c: "0" }]);
+      return jsonResult([]);
+    });
+
+    await migrate();
+
+    const announced = stdoutSpy.mock.calls
+      .map((c) => String(c[0]))
+      .some((l) => l.includes("WITHOUT executing them"));
+    stdoutSpy.mockRestore();
+    expect(announced).toBe(false);
+  });
+
   it("a filename sorting AFTER the pre-ledger cutover still executes for real on an existing deployment's bootstrap run", async () => {
     // 0027 sorts after PRE_LEDGER_BASELINE_CUTOVER
     // ("0026_stella_operational_events.sql") — a migration that did not

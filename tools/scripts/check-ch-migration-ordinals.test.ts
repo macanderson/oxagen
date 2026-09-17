@@ -13,18 +13,26 @@
  * names proves the function can count; it proves nothing about whether the
  * exemption list still matches the tree, which is the part that rots.
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   GRANDFATHERED,
+  MIGRATE_TS,
   MIGRATIONS_DIR,
+  PRE_LEDGER_BASELINE_CUTOVER,
+  baselineBackfills,
+  baselineOrdinalFloor,
+  cutoverDrift,
   duplicateOrdinals,
   offendingDuplicates,
   ordinalOf,
+  readCutover,
   sqlFilesIn,
   staleExemptions,
   malformed,
   overlooked,
   sortOrderConflicts,
+  vacatedBaselineOrdinals,
 } from "./check-ch-migration-ordinals.mjs";
 
 /** What is actually on disk right now. */
@@ -286,5 +294,147 @@ describe("ordinalOf", () => {
 
   it("does not read a number from the middle of a name", () => {
     expect(ordinalOf("error_0020_events.sql")).toBeNull();
+  });
+});
+
+describe("an ordinal at or below the pre-ledger baseline cutover", () => {
+  // Codex, #3192 r4036723001. Every other check in this file asks a question
+  // about the NAME — is it four digits, is it unique, does it sort where it
+  // claims to. A gap-fill passes all of them: `0018_new_table.sql` is
+  // four digits wide, claims a free ordinal, and sorts exactly where its
+  // ordinal says. The question those checks do not ask is what the name means
+  // relative to the pre-ledger baseline, and that is the one that matters:
+  // migrate() sweeps every file at or below PRE_LEDGER_BASELINE_CUTOVER into
+  // the ledger WITHOUT executing it on a pre-ledger deployment's first
+  // ledger-aware run. A file that did not exist when the cutover was pinned,
+  // but whose ordinal falls under it, is recorded as applied and never runs —
+  // recording-without-executing, which is the defect this whole PR exists to
+  // end, arriving through a filename instead of through a ledger state.
+
+  it("is invisible to every other check in this guard", () => {
+    // The witness for why a new rule was needed rather than a tighter old one.
+    const withGapFill = [...REAL, "0018_new_table.sql"].sort();
+    expect(malformed(withGapFill)).toEqual([]);
+    expect(
+      offendingDuplicates(withGapFill).filter((g) => g.unexempt.length > 0),
+    ).toEqual([]);
+    expect(sortOrderConflicts(withGapFill)).toEqual([]);
+    expect(overlooked(withGapFill)).toEqual([]);
+  });
+
+  it("is rejected when it fills 0018, the gap the finding names", () => {
+    expect(baselineBackfills([...REAL, "0018_new_table.sql"].sort())).toEqual([
+      { file: "0018_new_table.sql", ordinal: "0018" },
+    ]);
+  });
+
+  it("is rejected at 0001, the other gap under the cutover", () => {
+    expect(baselineBackfills([...REAL, "0001_early.sql"].sort())).toEqual([
+      { file: "0001_early.sql", ordinal: "0001" },
+    ]);
+  });
+
+  it("is rejected below every ordinal that has ever existed", () => {
+    // 0000 is under the whole roster rather than inside a gap in it. A rule
+    // written as a list of known holes would have to remember to include it;
+    // a rule written as "the recorded set of occupied ordinals" gets it free.
+    expect(baselineBackfills([...REAL, "0000_zeroth.sql"].sort())).toEqual([
+      { file: "0000_zeroth.sql", ordinal: "0000" },
+    ]);
+  });
+
+  it("is caught for EVERY ordinal at or below the floor, by one check or the other", () => {
+    // The rule stated exhaustively rather than by example. For each ordinal
+    // from 0000 up to the cutover, a new file claiming it is refused — as a
+    // baseline backfill if the ordinal is free, as a duplicate if it is taken.
+    // Nothing under the floor is reachable by a new migration.
+    const floor = Number(baselineOrdinalFloor());
+    const missed: string[] = [];
+    for (let n = 0; n <= floor; n++) {
+      const ordinal = String(n).padStart(4, "0");
+      const candidate = `${ordinal}_new_arrival.sql`;
+      const files = [...REAL, candidate].sort();
+      const asBackfill = baselineBackfills(files).some(
+        (b) => b.file === candidate,
+      );
+      const asDuplicate = offendingDuplicates(files).some((g) =>
+        g.unexempt.includes(candidate),
+      );
+      if (!asBackfill && !asDuplicate) missed.push(candidate);
+    }
+    expect(missed).toEqual([]);
+  });
+
+  it("accepts the first ordinal above the cutover", () => {
+    // The mirror. Without it the rule could pass by refusing everything.
+    // A fixture whose highest file IS the cutover, so 0027 is the next one up
+    // — on the real tree 0027 is already taken and would be a duplicate,
+    // which is a different check answering a different question.
+    const upToCutover = REAL.filter((f) => f <= PRE_LEDGER_BASELINE_CUTOVER);
+    expect(upToCutover.at(-1)).toBe(PRE_LEDGER_BASELINE_CUTOVER);
+    const withNext = [...upToCutover, "0027_something.sql"].sort();
+    expect(baselineBackfills(withNext)).toEqual([]);
+    expect(
+      offendingDuplicates(withNext).filter((g) => g.unexempt.length > 0),
+    ).toEqual([]);
+    expect(malformed(withNext)).toEqual([]);
+    expect(sortOrderConflicts(withNext)).toEqual([]);
+  });
+
+  it("accepts the next free ordinal on the real tree", () => {
+    expect(baselineBackfills([...REAL, "0028_brand_new.sql"].sort())).toEqual(
+      [],
+    );
+    expect(baselineBackfills([...REAL, "0031_much_later.sql"].sort())).toEqual(
+      [],
+    );
+  });
+
+  it("accepts the tree as it stands", () => {
+    expect(baselineBackfills(REAL)).toEqual([]);
+    expect(vacatedBaselineOrdinals(REAL)).toEqual([]);
+  });
+
+  it("reports a recorded baseline ordinal whose file has gone", () => {
+    // The mirror of the backfill rule. The roster is a claim about which
+    // ordinals the baseline covers; if a migration under one of them is
+    // deleted, the claim stops being true and the ordinal silently becomes a
+    // hole that the backfill rule would then be guarding for no reason. Same
+    // hazard as a grandfathered name that outlives its file.
+    const without = REAL.filter((f) => f !== "0019_usage_events.sql");
+    expect(vacatedBaselineOrdinals(without)).toEqual(["0019"]);
+  });
+});
+
+describe("the cutover this guard is written against", () => {
+  // The floor is only as good as its agreement with the constant it describes.
+  // PRE_LEDGER_BASELINE_CUTOVER lives in migrate.ts and is documented there as
+  // a one-time marker that must never be bumped; this is what makes that
+  // documentation enforceable rather than advisory.
+
+  it("is the literal migrate.ts actually uses", () => {
+    const source = readFileSync(MIGRATE_TS, "utf8");
+    expect(readCutover(source)).toBe(PRE_LEDGER_BASELINE_CUTOVER);
+    expect(cutoverDrift(source)).toBeNull();
+  });
+
+  it("reports a cutover that has been bumped", () => {
+    const moved = `const PRE_LEDGER_BASELINE_CUTOVER = "0027_tacho_events.sql";`;
+    expect(cutoverDrift(moved)).toEqual({
+      found: "0027_tacho_events.sql",
+      expected: PRE_LEDGER_BASELINE_CUTOVER,
+    });
+  });
+
+  it("reports a cutover that has been renamed out of recognition", () => {
+    expect(cutoverDrift("const SOMETHING_ELSE = 1;")).toEqual({
+      found: null,
+      expected: PRE_LEDGER_BASELINE_CUTOVER,
+    });
+  });
+
+  it("names a file that is on disk and sits at the floor", () => {
+    expect(REAL).toContain(PRE_LEDGER_BASELINE_CUTOVER);
+    expect(baselineOrdinalFloor()).toBe(ordinalOf(PRE_LEDGER_BASELINE_CUTOVER));
   });
 });
