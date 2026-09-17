@@ -97,6 +97,7 @@ import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
 import { URL, pathToFileURL } from "node:url";
 import kleur from "kleur";
+import type { SQL } from "drizzle-orm";
 import { and, count, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
@@ -198,8 +199,8 @@ export function unprovisionableReason(status: string): string | undefined {
  * Mirrors the predicates `packages/iam/src/fetch-authz.ts` applies to the same
  * table, which is the resolver this preflight is predicting the behaviour of.
  */
-export function orgWideSystemOwnerWhere(orgId: string, now: Date) {
-  return and(
+export function orgWideSystemOwnerWhere(orgId: string, now: Date): SQL {
+  const predicate = and(
     eq(schema.principals.orgId, orgId),
     // A human, not an agent or service principal: an agent holding Owner does
     // not keep a person out of the organisation.
@@ -217,6 +218,14 @@ export function orgWideSystemOwnerWhere(orgId: string, now: Date) {
       gt(schema.principalRoleAssignments.expiresAt, now),
     ),
   );
+  // `and()` is typed as possibly-undefined because it drops undefined
+  // conditions. Every condition above is a literal, so this cannot happen —
+  // and a `where()` that silently received `undefined` would match every row,
+  // which for this predicate means passing the preflight for any organisation.
+  if (!predicate) {
+    throw new Error("unreachable: the owner-readiness predicate was empty");
+  }
+  return predicate;
 }
 
 export function isLocalHost(host: string): boolean {
