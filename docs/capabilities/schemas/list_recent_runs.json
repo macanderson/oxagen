@@ -1,0 +1,80 @@
+{
+  "name": "list_recent_runs",
+  "domain": "run",
+  "description": "The newest runs of this workspace for the command menu: id, agent key, status and start time, the in-app agent's own turns excluded.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10,
+        "default": 8
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "agentKey": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "live",
+                "sealed",
+                "halted"
+              ]
+            },
+            "startedAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "agentKey",
+            "status",
+            "startedAt"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "runs"
+    ],
+    "additionalProperties": false
+  }
+}

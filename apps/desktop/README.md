@@ -82,8 +82,14 @@ pickers, `tacho detect`, and with `--enroll` the enroll, `tacho status` and a
 recorded first run per agent. It writes `oxagen-e2e-smoke-<host>.json`.
 Without `--enroll` it changes nothing on the machine.
 
-Needs Rust (stable) and, on Linux, `libwebkit2gtk-4.1-dev libappindicator3-dev
-librsvg2-dev patchelf`. The sidecars embed the host `node`, so there is no
+Needs Rust (stable), a Node built with single-executable support, and, on
+Linux, `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`. The
+sidecars are Node SEAs, so `sidecars` fails before `tauri build` ever runs on a
+Node compiled `--disable-single-executable-application` — which Homebrew's
+`node` is. Put an official / nvm build first on PATH for the bundle
+(`nvm use 24`, or `export PATH="$HOME/.nvm/versions/node/v24.18.0/bin:$PATH"`);
+`node -p "process.config.variables.single_executable_application"` says whether
+the one you have will do. The sidecars embed the host `node`, so there is no
 cross-compile; `.github/workflows/desktop.yml` builds each OS on its own runner
 and signs when the Apple / Azure secrets are present.
 
@@ -104,8 +110,11 @@ covered by `src/updater.test.ts`.
 The key pair came from `tauri signer generate` with no password. The private
 half is **not** in the repository: it lives at `~/.tauri/oxagen-desktop.key`
 on the machine that generated it, and CI needs it as the
-`TAURI_SIGNING_PRIVATE_KEY` secret (`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` can
-stay unset for this key). With the secret, `desktop.yml` signs every bundle
+`TAURI_SIGNING_PRIVATE_KEY` secret. The `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+secret can stay unset — but `desktop.yml` must keep passing it to the build
+step regardless, because Actions then defines the variable as the empty string
+and tauri only prompts for a password when the variable is *absent*. Dropping
+that line as an unused secret would hang, then fail, every signed build. With the secret, `desktop.yml` signs every bundle
 (the macOS jobs build `app` alongside `dmg`, since only the `app` target
 yields the `Oxagen.app.tar.gz` + `.sig` the updater installs) and attaches
 `latest.json` to the release; without it, the workflow passes
@@ -117,10 +126,23 @@ over): when a `desktop-v*` release is published, the workflow's `feed` job
 copies its `latest.json` onto `desktop-latest`, so a draft feeds nothing
 until it is published.
 
-Locally, `bundle` / `bundle:dmg` need either
-`TAURI_SIGNING_PRIVATE_KEY_PATH=~/.tauri/oxagen-desktop.key` or the same
-`--config src-tauri/tauri.unsigned.conf.json` after `tauri build`, because
-`createUpdaterArtifacts` is on in `tauri.conf.json`.
+Locally, `bundle` / `bundle:dmg` need either the key or the unsigned overlay,
+because `createUpdaterArtifacts` is on in `tauri.conf.json`:
+
+```
+TAURI_SIGNING_PRIVATE_KEY=~/.tauri/oxagen-desktop.key \
+TAURI_SIGNING_PRIVATE_KEY_PASSWORD= \
+  pnpm --filter @oxagen/desktop bundle:dmg
+```
+
+The variable is `TAURI_SIGNING_PRIVATE_KEY` (Tauri 2 takes either the key's
+contents or a path to it) — there is no `_PATH` form, and a build that sets one
+gets through every bundle and then fails on the signature at the very end.
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` must be set *to the empty string*, not left
+unset: this key has no password, but an absent variable makes tauri prompt for
+one, which fails with `Device not configured (os error 6)` anywhere without a
+TTY. Without the key, pass `--config src-tauri/tauri.unsigned.conf.json` after
+`tauri build` instead.
 
 ## Layout
 

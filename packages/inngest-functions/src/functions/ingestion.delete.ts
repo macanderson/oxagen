@@ -7,6 +7,42 @@ import { insertEvents } from "@oxagen/telemetry";
 import { logger } from "../logger";
 
 /**
+ * A Neo4j `count()` as a plain, JSON-safe JS number.
+ *
+ * The driver returns 64-bit integers as its own `Integer` ({low, high}) unless
+ * the session opts into lossless integers, and that object is a trap in two
+ * directions at once:
+ *
+ *   1. Arithmetic on it does NOT produce a number. `Integer + Integer` goes
+ *      through `Symbol.toPrimitive` and yields a **BigInt**, which
+ *      `JSON.stringify` refuses to serialize. A sum handed back from a
+ *      `step.run` is therefore dropped from the memoized step output, and on
+ *      replay the caller reads `undefined` — see the note on the finalizer
+ *      below for what that then does to the SQL.
+ *   2. Passed through unconverted it reaches Postgres as `{"low":n,"high":0}`,
+ *      not as `n`, so an `integer` column gets garbage even when nothing throws.
+ *
+ * Every count read out of a Neo4j record goes through here, so neither shape
+ * can escape this module. Anything unrecognisable counts as zero: a progress
+ * roll-up is telemetry on a deletion that already happened, and must never be
+ * the reason the job fails.
+ */
+function countOf(value: unknown): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "bigint") return Number(value);
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "toNumber" in value &&
+    typeof (value as { toNumber: unknown }).toNumber === "function"
+  ) {
+    const n = (value as { toNumber: () => number }).toNumber();
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+}
+
+/**
  * Async deletion job triggered by `ingestion/connection.delete`.
  *
  * Three modes:
@@ -124,7 +160,7 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
 
       // ── Step 2: Delete Neo4j entity nodes (when mode includes data) ──────────
       if (mode === "data_only" || mode === "full") {
-        const neo4jResult = (await step.run("delete-neo4j-data", () =>
+        const neo4jResult = await step.run("delete-neo4j-data", () =>
           runInTenantScope({ orgId, workspaceId }, async () => {
             const session = scopedSession();
 
@@ -163,9 +199,9 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
               { connectionId, orgId },
             );
 
-            const promotedCount =
-              (aliasResult.records[0]?.get("promoted") as number | undefined) ??
-              0;
+            const promotedCount = countOf(
+              aliasResult.records[0]?.get("promoted"),
+            );
             logger.info(
               { connectionId, orgId, promotedCount },
               "ingestion-delete: alias promotion complete",
@@ -185,9 +221,9 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
               { connectionId, orgId },
             );
 
-            const deletedCount =
-              (deleteResult.records[0]?.get("deleted") as number | undefined) ??
-              0;
+            const deletedCount = countOf(
+              deleteResult.records[0]?.get("deleted"),
+            );
 
             // ── Pass 3: Delete every other node this connection produced ─────
             // Catch-all for all NON-EntityNode artifacts stamped with this
@@ -206,10 +242,9 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
             `,
               { connectionId, orgId },
             );
-            const sourceDeletedCount =
-              (sourceDeleteResult.records[0]?.get("deleted") as
-                | number
-                | undefined) ?? 0;
+            const sourceDeletedCount = countOf(
+              sourceDeleteResult.records[0]?.get("deleted"),
+            );
 
             // ── Pass 4: Delete the SourceConnection meta-node ────────────────
             await session.run(
@@ -230,15 +265,28 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
               "ingestion-delete: neo4j nodes deleted (entities + connection-stamped + meta)",
             );
 
+            // Both already plain numbers via countOf, so this sum is a number
+            // and the object survives the JSON round-trip Inngest does to
+            // memoize a step's output. Summing the driver's Integers directly
+            // would produce a BigInt, which JSON cannot represent.
             return {
               promoted: promotedCount,
               deleted: deletedCount + sourceDeletedCount,
             };
           }),
-        )) as { promoted: number; deleted: number };
+        );
 
-        aliasPromotions = neo4jResult.promoted;
-        deletedEntities = neo4jResult.deleted;
+        // Read the memoized step output through countOf rather than asserting
+        // its shape with `as`. A replayed step hands back whatever survived
+        // JSON, which is not always what the callback returned, and the cast
+        // that used to sit here said `number` for a value that reached this
+        // line as `undefined`.
+        const graphProgress = neo4jResult as
+          | { promoted?: unknown; deleted?: unknown }
+          | null
+          | undefined;
+        aliasPromotions = countOf(graphProgress?.promoted);
+        deletedEntities = countOf(graphProgress?.deleted);
       }
 
       // ── Step 3: Delete Postgres records ──────────────────────────────────────
@@ -264,13 +312,13 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
               WHERE  connection_id = ${connectionId}::uuid
             `);
               // Soft-delete the connection itself so audit history is preserved.
-              // The column is deleted_by_user_id — connection.list filters on
+              // The column is deleted_by_id — connection.list filters on
               // deleted_at IS NULL, so this UPDATE is what retires the row.
               await tx.execute(sql`
               UPDATE ingestion.source_connections
               SET    status             = 'deleted',
                      deleted_at         = NOW(),
-                     deleted_by_user_id = ${requestedBy}::uuid,
+                     deleted_by_id = ${requestedBy}::uuid,
                      updated_at         = NOW()
               WHERE  id     = ${connectionId}::uuid
               AND    org_id = ${orgId}::uuid
@@ -327,7 +375,21 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
       // 'completed' with completed_at and the observed graph-deletion progress.
       // Guarded on deletionJobId so an event with no id set still completes
       // without throwing.
+      //
+      // Both counters are re-narrowed through countOf immediately before the
+      // template, belt and braces over the countOf calls at the assignment.
+      // drizzle's `sql` tag emits an EMPTY CHUNK for an `undefined`
+      // interpolation — no placeholder, no parameter, nothing — so a single
+      // undefined turns `SET deleted_entities = ${x}, alias_promotions = ${y}`
+      // into the literal text `SET deleted_entities = , alias_promotions = $1`,
+      // which Postgres rejects with a syntax error before it can run. That is
+      // not a hypothetical: it is what production did every ~65s while five
+      // deletion_jobs rows sat in 'running', the oldest for a week, because the
+      // step failed, Inngest retried, and the retry failed the same way. An
+      // undefined must never reach this template again.
       if (deletionJobId) {
+        const finalDeletedEntities = countOf(deletedEntities);
+        const finalAliasPromotions = countOf(aliasPromotions);
         await step.run("finalize-deletion-job", () =>
           runInTenantScope({ orgId, workspaceId }, () =>
             withTenantDb((tx) =>
@@ -335,8 +397,8 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
               UPDATE ingestion.deletion_jobs
               SET    status           = 'completed',
                      completed_at     = NOW(),
-                     deleted_entities = ${deletedEntities},
-                     alias_promotions = ${aliasPromotions}
+                     deleted_entities = ${finalDeletedEntities},
+                     alias_promotions = ${finalAliasPromotions}
               WHERE  id     = ${deletionJobId}::uuid
               AND    org_id = ${orgId}::uuid
             `),

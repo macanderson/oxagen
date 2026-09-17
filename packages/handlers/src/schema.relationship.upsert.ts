@@ -58,7 +58,7 @@ export const schemaRelationshipUpsertHandler: CapabilityHandler<
           startLabel: input.startLabel ?? existing.startLabel,
           endLabel: input.endLabel ?? existing.endLabel,
           cardinality: input.cardinality ?? existing.cardinality,
-          updatedByUserId: ctx.userId,
+          updatedById: ctx.userId,
         })
         .where(eq(db.relationshipTypes.id, existing.id))
         .returning();
@@ -79,8 +79,8 @@ export const schemaRelationshipUpsertHandler: CapabilityHandler<
           startLabel: input.startLabel,
           endLabel: input.endLabel,
           cardinality: input.cardinality,
-          createdByUserId: ctx.userId,
-          updatedByUserId: ctx.userId,
+          createdById: ctx.userId,
+          updatedById: ctx.userId,
         })
         .returning();
       if (!inserted)
@@ -116,7 +116,7 @@ export const schemaRelationshipUpsertHandler: CapabilityHandler<
               itemType: prop.itemType ?? existingProp.itemType,
               constraints: prop.constraints ?? existingProp.constraints,
               example: prop.example ?? existingProp.example,
-              updatedByUserId: ctx.userId,
+              updatedById: ctx.userId,
             })
             .where(eq(db.schemaProperties.id, existingProp.id));
         } else {
@@ -133,8 +133,8 @@ export const schemaRelationshipUpsertHandler: CapabilityHandler<
             itemType: prop.itemType,
             constraints: prop.constraints ?? {},
             example: prop.example,
-            createdByUserId: ctx.userId,
-            updatedByUserId: ctx.userId,
+            createdById: ctx.userId,
+            updatedById: ctx.userId,
           });
         }
       }

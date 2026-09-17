@@ -18,7 +18,7 @@ export const agentMemoryPromotionDismiss = registerCapability({
     "Dismiss a memory from the promotion candidate queue (or restore it), freeing the slot for the next candidate without archiving the memory.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "memory" },
   sensitivity: "low",

@@ -91,7 +91,7 @@ export async function toToolContracts(
  * `jsonSchema()` wrapper; a plain JSON Schema object, which a test or a raw
  * contract may hand in, is already the answer.
  */
-async function inputJsonSchema(schema: unknown): Promise<unknown> {
+export async function inputJsonSchema(schema: unknown): Promise<unknown> {
   if (
     typeof schema === "object" &&
     schema !== null &&

@@ -1,6 +1,6 @@
 ---
 name: e2e-runner
-description: End-to-end testing specialist using Playwright. Use PROACTIVELY for generating, maintaining, and running E2E tests. Manages test journeys, quarantines flaky tests, uploads artifacts (screenshots, videos, traces), and ensures critical user flows work.
+description: Maintains the three Playwright specs apps/app/e2e is allowed to hold — login, pay and page-load — and the route table page-load walks. Use when one of those three fails, flakes, or must change because sign-in, payment or the rev1 route set changed. It does NOT add specs: every other flow is a component test (oxagen-testing skill).
 tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
 model: sonnet
 ---
@@ -31,13 +31,13 @@ You are an expert end-to-end testing specialist. Your mission is to ensure criti
 
 ## Primary (and only) Tool: Playwright
 
-E2E lives in `apps/app/e2e/` with config at `apps/app/playwright.config.ts`. Existing specs in `apps/app/e2e/*.spec.ts` are the canonical examples — read one before writing a new flow.
+E2E lives in `apps/app/e2e/` with config at `apps/app/playwright.config.ts`. It holds exactly three specs and gains no fourth: `login.spec.ts`, `pay.spec.ts` and `page-load.spec.ts`, the last walking the route table in `e2e/routes.ts` (ARCHITECTURE.md §6.3). A new flow is a component test beside the component, not a spec here.
 
 This repo runs on **pnpm** — never `npm` and never global installs. Invoke Playwright via `pnpm exec` (Playwright is already a workspace dev dependency).
 
 ```bash
 pnpm exec playwright test                          # Run all E2E tests
-pnpm exec playwright test e2e/auth.spec.ts         # Run specific file
+pnpm exec playwright test e2e/page-load.spec.ts    # Run one of the three
 pnpm exec playwright test --headed                 # See browser
 pnpm exec playwright test --debug                  # Debug with inspector
 pnpm exec playwright test --trace on               # Run with trace
@@ -46,7 +46,7 @@ pnpm exec playwright show-report                    # View HTML report
 
 ## Screenshot Convention
 
-Write all screenshots to `apps/app/e2e/screenshots/`. This directory is **gitignored** — **delete and recreate it on every run** so artifacts never go stale and never get committed. Capture the success state of every user-facing flow you touch.
+The suite takes no screenshots. `playwright.config.ts` sets `trace: "retain-on-failure"`, so the trace is the artifact when a spec fails, and CI uploads it. A runtime artifact for a UI change belongs under `verifications/<session>/`, captured against a working page.
 
 ## Workflow
 
@@ -100,7 +100,7 @@ Common causes: race conditions (use auto-wait locators), network timing (wait fo
 
 ## Reference
 
-- Read the existing specs in `apps/app/e2e/*.spec.ts` and `apps/app/playwright.config.ts` for canonical patterns, Page Object Model usage, and configuration.
+- Read the three specs in `apps/app/e2e/*.spec.ts`, `apps/app/e2e/routes.ts` and `apps/app/playwright.config.ts` before changing any of them; the config's three projects (`login`, then `page-load` and `pay` on the saved storage state) are the shape.
 - Skill `oxagen-run` brings up and proves the local stack (app :3000, API :4000, MCP :4100, Postgres :5433) before a run.
 - Skill `test-completeness-judge` audits coverage and gates PR readiness.
 

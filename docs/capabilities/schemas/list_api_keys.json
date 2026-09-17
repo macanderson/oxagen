@@ -1,0 +1,102 @@
+{
+  "name": "list_api_keys",
+  "domain": "api_key",
+  "description": "List the API keys in scope with their metadata: public id, name, prefix, creation, last use, expiry and revocation times. Never returns a key's secret or its hash.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "publicId": {
+              "type": "string",
+              "description": "Prefixed public identifier (aky_)"
+            },
+            "name": {
+              "type": "string"
+            },
+            "prefix": {
+              "type": "string",
+              "description": "The fixed leading window of the raw key, for recognition"
+            },
+            "createdAt": {
+              "type": "string",
+              "description": "ISO-8601 creation timestamp"
+            },
+            "lastUsedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "expiresAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "revokedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "rotatable": {
+              "type": "boolean",
+              "description": "Whether rotate_api_key will replace this key, as at the instant of this read. False for a key an enrollment or a login flow owns, whose lifecycle belongs to that service; false for an expired or revoked key; and false for every key in an archived workspace, because a rotation mints fresh secret material and archival exists to stop that. Revocation is always available."
+            }
+          },
+          "required": [
+            "publicId",
+            "name",
+            "prefix",
+            "createdAt",
+            "lastUsedAt",
+            "expiresAt",
+            "revokedAt",
+            "rotatable"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "items"
+    ],
+    "additionalProperties": false
+  }
+}

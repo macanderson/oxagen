@@ -1,0 +1,95 @@
+{
+  "name": "get_run_frame_body",
+  "domain": "run",
+  "description": "Read the redacted body of one frame of a run by its sequence: the content type and bytes when the workspace retained bodies, the digest and no bytes under digest_only.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      },
+      "seq": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "runId",
+      "seq"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "contentType": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "bytes": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "digest": {
+        "type": "string"
+      },
+      "redactions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            },
+            "originalDigest": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "reason",
+            "originalDigest"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "contentType",
+      "bytes",
+      "digest",
+      "redactions"
+    ],
+    "additionalProperties": false
+  }
+}

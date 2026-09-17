@@ -140,6 +140,23 @@ export async function resolveOrgFromInvoice(
 }
 
 /**
+ * Dunning is the subscription's: a governed-action invoice (a block
+ * purchase, an auto top-up, an interim or period-close settlement; ADR-055
+ * §6) carries no subscription, and its outcome is the settlement ledger's.
+ * Without this, a suspended org that bought one block would be reset to
+ * active by a payment that did not settle the overdue subscription invoice,
+ * and a declined top-up would start a grace period.
+ */
+function isSubscriptionInvoice(invoice: BillingInvoice): boolean {
+  if (invoice.subscriptionId !== null) return true;
+  logger.debug(
+    { invoiceId: invoice.providerInvoiceId, orgId: invoice.orgId },
+    "billing: dunning — invoice carries no subscription, ignoring",
+  );
+  return false;
+}
+
+/**
  * Called when an invoice.payment_failed event fires.
  *
  * Idempotent: sets dunningState → 'grace', delinquentSince (if not already
@@ -148,6 +165,7 @@ export async function resolveOrgFromInvoice(
 export async function onInvoicePaymentFailed(
   invoice: BillingInvoice,
 ): Promise<void> {
+  if (!isSubscriptionInvoice(invoice)) return;
   const start = Date.now();
 
   // Capture the org context resolved inside the transaction so the best-effort
@@ -280,6 +298,7 @@ export async function onInvoicePaymentFailed(
 export async function onInvoiceRecovered(
   invoice: BillingInvoice,
 ): Promise<void> {
+  if (!isSubscriptionInvoice(invoice)) return;
   const start = Date.now();
 
   await withSystemDb(async (tx) => {

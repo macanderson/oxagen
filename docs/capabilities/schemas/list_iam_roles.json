@@ -82,6 +82,14 @@
                 "workspace"
               ]
             },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "human",
+                "agent"
+              ],
+              "description": "human for the seeded membership roles; agent for the seeded agent roles and every custom role, which only assign_agent_role binds"
+            },
             "isSystemDefault": {
               "type": "boolean",
               "description": "True for system-seeded roles (Owner, Admin, …) — not user-deletable"
@@ -118,6 +126,27 @@
                 "additionalProperties": false
               },
               "description": "Capability grants carried by the role (empty when includeGrants=false)"
+            },
+            "permissions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Catalogue permission ids every capability of which the role allows (empty when includeGrants=false)"
+            },
+            "createdAt": {
+              "type": "string",
+              "description": "ISO-8601"
+            },
+            "createdBy": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
@@ -125,10 +154,14 @@
             "name",
             "description",
             "scopeKind",
+            "kind",
             "isSystemDefault",
             "version",
             "memberCount",
-            "grants"
+            "grants",
+            "permissions",
+            "createdAt",
+            "createdBy"
           ],
           "additionalProperties": false
         },
@@ -146,6 +179,65 @@
       },
       "offset": {
         "type": "integer"
+      },
+      "catalog": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "group": {
+              "type": "string",
+              "enum": [
+                "Runs",
+                "Agents",
+                "Tools and policy",
+                "Repository",
+                "Graph and steering",
+                "Money",
+                "Audit"
+              ]
+            },
+            "description": {
+              "type": "string"
+            },
+            "capabilities": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "id",
+            "group",
+            "description",
+            "capabilities"
+          ],
+          "additionalProperties": false
+        },
+        "description": "The permission catalogue, in catalogue order"
+      },
+      "enforcement": {
+        "type": "object",
+        "properties": {
+          "tier": {
+            "type": "string",
+            "description": "The org's plan tier"
+          },
+          "enforced": {
+            "type": "boolean",
+            "description": "True when the kernel's IAM check runs the resolver for this org (the enterprise tier); false when every capability is allowed and the roles here are documentation"
+          }
+        },
+        "required": [
+          "tier",
+          "enforced"
+        ],
+        "additionalProperties": false,
+        "description": "Whether the roles listed govern anything for this org"
       }
     },
     "required": [
@@ -153,7 +245,9 @@
       "total",
       "hasMore",
       "limit",
-      "offset"
+      "offset",
+      "catalog",
+      "enforcement"
     ],
     "additionalProperties": false
   }

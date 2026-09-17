@@ -158,7 +158,7 @@ export async function setSpendBudget(
           limitMicros: input.limitMicros,
           notifiedThreshold: 0,
           notifiedPeriodStart: null,
-          updatedByUserId: input.actorUserId,
+          updatedById: input.actorUserId,
           updatedAt: new Date(),
         })
         .where(eq(schema.spendBudgets.id, existing.id))
@@ -175,8 +175,8 @@ export async function setSpendBudget(
         period: input.period,
         windowDays,
         limitMicros: input.limitMicros,
-        createdByUserId: input.actorUserId,
-        updatedByUserId: input.actorUserId,
+        createdById: input.actorUserId,
+        updatedById: input.actorUserId,
       })
       .returning();
     return created!;

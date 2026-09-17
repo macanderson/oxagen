@@ -20,6 +20,9 @@ export const orgMemberRemove = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: true,
+  // Membership is never a charge (ADR-052 exclusion 2): the billing gate and
+  // the governed-action recorder both skip this contract.
+  noBillingGate: true,
   agent: {
     requiresApproval: true,
     riskLevel: "high",
@@ -32,12 +35,15 @@ export const orgMemberRemove = registerCapability({
     workspace: {},
   },
   input: z.object({
-    // publicId of the org_users row (oru_ prefix) OR the target userId (uuid).
-    // The handler resolves either form against ctx.orgId for IDOR safety.
+    // The member's public id (`usr_…`, what list_members prints) or their user
+    // uuid. The handler resolves a public id against ctx.orgId and refuses a
+    // target outside the org as not_found, so either form is IDOR-safe.
     targetUserId: z
       .string()
       .min(1)
-      .describe("The UUID of the user to remove from the org"),
+      .describe(
+        "The user to remove: their public id (usr_…) or their user uuid",
+      ),
   }),
   output: z.object({
     removed: z.boolean(),

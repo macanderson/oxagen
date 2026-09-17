@@ -302,13 +302,46 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     placeholder: "60",
   },
 
+  TRUSTED_PROXY_CIDRS: {
+    group: "Rate limiting",
+    description:
+      "Comma-separated CIDRs or addresses of the proxies in front of apps/api, " +
+      "and the safe way to attribute a client address. Prefer it over " +
+      "TRUSTED_PROXY_HOP_COUNT: a hop count trusts the COUNT to be right, and " +
+      "one that is too high selects an entry the caller wrote, because a caller " +
+      "can pad x-forwarded-for until the arithmetic lands on its own value. " +
+      "Naming the proxies removes that: the walk goes right while each entry is " +
+      "a trusted proxy and stops at the first that is not. The pre-authentication " +
+      "IP ceilings on the Tacho and Stella machine routes enforce ONLY when this " +
+      "is set; unset, they skip rather than trust a count. Empty by default.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "10.0.0.0/8",
+  },
+
   TRUSTED_PROXY_HOP_COUNT: {
     group: "Rate limiting",
     description:
       "How many proxies sit in front of apps/api and append to x-forwarded-for. " +
-      "The client IP the IAM ip_ranges allowlist checks is the Nth entry from the " +
-      "right; entries left of it are caller-supplied. Optional — defaults to 1 " +
-      "(one ALB) in packages/config/src/env.ts. 0 disables the header entirely.",
+      "The client IP is the Nth entry from the right; entries left of it are " +
+      "caller-supplied. Two things depend on it: the IAM ip_ranges allowlist, " +
+      "and the pre-authentication IP ceilings on the Tacho and Stella machine " +
+      "routes. Set it to the REAL depth for the deployment — a wrong value " +
+      "resolves to a proxy's own address, which puts every caller behind that " +
+      "node in one rate-limit bucket that any of them can exhaust for the rest. " +
+      "This does NOT enable those ceilings — TRUSTED_PROXY_CIDRS does, and is " +
+      "the form to prefer; this one remains for the IAM allowlist as a legacy " +
+      "fallback, and identity wins where both are set. The upstream proxy must " +
+      "also be configured to preserve the chain — Caddy replaces " +
+      "x-forwarded-for unless trusted_proxies names its peer — or no depth is " +
+      "correct. " +
+      "they skip rather than pool callers. 0 means nothing in front is trusted, " +
+      "so x-forwarded-for AND x-real-ip are both refused. Optional — the schema " +
+      "defaults to 1 (one ALB) in packages/config/src/env.ts, but that default " +
+      "is a guess and only the allowlist falls back to it.",
     secret: false,
     clientExposed: false,
     services: ["api"],
@@ -771,19 +804,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
-  OXAGEN_ACTION_METER_MODE: {
-    group: "Billing",
-    description:
-      "ADR-052 governed-action meter mode: 'shadow' records actions against the " +
-      "annual counter and raises no debit; anything else (the default) charges. " +
-      "Set to shadow only for a staged rollout — the platform bills nothing at " +
-      "all while it is on.",
-    secret: false,
-    clientExposed: false,
-    services: ["api", "app", "mcp"],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
   OXAGEN_USAGE_DISCOUNT_PERCENT: {
     group: "Billing",
     description:
@@ -896,9 +916,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "Inngest",
     description:
       "Ed25519 private key (PKCS#8 PEM, newlines as \\n) this deployment signs Tacho policy " +
-      "bundles with (get_tacho_bundle). The matching public key travels to each host at " +
-      "enrollment so tacho-hook verifies a cached bundle offline and fails closed on one it " +
-      "cannot verify. Unset means enrollment and bundle capabilities refuse.",
+      "bundles with (get_tacho_bundle) and attests run exports with (export_run, ADR-058). " +
+      "The matching public key travels to each host at enrollment so tacho-hook verifies a " +
+      "cached bundle offline and fails closed on one it cannot verify, and into every export " +
+      "bundle so its verifier runs offline. Unset means enrollment, bundle and export refuse.",
     secret: true,
     clientExposed: false,
     services: ["api"],
@@ -1403,9 +1424,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   PLAYWRIGHT_BASE_URL: {
     group: "Testing / e2e",
     description:
-      "Base URL Playwright drives in apps/app e2e (apps/app/playwright.config.ts). LOCAL: unset → " +
-      "defaults to http://localhost:3000. CI: the booted next server URL. NOTE: read via raw " +
-      "process.env — not in baseEnvSchema (test-only).",
+      "Base URL of the deprecated Playwright suite (apps/app_deprecated/playwright.config.ts, " +
+      "deleted with that app in WL-50). The rev1 harness (apps/app/playwright.config.ts) reads " +
+      "NEXT_PUBLIC_APP_URL and does not read this. NOTE: read via raw process.env — not in " +
+      "baseEnvSchema (test-only).",
     secret: false,
     clientExposed: false,
     services: ["app"],
@@ -1415,9 +1437,24 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   E2E_TEST: {
     group: "Testing / e2e",
     description:
-      'Set "true" in the vitest test lanes (declared in turbo.json test:unit/test:coverage env) ' +
-      "so app code can branch to test-only behavior. Not for dev/preview/prod. NOTE: read via raw " +
-      "process.env — not in baseEnvSchema (test-only).",
+      'The exact string "true" on the e2e webServer (apps/app/playwright.config.ts) and the e2e ' +
+      "seed (apps/app seed:e2e): packages/auth relaxes email verification, secure cookies and " +
+      "rate limiting on that value, off-Vercel only (local-env.ts). Declared in turbo.json " +
+      "test:e2e env. Not for dev/preview/prod. NOTE: read via raw process.env — not in " +
+      "baseEnvSchema (test-only).",
+    secret: false,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  STRIPE_E2E: {
+    group: "Testing / e2e",
+    description:
+      'Whether the e2e job resolved a Stripe test key: "1" when STRIPE_TEST_SECRET_KEY was mapped ' +
+      'into STRIPE_SECRET_KEY, "0" on a fork pull request without one (pay.spec.ts skips). Set by ' +
+      "the e2e webServer env (apps/app/playwright.config.ts) and the CI job (WL-48). NOTE: read " +
+      "via raw process.env — not in baseEnvSchema (test-only).",
     secret: false,
     clientExposed: false,
     services: ["app"],
@@ -1493,7 +1530,11 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "Generate with `openssl rand -base64 32`.",
     secret: true,
     clientExposed: false,
-    services: ["app"],
+    // api and mcp as well as app: export_audit_events is a contract on all
+    // three surfaces (#3097), and the fallback cannot save mcp — BETTER_AUTH_SECRET
+    // is provisioned for api and app only, so an mcp export would walk the
+    // whole record and then throw on the signing key it never received.
+    services: ["api", "app", "mcp"],
     // Was ["production"], which contradicted the schema and the route. The
     // build-environment resolver enforces this field, so the contradiction
     // stopped the first app deploy that ever reached it — a registry claiming
@@ -1903,6 +1944,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "Operator scripts",
     description:
       "How many recent commits on main check-main-verified.mjs asks about. Defaults to 10.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "10",
+  },
+  MAIN_VERIFIED_GRACE_MINUTES: {
+    group: "Operator scripts",
+    description:
+      "How long after a commit lands check-main-verified.mjs refuses to conclude it has no run. The workflow races the registration of the run it looks for. Defaults to 10.",
     secret: false,
     clientExposed: false,
     services: [],

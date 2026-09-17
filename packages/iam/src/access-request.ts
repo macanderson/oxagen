@@ -100,8 +100,8 @@ export async function createAccessRequest(
           scopeId,
           status: "pending",
           justification: justification ?? null,
-          createdByUserId: ctx.userId,
-          updatedByUserId: ctx.userId,
+          createdById: ctx.userId,
+          updatedById: ctx.userId,
         })
         .returning({ publicId: schema.accessRequests.publicId }),
     );

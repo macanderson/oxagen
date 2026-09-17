@@ -1,4 +1,4 @@
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
 import {
   schema,
@@ -8,10 +8,24 @@ import {
 } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { eq } from "drizzle-orm";
-import { grantFreeCredits } from "@oxagen/billing";
+import { grantSignupCredits } from "@oxagen/billing";
 import { logger } from "./logger";
 import { bootstrapOrgIAM } from "./iam-provision";
+import { openOnboardingGate } from "./lib/onboarding";
+import { bootstrapWorkspace } from "./workspace-bootstrap";
 
+/**
+ * The org bootstrap: the organization row, the creator's owner membership,
+ * the IAM roles and grants, the first workspace with everything a workspace
+ * needs, the onboarding gate opened on that workspace (#2967: the
+ * organization exists, so the gate is at `wrap` with its 14-day provisional
+ * window), and the $5 signup grant (grantSignupCredits), in one system
+ * transaction. The grant funds the in-app agent's platform-paid turns
+ * (ADR-053 §2; apps/app/ARCHITECTURE.md §9, 2026-09-15), so an org never
+ * exists without it. No other billing row is written: no contract_terms,
+ * gau_buckets or gau_settlements row, and the billing settings row appears on
+ * the first write that needs it.
+ */
 export const organizationCreateHandler: CapabilityHandler<
   typeof organizationCreate
 > = async (input, ctx) => {
@@ -22,6 +36,13 @@ export const organizationCreateHandler: CapabilityHandler<
     );
     throw new Error("organization.create requires an authenticated user");
   }
+  const userId = ctx.userId;
+  const slugTaken = () =>
+    new HandlerError({
+      code: "conflict",
+      reason: "slug_taken",
+      message: `slug "${input.slug}" already in use`,
+    });
   // tenancy: system bypass via withSystemDb (bootstrap — creates the org's own root
   // rows; no tenant scope exists yet because the new org does not exist yet, and
   // ctx.orgId is the caller's current org, not the one being created) (see docs/specs/tenancy-rls/spec.md)
@@ -33,21 +54,10 @@ export const organizationCreateHandler: CapabilityHandler<
       columns: { id: true },
     }),
   );
-  if (existing) {
-    throw new Error(`slug "${input.slug}" already in use`);
-  }
-
-  let orgId: string;
-  let result: {
-    publicId: string;
-    name: string;
-    slug: string;
-    type: string;
-    createdAt: string;
-  };
+  if (existing) throw slugTaken();
 
   try {
-    const txResult = await withSystemDb(async (tx) => {
+    const created = await withSystemDb(async (tx) => {
       // Derive the immutable, globally-unique namespace from the slug, avoiding
       // any namespace already taken. The unique index is the authoritative guard
       // against a concurrent-create race; this best-effort read just picks a
@@ -76,8 +86,8 @@ export const organizationCreateHandler: CapabilityHandler<
           industry: input.type === "business" ? (input.industry ?? null) : null,
           employeeSize:
             input.type === "business" ? (input.employeeSize ?? null) : null,
-          createdByUserId: ctx.userId,
-          updatedByUserId: ctx.userId,
+          createdById: userId,
+          updatedById: userId,
         })
         .returning({
           publicId: schema.organizations.publicId,
@@ -94,11 +104,11 @@ export const organizationCreateHandler: CapabilityHandler<
       // never see an org they cannot reach.
       await tx.insert(schema.orgUsers).values({
         orgId: org.id,
-        userId: ctx.userId!,
+        userId,
         role: "owner",
         joinedAt: new Date(),
-        createdByUserId: ctx.userId,
-        updatedByUserId: ctx.userId,
+        createdById: userId,
+        updatedById: userId,
       });
 
       // Bootstrap full IAM state for the org — system roles, owner principal,
@@ -107,38 +117,49 @@ export const organizationCreateHandler: CapabilityHandler<
       // the owner having access (atomic with the org creation).
       await bootstrapOrgIAM({
         orgId: org.id,
-        ownerUserId: ctx.userId!,
-        actorUserId: ctx.userId!,
+        ownerUserId: userId,
+        actorUserId: userId,
         tx,
       });
 
-      return {
-        publicId: org.publicId,
-        name: org.name,
-        slug: org.slug,
-        type: org.type,
-        createdAt: org.createdAt.toISOString(),
-        id: org.id,
-      };
+      // The first workspace, on the same transaction: an org with no
+      // workspace has no page to land on.
+      const workspace = await bootstrapWorkspace({
+        tx,
+        orgId: org.id,
+        userId,
+        name: input.workspace.name,
+        slug: input.workspace.slug,
+      });
+
+      // The signup grant commits with the org: a failed grant rolls the org
+      // back rather than leaving an org whose first assistant turn the credit
+      // gate refuses.
+      await grantSignupCredits(tx, org.id);
+
+      await openOnboardingGate(tx, {
+        orgId: org.id,
+        workspaceId: workspace.id,
+        now: org.createdAt,
+      });
+
+      return { org, workspace };
     });
 
-    orgId = txResult.id;
-    result = {
-      publicId: txResult.publicId,
-      name: txResult.name,
-      slug: txResult.slug,
-      type: txResult.type,
-      createdAt: txResult.createdAt,
-    };
     logger.info(
-      { orgId: txResult.id, slug: txResult.slug, surface: ctx.surface },
+      {
+        orgId: created.org.id,
+        slug: created.org.slug,
+        workspaceId: created.workspace.id,
+        surface: ctx.surface,
+      },
       "organization.create: organization created successfully",
     );
     // Record security event for org creation (privileged mutation).
     emitSecurityEventAsync({
       eventType: "organization.created",
-      actorUserId: ctx.userId!,
-      orgId: txResult.id,
+      actorUserId: userId,
+      orgId: created.org.id,
       workspaceId: null,
       outcome: "success",
       capability: null,
@@ -147,17 +168,29 @@ export const organizationCreateHandler: CapabilityHandler<
       requestId: ctx.requestId,
     }).catch((err: unknown) => {
       logger.error(
-        { err, orgId: txResult.id },
+        { err, orgId: created.org.id },
         "organization.create: failed to record security event",
       );
     });
+
+    return {
+      publicId: created.org.publicId,
+      name: created.org.name,
+      slug: created.org.slug,
+      type: created.org.type,
+      createdAt: created.org.createdAt.toISOString(),
+      workspace: {
+        publicId: created.workspace.publicId,
+        slug: created.workspace.slug,
+      },
+    };
   } catch (err) {
-    if (isUniqueViolation(err)) {
+    if (isUniqueViolation(err, "organizations_slug_idx")) {
       logger.warn(
         { slug: input.slug, orgId: ctx.orgId },
         "organization.create: slug conflict",
       );
-      throw new Error(`slug "${input.slug}" already in use`);
+      throw slugTaken();
     }
     logger.error(
       { err, orgId: ctx.orgId },
@@ -165,37 +198,4 @@ export const organizationCreateHandler: CapabilityHandler<
     );
     throw err;
   }
-
-  // Grant the free $5 (500 credits) signup bonus AFTER the org transaction
-  // commits so a billing failure never rolls back the org creation itself.
-  // grantFreeCredits is idempotent — INSERT … ON CONFLICT DO NOTHING — so a
-  // second attempt is always safe, even if the first partially succeeded.
-  await grantFreeCredits(orgId).catch(async (firstErr: unknown) => {
-    const firstErrMsg =
-      firstErr instanceof Error
-        ? `${firstErr.message}\n${firstErr.stack}`
-        : String(firstErr);
-    logger.warn(
-      { err: firstErr, firstErrMsg, orgId },
-      "organization.create: grantFreeCredits failed on first attempt — retrying once",
-    );
-    // One idempotent retry. If this also fails, log the error and continue so
-    // the org creation itself is not surfaced as a failure to the caller.
-    // The orgId is logged at error level so ops can re-run the grant manually.
-    await grantFreeCredits(orgId).catch((retryErr: unknown) => {
-      const retryErrMsg =
-        retryErr instanceof Error
-          ? `${retryErr.message}\n${retryErr.stack}`
-          : String(retryErr);
-      logger.error(
-        { err: retryErr, retryErrMsg, orgId },
-        "organization.create: grantFreeCredits failed after retry — org created, credits not granted; re-apply manually",
-      );
-    });
-  });
-
-  // Registries are per-(org, workspace); the default registry is seeded by
-  // seedWorkspaceDefaultRegistry when the first workspace is created.
-
-  return result;
 };

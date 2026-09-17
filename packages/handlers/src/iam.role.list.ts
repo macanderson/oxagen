@@ -1,29 +1,34 @@
+// audit-exempt: a read of the org's permission model; the writes are create_role, set_role_grants and delete_role, each with its own security event.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   iamRoleList,
   type IamRoleRow,
 } from "@oxagen/oxagen/contracts/iam.role.list";
+import { PERMISSION_CATALOG } from "@oxagen/oxagen/iam";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, eq, inArray, isNull, or, gt, sql } from "drizzle-orm";
+import { toRoleRow } from "./lib/iam-roles";
+import { roleEnforcementOf } from "./lib/org-tier";
 import { logger } from "./logger";
 
 /**
  * iam.role.list handler.
  *
- * Reads the org's IAM roles, their capability grants, and the count of active
- * principal assignments per role. The IAM tables live in the dedicated `iam`
- * Postgres schema and are read through withSystemDb, so tenant isolation is
- * enforced HERE explicitly: every query filters by ctx.orgId. Never relax
- * this — role/grant data is the org's permission model.
- *
- * Read-only by design (ship-read-first): role and grant writes remain
- * provisioning-script-only until dedicated write contracts are authored.
+ * Reads the org's IAM roles, their capability grants, the catalogue
+ * permissions those grants cover, who created each role, and the count of
+ * active principal assignments per role — with the permission catalogue and
+ * whether the kernel enforces roles for the org's tier (ADR-063). The IAM
+ * tables live in the dedicated `iam` Postgres schema and are read through
+ * withSystemDb, so tenant isolation is enforced HERE explicitly: every query
+ * filters by ctx.orgId. Never relax this — role/grant data is the org's
+ * permission model.
  */
 export const iamRoleListHandler: CapabilityHandler<typeof iamRoleList> = async (
   input,
   ctx,
 ) => {
   const { orgId } = ctx;
+  const enforcement = await roleEnforcementOf(ctx);
 
   const result = await withSystemDb(async (tx) => {
     const roleConds = [eq(schema.roles.orgId, orgId)];
@@ -39,6 +44,8 @@ export const iamRoleListHandler: CapabilityHandler<typeof iamRoleList> = async (
         scopeKind: schema.roles.scopeKind,
         isSystemDefault: schema.roles.isSystemDefault,
         version: schema.roles.version,
+        createdAt: schema.roles.createdAt,
+        createdById: schema.roles.createdById,
       })
       .from(schema.roles)
       .where(and(...roleConds));
@@ -107,16 +114,40 @@ export const iamRoleListHandler: CapabilityHandler<typeof iamRoleList> = async (
       }
     }
 
-    const roles: IamRoleRow[] = page.map((r) => ({
-      id: r.publicId,
-      name: r.name,
-      description: r.description,
-      scopeKind: r.scopeKind as IamRoleRow["scopeKind"],
-      isSystemDefault: r.isSystemDefault,
-      version: r.version,
-      memberCount: counts.get(r.id) ?? 0,
-      grants: grantsByRole.get(r.id) ?? [],
-    }));
+    // The origin line: who created each custom role. System roles read as
+    // built-in on the page, so their creator (the org's bootstrap actor) is
+    // not looked up.
+    const creatorIds = [
+      ...new Set(
+        page
+          .filter((r) => !r.isSystemDefault && r.createdById !== null)
+          .map((r) => r.createdById as string),
+      ),
+    ];
+    const creatorNames = new Map<string, string>();
+    if (creatorIds.length > 0) {
+      const userRows = await tx
+        .select({
+          id: schema.users.id,
+          displayName: schema.users.displayName,
+          email: schema.users.email,
+        })
+        .from(schema.users)
+        .where(inArray(schema.users.id, creatorIds));
+      for (const u of userRows)
+        creatorNames.set(u.id, u.displayName ?? u.email);
+    }
+
+    const roles: IamRoleRow[] = page.map((r) =>
+      toRoleRow(
+        { ...r, scopeKind: r.scopeKind as IamRoleRow["scopeKind"] },
+        grantsByRole.get(r.id) ?? [],
+        counts.get(r.id) ?? 0,
+        r.isSystemDefault || r.createdById === null
+          ? null
+          : (creatorNames.get(r.createdById) ?? null),
+      ),
+    );
 
     return { roles, total };
   });
@@ -132,5 +163,12 @@ export const iamRoleListHandler: CapabilityHandler<typeof iamRoleList> = async (
     hasMore: result.total > input.offset + input.limit,
     limit: input.limit,
     offset: input.offset,
+    catalog: PERMISSION_CATALOG.map((p) => ({
+      id: p.id,
+      group: p.group,
+      description: p.description,
+      capabilities: [...p.capabilities],
+    })),
+    enforcement,
   };
 };

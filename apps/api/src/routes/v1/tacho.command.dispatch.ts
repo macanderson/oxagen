@@ -5,7 +5,7 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 
-/** Queue a control command for a Tacho host or session. Mounted on the org-scoped router behind session auth. */
+/** Queue a run control for one run, an agent's live runs or the workspace. Mounted on the org-scoped router behind session auth. */
 export const tachoCommandDispatchRoute = new Hono<AppEnv>();
 
 tachoCommandDispatchRoute.post("/", async (c) => {

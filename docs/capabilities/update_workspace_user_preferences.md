@@ -71,4 +71,4 @@ only update their own per-workspace defaults.
 ## Related
 
 - [get_workspace_user_preferences](get_workspace_user_preferences.md) — the read counterpart, exposed on api/mcp/agent.
-- [user.preferences.write](user.preferences.write.md) — the per-user (not per-workspace) UI/model preference write.
+- [user.preferences.set](user.preferences.set.md) — the per-user (not per-workspace) account preference write.

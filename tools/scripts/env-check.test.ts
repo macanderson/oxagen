@@ -156,6 +156,7 @@ describe("reconcile — PLATFORM_ALLOWLIST", () => {
       "PLAYWRIGHT_BASE_URL",
       "NEO4J_URL",
       "NEO4J_USER",
+      "OXAGEN_AGENT_TOKEN",
     ]) {
       expect(
         PLATFORM_ALLOWLIST.has(k),

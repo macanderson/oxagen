@@ -11,11 +11,21 @@
  * package with no `@oxagen/*` runtime dependency, so nothing here imports
  * `materializeTools`, `mcp-rbac` or `tool-budget` — and that constraint
  * pushes toward the right shape anyway. The JSON-RPC envelope is forwarded to
- * the workspace MCP endpoint with the host's own API key, which is already a
- * first-class Oxagen API key bound to the enrolling org and workspace, and
- * already resolves through the remote MCP context path. So there is exactly
- * one tool materialiser, one RBAC evaluation, one entitlement gate and one
- * meter, and they are the ones that already exist on the control plane.
+ * the workspace MCP endpoint over HTTPS, so there is exactly one tool
+ * materialiser, one RBAC evaluation, one entitlement gate and one meter, and
+ * they are the ones that already exist on the control plane.
+ *
+ * It forwards with a credential minted for exactly this job — **never the
+ * host key** (ADR-078 §4). The host key reports events and fetches the
+ * mandate; its principal is an API key, which has no `org_users` row, so
+ * `assertCallerRole` returns early for it and `checkIAM` takes the tier
+ * fast-path. A connected app forwarding under it would hold owner authority
+ * over the workspace. Enrollment therefore mints a second key with purpose
+ * `tacho_gateway_v1`, whose mandate is a rule rather than a list — an `mcp`
+ * capability that does not mutate and is not high-sensitivity — and
+ * `machineKeyDenial` enforces that purpose in the kernel's IAM adapter,
+ * ahead of the fast-path. A host with no gateway key serves no tools and
+ * never falls back to the host key.
  *
  * ADR-043 holds with no exception: this serves tools and records evidence. It
  * never runs a turn, never calls a model and never spawns a worker.
@@ -23,9 +33,10 @@
  * What the gateway adds on top of the forward:
  *
  *   1. **Attribution.** A call that cannot be attributed to an org and a
- *      workspace is refused, never defaulted. Attribution rides the host key,
- *      so a daemon with no loadable enrollment has nothing to present and says
- *      so rather than guessing.
+ *      workspace is refused, never defaulted. Attribution rides the gateway
+ *      key, so a daemon with no loadable enrollment — or one enrolled before
+ *      the gateway key existed — has nothing to present and says so rather
+ *      than guessing.
  *   2. **A tool ceiling.** When the mandate's bundle names one, a `tools/list`
  *      that would materialise past it fails with a message naming the model,
  *      the limit and the count — the shape `TooManyToolsForProviderError` uses
@@ -78,6 +89,12 @@ export interface GatewayAttribution {
   workspaceId: string;
   orgSlug: string;
   workspaceSlug: string;
+  /**
+   * The `tacho_gateway_v1` key, never the host key (ADR-078 §4). The daemon
+   * reads it from `host.gateway_api_key` and returns no attribution at all
+   * when it is absent, so there is no path by which the host key reaches
+   * this field.
+   */
   apiKey: string;
   hostEnrollmentId: string;
 }

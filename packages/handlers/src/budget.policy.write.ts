@@ -27,8 +27,8 @@ export const budgetPolicyWriteHandler: CapabilityHandler<
   // (no prior preferences row) still produces a valid row.
   const insertValues: NewUserPreferences = {
     userId,
-    createdByUserId: userId,
-    updatedByUserId: userId,
+    createdById: userId,
+    updatedById: userId,
     perTurnBudgetEnabled: input.enabled ?? false,
     perTurnBudgetMode: input.mode ?? "prompt",
     perTurnBudgetGracePct: input.graceOveragePct ?? 0.25,
@@ -38,8 +38,8 @@ export const budgetPolicyWriteHandler: CapabilityHandler<
 
   // Partial update — only fields explicitly provided change; anything omitted
   // keeps its existing value.
-  const updateSet: Partial<NewUserPreferences> & { updatedByUserId: string } = {
-    updatedByUserId: userId,
+  const updateSet: Partial<NewUserPreferences> & { updatedById: string } = {
+    updatedById: userId,
   };
   if (input.enabled !== undefined)
     updateSet.perTurnBudgetEnabled = input.enabled;

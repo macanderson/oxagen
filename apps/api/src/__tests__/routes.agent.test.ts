@@ -1,6 +1,6 @@
 /**
  * Unit tests for agent route handlers:
- *   agent.approval.resolve, agent.mcp.list, agent.mcp.register,
+ *   agent.approval.list, agent.approval.resolve, agent.mcp.list, agent.mcp.register,
  *   agent.memory.recall, agent.memory.write, agent.tool.list,
  *   agent.definition.* and agent.deploy
  *
@@ -109,17 +109,61 @@ beforeEach(() => {
   mocks.invoke.mockResolvedValue({ ok: true });
 });
 
+// ── agent.approval.list ─────────────────────────────────────────────────────
+
+describe("agent.approval.list route", () => {
+  const PATH = "/agent/approvals/list";
+
+  it("happy path POST: returns 200 with the page invoke returned", async () => {
+    const invokeResult = { items: [], nextCursor: null };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await app.fetch(post(PATH, {}));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke once with contract name 'list_approvals', the parsed input and surface 'api'", async () => {
+    mocks.invoke.mockResolvedValue({ items: [], nextCursor: null });
+    await app.fetch(
+      post(PATH, { runId: "arun_0123456789abcdefghjkmn", limit: 5 }),
+    );
+    expect(mocks.invoke).toHaveBeenCalledOnce();
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_approvals");
+    expect(mocks.invoke.mock.calls[0]?.[1]).toEqual({
+      runId: "arun_0123456789abcdefghjkmn",
+      limit: 5,
+    });
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+  });
+
+  it("defaults the page size to 50 when the body omits it", async () => {
+    mocks.invoke.mockResolvedValue({ items: [], nextCursor: null });
+    await app.fetch(post(PATH, {}));
+    expect(mocks.invoke.mock.calls[0]?.[1]).toEqual({ limit: 50 });
+  });
+
+  it("refuses a page size outside 1..100 and an unknown field before invoke", async () => {
+    const tooBig = await app.fetch(post(PATH, { limit: 101 }));
+    expect(tooBig.status).toBe(400);
+    const unknown = await app.fetch(post(PATH, { status: "pending" }));
+    expect(unknown.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
 // ── agent.approval.resolve ──────────────────────────────────────────────────
 
 describe("agent.approval.resolve route", () => {
   const PATH = "/agent/approvals/resolve";
+  const PUBLIC_ID = "apr_01k5rt9xq7v3m8n2p4s6t8w0";
+  const ROW_UUID = "4b2f7a0e-6c1d-4e8a-9f3b-2d5c7e9a1b3c";
 
   it("happy path: forwards invoke result as 200 JSON", async () => {
-    const invokeResult = { approvalId: "appr-1", resolution: "approved" };
+    const invokeResult = { approvalId: PUBLIC_ID, resolution: "approved" };
     mocks.invoke.mockResolvedValue(invokeResult);
 
     const res = await app.fetch(
-      post(PATH, { approvalId: "appr-1", decision: "approved" }),
+      post(PATH, { approvalId: PUBLIC_ID, decision: "approved" }),
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(invokeResult);
@@ -127,29 +171,51 @@ describe("agent.approval.resolve route", () => {
 
   it("calls invoke once with contract name 'resolve_approval' and surface 'api'", async () => {
     await app.fetch(
-      post(PATH, { approvalId: "appr-1", decision: "denied", note: "bad" }),
+      post(PATH, { approvalId: PUBLIC_ID, decision: "denied", note: "bad" }),
     );
     expect(mocks.invoke).toHaveBeenCalledOnce();
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("resolve_approval");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
-  it("passes parsed body fields to invoke", async () => {
+  it("passes parsed body fields to invoke, a uuid id as sent", async () => {
     await app.fetch(
-      post(PATH, { approvalId: "appr-2", decision: "denied", note: "nope" }),
+      post(PATH, { approvalId: ROW_UUID, decision: "denied", note: "nope" }),
     );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.approvalId).toBe("appr-2");
+    expect(body.approvalId).toBe(ROW_UUID);
     expect(body.decision).toBe("denied");
     expect(body.note).toBe("nope");
   });
 
   it("invalid decision enum → Zod parse error → 400, invoke not called", async () => {
     const res = await app.fetch(
-      post(PATH, { approvalId: "x", decision: "maybe" }),
+      post(PATH, { approvalId: PUBLIC_ID, decision: "maybe" }),
     );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("approvalId that is neither apr_… nor a uuid → 400, invoke not called", async () => {
+    const res = await app.fetch(
+      post(PATH, { approvalId: "appr-1", decision: "approved" }),
+    );
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("an id that matched no pending row → 409 conflict approval_expired", async () => {
+    const { HandlerError } = await import("@oxagen/oxagen");
+    mocks.invoke.mockRejectedValue(
+      new HandlerError({ code: "conflict", reason: "approval_expired" }),
+    );
+    const res = await app.fetch(
+      post(PATH, { approvalId: PUBLIC_ID, decision: "approved" }),
+    );
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: { code: "conflict", reason: "approval_expired" },
+    });
   });
 });
 

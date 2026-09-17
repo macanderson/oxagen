@@ -146,8 +146,8 @@ describe("bindAgentEnvironment", () => {
       agentId: AGENT_UUID,
       environmentId: "env_int_1",
       isPrimary: true,
-      createdByUserId: "u1",
-      updatedByUserId: "u1",
+      createdById: "u1",
+      updatedById: "u1",
     });
   });
 
@@ -223,11 +223,11 @@ describe("bindAgentEnvironment", () => {
     expect(state.updates).toHaveLength(2);
     expect(state.updates[0]!.set).toMatchObject({
       isPrimary: false,
-      updatedByUserId: null,
+      updatedById: null,
     });
     expect(state.updates[1]!.set).toMatchObject({
       isPrimary: true,
-      updatedByUserId: null,
+      updatedById: null,
     });
   });
 

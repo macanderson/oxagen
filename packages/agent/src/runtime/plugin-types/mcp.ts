@@ -1,12 +1,20 @@
 /**
- * MCP plugin-type contributor: yields raw tools for every enabled + healthy
- * workspace-installed MCP server whose installed_plugins row is enabled and not
- * soft-deleted. The decrypted per-workspace credential is injected into connectMcp.
+ * MCP plugin-type contributor: yields raw tools for every server
+ * selectMaterializableMcpServers returns (../mcp-servers.ts, the selection
+ * get_agent_toolbelt reports from). The decrypted per-workspace credential is
+ * injected into connectMcp.
  *
  * For OAuth listings (authKind === "oauth"), a DbOAuthClientProvider is built so
  * the transport auto-refreshes via the provider's tokens()/saveTokens() interface.
  * On UnauthorizedError (or any auth failure), the credential is flipped to
  * needs_reauth and that server is skipped for this turn.
+ *
+ * KILL SWITCHES (spec §6.11): before anything reaches a server, the turn's
+ * gate is asked about the server and the connection it would be reached with.
+ * A switch on either (or on the agent, operator, workspace or organisation)
+ * leaves the server out of the turn: no connect, no tools/list, no grant. The
+ * broker's grant is recorded before the credential is presented, so a killed
+ * connection mints no grant and an unrecorded credential use cannot occur.
  *
  * DESCRIPTOR PINNING (pin-or-fail-closed): live tool descriptors are diffed
  * against the newest mcp.tool_snapshots pins before anything reaches the model.
@@ -17,14 +25,16 @@
  * explicit admin action of disabling + re-enabling the server (which
  * re-captures snapshots), or re-registering it.
  */
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import pino from "pino";
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
-import { schema, withTenantDb } from "@oxagen/database";
+import { withTenantDb } from "@oxagen/database";
 import {
   getWorkspaceSecret,
   DbOAuthClientProvider,
+  findCredentialConnection,
   markCredentialNeedsReauth,
+  recordCredentialGrant,
+  type CredentialConnection,
 } from "@oxagen/plugins";
 import type { CapabilityContext } from "../../types";
 import {
@@ -38,6 +48,7 @@ import {
   type PluginContributeOptions,
 } from "../plugin-type";
 import { decryptMcpAuthConfig } from "../mcp-server-auth-crypto";
+import { selectMaterializableMcpServers } from "../mcp-servers";
 import {
   captureToolSnapshots,
   diffDescriptorsAgainstPins,
@@ -68,68 +79,50 @@ export function resolveMcpOAuthRedirectUrl(
 
 async function contributeMcpTools(
   ctx: CapabilityContext,
-  options?: PluginContributeOptions,
+  options: PluginContributeOptions,
 ): Promise<ContributedRawTool[]> {
   if (!ctx.workspaceId) return [];
 
-  // Enabled + healthy installs joined to the installed_plugins row (workspace-scoped).
-  // Also selects authKind from the installed plugin so we can branch on OAuth vs static.
   const workspaceId = ctx.workspaceId;
-  const servers = await withTenantDb(async (tx) => {
-    // Base conditions — always applied.
-    const baseConds = [
-      eq(schema.mcpServers.orgId, ctx.orgId),
-      eq(schema.mcpServers.workspaceId, workspaceId),
-      eq(schema.mcpServers.enabled, true),
-      // Soft-deleted servers stop registering tools but keep their
-      // descriptor snapshots for replay.
-      isNull(schema.mcpServers.deletedAt),
-      // Accept "healthy" (probed OK, e.g. after OAuth) AND "unknown" (just enabled
-      // via the toggle/secret path — only the OAuth callback ever sets "healthy", so
-      // requiring "healthy" silently hid every secret-auth server from the agent).
-      // The live connectMcp() + listTools() below is the real health gate: a server
-      // that can't connect is skipped gracefully. Genuinely "unhealthy" servers are
-      // still excluded.
-      // or(eq,eq) rather than inArray: `inArray` is reserved for the per-turn
-      // serverAllowlist filter below, and using it here too would make that filter
-      // ambiguous to assert against.
-      or(
-        eq(schema.mcpServers.healthStatus, "healthy"),
-        eq(schema.mcpServers.healthStatus, "unknown"),
-      ),
-      eq(schema.pluginInstalledPlugins.enabled, true),
-      isNull(schema.pluginInstalledPlugins.deletedAt),
-    ] as const;
-    // Per-turn server allowlist: when the user has toggled specific servers
-    // active in the chat composer, only load those servers' tools.
-    const allowlistCond =
-      options?.serverAllowlist && options.serverAllowlist.size > 0
-        ? inArray(schema.mcpServers.publicId, [...options.serverAllowlist])
-        : undefined;
-    return tx
-      .select({
-        id: schema.mcpServers.id,
-        publicId: schema.mcpServers.publicId,
-        name: schema.mcpServers.name,
-        endpointUrl: schema.mcpServers.endpointUrl,
-        authStrategy: schema.mcpServers.authStrategy,
-        authConfig: schema.mcpServers.authConfig,
-        orgListingId: schema.mcpServers.orgListingId,
-        authKind: schema.pluginInstalledPlugins.authKind,
-      })
-      .from(schema.mcpServers)
-      .innerJoin(
-        schema.pluginInstalledPlugins,
-        eq(schema.mcpServers.orgListingId, schema.pluginInstalledPlugins.id),
-      )
-      .where(and(...baseConds, allowlistCond));
-  });
+  const servers = await withTenantDb((tx) =>
+    selectMaterializableMcpServers(tx, {
+      orgId: ctx.orgId,
+      workspaceId,
+      serverAllowlist: options.serverAllowlist,
+    }),
+  );
 
   const out: ContributedRawTool[] = [];
   for (const server of servers) {
     try {
-      let client;
+      // The connection the broker would present for this server, resolved
+      // before the gate is asked so a switch on it is seen.
+      const connection = await connectionFor(ctx, server);
+      const killed = await options.killSwitches.check({
+        capabilityId: `mcp.${server.id}`,
+        serverId: server.id,
+        connectionId: connection?.id ?? null,
+        readOnly: false,
+      });
+      if (killed !== null) {
+        logger.warn(
+          {
+            serverId: server.id,
+            serverName: server.name,
+            killSwitch: killed.publicId,
+            target: `${killed.targetKind} ${killed.targetId}`,
+          },
+          "MCP server left out of the turn by kill switch",
+        );
+        continue;
+      }
+      // The grant is on record before the credential is presented.
+      const connectionId =
+        connection === null
+          ? null
+          : (await grantFor(ctx, server, connection)).connectionId;
 
+      let client;
       if (server.authKind === "oauth" && server.orgListingId) {
         // OAuth path: build a DbOAuthClientProvider so the transport auto-refreshes.
         const redirectUrl = resolveMcpOAuthRedirectUrl();
@@ -252,6 +245,7 @@ async function contributeMcpTools(
           // NAME ("github:*"), not by row uuid.
           externalServerName: server.name,
           externalToolName: pinnedTool.toolName,
+          externalConnectionId: connectionId,
         });
       }
     } catch (err) {
@@ -287,6 +281,64 @@ async function contributeMcpTools(
     }
   }
   return out;
+}
+
+/**
+ * The stored credential the broker presents for this server: the workspace's
+ * credential for the server's listing, when the server is reached with one
+ * (an OAuth listing, or a static strategy other than `none`). Null when the
+ * server is reached without a credential.
+ */
+function connectionFor(
+  ctx: CapabilityContext,
+  server: {
+    authKind: string | null;
+    authStrategy: string;
+    orgListingId: string | null;
+  },
+): Promise<CredentialConnection | null> {
+  if (
+    !server.orgListingId ||
+    (server.authKind !== "oauth" && server.authStrategy === "none")
+  ) {
+    return Promise.resolve(null);
+  }
+  return findCredentialConnection({
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+    orgListingId: server.orgListingId,
+  });
+}
+
+/**
+ * The credential broker's record of this use (spec §6.8): `connection` is
+ * about to be presented to the server for this turn, on behalf of the run
+ * when there is one. Written before the credential is presented; a grant
+ * that cannot be written fails the server for this turn, so an unrecorded
+ * credential use cannot occur.
+ */
+function grantFor(
+  ctx: CapabilityContext,
+  server: {
+    id: string;
+    publicId: string;
+    name: string;
+    endpointUrl: string;
+  },
+  connection: CredentialConnection,
+) {
+  return recordCredentialGrant({
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+    connection,
+    mcpServerId: server.id,
+    // Named on the row, not joined: the server row does not outlive an
+    // uninstall and the grants log has to.
+    mcpServerPublicId: server.publicId,
+    mcpServerName: server.name,
+    endpointUrl: server.endpointUrl,
+    runId: ctx.agentRun?.runId ?? null,
+  });
 }
 
 registerPluginType({ type: "mcp_server", contributeTools: contributeMcpTools });

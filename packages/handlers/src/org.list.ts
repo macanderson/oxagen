@@ -1,7 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgList } from "@oxagen/oxagen/contracts/org.list";
 import { schema, withSystemDb } from "@oxagen/database";
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import { logger } from "./logger";
 
 /**
@@ -11,11 +11,12 @@ import { logger } from "./logger";
  * no active tenant scope yet), and the WHERE clause is keyed to the caller's own
  * userId, so it can only ever return the caller's own memberships. Deleted orgs
  * are filtered out; suspended ones remain visible so the user understands why
- * they can't act.
+ * they can't act. Rows come in the order the user joined, so the first is the
+ * membership the app's `/` landing opens.
  *
  * Auth: supports both session auth (ctx.userId set) and API-key auth
  * (ctx.userId null, ctx.apiKeyId set). For API-key callers the effective user
- * is resolved from the key's created_by_user_id — matching the IAM layer's
+ * is resolved from the key's created_by_id — matching the IAM layer's
  * "API key authorizes as its creator" invariant. The result is always scoped
  * to that one user's memberships; the caller can never cross-read another
  * user's org list.
@@ -26,7 +27,7 @@ export const orgListHandler: CapabilityHandler<typeof orgList> = async (
 ) => {
   // ── Resolve acting user ───────────────────────────────────────────────────
   // Session auth:  ctx.userId is the real user; use directly.
-  // API-key auth:  ctx.userId is null; resolve from the key's createdByUserId.
+  // API-key auth:  ctx.userId is null; resolve from the key's createdById.
   //                The auth middleware already validated the key before reaching
   //                this handler (401 for invalid/expired keys), so the DB row
   //                will almost always be present. A missing row (key deleted
@@ -37,7 +38,7 @@ export const orgListHandler: CapabilityHandler<typeof orgList> = async (
   if (!userId && ctx.apiKeyId) {
     const keyRow = await withSystemDb((tx) =>
       tx
-        .select({ createdByUserId: schema.apiKeys.createdByUserId })
+        .select({ createdById: schema.apiKeys.createdById })
         .from(schema.apiKeys)
         .where(
           and(
@@ -48,7 +49,7 @@ export const orgListHandler: CapabilityHandler<typeof orgList> = async (
         .limit(1)
         .then((rows) => rows[0] ?? null),
     );
-    userId = keyRow?.createdByUserId ?? null;
+    userId = keyRow?.createdById ?? null;
   }
 
   if (!userId) {
@@ -81,7 +82,8 @@ export const orgListHandler: CapabilityHandler<typeof orgList> = async (
           eq(schema.orgUsers.userId, resolvedUserId),
           ne(schema.organizations.status, "deleted"),
         ),
-      ),
+      )
+      .orderBy(asc(schema.orgUsers.joinedAt), asc(schema.organizations.slug)),
   );
   return {
     organizations: rows.map((r) => ({

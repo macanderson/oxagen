@@ -74,6 +74,17 @@ export const baseEnvSchema = z.object({
   // 0 means nothing rewrites the header and no entry in it is usable.
   TRUSTED_PROXY_HOP_COUNT: z.coerce.number().int().nonnegative().default(1),
 
+  // The proxies themselves, as a comma-separated CIDR/address list, and the
+  // form that is actually safe. Counting hops trusts the COUNT to be right; a
+  // count that is too high selects an entry the caller wrote, because a caller
+  // can pad x-forwarded-for until the arithmetic lands on its own value. Naming
+  // the proxies instead means attribution never depends on the length of a
+  // list the caller can grow: walk from the right while each entry is a trusted
+  // proxy, and the first entry that is not one is the client.
+  // Empty (the default) means no proxy identity is declared — see
+  // extractClientIp in apps/api/src/lib/context.ts.
+  TRUSTED_PROXY_CIDRS: z.string().default(""),
+
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
 
@@ -326,12 +337,6 @@ export const baseEnvSchema = z.object({
   // prints the value to set. Must be >= 1 (a markup below 1 would sell
   // credits below provider cost).
   OXAGEN_METER_MARKUP: z.coerce.number().gte(1).optional(),
-
-  // ADR-052 §7.5. "shadow" counts governed actions and raises no debit, for a
-  // staged rollout; the default charges. Left optional and defaulted in code
-  // rather than here, so an unset value and an explicit "charge" are the same
-  // thing — the failure mode of a typo'd value is to charge, not to stop.
-  OXAGEN_ACTION_METER_MODE: z.enum(["shadow", "charge"]).optional(),
 
   // ── Usage-purchase volume discount (hybrid SaaS + usage pricing) ──
   // When a customer buys usage credits they earn a volume discount of

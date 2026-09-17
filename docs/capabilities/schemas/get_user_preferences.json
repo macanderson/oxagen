@@ -86,6 +86,14 @@
       },
       "language": {
         "type": "string"
+      },
+      "theme": {
+        "type": "string",
+        "enum": [
+          "system",
+          "light",
+          "dark"
+        ]
       }
     },
     "required": [
@@ -96,7 +104,8 @@
       "defaultTextTier",
       "defaultTextModel",
       "timezone",
-      "language"
+      "language",
+      "theme"
     ],
     "additionalProperties": false
   }

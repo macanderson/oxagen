@@ -40,8 +40,8 @@ export const workspaceInviteSendHandler: CapabilityHandler<
         status: "pending",
         invitedByUserId: ctx.userId!,
         expiresAt,
-        createdByUserId: ctx.userId,
-        updatedByUserId: ctx.userId,
+        createdById: ctx.userId,
+        updatedById: ctx.userId,
       })
       .onConflictDoNothing()
       .returning({

@@ -130,7 +130,20 @@ function fakeControlPlane(bundleEtag: string) {
     ingested,
     acks,
     calls,
-    queue: (command: DeliveredCommand) => commandQueue.push(command),
+    queue: (
+      command: Omit<
+        DeliveredCommand,
+        "requested_mode" | "delivery_mode" | "degraded_reason" | "reason"
+      > &
+        Partial<DeliveredCommand>,
+    ) =>
+      commandQueue.push({
+        requested_mode: null,
+        delivery_mode: null,
+        degraded_reason: null,
+        reason: null,
+        ...command,
+      }),
     setHostStatus: (status: ControlEnvelope["host_status"]) => {
       hostStatus = status;
     },
@@ -538,12 +551,12 @@ describe("tachod", () => {
     });
     await handle.tick();
     const ackIds = (
-      plane.acks as Array<{ command_id: string; outcome: string }>
-    ).map((a) => `${a.command_id}:${a.outcome}`);
+      plane.acks as Array<{ command_id: string; status: string }>
+    ).map((a) => `${a.command_id}:${a.status}`);
     expect(ackIds).toEqual(
       expect.arrayContaining([
         "cmd_pause:applied",
-        "cmd_msg:delivered",
+        "cmd_msg:received",
         "cmd_msg:applied",
         "cmd_old:expired",
         "cmd_lost:failed",
@@ -725,5 +738,64 @@ describe("tachod", () => {
     expect(handle.shipper.lastError).toContain("unreachable");
     plane.setDown(false);
     expect(handle.shipper.ready()).toBe(false);
+  });
+
+  it("backs off the command poll instead of retrying it every tick", async () => {
+    // The regression this guards: `sendAcks` had no gate of its own. Its only
+    // skip condition is "a recent ingest already carried a control envelope",
+    // and an outage makes ingest stale too, so every tick — one per second in
+    // the real daemon — re-attempted the poll. A control plane answering 503
+    // therefore got 60 requests a minute from every enrolled host, forever,
+    // and the host wrote 1770 identical failures into 2000 lines of log. The
+    // daemon must get quieter when the control plane is down, not louder.
+    const plane = fakeControlPlane("etag-backoff");
+    let clock = 1_000_000;
+    const { handle, log } = await boot(plane, scratchPaths(), {
+      now: () => clock,
+    });
+    const pollCount = () =>
+      plane.calls.filter((u) => u.endsWith("/commands")).length;
+
+    plane.setDown(true);
+    await handle.tick();
+    const afterFirstFailure = pollCount();
+    expect(afterFirstFailure).toBeGreaterThan(0);
+
+    // Four more ticks a tenth of a second apart: the daemon is inside its
+    // backoff window and must not touch the control plane again.
+    for (let i = 0; i < 4; i += 1) {
+      clock += 100;
+      await handle.tick();
+    }
+    expect(pollCount()).toBe(afterFirstFailure);
+
+    // Past the first backoff (2s), exactly one more attempt is allowed.
+    clock += 2_500;
+    await handle.tick();
+    expect(pollCount()).toBe(afterFirstFailure + 1);
+    clock += 100;
+    await handle.tick();
+    expect(pollCount()).toBe(afterFirstFailure + 1);
+
+    // The log names the streak and the wait, so a reader can tell one failure
+    // from the eight hundredth and see that the daemon is holding off.
+    const failures = log.filter((l) => l.includes("command poll failed"));
+    expect(failures).toHaveLength(2);
+    expect(failures[0]).toMatch(/1 in a row, retrying in 2s/);
+    expect(failures[1]).toMatch(/2 in a row, retrying in 4s/);
+
+    // Recovery resets the window: the next failure waits the minimum again.
+    plane.setDown(false);
+    clock += 5_000;
+    await handle.tick();
+    expect(log.some((l) => l.includes("command poll recovered"))).toBe(true);
+
+    plane.setDown(true);
+    clock += 100;
+    await handle.tick();
+    const afterRecovery = log.filter((l) => l.includes("command poll failed"));
+    expect(afterRecovery[afterRecovery.length - 1]).toMatch(
+      /1 in a row, retrying in 2s/,
+    );
   });
 });

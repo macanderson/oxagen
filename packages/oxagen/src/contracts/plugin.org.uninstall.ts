@@ -9,7 +9,7 @@ export const pluginOrgUninstall = registerCapability({
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: true, riskLevel: "high", category: "plugin" },
-  layers: ["api", "docs", "mcp", "unit", "app"],
+  layers: ["api", "docs", "mcp", "unit"],
   scoped: true,
   sensitivity: "destructive",
   defaultEffect: "deny",

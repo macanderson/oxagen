@@ -2,25 +2,41 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingCreditsPurchase } from "@oxagen/oxagen/contracts/billing.credits.purchase";
 import { createUsageCreditCheckout } from "@oxagen/billing";
 import { emitSecurityEvent } from "@oxagen/database/security";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { logger } from "./logger";
 
+/**
+ * purchase_credits — top up the organisation's in-app AI usage credit balance
+ * through Stripe Checkout (apps/app/ARCHITECTURE.md §1.4, §3.9 "the second
+ * meter"). Credits pay for the in-app agent's model calls at provider cost
+ * times the published markup; 1 credit = $0.01. The Stripe webhook grants the
+ * credits after payment, so this handler grants nothing itself.
+ *
+ * Role gate — `assertOrgRole`: org Owner or Billing, for the signed-in user or
+ * the creator of the API key (`resolveActingUserId`), who is recorded as the
+ * actor. The kernel's IAM check allows every capability for a non-enterprise
+ * org, so the handler owns this check (§3.2, INV-29). Before WL-67 this
+ * handler asked only that some principal existed, which let any member of a
+ * Free, Build or Scale org start a top-up.
+ *
+ * The contract is `noBillingGate: true` (INV-27): buying credits is never
+ * refused for lack of governed action units.
+ */
 export const billingCreditsPurchaseHandler: CapabilityHandler<
   typeof billingCreditsPurchase
 > = async (input, ctx) => {
-  // Authorization guard: a resolved principal is required, and the request
-  // must be scoped to a specific org. Credit purchase is a mutating billing
-  // action — it must never proceed on behalf of an anonymous or unscoped caller.
-  if (!ctx.userId && !ctx.apiKeyId) {
-    logger.warn(
-      { orgId: ctx.orgId },
-      "billing.credits.purchase: rejected — no authenticated principal",
-    );
-    throw new Error("Unauthorized: no authenticated principal");
-  }
+  // The role gate and the acting-user lookup both read tables scoped to this
+  // org, so the scope is required before either runs.
   if (!ctx.orgId) {
     logger.warn({}, "billing.credits.purchase: rejected — missing orgId");
     throw new Error("Forbidden: orgId is required to purchase usage credits");
   }
+
+  const actingUserId = await resolveActingUserId(ctx);
+  await assertOrgRole(
+    { ...ctx, userId: actingUserId },
+    { org: ["Owner", "Billing"] },
+  );
 
   // Convert the customer-facing dollar amount to cents.
   // amountUsd is validated by the contract schema (≥ 5, positive).
@@ -37,10 +53,10 @@ export const billingCreditsPurchaseHandler: CapabilityHandler<
     // ── Emit audit event (fire-and-forget) ────────────────────────────────────
     emitSecurityEvent({
       eventType: "billing.checkout_initiated",
-      actorUserId: ctx.userId ?? null,
+      actorUserId: actingUserId,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId ?? null,
-      capability: "purchase_credits",
+      capability: billingCreditsPurchase.name,
       outcome: "success",
       ip: null,
       userAgent: null,

@@ -1,0 +1,91 @@
+/**
+ * spend-counter.ts — the running spend counter the recorders keep for the
+ * spend-budget gate (Mission Control spec §12.5; ADR-060 §5; #2820).
+ *
+ * `billing.spend_counters` holds one row per (org, workspace, UTC day) in
+ * micro-USD. Every recorder that prices a model call adds to it in the same
+ * breath as it writes the frame: the `@oxagen/ai` gateway after `token_usage`,
+ * the tacho ingest handler after a batch that carried cost. The gate
+ * (./spend-budget-gate.ts) and the budget panel sum these rows over the
+ * ceiling's window in Postgres, so a ClickHouse stall neither zeroes a
+ * ceiling nor denies a call.
+ *
+ * The counter is day-granular. A rolling window that starts mid-day counts
+ * the whole of its first day, a bounded over-count of at most one day's
+ * spend at the window's tail; a monthly window starts on a day boundary and
+ * is exact.
+ *
+ * Both functions run on the system connection with explicit org and
+ * workspace predicates: the recorders run outside a tenant scope (the AI SDK
+ * fires `onFinish` after the request's scope is gone), and an org-level
+ * ceiling sums every workspace's rows, which a workspace-scoped session
+ * could not see.
+ */
+import { schema, withSystemDb } from "@oxagen/database";
+import { and, eq, gte, lte, sql } from "drizzle-orm";
+
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+
+/** The UTC calendar day of an instant, as `YYYY-MM-DD`. */
+function utcDay(at: Date): string {
+  return at.toISOString().slice(0, 10);
+}
+
+/**
+ * Add `micros` to the counter for the frame's org, workspace and day. A
+ * non-positive amount writes nothing. One INSERT … ON CONFLICT DO UPDATE on
+ * the scope-day key, so concurrent recorders add rather than overwrite.
+ */
+export async function recordSpend(args: {
+  orgId: string;
+  /** Null for a frame outside a workspace. */
+  workspaceId: string | null;
+  at: Date;
+  micros: bigint;
+}): Promise<void> {
+  if (args.micros <= 0n) return;
+  const workspaceId = args.workspaceId === NIL_UUID ? null : args.workspaceId;
+  await withSystemDb((tx) =>
+    tx.execute(sql`
+      INSERT INTO ${schema.spendCounters} (org_id, workspace_id, day, spent_micros)
+      VALUES (${args.orgId}::uuid, ${workspaceId}::uuid, ${utcDay(args.at)}::date, ${args.micros.toString()}::bigint)
+      ON CONFLICT (org_id, coalesce(workspace_id, '${sql.raw(NIL_UUID)}'::uuid), day)
+      DO UPDATE SET
+        spent_micros = ${schema.spendCounters}.spent_micros + EXCLUDED.spent_micros,
+        updated_at = now()
+    `),
+  );
+}
+
+/**
+ * Period-to-date spend (micro-USD) for a scope window, from the counter. An
+ * org-level ceiling omits `workspaceId` and sums every row of the org; a
+ * workspace ceiling sums the rows that name it. The signature is the gate's
+ * `readSpend` dependency, so it replaces the ClickHouse sum in place.
+ */
+export async function sumSpendCounter(args: {
+  orgId: string;
+  workspaceId?: string | null;
+  periodStart: Date;
+  periodEnd: Date;
+}): Promise<bigint> {
+  const scoped = args.workspaceId != null && args.workspaceId.length > 0;
+  const rows = await withSystemDb((tx) =>
+    tx
+      .select({
+        micros: sql<string>`coalesce(sum(${schema.spendCounters.spentMicros}), 0)::text`,
+      })
+      .from(schema.spendCounters)
+      .where(
+        and(
+          eq(schema.spendCounters.orgId, args.orgId),
+          scoped
+            ? eq(schema.spendCounters.workspaceId, args.workspaceId as string)
+            : undefined,
+          gte(schema.spendCounters.day, utcDay(args.periodStart)),
+          lte(schema.spendCounters.day, utcDay(args.periodEnd)),
+        ),
+      ),
+  );
+  return BigInt(rows[0]?.micros ?? "0");
+}

@@ -22,10 +22,10 @@ export async function agentMcpDeleteHandler(
       .update(schema.mcpServers)
       .set({
         deletedAt: now,
-        deletedByUserId: ctx.userId,
+        deletedById: ctx.userId,
         enabled: false,
         updatedAt: now,
-        updatedByUserId: ctx.userId,
+        updatedById: ctx.userId,
       })
       .where(
         and(

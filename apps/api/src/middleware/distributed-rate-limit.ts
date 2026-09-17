@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { withSystemDb } from "@oxagen/database";
 import { requireEnv } from "@oxagen/config/env";
 import { logger } from "./logger";
+import { extractClientIp, trustedProxyCidrs } from "../lib/context";
 import type { AppEnv } from "../app";
 
 /**
@@ -68,9 +69,17 @@ export interface DistributedRateLimitOptions {
   /**
    * Optional unprefixed bucket suffix for pre-authentication or other custom
    * scopes. The limiter always prepends `keyPrefix`, preventing cross-surface
-   * collisions. Resolvers must return non-secret, bounded values.
+   * collisions. Resolvers must return non-secret, bounded values. A resolver
+   * that reads the request body returns a promise.
+   *
+   * Returning `null` means "this request cannot be attributed to a bucket",
+   * and the limiter SKIPS — it does not count, and it does not deny, not even
+   * when `failClosedOnStoreError` is set. A resolver must never substitute a
+   * shared constant for an identity it cannot establish: every caller in one
+   * bucket is not a ceiling, it is one abuser's power to lock everyone else
+   * out. See `trustedClientIpBucketKey`.
    */
-  bucketKey?: (c: Context<AppEnv>) => string;
+  bucketKey?: (c: Context<AppEnv>) => string | null | Promise<string | null>;
 }
 
 const DEFAULT_WINDOW_MS = 60_000;
@@ -101,17 +110,106 @@ export function deriveBucketKey(c: Context<AppEnv>, keyPrefix: string): string {
 }
 
 /**
- * Vercel replaces `x-vercel-forwarded-for` from its trusted network boundary,
- * unlike caller-controlled `x-forwarded-for`. Outside Vercel, collapse all
- * traffic into one conservative bucket rather than trusting a spoofable IP.
+ * One enrolled machine, one bucket.
+ *
+ * The post-auth ceilings on the Tacho and Stella machine routes are documented
+ * and sized per host, but they were using the default `deriveBucketKey`, which
+ * picks `workspaceId`. Every enrolled machine carries a distinct API key and
+ * shares its workspace, so a handful of daemons would exhaust one counter
+ * between them and all receive 429 — and the first minutes after this limiter
+ * starts counting for the first time are exactly when every host drains its
+ * backlog at once. Key on the enrolled credential instead.
+ *
+ * Falls back to the workspace when no API key is on the context, which on these
+ * routers means something other than an enrolled machine reached them; that is
+ * the behaviour these mounts had before, so the fallback is never worse.
+ *
+ * Exported for the same reason as `deriveBucketKey`: so the derivation can be
+ * unit-tested without a live DB.
  */
-export function trustedVercelIpBucketKey(c: Context<AppEnv>): string {
-  if (process.env.VERCEL !== "1") return "ip:unverified";
-  const trustedForwardedFor = c.req
-    .header("x-vercel-forwarded-for")
-    ?.split(",", 1)[0]
-    ?.trim();
-  return `ip:${trustedForwardedFor || "unverified"}`;
+export function enrolledMachineBucketKey(c: Context<AppEnv>): string {
+  const apiKeyId = c.get("apiKeyId");
+  if (apiKeyId) return `machine:${apiKeyId}`;
+  const workspaceId = c.get("workspaceId");
+  if (workspaceId) return `ws:${workspaceId}`;
+  const orgId = c.get("orgId");
+  return orgId ? `org:${orgId}` : `ip:${clientIp(c)}`;
+}
+
+/**
+ * The client address, as far as this deployment can actually vouch for it, or
+ * `null` when it cannot vouch for one at all.
+ *
+ * This used to return the constant `ip:unverified` for every caller whenever
+ * `VERCEL !== "1"` — which is always, since production runs on AWS behind an
+ * ALB and Caddy. A single bucket shared by every caller on the internet is not
+ * a rate limit; it is shared fate. It was harmless only because the counter
+ * store threw on every request, and this PR fixes that: on these fail-closed
+ * pre-auth mounts, one client sending `max + 1` requests in a window would take
+ * the entire Tacho and Stella ingress offline for everyone, before any
+ * credential was checked. That is a denial of service handed to anyone who can
+ * reach the host.
+ *
+ * So: derive a real client address. `extractClientIp` (lib/context.ts) already
+ * does the hardened version of this — it walks the forwarded-for chain from the
+ * RIGHT by TRUSTED_PROXY_HOP_COUNT, so entries a caller prepends itself can
+ * never move the entry it picks, and it is the same derivation the IAM
+ * `ip_ranges` / `ip_allow` conditions are judged on.
+ *
+ * Returning `null` is deliberate and load-bearing: it means this deployment has
+ * no trusted proxy chain to read, so there is no per-client bucket to enforce,
+ * and the limiter SKIPS rather than lumping everyone together (see the
+ * `bucketKey` contract). An unattributable ceiling is worse than no ceiling,
+ * because it converts one abuser into an outage for every other caller. The
+ * per-credential ceiling mounted beside this one is unaffected either way.
+ *
+ * The ceiling is therefore enforced ONLY where the deployment has named its
+ * proxies, by setting TRUSTED_PROXY_CIDRS. A hop count is not enough here: it
+ * trusts the COUNT to be right, and a count that is too high lets a caller pad
+ * x-forwarded-for until the arithmetic lands on a value the caller chose, which
+ * on this ceiling means a fresh bucket per request and no ceiling at all.
+ * Nothing in the request separates that from a correct deeper chain. Naming the
+ * proxies does separate it: the walk stops on what an entry IS, so padding only
+ * lengthens a prefix it never reaches. Undeclared proxies are an
+ * unattributable request, so it skips.
+ *
+ * Production needs a change OUTSIDE this file before any depth is correct.
+ * Caddy's `reverse_proxy` does not append to an inbound X-Forwarded-For unless
+ * the peer is a trusted proxy — it REPLACES it. Measured against `caddy:2`:
+ * a request arriving as `X-Forwarded-For: 203.0.113.99` reached the upstream as
+ * `172.17.0.1` with a plain `reverse_proxy`, and as `203.0.113.99, 172.17.0.1`
+ * once `trusted_proxies` was set. So until the Caddyfile change ships, the API
+ * sees only the load balancer and NO hop count recovers a client. The
+ * `trusted_proxies` block is in infra/tools/caddy/Caddyfile.alb; after it
+ * deploys the chain is two deep and the depth to declare is 2.
+ *
+ * That leaves an unconfigured deployment exactly where it is today — this
+ * counter has never once incremented — rather than switching on a ceiling
+ * nobody has told us how to attribute. Naming the proxies turns it on.
+ * Sequencing the Caddy deploy and that value is tracked on #3167; nothing here
+ * enforces until both are done.
+ */
+export function trustedClientIpBucketKey(c: Context<AppEnv>): string | null {
+  // Vercel replaces `x-vercel-forwarded-for` at its own trusted network
+  // boundary, so it needs no hop arithmetic. Kept for preview deployments.
+  if (process.env.VERCEL === "1") {
+    const trustedForwardedFor = c.req
+      .header("x-vercel-forwarded-for")
+      ?.split(",", 1)[0]
+      ?.trim();
+    return trustedForwardedFor ? `ip:${trustedForwardedFor}` : null;
+  }
+  // These mounts require the SAFE form of the declaration: the proxies named by
+  // identity, not counted. A hop count trusts itself to be right, and one that
+  // is too high lets a caller pad x-forwarded-for until the arithmetic lands on
+  // a value the caller chose — which on this ceiling means minting a fresh
+  // bucket per request and evading it entirely. Nothing in the request
+  // distinguishes an over-declared count from a correct deeper chain, so a
+  // count cannot defend itself here. Undeclared proxies are an unattributable
+  // request, and unattributable skips.
+  if (trustedProxyCidrs().length === 0) return null;
+  const clientAddress = extractClientIp(c);
+  return clientAddress ? `ip:${clientAddress}` : null;
 }
 
 /** Domain separator — see authorizationFingerprintBucketKey. */
@@ -144,6 +242,28 @@ export function authorizationFingerprintBucketKey(c: Context<AppEnv>): string {
 // Throttle fail-open warnings to at most one per window per route group, so a
 // store outage logs a signal without drowning the logs in one line per request.
 const lastWarnAtByPrefix = new Map<string, number>();
+
+/**
+ * Flatten an error and its `cause` chain into one string.
+ *
+ * This used to log `err.message` alone. Drizzle wraps every failure in a
+ * DrizzleQueryError whose message is only the SQL text and the bound params, so
+ * the actual reason — a driver TypeError, a Postgres SQLSTATE, a dead socket —
+ * lived in `cause` and never reached CloudWatch. Production spent that outage
+ * showing a query that looked perfectly valid and no reason for it to fail.
+ * Whatever breaks this store next, the log should name it.
+ */
+function describeError(err: unknown): string {
+  const seen = new Set<unknown>();
+  const parts: string[] = [];
+  let current: unknown = err;
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    parts.push(current instanceof Error ? current.message : String(current));
+    current = current instanceof Error ? current.cause : undefined;
+  }
+  return parts.join(" <- ");
+}
 function warnStoreError(
   keyPrefix: string,
   windowMs: number,
@@ -156,7 +276,7 @@ function warnStoreError(
   logger.warn(
     {
       keyPrefix,
-      err: err instanceof Error ? err.message : String(err),
+      err: describeError(err),
       failClosed,
     },
     failClosed
@@ -173,12 +293,38 @@ function warnStoreError(
  */
 function sweepStaleWindows(olderThan: Date): void {
   void withSystemDb(async (tx) => {
+    // `.toISOString()` + an explicit cast, never the Date itself — see the
+    // note on the increment upsert in `distributedRateLimiter` below. A raw
+    // Date bound through `sql` throws in the driver before Postgres is even
+    // reached, and this sweep swallows its errors, so the bug was silent here:
+    // every sampled sweep since this limiter shipped has thrown and deleted
+    // nothing.
     await tx.execute(sql`
-      DELETE FROM ratelimit.rate_limit_counters WHERE window_start < ${olderThan}
+      DELETE FROM ratelimit.rate_limit_counters
+      WHERE window_start < ${olderThan.toISOString()}::timestamptz
     `);
   }).catch(() => {
     /* best-effort — see doc comment */
   });
+}
+
+/**
+ * A ceiling that cannot name who it is limiting is not being enforced, and that
+ * is a deployment fact an operator should be able to see rather than infer from
+ * a counter that never moves. Throttled per prefix like the store-error warn.
+ */
+const lastUnattributableWarnAtByPrefix = new Map<string, number>();
+function warnUnattributable(keyPrefix: string, windowMs: number): void {
+  const now = Date.now();
+  if (now - (lastUnattributableWarnAtByPrefix.get(keyPrefix) ?? 0) < windowMs)
+    return;
+  lastUnattributableWarnAtByPrefix.set(keyPrefix, now);
+  logger.warn(
+    { keyPrefix },
+    "distributed rate limiter has no attributable bucket for this request — " +
+      "skipping (set TRUSTED_PROXY_CIDRS to the proxies in front of this " +
+      "deployment)",
+  );
 }
 
 export function distributedRateLimiter(
@@ -204,9 +350,17 @@ export function distributedRateLimiter(
   return async (c, next) => {
     if (methods !== "all" && !methods.includes(c.req.method)) return next();
 
-    const key = opts.bucketKey
-      ? `${opts.keyPrefix}:${opts.bucketKey(c)}`
-      : deriveBucketKey(c, opts.keyPrefix);
+    let key: string;
+    if (opts.bucketKey) {
+      const suffix = await opts.bucketKey(c);
+      if (suffix === null) {
+        warnUnattributable(opts.keyPrefix, windowMs);
+        return next();
+      }
+      key = `${opts.keyPrefix}:${suffix}`;
+    } else {
+      key = deriveBucketKey(c, opts.keyPrefix);
+    }
     const now = Date.now();
     const windowStartMs = Math.floor(now / windowMs) * windowMs;
     const resetAtMs = windowStartMs + windowMs;
@@ -230,9 +384,25 @@ export function distributedRateLimiter(
     let count: number;
     try {
       count = await withSystemDb(async (tx) => {
+        // The window is bound as ISO-8601 text with an explicit ::timestamptz
+        // cast, NOT as a Date. drizzle's `sql` template hands an interpolated
+        // value straight to the driver as a bind parameter, and postgres.js
+        // serializes parameters with `Buffer.byteLength(value)`, which throws
+        //   TypeError [ERR_INVALID_ARG_TYPE]: The "string" argument must be of
+        //   type string or an instance of Buffer or ArrayBuffer. Received an
+        //   instance of Date
+        // for anything that is not already a string. (Drizzle converts Dates
+        // for you when the statement is built from a typed table column; raw
+        // `sql` has no column type to convert against, so it does not.)
+        //
+        // That threw on EVERY request, so this limiter had never once written
+        // a counter: fail-open surfaces (chat, and the post-auth tacho/Stella
+        // ceilings) silently stopped limiting, and the fail-closed pre-auth
+        // ceilings on /v1/tacho/* and /v1/telemetry/stella/* answered 503
+        // `rate_limit_unavailable` to every enrolled host. Keep the cast.
         const rows = (await tx.execute(sql`
           INSERT INTO ratelimit.rate_limit_counters AS c (bucket_key, window_start, count)
-          VALUES (${key}, ${windowStart}, 1)
+          VALUES (${key}, ${windowStart.toISOString()}::timestamptz, 1)
           ON CONFLICT (bucket_key, window_start)
           DO UPDATE SET count = c.count + 1
           RETURNING c.count

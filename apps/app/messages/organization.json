@@ -1,0 +1,275 @@
+{
+  "organization": {
+    "tabs": {
+      "label": "Organization",
+      "people": "People",
+      "roles": "Roles",
+      "apiKeys": "API keys"
+    },
+    "roles": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "member": "Member",
+      "billing": "Billing",
+      "compliance": "Compliance",
+      "viewer": "Viewer"
+    },
+    "people": {
+      "title": "People",
+      "person": "Person",
+      "role": "Role",
+      "joined": "Joined",
+      "actions": "Actions",
+      "empty": "This organization has no members."
+    },
+    "actions": {
+      "readOnly": "An owner or an admin makes these changes.",
+      "denied": "Changing a role and removing a member are Owner and Admin actions.",
+      "fields": {
+        "name": "Name",
+        "description": "Description",
+        "scope": "Scope",
+        "slug": "Slug",
+        "slugHint": "Lowercase letters, digits, and hyphens. It is the second segment of every URL in this workspace.",
+        "permissions": "Permissions",
+        "roleNameHint": "Lowercase letters and digits, separated by a dot, a hyphen, or an underscore. It cannot change later."
+      },
+      "createRole": {
+        "open": "Create role",
+        "title": "Create a role",
+        "confirm": "Create",
+        "pending": "Creating"
+      },
+      "editRole": {
+        "open": "Edit",
+        "title": "Edit {name}",
+        "confirm": "Save",
+        "pending": "Saving"
+      },
+      "deleteRole": {
+        "open": "Delete",
+        "title": "Delete {name}",
+        "body": "The role and its grants go. The audit record keeps what it allowed.",
+        "confirm": "Delete",
+        "pending": "Deleting"
+      },
+      "createWorkspace": {
+        "open": "Create a workspace",
+        "title": "Create a workspace",
+        "confirm": "Create",
+        "pending": "Creating"
+      },
+      "editWorkspace": {
+        "open": "Edit",
+        "title": "Edit {name}",
+        "confirm": "Save",
+        "pending": "Saving"
+      },
+      "archiveWorkspace": {
+        "open": "Archive",
+        "title": "Archive {name}",
+        "body": "The workspace leaves the switcher. Its slug stays taken, and its runs and frames stay readable.",
+        "confirm": "Archive",
+        "pending": "Archiving"
+      },
+      "role": {
+        "open": "Change role",
+        "title": "Change the role of {name}",
+        "body": "This replaces the role they hold across the organization. The record keeps the change with your name on it.",
+        "label": "Role",
+        "confirm": "Change it",
+        "pending": "Changing"
+      },
+      "remove": {
+        "open": "Remove",
+        "title": "Remove {name} from the organization",
+        "body": "They lose {role} and every workspace grant, and Oxagen revokes the command-line keys they minted. Runs stay attributed to them. Only a new invitation brings them back.",
+        "confirm": "Remove",
+        "pending": "Removing"
+      },
+      "failure": {
+        "orgRoleRequired": "Denied. An owner or an admin makes this change.",
+        "noPrincipal": "The request carried no signed-in user. Sign in and try again.",
+        "delegationCeiling": "Denied. A role cannot grant more than you hold. Drop the permissions you do not hold, or ask an owner.",
+        "roleExists": "That name is taken in this organization. Pick another.",
+        "roleNotFound": "This organization has no role by that name. Nothing was changed.",
+        "roleInUse": "Principals still hold this role. Reassign them, then delete it.",
+        "systemRoleReadonly": "Built-in roles are read-only. Duplicate this one to change its permissions.",
+        "slugTaken": "That slug is taken in this organization. Pick another.",
+        "workspaceNotFound": "That workspace has left this organization. Reload the page.",
+        "alreadyArchived": "This workspace is already archived.",
+        "workspaceHasAgents": "Agents are still registered in this workspace. Deregister or move them, then archive it.",
+        "invalid": "The request was refused as invalid. Nothing was changed.",
+        "pendingApproval": "The change is waiting for approval, request {accessRequestId}.",
+        "unavailable": "The change could not be made: {code}. Nothing was changed.",
+        "refused": "The change was refused: {code}. Nothing was changed.",
+        "lastOwner": "This is the last owner of the organization. Make someone else an owner first.",
+        "targetNotMember": "This person is no longer a member of this organization.",
+        "roleNotGrantable": "That role is not one this organization grants. Nothing was changed.",
+        "insufficientRole": "Your organization role does not allow this change. Nothing was changed."
+      }
+    },
+    "invitations": {
+      "title": "Pending invitations",
+      "email": "Email",
+      "role": "Role offered",
+      "sent": "Sent",
+      "expires": "Expires",
+      "never": "Never",
+      "empty": "No invitations are waiting for an answer."
+    },
+    "apiKeys": {
+      "lead": "A key acts as the person who created it, in this workspace: on the API, MCP and the CLI it can do what that person can do here, and no more.",
+      "tableLabel": "API keys",
+      "columns": {
+        "name": "Name",
+        "prefix": "Prefix",
+        "created": "Created",
+        "lastUsed": "Last used",
+        "expires": "Expires",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "actions": {
+        "create": {
+          "open": "Create a key",
+          "title": "Create an API key",
+          "body": "The key acts as you. Oxagen shows the secret once and stores only its prefix and a hash, so a lost key is rotated, never recovered.",
+          "name": "Name",
+          "expires": "Expires at the end of this day, UTC (optional)",
+          "expiresUtc": "Leave this empty for a key that does not expire. The day is read in UTC, not your local time.",
+          "expiresAt": "The key stops working at {at}.",
+          "confirm": "Create it",
+          "pending": "Creating"
+        },
+        "rotate": {
+          "open": "Rotate",
+          "title": "Rotate {name}",
+          "body": "This issues a replacement with the same expiry and ends this key in the same transaction. Requests presenting the old key are refused from that moment, so put the new one in place first. An expired key cannot be rotated, because the replacement would carry the expiry that ended it.",
+          "confirm": "Rotate it",
+          "pending": "Rotating"
+        },
+        "revoke": {
+          "open": "Revoke",
+          "title": "Revoke {name}",
+          "body": "Every request presenting this key is refused from this moment. The row stays in the record with the time it ended. Only a new key restores access.",
+          "confirm": "Revoke",
+          "pending": "Revoking"
+        },
+        "secret": {
+          "title": "Copy the key now",
+          "body": "This is the only time Oxagen shows it. Close this and the secret is gone from here for good.",
+          "named": "{name} · begins {prefix}"
+        },
+        "failure": {
+          "denied": "Your organization role does not allow this. Nothing was changed.",
+          "keyNotFound": "This key is no longer here, or it was already revoked.",
+          "keyExpired": "This key expired while the page was open. Rotating it would copy the expiry that ended it onto the replacement, so nothing was changed. Create a new key instead.",
+          "nameRequired": "Give the key a name so the roster can tell it apart.",
+          "expiryNotADay": "That expiry is not a date. Pick a day, or leave it empty for a key that does not expire.",
+          "expiryInThePast": "That day is already over. Pick a later one, or leave it empty for a key that does not expire.",
+          "refused": "The change was refused: {code}. Nothing was changed.",
+          "invalid": "The request was refused as invalid. Nothing was changed.",
+          "pendingApproval": "The change is waiting for approval, request {accessRequestId}.",
+          "unavailable": "The change could not be made: {code}. Nothing was changed.",
+          "workspaceArchived": "That workspace was archived while this page was open. Its keys are listed so they can be revoked; no new key is issued into it."
+        }
+      },
+      "status": {
+        "live": "live",
+        "expired": "expired",
+        "revoked": "revoked"
+      },
+      "workspace": {
+        "label": "Workspace",
+        "archived": "{name} (archived)",
+        "archivedNote": "This workspace is archived. Its keys still authenticate, so they are listed here until they are revoked — but no new key is issued into it."
+      },
+      "noWorkspace": {
+        "title": "A key needs a workspace",
+        "body": "A key is issued into one workspace and acts only there. This organization has no workspace you are a member of, so there is nowhere to issue one yet."
+      },
+      "never": "Never",
+      "neverUsed": "Never used",
+      "empty": "This workspace has no API keys.",
+      "denied": {
+        "title": "You cannot see this organization’s API keys",
+        "body": "Signed in as {role}. Needed: {permission}. An owner can grant it, and the grant is recorded in the audit record."
+      },
+      "pending": {
+        "title": "Waiting for approval",
+        "body": "Access request {id} is waiting for an owner’s decision."
+      },
+      "error": {
+        "title": "API keys could not be loaded",
+        "body": "{status} {code}. Nothing was changed. Reload the page to try again."
+      }
+    },
+    "denied": {
+      "title": "You cannot see this organization’s people",
+      "body": "Signed in as {role}. Needed: {permission}. An owner can grant it, and the grant is recorded in the audit record."
+    },
+    "pending": {
+      "title": "Waiting for approval",
+      "body": "Access request {id} is waiting for an owner’s decision."
+    },
+    "error": {
+      "title": "Organization could not be loaded",
+      "body": "{status} {code}. Nothing was changed. Reload the page to try again."
+    },
+    "roleCatalog": {
+      "title": "Roles",
+      "lead": "What each role allows, and who holds it.",
+      "enforcement": {
+        "enforced": "Oxagen checks these grants on governed calls.",
+        "recorded": "recorded for people, enforced for agents. On the {tier} tier Oxagen allows a person every governed action whatever a role says. An agent is checked on every tier: its own grants and the grants of the person it acts for both bound what it may do."
+      },
+      "tableLabel": "Roles",
+      "columns": {
+        "role": "Role",
+        "kind": "Held by",
+        "scope": "Scope",
+        "permissions": "Permissions",
+        "heldBy": "Principals",
+        "origin": "Origin",
+        "actions": "Actions"
+      },
+      "kind": {
+        "human": "People",
+        "agent": "Agents"
+      },
+      "scope": {
+        "org": "Organization",
+        "workspace": "Workspace"
+      },
+      "origin": {
+        "builtIn": "Built in",
+        "createdBy": "Created by {name}",
+        "custom": "Custom"
+      },
+      "noPermissions": "No permissions",
+      "empty": "This organization has no roles.",
+      "catalog": {
+        "title": "Permission catalogue",
+        "lead": "A permission is a named bundle of capabilities. A role allows a permission when it allows every capability in it.",
+        "covers": "{count} capabilities"
+      }
+    },
+    "workspaces": {
+      "title": "Workspaces",
+      "tableLabel": "Workspaces",
+      "columns": {
+        "workspace": "Workspace",
+        "role": "Your role",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "status": {
+        "live": "live",
+        "archived": "archived"
+      },
+      "noRole": "No membership",
+      "empty": "This organization has no workspaces."
+    }
+  }
+}

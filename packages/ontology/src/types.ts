@@ -73,6 +73,10 @@ export const EdgeTypes = {
   APPROVED_BY: "APPROVED_BY",
   ORIGINATED_FROM: "ORIGINATED_FROM",
   CALLED_TOOL: "CALLED_TOOL",
+  // Two-axis memory lifecycle. schema.cypher documented both edge types from
+  // the start; the registry only caught up on 2026-09-15.
+  PROMOTED: "PROMOTED", // Promotion → AgentMemory (auditable class promotion)
+  DEMOTED: "DEMOTED", // Demotion → AgentMemory (auditable class demotion)
   // Ingestion pipeline — provenance + deduplication edges.
   ALIAS_OF: "ALIAS_OF", // alias node → principal (dedup; carries confidence score)
   SOURCED_FROM: "SOURCED_FROM", // ingested EntityNode → SourceConnection

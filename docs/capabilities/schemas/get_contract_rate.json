@@ -1,0 +1,102 @@
+{
+  "name": "get_contract_rate",
+  "domain": "billing",
+  "description": "The organisation's contracted governed-action terms: per-GAU rate in micro-dollars, block size, currency, included GAUs per month, effective dates, and whether they are the published tier's figures or a negotiated agreement's",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "billing"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "source": {
+        "type": "string",
+        "enum": [
+          "published_tier",
+          "negotiated"
+        ]
+      },
+      "agreementRef": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "tier": {
+        "type": "string",
+        "enum": [
+          "free",
+          "build",
+          "scale",
+          "enterprise"
+        ]
+      },
+      "currency": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 3
+      },
+      "ratePerGauMicros": {
+        "type": "string"
+      },
+      "blockSizeGau": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "includedGauPerMonth": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "effectiveFrom": {
+        "type": "string"
+      },
+      "effectiveTo": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "source",
+      "agreementRef",
+      "tier",
+      "currency",
+      "ratePerGauMicros",
+      "blockSizeGau",
+      "includedGauPerMonth",
+      "effectiveFrom",
+      "effectiveTo"
+    ],
+    "additionalProperties": false
+  }
+}

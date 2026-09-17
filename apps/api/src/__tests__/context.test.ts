@@ -59,6 +59,7 @@ vi.mock("@oxagen/handlers", () => ({
 
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import {
   capabilityContext,
   __resetTrustedProxyHopsForTests,
@@ -132,7 +133,15 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
     __resetTrustedProxyHopsForTests();
   }
 
+  function setTrustedProxyCidrs(cidrs: string): void {
+    process.env.TRUSTED_PROXY_CIDRS = cidrs;
+    __resetTrustedProxyHopsForTests();
+  }
+
   beforeEach(() => {
+    // Empty is the default, and a case that names proxies must not change how
+    // the next one attributes an address.
+    setTrustedProxyCidrs("");
     setTrustedProxyHops("1");
   });
 
@@ -197,13 +206,26 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
     ).toBeNull();
   });
 
-  it("falls back to the leftmost entry when the chain is shorter than the count", async () => {
-    // A proxy did not append what this deployment says it does; the oldest
-    // entry is the best candidate left, and better than nothing.
+  it("refuses a chain shorter than the declared hop count", async () => {
+    // This used to clamp to the leftmost entry as "better than nothing". It is
+    // worse than nothing: the leftmost entry is whatever the caller sent, so a
+    // deployment whose hop count is too high would hand a caller-supplied
+    // address to the IAM allowlist and to the pre-auth rate-limit ceilings. A
+    // correctly declared depth never produces a short chain.
     setTrustedProxyHops("3");
     expect(
       await clientIpFor({ "x-forwarded-for": "203.0.113.7, 192.0.2.44" }),
-    ).toBe("203.0.113.7");
+    ).toBeNull();
+  });
+
+  it("refuses a short chain rather than falling through to x-real-ip", async () => {
+    setTrustedProxyHops("3");
+    expect(
+      await clientIpFor({
+        "x-forwarded-for": "203.0.113.7",
+        "x-real-ip": "198.51.100.5",
+      }),
+    ).toBeNull();
   });
 
   it("drops empty segments rather than falling through on a leading comma", async () => {
@@ -225,6 +247,76 @@ describe("extractClientIp (via capabilityContext.clientIp)", () => {
 
   it("returns null when x-real-ip is empty and x-forwarded-for is absent", async () => {
     expect(await clientIpFor({ "x-real-ip": "" })).toBeNull();
+  });
+
+  // ── attribution by proxy identity ─────────────────────────────────────────
+  // A hop count trusts the COUNT. One that is too high lets a caller pad
+  // x-forwarded-for until the arithmetic lands on a value the caller chose, and
+  // nothing in the request separates that from a correct deeper chain. Naming
+  // the proxies removes the arithmetic: the walk stops on what an entry IS.
+
+  it("stops at the first entry that is not a trusted proxy", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(
+      await clientIpFor({ "x-forwarded-for": "203.0.113.7, 10.0.0.5" }),
+    ).toBe("203.0.113.7");
+  });
+
+  it("is unmoved by a caller padding the header", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
+    // The caller prepends an allowlisted-looking address and an extra hop.
+    // Under a hop count that is the bypass; here the walk never reaches it.
+    expect(
+      await clientIpFor({
+        "x-forwarded-for": "198.51.100.1, 10.1.1.1, 203.0.113.7, 10.0.0.5",
+      }),
+    ).toBe("203.0.113.7");
+  });
+
+  it("refuses a chain that never reaches a trusted proxy", async () => {
+    // No named proxy stands to the right of the rightmost entry, so nothing
+    // vouched for it — that is what a request which never passed through the
+    // expected proxy looks like, whether from a typo in the CIDR list, a
+    // network change, or a path that bypasses it. The entry is then whatever
+    // the caller sent.
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(await clientIpFor({ "x-forwarded-for": "203.0.113.7" })).toBeNull();
+    expect(
+      await clientIpFor({ "x-forwarded-for": "10.0.0.5, 203.0.113.7" }),
+    ).toBeNull();
+  });
+
+  it("refuses when every entry is a trusted proxy", async () => {
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(
+      await clientIpFor({ "x-forwarded-for": "10.0.0.4, 10.0.0.5" }),
+    ).toBeNull();
+  });
+
+  it("takes precedence over the hop count when both are set", async () => {
+    // The count alone would pick the rightmost entry, i.e. the proxy itself.
+    setTrustedProxyHops("1");
+    setTrustedProxyCidrs("10.0.0.0/8");
+    expect(
+      await clientIpFor({ "x-forwarded-for": "203.0.113.7, 10.0.0.5" }),
+    ).toBe("203.0.113.7");
+  });
+
+  it("refuses x-real-ip when no proxy is trusted", async () => {
+    // TRUSTED_PROXY_HOP_COUNT = 0 says nothing in front of this process
+    // rewrites forwarding headers, so x-real-ip is as caller-supplied as
+    // x-forwarded-for and worth exactly as little. Believing it let a caller
+    // hand this function any address it liked: enough to satisfy an
+    // `ip_ranges` / `ip_allow` condition it should fail, and enough to mint a
+    // fresh rate-limit bucket per request by rotating the header.
+    setTrustedProxyHops("0");
+    expect(await clientIpFor({ "x-real-ip": "1.2.3.4" })).toBeNull();
+    expect(
+      await clientIpFor({
+        "x-real-ip": "1.2.3.4",
+        "x-forwarded-for": "203.0.113.9",
+      }),
+    ).toBeNull();
   });
 });
 
@@ -268,7 +360,9 @@ describe("capabilityContext requireOrg", () => {
     // The shape a bootstrap route needs: the caller has an org and is asking
     // for their first workspace. Before this existed the only way to get past
     // the workspace check was requireOrg:false, which dropped the org check
-    // too.
+    // too. The workspace id such a call carries is the org-only sentinel, not
+    // the empty string: the kernel enters a tenant scope that asserts a uuid,
+    // so an empty id was refused before the handler ran (#3029, ADR-068).
     const res = await withContext(
       {},
       (c) => capabilityContext(c, { requireWorkspace: false }),
@@ -277,7 +371,7 @@ describe("capabilityContext requireOrg", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { orgId: string; workspaceId: string };
     expect(body.orgId).toBe("o1");
-    expect(body.workspaceId).toBe("");
+    expect(body.workspaceId).toBe(ORG_ONLY_WORKSPACE_ID);
   });
 
   it("still refuses a missing org when only the workspace check is waived", async () => {
@@ -368,5 +462,41 @@ describe("capabilityContext requireOrg", () => {
     });
     const body = (await res.json()) as { userId: string };
     expect(body.userId).toBe("user-123");
+  });
+});
+
+// ── INV-31: no surface builds a platform-operator binding ─────────────────────
+//
+// `set_org_billing_terms` is reachable only from a `CapabilityContext` carrying
+// a binding minted by `createPlatformOperatorContext` (packages/oxagen). The
+// kernel refuses any other value on that field, and the second half of the
+// invariant is that no surface's context builder puts one there at all — not
+// even `undefined`, which a later spread could overwrite unnoticed
+// (apps/app/ARCHITECTURE.md §4, INV-31).
+
+describe("capabilityContext and the platform-operator binding", () => {
+  it("builds no platformOperator key at all", async () => {
+    const res = await withContext(
+      {},
+      (c) => ({ hasKey: "platformOperator" in capabilityContext(c) }),
+      { orgId: "o1", workspaceId: "w1", userId: "u1", apiKeyId: null },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { hasKey: boolean };
+    expect(body.hasKey).toBe(false);
+  });
+
+  it("builds no platformOperator key on the bootstrap shape either", async () => {
+    const res = await withContext(
+      {},
+      (c) => ({
+        hasKey:
+          "platformOperator" in capabilityContext(c, { requireOrg: false }),
+      }),
+      { orgId: null, workspaceId: null, userId: null, apiKeyId: null },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { hasKey: boolean };
+    expect(body.hasKey).toBe(false);
   });
 });

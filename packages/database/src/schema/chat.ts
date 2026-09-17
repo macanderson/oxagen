@@ -31,7 +31,7 @@ export const conversations = chatSchema.table(
     // drift mid-conversation. NULL = non-code conversation. Shape:
     // StoredCodeBinding (apps/app chat stream code-binding.ts).
     codeBinding: jsonb("code_binding"),
-    // softDeleteMixin (deleted_at / deleted_by_user_id): the engineering law
+    // softDeleteMixin (deleted_at / deleted_by_id): the engineering law
     // forbids hard-deletes on org-scoped tables, so the user-facing "delete"
     // sets deleted_at — the row is retained for SOC2/audit but vanishes from
     // every list and is not restorable through the UI. conversation.delete and

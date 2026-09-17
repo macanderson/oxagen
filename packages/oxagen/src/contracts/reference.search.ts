@@ -68,7 +68,7 @@ export const referenceSearch = registerCapability({
     "@-mention tokens; pass `slug` for exact-id resolution of an existing mention.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"] as const,
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },
   sensitivity: "low",

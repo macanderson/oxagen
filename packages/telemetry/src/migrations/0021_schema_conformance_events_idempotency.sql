@@ -68,6 +68,18 @@
 --   "Same-process concurrency guard" comment); #2687 tracks a real
 --   cross-process guard if that ever changes.
 
+-- AND IT CANNOT BE DELETED EITHER (#2972)
+--   The ledger stops this DROP replaying on a database that has already run
+--   this file. It does nothing for a FRESH database, which still runs every
+--   file in order — and there this DROP is the only thing doing the work.
+--   0014_schema_conformance_events.sql has already created
+--   schema_conformance_events as plain MergeTree with the old ORDER BY, so
+--   without the DROP the `CREATE TABLE IF NOT EXISTS` below is a NO-OP and the
+--   new deployment keeps the un-deduplicated table this migration exists to
+--   replace — silently, with nothing failing. ClickHouse has no
+--   `ALTER ... MODIFY ENGINE` for the MergeTree family, so there is no
+--   in-place substitute for the drop-and-recreate.
+
 DROP TABLE IF EXISTS schema_conformance_events;
 
 CREATE TABLE IF NOT EXISTS schema_conformance_events

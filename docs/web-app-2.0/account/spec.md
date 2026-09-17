@@ -31,7 +31,7 @@ Security tab doubles as the redirect target when an org enforces MFA and the use
 
 ## Capabilities invoked
 - `user.preferences.read` (`get_user_preferences`) — seeds the Preferences form; also read directly (non-`invoke()`) on Profile as a documented IAM-bootstrap workaround, since `apps/app` does not bootstrap IAM.
-- `user.preferences.write` (`update_user_preferences`) — saves Preferences tab changes.
+- `user.preferences.set` (`set_preferences`) — saves Preferences tab changes. It is the one writer of the preference row (ADR-075); `update_user_preferences` was folded into it, so nothing invokes that name any more.
 - `privacy.data.export` (`export_data`, scope=user) — Privacy tab export request.
 - `privacy.data.erase` (`erase_data`, scope=user) — Privacy tab erasure request.
 - Better Auth `twoFactor` plugin (enroll/verify/disable/backup-codes) and Better Auth session-revoke — no Oxagen contract; native to Better Auth.

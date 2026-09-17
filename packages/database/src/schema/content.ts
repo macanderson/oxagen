@@ -42,7 +42,7 @@ export const generatedAssets = contentSchema.table(
     ...orgScopeMixin(),
     ...softDeleteMixin(),
     // The user who generated the asset (ownership; drives the `user` access
-    // policy). Distinct from auditMixin.createdByUserId (nullable audit field).
+    // policy). Distinct from auditMixin.createdById (nullable audit field).
     userId: uuid("user_id").notNull(),
     kind: text("kind").notNull(),
     // Provenance discriminator. 'user_upload' = a chat/agent attachment the

@@ -50,7 +50,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         orgId: "m.orgId",
         workspaceId: "m.workspaceId",
         deletedAt: "m.deletedAt",
-        deletedByUserId: "m.deletedByUserId",
+        deletedById: "m.deletedById",
         enabled: "m.enabled",
         healthStatus: "m.healthStatus",
         lastHealthcheckAt: "m.lastHealthcheckAt",
@@ -59,7 +59,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         authStrategy: "m.authStrategy",
         authConfig: "m.authConfig",
         updatedAt: "m.updatedAt",
-        updatedByUserId: "m.updatedByUserId",
+        updatedById: "m.updatedById",
       },
     },
   };

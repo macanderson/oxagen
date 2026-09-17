@@ -8,7 +8,7 @@ export const integrationConfigure = registerCapability({
     "Update plugin instance configuration: credentials, filters, and sync cadence.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "plugin" },
   sensitivity: "medium",
