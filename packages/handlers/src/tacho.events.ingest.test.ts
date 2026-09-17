@@ -300,6 +300,13 @@ interface FakeDb {
    * host's chains its gateway has served, one row each (#3221). Empty by
    * default, which is the honest state: no chain has been served.
    */
+  /**
+   * Hide the session from the read that precedes the INSERT, while leaving it
+   * in `sessions` for the conflict to hit. That IS the race: `existing` is read
+   * before the insert, so a row another request creates in between is invisible
+   * to the `common` this batch computed.
+   */
+  hideSessionFromRead: boolean;
   gatewayChains: Array<{
     chainSessionUuid: string;
     lastSeenAt: Date;
@@ -361,6 +368,7 @@ function fakeDb(): FakeDb {
       },
     ],
     updates: [],
+    hideSessionFromRead: false,
     gatewayChains: [],
     retentionPolicy: undefined,
   };
@@ -470,7 +478,7 @@ function wire(db: FakeDb): void {
           },
           tachoSessions: {
             findFirst: async (args: { where?: unknown }) =>
-              sessionNamed(db, args.where),
+              db.hideSessionFromRead ? undefined : sessionNamed(db, args.where),
           },
           authorizationDenyGenerations: {
             findMany: async () => [
@@ -509,7 +517,18 @@ function wire(db: FakeDb): void {
           values: (values: Record<string, unknown>) => {
             const name = tableName(table);
             const chain = {
-              onConflictDoUpdate: async () => {
+              onConflictDoUpdate: async (args?: { setWhere?: unknown }) => {
+                // `setWhere` is modelled, because the statement uses it to
+                // refuse to re-seal a row another request already sealed. A
+                // fixture that ignored it would report the guard working when
+                // it was not there at all.
+                if (
+                  args?.setWhere !== undefined &&
+                  name === "sessions" &&
+                  db.sessions.get(values["sessionUuid"] as string)?.["sealedAt"]
+                ) {
+                  return;
+                }
                 if (name === "sessions")
                   db.sessions.set(values["sessionUuid"] as string, {
                     id: "s1",
@@ -1578,6 +1597,43 @@ describe("ingest_tacho_events: bodies and the seal", () => {
       replayGrade: "fork",
       completenessGaps: [],
     });
+  });
+
+  it("does not re-seal a row another request sealed first", async () => {
+    // Two first-ingest requests for the same session can both read
+    // `existing === undefined` and derive different tiers. The loser's
+    // `onConflictDoUpdate` applies a `common` computed as though no row
+    // existed: it leaves the winner's `enforcementTier` alone, because the tier
+    // is only set on the promotion path, but it would write ITS OWN
+    // `replayGrade`. The row is then a sealed session whose signed grade was
+    // computed from a tier it does not carry — and a sealed session is never
+    // regraded.
+    //
+    // Modelled as the race's second half: the row is already there and sealed,
+    // exactly as the winner left it, and this batch is the loser arriving.
+    const db = fakeDb();
+    const events = sessionWithContent("gateway");
+    servedChain(db, events);
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "gateway",
+      replayGrade: "fork",
+      sealedAt: new Date("2026-09-08T09:40:00.000Z"),
+    });
+    // …and invisible to the read that precedes the INSERT, which is what makes
+    // this the conflict path rather than the ordinary existing-session one.
+    db.hideSessionFromRead = true;
+    wire(db);
+
+    // No body, so this batch's own seal would grade `inspect` — a value that
+    // must not land on the winner's row.
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+
+    const row = db.sessions.get(SESSION);
+    expect(row?.["enforcementTier"]).toBe("gateway");
+    expect(row?.["replayGrade"]).toBe("fork");
   });
 
   it("grades a genesis-and-seal batch with the tier it actually writes", async () => {

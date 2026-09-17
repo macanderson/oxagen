@@ -1110,6 +1110,27 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           .onConflictDoUpdate({
             target: schema.tachoSessions.sessionUuid,
             set: common,
+            // Only while the row is not already sealed.
+            //
+            // `common` here was computed as though no row existed — `existing`
+            // was read before the INSERT, so it says nothing about the row this
+            // statement is now conflicting with. That is harmless for the
+            // counters and the head, and it is not harmless for the seal: two
+            // first-ingest requests for the same session can both read
+            // `existing === undefined`, derive different tiers, and the loser
+            // then writes ITS `replayGrade` over the winner's row while leaving
+            // the winner's `enforcementTier` alone, because the tier is only
+            // set on the promotion path. The result is a sealed session whose
+            // signed grade was computed from a tier it does not carry, and a
+            // sealed session is never regraded.
+            //
+            // The guard is the invariant this file already states everywhere
+            // else — a sealed session is final — made true under concurrency
+            // rather than only under the read that preceded the insert. The
+            // losing batch's counters go with it, which is the right trade:
+            // they are a duplicate of a sealed session's, and a wrong signed
+            // grade is not recoverable while a missing increment is.
+            setWhere: isNull(schema.tachoSessions.sealedAt),
           });
         // Counters on a fresh row start from the insert's zero defaults; apply the delta.
         await tx
