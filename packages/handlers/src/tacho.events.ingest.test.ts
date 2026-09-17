@@ -8,7 +8,7 @@ import {
   sessionUuid,
 } from "@oxagen/tacho";
 import { schema } from "@oxagen/database";
-import { Param, SQL } from "drizzle-orm";
+import { Column, Param, SQL } from "drizzle-orm";
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -307,6 +307,20 @@ interface FakeDb {
    * to the `common` this batch computed.
    */
   hideSessionFromRead: boolean;
+  /**
+   * Hide the session from the NEXT read only. The conflict path with the row
+   * still visible afterwards: `existing` is undefined, the INSERT conflicts,
+   * and the re-read that follows sees the row the winner left — which is how
+   * the handler gets a `publicId` for a session it did not open.
+   */
+  hideSessionFromNextRead: boolean;
+  /**
+   * A concurrent batch for the same session commits between this request's read
+   * and its write, advancing the row's `seq_count` to this value. One-shot:
+   * applied on the next session read and then cleared, which is the interleaving
+   * — the read returns values, and the row moves on under them.
+   */
+  advanceSeqCountOnRead: number | undefined;
   gatewayChains: Array<{
     chainSessionUuid: string;
     lastSeenAt: Date;
@@ -369,6 +383,8 @@ function fakeDb(): FakeDb {
     ],
     updates: [],
     hideSessionFromRead: false,
+    hideSessionFromNextRead: false,
+    advanceSeqCountOnRead: undefined,
     gatewayChains: [],
     retentionPolicy: undefined,
   };
@@ -441,6 +457,35 @@ function boundValues(node: unknown): unknown[] {
 }
 
 /** The session row a `tacho.sessions` lookup names: the row keyed by a session uuid it binds. */
+/**
+ * The `(column, value)` pairs an equality predicate binds, in order.
+ *
+ * `eq(col, value)` compiles to the chunks `[Column, " = ", Param]`, and `and()`
+ * nests those, so pairing a column with the next parameter recovers exactly the
+ * equalities the statement will evaluate. The fixture re-evaluates them against
+ * the row as it stands, which is what Postgres does — a fake that applied the
+ * SET regardless would report an optimistic guard working when it was absent.
+ */
+function boundColumns(node: unknown): Array<[string, unknown]> {
+  if (!(node instanceof SQL)) return [];
+  const pairs: Array<[string, unknown]> = [];
+  let pending: string | null = null;
+  for (const chunk of node.queryChunks) {
+    if (chunk instanceof Column) {
+      pending = chunk.name.replace(/_([a-z])/g, (_, c: string) =>
+        c.toUpperCase(),
+      );
+    } else if (chunk instanceof Param) {
+      if (pending !== null) pairs.push([pending, chunk.value]);
+      pending = null;
+    } else if (chunk instanceof SQL) {
+      pairs.push(...boundColumns(chunk));
+      pending = null;
+    }
+  }
+  return pairs;
+}
+
 function sessionNamed(db: FakeDb, where: unknown) {
   for (const value of boundValues(where)) {
     const row = db.sessions.get(value as string);
@@ -477,8 +522,25 @@ function wire(db: FakeDb): void {
             },
           },
           tachoSessions: {
-            findFirst: async (args: { where?: unknown }) =>
-              db.hideSessionFromRead ? undefined : sessionNamed(db, args.where),
+            findFirst: async (args: { where?: unknown }) => {
+              if (db.hideSessionFromRead) return undefined;
+              if (db.hideSessionFromNextRead) {
+                db.hideSessionFromNextRead = false;
+                return undefined;
+              }
+              const row = sessionNamed(db, args.where);
+              if (!row) return undefined;
+              // A read returns VALUES, not a live handle on the row — which is
+              // the whole reason `existing` can be stale. Snapshotting here is
+              // what lets the fixture model a concurrent commit landing
+              // between the read and the write.
+              const snapshot = { ...row };
+              if (db.advanceSeqCountOnRead !== undefined) {
+                row["seqCount"] = db.advanceSeqCountOnRead;
+                db.advanceSeqCountOnRead = undefined;
+              }
+              return snapshot;
+            },
           },
           authorizationDenyGenerations: {
             findMany: async () => [
@@ -597,8 +659,8 @@ function wire(db: FakeDb): void {
           },
         }),
         update: (table: unknown) => ({
-          set: (values: Record<string, unknown>) => ({
-            where: async () => {
+          set: (values: Record<string, unknown>) => {
+            const run = async (condition?: unknown) => {
               const name = tableName(table);
               db.updates.push({ table: name, values });
               if (name === "control_commands" && values["outcome"] === "sent") {
@@ -607,11 +669,30 @@ function wire(db: FakeDb): void {
               }
               if (name === "sessions") {
                 const current = db.sessions.get(SESSION);
-                if (current) Object.assign(current, values);
+                if (!current) return [];
+                // The WHERE is re-evaluated against the row as it is NOW. The
+                // existing-session update carries an optimistic guard on
+                // `seq_count`, and a fixture that ignored it would pass
+                // whether or not the guard were there.
+                for (const [column, value] of boundColumns(condition)) {
+                  if (current[column] === undefined) continue;
+                  if (current[column] !== value) return [];
+                }
+                Object.assign(current, values);
+                return [{ id: current["id"] ?? "s1" }];
               }
               return [];
-            },
-          }),
+            };
+            return {
+              // Chainable AND awaitable: the statement runs once, and
+              // `.returning()` hands back the same answer rather than
+              // re-executing it.
+              where: (condition?: unknown) => {
+                const result = run(condition);
+                return Object.assign(result, { returning: () => result });
+              },
+            };
+          },
         }),
       }),
   );
@@ -1839,6 +1920,133 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     // The winner's row is left unsealed and ungraded rather than graded wrong.
     expect(row?.["replayGrade"]).toBeUndefined();
     expect(row?.["sealedAt"] ?? null).toBeNull();
+  });
+
+  it("does not open the onboarding gate on a conflict it did not insert", async () => {
+    // `firstOpenedRunId` was gated on `accepted && !existing`, and `!existing`
+    // is the read that preceded the INSERT. A conflict that took the UPDATE
+    // path is accepted and still did not open the session, so the organisation
+    // had its first frame from the request that inserted the row, not from
+    // this one. `xmax = 0` is the statement's own answer to that question;
+    // `!existing` is a guess made before it ran.
+    const db = fakeDb();
+    const events = session();
+    db.sessions.set(SESSION, {
+      id: "s1",
+      publicId: "tse_s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      sealedAt: null,
+      // The SAME chain: the winner is this request's twin, so the guard lets
+      // the conflict through and only `inserted` separates them.
+      genesisHash: (events[0] as TachoEvent).hash,
+      parentSessionUuid: null,
+    });
+    // Hidden from the read that precedes the INSERT and visible to the one
+    // after it, which is exactly what the loser of the race sees.
+    db.hideSessionFromNextRead = true;
+    wire(db);
+
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+
+    expect(mocks.unlockOnboardingGate).not.toHaveBeenCalled();
+    // …and the host's session count follows the same answer.
+    expect(
+      db.updates.find(
+        (u) => u.table === "hosts" && "sessionsCount" in u.values,
+      ),
+    ).toBeUndefined();
+  });
+
+  it("does not write its chain head onto a row recording a different genesis", async () => {
+    // The identity guard was conditioned on the promotion, so it answered the
+    // question only for the rare batch that derives `gateway`. An ordinary
+    // observe-mode batch conflicting onto a row wearing its session uuid still
+    // wrote its head, its chain verdict and its counters there.
+    //
+    // `genesis_hash` is INSERT-only, so the row keeps the other chain's genesis
+    // and gains this chain's `last_hash` — the two endpoints of two different
+    // chains on one row, recorded `chain_verified = true` with no chain break.
+    // Every later batch of the real chain then misses `prev_hash` against the
+    // foreign head, and `chain_verified` is sticky false from there on and is
+    // signed into the seal.
+    //
+    // Discriminating against "does not promote a row whose genesis is not the
+    // one it matched": same shape, but this batch derives no gateway tier at
+    // all, which is the case the narrow guard let through.
+    const db = fakeDb();
+    const events = session();
+    const foreignHead = `sha256:${"e".repeat(64)}`;
+    db.sessions.set(SESSION, {
+      id: "s1",
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      enforcementTier: "observe",
+      sealedAt: null,
+      genesisHash: `sha256:${"d".repeat(64)}`,
+      lastHash: foreignHead,
+      chainVerified: true,
+      numTurns: 0,
+    });
+    // Invisible to the read that precedes the INSERT, which is what makes this
+    // the conflict path rather than the ordinary existing-session one.
+    db.hideSessionFromRead = true;
+    wire(db);
+
+    const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
+
+    const row = db.sessions.get(SESSION);
+    expect(row?.["lastHash"]).toBe(foreignHead);
+    expect(row?.["genesisHash"]).toBe(`sha256:${"d".repeat(64)}`);
+    // And the batch is not acknowledged, so the daemon keeps it.
+    expect(output.accepted).toBe(0);
+    expect(output.event_ids).toEqual([]);
+    expect(mocks.insertTachoEvents).toHaveBeenCalledWith([]);
+  });
+
+  it("refuses a batch whose session advanced under the read its frames were folded against", async () => {
+    // The existing-session path claimed `accepted` was "always true — it
+    // targets a row it read". It targets a row it read A MOMENT AGO, under no
+    // lock. `fresh` is every event at or past `existing.seqCount`, so when a
+    // concurrent batch for the same session commits in between, both
+    // transactions fold the SAME frames and every counter is applied twice —
+    // and a row the first one sealed is written again by the second, whose
+    // `terminalPatch` was computed against an unsealed read.
+    //
+    // Not adversarial: the daemon re-sends a batch whose response it did not
+    // see, so a retry overlapping an in-flight original is the ordinary way
+    // two requests carry identical frames.
+    const db = fakeDb();
+    const events = session();
+    db.sessions.set(SESSION, {
+      id: "s1",
+      publicId: "tse_s1",
+      sessionUuid: SESSION,
+      seqCount: 3,
+      lastHash: events[2]?.hash,
+      chainVerified: true,
+      hostId: HOST_ID,
+    });
+    // The concurrent winner commits between this request's read and its write.
+    db.advanceSeqCountOnRead = events.length;
+    wire(db);
+
+    const output = await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: events.slice(3),
+      },
+      CONTEXT,
+    );
+
+    // The winner's head stands, unwritten by the loser.
+    expect(db.sessions.get(SESSION)?.["seqCount"]).toBe(events.length);
+    // And the loser's frames are not acknowledged, so they are re-sent rather
+    // than counted twice or lost.
+    expect(output.accepted).toBe(0);
+    expect(output.event_ids).toEqual([]);
+    expect(mocks.insertTachoEvents).toHaveBeenCalledWith([]);
   });
 
   it("does not re-seal a row another request sealed first", async () => {

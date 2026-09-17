@@ -537,6 +537,12 @@ function genesisRow(
   // One derivation, one caller. There is nothing left to disagree.
   tier: string,
   gatewayObservedAt: Date | null,
+  // The chain's own genesis, recorded on the row so a later batch can be
+  // matched against it — and so the conflict guard (`landsOnThisChain`) checks
+  // the same value this INSERT writes. Passed in for the same reason `tier` is:
+  // the caller derives it to build that guard, and a second derivation here is
+  // two values that have to agree.
+  genesisHash: string | null,
 ) {
   const first = events[0] as TachoEvent;
   const genesis = events.find((event) => event.kind === "agent_start") ?? first;
@@ -545,11 +551,6 @@ function genesisRow(
   const anthropic = genesis.anthropic ?? {};
   const subagent = genesis.subagent;
   const ingestedAt = new Date(first.ts);
-  // The chain's own genesis, recorded on the row so a later batch can be
-  // matched against it. `seq === 0` or nothing: a batch that does not open the
-  // chain is not carrying its first event, and a hash taken from anywhere else
-  // would be matching the wrong thing.
-  const genesisHash = first.seq === 0 ? first.hash : null;
   return {
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
@@ -1171,15 +1172,78 @@ export const tachoEventsIngestHandler: CapabilityHandler<
             }
           : withoutTerminal(common, terminalColumns);
 
-      // Whether this batch's writes landed. Always true on the existing-session
-      // path, which targets a row it read; decided by the statement on the
-      // insert path, where the guard may refuse it.
-      let accepted = true;
+      // The row this INSERT's conflict path may land on must be the chain this
+      // batch IS, whatever tier it derived.
+      //
+      // `genesis_hash` is INSERT-only — the conflict path never rewrites it —
+      // so a row that got there first wearing this session uuid keeps its own
+      // genesis while this batch writes its head, its chain verdict, its
+      // counters and its rollups onto it. The result is one row whose
+      // `genesis_hash` and `last_hash` are the endpoints of two different
+      // chains, recorded `chain_verified = true` with no chain break, so
+      // nothing announces it; and because `chain_verified` is sticky false once
+      // the real chain's next `prev_hash` misses, the real chain is graded
+      // broken for the rest of its life and that verdict is signed into the
+      // seal.
+      //
+      // This predicate used to be conditioned on the promotion
+      // (discussion_r4042105761), which asked the identity question only for
+      // the rare batch that derives `gateway`. Identity is not a property of
+      // the tier: a batch whose genesis differs from the stored row is a
+      // different chain claiming the same name whatever tier it is on, and
+      // nothing it carries belongs on that row. Widening it costs the
+      // promotion branch nothing — `promotedOnGenesis` is `sessionGenesisHash`
+      // or null, so the promotion case is the same predicate it already was.
+      //
+      // Null is a batch that cannot answer: one that does not open at seq 0 and
+      // so has no genesis of its own. It falls back to the seal guard alone,
+      // exactly as before.
+      const landsOnThisChain =
+        sessionGenesisHash !== null
+          ? and(
+              isNull(schema.tachoSessions.sealedAt),
+              eq(schema.tachoSessions.genesisHash, sessionGenesisHash),
+            )
+          : isNull(schema.tachoSessions.sealedAt);
+
+      // Whether this batch's writes landed, and whether they opened the
+      // session. Decided by the statement on BOTH paths: on neither is the row
+      // this transaction writes necessarily the row it read.
+      let accepted: boolean;
+      let inserted = false;
       if (existing) {
-        await tx
+        // The row must still be where the read left it.
+        //
+        // `fresh` — and everything folded from it: the delta, the content and
+        // body counts, the seal and the grade computed from them — is derived
+        // from `existing.seqCount`, a head read under no lock. A concurrent
+        // batch for the same session advances that head between the read and
+        // this statement, and then both transactions fold the SAME frames:
+        // every counter on the row is applied twice, and a row the first one
+        // sealed is written again by the second, whose `terminalPatch` was
+        // computed against an unsealed read.
+        //
+        // That is not an adversarial case. The daemon's spool re-sends a batch
+        // whose response it did not see, so a retry overlapping an in-flight
+        // original is the ordinary way it happens, and the two carry identical
+        // frames.
+        //
+        // `seq_count` is written only here and only ever forward, so matching
+        // it IS the question "is this still the row `fresh` was computed
+        // against". A refusal costs one round trip: the batch is not
+        // acknowledged, the daemon keeps it, and the next read sees the real
+        // head.
+        const written = await tx
           .update(schema.tachoSessions)
           .set(common)
-          .where(eq(schema.tachoSessions.id, existing.id));
+          .where(
+            and(
+              eq(schema.tachoSessions.id, existing.id),
+              eq(schema.tachoSessions.seqCount, existing.seqCount),
+            ),
+          )
+          .returning({ id: schema.tachoSessions.id });
+        accepted = written.length > 0;
       } else {
         if (initiatingPrincipalId === undefined)
           initiatingPrincipalId = await enrollingPrincipalId(tx, ctx, host);
@@ -1192,6 +1256,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           sessionGatewayColumn,
           derivedTier,
           derivedTier === TACHO_GATEWAY_TIER ? (chainRecord?.at ?? null) : null,
+          sessionGenesisHash,
         );
         const written = await tx
           .insert(schema.tachoSessions)
@@ -1226,31 +1291,11 @@ export const tachoEventsIngestHandler: CapabilityHandler<
             // losing batch's counters go with it, which is the right trade:
             // they are a duplicate of a sealed session's, and a wrong signed
             // grade is not recoverable while a missing increment is.
-            setWhere:
-              promotedOnGenesis !== null
-                ? and(
-                    isNull(schema.tachoSessions.sealedAt),
-                    // The row this lands on must be the chain the promotion was
-                    // derived from.
-                    //
-                    // `conflictSet` writes `gateway` onto whatever row is there,
-                    // and `genesis_hash` is INSERT-only — the conflict path never
-                    // rewrites it. So two first-ingest requests carrying
-                    // different genesis events for one session uuid let a forged
-                    // row land first and then take the legitimate batch's
-                    // promotion: the session keeps the forged genesis and
-                    // everything derived from it, and carries `gateway` for good.
-                    // Matching the hash is the difference between promoting THIS
-                    // chain and promoting whatever got there first wearing its
-                    // uuid.
-                    //
-                    // A mismatch drops the whole update rather than part of it. A
-                    // batch whose genesis differs from the stored row is a
-                    // different chain claiming the same name, and nothing it
-                    // carries belongs on that row.
-                    eq(schema.tachoSessions.genesisHash, promotedOnGenesis),
-                  )
-                : isNull(schema.tachoSessions.sealedAt),
+            //
+            // And the row must be the chain this batch is: `landsOnThisChain`
+            // carries the seal guard together with the genesis match, so a
+            // mismatch drops the whole update rather than part of it.
+            setWhere: landsOnThisChain,
           })
           // Whether the statement did anything. `ON CONFLICT DO UPDATE` with a
           // `setWhere` that does not hold returns no rows, and that is the only
@@ -1275,7 +1320,8 @@ export const tachoEventsIngestHandler: CapabilityHandler<
             inserted: sql<boolean>`xmax = 0`,
           });
         accepted = written.length > 0;
-        if (written[0]?.inserted === true) newSessions += 1;
+        inserted = written[0]?.inserted === true;
+        if (inserted) newSessions += 1;
         // Counters on a fresh row start from the insert's zero defaults; apply
         // the delta — but only if the row is this batch's to touch.
         //
@@ -1289,20 +1335,25 @@ export const tachoEventsIngestHandler: CapabilityHandler<
             .update(schema.tachoSessions)
             .set(increments)
             .where(eq(schema.tachoSessions.sessionUuid, sessionUuid));
-        } else {
-          refusedSessions.add(sessionUuid);
         }
       }
+      // Refused on either path: the row this batch hit is sealed, is a
+      // different chain wearing the same uuid, or moved under the read its
+      // frames were folded against. Its events are not that session's evidence
+      // and are not acknowledged.
+      if (!accepted) refusedSessions.add(sessionUuid);
 
       const sessionRow = await tx.query.tachoSessions.findFirst({
         where: eq(schema.tachoSessions.sessionUuid, sessionUuid),
         columns: { id: true, publicId: true, parentSessionUuid: true },
       });
       const sessionId = sessionRow?.id;
+      // `inserted`, not `accepted && !existing`: a conflict that took the update
+      // path is accepted and still did not open the session, and `!existing` is
+      // the read that preceded the statement.
       if (
         sessionRow?.publicId &&
-        accepted &&
-        !existing &&
+        inserted &&
         firstOpenedRunId === null &&
         first.parent_session_uuid == null
       ) {
