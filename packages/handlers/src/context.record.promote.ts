@@ -117,7 +117,7 @@ export const contextRecordPromoteHandler: CapabilityHandler<
       policyVersion: input.policy_version,
       prevChainDigest,
       chainDigest,
-      createdByUserId: ctx.userId ?? undefined,
+      createdById: ctx.userId ?? undefined,
     });
     await tx
       .update(schema.contextRecords)
@@ -130,7 +130,7 @@ export const contextRecordPromoteHandler: CapabilityHandler<
               activatedAt: sql`now()`,
             }
           : {}),
-        updatedByUserId: ctx.userId ?? undefined,
+        updatedById: ctx.userId ?? undefined,
         updatedAt: sql`now()`,
       })
       .where(eq(schema.contextRecords.id, record.id));

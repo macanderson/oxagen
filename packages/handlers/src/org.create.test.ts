@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
@@ -9,23 +10,29 @@ const mocks = vi.hoisted(() => ({
   // withSystemDbFn tracks each withSystemDb call so tests can assert the org
   // creation wraps its writes in the system-bypass transaction.
   withSystemDbFn: vi.fn(),
-  grantFreeCredits: vi.fn(),
   bootstrapOrgIAM: vi.fn(),
+  bootstrapWorkspace: vi.fn(),
+  grantSignupCredits: vi.fn(),
+  openOnboardingGate: vi.fn(),
 }));
 
-// Default: no existing slug
-mocks.orgFindFirst.mockResolvedValue(null);
-// Default: tx inserts succeed
-mocks.txInsertOrgReturning.mockResolvedValue([
-  {
-    publicId: "org_pub_1",
-    name: "Acme Corp",
-    slug: "acme",
-    type: "business",
-    createdAt: new Date("2026-05-01T00:00:00Z"),
-    id: "internal_org_id",
-  },
-]);
+const ORG_ROW = {
+  publicId: "org_pub_1",
+  name: "Acme Corp",
+  slug: "acme",
+  type: "business",
+  createdAt: new Date("2026-05-01T00:00:00Z"),
+  id: "internal_org_id",
+};
+
+const WORKSPACE_ROW = {
+  id: "internal_ws_id",
+  publicId: "ws_pub_1",
+  name: "Core",
+  slug: "core",
+  createdAt: new Date("2026-05-01T00:00:00Z"),
+};
+
 // Stub the INSERT chain: insert().values().returning()
 const orgValuesStub = { returning: mocks.txInsertOrgReturning };
 mocks.txInsertOrg.mockReturnValue({ values: () => orgValuesStub });
@@ -34,63 +41,62 @@ mocks.txInsertOrgUsers.mockReturnValue({
   values: vi.fn(async () => undefined),
 });
 
-// withSystemDb passthrough: runs the callback with a fake tx.
-// The handler calls withSystemDb twice:
-//   1. slug check → tx.query.organizations.findFirst
-//   2. main body  → tx.insert (org + orgUsers) + bootstrapOrgIAM (stubbed)
-// A per-call insert counter keeps the org/orgUsers routing correct.
-mocks.withSystemDbFn.mockImplementation(
-  async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
-    let insertCount = 0;
-    const tx = {
-      query: {
-        organizations: { findFirst: mocks.orgFindFirst },
-      },
-      // Namespace derivation reads existing org namespaces before the insert;
-      // an empty set means the slug-derived namespace is used verbatim.
-      select: () => ({ from: async () => [] }),
-      insert: (table: unknown): unknown => {
-        insertCount++;
-        if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
-        return mocks.txInsertOrgUsers(table) as unknown;
-      },
-    };
-    return fn(tx as unknown as Parameters<typeof fn>[0]);
-  },
-);
+/** A fake system transaction: the slug pre-check reads, the main body writes. */
+function makeTx(): Record<string, unknown> {
+  let insertCount = 0;
+  return {
+    query: {
+      organizations: { findFirst: mocks.orgFindFirst },
+    },
+    // Namespace derivation reads existing org namespaces before the insert;
+    // an empty set means the slug-derived namespace is used verbatim.
+    select: () => ({ from: async () => [] }),
+    insert: (table: unknown): unknown => {
+      insertCount++;
+      if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
+      return mocks.txInsertOrgUsers(table) as unknown;
+    },
+  };
+}
+
+function passthrough(): void {
+  mocks.withSystemDbFn.mockImplementation(
+    async (fn: (tx: Record<string, unknown>) => Promise<unknown>) =>
+      fn(makeTx()),
+  );
+}
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-    // db() is no longer called by organization.create — kept for safety in case
-    // any transitive dep still references it in tests.
-    db: () => ({
-      query: { organizations: { findFirst: mocks.orgFindFirst } },
-    }),
     withSystemDb: async (
       fn: (tx: Record<string, unknown>) => Promise<unknown>,
     ): Promise<unknown> => mocks.withSystemDbFn(fn) as Promise<unknown>,
   };
 });
 
-// Stub the billing package so grantFreeCredits doesn't open a second
-// db().transaction() inside the handler test. Billing idempotency is
-// covered by @oxagen/billing's own test suite.
-mocks.grantFreeCredits.mockResolvedValue(undefined);
-vi.mock("@oxagen/billing", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@oxagen/billing")>();
-  return {
-    ...real,
-    grantFreeCredits: mocks.grantFreeCredits,
-  };
-});
+// The signup grant is written on the org transaction (grants.test.ts covers
+// the ledger, lot and balance rows it writes). The mock exposes only
+// grantSignupCredits, so any other billing call fails the test.
+mocks.grantSignupCredits.mockResolvedValue(true);
+vi.mock("@oxagen/billing", () => ({
+  grantSignupCredits: mocks.grantSignupCredits,
+}));
 
-// Stub bootstrapOrgIAM — IAM provisioning is tested separately in
-// iam-provision.test.ts. Here we only verify it's called correctly.
+// IAM provisioning is tested in iam-provision.test.ts and the workspace
+// bootstrap in workspace-bootstrap.test.ts; here we verify both are called on
+// the org transaction with the right arguments.
 mocks.bootstrapOrgIAM.mockResolvedValue(undefined);
 vi.mock("./iam-provision", () => ({
   bootstrapOrgIAM: mocks.bootstrapOrgIAM,
+}));
+mocks.bootstrapWorkspace.mockResolvedValue(WORKSPACE_ROW);
+vi.mock("./workspace-bootstrap", () => ({
+  bootstrapWorkspace: mocks.bootstrapWorkspace,
+}));
+vi.mock("./lib/onboarding", () => ({
+  openOnboardingGate: mocks.openOnboardingGate,
 }));
 
 import { organizationCreateHandler } from "./org.create";
@@ -100,118 +106,92 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
+const INPUT = organizationCreate.input.parse({
+  name: "Acme Corp",
+  slug: "acme",
+  workspace: { name: "Core", slug: "core" },
+});
+
 describe("organizationCreateHandler (@oxagen/handlers)", () => {
   beforeEach(() => {
     mocks.orgFindFirst.mockClear();
     mocks.txInsertOrg.mockClear();
     mocks.txInsertOrgReturning.mockClear();
     mocks.txInsertOrgUsers.mockClear();
-    mocks.grantFreeCredits.mockClear();
     mocks.bootstrapOrgIAM.mockClear();
+    mocks.bootstrapWorkspace.mockClear();
+    mocks.grantSignupCredits.mockReset();
     // Restore defaults
     mocks.orgFindFirst.mockResolvedValue(null);
-    mocks.txInsertOrgReturning.mockResolvedValue([
-      {
-        publicId: "org_pub_1",
-        name: "Acme Corp",
-        slug: "acme",
-        type: "business",
-        createdAt: new Date("2026-05-01T00:00:00Z"),
-        id: "internal_org_id",
-      },
-    ]);
-    mocks.grantFreeCredits.mockResolvedValue(undefined);
+    mocks.txInsertOrgReturning.mockResolvedValue([ORG_ROW]);
     mocks.bootstrapOrgIAM.mockResolvedValue(undefined);
-    // Reset call count + restore default implementation (clears any one-time
-    // overrides set by individual test cases).
+    mocks.bootstrapWorkspace.mockResolvedValue(WORKSPACE_ROW);
+    mocks.grantSignupCredits.mockResolvedValue(true);
     mocks.withSystemDbFn.mockReset();
-    mocks.withSystemDbFn.mockImplementation(
-      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
-        let insertCount = 0;
-        const tx = {
-          query: {
-            organizations: { findFirst: mocks.orgFindFirst },
-          },
-          // See note above: namespace derivation reads existing namespaces first.
-          select: () => ({ from: async () => [] }),
-          insert: (table: unknown): unknown => {
-            insertCount++;
-            if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
-            return mocks.txInsertOrgUsers(table) as unknown;
-          },
-        };
-        return fn(tx as unknown as Parameters<typeof fn>[0]);
-      },
-    );
+    passthrough();
   });
 
   // ── auth guard ───────────────────────────────────────────────────────────
 
   it("throws when userId is null (unauthenticated request)", async () => {
     const anonCtx: CapabilityContext = { ...CTX, userId: null };
-    await expect(
-      organizationCreateHandler(
-        {
-          name: "Test",
-          slug: "test",
-          planSlug: "free",
-          type: "business" as const,
-        },
-        anonCtx,
-      ),
-    ).rejects.toThrow("organization.create requires an authenticated user");
+    await expect(organizationCreateHandler(INPUT, anonCtx)).rejects.toThrow(
+      "organization.create requires an authenticated user",
+    );
+    expect(mocks.withSystemDbFn).not.toHaveBeenCalled();
   });
 
   // ── slug conflict guard ──────────────────────────────────────────────────
 
-  it("throws a friendly error when the slug already exists (pre-check path)", async () => {
+  it("refuses a taken slug as a conflict (pre-check path)", async () => {
     mocks.orgFindFirst.mockResolvedValueOnce({ id: "existing_id" });
 
-    await expect(
-      organizationCreateHandler(
-        {
-          name: "Clone",
-          slug: "acme",
-          planSlug: "free",
-          type: "business" as const,
-        },
-        CTX,
-      ),
-    ).rejects.toThrow('slug "acme" already in use');
+    await expect(organizationCreateHandler(INPUT, CTX)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "slug_taken",
+      message: 'slug "acme" already in use',
+    });
+    expect(mocks.txInsertOrg).not.toHaveBeenCalled();
   });
 
-  it("throws a friendly error on unique_violation (race condition path)", async () => {
+  it("refuses a slug taken by a concurrent create as a conflict (race condition path)", async () => {
     // Pre-check passes (no row), but the second withSystemDb call (main body)
     // races and hits the unique index.
-    mocks.orgFindFirst.mockResolvedValueOnce(null);
-    // Override: first call (slug check) resolves null; second call (main body) throws.
     let callIdx = 0;
     mocks.withSystemDbFn.mockImplementation(
       async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
         callIdx++;
-        if (callIdx === 1) {
-          // slug check — simulate no match
-          return fn({
-            query: { organizations: { findFirst: async () => null } },
-          } as unknown as Parameters<typeof fn>[0]);
-        }
-        // main body — simulate unique_violation
-        const err = Object.assign(new Error("dup"), { code: "23505" });
-        throw err;
+        if (callIdx === 1) return fn(makeTx());
+        throw Object.assign(new Error("dup"), {
+          code: "23505",
+          constraint_name: "organizations_slug_idx",
+        });
       },
     );
 
-    await expect(
-      organizationCreateHandler(
-        {
-          name: "Race",
-          slug: "race-slug",
-          planSlug: "free",
-          type: "business" as const,
-        },
-        CTX,
-      ),
-    ).rejects.toThrow('slug "race-slug" already in use');
+    await expect(organizationCreateHandler(INPUT, CTX)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "slug_taken",
+    });
+  });
+
+  it("re-throws a unique violation on another index unchanged", async () => {
+    let callIdx = 0;
+    const namespaceRace = Object.assign(new Error("dup"), {
+      code: "23505",
+      constraint_name: "organizations_namespace_idx",
+    });
+    mocks.withSystemDbFn.mockImplementation(
+      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
+        callIdx++;
+        if (callIdx === 1) return fn(makeTx());
+        throw namespaceRace;
+      },
+    );
+
+    await expect(organizationCreateHandler(INPUT, CTX)).rejects.toBe(
+      namespaceRace,
+    );
   });
 
   it("re-throws non-slug database errors unchanged", async () => {
@@ -219,84 +199,63 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     mocks.withSystemDbFn.mockImplementation(
       async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
         callIdx++;
-        if (callIdx === 1) {
-          return fn({
-            query: { organizations: { findFirst: async () => null } },
-          } as unknown as Parameters<typeof fn>[0]);
-        }
+        if (callIdx === 1) return fn(makeTx());
         throw new Error("connection refused");
       },
     );
 
-    await expect(
-      organizationCreateHandler(
-        {
-          name: "Bad",
-          slug: "bad-slug",
-          planSlug: "free",
-          type: "business" as const,
-        },
-        CTX,
-      ),
-    ).rejects.toThrow("connection refused");
+    await expect(organizationCreateHandler(INPUT, CTX)).rejects.toThrow(
+      "connection refused",
+    );
+  });
+
+  it("throws when the organization insert returns no row", async () => {
+    mocks.txInsertOrgReturning.mockResolvedValueOnce([]);
+
+    await expect(organizationCreateHandler(INPUT, CTX)).rejects.toThrow(
+      "organization insert returned no row",
+    );
+    expect(mocks.bootstrapOrgIAM).not.toHaveBeenCalled();
+    expect(mocks.bootstrapWorkspace).not.toHaveBeenCalled();
   });
 
   // ── happy path ───────────────────────────────────────────────────────────
 
-  it("returns the new org's publicId, name, slug, type, and ISO createdAt", async () => {
-    const result = await organizationCreateHandler(
-      {
-        name: "Acme Corp",
-        slug: "acme",
-        planSlug: "free",
-        type: "business" as const,
-      },
-      CTX,
-    );
+  it("returns the new org and its first workspace", async () => {
+    const result = await organizationCreateHandler(INPUT, CTX);
 
-    expect(result.publicId).toBe("org_pub_1");
-    expect(result.name).toBe("Acme Corp");
-    expect(result.slug).toBe("acme");
-    expect(result.type).toBe("business");
-    expect(result.createdAt).toBe("2026-05-01T00:00:00.000Z");
+    expect(result).toEqual({
+      publicId: "org_pub_1",
+      name: "Acme Corp",
+      slug: "acme",
+      type: "business",
+      createdAt: "2026-05-01T00:00:00.000Z",
+      workspace: { publicId: "ws_pub_1", slug: "core" },
+    });
   });
 
-  it("runs the org insert inside a withSystemDb bypass and then calls grantFreeCredits", async () => {
-    await organizationCreateHandler(
-      {
-        name: "Tx Test",
-        slug: "tx-test",
-        planSlug: "free",
-        type: "business" as const,
-      },
-      CTX,
-    );
-    // The org creation (orgs + orgUsers) must happen inside withSystemDb so the
-    // bootstrap writes succeed without an active tenant scope (RLS bypass) and
-    // membership is never visible without the org row.
-    // withSystemDb is called twice: (1) the slug pre-check, (2) the main
-    // body (org + orgUsers + IAM). The old MCP registry sync call (previously
-    // the 3rd call) was removed in the workspace-scoping rebuild (2026-06-17)
-    // — registries are now per-(org, workspace), seeded at workspace creation.
+  it("writes the org, the owner membership, IAM and the first workspace on one system transaction", async () => {
+    await organizationCreateHandler(INPUT, CTX);
+
+    // withSystemDb is called twice: (1) the slug pre-check, (2) the bootstrap.
     expect(mocks.withSystemDbFn).toHaveBeenCalledTimes(2);
-    // grantFreeCredits must be called after the org tx commits (billing runs
-    // in its own isolated transaction so a billing failure cannot roll back
-    // the org creation).
-    expect(mocks.grantFreeCredits).toHaveBeenCalledTimes(1);
-    expect(mocks.grantFreeCredits).toHaveBeenCalledWith("internal_org_id");
-  });
+    expect(mocks.txInsertOrg).toHaveBeenCalledTimes(1);
+    expect(mocks.txInsertOrgUsers).toHaveBeenCalledTimes(1);
 
-  it("calls bootstrapOrgIAM inside the transaction so IAM is atomic with org creation", async () => {
-    await organizationCreateHandler(
-      {
-        name: "IAM Test",
-        slug: "iam-test",
-        planSlug: "free",
-        type: "business" as const,
-      },
-      CTX,
-    );
-    expect(mocks.bootstrapOrgIAM).toHaveBeenCalledTimes(1);
+    const iamTx = mocks.bootstrapOrgIAM.mock.calls[0]?.[0]?.tx;
+    const wsTx = mocks.bootstrapWorkspace.mock.calls[0]?.[0]?.tx;
+    expect(iamTx).toBeDefined();
+    expect(wsTx).toBe(iamTx);
+    // The onboarding gate opens on the same transaction, on the first
+    // workspace, timed from the organization's own creation (#2967).
+    expect(mocks.openOnboardingGate).toHaveBeenCalledTimes(1);
+    expect(mocks.openOnboardingGate.mock.calls[0]?.[0]).toBe(iamTx);
+    expect(mocks.openOnboardingGate.mock.calls[0]?.[1]).toEqual({
+      orgId: "internal_org_id",
+      workspaceId: "internal_ws_id",
+      now: ORG_ROW.createdAt,
+    });
+
     expect(mocks.bootstrapOrgIAM).toHaveBeenCalledWith(
       expect.objectContaining({
         orgId: "internal_org_id",
@@ -304,73 +263,61 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
         actorUserId: "u_1",
       }),
     );
+    expect(mocks.bootstrapWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: "internal_org_id",
+        userId: "u_1",
+        name: "Core",
+        slug: "core",
+      }),
+    );
   });
 
-  // ── grantFreeCredits error handling with idempotent retry ───────────────
+  it("writes the $5 signup grant for the new org on the org transaction", async () => {
+    await organizationCreateHandler(INPUT, CTX);
 
-  it("retries grantFreeCredits once on first failure — org creation still succeeds", async () => {
-    // First call fails, retry succeeds.
-    mocks.grantFreeCredits
-      .mockRejectedValueOnce(new Error("billing service unavailable"))
-      .mockResolvedValueOnce(undefined);
-
-    const result = await organizationCreateHandler(
-      {
-        name: "Credits Retry",
-        slug: "credits-retry",
-        planSlug: "free",
-        type: "business" as const,
-      },
-      CTX,
+    const iamTx = mocks.bootstrapOrgIAM.mock.calls[0]?.[0]?.tx;
+    expect(mocks.grantSignupCredits).toHaveBeenCalledTimes(1);
+    expect(mocks.grantSignupCredits).toHaveBeenCalledWith(
+      iamTx,
+      "internal_org_id",
     );
-
-    // Org was created successfully.
-    expect(result.publicId).toBe("org_pub_1");
-    // grantFreeCredits must have been called twice: first attempt + one retry.
-    expect(mocks.grantFreeCredits).toHaveBeenCalledTimes(2);
-    expect(mocks.grantFreeCredits).toHaveBeenCalledWith("internal_org_id");
   });
 
-  it("does not throw when both grantFreeCredits attempts fail — org creation still succeeds", async () => {
-    // Both attempts fail (transient infra failure). Org creation must not surface
-    // the billing error since the org row is committed and the grant can be
-    // re-applied manually using the orgId logged at error level.
-    mocks.grantFreeCredits
-      .mockRejectedValueOnce(new Error("billing DB down"))
-      .mockRejectedValueOnce(new Error("billing DB down"));
+  it("surfaces a signup grant failure so the org transaction cannot commit without it", async () => {
+    mocks.grantSignupCredits.mockRejectedValueOnce(new Error("ledger down"));
 
-    const result = await organizationCreateHandler(
-      {
-        name: "Credits Both Fail",
-        slug: "credits-both-fail",
-        planSlug: "free",
-        type: "business" as const,
-      },
-      CTX,
+    await expect(organizationCreateHandler(INPUT, CTX)).rejects.toThrow(
+      "ledger down",
     );
-
-    // Org was created successfully despite both grantFreeCredits failures.
-    expect(result.publicId).toBe("org_pub_1");
-    expect(result.slug).toBe("acme");
-    // Both attempts must be made.
-    expect(mocks.grantFreeCredits).toHaveBeenCalledTimes(2);
   });
 
-  it("succeeds without retrying when first grantFreeCredits call succeeds", async () => {
-    // Happy path: grantFreeCredits succeeds on first try — no retry needed.
-    mocks.grantFreeCredits.mockResolvedValueOnce(undefined);
+  it("creates the Default workspace when the input names none", async () => {
+    const input = organizationCreate.input.parse({
+      name: "Acme Corp",
+      slug: "acme",
+    });
+    mocks.bootstrapWorkspace.mockResolvedValueOnce({
+      ...WORKSPACE_ROW,
+      name: "Default",
+      slug: "default",
+    });
 
-    await organizationCreateHandler(
-      {
-        name: "Credits OK",
-        slug: "credits-ok",
-        planSlug: "free",
-        type: "business" as const,
-      },
-      CTX,
+    const result = await organizationCreateHandler(input, CTX);
+
+    expect(mocks.bootstrapWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Default", slug: "default" }),
+    );
+    expect(result.workspace.slug).toBe("default");
+  });
+
+  it("surfaces a workspace bootstrap failure so the org transaction cannot commit without it", async () => {
+    mocks.bootstrapWorkspace.mockRejectedValueOnce(
+      new Error("workspace insert returned no row"),
     );
 
-    // Must only be called once when the first attempt succeeds.
-    expect(mocks.grantFreeCredits).toHaveBeenCalledTimes(1);
+    await expect(organizationCreateHandler(INPUT, CTX)).rejects.toThrow(
+      "workspace insert returned no row",
+    );
   });
 });

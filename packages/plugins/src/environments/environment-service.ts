@@ -106,8 +106,8 @@ export async function createEnvironment(
         description: input.description ?? null,
         isDefault: false,
         isActive: true,
-        createdByUserId: actor.userId ?? null,
-        updatedByUserId: actor.userId ?? null,
+        createdById: actor.userId ?? null,
+        updatedById: actor.userId ?? null,
       })
       .returning(envColumns());
     if (!row) throw new Error("[environments] insert returned no row");
@@ -176,7 +176,7 @@ export async function updateEnvironment(
           : {}),
         ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
         updatedAt: new Date(),
-        updatedByUserId: actor.userId ?? null,
+        updatedById: actor.userId ?? null,
       })
       .where(eq(schema.environments.id, existing.id))
       .returning(envColumns());
@@ -198,7 +198,7 @@ export async function deleteEnvironment(
     }
     await tx
       .update(schema.environments)
-      .set({ deletedAt: new Date(), deletedByUserId: actor.userId ?? null })
+      .set({ deletedAt: new Date(), deletedById: actor.userId ?? null })
       .where(eq(schema.environments.id, existing.id));
   });
   return { ok: true };
@@ -221,7 +221,7 @@ export async function setDefaultEnvironment(
       .set({
         isDefault: false,
         updatedAt: new Date(),
-        updatedByUserId: actor.userId ?? null,
+        updatedById: actor.userId ?? null,
       })
       .where(
         and(
@@ -236,7 +236,7 @@ export async function setDefaultEnvironment(
         isDefault: true,
         isActive: true,
         updatedAt: new Date(),
-        updatedByUserId: actor.userId ?? null,
+        updatedById: actor.userId ?? null,
       })
       .where(eq(schema.environments.id, target.id))
       .returning(envColumns());

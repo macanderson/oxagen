@@ -14,7 +14,7 @@ export const conversationArchive = registerCapability({
     "Archive or unarchive conversations (reversible — sets or clears archived_at, no data loss)",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: {
     requiresApproval: false,

@@ -63,7 +63,7 @@ describe("workspaceListHandler", () => {
     mocks.withSystemDb.mockResolvedValueOnce(LIST_RESULT);
 
     const result = await workspaceListHandler(
-      { orgSlug: "acme" },
+      { orgSlug: "acme", includeArchived: false },
       makeCTX({
         userId: "usr_session",
         apiKeyId: null,
@@ -82,13 +82,13 @@ describe("workspaceListHandler", () => {
   it("resolves the effective user from the API key and returns their workspaces", async () => {
     // Call 1: API-key lookup returns the key's creator.
     mocks.withSystemDb.mockResolvedValueOnce({
-      createdByUserId: "usr_key_creator",
+      createdById: "usr_key_creator",
     });
     // Call 2: org+membership+listing transaction.
     mocks.withSystemDb.mockResolvedValueOnce(LIST_RESULT);
 
     const result = await workspaceListHandler(
-      { orgSlug: "acme" },
+      { orgSlug: "acme", includeArchived: false },
       makeCTX({
         userId: null,
         apiKeyId: "aky_test",
@@ -101,12 +101,12 @@ describe("workspaceListHandler", () => {
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);
   });
 
-  it("throws when the API key row has no createdByUserId (fail-closed)", async () => {
-    mocks.withSystemDb.mockResolvedValueOnce({ createdByUserId: null });
+  it("throws when the API key row has no createdById (fail-closed)", async () => {
+    mocks.withSystemDb.mockResolvedValueOnce({ createdById: null });
 
     await expect(
       workspaceListHandler(
-        { orgSlug: "acme" },
+        { orgSlug: "acme", includeArchived: false },
         makeCTX({ userId: null, apiKeyId: "aky_no_creator" }),
       ),
     ).rejects.toThrow("workspace.list requires an authenticated user");
@@ -120,7 +120,7 @@ describe("workspaceListHandler", () => {
 
     await expect(
       workspaceListHandler(
-        { orgSlug: "acme" },
+        { orgSlug: "acme", includeArchived: false },
         makeCTX({ userId: null, apiKeyId: "aky_deleted" }),
       ),
     ).rejects.toThrow("workspace.list requires an authenticated user");
@@ -133,12 +133,88 @@ describe("workspaceListHandler", () => {
   it("throws immediately when neither userId nor apiKeyId is set (unauthenticated)", async () => {
     await expect(
       workspaceListHandler(
-        { orgSlug: "acme" },
+        { orgSlug: "acme", includeArchived: false },
         makeCTX({ userId: null, apiKeyId: null }),
       ),
     ).rejects.toThrow("workspace.list requires an authenticated user");
 
     // No DB calls for unauthenticated requests.
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
+  });
+
+  // ── membership gate ──────────────────────────────────────────────────────────
+
+  describe("membership gate", () => {
+    const org = {
+      id: "org_1",
+      publicId: "pub_1",
+      slug: "acme",
+      namespace: "acme",
+      name: "Acme Corp",
+    };
+
+    function runInTx(found: {
+      org: typeof org | undefined;
+      membership: { role: string } | undefined;
+    }) {
+      const tx = {
+        query: {
+          organizations: { findFirst: vi.fn().mockResolvedValue(found.org) },
+          orgUsers: { findFirst: vi.fn().mockResolvedValue(found.membership) },
+        },
+        select: vi.fn(),
+      };
+      mocks.withSystemDb.mockImplementationOnce(
+        (fn: (t: typeof tx) => unknown) => fn(tx),
+      );
+      return tx;
+    }
+
+    const session = makeCTX({
+      userId: "usr_session",
+      apiKeyId: null,
+      orgId: "",
+      workspaceId: "",
+    });
+
+    it("lists the organization's workspaces in creation order, so the first is its first workspace", async () => {
+      const { schema } = await import("@oxagen/database");
+      const { asc } = await import("drizzle-orm");
+      const orderBy = vi.fn().mockResolvedValue([]);
+      const tx = runInTx({ org, membership: { role: "owner" } });
+      tx.select.mockReturnValue({
+        from: () => ({ leftJoin: () => ({ where: () => ({ orderBy }) }) }),
+      });
+      await workspaceListHandler(
+        { includeArchived: false, orgSlug: "acme" },
+        session,
+      );
+      expect(orderBy).toHaveBeenCalledWith(
+        asc(schema.workspaces.createdAt),
+        asc(schema.workspaces.slug),
+      );
+    });
+
+    it("refuses an organization the caller is not a member of as forbidden, listing nothing (negative)", async () => {
+      const tx = runInTx({ org, membership: undefined });
+      await expect(
+        workspaceListHandler(
+          { includeArchived: false, orgSlug: "acme" },
+          session,
+        ),
+      ).rejects.toMatchObject({ code: "forbidden", reason: "not_a_member" });
+      expect(tx.select).not.toHaveBeenCalled();
+    });
+
+    it("refuses an unknown organization with the same refusal (negative)", async () => {
+      const tx = runInTx({ org: undefined, membership: undefined });
+      await expect(
+        workspaceListHandler(
+          { includeArchived: false, orgSlug: "nope" },
+          session,
+        ),
+      ).rejects.toMatchObject({ code: "forbidden", reason: "not_a_member" });
+      expect(tx.query.orgUsers.findFirst).not.toHaveBeenCalled();
+    });
   });
 });

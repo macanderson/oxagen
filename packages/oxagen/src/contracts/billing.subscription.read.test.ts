@@ -2,6 +2,16 @@ import { describe, expect, it } from "vitest";
 import { billingSubscriptionRead } from "./billing.subscription.read";
 
 describe("billing.subscription.read capability", () => {
+  it("is a read that is never refused for lack of GAUs: mutates false, noBillingGate, Owner/Admin/Billing", () => {
+    expect(billingSubscriptionRead.mutates).toBe(false);
+    expect(billingSubscriptionRead.noBillingGate).toBe(true);
+    expect(billingSubscriptionRead.defaultRoles?.org).toEqual({
+      Owner: "allow",
+      Admin: "allow",
+      Billing: "allow",
+    });
+  });
+
   it("parses an empty input object", () => {
     const parsed = billingSubscriptionRead.input.parse({});
     expect(parsed).toEqual({});

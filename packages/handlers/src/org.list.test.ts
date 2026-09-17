@@ -5,8 +5,8 @@
  *   1. Session auth (ctx.userId set): returns the caller's org memberships
  *      without a DB round-trip for API-key resolution.
  *   2. API-key auth (ctx.userId null, ctx.apiKeyId set): resolves effective
- *      user from the key's created_by_user_id and returns those memberships.
- *   3. API-key auth where the key row has no createdByUserId: throws fail-closed.
+ *      user from the key's created_by_id and returns those memberships.
+ *   3. API-key auth where the key row has no createdById: throws fail-closed.
  *   4. API-key auth where the key row is missing (soft-deleted): throws fail-closed.
  *   5. Neither userId nor apiKeyId: throws fail-closed immediately (no DB call).
  *
@@ -58,6 +58,29 @@ beforeEach(() => {
 // ── tests ──────────────────────────────────────────────────────────────────────
 
 describe("orgListHandler", () => {
+  it("lists memberships in the order the user joined, so the first is the one they joined first", async () => {
+    const { schema } = await import("@oxagen/database");
+    const { asc } = await import("drizzle-orm");
+    const orderBy = vi.fn().mockResolvedValue(ORG_ROWS);
+    const tx = {
+      select: () => ({
+        from: () => ({ innerJoin: () => ({ where: () => ({ orderBy }) }) }),
+      }),
+    };
+    mocks.withSystemDb.mockImplementationOnce((fn: (t: typeof tx) => unknown) =>
+      fn(tx),
+    );
+    const result = await orgListHandler(
+      {},
+      makeCTX({ userId: "usr_session", apiKeyId: null }),
+    );
+    expect(result.organizations.map((o) => o.slug)).toEqual(["acme"]);
+    expect(orderBy).toHaveBeenCalledWith(
+      asc(schema.orgUsers.joinedAt),
+      asc(schema.organizations.slug),
+    );
+  });
+
   // ── session auth ────────────────────────────────────────────────────────────
 
   it("returns org memberships for a session-auth caller (ctx.userId set)", async () => {
@@ -87,7 +110,7 @@ describe("orgListHandler", () => {
   it("resolves the effective user from the API key and returns their orgs", async () => {
     // Call 1: API-key lookup returns the key's creator.
     mocks.withSystemDb.mockResolvedValueOnce({
-      createdByUserId: "usr_key_creator",
+      createdById: "usr_key_creator",
     });
     // Call 2: membership query returns ORG_ROWS.
     mocks.withSystemDb.mockResolvedValueOnce(ORG_ROWS);
@@ -108,9 +131,9 @@ describe("orgListHandler", () => {
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);
   });
 
-  it("throws when the API key row has no createdByUserId (fail-closed)", async () => {
-    // API-key lookup returns a row but createdByUserId is null.
-    mocks.withSystemDb.mockResolvedValueOnce({ createdByUserId: null });
+  it("throws when the API key row has no createdById (fail-closed)", async () => {
+    // API-key lookup returns a row but createdById is null.
+    mocks.withSystemDb.mockResolvedValueOnce({ createdById: null });
 
     await expect(
       orgListHandler({}, makeCTX({ userId: null, apiKeyId: "aky_no_creator" })),

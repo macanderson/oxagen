@@ -1,7 +1,7 @@
 {
   "name": "create_org",
   "domain": "org",
-  "description": "Create a new organization with a globally-unique slug",
+  "description": "Create a new organization with a globally-unique slug, its owner membership, IAM bootstrap and first workspace",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -93,6 +93,30 @@
           "5001-10000",
           "10000+"
         ]
+      },
+      "workspace": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "name",
+          "slug"
+        ],
+        "additionalProperties": false,
+        "default": {
+          "name": "Default",
+          "slug": "default"
+        }
       }
     },
     "required": [
@@ -119,6 +143,22 @@
       },
       "createdAt": {
         "type": "string"
+      },
+      "workspace": {
+        "type": "object",
+        "properties": {
+          "publicId": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "publicId",
+          "slug"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [
@@ -126,7 +166,8 @@
       "name",
       "slug",
       "type",
-      "createdAt"
+      "createdAt",
+      "workspace"
     ],
     "additionalProperties": false
   }

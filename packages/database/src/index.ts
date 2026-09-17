@@ -8,6 +8,7 @@ export * from "./types";
 export {
   withTenantDb,
   withSystemDb,
+  setTransactionWorkspaceScope,
   assertRlsConnectionSafe,
   assertRlsEnforcedInProduction,
   type Tx,
@@ -26,6 +27,12 @@ export {
 } from "./data-plane-pool";
 export { recordIfUnscoped, __unscopedCountForTests } from "./unscoped-meter";
 export { isUniqueViolation } from "./errors";
+export {
+  readRunVerdict,
+  readWitnessedRunId,
+  hidesWitnessRuns,
+  notWitnessRun,
+} from "./proof";
 export {
   deriveNamespace,
   normalizeNamespaceSeed,

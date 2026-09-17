@@ -40,9 +40,9 @@ export const orgModelCredentialDeleteHandler: CapabilityHandler<
       .update(schema.modelCredentials)
       .set({
         deletedAt: now,
-        deletedByUserId: ctx.userId ?? null,
+        deletedById: ctx.userId ?? null,
         updatedAt: now,
-        updatedByUserId: ctx.userId ?? null,
+        updatedById: ctx.userId ?? null,
       })
       .where(eq(schema.modelCredentials.id, existing.id));
     return true;

@@ -1,65 +1,56 @@
-import Link from "next/link";
-import { OxagenWordmark } from "@/components/ui/brand";
-import { LoginForm } from "@/components/auth/login-form";
-import { OAuthButtons } from "@/components/auth/oauth-buttons";
-import { safeReturnTo, withReturnTo } from "@/lib/return-to";
+import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
+import { LoginForm, OAuthButtons } from "@/features/auth";
+import { readNext, routes } from "@/shared/safe-path";
+import { AuthColumn, AuthFooter, AuthSkeleton } from "@/ui/auth-shell";
+import { linkText } from "@/ui/control-styles";
+import { SafeLink } from "@/ui/navigation";
+import { PageHeader } from "@/ui/page-header";
 
-/**
- * /login. `returnTo` (a same-origin path) is where the user goes once signed
- * in — `/cli/authorize` sets it so the CLI and desktop browser login come
- * back to the consent page; it rides through the second factor and the
- * sign-up link so an operator with no account can still finish the flow.
- */
-export default async function LoginPage({
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("pages");
+  return { title: t("login") };
+}
+
+export default function LoginPage(props: PageProps<"/login">) {
+  return (
+    <Suspense fallback={<AuthSkeleton />}>
+      <Login searchParams={props.searchParams} />
+    </Suspense>
+  );
+}
+
+async function Login({
   searchParams,
 }: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  searchParams: PageProps<"/login">["searchParams"];
 }) {
   const params = await searchParams;
-  const returnTo = safeReturnTo(params["returnTo"] ?? params["next"]);
+  // Only a same-origin relative path survives; anything else lands on "/".
+  const next = readNext(params);
+  const [t, pages] = await Promise.all([
+    getTranslations("auth"),
+    getTranslations("pages"),
+  ]);
   return (
-    <div className="w-full max-w-sm space-y-6">
-      <div className="flex justify-center">
-        <OxagenWordmark className="h-8" />
+    <AuthColumn>
+      <PageHeader
+        eyebrow={t("login.eyebrow")}
+        title={pages("login")}
+        description={t("login.lead")}
+      />
+      <div className="flex flex-col gap-4">
+        <OAuthButtons callbackURL={next} />
+        <LoginForm next={next} />
       </div>
-
-      <div className="rounded-xl border border-border/60 bg-card/80 p-8 shadow-xl space-y-6 backdrop-blur-xl">
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Welcome back
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Sign in to your Oxagen workspace
-          </p>
-        </div>
-
-        <OAuthButtons callbackURL={returnTo ?? "/"} />
-
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-card px-2 text-muted-foreground">Or</span>
-          </div>
-        </div>
-
-        <LoginForm mode="signin" returnTo={returnTo} />
-
-        <p className="text-center text-sm text-muted-foreground">
-          Don&rsquo;t have an account?{" "}
-          <Link
-            href={withReturnTo("/signup", returnTo)}
-            className="font-medium text-primary hover:underline"
-          >
-            Sign up
-          </Link>
-        </p>
-      </div>
-
-      <p className="text-center text-xs text-muted-foreground">
-        SOC 2 Type II · SSO/SCIM · RBAC-enforced retrieval
-      </p>
-    </div>
+      <AuthFooter>
+        {t("login.newHere")}{" "}
+        <SafeLink to={routes.signup(next)} className={linkText}>
+          {t("login.createAccount")}
+        </SafeLink>
+      </AuthFooter>
+      <AuthFooter>{t("login.haveInvite")}</AuthFooter>
+    </AuthColumn>
   );
 }

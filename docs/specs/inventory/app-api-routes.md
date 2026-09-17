@@ -85,7 +85,7 @@ POST /api/v1/chat/stream accepts JSON body with user message content, optional c
 GET /api/v1/assets/[assetId] resolves session (authenticated or null for public assets), calls serveGeneratedAsset(assetId, { userId, surface: "app" }), which enforces asset access policy (user-owned, org-owned, or public) and returns body stream + metadata. Returns 404 for not-found or forbidden assets (no 403 leak). Cache header "private, max-age=0, must-revalidate" ensures no stale-cached asset from another session.
 
 #### Scenario: Authenticated user retrieves their own asset
-- **WHEN** session present, assetId in database with accessPolicy=user and createdByUserId matches session.user.id
+- **WHEN** session present, assetId in database with accessPolicy=user and createdById matches session.user.id
 - **THEN** serveGeneratedAsset returns { body (stream from blob), mimeType, contentDisposition, sizeBytes }, HTTP 200 with private cache-control
 
 #### Scenario: Authenticated user retrieves org-scoped asset

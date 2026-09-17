@@ -59,8 +59,8 @@ import {
 const FORBIDDEN_COLS = [
   "updated_at",
   "deleted_at",
-  "updated_by_user_id",
-  "deleted_by_user_id",
+  "updated_by_id",
+  "deleted_by_id",
 ];
 
 describe("append-only tables: forbidden mutation columns", () => {

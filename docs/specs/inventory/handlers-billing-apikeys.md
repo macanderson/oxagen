@@ -243,11 +243,11 @@ The API key generation routine SHALL produce a raw key in the format "ox_" + bas
 <!-- enforced: api.key.create.ts:63-85 -->
 <!-- test: api.key.create.test.ts -->
 
-After authorization and key generation, the handler SHALL insert an api_keys row containing the orgId, workspaceId, keyPrefix, keyHash, name, scope, optional expiresAt, and audit fields (createdByUserId, updatedByUserId). The insert is atomic and returns the new row.
+After authorization and key generation, the handler SHALL insert an api_keys row containing the orgId, workspaceId, keyPrefix, keyHash, name, scope, optional expiresAt, and audit fields (createdById, updatedById). The insert is atomic and returns the new row.
 
 #### Scenario: successful API key row insertion
 - **WHEN** all authz checks pass and key material is generated
-- **THEN** insert into api_keys { orgId, workspaceId, keyPrefix, keyHash, name, scope, expiresAt (if present), createdByUserId: userId, updatedByUserId: userId }, return inserted row with id, publicId, name, keyPrefix, expiresAt, createdAt
+- **THEN** insert into api_keys { orgId, workspaceId, keyPrefix, keyHash, name, scope, expiresAt (if present), createdById: userId, updatedById: userId }, return inserted row with id, publicId, name, keyPrefix, expiresAt, createdAt
 
 #### Scenario: insert fails (internal error)
 - **WHEN** insert returns empty result
@@ -324,15 +324,15 @@ An api.key.revoke request SHALL be rejected if ctx.orgId is missing.
 <!-- enforced: api.key.revoke.ts:49-80 -->
 <!-- test: api.key.revoke.test.ts -->
 
-When an authorized org Owner/Admin revokes an API key, the handler SHALL soft-delete the key by setting deletedAt and deletedByUserId. The key must exist, belong to the calling org, and not already be deleted (IDOR-safe query).
+When an authorized org Owner/Admin revokes an API key, the handler SHALL soft-delete the key by setting deletedAt and deletedById. The key must exist, belong to the calling org, and not already be deleted (IDOR-safe query).
 
 #### Scenario: revoke an active API key
 - **WHEN** ctx has valid authz, input.keyPublicId matches an api_keys row with orgId=ctx.orgId and deletedAt is null
-- **THEN** set deletedAt=now(), deletedByUserId=userId, updatedAt=now(), updatedByUserId=userId on the matching row
+- **THEN** set deletedAt=now(), deletedById=userId, updatedAt=now(), updatedById=userId on the matching row
 
 #### Scenario: key does not exist or already revoked
 - **WHEN** no api_keys row matches publicId + orgId + isNull(deletedAt)
-- **THEN** throw Error("Not found: API key does not exist, is not in this org, or is already revoked")
+- **THEN** throw HandlerError { code: "not_found", reason: "api_key_not_found" }
 
 ---
 
@@ -390,11 +390,11 @@ When an authorized org Owner/Admin rotates an API key, the handler SHALL atomica
 
 #### Scenario: successful atomic rotation
 - **WHEN** ctx has valid authz, input.keyPublicId matches an active api_keys row in orgId=ctx.orgId
-- **THEN** within a single transaction: 1) select old key by publicId + orgId + isNull(deletedAt), 2) insert new key with same scope, workspaceId, expiresAt; name=input.name or old name, 3) set old key deletedAt=now(), deletedByUserId=userId, return { inserted new key, revokedPublicId: old key publicId }
+- **THEN** within a single transaction: 1) select old key by publicId + orgId + isNull(deletedAt), 2) insert new key with same scope, workspaceId, expiresAt; name=input.name or old name, 3) set old key deletedAt=now(), deletedById=userId, return { inserted new key, revokedPublicId: old key publicId }
 
 #### Scenario: old key not found or already revoked
 - **WHEN** no api_keys row matches publicId + orgId + isNull(deletedAt)
-- **THEN** throw Error("Not found: API key does not exist, is not in this org, or is already revoked")
+- **THEN** throw HandlerError { code: "not_found", reason: "api_key_not_found" }
 
 #### Scenario: new key insertion fails
 - **WHEN** insert of replacement key returns empty result

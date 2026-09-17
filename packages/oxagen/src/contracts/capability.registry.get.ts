@@ -55,7 +55,7 @@ export const capabilityRegistryGet = registerCapability({
     "Read one typed capability contract from the live registry as the full enforced object — identity grants, tenancy scope, permitted action with input/output field specs, commercial terms (billing gate + entitlement pack), and chaining metadata. Read-only platform metadata.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["api", "mcp", "unit", "docs", "app"],
+  layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   // Same reasoning as list_capability_registry: governance introspection must
   // never be blocked by a zero credit balance.

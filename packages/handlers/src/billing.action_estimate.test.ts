@@ -28,7 +28,7 @@ function parseInput(raw: Record<string, unknown>) {
 }
 
 describe("billingActionEstimateHandler", () => {
-  it("reproduces the spec §4.5 worked example", async () => {
+  it("prices the spec §4.5 seed-deck customer at the v1 band over the annual allowance this path still counts (ADR-055 makes the allowance monthly; WL-25 moves the path)", async () => {
     // 50 agents × 20 runs × 250 working days = 250,000 runs/yr, standard task.
     const out = await billingActionEstimateHandler(
       parseInput({ runsPerYear: 250_000, tier: "scale" }),
@@ -42,9 +42,9 @@ describe("billingActionEstimateHandler", () => {
     expect(out.actionsPerYear).toBe(3_750_000);
     expect(out.includedActionsAnnual).toBe(1_500_000);
     expect(out.band.id).toBe("1m-5m");
-    expect(out.band.usdPer1000).toBe(15);
+    expect(out.band.usdPer1000).toBe(4);
     expect(out.overageActions).toBe(2_250_000);
-    expect(out.overageUsd).toBeCloseTo(33_750, 6);
+    expect(out.overageUsd).toBeCloseTo(9_000, 6);
   });
 
   it("defaults the tier to scale and the run class to a standard task", async () => {
@@ -78,7 +78,7 @@ describe("billingActionEstimateHandler", () => {
     expect(out.includedActionsAnnual).toBe(250_000);
     expect(out.overageActions).toBe(500_000);
     expect(out.band.id).toBe("first-1m");
-    expect(out.overageUsd).toBeCloseTo(10_000, 6);
+    expect(out.overageUsd).toBeCloseTo(2_500, 6);
   });
 
   it("uses each published run class ratio", async () => {

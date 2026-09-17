@@ -1,0 +1,78 @@
+// get_auto_eligibility — the auto-approval evaluation recorded for one
+// approval request, and who resolved it (MC spec §6.9 part 2, §6.10; ADR-070).
+//
+// Read, never recomputed. The row carries the rule that was read and every
+// reason the call did not qualify, written when the call was parked, so the
+// page shows the decision that was made rather than what today's rules would
+// say about it (INV-10).
+//
+// audit-exempt: read-only; the kernel's capability.invoke_* row is the audit.
+
+import { schema, withTenantDb } from "@oxagen/database";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
+import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
+import { approvalAutoEligibilityGet } from "@oxagen/oxagen/contracts/approval.auto_eligibility.get";
+import { isApprovalPublicId } from "@oxagen/oxagen/contracts/agent.approval.resolve";
+import { isFloorReason } from "@oxagen/rules";
+import { and, eq } from "drizzle-orm";
+import { requireWorkspace } from "./_approval_rule";
+
+const ar = schema.approvalRequests;
+
+export const approvalAutoEligibilityGetHandler: CapabilityHandler<
+  typeof approvalAutoEligibilityGet
+> = async (input, ctx) => {
+  const workspaceId = requireWorkspace(ctx, "get_auto_eligibility");
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: ["Owner", "Admin", "Member"] },
+  );
+
+  // The id arrives as the public id (apr_…) or the row uuid (#2906).
+  const byId = isApprovalPublicId(input.approvalId)
+    ? eq(ar.publicId, input.approvalId)
+    : eq(ar.id, input.approvalId);
+
+  // The person who answered is reached through the declared relation
+  // (`packages/database/src/relations.ts`), never a cross-schema join written
+  // here: `agent.approval_requests` and `auth.users` are different domains.
+  const row = await withTenantDb((tx) =>
+    tx.query.approvalRequests.findFirst({
+      where: and(
+        byId,
+        eq(ar.orgId, ctx.orgId),
+        eq(ar.workspaceId, workspaceId),
+      ),
+      columns: {
+        autoRuleId: true,
+        resolvedReasons: true,
+        resolvedByPolicy: true,
+      },
+      with: { resolvedBy: { columns: { publicId: true } } },
+    }),
+  );
+  if (!row) {
+    throw new HandlerError({
+      code: "not_found",
+      reason: "approval_not_found",
+      message: "No such approval request in this workspace",
+    });
+  }
+
+  const reasons = row.resolvedReasons;
+  return {
+    approvalId: input.approvalId,
+    resolvedBy:
+      row.resolvedByPolicy ??
+      (row.resolvedBy === null ? null : `user:${row.resolvedBy.publicId}`),
+    eligibility:
+      row.autoRuleId === null
+        ? null
+        : {
+            ruleId: row.autoRuleId,
+            ok: reasons.length === 0,
+            reasons,
+            floor: reasons.some(isFloorReason),
+          },
+  };
+};

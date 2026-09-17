@@ -37,7 +37,10 @@ import { agentDefinitionSummarize } from "../agent.definition.summarize";
  * opened one.
  */
 export const contextPrSchema = z.object({
-  url: z.string().url().describe("The pull request on the workspace's main repo"),
+  url: z
+    .string()
+    .url()
+    .describe("The pull request on the workspace's main repo"),
   number: z.number().int().positive(),
   branch: z
     .string()

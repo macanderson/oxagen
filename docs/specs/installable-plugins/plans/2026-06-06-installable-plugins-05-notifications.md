@@ -14,7 +14,7 @@
 
 ## Grounded conventions (verified from codebase)
 
-- **`notification.notifications` schema** (`packages/database/src/schema/notification.ts`): columns `id uuid PK`, `publicId citext`, `createdAt/updatedAt/createdByUserId/updatedByUserId` (audit), `orgId uuid`, `workspaceId uuid nullable`, `userId uuid`, `kind text` CHECK `IN ('system','approval','run','member','security')`, `title text`, `body text nullable`, `deepLink text nullable`, `unread boolean DEFAULT true`, `archived boolean DEFAULT false`, `emailedAt timestamptz nullable`. Drizzle export: `schema.notifications`.
+- **`notification.notifications` schema** (`packages/database/src/schema/notification.ts`): columns `id uuid PK`, `publicId citext`, `createdAt/updatedAt/createdById/updatedById` (audit), `orgId uuid`, `workspaceId uuid nullable`, `userId uuid`, `kind text` CHECK `IN ('system','approval','run','member','security')`, `title text`, `body text nullable`, `deepLink text nullable`, `unread boolean DEFAULT true`, `archived boolean DEFAULT false`, `emailedAt timestamptz nullable`. Drizzle export: `schema.notifications`.
 - **`sendEmail(input: SendEmailInput)`** in `@oxagen/notifications` (`packages/notifications/src/send-email.ts`): validates via `sendEmailInputSchema`, dispatches via configured SMTP transport. `SendEmailInput` fields: `to` (string | string[]), `subject`, `text?`, `html?`, `from?`, `replyTo?`, `cc?`, `bcc?` — must supply at least `text` or `html`.
 - **`org.org_users`** (`packages/database/src/schema/org.ts`): `orgId uuid`, `userId uuid`, `role text`. `org.organizations.settings jsonb DEFAULT '{}'`.
 - **`auth.users`** (`packages/database/src/schema/auth.ts`): `id uuid`, `email citext NOT NULL`.

@@ -109,7 +109,7 @@ export const repoConfigureHandler: CapabilityHandler<
       .update(schema.sourceConnections)
       .set({
         deliveryConfig: updated,
-        updatedByUserId: ctx.userId ?? undefined,
+        updatedById: ctx.userId ?? undefined,
         updatedAt: now,
       })
       .where(eq(schema.sourceConnections.id, existing.id));

@@ -3,11 +3,11 @@ import { embed, embedMany as embedManyThroughGateway } from "ai";
 import { embeddingProvider, type ModelCredential } from "./models";
 import type { TurnFunding } from "./funding-source";
 import {
-  insertTokenUsage,
   providerFromModelId,
   hashPrompt,
   type Surface,
 } from "@oxagen/telemetry";
+import { recordTokenUsage } from "./record-token-usage";
 import {
   chargeUsageCredits,
   providerCostUsdMicros,
@@ -87,7 +87,7 @@ async function meterEmbeddingCall(params: {
 
   try {
     const promptHash = await hashPrompt(params.texts.join("\n"));
-    await insertTokenUsage([
+    await recordTokenUsage([
       {
         execution_step_id: executionStepId,
         org_id: orgId,

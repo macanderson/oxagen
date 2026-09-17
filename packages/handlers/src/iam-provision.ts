@@ -188,8 +188,8 @@ async function bootstrapOrgIAMWithTx(
           scopeKind: spec.scopeKind,
           name: spec.name,
           isSystemDefault: true,
-          createdByUserId: actorUserId,
-          updatedByUserId: actorUserId,
+          createdById: actorUserId,
+          updatedById: actorUserId,
         })
         .onConflictDoNothing()
         .returning({ id: schema.roles.id });
@@ -269,8 +269,8 @@ async function bootstrapOrgIAMWithTx(
         displayName,
         status: "active",
         parentUserId: ownerUserId,
-        createdByUserId: actorUserId,
-        updatedByUserId: actorUserId,
+        createdById: actorUserId,
+        updatedById: actorUserId,
       })
       .onConflictDoNothing()
       .returning({ id: schema.principals.id });
@@ -335,8 +335,8 @@ async function bootstrapOrgIAMWithTx(
         roleId: ownerRoleId,
         orgId,
         assignedBy: actorUserId,
-        createdByUserId: actorUserId,
-        updatedByUserId: actorUserId,
+        createdById: actorUserId,
+        updatedById: actorUserId,
       })
       .onConflictDoNothing();
     logger.info(
@@ -367,8 +367,8 @@ async function bootstrapOrgIAMWithTx(
             roleId,
             capabilityId: cap.name,
             effect,
-            createdByUserId: actorUserId,
-            updatedByUserId: actorUserId,
+            createdById: actorUserId,
+            updatedById: actorUserId,
           })
           .onConflictDoNothing();
       }
@@ -391,8 +391,8 @@ async function bootstrapOrgIAMWithTx(
             roleId,
             capabilityId: cap.name,
             effect,
-            createdByUserId: actorUserId,
-            updatedByUserId: actorUserId,
+            createdById: actorUserId,
+            updatedById: actorUserId,
           })
           .onConflictDoNothing();
       }
@@ -441,8 +441,8 @@ async function bootstrapOrgIAMWithTx(
           name: spec.name,
           description: spec.description,
           isSystemDefault: true,
-          createdByUserId: actorUserId,
-          updatedByUserId: actorUserId,
+          createdById: actorUserId,
+          updatedById: actorUserId,
         })
         .onConflictDoNothing()
         .returning({ id: schema.roles.id });
@@ -506,8 +506,8 @@ async function bootstrapOrgIAMWithTx(
           capabilityId: cap.name,
           effect: spec.computeEffect(cap.category, cap.riskLevel),
           conditionsJsonb,
-          createdByUserId: actorUserId,
-          updatedByUserId: actorUserId,
+          createdById: actorUserId,
+          updatedById: actorUserId,
         })
         .onConflictDoNothing();
     }
@@ -598,8 +598,8 @@ async function provisionMemberPrincipalWithTx(
       displayName,
       status: "active",
       parentUserId: userId,
-      createdByUserId: actorUserId,
-      updatedByUserId: actorUserId,
+      createdById: actorUserId,
+      updatedById: actorUserId,
     })
     .onConflictDoNothing()
     .returning({ id: schema.principals.id });

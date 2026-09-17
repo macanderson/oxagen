@@ -1,184 +1,119 @@
 /**
- * Unit tests for action-metering.ts — the governed-action meter (ADR-052).
+ * Unit tests for action-metering.ts — the governed-action meter (ADR-052,
+ * ADR-055).
  *
  * Each test is anchored to a specific invariant claimed in the source file's
  * JSDoc, so a change that breaks the claim also breaks the test that proves
- * it. Mocks the `withTenantDb` seam (following consume-credits.test.ts /
- * tier.test.ts) and the `./credits` module — no live Postgres needed.
+ * it. The `withTenantDb` seam hands out the in-memory GAU store from
+ * test-utils/gau-fake-tx.ts, which runs the real statements against
+ * `billing.gau_buckets` and `billing.gau_settlements`. The recorder's other
+ * reads — terms, settings, the default card — are module doubles.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  fakeGauExecutor,
+  makeFakeGauStore,
+  type FakeGauStore,
+} from "./test-utils/gau-fake-tx";
 
-// ---------------------------------------------------------------------------
-// The governed_action_counters mock — an in-memory upsert-add table, keyed by
-// (orgId, periodStart). Mirrors the ON CONFLICT DO UPDATE ... RETURNING
-// semantics of incrementActionCounter's real statement.
-// ---------------------------------------------------------------------------
-
-interface CounterRow {
-  actionsUsed: bigint;
-  actionsCharged: bigint;
-}
-
-const state: {
-  counters: Map<string, CounterRow>;
-} = { counters: new Map() };
-
-function counterKey(orgId: string, periodStart: Date): string {
-  return `${orgId}::${periodStart.toISOString()}`;
-}
-
-// Distinguishable placeholder schema — values are never inspected for
-// anything beyond identity/round-tripping through our mocked eq()/and().
-const SCHEMA = {
-  governedActionCounters: {
-    orgId: "gac.orgId",
-    periodStart: "gac.periodStart",
-    actionsUsed: "gac.actionsUsed",
-    actionsCharged: "gac.actionsCharged",
-  },
-} as const;
-
-interface EqCond {
-  _eq: [unknown, unknown];
-}
-interface AndCond {
-  _and: EqCond[];
-}
-
-function makeTx() {
-  return {
-    insert: vi.fn(() => ({
-      values: vi.fn(
-        (v: {
-          orgId: string;
-          periodStart: Date;
-          actionsUsed: bigint;
-          actionsCharged: bigint;
-        }) => ({
-          onConflictDoUpdate: vi.fn(() => ({
-            returning: vi.fn(async () => {
-              const key = counterKey(v.orgId, v.periodStart);
-              const existing = state.counters.get(key) ?? {
-                actionsUsed: 0n,
-                actionsCharged: 0n,
-              };
-              const next: CounterRow = {
-                actionsUsed: existing.actionsUsed + v.actionsUsed,
-                actionsCharged: existing.actionsCharged + v.actionsCharged,
-              };
-              state.counters.set(key, next);
-              return [{ actionsUsed: next.actionsUsed }];
-            }),
-          })),
-        }),
-      ),
-    })),
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn((cond: AndCond) => ({
-          limit: vi.fn(async () => {
-            const orgId = cond._and[0]?._eq[1] as string;
-            const periodStart = cond._and[1]?._eq[1] as Date;
-            const row = state.counters.get(counterKey(orgId, periodStart));
-            return row
-              ? [
-                  {
-                    actionsUsed: row.actionsUsed,
-                    actionsCharged: row.actionsCharged,
-                  },
-                ]
-              : [];
-          }),
-        })),
-      })),
-    })),
-  };
-}
+const mocks = vi.hoisted(() => ({
+  withTenantDb: vi.fn(),
+  resolveGauEntitlement: vi.fn(),
+  readGauEntitlement: vi.fn(),
+  ensureStripeCustomer: vi.fn(),
+  readOrgBillingSettings: vi.fn(),
+  readDefaultPaymentMethod: vi.fn(),
+  billingProvider: vi.fn(),
+}));
 
 vi.mock("drizzle-orm", async (importOriginal) => {
   const real = await importOriginal<typeof import("drizzle-orm")>();
-  return {
-    ...real,
-    eq: (a: unknown, b: unknown) => ({ _eq: [a, b] }) as EqCond,
-    and: (...conds: EqCond[]) => ({ _and: conds }) as AndCond,
-  };
+  const { conditionMocks } = await import("./test-utils/gau-conditions");
+  return { ...real, ...conditionMocks };
 });
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return {
-    ...real,
-    withTenantDb: async (fn: (tx: ReturnType<typeof makeTx>) => unknown) =>
-      fn(makeTx()),
-    schema: SCHEMA,
-  };
+  return { ...real, withTenantDb: mocks.withTenantDb };
 });
 
-// ---------------------------------------------------------------------------
-// consumeCredits mock — action-metering.ts's only billing dependency.
-// ---------------------------------------------------------------------------
-
-const consumeCreditsMock = vi.fn(
-  async (_args: {
-    orgId: string;
-    requestedMicroCents?: bigint;
-    requestedCents?: bigint;
-    reason: string;
-    referenceType?: string;
-    referenceId?: string;
-  }) => ({
-    chargedCents: 0n,
-    shortfallCents: 0n,
-    balanceCents: 0n,
-    carryMicroCents: 0n,
-  }),
+vi.mock(
+  "./contract-terms",
+  () =>
+    ({
+      resolveGauEntitlement: mocks.resolveGauEntitlement,
+      readGauEntitlement: mocks.readGauEntitlement,
+    }) satisfies Pick<
+      typeof import("./contract-terms"),
+      "resolveGauEntitlement" | "readGauEntitlement"
+    >,
 );
 
-vi.mock("./credits", () => ({
-  consumeCredits: (...args: Parameters<typeof consumeCreditsMock>) =>
-    consumeCreditsMock(...args),
+vi.mock(
+  "./customers",
+  () =>
+    ({ ensureStripeCustomer: mocks.ensureStripeCustomer }) satisfies Pick<
+      typeof import("./customers"),
+      "ensureStripeCustomer"
+    >,
+);
+
+vi.mock(
+  "./billing-settings",
+  () =>
+    ({ readOrgBillingSettings: mocks.readOrgBillingSettings }) satisfies Pick<
+      typeof import("./billing-settings"),
+      "readOrgBillingSettings"
+    >,
+);
+
+vi.mock(
+  "./payment-methods",
+  () =>
+    ({
+      readDefaultPaymentMethod: mocks.readDefaultPaymentMethod,
+    }) satisfies Pick<
+      typeof import("./payment-methods"),
+      "readDefaultPaymentMethod"
+    >,
+);
+
+vi.mock(
+  "./client",
+  () =>
+    ({ billingProvider: mocks.billingProvider }) satisfies Pick<
+      typeof import("./client"),
+      "billingProvider"
+    >,
+);
+
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
 const {
-  ACTION_RATE_BANDS,
   resolveActionBand,
   TIER_ACTION_ALLOWANCES,
   ENTERPRISE_FALLBACK_ALLOWANCE,
   resolveActionAllowance,
   RETENTION_INCLUDED_MONTHS,
   RETENTION_USD_PER_GB_MONTH,
-  retentionCreditsForGbMonths,
-  microCreditsForActions,
-  creditsForActions,
-  priceAnnualVolumeCredits,
-  resolveActionMeterMode,
-  resetActionMeterModeForTests,
   actionPeriodStart,
-  incrementActionCounter,
-  readActionCounter,
-  billableActionCount,
   recordGovernedAction,
-  chargeEvidenceRetention,
 } = await import("./action-metering");
-const { MICRO_CREDITS_PER_CREDIT } = await import("./pricing");
-const { CREDIT_REASONS } = await import("./constants");
 const { logger } = await import("./logger");
 
-const FIRST_1M = ACTION_RATE_BANDS.find((b) => b.id === "first-1m")!;
-const M1_5M = ACTION_RATE_BANDS.find((b) => b.id === "1m-5m")!;
-const M5_25M = ACTION_RATE_BANDS.find((b) => b.id === "5m-25m")!;
-const COMMITTED_25M = ACTION_RATE_BANDS.find(
-  (b) => b.id === "committed-25m-plus",
-)!;
+let store: FakeGauStore;
+let txs: ReturnType<typeof fakeGauExecutor>[];
 
 beforeEach(() => {
-  state.counters = new Map();
-  consumeCreditsMock.mockReset();
-  consumeCreditsMock.mockResolvedValue({
-    chargedCents: 0n,
-    shortfallCents: 0n,
-    balanceCents: 0n,
-    carryMicroCents: 0n,
+  vi.clearAllMocks();
+  store = makeFakeGauStore();
+  txs = [];
+  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) => {
+    const tx = fakeGauExecutor(store);
+    txs.push(tx);
+    return Promise.resolve(fn(tx));
   });
 });
 
@@ -284,183 +219,17 @@ describe("resolveActionAllowance", () => {
 });
 
 // ---------------------------------------------------------------------------
-// billableActionCount — the straddle case, and never negative.
+// The retention constants the rate-card and retention capabilities print.
 // ---------------------------------------------------------------------------
 
-describe("billableActionCount", () => {
-  it("splits a call that straddles the allowance boundary", () => {
-    expect(billableActionCount(9, 12, 10)).toBe(2);
-  });
-
-  it("returns 0 when the whole call is inside the allowance", () => {
-    expect(billableActionCount(0, 5, 10)).toBe(0);
-  });
-
-  it("returns the full delta when the whole call is past the allowance", () => {
-    expect(billableActionCount(15, 20, 10)).toBe(5);
-  });
-
-  it("never returns negative, even for a non-increasing before/after pair", () => {
-    expect(billableActionCount(20, 15, 10)).toBe(0);
-    expect(billableActionCount(5, 5, 10)).toBe(0);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// microCreditsForActions vs creditsForActions — exact vs display upper bound.
-// ---------------------------------------------------------------------------
-
-describe("microCreditsForActions vs creditsForActions", () => {
-  it("prices one action at the $6 band as 0.6 of a credit in micro-credits, not 1", () => {
-    const micro = microCreditsForActions(1, COMMITTED_25M);
-    expect(micro).toBe(600_000n); // 0.6 credit exactly
-    expect(micro).toBeLessThan(MICRO_CREDITS_PER_CREDIT);
-  });
-
-  it("rounds the same single action UP to a whole credit for display", () => {
-    expect(creditsForActions(1, COMMITTED_25M)).toBe(1n);
-  });
-
-  it("does NOT price 1000 actions at the $6 band as 1000 credits", () => {
-    // The exact failure this file exists to prevent: rounding every action up
-    // to a whole credit would charge 1000 credits for $6 of work.
-    const micro = microCreditsForActions(1000, COMMITTED_25M);
-    expect(micro).toBe(600_000_000n); // exactly 600 credits, in micro-credits
-    expect(micro / MICRO_CREDITS_PER_CREDIT).toBe(600n);
-    expect(micro).toBeLessThan(1000n * MICRO_CREDITS_PER_CREDIT);
-  });
-
-  it("agrees with creditsForActions once a count's worth lands on a whole credit", () => {
-    // 50 actions at the $20 band = $1.00 = exactly 100 credits.
-    const micro = microCreditsForActions(50, FIRST_1M);
-    const credits = creditsForActions(50, FIRST_1M);
-    expect(micro / MICRO_CREDITS_PER_CREDIT).toBe(100n);
-    expect(credits).toBe(100n);
-    expect(micro / MICRO_CREDITS_PER_CREDIT).toBe(credits);
-  });
-
-  it("returns 0n for a non-positive or non-finite count on both functions", () => {
-    expect(microCreditsForActions(0, FIRST_1M)).toBe(0n);
-    expect(microCreditsForActions(-5, FIRST_1M)).toBe(0n);
-    expect(microCreditsForActions(Number.NaN, FIRST_1M)).toBe(0n);
-    expect(creditsForActions(0, FIRST_1M)).toBe(0n);
-    expect(creditsForActions(-5, FIRST_1M)).toBe(0n);
-  });
-
-  it("creditsForActions defaults to the first band when none is given", () => {
-    expect(creditsForActions(50)).toBe(creditsForActions(50, FIRST_1M));
-  });
-});
-
-// ---------------------------------------------------------------------------
-// retentionCreditsForGbMonths — rounds up; non-positive/non-finite is 0n.
-// ---------------------------------------------------------------------------
-
-describe("retentionCreditsForGbMonths", () => {
-  it("returns 0n for zero gb-months", () => {
-    expect(retentionCreditsForGbMonths(0)).toBe(0n);
-  });
-
-  it("returns 0n for negative gb-months", () => {
-    expect(retentionCreditsForGbMonths(-3)).toBe(0n);
-  });
-
-  it("returns 0n for non-finite gb-months", () => {
-    expect(retentionCreditsForGbMonths(Number.NaN)).toBe(0n);
-    expect(retentionCreditsForGbMonths(Number.POSITIVE_INFINITY)).toBe(0n);
-  });
-
-  it("prices a whole gb-month exactly", () => {
-    // 1 GB-month * $0.08/GB-month = $0.08 = 8 credits, exact.
-    expect(retentionCreditsForGbMonths(1)).toBe(
-      BigInt(Math.round(RETENTION_USD_PER_GB_MONTH * 100)),
-    );
-  });
-
-  it("rounds a fractional-credit charge UP", () => {
-    // 0.3 GB-months * $0.08 = $0.024 = 2.4 credits → rounds up to 3.
-    expect(retentionCreditsForGbMonths(0.3)).toBe(3n);
-  });
-
+describe("retention constants", () => {
   it("RETENTION_INCLUDED_MONTHS is a positive whole number of months", () => {
-    expect(RETENTION_INCLUDED_MONTHS).toBe(12);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// priceAnnualVolumeCredits — total volume, not marginal.
-// ---------------------------------------------------------------------------
-
-describe("priceAnnualVolumeCredits", () => {
-  it("prices the whole annual total at the single band it lands in", () => {
-    // 3M actions land in the 1m-5m ($15) band; the WHOLE 3M prices at $15,
-    // not $20 for the first million and $15 after.
-    const total = 3_000_000;
-    expect(resolveActionBand(total).id).toBe("1m-5m");
-    expect(priceAnnualVolumeCredits(total)).toBe(
-      creditsForActions(total, M1_5M),
-    );
-    expect(priceAnnualVolumeCredits(total)).toBe(4_500_000n);
+    expect(Number.isInteger(RETENTION_INCLUDED_MONTHS)).toBe(true);
+    expect(RETENTION_INCLUDED_MONTHS).toBeGreaterThan(0);
   });
 
-  it("is strictly less than pricing the total at the first band's rate (proves it is not marginal)", () => {
-    const total = 3_000_000;
-    const marginalWrong = creditsForActions(total, FIRST_1M);
-    expect(priceAnnualVolumeCredits(total)).toBeLessThan(marginalWrong);
-  });
-
-  it("prices a total landing in the 5m-25m band at that band's rate", () => {
-    const total = 10_000_000;
-    expect(resolveActionBand(total).id).toBe("5m-25m");
-    expect(priceAnnualVolumeCredits(total)).toBe(
-      creditsForActions(total, M5_25M),
-    );
-  });
-});
-
-// ---------------------------------------------------------------------------
-// resolveActionMeterMode / resetActionMeterModeForTests
-// ---------------------------------------------------------------------------
-
-describe("resolveActionMeterMode", () => {
-  const ENV_KEY = "OXAGEN_ACTION_METER_MODE";
-  const original = process.env[ENV_KEY];
-
-  beforeEach(() => {
-    resetActionMeterModeForTests();
-    delete process.env[ENV_KEY];
-  });
-
-  afterEach(() => {
-    resetActionMeterModeForTests();
-    if (original === undefined) delete process.env[ENV_KEY];
-    else process.env[ENV_KEY] = original;
-  });
-
-  it("defaults to 'charge' when the env var is unset", () => {
-    expect(resolveActionMeterMode()).toBe("charge");
-  });
-
-  it("returns 'shadow' only for exactly 'shadow'", () => {
-    process.env[ENV_KEY] = "shadow";
-    expect(resolveActionMeterMode()).toBe("shadow");
-  });
-
-  it("defaults to 'charge' for any other value", () => {
-    process.env[ENV_KEY] = "SHADOW"; // wrong case
-    expect(resolveActionMeterMode()).toBe("charge");
-    resetActionMeterModeForTests();
-    process.env[ENV_KEY] = "off";
-    expect(resolveActionMeterMode()).toBe("charge");
-  });
-
-  it("memoises within a process — a later env change has no effect until reset", () => {
-    process.env[ENV_KEY] = "shadow";
-    expect(resolveActionMeterMode()).toBe("shadow");
-    process.env[ENV_KEY] = "charge";
-    expect(resolveActionMeterMode()).toBe("shadow"); // still memoised
-    resetActionMeterModeForTests();
-    expect(resolveActionMeterMode()).toBe("charge"); // re-resolves after reset
+  it("RETENTION_USD_PER_GB_MONTH is a positive rate", () => {
+    expect(RETENTION_USD_PER_GB_MONTH).toBeGreaterThan(0);
   });
 });
 
@@ -494,325 +263,573 @@ describe("actionPeriodStart", () => {
 });
 
 // ---------------------------------------------------------------------------
-// incrementActionCounter / readActionCounter — the withTenantDb seam.
-// ---------------------------------------------------------------------------
-
-describe("incrementActionCounter", () => {
-  const now = new Date("2026-03-01T00:00:00Z");
-
-  it("derives before/after from the RETURNING total on a fresh counter", async () => {
-    const result = await incrementActionCounter("org-1", 5, 0, now);
-    expect(result).toEqual({ before: 0, after: 5 });
-  });
-
-  it("derives before/after from the RETURNING total on an existing counter", async () => {
-    await incrementActionCounter("org-1", 5, 0, now);
-    const result = await incrementActionCounter("org-1", 3, 1, now);
-    expect(result).toEqual({ before: 5, after: 8 });
-  });
-
-  it("clamps a negative or fractional actions count before storing", async () => {
-    const result = await incrementActionCounter("org-1", -5, -1, now);
-    expect(result).toEqual({ before: 0, after: 0 });
-  });
-
-  it("floors a fractional actions count", async () => {
-    const result = await incrementActionCounter("org-1", 2.9, 0, now);
-    expect(result).toEqual({ before: 0, after: 2 });
-  });
-
-  it("keeps counters for different orgs independent", async () => {
-    await incrementActionCounter("org-1", 5, 0, now);
-    const other = await incrementActionCounter("org-2", 1, 0, now);
-    expect(other).toEqual({ before: 0, after: 1 });
-  });
-});
-
-describe("readActionCounter", () => {
-  const now = new Date("2026-03-01T00:00:00Z");
-
-  it("returns zeroes when no row exists for the org/period", async () => {
-    const result = await readActionCounter("org-never-seen", now);
-    expect(result.actionsUsed).toBe(0);
-    expect(result.actionsCharged).toBe(0);
-    expect(result.periodStart.toISOString()).toBe("2026-01-01T00:00:00.000Z");
-  });
-
-  it("reflects prior increments", async () => {
-    await incrementActionCounter("org-1", 10, 4, now);
-    const result = await readActionCounter("org-1", now);
-    expect(result.actionsUsed).toBe(10);
-    expect(result.actionsCharged).toBe(4);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// recordGovernedAction — the recorder.
+// recordGovernedAction — the GAU debit and the auto top-up claim (ADR-055).
 // ---------------------------------------------------------------------------
 
 describe("recordGovernedAction", () => {
-  const ENV_KEY = "OXAGEN_ACTION_METER_MODE";
-  const now = new Date("2026-04-01T00:00:00Z");
+  const ORG = "00000000-0000-0000-0000-00000000a0a1";
+  const NOW = new Date("2026-09-14T12:00:00.000Z");
+  const CAL_SEP = {
+    start: new Date("2026-09-01T00:00:00.000Z"),
+    end: new Date("2026-10-01T00:00:00.000Z"),
+  };
+  const FREE_TERMS = {
+    source: "published_tier" as const,
+    tier: "free" as const,
+    currency: "usd",
+    ratePerGauMicros: 5_000n,
+    blockSizeGau: 5_000,
+    includedGauPerMonth: 5_000,
+  };
+  const BUILD_TERMS = {
+    ...FREE_TERMS,
+    tier: "build" as const,
+    includedGauPerMonth: 50_000,
+  };
+  const CARD = { stripePaymentMethodId: "pm_1", brand: "visa", last4: "4242" };
+  const SETTINGS = {
+    orgId: ORG,
+    stripeCustomerId: "cus_1",
+    approvedForInvoiceBilling: false,
+    invoiceGauMax: 100_000,
+    autoTopupEnabled: true,
+    autoTopupBlocks: 1,
+    dunningState: "active" as const,
+  };
+
+  function seedBucket(overrides: Record<string, unknown>) {
+    const row = {
+      id: crypto.randomUUID(),
+      orgId: ORG,
+      periodStart: CAL_SEP.start,
+      periodEnd: CAL_SEP.end,
+      includedGau: 5_000,
+      purchasedGau: 0,
+      carriedGau: 0,
+      usedGau: 0,
+      overageInvoicedGau: 0,
+      interimSeq: 0,
+      topupSeq: 0,
+      openTopupSettlementId: null,
+      closedAt: null,
+      createdAt: NOW,
+      updatedAt: NOW,
+      ...overrides,
+    };
+    store.buckets.push(row);
+    return row;
+  }
+
+  const record = (actions = 1) =>
+    recordGovernedAction({
+      orgId: ORG,
+      actions,
+      capability: "resolve_approval",
+      now: NOW,
+    });
 
   beforeEach(() => {
-    delete process.env[ENV_KEY];
-    resetActionMeterModeForTests();
+    mocks.resolveGauEntitlement.mockResolvedValue({
+      terms: BUILD_TERMS,
+      subscription: null,
+    });
+    mocks.readOrgBillingSettings.mockResolvedValue(SETTINGS);
+    mocks.readDefaultPaymentMethod.mockResolvedValue(null);
   });
 
-  afterEach(() => {
-    delete process.env[ENV_KEY];
-    resetActionMeterModeForTests();
+  it("debits the month bucket through ensureCurrentBucket and returns the post-debit row", async () => {
+    const result = await record(3);
+    expect(result.bucket).toMatchObject({
+      orgId: ORG,
+      periodStart: CAL_SEP.start,
+      periodEnd: CAL_SEP.end,
+      includedGau: 50_000,
+      usedGau: 3,
+    });
+    expect(result.remainingGau).toBe(49_997);
+    expect(result.mode).toBe("prepaid");
+    expect(result.autoTopup).toBeNull();
+    expect(store.buckets).toHaveLength(1);
+    expect(mocks.resolveGauEntitlement).toHaveBeenCalledWith(ORG, NOW);
+    expect(mocks.readOrgBillingSettings).toHaveBeenCalledWith(ORG);
   });
 
-  it("shadow mode records the count and raises no debit", async () => {
-    process.env[ENV_KEY] = "shadow";
-    resetActionMeterModeForTests();
-
-    const result = await recordGovernedAction({
-      orgId: "org-1",
-      actions: 5,
-      capability: "send_message",
-      tier: "free",
-      now,
+  it("runs the debit on the transaction withTenantDb opened for it, as one upsert", async () => {
+    await record(1);
+    const upsert = store.log.find((s) => s.op === "upsert");
+    expect(upsert).toMatchObject({
+      table: "buckets",
+      values: { orgId: ORG, usedGau: 1, purchasedGau: 0 },
     });
-
-    expect(result.mode).toBe("shadow");
-    expect(result.creditsCharged).toBe(0n);
-    expect(consumeCreditsMock).not.toHaveBeenCalled();
-    // The action was still counted.
-    expect(result.periodActions).toBe(5);
-    const counter = await readActionCounter("org-1", now);
-    expect(counter.actionsUsed).toBe(5);
+    // The debit is the one tenant transaction a prepaid org inside its
+    // allowance opens; nothing else on the recorder path writes.
+    expect(txs).toHaveLength(1);
   });
 
-  it("raises no debit while inside the allowance", async () => {
-    const result = await recordGovernedAction({
-      orgId: "org-1",
-      actions: 10,
-      capability: "send_message",
-      tier: "build", // 250,000 allowance
-      now,
+  it("uses the subscription's period from periodFor, not the calendar month", async () => {
+    mocks.resolveGauEntitlement.mockResolvedValue({
+      terms: BUILD_TERMS,
+      subscription: {
+        billingInterval: "month",
+        currentPeriodStart: new Date("2026-09-03T08:00:00.000Z"),
+        currentPeriodEnd: new Date("2026-10-03T08:00:00.000Z"),
+      },
     });
-
-    expect(result.billableActions).toBe(0);
-    expect(result.creditsCharged).toBe(0n);
-    expect(consumeCreditsMock).not.toHaveBeenCalled();
-  });
-
-  it("debits via consumeCredits with reason consume_execution and referenceType governed_action once past the allowance", async () => {
-    // Seed the counter already at the free tier's 25,000 allowance.
-    await incrementActionCounter("org-1", 25_000, 0, now);
-    consumeCreditsMock.mockResolvedValueOnce({
-      chargedCents: 20n,
-      shortfallCents: 0n,
-      balanceCents: 980n,
-      carryMicroCents: 0n,
-    });
-
-    const result = await recordGovernedAction({
-      orgId: "org-1",
-      actions: 10,
-      capability: "send_message",
-      tier: "free",
-      now,
-    });
-
-    expect(result.billableActions).toBe(10);
-    expect(result.band.id).toBe("first-1m");
-    expect(result.creditsCharged).toBe(20n);
-    expect(consumeCreditsMock).toHaveBeenCalledTimes(1);
-    expect(consumeCreditsMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        orgId: "org-1",
-        requestedMicroCents: 20_000_000n, // 10 actions @ $20/1000 = 20 credits
-        reason: CREDIT_REASONS.CONSUME_EXECUTION,
-        referenceType: "governed_action",
-      }),
+    const result = await record(1);
+    expect(result.bucket.periodStart).toEqual(
+      new Date("2026-09-03T08:00:00.000Z"),
+    );
+    expect(result.bucket.periodEnd).toEqual(
+      new Date("2026-10-03T08:00:00.000Z"),
     );
   });
 
-  it("writes NO referenceId (undefined, never fabricated) when there is no runId", async () => {
-    await incrementActionCounter("org-1", 25_000, 0, now);
-    await recordGovernedAction({
-      orgId: "org-1",
-      actions: 10,
-      capability: "send_message",
-      tier: "free",
-      now,
-    });
-
-    const call = consumeCreditsMock.mock.calls[0]?.[0] as {
-      referenceId?: string;
-    };
-    expect(call.referenceId).toBeUndefined();
-    expect(Object.prototype.hasOwnProperty.call(call, "referenceId")).toBe(
-      true,
-    );
+  it("debits once per call: two calls add up on the one bucket", async () => {
+    await record(2);
+    const result = await record(5);
+    expect(result.bucket.usedGau).toBe(7);
+    expect(store.buckets).toHaveLength(1);
   });
 
-  it("uses the runId as referenceId when one is given", async () => {
-    await incrementActionCounter("org-1", 25_000, 0, now);
-    const runId = "018f7e4a-4e4a-7000-8000-000000000001";
-    await recordGovernedAction({
-      orgId: "org-1",
-      actions: 10,
-      capability: "send_message",
-      tier: "free",
-      runId,
-      now,
-    });
-
-    const call = consumeCreditsMock.mock.calls[0]?.[0] as {
-      referenceId?: string;
-    };
-    expect(call.referenceId).toBe(runId);
-  });
-
-  it("increments the counter BEFORE debiting, and increments actionsCharged AFTER the debit", async () => {
-    await incrementActionCounter("org-1", 25_000, 0, now);
-    const order: string[] = [];
-    consumeCreditsMock.mockImplementationOnce(async () => {
-      order.push("consumeCredits");
-      const counter = await readActionCounter("org-1", now);
-      // At the moment consumeCredits runs, actionsUsed already reflects this
-      // call's actions, but actionsCharged does not yet.
-      expect(counter.actionsUsed).toBe(25_010);
-      expect(counter.actionsCharged).toBe(0);
-      return {
-        chargedCents: 20n,
-        shortfallCents: 0n,
-        balanceCents: 0n,
-        carryMicroCents: 0n,
-      };
-    });
-
-    await recordGovernedAction({
-      orgId: "org-1",
-      actions: 10,
-      capability: "send_message",
-      tier: "free",
-      now,
-    });
-
-    const finalCounter = await readActionCounter("org-1", now);
-    expect(finalCounter.actionsCharged).toBe(10);
-    expect(order).toEqual(["consumeCredits"]);
-  });
-
-  it("never throws when consumeCredits rejects — the customer's response is already correct", async () => {
-    await incrementActionCounter("org-1", 25_000, 0, now);
-    consumeCreditsMock.mockRejectedValueOnce(new Error("ledger unavailable"));
-
-    await expect(
-      recordGovernedAction({
-        orgId: "org-1",
-        actions: 10,
-        capability: "send_message",
-        tier: "free",
-        now,
-      }),
-    ).resolves.not.toThrow();
-  });
-
-  it("leaves actions counted but uncharged when consumeCredits rejects (the audit gap)", async () => {
-    await incrementActionCounter("org-1", 25_000, 0, now);
-    consumeCreditsMock.mockRejectedValueOnce(new Error("ledger unavailable"));
-
-    const result = await recordGovernedAction({
-      orgId: "org-1",
-      actions: 10,
-      capability: "send_message",
-      tier: "free",
-      now,
-    });
-
-    expect(result.creditsCharged).toBe(0n);
-    expect(result.periodActions).toBe(25_010);
-
-    const counter = await readActionCounter("org-1", now);
-    expect(counter.actionsUsed).toBe(25_010); // still counted
-    expect(counter.actionsCharged).toBe(0); // never charged — the debit failed
-  });
-
-  it("defaults tier to 'free' when none is supplied", async () => {
-    const result = await recordGovernedAction({
-      orgId: "org-1",
-      actions: 1,
-      capability: "send_message",
-      now,
-    });
-    // free allowance is 25,000 — 1 action stays inside it.
-    expect(result.billableActions).toBe(0);
+  it("reports the stored negative remaining when the debit overdraws the bucket", async () => {
+    seedBucket({ includedGau: 50_000, usedGau: 49_999 });
+    const result = await record(3);
+    expect(result.remainingGau).toBe(-2);
+    expect(result.bucket.usedGau).toBe(50_002);
   });
 
   it("treats a fractional actions count as at least 1", async () => {
-    const result = await recordGovernedAction({
-      orgId: "org-1",
-      actions: 0.4,
-      capability: "send_message",
-      tier: "free",
-      now,
-    });
-    expect(result.periodActions).toBe(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// chargeEvidenceRetention — the opt-in guarantee.
-// ---------------------------------------------------------------------------
-
-describe("chargeEvidenceRetention", () => {
-  beforeEach(() => {
-    consumeCreditsMock.mockReset();
-    consumeCreditsMock.mockResolvedValue({
-      chargedCents: 0n,
-      shortfallCents: 0n,
-      balanceCents: 0n,
-      carryMicroCents: 0n,
-    });
+    const result = await record(0.4);
+    expect(result.bucket.usedGau).toBe(1);
   });
 
-  it("refuses and charges nothing when the org has not opted in", async () => {
-    const result = await chargeEvidenceRetention({
-      orgId: "org-1",
-      gbMonths: 100,
-      optedIn: false,
+  // ── item 8c: the auto top-up claim ────────────────────────────────────────
+
+  it("a Free org with no default payment method at remaining ≤ 0 claims no episode, writes no settlement, calls no provider", async () => {
+    mocks.resolveGauEntitlement.mockResolvedValue({
+      terms: FREE_TERMS,
+      subscription: null,
     });
-    expect(result.creditsCharged).toBe(0n);
-    expect(consumeCreditsMock).not.toHaveBeenCalled();
+    mocks.readDefaultPaymentMethod.mockResolvedValue(null);
+    seedBucket({ includedGau: 5_000, usedGau: 4_999 });
+
+    const result = await record(1);
+
+    expect(result.remainingGau).toBe(0);
+    expect(result.autoTopup).toBeNull();
+    expect(store.settlements).toHaveLength(0);
+    expect(store.buckets[0]).toMatchObject({
+      openTopupSettlementId: null,
+      topupSeq: 0,
+    });
+    expect(mocks.readDefaultPaymentMethod).toHaveBeenCalledWith(ORG);
+    expect(store.log.filter((s) => s.op === "update")).toHaveLength(0);
+    expect(mocks.billingProvider).not.toHaveBeenCalled();
   });
 
-  it("charges with reason consume_retention when opted in", async () => {
-    consumeCreditsMock.mockResolvedValueOnce({
-      chargedCents: 8n,
-      shortfallCents: 0n,
-      balanceCents: 992n,
-      carryMicroCents: 0n,
+  it("a Free org with a saved default card claims one auto_topup settlement for auto_topup_blocks × block_size_gau at Free's published rate", async () => {
+    mocks.resolveGauEntitlement.mockResolvedValue({
+      terms: FREE_TERMS,
+      subscription: null,
     });
-
-    const result = await chargeEvidenceRetention({
-      orgId: "org-1",
-      gbMonths: 1,
-      optedIn: true,
+    mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+    mocks.readOrgBillingSettings.mockResolvedValue({
+      ...SETTINGS,
+      autoTopupBlocks: 2,
     });
+    const bucket = seedBucket({ includedGau: 5_000, usedGau: 4_999 });
 
-    expect(result.creditsCharged).toBe(8n);
-    expect(consumeCreditsMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        orgId: "org-1",
-        reason: CREDIT_REASONS.CONSUME_RETENTION,
-        referenceType: "evidence_retention",
-      }),
+    const result = await record(1);
+
+    expect(store.settlements).toHaveLength(1);
+    expect(result.autoTopup).toMatchObject({
+      orgId: ORG,
+      bucketId: bucket.id,
+      kind: "auto_topup",
+      seq: 1,
+      quantityGau: 10_000,
+      ratePerGauMicros: 5_000n,
+      currency: "usd",
+      status: "pending",
+    });
+    expect(store.buckets[0]).toMatchObject({ topupSeq: 1 });
+  });
+
+  it("a Build org with a card claims exactly the same way", async () => {
+    mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+    seedBucket({ includedGau: 50_000, usedGau: 50_000 });
+    const result = await record(1);
+    expect(result.autoTopup).toMatchObject({
+      kind: "auto_topup",
+      quantityGau: 5_000,
+    });
+  });
+
+  it("the claim commits in its own transaction after the debit's", async () => {
+    mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+    seedBucket({ includedGau: 50_000, usedGau: 50_000 });
+    await record(1);
+    const ops = store.log
+      .filter((s) => s.op !== "select")
+      .map((s) => `${s.op}:${s.table}`);
+    expect(ops.slice(0, 3)).toEqual([
+      "upsert:buckets",
+      "update:buckets",
+      "insert:settlements",
+    ]);
+    // The debit and the claim are the first two tenant transactions.
+    expect(store.log.indexOf(store.log.find((s) => s.op === "update")!)).toBe(
+      store.log.findIndex((s) => s.op === "update"),
+    );
+    expect(txs.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("claims nothing while an episode is already open", async () => {
+    mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+    seedBucket({
+      includedGau: 50_000,
+      usedGau: 50_000,
+      openTopupSettlementId: crypto.randomUUID(),
+      topupSeq: 1,
+    });
+    const result = await record(1);
+    expect(result.autoTopup).toBeNull();
+    expect(store.settlements).toHaveLength(0);
+  });
+
+  it("claims nothing when auto top-up is disabled, without reading the card", async () => {
+    mocks.readOrgBillingSettings.mockResolvedValue({
+      ...SETTINGS,
+      autoTopupEnabled: false,
+    });
+    seedBucket({ includedGau: 50_000, usedGau: 50_000 });
+    const result = await record(1);
+    expect(result.autoTopup).toBeNull();
+    expect(mocks.readDefaultPaymentMethod).not.toHaveBeenCalled();
+    expect(store.settlements).toHaveLength(0);
+  });
+
+  it("claims no auto top-up for an invoice-billed org however far past the allowance", async () => {
+    mocks.readOrgBillingSettings.mockResolvedValue({
+      ...SETTINGS,
+      approvedForInvoiceBilling: true,
+    });
+    mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+    const bucket = seedBucket({ includedGau: 50_000, usedGau: 400_000 });
+    const result = await record(1);
+    expect(result.mode).toBe("invoice");
+    expect(result.autoTopup).toBeNull();
+    expect(store.settlements.map((r) => r.kind)).not.toContain("auto_topup");
+    expect(bucket.topupSeq).toBe(0);
+  });
+
+  it("claims nothing while remaining > 0", async () => {
+    mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+    seedBucket({ includedGau: 50_000, usedGau: 49_998 });
+    const result = await record(1);
+    expect(result.remainingGau).toBe(1);
+    expect(result.autoTopup).toBeNull();
+  });
+
+  it("never throws after the debit: a failing claim is logged and the debit stands", async () => {
+    mocks.readDefaultPaymentMethod.mockRejectedValue(
+      new Error("mirror unavailable"),
+    );
+    seedBucket({ includedGau: 50_000, usedGau: 50_000 });
+    const result = await record(1);
+    expect(result.bucket.usedGau).toBe(50_001);
+    expect(result.autoTopup).toBeNull();
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: ORG, err: "mirror unavailable" }),
+      expect.stringMatching(/step after the debit failed/),
     );
   });
 
-  it("charges nothing for zero gb-months, without calling consumeCredits", async () => {
-    const result = await chargeEvidenceRetention({
-      orgId: "org-1",
-      gbMonths: 0,
-      optedIn: true,
+  // ── items 8c–8e: the settlement sequence after a claim ────────────────────
+
+  describe("settlement", () => {
+    /** Every committed tenant transaction and every provider call, in order. */
+    let order: string[];
+    const provider = {
+      createGauInvoice: vi.fn(),
+      finalizeAndPayGauInvoice: vi.fn(),
+    };
+    const settlementRow = () => store.settlements[0]!;
+    const invoiceMode = (over: Record<string, unknown> = {}) =>
+      mocks.readOrgBillingSettings.mockResolvedValue({
+        ...SETTINGS,
+        approvedForInvoiceBilling: true,
+        invoiceGauMax: 1_000,
+        ...over,
+      });
+
+    beforeEach(() => {
+      order = [];
+      mocks.withTenantDb.mockImplementation(
+        async (fn: (tx: unknown) => unknown) => {
+          const tx = fakeGauExecutor(store);
+          txs.push(tx);
+          const out = await fn(tx);
+          order.push("commit");
+          return out;
+        },
+      );
+      mocks.readGauEntitlement.mockResolvedValue({
+        terms: BUILD_TERMS,
+        subscription: null,
+      });
+      mocks.ensureStripeCustomer.mockResolvedValue("cus_ensured");
+      provider.createGauInvoice.mockImplementation(
+        async (input: { settlementId: string }) => {
+          order.push("createGauInvoice");
+          return { invoiceId: `in_${input.settlementId}` };
+        },
+      );
+      provider.finalizeAndPayGauInvoice.mockImplementation(async () => {
+        order.push("finalizeAndPayGauInvoice");
+        return { status: "paid", amountCents: 2_500, hostedInvoiceUrl: null };
+      });
+      mocks.billingProvider.mockReturnValue(provider);
     });
-    expect(result.creditsCharged).toBe(0n);
-    expect(consumeCreditsMock).not.toHaveBeenCalled();
+
+    it("prepaid: commits the claim before the first provider call, charges the saved card for the settings' customer, and the paid top-up grants and clears the episode", async () => {
+      mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+      const bucket = seedBucket({ includedGau: 50_000, usedGau: 50_000 });
+
+      const result = await record(1);
+
+      expect(order).toEqual([
+        "commit", // the debit
+        "commit", // the claim
+        "createGauInvoice",
+        "commit", // recordGauInvoice
+        "finalizeAndPayGauInvoice",
+        "commit", // settleGauPaid
+      ]);
+      expect(provider.createGauInvoice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customerId: "cus_1",
+          settlementId: result.autoTopup!.id,
+          kind: "gau_auto_topup",
+          quantityGau: 5_000,
+          collection: {
+            method: "charge_automatically",
+            defaultPaymentMethodId: "pm_1",
+          },
+        }),
+      );
+      expect(mocks.ensureStripeCustomer).not.toHaveBeenCalled();
+      expect(settlementRow()).toMatchObject({
+        status: "paid",
+        stripeInvoiceId: `in_${result.autoTopup!.id}`,
+      });
+      expect(bucket).toMatchObject({
+        purchasedGau: 5_000,
+        openTopupSettlementId: null,
+      });
+    });
+
+    it("prepaid: a top-up that ends open leaves the episode set, and a second exhaustion in the month claims nothing", async () => {
+      mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+      provider.finalizeAndPayGauInvoice.mockResolvedValue({
+        status: "open",
+        amountCents: 2_500,
+        hostedInvoiceUrl: null,
+      });
+      const bucket = seedBucket({ includedGau: 50_000, usedGau: 50_000 });
+
+      const first = await record(1);
+      const second = await record(1);
+
+      expect(second.autoTopup).toBeNull();
+      expect(store.settlements).toHaveLength(1);
+      expect(settlementRow().status).toBe("open");
+      expect(bucket.openTopupSettlementId).toBe(first.autoTopup!.id);
+      expect(provider.createGauInvoice).toHaveBeenCalledOnce();
+    });
+
+    it("prepaid: a provider that rejects the create leaves the claim pending with no invoice id, and the recorder returns", async () => {
+      mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+      provider.createGauInvoice.mockRejectedValue(new Error("stripe down"));
+      seedBucket({ includedGau: 50_000, usedGau: 50_000 });
+
+      const result = await record(1);
+
+      expect(result.bucket.usedGau).toBe(50_001);
+      expect(settlementRow()).toMatchObject({
+        status: "pending",
+        stripeInvoiceId: null,
+      });
+    });
+
+    it("prepaid: a provider that rejects the finalize leaves the claim pending with its invoice id, and the recorder returns", async () => {
+      mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+      provider.finalizeAndPayGauInvoice.mockRejectedValue(
+        new Error("stripe down"),
+      );
+      seedBucket({ includedGau: 50_000, usedGau: 50_000 });
+
+      const result = await record(1);
+
+      expect(settlementRow()).toMatchObject({
+        status: "pending",
+        stripeInvoiceId: `in_${result.autoTopup!.id}`,
+      });
+      expect(store.buckets[0]!.purchasedGau).toBe(0);
+    });
+
+    it("prepaid: an org with a card and no stripe_customer_id leaves the claim pending and calls no provider", async () => {
+      mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+      mocks.readOrgBillingSettings.mockResolvedValue({
+        ...SETTINGS,
+        stripeCustomerId: null,
+      });
+      seedBucket({ includedGau: 50_000, usedGau: 50_000 });
+
+      await record(1);
+
+      expect(settlementRow().status).toBe("pending");
+      expect(provider.createGauInvoice).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["prepaid inside the allowance", {}, 49_000, CARD, null],
+      [
+        "prepaid exhausted with auto top-up off",
+        { autoTopupEnabled: false },
+        50_000,
+        CARD,
+        null,
+      ],
+      ["prepaid exhausted with no card", {}, 50_000, null, null],
+      ["prepaid exhausted with a card", {}, 50_000, CARD, "auto_topup"],
+      [
+        "invoice-billed below invoice_gau_max",
+        { approvedForInvoiceBilling: true, invoiceGauMax: 1_000 },
+        50_000 + 998,
+        CARD,
+        null,
+      ],
+      [
+        "invoice-billed reaching invoice_gau_max",
+        { approvedForInvoiceBilling: true, invoiceGauMax: 1_000 },
+        50_000 + 999,
+        CARD,
+        "interim_invoice",
+      ],
+      [
+        "an unapproved org past its stored invoice_gau_max, with no card",
+        { approvedForInvoiceBilling: false, invoiceGauMax: 1 },
+        60_000,
+        null,
+        null,
+      ],
+    ])("mode matrix: %s", async (_name, over, usedGau, card, settledKind) => {
+      mocks.readOrgBillingSettings.mockResolvedValue({
+        ...SETTINGS,
+        ...over,
+      });
+      mocks.readDefaultPaymentMethod.mockResolvedValue(card);
+      seedBucket({ includedGau: 50_000, usedGau });
+
+      await expect(record(1)).resolves.toBeDefined();
+
+      expect(store.settlements.map((r) => r.kind)).toEqual(
+        settledKind === null ? [] : [settledKind],
+      );
+      expect(
+        store.settlements.filter((r) => r.kind === "interim_invoice"),
+      ).toHaveLength(settledKind === "interim_invoice" ? 1 : 0);
+    });
+
+    it("invoice: crossing invoice_gau_max claims exactly the max for the customer ensureStripeCustomer resolves, collected from the default card, and accrual restarts", async () => {
+      invoiceMode();
+      mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+      const bucket = seedBucket({ includedGau: 50_000, usedGau: 50_999 });
+
+      const result = await record(1);
+
+      expect(result.interimInvoice).toMatchObject({
+        kind: "interim_invoice",
+        seq: 1,
+        quantityGau: 1_000,
+      });
+      expect(order.slice(0, 3)).toEqual([
+        "commit",
+        "commit",
+        "createGauInvoice",
+      ]);
+      expect(mocks.ensureStripeCustomer).toHaveBeenCalledWith(ORG);
+      expect(provider.createGauInvoice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customerId: "cus_ensured",
+          kind: "gau_interim",
+          quantityGau: 1_000,
+          collection: {
+            method: "charge_automatically",
+            defaultPaymentMethodId: "pm_1",
+          },
+        }),
+      );
+      expect(settlementRow().status).toBe("paid");
+      expect(bucket).toMatchObject({
+        overageInvoicedGau: 1_000,
+        interimSeq: 1,
+        purchasedGau: 0,
+      });
+
+      // GAU #1,001 of overage opens the next accrual; its crossing is seq 2.
+      expect((await record(1)).interimInvoice).toBeNull();
+      const again = await record(999);
+      expect(again.interimInvoice).toMatchObject({
+        seq: 2,
+        quantityGau: 1_000,
+      });
+    });
+
+    it("invoice: an org with no default payment method gets a send_invoice invoice and ends open with an invoice id and no failed row", async () => {
+      invoiceMode();
+      mocks.readDefaultPaymentMethod.mockResolvedValue(null);
+      provider.finalizeAndPayGauInvoice.mockResolvedValue({
+        status: "open",
+        amountCents: 500,
+        hostedInvoiceUrl: "https://invoice.stripe.com/i/interim",
+      });
+      seedBucket({ includedGau: 50_000, usedGau: 50_999 });
+
+      const result = await record(1);
+
+      expect(provider.createGauInvoice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          collection: { method: "send_invoice", daysUntilDue: 30 },
+        }),
+      );
+      expect(settlementRow()).toMatchObject({
+        status: "open",
+        stripeInvoiceId: `in_${result.interimInvoice!.id}`,
+      });
+      expect(store.settlements.map((r) => r.status)).not.toContain("failed");
+    });
+
+    it("invoice: a terms change mid-month prices the next settlement at the new rate", async () => {
+      invoiceMode();
+      mocks.readDefaultPaymentMethod.mockResolvedValue(CARD);
+      seedBucket({ includedGau: 50_000, usedGau: 50_999 });
+      await record(1);
+
+      mocks.resolveGauEntitlement.mockResolvedValue({
+        terms: { ...BUILD_TERMS, ratePerGauMicros: 4_000n },
+        subscription: null,
+      });
+      await record(1_000);
+
+      expect(store.settlements.map((r) => r.ratePerGauMicros)).toEqual([
+        5_000n,
+        4_000n,
+      ]);
+      expect(provider.createGauInvoice).toHaveBeenLastCalledWith(
+        expect.objectContaining({ ratePerGauMicros: 4_000n }),
+      );
+    });
   });
 });

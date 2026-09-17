@@ -245,6 +245,12 @@ export interface BillingInvoice {
   orgId: string | null;
   /** Reason this invoice was created ("subscription_create", "subscription_cycle", etc.). */
   billingReason: string | null;
+  /**
+   * The governed-action settlement this invoice settles, from
+   * `metadata.gau_settlement_id`; null for every other invoice. The webhook
+   * routes `invoice.paid` and `invoice.payment_failed` on it (ADR-055 §6).
+   */
+  gauSettlementId: string | null;
   lineItems: BillingInvoiceLineItem[];
 }
 
@@ -286,10 +292,96 @@ export interface BillingCheckoutDynamicCreditInput {
   cancelUrl: string;
 }
 
+/**
+ * A block purchase of governed action units (ADR-055 §6,
+ * apps/app/ARCHITECTURE.md §3.9 item 11). One `price_data` line at the block
+ * price, `quantity: blocks`; the session and its invoice carry the terms the
+ * purchase was priced at, so the webhook grant needs nothing from the
+ * handler. The card Checkout collects is saved for off-session use (the
+ * recorder's auto top-up).
+ */
+export interface BillingCheckoutGauInput {
+  customerId: string;
+  orgId: string;
+  /** Units purchased: `blocks × block size`. */
+  quantityGau: number;
+  blocks: number;
+  /** Price of one block in minor units of `currency`; a whole number by the plans/contract_terms CHECK. */
+  blockPriceCents: number;
+  /** Micro-dollars per GAU, recorded on the session for the settlement row. */
+  ratePerGauMicros: bigint;
+  /** ISO 4217, lower case. */
+  currency: string;
+  successUrl: string;
+  cancelUrl: string;
+}
+
 export interface BillingCheckoutResult {
   sessionId: string;
   url: string;
 }
+
+/** The card a completed Checkout Session collected and saved to the customer. */
+export interface BillingCheckoutPaymentMethod {
+  id: string;
+  /** Provider payment-method type (`card`, `link`, …). */
+  type: string;
+  brand: string | null;
+  last4: string | null;
+  expMonth: number | null;
+  expYear: number | null;
+}
+
+// ── Governed-action settlement invoices ──────────────────────────────────────
+
+/** The `oxagen_kind` a settlement invoice carries (ARCHITECTURE.md §3.9 item 11). */
+export type GauInvoiceKind =
+  | "gau_auto_topup"
+  | "gau_interim"
+  | "gau_period_close";
+
+/**
+ * How Stripe collects a settlement invoice: from the org's default card, or
+ * by emailing the hosted invoice when the org has saved none.
+ */
+export type GauInvoiceCollection =
+  | { method: "charge_automatically"; defaultPaymentMethodId: string }
+  | { method: "send_invoice"; daysUntilDue: number };
+
+export interface BillingGauInvoiceInput {
+  customerId: string;
+  orgId: string;
+  /** The settlement row's id: the invoice metadata the webhook routes on, and the prefix of every idempotency key. */
+  settlementId: string;
+  kind: GauInvoiceKind;
+  quantityGau: number;
+  /** Micro-dollars per GAU, charged exactly as the line's unit amount. */
+  ratePerGauMicros: bigint;
+  /** ISO 4217, lower case. */
+  currency: string;
+  description: string;
+  collection: GauInvoiceCollection;
+}
+
+/** A settlement's invoice, addressed by both ids so each request can be keyed on the settlement. */
+export interface BillingGauInvoiceRef {
+  settlementId: string;
+  invoiceId: string;
+}
+
+export interface BillingGauInvoicePayment {
+  /** `paid`: collected. `open`: finalized and unpaid; Stripe owns collection from here. */
+  status: "paid" | "open";
+  amountCents: number;
+  hostedInvoiceUrl: string | null;
+}
+
+/** What `deleteOrVoidDraftInvoice` found and did. `absent`: already void or deleted. */
+export type BillingDraftInvoiceOutcome =
+  | "deleted"
+  | "voided"
+  | "paid"
+  | "absent";
 
 // ── Credit-pack line items ───────────────────────────────────────────────────
 
@@ -358,10 +450,17 @@ export interface BillingCheckoutSession {
   id: string;
   mode: string;
   paymentStatus: string;
+  /** Provider customer the session was created for; null for a guest session. */
+  customerId: string | null;
   /** Metadata on the session (e.g. org_id). */
   metadata: Record<string, string>;
   /** Provider subscription id created from this session (if mode=subscription). */
   subscriptionId: string | null;
+  /**
+   * The invoice a payment-mode session issued, present only when the session
+   * was created with `invoice_creation` enabled (the GAU block purchase).
+   */
+  invoiceId: string | null;
 }
 
 // ── BillingProvider interface ────────────────────────────────────────────────
@@ -454,6 +553,33 @@ export interface BillingProvider {
   /** Retrieve a full invoice including line items. */
   getInvoice(invoiceId: string): Promise<BillingInvoice>;
 
+  /**
+   * Create a settlement's invoice as a draft (`auto_advance: false`) with its
+   * one line: `quantityGau` units at the per-GAU rate. Stripe never finalizes
+   * or collects the draft on its own.
+   */
+  createGauInvoice(
+    input: BillingGauInvoiceInput,
+  ): Promise<{ invoiceId: string }>;
+
+  /**
+   * Do what is left of a settlement invoice by Stripe's own state: finalize a
+   * draft (`auto_advance: true`), charge an open `charge_automatically`
+   * invoice off-session. Answers `open` for every outcome that leaves a
+   * finalized, unpaid invoice with Stripe; throws for anything else.
+   */
+  finalizeAndPayGauInvoice(
+    ref: BillingGauInvoiceRef,
+  ): Promise<BillingGauInvoicePayment>;
+
+  /**
+   * Remove a superseded settlement's invoice: delete a draft, void an open
+   * invoice, leave a paid, void or deleted one alone.
+   */
+  deleteOrVoidDraftInvoice(
+    ref: BillingGauInvoiceRef,
+  ): Promise<{ outcome: BillingDraftInvoiceOutcome }>;
+
   // ── Checkout ─────────────────────────────────────────────────────────────────
 
   /** Create a subscription checkout session. */
@@ -480,6 +606,24 @@ export interface BillingProvider {
   getCheckoutSessionCreditPacks(
     sessionId: string,
   ): Promise<BillingCreditPackLineItem[]>;
+
+  /**
+   * Create the block-purchase checkout session of ADR-055 §6: `mode: "payment"`,
+   * one inline `price_data` line, an invoice for the payment, and the card
+   * saved for off-session use. No pre-created Price is involved.
+   */
+  createGauCheckout(
+    input: BillingCheckoutGauInput,
+  ): Promise<BillingCheckoutResult>;
+
+  /**
+   * The payment method a completed checkout session charged and saved, or
+   * null when the session holds none (unpaid, or a method Checkout did not
+   * attach).
+   */
+  getCheckoutPaymentMethod(
+    sessionId: string,
+  ): Promise<BillingCheckoutPaymentMethod | null>;
 
   // ── Webhook ─────────────────────────────────────────────────────────────────
 

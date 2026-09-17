@@ -1,0 +1,263 @@
+// The §2 layer matrix and platform-package allowlist of ARCHITECTURE.md as data,
+// consumed by import-graph.test.ts. Paths are posix and relative to `src/`
+// without extension; a directory import ends in `/index` (parse.ts).
+//
+// Readings this file settles, each recorded in the PR that made it (WL-01
+// unless named):
+// - The named rows of the platform allowlist add to the base row ("everything
+//   else under src/"): kernel.ts reports to telemetry (§3.2 steps 0 and 6), so
+//   the base row's `captureError` must reach it.
+// - `@oxagen/ui` is the shared component library, not a platform package: it
+//   touches no store and no kernel, and the root layout and sidebar import it,
+//   so it is outside the platform set.
+// - `src/i18n/**` has no row in §2; it is treated as a leaf like `src/shared`
+//   (it may import only itself). The one edge into it, `app/layout.tsx` →
+//   `@/i18n/catalogs`, is a baseline entry for WL-33's root-layout rewrite.
+import type { ImportEdge } from "./parse";
+
+export type Directive = "use client" | "use server" | null;
+
+export type Importer = {
+  /** Posix path relative to `src/`, without extension. */
+  readonly file: string;
+  readonly directive: Directive;
+};
+
+type LayerName =
+  | "app"
+  | "features"
+  | "ui"
+  | "vocabulary"
+  | "ports"
+  | "source"
+  | "live"
+  | "server"
+  | "shared"
+  | "proxy"
+  | "i18n";
+
+const under = (file: string, dir: string): boolean =>
+  file.startsWith(`${dir}/`);
+
+const featurePage = (file: string): string | null =>
+  under(file, "features") ? (file.split("/")[1] ?? null) : null;
+
+const isFeatureBarrel = (target: string): boolean =>
+  /^features\/[^/]+\/index$/.test(target);
+
+/** Every binding of the edge is in `names`; a side-effect import or a namespace binds more than that. */
+const onlyNames = (edge: ImportEdge, names: readonly string[]): boolean =>
+  edge.names.length > 0 && edge.names.every((name) => names.includes(name));
+
+const isVocabulary = (target: string): boolean =>
+  target === "data/read" ||
+  under(target, "data/contracts") ||
+  target === "data/unrecorded";
+
+/** Which §2 row a production module falls under; null for a file the matrix does not place. */
+function layerOf(file: string): LayerName | null {
+  if (under(file, "app")) return "app";
+  if (under(file, "features")) return "features";
+  if (under(file, "ui")) return "ui";
+  if (isVocabulary(file)) return "vocabulary";
+  if (file === "data/ports") return "ports";
+  if (file === "data/source") return "source";
+  if (under(file, "data/live")) return "live";
+  if (under(file, "server")) return "server";
+  if (under(file, "shared")) return "shared";
+  if (file === "proxy") return "proxy";
+  if (under(file, "i18n")) return "i18n";
+  return null;
+}
+
+/**
+ * The "May import (internal)" column of §2, one predicate per row. A file the
+ * matrix does not place may import nothing internal: every edge out of it is a
+ * violation until the file is deleted or moved into a row.
+ */
+const ALLOWED: Record<
+  LayerName,
+  (from: Importer, target: string, edge: ImportEdge) => boolean
+> = {
+  app: (_from, target) =>
+    isFeatureBarrel(target) ||
+    target === "server/viewer" ||
+    target === "data/source" ||
+    under(target, "ui") ||
+    under(target, "shared"),
+  features: (from, target, edge) => {
+    const page = featurePage(from.file);
+    if (page !== null && under(target, `features/${page}`)) return true;
+    if (isFeatureBarrel(target)) return true;
+    if (under(target, "ui") || under(target, "shared")) return true;
+    if (isVocabulary(target) || target === "data/ports") return true;
+    if (target === "server/viewer" || target === "server/session") return true;
+    // `kernelWrite`, only from a "use server" module; its types from anywhere.
+    if (target === "server/kernel") {
+      return (
+        edge.typeOnly ||
+        (from.directive === "use server" && onlyNames(edge, ["kernelWrite"]))
+      );
+    }
+    // The stream handler alone (§3.5).
+    if (target === "server/sse") return from.file === "features/run/stream";
+    return false;
+  },
+  // The "(types)" qualifiers of §2 are read literally: a value import of a
+  // zod schema from `@/data/contracts/*` or of `@/data/read` is a layer violation
+  // from `ui`, as is a value import of `@/server/viewer` from `ports`.
+  ui: (_from, target, edge) =>
+    under(target, "ui") ||
+    target === "data/unrecorded" ||
+    (isVocabulary(target) && edge.typeOnly) ||
+    under(target, "shared"),
+  vocabulary: (_from, target) => isVocabulary(target),
+  ports: (_from, target, edge) =>
+    target === "data/read" ||
+    under(target, "data/contracts") ||
+    (target === "server/viewer" && edge.typeOnly),
+  source: (_from, target) => under(target, "data/live"),
+  live: (_from, target) =>
+    isVocabulary(target) ||
+    target === "data/ports" ||
+    target === "server/kernel" ||
+    under(target, "data/live"),
+  server: (_from, target) =>
+    target === "data/read" ||
+    under(target, "shared") ||
+    under(target, "server"),
+  shared: (_from, target) => under(target, "shared"),
+  proxy: (_from, target) => under(target, "shared"),
+  i18n: (_from, target) => under(target, "i18n"),
+};
+
+/**
+ * INV-22: a module that exists for tests. No §2 row admits an edge to one, so
+ * the `features` row's same-feature grant and the `server` row's own-directory
+ * grant stop at `shell.builders` and `viewer.testing`. Test files are not
+ * judged as importers (parse.ts `isTestOnly`), which is what leaves them free
+ * to import these.
+ */
+export const testOnlyTarget = (target: string): boolean =>
+  /\.builders$/.test(target) || target === "server/viewer.testing";
+
+/** INV-02: the module that exports the MINT token. */
+export const MINT_MODULE = "server/viewer-mint";
+
+/** INV-02: the only modules that may hold the MINT token, test files included. */
+export const MINT_IMPORTERS: readonly string[] = [
+  "server/viewer",
+  "server/viewer.testing",
+];
+
+/** INV-07: does the §2 row of `from` admit an internal edge to `target`? */
+export function layerAllows(
+  from: Importer,
+  target: string,
+  edge: ImportEdge,
+): boolean {
+  if (target === MINT_MODULE) return MINT_IMPORTERS.includes(from.file);
+  if (testOnlyTarget(target)) return false;
+  const layer = layerOf(from.file);
+  return layer !== null && ALLOWED[layer](from, target, edge);
+}
+
+/** INV-21: a "use client" module never reaches these, whatever its row says. */
+export function clientBoundaryRefuses(
+  target: string,
+  edge: ImportEdge,
+): boolean {
+  if (under(target, "server")) return !edge.typeOnly;
+  return (
+    target === "data/source" ||
+    under(target, "data/live") ||
+    isFeatureBarrel(target)
+  );
+}
+
+// --- Platform-package allowlist (INV-03, INV-05) -----------------------------
+
+/** A specifier the allowlist governs: every `@oxagen/*` entry except the UI library, plus the ORM. */
+export function isPlatformSpecifier(specifier: string): boolean {
+  if (specifier === "@oxagen/ui" || specifier.startsWith("@oxagen/ui/")) {
+    return false;
+  }
+  return (
+    specifier.startsWith("@oxagen/") ||
+    specifier === "drizzle-orm" ||
+    specifier.startsWith("drizzle-orm/")
+  );
+}
+
+/** Specifier patterns: exact, or `<prefix>/*` for any subpath except `index` (the barrel through the export map). */
+const matches = (pattern: string, specifier: string): boolean => {
+  if (!pattern.endsWith("/*")) return pattern === specifier;
+  const prefix = pattern.slice(0, -1);
+  return (
+    specifier.startsWith(prefix) &&
+    specifier.length > prefix.length &&
+    specifier.slice(prefix.length) !== "index"
+  );
+};
+
+/** Rows keyed by file relative to APP_DIR (the module rows of the §2 table). */
+const PLATFORM_ROWS: Readonly<Record<string, readonly string[]>> = {
+  "src/server/kernel.ts": [
+    "@oxagen/oxagen",
+    "@oxagen/oxagen/kernel",
+    "@oxagen/oxagen/registry",
+    "@oxagen/oxagen/types",
+    "@oxagen/handlers/register",
+    "@oxagen/agent/register",
+  ],
+  "src/server/session.ts": ["@oxagen/auth", "@oxagen/auth/*"],
+  "src/features/auth/auth-client.ts": ["@oxagen/auth/client"],
+  // The emitted security event types the Audit filter offers (#2528, #3097):
+  // a pure leaf package with no store and no kernel.
+  "src/features/audit/filters.ts": ["@oxagen/compliance"],
+  "src/server/tenancy-lookups.ts": ["@oxagen/database", "drizzle-orm"],
+  "instrumentation.ts": [
+    "@oxagen/oxagen/kernel",
+    "@oxagen/iam",
+    "@oxagen/billing",
+    "@oxagen/plugins",
+    "@oxagen/rules",
+    "@oxagen/database/data-plane",
+  ],
+};
+
+/**
+ * Bindings a row admits from a specifier its module list does not name whole
+ * (#3048). `instrumentation.ts` is the process bootstrap: it wires the tracer,
+ * the RLS connection guard and the security event emitter, as
+ * `apps/api/src/bootstrap.ts` and `apps/mcp/src/middleware.ts` do. Any other
+ * binding from these specifiers, a namespace or a side-effect import is refused.
+ */
+const PLATFORM_NAMED_ROWS: Readonly<
+  Record<string, Readonly<Record<string, readonly string[]>>>
+> = {
+  "instrumentation.ts": {
+    "@oxagen/telemetry": ["initTracer", "recordSecurityEvent"],
+    "@oxagen/database/security": ["makeSecurityEventInserter"],
+    "@oxagen/database": ["assertRlsConnectionSafe"],
+  },
+};
+
+/** The base row, "everything else under src/": contract declarations, and one telemetry export. */
+const BASE_SPECIFIERS = ["@oxagen/oxagen/contracts/*"] as const;
+const BASE_NAMED: Readonly<Record<string, readonly string[]>> = {
+  "@oxagen/telemetry": ["captureError"],
+};
+
+/** Does the allowlist admit `edge` from the file at `appFile` (relative to APP_DIR)? */
+export function platformAllows(appFile: string, edge: ImportEdge): boolean {
+  const { specifier } = edge;
+  const row = PLATFORM_ROWS[appFile] ?? [];
+  if ([...row, ...BASE_SPECIFIERS].some((p) => matches(p, specifier))) {
+    return true;
+  }
+  return onlyNames(edge, [
+    ...(BASE_NAMED[specifier] ?? []),
+    ...(PLATFORM_NAMED_ROWS[appFile]?.[specifier] ?? []),
+  ]);
+}

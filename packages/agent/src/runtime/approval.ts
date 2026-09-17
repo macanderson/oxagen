@@ -1,5 +1,7 @@
 import { withTenantDb, schema } from "@oxagen/database";
-import { eq, and, sql } from "drizzle-orm";
+import { inputDigest } from "@oxagen/rules";
+import { notifyApprovalRequested } from "@oxagen/rules/approval-notify";
+import { eq, and, gt, isNull, sql } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
 import postgres from "postgres";
 import pino from "pino";
@@ -13,12 +15,32 @@ const logger = pino({
 // resolve to `expired` server-side rather than dangling forever.
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
 
+// The fan-out's own bounds live beside the fan-out, in @oxagen/rules: there
+// are two writers of an approval row and only one place that tells people
+// about it. Re-exported here because this module is where they were first
+// read from, and the cap is part of this module's contract with its callers.
+export {
+  APPROVAL_NOTIFY_CHUNK,
+  APPROVAL_NOTIFY_MAX_RECIPIENTS,
+} from "@oxagen/rules/approval-notify";
+
 export interface CreateApprovalArgs {
   orgId: string;
   workspaceId: string;
   messageId: string;
   capabilityName: string;
   inputPreview: unknown;
+  /**
+   * The capability input this approval is for, when it is the value `invoke()`
+   * will receive. Its canonical digest is what a rule's standing window is
+   * keyed on, so a person approving THIS card can satisfy a later window for
+   * the same call.
+   *
+   * Pass it only where the value provably matches what the decision path
+   * digests. Omit it and the row stores a null digest, which is what it did
+   * before: no standing match, and the next call asks a person again.
+   */
+  digestInput?: unknown;
   riskLevel: "low" | "medium" | "high";
   executionStepId?: string | null;
   toolCallId?: string | null;
@@ -99,8 +121,44 @@ export async function createApprovalRequest(
   args: CreateApprovalArgs,
 ): Promise<{ approvalId: string }> {
   const expiresAt = new Date(Date.now() + (args.ttlMs ?? DEFAULT_TTL_MS));
-  const [row] = await withTenantDb((tx) =>
-    tx
+  // An ordinary approval row used to store no digest at all, so a person's
+  // decision here could never satisfy a rule's standing window and the next
+  // identical call asked again. That is friction rather than exposure, which
+  // is why it is safe to fix — and why the fix must not overshoot: a digest
+  // computed over a DIFFERENT value than the decision path digests would
+  // produce a false match, turning the friction into a skipped person.
+  //
+  // `inputDigest` refuses a value it cannot encode (see its contract), and a
+  // refusal here must not stop an approval card from being written. A throw
+  // leaves the digest null, which is exactly the old behaviour: no standing
+  // match, a person is asked.
+  let digest: string | null = null;
+  if (args.digestInput !== undefined) {
+    try {
+      digest = inputDigest(args.digestInput);
+    } catch {
+      digest = null;
+    }
+  }
+  const approvalId = await withTenantDb(async (tx) => {
+    // One live approval per parked call. `approvalMode: "park"` throws rather
+    // than blocking, so the model sees a failed tool call and may ask again for
+    // the same call — without this, each retry writes a fresh approval and
+    // another fan-out, and the person is asked to answer the same write several
+    // times. The key is the call: the turn's message, the capability, and the
+    // engine's tool-call id when there is one.
+    //
+    // Scoped to unresolved rows, so a call denied once can be asked again.
+    // This closes the retry case, which is sequential inside one turn; two
+    // processes parking the same call at the same instant would still write
+    // two rows. The durable close is a partial unique index on
+    // (workspace_id, message_id, capability_name, tool_call_id) NULLS NOT
+    // DISTINCT WHERE resolution IS NULL, which needs a migration this worktree
+    // cannot hash (no atlas binary) or verify (no database).
+    const existing = await findLiveApproval(tx, args);
+    if (existing) return existing;
+
+    const [row] = await tx
       .insert(schema.approvalRequests)
       .values({
         orgId: args.orgId,
@@ -111,12 +169,58 @@ export async function createApprovalRequest(
         riskLevel: args.riskLevel,
         executionStepId: args.executionStepId ?? null,
         toolCallId: args.toolCallId ?? null,
+        inputDigest: digest,
         expiresAt,
       })
-      .returning({ id: schema.approvalRequests.id }),
-  );
-  if (!row) throw new Error("approval insert failed");
-  return { approvalId: row.id };
+      .returning({ id: schema.approvalRequests.id });
+    if (!row) throw new Error("approval insert failed");
+
+    // MC spec §7.7 approval.requested, written with the approval so neither
+    // exists without the other. Shared with the mandate gate's own insert,
+    // which parks a call when an `alwaysHumanFor` or `humanAbove` rule fires:
+    // the fan-out belongs to the approval row, not to one of its writers.
+    await notifyApprovalRequested(tx, {
+      orgId: args.orgId,
+      workspaceId: args.workspaceId,
+      capabilityName: args.capabilityName,
+      riskLevel: args.riskLevel,
+      expiresAt,
+    });
+    return row.id;
+  });
+  return { approvalId };
+}
+
+type Tx = Parameters<Parameters<typeof withTenantDb>[0]>[0];
+
+/**
+ * An unresolved approval already standing for this exact parked call, if one
+ * is. Expired rows are excluded: an approval past its window cannot be
+ * answered, so reusing it would park the retry on something nobody can act on.
+ */
+async function findLiveApproval(
+  tx: Tx,
+  args: CreateApprovalArgs,
+): Promise<string | null> {
+  const a = schema.approvalRequests;
+  const [row] = await tx
+    .select({ id: a.id })
+    .from(a)
+    .where(
+      and(
+        eq(a.orgId, args.orgId),
+        eq(a.workspaceId, args.workspaceId),
+        eq(a.messageId, args.messageId),
+        eq(a.capabilityName, args.capabilityName),
+        args.toolCallId
+          ? eq(a.toolCallId, args.toolCallId)
+          : isNull(a.toolCallId),
+        isNull(a.resolution),
+        gt(a.expiresAt, new Date()),
+      ),
+    )
+    .limit(1);
+  return row?.id ?? null;
 }
 
 // Pauses execution until the approval resolves (via PG NOTIFY) or the

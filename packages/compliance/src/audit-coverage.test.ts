@@ -118,6 +118,8 @@ const REQUIRED_EMIT_PREFIXES: readonly string[] = [
   "workspace.settings.write", // workspace-profile mutation
   "org.create", // org creation (privileged bootstrap)
   "iam-provision", // IAM bootstrap helper (roles / principals / grants)
+  "mandate.", // mandates: grant / limits change / revoke (ADR-059); reads and the draft request are exempt
+  "approval_rule.", // auto-approval rules: written, switched off, deleted (ADR-070); the two reads are exempt
   "prompt.settings.write", // system-prompt customization mutation
 ] as const;
 

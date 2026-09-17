@@ -17,7 +17,7 @@ export const agentMemoryPromotionRationales = registerCapability({
     "Suggest short, context-grounded rationales for promoting or demoting a memory, drafted by a low-cost model from the memory's lesson and citation signals.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "memory" },
   sensitivity: "low",

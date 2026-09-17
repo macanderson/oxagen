@@ -4,7 +4,8 @@
  * Covers:
  *  - bootstrapBillingRuntime calls setBillingAdmissionGate on first call
  *  - bootstrapBillingRuntime is idempotent (second call is a no-op)
- *  - The gate function delegate calls assertCanStartTurn
+ *  - The gate function delegate calls assertGauAvailable, never the credit
+ *    gate assertCanStartTurn (ADR-055: it survives for the assistant turn only)
  *
  * Each test gets a fresh module import so the `booted` module-level flag is
  * reset between tests. vi.resetModules() is called in beforeEach to ensure
@@ -46,21 +47,14 @@ vi.mock(
     >,
 );
 
-// ADR-052 accrual. Both are mocked because the real ones open a tenant scope
-// and a system-db connection, which a bootstrap test has no business needing:
-// the question here is only whether bootstrap wires the recorder to them.
+// ADR-052 accrual. Mocked because the real one opens a tenant scope, which a
+// bootstrap test has no business needing: the question here is only whether
+// bootstrap wires the recorder to it.
 const recordGovernedActionMock = vi.fn().mockResolvedValue({
-  periodActions: 1,
-  billableActions: 0,
-  band: {
-    id: "first-1m",
-    minAnnualActions: 0,
-    maxAnnualActions: 1_000_000,
-    usdPer1000: 20,
-  },
-  creditsCharged: 0n,
-  shortfallCredits: 0n,
-  mode: "charge" as const,
+  bucket: {},
+  remainingGau: 1,
+  mode: "prepaid" as const,
+  autoTopup: null,
 });
 vi.mock(
   "./action-metering",
@@ -71,21 +65,18 @@ vi.mock(
     >,
 );
 
-const resolveOrgActionEntitlementMock = vi.fn().mockResolvedValue({
-  tier: "scale" as const,
-  includedActionsAnnual: 1_500_000,
-});
+const assertGauAvailableMock = vi.fn().mockResolvedValue(undefined);
 vi.mock(
-  "./plan-allowance",
+  "./gau-bucket",
   () =>
-    ({
-      resolveOrgActionEntitlement: resolveOrgActionEntitlementMock,
-    }) satisfies Pick<
-      typeof import("./plan-allowance"),
-      "resolveOrgActionEntitlement"
+    ({ assertGauAvailable: assertGauAvailableMock }) satisfies Pick<
+      typeof import("./gau-bucket"),
+      "assertGauAvailable"
     >,
 );
 
+// The credit-balance gate is mocked so the test can prove bootstrap does NOT
+// install it: it survives for the ADR-053 assistant turn only.
 const assertCanStartTurnMock = vi.fn().mockResolvedValue(undefined);
 vi.mock(
   "./metering",
@@ -134,7 +125,7 @@ describe("bootstrapBillingRuntime", () => {
     expect(setBillingAdmissionGateMock).toHaveBeenCalledTimes(1);
   });
 
-  it("the registered gate delegates to assertCanStartTurn", async () => {
+  it("the registered gate delegates to assertGauAvailable and never to the credit gate", async () => {
     const { bootstrapBillingRuntime } = await import("./bootstrap");
     bootstrapBillingRuntime();
     // The gate function was registered in the call above — extract it.
@@ -143,7 +134,21 @@ describe("bootstrapBillingRuntime", () => {
       | undefined;
     expect(gateFn).toBeDefined();
     await gateFn!("org-test");
-    expect(assertCanStartTurnMock).toHaveBeenCalledWith("org-test");
+    expect(assertGauAvailableMock).toHaveBeenCalledWith("org-test");
+    expect(assertCanStartTurnMock).not.toHaveBeenCalled();
+  });
+
+  it("the registered gate lets a GauExhaustedError through to the kernel", async () => {
+    const { bootstrapBillingRuntime } = await import("./bootstrap");
+    bootstrapBillingRuntime();
+    const refusal = Object.assign(new Error("exhausted"), {
+      code: "gau_exhausted",
+    });
+    assertGauAvailableMock.mockRejectedValueOnce(refusal);
+    const gateFn = setBillingAdmissionGateMock.mock.calls[0]?.[0] as (
+      orgId: string,
+    ) => Promise<void>;
+    await expect(gateFn("org-test")).rejects.toBe(refusal);
   });
 
   // ── ADR-052: accrual is wired, and wired separately from admission ────────
@@ -153,7 +158,7 @@ describe("bootstrapBillingRuntime", () => {
     expect(setUsageRecorderMock).toHaveBeenCalledTimes(1);
   });
 
-  it("the registered recorder resolves the org's entitlement and records the action against it", async () => {
+  it("the registered recorder hands the kernel's record to recordGovernedAction and nothing more", async () => {
     const { bootstrapBillingRuntime } = await import("./bootstrap");
     bootstrapBillingRuntime();
     const recorder = setUsageRecorderMock.mock.calls[0]?.[0] as
@@ -177,15 +182,12 @@ describe("bootstrapBillingRuntime", () => {
       occurredAt,
     });
 
-    expect(resolveOrgActionEntitlementMock).toHaveBeenCalledWith("org-test");
-    // The tier and allowance come from the entitlement read, not from the
-    // record — a caller cannot talk itself onto a cheaper band by claiming one.
+    // The terms, mode and period are resolved inside the recorder, never taken
+    // from the record — a caller cannot talk itself onto cheaper terms.
     expect(recordGovernedActionMock).toHaveBeenCalledWith({
       orgId: "org-test",
       actions: 3,
       capability: "query_ontology",
-      tier: "scale",
-      planIncludedActions: 1_500_000,
       runId: "run-test",
       now: occurredAt,
     });

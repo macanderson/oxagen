@@ -151,6 +151,42 @@ describe("systemInstallInstructionsHandler", () => {
     }
   });
 
+  // ── the wrap with a one-time enrollment token (#2967) ─────────────────────
+
+  it("answers the wrap steps for claude-code and codex when handed an enrollment token", async () => {
+    const enrollmentToken = "oxe_1time_0123456789abcdefghjkmnpqrs";
+    for (const client of ["claude-code", "codex"] as const) {
+      const result = await systemInstallInstructionsHandler(
+        { client, enrollmentToken },
+        CTX,
+      );
+      const commands = result.steps.map((s) => s.command ?? "");
+      expect(commands).toContain(
+        `oxagen agent enroll --token ${enrollmentToken} --harness ${client}`,
+      );
+      // The wrap replaces the MCP steps: no API-key page, no `mcp add`.
+      expect(commands.join("\n")).not.toContain("mcp add");
+      expect(commands.join("\n")).not.toContain("/developer/tokens");
+      expect(result.render.props["steps"]).toEqual(result.steps);
+    }
+  });
+
+  it("ignores the token for a client that has no wrap", async () => {
+    const withToken = await systemInstallInstructionsHandler(
+      {
+        client: "cursor",
+        enrollmentToken: "oxe_1time_0123456789abcdefghjkmnpqrs",
+      },
+      CTX,
+    );
+    const without = await systemInstallInstructionsHandler(
+      { client: "cursor" },
+      CTX,
+    );
+    expect(withToken.steps).toEqual(without.steps);
+    expect(JSON.stringify(withToken)).not.toContain("oxe_1time_");
+  });
+
   // ── error path ────────────────────────────────────────────────────────────
 
   it("throws TypeError when an unsupported client bypasses Zod validation", async () => {

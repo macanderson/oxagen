@@ -14,7 +14,7 @@ export const conversationPurge = registerCapability({
     "Permanently delete every archived conversation the caller owns in this workspace (soft-delete: sets deleted_at; rows retained for audit)",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "docs", "mcp", "unit", "app"],
+  layers: ["schema", "api", "docs", "mcp", "unit"],
   scoped: true,
   agent: {
     requiresApproval: true,

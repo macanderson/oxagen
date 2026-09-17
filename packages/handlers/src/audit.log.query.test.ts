@@ -1,292 +1,310 @@
 /**
- * audit.log.query handler tests.
+ * query_audit_log handler tests.
  *
- * Strategy: mock withSystemDb so no DB is needed. A chainable query stub
- * captures the WHERE conditions and returns canned rows, letting us assert:
- * org-scoping is always applied (tenant isolation), the workspace predicate
- * defaults to the caller's own workspace, events come back newest-first,
- * filters are forwarded, and pagination / hasMore are right.
- *
- * ADR-043 removed the second spine (playbook_events) with the automations
- * subsystem, so `source: "playbook"` now matches nothing.
- *
- * The stub routes .from() by drizzle table identity because the handler now
- * reads org_users too — resolving whether the caller may widen past their own
- * workspace. `mocks.orgRole` is what that lookup returns.
+ * The org is tier-free in every case: the kernel's IAM check allows every
+ * capability there, so each refusal below comes from the handler's own role
+ * gate, which runs for real against a withTenantDb double that answers the
+ * principal and role tables (test-utils/role-tx.ts). The events read runs
+ * against a withSystemDb double that records the WHERE clause, the page
+ * bounds and returns stored rows, so a test asserts which feed a caller was
+ * given, not the shape of a canned reply.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   withSystemDb: vi.fn(),
-  whereArgs: [] as unknown[],
-  securityRows: [] as Record<string, unknown>[],
-  /** The caller's org_users.role, or null for "not a member of this org". */
-  orgRole: null as string | null,
-  tablesRead: [] as unknown[],
+  withTenantDb: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...real, withSystemDb: mocks.withSystemDb };
+  return {
+    ...real,
+    withSystemDb: mocks.withSystemDb,
+    withTenantDb: mocks.withTenantDb,
+  };
 });
 
+import { isHandlerError } from "@oxagen/oxagen";
+import { auditLogQuery } from "@oxagen/oxagen/contracts/audit.log.query";
 import { schema } from "@oxagen/database";
-import { and, eq, type SQL } from "drizzle-orm";
+import { and, eq, gte, lt, type SQL } from "drizzle-orm";
 import { auditLogQueryHandler } from "./audit.log.query";
-import { TEST_CTX as CTX, makeCTX } from "./test-utils/fixtures";
+import { ORG_ONLY_WS } from "./audit.shared";
+import { makeCTX } from "./test-utils/fixtures";
+import { type RoleFixture, roleTenantDb } from "./test-utils/role-tx";
 
-// A query builder whose .from() decides which canned rows to return by drizzle
-// table identity. It records the and(...) condition passed to .where().
-function makeTx() {
+const ORG = "0192d4a8-7c1e-7a00-8000-00000000a0d1";
+const USER = "0192d4a8-7c1e-7a00-8000-0000000005e1";
+const OWN_WS = "0192d4a8-7c1e-7a00-8000-00000000c0e1";
+const OTHER_WS = "0192d4a8-7c1e-7a00-8000-00000000c0e2";
+const KEY = "0192d4a8-7c1e-7a00-8000-0000000a91e1";
+const KEY_CREATOR = "0192d4a8-7c1e-7a00-8000-0000000c7ea7";
+
+/** An organization-level call: the app's org pages carry the sentinel workspace. */
+const orgCall = () =>
+  makeCTX({ orgId: ORG, userId: USER, workspaceId: ORG_ONLY_WS });
+/** A call scoped to one workspace: an API key or a workspace page. */
+const wsCall = () => makeCTX({ orgId: ORG, userId: USER, workspaceId: OWN_WS });
+
+const input = (
+  over: Partial<Parameters<typeof auditLogQuery.input.parse>[0]> = {},
+) => auditLogQuery.input.parse(over);
+
+const read = {
+  where: [] as SQL[],
+  limit: [] as number[],
+  offset: [] as number[],
+};
+let stored: Record<string, unknown>[] = [];
+
+function eventsTx() {
   return {
-    select: () => ({
-      from: (table: unknown) => {
-        mocks.tablesRead.push(table);
-        if (table === schema.orgUsers) {
-          return {
-            where: () => ({
-              limit: () =>
-                Promise.resolve(
-                  mocks.orgRole === null ? [] : [{ role: mocks.orgRole }],
-                ),
-            }),
-          };
-        }
-        // security_events is the only spine left; assert the handler never
-        // reaches for another table.
-        expect(table).toBe(schema.securityEvents);
-        return {
-          where: (cond: unknown) => {
-            mocks.whereArgs.push(cond);
-            return {
-              orderBy: () => ({
-                limit: () => Promise.resolve(mocks.securityRows),
-              }),
-            };
-          },
-        };
-      },
-    }),
+    select: () => {
+      const chain = {
+        from: () => chain,
+        leftJoin: () => chain,
+        where: (cond: SQL) => {
+          read.where.push(cond);
+          return chain;
+        },
+        orderBy: () => chain,
+        limit: (n: number) => {
+          read.limit.push(n);
+          return chain;
+        },
+        offset: (n: number) => {
+          read.offset.push(n);
+          return Promise.resolve(stored.slice(n, n + (read.limit.at(-1) ?? 0)));
+        },
+      };
+      return chain;
+    },
   };
 }
 
-/**
- * Assert the captured WHERE is exactly the given conditions. Built with the
- * same drizzle helpers the handler uses, so this compares the predicate itself
- * rather than reaching into drizzle's SQL internals.
- */
-function expectWhere(...conds: SQL[]): void {
-  expect(mocks.whereArgs[0]).toStrictEqual(and(...conds));
+function roles(fixture: RoleFixture) {
+  mocks.withTenantDb.mockImplementation(roleTenantDb(fixture));
 }
 
-const orgIs = (id: string): SQL => eq(schema.securityEvents.orgId, id);
-const workspaceIs = (id: string): SQL =>
-  eq(schema.securityEvents.workspaceId, id);
+function row(n: number, over: Record<string, unknown> = {}) {
+  const occurredAt = new Date(Date.UTC(2026, 8, 15, 12, 0, 60 - n));
+  return {
+    id: `0192d4a8-7c1e-7a00-8000-${String(n).padStart(12, "0")}`,
+    at: `${occurredAt.toISOString().replace("T", " ").replace("Z", "")}123+00`,
+    occurredAt,
+    eventType: "capability.invoke_denied",
+    actorUserId: USER,
+    actorPublicId: "usr_7k2m9q4x8r1t5v3w6y0z2a",
+    workspaceId: OWN_WS,
+    workspaceSlug: "core-platform",
+    capability: "set_spend_budget",
+    outcome: "deny",
+    ip: "203.0.113.7",
+    userAgent: "Mozilla/5.0",
+    requestId: `req_${n}`,
+    ...over,
+  };
+}
+
+const orgIs = eq(schema.securityEvents.orgId, ORG);
+const workspaceIs = (id: string) => eq(schema.securityEvents.workspaceId, id);
+
+async function refusal(promise: Promise<unknown>) {
+  const err = await promise.then(
+    () => null,
+    (e: unknown) => e,
+  );
+  expect(isHandlerError(err)).toBe(true);
+  return err as { code: string; reason: string };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.whereArgs = [];
-  mocks.securityRows = [];
-  mocks.tablesRead = [];
-  // Default: the caller is an org Owner, which is what the pre-existing
-  // assertions below (whole-org feed, no workspace predicate) describe.
-  mocks.orgRole = "owner";
-  mocks.withSystemDb.mockImplementation(
-    async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx()),
+  read.where = [];
+  read.limit = [];
+  read.offset = [];
+  stored = [];
+  mocks.withSystemDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+    Promise.resolve(fn(eventsTx())),
   );
 });
 
-describe("auditLogQueryHandler", () => {
-  it("returns security events newest-first and reports pagination", async () => {
-    mocks.securityRows = [
-      {
-        eventType: "billing.plan_changed",
-        occurredAt: new Date("2024-01-03T00:00:00Z"),
-        actorUserId: "u1",
-        workspaceId: "ws_1",
-        capability: "start_subscription_upgrade",
-        outcome: "success",
-        requestId: "req1",
-      },
-      {
-        eventType: "auth.sign_in",
-        occurredAt: new Date("2024-01-05T00:00:00Z"),
-        actorUserId: "u1",
-        workspaceId: "ws_1",
-        capability: null,
-        outcome: "success",
-        requestId: "req2",
-      },
+describe("query_audit_log from the organization (the org-only sentinel)", () => {
+  it("gives an org Owner the whole organization's feed with every recorded field", async () => {
+    roles({ org: "Owner" });
+    stored = [
+      row(1),
+      row(2, { ip: null, userAgent: null, actorPublicId: null }),
     ];
 
-    const result = await auditLogQueryHandler(
-      { source: "all", limit: 50, offset: 0 },
-      CTX,
-    );
+    const out = await auditLogQueryHandler(input(), orgCall());
 
-    expect(result.events).toHaveLength(2);
-    // Newest first: Jan 5 before Jan 3.
-    expect(result.events[0]?.eventType).toBe("auth.sign_in");
-    expect(result.events[1]?.capability).toBe("start_subscription_upgrade");
-    expect(result.events.every((e) => e.source === "security")).toBe(true);
-    expect(result.hasMore).toBe(false);
-    expect(result.total).toBe(2);
+    expect(read.where).toEqual([and(orgIs)]);
+    expect(out.events).toEqual([
+      {
+        id: row(1).id,
+        source: "security",
+        eventType: "capability.invoke_denied",
+        occurredAt: row(1).occurredAt.toISOString(),
+        actorUserId: USER,
+        actorPublicId: "usr_7k2m9q4x8r1t5v3w6y0z2a",
+        workspaceId: OWN_WS,
+        workspaceSlug: "core-platform",
+        capability: "set_spend_budget",
+        outcome: "deny",
+        ip: "203.0.113.7",
+        userAgent: "Mozilla/5.0",
+        requestId: "req_1",
+      },
+      expect.objectContaining({
+        ip: null,
+        userAgent: null,
+        actorPublicId: null,
+      }),
+    ]);
+    expect(out).toMatchObject({
+      total: 2,
+      hasMore: false,
+      limit: 50,
+      offset: 0,
+    });
   });
 
-  it("only queries the security spine when source=security", async () => {
-    mocks.securityRows = [
-      {
-        eventType: "auth.sign_in",
-        occurredAt: new Date("2024-01-01T00:00:00Z"),
-        actorUserId: "u1",
-        workspaceId: null,
-        capability: null,
-        outcome: "success",
-        requestId: null,
-      },
-    ];
-
-    const result = await auditLogQueryHandler(
-      { source: "security", limit: 50, offset: 0 },
-      CTX,
-    );
-
-    expect(result.events).toHaveLength(1);
-    expect(result.events.every((e) => e.source === "security")).toBe(true);
-    // Exactly one table was queried.
-    expect(mocks.whereArgs).toHaveLength(1);
+  it("gives an org Admin the whole organization's feed", async () => {
+    roles({ org: "Admin" });
+    await auditLogQueryHandler(input(), orgCall());
+    expect(read.where).toEqual([and(orgIs)]);
   });
 
-  it("always scopes by orgId (tenant-isolation guard)", async () => {
-    // The handler must call withSystemDb and apply an org filter. We assert the
-    // capability cannot run without producing a WHERE clause per queried table.
-    await auditLogQueryHandler({ source: "all", limit: 10, offset: 0 }, CTX);
-    expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
-    expect(mocks.whereArgs.length).toBe(1); // the one surviving spine, filtered
+  it("refuses a Member as forbidden instead of an empty page filtered on the sentinel", async () => {
+    roles({ org: "Member" });
+    const err = await refusal(auditLogQueryHandler(input(), orgCall()));
+    expect(err.code).toBe("forbidden");
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
   });
 
-  it("reports hasMore when more events exist than the page window", async () => {
-    // 2 security rows, limit 1 → after merge, page=1 and hasMore=true.
-    mocks.securityRows = [
-      {
-        eventType: "a",
-        occurredAt: new Date("2024-01-02T00:00:00Z"),
-        actorUserId: null,
-        workspaceId: null,
-        capability: null,
-        outcome: "allow",
-        requestId: null,
-      },
-      {
-        eventType: "b",
-        occurredAt: new Date("2024-01-01T00:00:00Z"),
-        actorUserId: null,
-        workspaceId: null,
-        capability: null,
-        outcome: "allow",
-        requestId: null,
-      },
-    ];
-
-    const result = await auditLogQueryHandler(
-      { source: "security", limit: 1, offset: 0 },
-      CTX,
+  it("refuses a Member naming a workspace", async () => {
+    roles({ org: "Member", workspace: "Owner" });
+    const err = await refusal(
+      auditLogQueryHandler(input({ workspaceId: OWN_WS }), orgCall()),
     );
-    expect(result.events).toHaveLength(1);
-    expect(result.events[0]?.eventType).toBe("a"); // newest
-    expect(result.hasMore).toBe(true);
+    expect(err.code).toBe("forbidden");
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
   });
 });
 
-describe("auditLogQueryHandler — workspace boundary", () => {
-  // The finding: a member scoped to one workspace received the whole org's
-  // security feed, because the workspace predicate was applied only when the
-  // caller happened to name a workspace in the input.
-  it("defaults the workspace predicate to ctx.workspaceId for a non-org-admin", async () => {
-    mocks.orgRole = "member";
-
-    await auditLogQueryHandler(
-      { source: "security", limit: 50, offset: 0 },
-      CTX,
-    );
-
-    expectWhere(orgIs(CTX.orgId), workspaceIs(CTX.workspaceId));
+describe("query_audit_log scoped to a workspace", () => {
+  it("gives that workspace's Owner its own record when they name it", async () => {
+    roles({ org: "Member", workspace: "Owner" });
+    await auditLogQueryHandler(input({ workspaceId: OWN_WS }), wsCall());
+    expect(read.where).toEqual([and(orgIs, workspaceIs(OWN_WS))]);
   });
 
-  it("omits the workspace predicate for an org Owner (the Governance hub feed)", async () => {
-    mocks.orgRole = "owner";
-
-    await auditLogQueryHandler(
-      { source: "security", limit: 50, offset: 0 },
-      CTX,
-    );
-
-    expectWhere(orgIs(CTX.orgId));
+  it("gives that workspace's Owner its own record when they name none", async () => {
+    roles({ org: "Member", workspace: "Owner" });
+    await auditLogQueryHandler(input(), wsCall());
+    expect(read.where).toEqual([and(orgIs, workspaceIs(OWN_WS))]);
   });
 
-  it("accepts an org role written in the capitalized SystemOrgRole casing", async () => {
-    // org_users.role is stored in both casings; a case-sensitive compare would
-    // deny a legitimately promoted admin.
-    mocks.orgRole = "Admin";
-
-    await auditLogQueryHandler(
-      { source: "security", limit: 50, offset: 0 },
-      CTX,
-    );
-
-    expectWhere(orgIs(CTX.orgId));
+  it("gives an org Admin the whole organization when they name no workspace", async () => {
+    roles({ org: "Admin", workspace: null });
+    await auditLogQueryHandler(input(), wsCall());
+    expect(read.where).toEqual([and(orgIs)]);
   });
 
-  it("refuses another workspace to a caller with no org role", async () => {
-    mocks.orgRole = "member";
+  it("lets an org Admin name a sibling workspace", async () => {
+    roles({ org: "Admin" });
+    await auditLogQueryHandler(input({ workspaceId: OTHER_WS }), wsCall());
+    expect(read.where).toEqual([and(orgIs, workspaceIs(OTHER_WS))]);
+  });
 
-    await expect(
-      auditLogQueryHandler(
-        { source: "security", limit: 50, offset: 0, workspaceId: "ws_other" },
-        CTX,
+  it("refuses a workspace Owner naming another workspace, before reading", async () => {
+    roles({ org: "Member", workspace: "Owner" });
+    const err = await refusal(
+      auditLogQueryHandler(input({ workspaceId: OTHER_WS }), wsCall()),
+    );
+    expect(err.code).toBe("forbidden");
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
+  });
+
+  it("refuses a workspace Member naming no workspace", async () => {
+    roles({ org: "Member", workspace: "Member" });
+    const err = await refusal(auditLogQueryHandler(input(), wsCall()));
+    expect(err.code).toBe("forbidden");
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
+  });
+});
+
+describe("query_audit_log from an API key", () => {
+  const keyCall = () =>
+    makeCTX({ orgId: ORG, userId: null, apiKeyId: KEY, workspaceId: OWN_WS });
+
+  it("acts as the key's creator: an org Owner's key reads the organization", async () => {
+    roles({ org: "Owner", keyCreator: KEY_CREATOR });
+    await auditLogQueryHandler(input(), keyCall());
+    expect(read.where).toEqual([and(orgIs)]);
+  });
+
+  it("refuses a key with no recorded creator as no_principal", async () => {
+    roles({ org: "Owner", keyCreator: null });
+    const err = await refusal(
+      auditLogQueryHandler(input({ workspaceId: OTHER_WS }), keyCall()),
+    );
+    expect(err).toMatchObject({ code: "forbidden", reason: "no_principal" });
+  });
+});
+
+describe("query_audit_log filters and paging", () => {
+  beforeEach(() => roles({ org: "Owner" }));
+
+  it("applies every filter on top of the org fence", async () => {
+    await auditLogQueryHandler(
+      input({
+        eventType: "auth.sign_in",
+        actorUserId: USER,
+        actorPublicId: "usr_7k2m9q4x8r1t5v3w6y0z2a",
+        capability: "create_api_key",
+        outcome: "allow",
+        from: "2026-09-01T00:00:00.000Z",
+        to: "2026-09-15T00:00:00.000Z",
+      }),
+      orgCall(),
+    );
+    const se = schema.securityEvents;
+    expect(read.where).toEqual([
+      and(
+        orgIs,
+        eq(se.eventType, "auth.sign_in"),
+        eq(se.actorUserId, USER),
+        eq(schema.users.publicId, "usr_7k2m9q4x8r1t5v3w6y0z2a"),
+        eq(se.capability, "create_api_key"),
+        eq(se.outcome, "allow"),
+        gte(se.occurredAt, new Date("2026-09-01T00:00:00.000Z")),
+        lt(se.occurredAt, new Date("2026-09-15T00:00:00.000Z")),
       ),
-    ).rejects.toThrow(/Forbidden/);
-    // Refused before the spine was read, not after.
-    expect(mocks.whereArgs).toHaveLength(0);
+    ]);
   });
 
-  it("allows an org Admin to name a sibling workspace", async () => {
-    mocks.orgRole = "admin";
-
-    await auditLogQueryHandler(
-      { source: "security", limit: 50, offset: 0, workspaceId: "ws_other" },
-      CTX,
+  it("reads one row past the page to report hasMore, and starts at the offset", async () => {
+    stored = [row(1), row(2), row(3), row(4)];
+    const out = await auditLogQueryHandler(
+      input({ limit: 2, offset: 1 }),
+      orgCall(),
     );
-
-    expectWhere(orgIs(CTX.orgId), workspaceIs("ws_other"));
+    expect(read.limit).toEqual([3]);
+    expect(read.offset).toEqual([1]);
+    expect(out.events.map((e) => e.requestId)).toEqual(["req_2", "req_3"]);
+    expect(out).toMatchObject({ total: 2, hasMore: true, limit: 2, offset: 1 });
   });
 
-  it("does not consult org_users when the caller asks for its own workspace", async () => {
-    mocks.orgRole = "member";
-
-    await auditLogQueryHandler(
-      {
-        source: "security",
-        limit: 50,
-        offset: 0,
-        workspaceId: CTX.workspaceId,
-      },
-      CTX,
+  it("reports no more at the end of the record", async () => {
+    stored = [row(1), row(2)];
+    const out = await auditLogQueryHandler(
+      input({ limit: 2, offset: 1 }),
+      orgCall(),
     );
-
-    expect(mocks.tablesRead).not.toContain(schema.orgUsers);
-  });
-
-  it("fails closed for an API key with no user and no workspace scope", async () => {
-    // No userId means no org membership to read, and an empty workspaceId
-    // leaves no scope to narrow to — there is nothing this caller may read.
-    mocks.orgRole = null;
-
-    await expect(
-      auditLogQueryHandler(
-        { source: "security", limit: 50, offset: 0 },
-        makeCTX({ userId: null, workspaceId: "" }),
-      ),
-    ).rejects.toThrow(/Forbidden/);
+    expect(out.events).toHaveLength(1);
+    expect(out.hasMore).toBe(false);
   });
 });

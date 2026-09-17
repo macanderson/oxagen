@@ -38,9 +38,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 vi.mock("./agent.trace.get", () => ({ agentTraceGetHandler: vi.fn() }));
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
-  // agent.debug.trace now imports CREDIT_REASONS from @oxagen/billing, whose
-  // module graph reaches sumSpendMicros. A partial mock keeps the real exports
-  // rather than making this file list every one the chain touches.
+  // agent.debug.trace imports CREDIT_REASONS from @oxagen/billing, whose
+  // module graph reaches the telemetry frame readers. A partial mock keeps the
+  // real exports rather than making this file list every one the chain touches.
   const real = await importOriginal<typeof import("@oxagen/telemetry")>();
   return {
     ...real,

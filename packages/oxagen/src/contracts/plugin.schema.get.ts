@@ -164,7 +164,7 @@ export const pluginSchemaGet = registerCapability({
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: false,
   sensitivity: "low",
   defaultEffect: "deny",

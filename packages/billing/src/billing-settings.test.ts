@@ -14,6 +14,14 @@
  *  7. updateAutoReloadSettings — accepts amountCents exactly 100
  *  8. updateAutoReloadSettings — accepts thresholdCents = 0
  *  9. getOrgBillingSettings — throws when DB returns no row after insert
+ * 10. readOrgBillingSettings — the GAU-path read: column defaults for an org
+ *     with no row, never an insert (asserted on the query log)
+ * 11. setAutoTopup — the customer's upsert: tenant-scoped, ON CONFLICT
+ *     (org_id) with a SET naming only its two columns, returns the row as
+ *     stored, refuses a non-positive block count
+ * 12. setOrgBillingTerms — the platform operator's upsert: system-scoped,
+ *     ON CONFLICT (org_id) with a SET naming only its two columns, returns
+ *     the stored row
  */
 
 import { afterAll, describe, it, expect, vi, beforeEach } from "vitest";
@@ -35,6 +43,19 @@ const updateWhereMock = vi.fn().mockResolvedValue(undefined);
 const updateReturningMock = vi.fn();
 updateSetMock.mockReturnValue({ where: updateWhereMock });
 const updateMock = vi.fn().mockReturnValue({ set: updateSetMock });
+
+// `.insert().values().onConflictDoUpdate().returning()` — the upsert shape the
+// two GAU billing-terms writers use (setAutoTopup, setOrgBillingTerms). Kept
+// separate from insertValuesMock's onConflictDoNothing chain above so a test
+// can assert WHICH upsert a call made.
+const upsertReturningMock = vi.fn();
+const onConflictDoUpdateMock = vi
+  .fn()
+  .mockReturnValue({ returning: upsertReturningMock });
+insertValuesMock.mockReturnValue({
+  onConflictDoNothing: insertOnConflictDoNothingMock,
+  onConflictDoUpdate: onConflictDoUpdateMock,
+});
 
 const findFirstMock = vi.fn();
 
@@ -67,10 +88,20 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 const {
   DEFAULT_ASSISTANT_SPEND_CAP_CENTS,
   getOrgBillingSettings,
+  readOrgBillingSettings,
+  setAutoTopup,
+  setOrgBillingTerms,
   updateAssistantSpendCap,
   updateAutoReloadSettings,
 } = await import("./billing-settings");
-const { withTenantDb, withSystemDb } = await import("@oxagen/database");
+const { schema, withTenantDb, withSystemDb } = await import("@oxagen/database");
+
+/** The column names an upsert's ON CONFLICT … DO UPDATE SET clause names. */
+function upsertSetColumns(): string[] {
+  const call = onConflictDoUpdateMock.mock.calls[0];
+  if (!call) throw new Error("expected one onConflictDoUpdate call");
+  return Object.keys((call[0] as { set: Record<string, unknown> }).set).sort();
+}
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -397,5 +428,310 @@ describe("updateAutoReloadSettings", () => {
     expect(setArg.autoReloadThresholdCents).toBeUndefined();
     expect(setArg.autoReloadAmountCents).toBeUndefined();
     expect(setArg.autoReloadPaymentMethodId).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// readOrgBillingSettings — ADR-055 §5: a read never writes
+// ---------------------------------------------------------------------------
+
+describe("readOrgBillingSettings", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("reads inside the caller's tenant scope by default", async () => {
+    findFirstMock.mockResolvedValue(undefined);
+    await readOrgBillingSettings("org-001");
+    expect(withTenantDb).toHaveBeenCalledOnce();
+    expect(withSystemDb).not.toHaveBeenCalled();
+  });
+
+  it("reads through withSystemDb with { system: true }, for the close job and the operator handler", async () => {
+    findFirstMock.mockResolvedValue(undefined);
+    const result = await readOrgBillingSettings("org-001", { system: true });
+    expect(withSystemDb).toHaveBeenCalledOnce();
+    expect(withTenantDb).not.toHaveBeenCalled();
+    expect(insertMock).not.toHaveBeenCalled();
+    expect(result.approvedForInvoiceBilling).toBe(false);
+  });
+
+  it("returns the column defaults for an org with no row and issues NO insert", async () => {
+    findFirstMock.mockResolvedValue(undefined);
+
+    const result = await readOrgBillingSettings("org-new");
+
+    expect(result).toEqual({
+      orgId: "org-new",
+      stripeCustomerId: null,
+      approvedForInvoiceBilling: false,
+      invoiceGauMax: 100_000,
+      autoTopupEnabled: true,
+      autoTopupBlocks: 1,
+      dunningState: "active",
+    });
+    // The query log: one SELECT, no INSERT, no UPDATE.
+    expect(findFirstMock).toHaveBeenCalledOnce();
+    expect(insertMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("returns the stored row and still never inserts", async () => {
+    findFirstMock.mockResolvedValue({
+      stripeCustomerId: "cus_123",
+      approvedForInvoiceBilling: true,
+      invoiceGauMax: 250_000,
+      autoTopupEnabled: false,
+      autoTopupBlocks: 4,
+      dunningState: "suspended",
+    });
+
+    const result = await readOrgBillingSettings("org-001");
+
+    expect(result).toEqual({
+      orgId: "org-001",
+      stripeCustomerId: "cus_123",
+      approvedForInvoiceBilling: true,
+      invoiceGauMax: 250_000,
+      autoTopupEnabled: false,
+      autoTopupBlocks: 4,
+      dunningState: "suspended",
+    });
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it("reads through withTenantDb (the callers run inside a tenant scope)", async () => {
+    findFirstMock.mockResolvedValue(undefined);
+    await readOrgBillingSettings("org-001");
+    expect(withTenantDb).toHaveBeenCalledOnce();
+    expect(withSystemDb).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setAutoTopup — the customer's write (ADR-055 §5, set_auto_topup)
+// ---------------------------------------------------------------------------
+
+describe("setAutoTopup", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    insertValuesMock.mockReturnValue({
+      onConflictDoNothing: insertOnConflictDoNothingMock,
+      onConflictDoUpdate: onConflictDoUpdateMock,
+    });
+    onConflictDoUpdateMock.mockReturnValue({ returning: upsertReturningMock });
+  });
+
+  it("upserts the two columns and returns them as stored", async () => {
+    upsertReturningMock.mockResolvedValue([
+      { autoTopupEnabled: true, autoTopupBlocks: 3 },
+    ]);
+
+    const result = await setAutoTopup("org-001", { enabled: true, blocks: 3 });
+
+    expect(result).toEqual({ enabled: true, blocks: 3 });
+    expect(insertValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: "org-001",
+        autoTopupEnabled: true,
+        autoTopupBlocks: 3,
+      }),
+    );
+  });
+
+  it("is keyed on org_id and updates only its own two columns on conflict", async () => {
+    upsertReturningMock.mockResolvedValue([
+      { autoTopupEnabled: true, autoTopupBlocks: 3 },
+    ]);
+
+    await setAutoTopup("org-001", { enabled: true, blocks: 3 });
+
+    expect(onConflictDoUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ target: schema.orgBillingSettings.orgId }),
+    );
+    expect(upsertSetColumns()).toEqual([
+      "autoTopupBlocks",
+      "autoTopupEnabled",
+      "updatedAt",
+    ]);
+  });
+
+  it("answers with the stored row rather than the requested values", async () => {
+    upsertReturningMock.mockResolvedValue([
+      { autoTopupEnabled: false, autoTopupBlocks: 1 },
+    ]);
+
+    await expect(
+      setAutoTopup("org-001", { enabled: true, blocks: 9 }),
+    ).resolves.toEqual({ enabled: false, blocks: 1 });
+  });
+
+  it("writes through withTenantDb — the capability is scoped and RLS is the fence", async () => {
+    upsertReturningMock.mockResolvedValue([
+      { autoTopupEnabled: true, autoTopupBlocks: 1 },
+    ]);
+
+    await setAutoTopup("org-001", { enabled: true, blocks: 1 });
+
+    expect(withTenantDb).toHaveBeenCalledOnce();
+    expect(withSystemDb).not.toHaveBeenCalled();
+  });
+
+  it.each([0, -1, 1.5])(
+    "refuses %s blocks before any write",
+    async (blocks) => {
+      await expect(
+        setAutoTopup("org-001", { enabled: true, blocks }),
+      ).rejects.toThrow(/blocks must be >= 1/);
+      expect(insertMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("throws when the upsert returns no row", async () => {
+    upsertReturningMock.mockResolvedValue([]);
+
+    await expect(
+      setAutoTopup("org-001", { enabled: true, blocks: 1 }),
+    ).rejects.toThrow(/failed to save auto top-up/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setOrgBillingTerms — the platform operator's write (set_org_billing_terms)
+// ---------------------------------------------------------------------------
+
+describe("setOrgBillingTerms", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    insertValuesMock.mockReturnValue({
+      onConflictDoNothing: insertOnConflictDoNothingMock,
+      onConflictDoUpdate: onConflictDoUpdateMock,
+    });
+    onConflictDoUpdateMock.mockReturnValue({ returning: upsertReturningMock });
+  });
+
+  it("upserts the terms and returns the stored row", async () => {
+    upsertReturningMock.mockResolvedValue([
+      {
+        orgId: "org-001",
+        approvedForInvoiceBilling: true,
+        invoiceGauMax: 250_000,
+      },
+    ]);
+
+    const result = await setOrgBillingTerms({
+      orgId: "org-001",
+      approvedForInvoiceBilling: true,
+      invoiceGauMax: 250_000,
+    });
+
+    expect(result).toEqual({
+      orgId: "org-001",
+      approvedForInvoiceBilling: true,
+      invoiceGauMax: 250_000,
+    });
+    expect(insertValuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: "org-001",
+        approvedForInvoiceBilling: true,
+        invoiceGauMax: 250_000,
+      }),
+    );
+  });
+
+  it("is keyed on org_id and updates only its own two columns on conflict", async () => {
+    upsertReturningMock.mockResolvedValue([
+      {
+        orgId: "org-001",
+        approvedForInvoiceBilling: true,
+        invoiceGauMax: 250_000,
+      },
+    ]);
+
+    await setOrgBillingTerms({
+      orgId: "org-001",
+      approvedForInvoiceBilling: true,
+      invoiceGauMax: 250_000,
+    });
+
+    expect(onConflictDoUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ target: schema.orgBillingSettings.orgId }),
+    );
+    expect(upsertSetColumns()).toEqual([
+      "approvedForInvoiceBilling",
+      "invoiceGauMax",
+      "updatedAt",
+    ]);
+  });
+
+  it("writes through withSystemDb — the call carries no tenant to scope to", async () => {
+    upsertReturningMock.mockResolvedValue([
+      {
+        orgId: "org-001",
+        approvedForInvoiceBilling: false,
+        invoiceGauMax: 100_000,
+      },
+    ]);
+
+    await setOrgBillingTerms({
+      orgId: "org-001",
+      approvedForInvoiceBilling: false,
+      invoiceGauMax: 100_000,
+    });
+
+    expect(withSystemDb).toHaveBeenCalledOnce();
+    expect(withTenantDb).not.toHaveBeenCalled();
+  });
+
+  it.each([0, -1, 2.5])(
+    "refuses an invoiceGauMax of %s before any write",
+    async (invoiceGauMax) => {
+      await expect(
+        setOrgBillingTerms({
+          orgId: "org-001",
+          approvedForInvoiceBilling: true,
+          invoiceGauMax,
+        }),
+      ).rejects.toThrow(/invoiceGauMax must be >= 1/);
+      expect(insertMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("throws when the upsert returns no row", async () => {
+    upsertReturningMock.mockResolvedValue([]);
+
+    await expect(
+      setOrgBillingTerms({
+        orgId: "org-001",
+        approvedForInvoiceBilling: true,
+        invoiceGauMax: 1,
+      }),
+    ).rejects.toThrow(/failed to save billing terms/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The Free-tier default (maintainer, 2026-09-14; ADR-055 §6)
+// ---------------------------------------------------------------------------
+
+describe("the Free-tier auto top-up default", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("is on, at one block, for a Free org that has never touched its settings", async () => {
+    // A Free org has no org_billing_settings row until it buys something or
+    // saves a card, so this is the state every Free org is in. Auto top-up is
+    // already on: once a card exists the recorder charges it for one
+    // 5,000-GAU block at the list rate, with no setting change (the rule the
+    // 2026-09-14 direction states).
+    findFirstMock.mockResolvedValue(undefined);
+
+    const settings = await readOrgBillingSettings("org-free");
+
+    expect(settings.autoTopupEnabled).toBe(true);
+    expect(settings.autoTopupBlocks).toBe(1);
+    expect(settings.approvedForInvoiceBilling).toBe(false);
+    expect(insertMock).not.toHaveBeenCalled();
   });
 });

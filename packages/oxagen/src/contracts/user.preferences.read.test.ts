@@ -24,6 +24,7 @@ describe("user.preferences.read capability", () => {
       defaultTextModel: "anthropic/claude-opus-4.8",
       timezone: "America/New_York",
       language: "en",
+      theme: "system",
     });
     expect(parsed.fontSize).toBe("large");
     expect(parsed.defaultTextTier).toBe("precise");
@@ -39,6 +40,7 @@ describe("user.preferences.read capability", () => {
       defaultTextModel: null,
       timezone: "UTC",
       language: "en",
+      theme: "system",
     });
     expect(parsed.defaultTextTier).toBeNull();
     expect(parsed.defaultTextModel).toBeNull();

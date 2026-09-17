@@ -54,17 +54,52 @@ describe("iam.role.list capability", () => {
           description: null,
           scopeKind: "org",
           isSystemDefault: true,
+          kind: "human",
           version: "1",
           memberCount: 2,
           grants: [{ capability: "query_audit_log", effect: "allow" }],
+          permissions: ["audit.read"],
+          createdAt: "2026-09-01T00:00:00.000Z",
+          createdBy: null,
         },
       ],
       total: 1,
       hasMore: false,
       limit: 100,
       offset: 0,
+      catalog: [
+        {
+          id: "audit.read",
+          group: "Audit",
+          description: "Query the audit log",
+          capabilities: ["query_audit_log"],
+        },
+      ],
+      enforcement: { tier: "enterprise", enforced: true },
     });
     expect(parsed.roles[0]?.grants[0]?.effect).toBe("allow");
+    expect(parsed.roles[0]?.permissions).toEqual(["audit.read"]);
+  });
+
+  it("carries the catalogue and the enforcement flag on every read (negative: neither may be omitted)", () => {
+    const base = { roles: [], total: 0, hasMore: false, limit: 100, offset: 0 };
+    expect(iamRoleList.output.safeParse(base).success).toBe(false);
+    expect(
+      iamRoleList.output.safeParse({
+        ...base,
+        catalog: [],
+        enforcement: { tier: "free", enforced: false },
+      }).success,
+    ).toBe(true);
+    expect(
+      iamRoleList.output.safeParse({
+        ...base,
+        catalog: [
+          { id: "x", group: "Nowhere", description: "", capabilities: ["y"] },
+        ],
+        enforcement: { tier: "free", enforced: false },
+      }).success,
+    ).toBe(false);
   });
 
   it("rejects an output grant with an invalid effect", () => {
@@ -77,15 +112,21 @@ describe("iam.role.list capability", () => {
             description: null,
             scopeKind: "org",
             isSystemDefault: true,
+            kind: "human",
             version: "1",
             memberCount: 0,
             grants: [{ capability: "x", effect: "sometimes" }],
+            permissions: [],
+            createdAt: "2026-09-01T00:00:00.000Z",
+            createdBy: null,
           },
         ],
         total: 1,
         hasMore: false,
         limit: 100,
         offset: 0,
+        catalog: [],
+        enforcement: { tier: "free", enforced: false },
       }),
     ).toThrow();
   });

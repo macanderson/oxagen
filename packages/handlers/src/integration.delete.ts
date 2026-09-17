@@ -60,7 +60,7 @@ export const integrationDeleteHandler: CapabilityHandler<
       .update(schema.sourceConnections)
       .set({
         status: "deleting",
-        updatedByUserId: ctx.userId ?? undefined,
+        updatedById: ctx.userId ?? undefined,
         updatedAt: new Date(),
       })
       .where(eq(schema.sourceConnections.id, conn.id)),

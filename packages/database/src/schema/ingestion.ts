@@ -14,9 +14,12 @@ import { sql } from "drizzle-orm";
 import { ingestionSchema } from "./_schemas";
 import {
   appendOnlyAuditMixin,
+  auditMixin,
   citext,
+  hexIdMixin,
   idMixin,
   orgScopeMixin,
+  softDeleteMixin,
   uuidv7Default,
 } from "./_mixins";
 
@@ -26,14 +29,9 @@ export const sourceConnections = ingestionSchema.table(
   "source_connections",
   {
     ...idMixin("con"),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-    workspaceId: uuid("workspace_id").notNull(),
-    orgId: uuid("org_id").notNull(),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    ...softDeleteMixin(),
     connectorId: text("connector_id").notNull(),
     displayName: text("display_name").notNull(),
     authScheme: text("auth_scheme").notNull(),
@@ -67,11 +65,7 @@ export const sourceConnections = ingestionSchema.table(
       withTimezone: true,
       mode: "date",
     }),
-    deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
-    deletedByUserId: uuid("deleted_by_user_id"),
     oauthAccountId: uuid("oauth_account_id"),
-    createdByUserId: uuid("created_by_user_id"),
-    updatedByUserId: uuid("updated_by_user_id"),
   },
   (t) => ({
     workspaceOrgIdx: index("source_connections_workspace_org_idx").on(
@@ -470,7 +464,7 @@ export const githubInstallations = ingestionSchema.table(
 export const repositoryBindings = ingestionSchema.table(
   "repository_bindings",
   {
-    ...idMixin("rpb"),
+    ...hexIdMixin("rpb"),
     ...orgScopeMixin(),
     ...appendOnlyAuditMixin(),
     connectionId: uuid("connection_id").notNull(),

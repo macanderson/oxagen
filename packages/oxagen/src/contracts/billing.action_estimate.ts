@@ -58,7 +58,7 @@ export const billingActionEstimate = registerCapability({
     "Convert a projected number of agent runs into governed actions and a price, using the published run-class conversion (spec §3.4) and volume bands (§4.1). Shows the actions-per-run ratio it used, and the tier allowance it applied. Pure arithmetic — no organisation data is read.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "billing" },

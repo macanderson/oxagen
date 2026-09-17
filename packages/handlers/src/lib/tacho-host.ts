@@ -14,7 +14,19 @@ import {
 } from "@oxagen/oxagen/tacho/schemas";
 import { digestJcs, type JsonValue } from "@oxagen/tacho";
 import { schema } from "@oxagen/database";
-import { and, asc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { RETENTION_CONTENT_CLASSES } from "@oxagen/run-ledger";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { z } from "zod";
 import { type BundleSigner, bundleSignerFromEnv } from "./tacho-bundle-signing";
 import { tachoHostApiKeyScopeSchema } from "./tacho-enrollment";
@@ -23,7 +35,7 @@ export type TachoHostRow = typeof schema.tachoHosts.$inferSelect;
 export type ControlEnvelope = z.output<typeof controlEnvelopeSchema>;
 
 /** The transaction shape the helpers need; kept narrow so tests can fake it. */
-export interface TachoTx {
+interface TachoTx {
   query: {
     apiKeys: { findFirst: (args: unknown) => Promise<unknown> };
     tachoHosts: { findFirst: (args: unknown) => Promise<unknown> };
@@ -31,6 +43,7 @@ export interface TachoTx {
       findMany: (args: unknown) => Promise<unknown>;
     };
     tachoControlCommands: { findMany: (args: unknown) => Promise<unknown> };
+    retentionPolicyVersions: { findFirst: (args: unknown) => Promise<unknown> };
   };
   update: (table: unknown) => {
     set: (values: Record<string, unknown>) => {
@@ -127,10 +140,41 @@ export async function readDenyGeneration(
   return { org, workspace };
 }
 
+/** The bundle's retention clause: what the host may retain and ship. */
+type BundleRetention = PolicyBundle["retention"];
+
+/**
+ * The workspace's fidelity setting (ADR-058 decision 2): the mode and content
+ * classes of its latest `evidence.retention_policy_versions` row. A workspace
+ * that has pinned no policy retains bodies of every class; `digest_only` is
+ * the opt-down a policy row records, and every run in that workspace grades
+ * `inspect`.
+ */
+export async function readWorkspaceRetention(
+  tx: TachoTx,
+  orgId: string,
+  workspaceId: string,
+): Promise<BundleRetention> {
+  const row = (await tx.query.retentionPolicyVersions.findFirst({
+    where: and(
+      eq(schema.retentionPolicyVersions.orgId, orgId),
+      eq(schema.retentionPolicyVersions.workspaceId, workspaceId),
+    ),
+    orderBy: [desc(schema.retentionPolicyVersions.version)],
+    columns: { mode: true, retainedContentClasses: true },
+  })) as { mode: string; retainedContentClasses: string[] } | undefined;
+  if (!row) {
+    return { mode: "content_exact", classes: [...RETENTION_CONTENT_CLASSES] };
+  }
+  if (row.mode === "digest_only") return { mode: "digest_only", classes: [] };
+  return { mode: "content_exact", classes: [...row.retainedContentClasses] };
+}
+
 /** The unsigned bundle for a host at this moment (spec section 7.1). */
 export function unsignedBundle(
   host: TachoHostRow,
   denyGeneration: DenyGeneration,
+  retention: BundleRetention,
   now: Date = new Date(),
 ): Omit<PolicyBundle, "signature"> {
   const status = tachoHostStatusSchema.parse(host.status);
@@ -149,7 +193,7 @@ export function unsignedBundle(
     tools: {} as PolicyBundle["tools"],
     budget: { mode: "observed" as const },
     context: { system: null },
-    retention: { mode: "digest_only" as const, classes: [] as string[] },
+    retention,
     mode,
   };
   const etag = digestJcs(content as unknown as JsonValue).slice(
@@ -184,45 +228,103 @@ export function signBundle(
   return { ...unsigned, signature: signer.sign(unsigned) };
 }
 
-/** Pending commands for a host, marked delivered as they leave. */
+/**
+ * Expire this host's `queued` commands whose expiry passed before a poll
+ * drained them (spec §7.4 `expired`: "the expiry passed with no boundary
+ * reached"). Runs on every control poll.
+ *
+ * Only `queued` rows are swept: a row is Oxagen's until it leaves on the
+ * wire, and the host's after. The host checks the deadline at receipt and
+ * again at the boundary that would inject a steer, acknowledging `expired`
+ * when it passed, so every acknowledgement it sends is true of the chain,
+ * and it may arrive after the clock passed (a pause applied at receipt is
+ * acknowledged on the next poll; an ingest in between must not turn that
+ * row `expired` and make `fetch_commands` drop the `applied`).
+ * `list_commands` derives `expired` under this same predicate and no wider;
+ * a row the host holds and never acknowledges reads as recorded, with its
+ * `expiresAt` for the interface to show.
+ */
+export async function expireCommands(
+  tx: TachoTx,
+  host: TachoHostRow,
+  now: Date,
+): Promise<void> {
+  await tx
+    .update(schema.tachoControlCommands)
+    .set({ outcome: "expired", updatedAt: now })
+    .where(
+      and(
+        eq(schema.tachoControlCommands.hostId, host.id),
+        eq(schema.tachoControlCommands.outcome, "queued"),
+        lte(schema.tachoControlCommands.expiresAt, now),
+      ),
+    );
+}
+
+type ControlCommandRow = typeof schema.tachoControlCommands.$inferSelect;
+type DeliveredCommand = ControlEnvelope["commands"][number];
+
+/** A queued row as the wire carries it (spec section 7.4). */
+function toDeliveredCommand(row: ControlCommandRow): DeliveredCommand {
+  const payload = (row.payload as Record<string, unknown>) ?? {};
+  return {
+    id: row.publicId,
+    command: row.command as DeliveredCommand["command"],
+    session_uuid:
+      typeof payload["session_uuid"] === "string"
+        ? (payload["session_uuid"] as string)
+        : null,
+    payload,
+    requested_mode: row.requestedMode as DeliveredCommand["requested_mode"],
+    delivery_mode: row.deliveryMode as DeliveredCommand["delivery_mode"],
+    degraded_reason: row.degradedReason,
+    reason: row.reason,
+    issued_at: row.issuedAt.toISOString(),
+    expires_at: row.expiresAt?.toISOString() ?? null,
+  };
+}
+
+/** Queued commands for a host, marked `sent` as they leave. */
 export async function drainCommands(
   tx: TachoTx,
   host: TachoHostRow,
   now: Date = new Date(),
 ): Promise<ControlEnvelope["commands"]> {
+  await expireCommands(tx, host, now);
   const rows = (await tx.query.tachoControlCommands.findMany({
     where: and(
       eq(schema.tachoControlCommands.hostId, host.id),
-      eq(schema.tachoControlCommands.outcome, "pending"),
+      eq(schema.tachoControlCommands.outcome, "queued"),
       or(
         isNull(schema.tachoControlCommands.expiresAt),
         gt(schema.tachoControlCommands.expiresAt, now),
       ),
     ),
-    orderBy: [asc(schema.tachoControlCommands.issuedAt)],
+    // `issued_at` alone is a partial order: `defaultNow()` is the transaction
+    // timestamp, so two commands dispatched in the same instant tie and the
+    // host then receives them in whatever order the heap hands back — a pause
+    // arriving after the steer the operator issued second. The public id is
+    // the tie-break `list_commands` already uses, so the delivery order and
+    // the delivery report agree on one total order rather than two partial
+    // ones.
+    orderBy: [
+      asc(schema.tachoControlCommands.issuedAt),
+      asc(schema.tachoControlCommands.publicId),
+    ],
     limit: 100,
-  })) as Array<
-    typeof schema.tachoControlCommands.$inferSelect & {
-      sessionUuid?: string | null;
-    }
-  >;
-  const delivered: ControlEnvelope["commands"] = [];
-  for (const row of rows) {
+  })) as ControlCommandRow[];
+  if (rows.length > 0) {
     await tx
       .update(schema.tachoControlCommands)
-      .set({ outcome: "delivered", deliveredAt: now, updatedAt: now })
-      .where(eq(schema.tachoControlCommands.id, row.id));
-    delivered.push({
-      id: row.publicId,
-      command: row.command as ControlEnvelope["commands"][number]["command"],
-      session_uuid:
-        (row.payload as { session_uuid?: string } | null)?.session_uuid ?? null,
-      payload: (row.payload as Record<string, unknown>) ?? {},
-      issued_at: row.issuedAt.toISOString(),
-      expires_at: row.expiresAt?.toISOString() ?? null,
-    });
+      .set({ outcome: "sent", deliveredAt: now, updatedAt: now })
+      .where(
+        inArray(
+          schema.tachoControlCommands.id,
+          rows.map((row) => row.id),
+        ),
+      );
   }
-  return delivered;
+  return rows.map(toDeliveredCommand);
 }
 
 /** The control envelope every machine response carries (spec section 7.4). */
@@ -232,12 +334,11 @@ export async function controlEnvelope(
   host: TachoHostRow,
   now: Date = new Date(),
 ): Promise<ControlEnvelope> {
-  const denyGeneration = await readDenyGeneration(
-    tx,
-    ctx.orgId,
-    ctx.workspaceId,
-  );
-  const bundle = unsignedBundle(host, denyGeneration, now);
+  const [denyGeneration, retention] = await Promise.all([
+    readDenyGeneration(tx, ctx.orgId, ctx.workspaceId),
+    readWorkspaceRetention(tx, ctx.orgId, ctx.workspaceId),
+  ]);
+  const bundle = unsignedBundle(host, denyGeneration, retention, now);
   const commands = await drainCommands(tx, host, now);
   return controlEnvelopeSchema.parse({
     host_status: tachoHostStatusSchema.parse(host.status),

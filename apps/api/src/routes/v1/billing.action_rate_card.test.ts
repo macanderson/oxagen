@@ -58,7 +58,9 @@ beforeEach(() => {
 });
 
 async function get(qs = ""): Promise<Response> {
-  return billingActionRateCardRoute.fetch(new Request(`http://localhost/?${qs}`));
+  return billingActionRateCardRoute.fetch(
+    new Request(`http://localhost/?${qs}`),
+  );
 }
 
 describe("GET billing/actions/rate-card", () => {

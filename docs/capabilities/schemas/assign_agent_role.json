@@ -1,7 +1,7 @@
 {
   "name": "assign_agent_role",
   "domain": "agent",
-  "description": "Assign an IAM role to an agent's delegated principal. System agent roles (Agent Observer/Contributor/Operator) are assignable at every tier; custom roles are enterprise-only. Rejected when the role's grants exceed the assigning user's own effective grants (delegation ceiling). Audited with principal_kind='agent'.",
+  "description": "Assign an IAM role to an agent's delegated principal. System agent roles (Agent Observer/Contributor/Operator) and custom roles are both assignable at every tier; whether the kernel resolves the grant is what the tier decides, and list_iam_roles reports it. Rejected when the role's grants exceed the assigning user's own effective grants (delegation ceiling). Audited with principal_kind='agent'.",
   "mode": "sync",
   "surfaces": [
     "api",

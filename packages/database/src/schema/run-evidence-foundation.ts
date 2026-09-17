@@ -15,16 +15,35 @@
 // means a stage or status can never be spelled two ways across three schemas.
 
 import {
+  bigint,
+  boolean,
   check,
+  foreignKey,
   index,
   integer,
   jsonb,
   text,
+  timestamp,
   uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import {
+  DISCLOSURE_GRAINS,
+  ORACLE_KINDS,
+  PROOF_VERDICTS,
+  TAMPER_EXCLUSIONS,
+  WITNESS_RESULTS,
+} from "@oxagen/run-evidence";
 import { evidenceSchema } from "./_schemas";
-import { appendOnlyAuditMixin, idMixin, orgScopeMixin } from "./_mixins";
+import {
+  appendOnlyAuditMixin,
+  auditMixin,
+  hexIdMixin,
+  idMixin,
+  orgScopeMixin,
+  uuidv7Default,
+} from "./_mixins";
 
 // ---------------------------------------------------------------------------
 // Shared vocabularies
@@ -126,7 +145,7 @@ export const SHA256_DIGEST_PATTERN = "^sha256:[0-9a-f]{64}$";
 export const retentionPolicyVersions = evidenceSchema.table(
   "retention_policy_versions",
   {
-    ...idMixin("rpv"),
+    ...hexIdMixin("rpv"),
     ...orgScopeMixin(),
     ...appendOnlyAuditMixin(),
     // Monotonically increasing per (org, workspace). Version 1 is the first
@@ -192,3 +211,239 @@ export type RetentionPolicyVersion =
   typeof retentionPolicyVersions.$inferSelect;
 export type NewRetentionPolicyVersion =
   typeof retentionPolicyVersions.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// evidence.run_exports — the export job `export_run` queues (spec App. E)
+// ---------------------------------------------------------------------------
+//
+// One row per requested bundle. The job builds the bundle (the frame
+// envelopes as NDJSON, the Merkle root, the attestation, the verifier script)
+// into the organisation's object store and records where it landed; the row
+// is what Audit › exports lists. Mutable by design: `status` moves from
+// `queued` through `building` to `ready` or `failed`, and every other column
+// is written once. ADR-058.
+export const RUN_EXPORT_STATUSES = [
+  "queued",
+  "building",
+  "ready",
+  "failed",
+] as const;
+export type RunExportStatus = (typeof RUN_EXPORT_STATUSES)[number];
+
+export const runExports = evidenceSchema.table(
+  "run_exports",
+  {
+    ...idMixin("rexp"),
+    ...orgScopeMixin(),
+    ...auditMixin(),
+    // The run's public id (`arun_…` or `tse_…`): the export names the run the
+    // way every surface does, whichever store minted it.
+    runPublicId: text("run_public_id").notNull(),
+    // The signed-in user who asked; the attestation names them.
+    requestedByUserId: uuid("requested_by_user_id").notNull(),
+    status: text("status").notNull().default("queued"),
+    // Set together when the bundle is ready: where it is, its digest, and the
+    // Merkle root and frame count the attestation commits to.
+    bundleRef: text("bundle_ref"),
+    bundleDigest: text("bundle_digest"),
+    merkleRoot: text("merkle_root"),
+    frameCount: integer("frame_count"),
+    completedAt: timestamp("completed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    // Set when `status = 'failed'`.
+    error: text("error"),
+  },
+  (t) => ({
+    orgIdx: index("run_exports_org_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.createdAt,
+    ),
+    runIdx: index("run_exports_run_idx").on(t.runPublicId),
+    statusCheck: check(
+      "run_exports_status_check",
+      sql`${t.status} IN ('queued', 'building', 'ready', 'failed')`,
+    ),
+    readyCheck: check(
+      "run_exports_ready_check",
+      sql`(${t.status} = 'ready') = (${t.bundleRef} IS NOT NULL AND ${t.bundleDigest} IS NOT NULL AND ${t.merkleRoot} IS NOT NULL AND ${t.frameCount} IS NOT NULL AND ${t.completedAt} IS NOT NULL)`,
+    ),
+    failedCheck: check(
+      "run_exports_failed_check",
+      sql`(${t.status} = 'failed') = (${t.error} IS NOT NULL)`,
+    ),
+    digestCheck: check(
+      "run_exports_digest_check",
+      sql`(${t.bundleDigest} IS NULL OR ${t.bundleDigest} ~ '^sha256:[0-9a-f]{64}$') AND (${t.merkleRoot} IS NULL OR ${t.merkleRoot} ~ '^sha256:[0-9a-f]{64}$') AND (${t.frameCount} IS NULL OR ${t.frameCount} >= 0)`,
+    ),
+  }),
+);
+
+export type RunExport = typeof runExports.$inferSelect;
+export type NewRunExport = typeof runExports.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Proof: witnesses, verdicts, the disclosure grain (spec §8.5, ADR-064)
+// ---------------------------------------------------------------------------
+//
+// A witness is a check the worker never sees; its verdict lands on the
+// worker's run as a `proof.observed` frame, and `ingest_tacho_events` writes
+// one `verdicts` row per such frame. Both tables are records: the app role
+// may insert and read them, never rewrite or delete them. The run's verdict
+// on `cost.run_totals` is aggregated from these rows when the rollup rebuilds
+// the run (`aggregateRunVerdict`, @oxagen/run-evidence).
+
+const quoted = (values: readonly string[]) =>
+  sql.raw(values.map((v) => `'${v}'`).join(", "));
+
+/** One row per witness a workspace has seen a verdict for. Its identity is immutable. */
+export const witnesses = evidenceSchema.table(
+  "witnesses",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    ...appendOnlyAuditMixin(),
+    // The producer's id (`wit_…`), unique per workspace.
+    witnessId: text("witness_id").notNull(),
+    oracleKind: text("oracle_kind").notNull(),
+    // The normalized command's digest; the command itself never leaves the runner.
+    commandDigest: text("command_digest").notNull(),
+    // Held out: reported to the record, never to the worker.
+    heldOut: boolean("held_out").notNull(),
+  },
+  (t) => ({
+    witnessUniq: uniqueIndex("witnesses_witness_uniq").on(
+      t.orgId,
+      t.workspaceId,
+      t.witnessId,
+    ),
+    oracleCheck: check(
+      "witnesses_oracle_kind_check",
+      sql`${t.oracleKind} IN (${quoted(ORACLE_KINDS)})`,
+    ),
+    digestCheck: check(
+      "witnesses_command_digest_check",
+      sql`${t.commandDigest} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+  }),
+);
+
+/** One row per `proof.observed` frame: one attempt of one witness on one run. */
+export const verdicts = evidenceSchema.table(
+  "verdicts",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    ...appendOnlyAuditMixin(),
+    // The worker's run (`arun_…` or `tse_…`, a root session for a wrapped
+    // run), the session whose chain carried the frame, and its seq there:
+    // a subagent's frames are part of its root's run and number from 0.
+    runId: text("run_id").notNull(),
+    sessionUuid: uuid("session_uuid").notNull(),
+    frameSeq: bigint("frame_seq", { mode: "number" }).notNull(),
+    observedAt: timestamp("observed_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    witnessId: text("witness_id").notNull(),
+    // 1-based, in frame order, per (run, witness).
+    attemptNo: integer("attempt_no").notNull(),
+    // The witness's own run; null when the producer recorded none.
+    witnessRunId: text("witness_run_id"),
+    targetRef: text("target_ref").notNull(),
+    targetSha: text("target_sha").notNull(),
+    prRef: text("pr_ref").notNull(),
+    prSha: text("pr_sha").notNull(),
+    targetResult: text("target_result").notNull(),
+    prResult: text("pr_result").notNull(),
+    verdict: text("verdict").notNull(),
+    failFingerprint: text("fail_fingerprint"),
+    passOutputDigest: text("pass_output_digest"),
+    tamperExclusion: text("tamper_exclusion").notNull(),
+    // { fingerprint_authored, fingerprint_at_run } when the exclusion broke.
+    tamper: jsonb("tamper"),
+    disclosureGrain: text("disclosure_grain").notNull(),
+    // { key_id, signature }: the runner's signed statement of what it ran.
+    runnerAttestation: jsonb("runner_attestation").notNull(),
+  },
+  (t) => ({
+    frameUniq: uniqueIndex("verdicts_frame_uniq").on(
+      t.orgId,
+      t.workspaceId,
+      t.runId,
+      t.sessionUuid,
+      t.frameSeq,
+    ),
+    attemptUniq: uniqueIndex("verdicts_attempt_uniq").on(
+      t.orgId,
+      t.workspaceId,
+      t.runId,
+      t.witnessId,
+      t.attemptNo,
+    ),
+    witnessRunIdx: index("verdicts_witness_run_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.witnessRunId,
+    ),
+    witnessFk: foreignKey({
+      name: "verdicts_witness_fk",
+      columns: [t.orgId, t.workspaceId, t.witnessId],
+      foreignColumns: [
+        witnesses.orgId,
+        witnesses.workspaceId,
+        witnesses.witnessId,
+      ],
+    }),
+    verdictCheck: check(
+      "verdicts_verdict_check",
+      sql`${t.verdict} IN (${quoted(PROOF_VERDICTS)})`,
+    ),
+    resultCheck: check(
+      "verdicts_result_check",
+      sql`${t.targetResult} IN (${quoted(WITNESS_RESULTS)}) AND ${t.prResult} IN (${quoted(WITNESS_RESULTS)})`,
+    ),
+    grainCheck: check(
+      "verdicts_disclosure_grain_check",
+      sql`${t.disclosureGrain} IN (${quoted(DISCLOSURE_GRAINS)})`,
+    ),
+    tamperCheck: check(
+      "verdicts_tamper_check",
+      sql`${t.tamperExclusion} IN (${quoted(TAMPER_EXCLUSIONS)}) AND (${t.tamperExclusion} = 'broken') = (${t.verdict} = 'tampered') AND (${t.tamper} IS NOT NULL) = (${t.tamperExclusion} = 'broken')`,
+    ),
+    // Only a fail on the target and a pass on the head, with the fingerprint
+    // held, is a flip.
+    flipCheck: check(
+      "verdicts_flip_check",
+      sql`${t.verdict} <> 'flipped' OR (${t.targetResult} = 'fail' AND ${t.prResult} = 'pass')`,
+    ),
+    attemptCheck: check("verdicts_attempt_check", sql`${t.attemptNo} > 0`),
+  }),
+);
+
+/**
+ * The workspace's disclosure grain (spec §8.5 invariant 3). No row is `L0`.
+ * Changing it is `set_disclosure_grain`, an Owner or Admin in a signed-in
+ * session, recorded as `evidence.disclosure_grain_changed`.
+ */
+export const disclosurePolicies = evidenceSchema.table(
+  "disclosure_policies",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    ...auditMixin(),
+    grain: text("grain").notNull(),
+  },
+  (t) => ({
+    workspaceUniq: uniqueIndex("disclosure_policies_workspace_uniq").on(
+      t.orgId,
+      t.workspaceId,
+    ),
+    grainCheck: check(
+      "disclosure_policies_grain_check",
+      sql`${t.grain} IN (${quoted(DISCLOSURE_GRAINS)})`,
+    ),
+  }),
+);

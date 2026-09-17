@@ -25,7 +25,7 @@ export const conversationArchiveHandler: CapabilityHandler<
         archivedAt: input.archived ? now : null,
         archivedByUserId: input.archived ? userId : null,
         updatedAt: now,
-        updatedByUserId: userId,
+        updatedById: userId,
       })
       .where(
         and(
