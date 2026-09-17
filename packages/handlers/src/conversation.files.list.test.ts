@@ -28,7 +28,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     }),
   });
 
-  return {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
     ...real,
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
       mocks.callCount.value += 1;
@@ -38,6 +41,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       return fn(makeChain(leaf));
     },
   };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 import { conversationFilesListHandler } from "./conversation.files.list";

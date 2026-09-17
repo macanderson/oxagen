@@ -64,10 +64,14 @@ vi.mock("@oxagen/database", () => {
       }),
     }),
   };
-  return {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
     schema: { orgUsers: { role: "role", orgId: "orgId", userId: "userId" } },
     withTenantDb: vi.fn((fn: (t: typeof tx) => unknown) => fn(tx)),
   };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 import {

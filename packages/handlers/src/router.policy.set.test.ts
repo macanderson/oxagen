@@ -18,11 +18,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
-const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  withTenantDb: vi.fn(),
+  withOrgDb: vi.fn(),
+}));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...real, withTenantDb: mocks.withTenantDb };
+  return {
+    ...real,
+    withTenantDb: mocks.withTenantDb,
+    withOrgDb: mocks.withOrgDb,
+  };
 });
 
 vi.mock("./logger", () => ({
@@ -55,8 +62,9 @@ describe("set_routing_policy scope guard", () => {
         ctx(ORG_ONLY_WORKSPACE_ID),
       ),
     ).rejects.toThrow(/requires a workspace context/);
-    // Nothing is read and nothing is written.
+    // Nothing is read and nothing is written, by either seam.
     expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    expect(mocks.withOrgDb).not.toHaveBeenCalled();
   });
 
   it("refuses workspace scope carrying no workspace at all", async () => {
@@ -67,6 +75,7 @@ describe("set_routing_policy scope guard", () => {
       ),
     ).rejects.toThrow(/requires a workspace context/);
     expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    expect(mocks.withOrgDb).not.toHaveBeenCalled();
   });
 
   it("refuses the default scope, which is workspace, on a sentinel context", async () => {
@@ -78,9 +87,15 @@ describe("set_routing_policy scope guard", () => {
     ).rejects.toThrow(/requires a workspace context/);
   });
 
-  it("admits org scope on a sentinel context — the org row carries workspace_id NULL", async () => {
+  // The org row is reached through withOrgDb, never withTenantDb (ADR-086).
+  // `workspace.routing_policy` is `workspace_nullable`, so its policy names the
+  // workspace GUC — and under the org-only sentinel that GUC is not a uuid, so
+  // a withTenantDb statement against this table refuses with 22P02 before it
+  // reads anything. Asserting withTenantDb was NOT used is the half of this
+  // test that would otherwise pass on the seam that cannot work.
+  it("admits org scope on a sentinel context through withOrgDb — the org row carries workspace_id NULL", async () => {
     const insertValues = vi.fn().mockResolvedValue([]);
-    mocks.withTenantDb.mockImplementation(
+    mocks.withOrgDb.mockImplementation(
       (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
           query: { routingPolicy: { findFirst: () => Promise.resolve(null) } },
@@ -96,6 +111,7 @@ describe("set_routing_policy scope guard", () => {
     expect(insertValues).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: null }),
     );
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
   });
 
   it("admits workspace scope on a real workspace id", async () => {
@@ -119,5 +135,8 @@ describe("set_routing_policy scope guard", () => {
     );
 
     expect(updateWhere).toHaveBeenCalled();
+    // And NOT through withOrgDb: that seam leaves the workspace GUC empty, so
+    // a row naming a workspace would fail WITH CHECK with 42501.
+    expect(mocks.withOrgDb).not.toHaveBeenCalled();
   });
 });
