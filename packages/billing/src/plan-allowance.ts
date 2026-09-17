@@ -22,6 +22,45 @@ function isTier(value: unknown): value is PlanTier {
   return typeof value === "string" && VALID_TIERS.has(value as PlanTier);
 }
 
+/** PostgreSQL `undefined_column`. */
+const UNDEFINED_COLUMN = "42703";
+
+/**
+ * Whether `org.organizations.negotiated_actions_annual` exists in this database.
+ *
+ * `undefined` until a query has told us. Deployment and migration are separate
+ * manual steps in this repo (`pipeline.yml`: `deploy-node` no longer waits for
+ * `db-migrate.yml`), so production can run this code before migration
+ * `20260916120000` has been applied. An unconditional reference to the column
+ * then raised 42703 on EVERY `resolveOrgActionEntitlement` call — and because
+ * the kernel catches the recorder's error, successful governed actions went
+ * uncounted and unbilled for the whole window, silently.
+ *
+ * Cached per process rather than probed per call: the accrual path runs after
+ * every governed action, and `information_schema` on each one would be the
+ * round trip this module exists to avoid. The cost of the rollout window is one
+ * failed query per process, once.
+ */
+let negotiatedColumnPresent: boolean | undefined;
+
+/** Test seam. Resets the per-process answer above. */
+export function resetNegotiatedColumnProbeForTests(): void {
+  negotiatedColumnPresent = undefined;
+}
+
+function isUndefinedColumn(err: unknown): boolean {
+  for (let e: unknown = err, depth = 0; e && depth < 5; depth += 1) {
+    if (
+      typeof e === "object" &&
+      (e as { code?: unknown }).code === UNDEFINED_COLUMN
+    ) {
+      return true;
+    }
+    e = (e as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 export interface OrgActionEntitlement {
   tier: PlanTier;
   /**
@@ -75,17 +114,35 @@ export async function resolveOrgActionEntitlement(
         ),
       )
       .limit(1);
-    const o = await tx
-      .select({
-        planType: schema.organizations.planType,
-        // Selected from a row this query already reads, so the legacy leg costs
-        // no extra round trip on the accrual path.
-        negotiatedActionsAnnual: schema.organizations.negotiatedActionsAnnual,
-      })
-      .from(schema.organizations)
-      .where(eq(schema.organizations.id, orgId))
-      .limit(1);
-    return { sub: s, org: o };
+    // Selected from a row this query already reads, so the legacy leg costs no
+    // extra round trip on the accrual path — when the column is there.
+    const withNegotiated = {
+      planType: schema.organizations.planType,
+      negotiatedActionsAnnual: schema.organizations.negotiatedActionsAnnual,
+    };
+    const tierOnly = { planType: schema.organizations.planType };
+    const readOrg = async (columns: Record<string, unknown>) =>
+      tx
+        .select(columns as typeof withNegotiated)
+        .from(schema.organizations)
+        .where(eq(schema.organizations.id, orgId))
+        .limit(1);
+
+    if (negotiatedColumnPresent === false) {
+      return { sub: s, org: await readOrg(tierOnly) };
+    }
+    try {
+      const o = await readOrg(withNegotiated);
+      negotiatedColumnPresent = true;
+      return { sub: s, org: o };
+    } catch (err) {
+      if (!isUndefinedColumn(err)) throw err;
+      // The code is ahead of the migration. Answer on the tier alone, which is
+      // what an unmigrated database could record anyway, rather than failing
+      // the accrual and taking the metering down with it.
+      negotiatedColumnPresent = false;
+      return { sub: s, org: await readOrg(tierOnly) };
+    }
   });
 
   const row = sub[0];

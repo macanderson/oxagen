@@ -16,27 +16,67 @@ interface TxState {
     negotiatedActionsAnnual?: bigint | number | null;
   }[];
   dbCalls: number;
+  /**
+   * Stand in for a database behind migration `20260916120000`: any select
+   * naming `negotiated_actions_annual` raises PostgreSQL 42703, which is what
+   * production does when `deploy-node` lands ahead of `db-migrate.yml`.
+   */
+  negotiatedColumnMissing: boolean;
+  /** Column sets the org leg asked for, in order. */
+  orgSelects: string[][];
+  /** An error the org leg raises whatever columns were asked for. */
+  orgError?: Error;
+  /** Like `orgError`, but consumed by the first org read only. */
+  orgErrorOnce?: Error;
 }
 
 const txState: TxState = {
   subRows: [],
   orgRows: [],
   dbCalls: 0,
+  negotiatedColumnMissing: false,
+  orgSelects: [],
 };
+
+function undefinedColumn(): Error & { code: string } {
+  const err = new Error(
+    'column organizations.negotiated_actions_annual does not exist',
+  ) as Error & { code: string };
+  err.code = "42703";
+  return err;
+}
 
 function makeTx() {
   return {
-    select: vi.fn().mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        innerJoin: vi.fn().mockReturnValue({
+    select: vi.fn().mockImplementation((columns: Record<string, unknown>) => {
+      const names = Object.keys(columns ?? {});
+      return {
+        from: vi.fn().mockReturnValue({
+          innerJoin: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue(txState.subRows),
+            }),
+          }),
           where: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue(txState.subRows),
+            limit: vi.fn().mockImplementation(async () => {
+              txState.orgSelects.push(names);
+              if (txState.orgErrorOnce) {
+                const once = txState.orgErrorOnce;
+                txState.orgErrorOnce = undefined;
+                throw once;
+              }
+              if (txState.orgError) throw txState.orgError;
+              if (
+                txState.negotiatedColumnMissing &&
+                names.includes("negotiatedActionsAnnual")
+              ) {
+                throw undefinedColumn();
+              }
+              return txState.orgRows;
+            }),
           }),
         }),
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue(txState.orgRows),
-        }),
-      }),
+      };
     }),
   };
 }
@@ -56,9 +96,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-const { resolveOrgActionEntitlement, publishedAllowanceForTier } = await import(
-  "./plan-allowance"
-);
+const {
+  resolveOrgActionEntitlement,
+  publishedAllowanceForTier,
+  resetNegotiatedColumnProbeForTests,
+} = await import("./plan-allowance");
 const {
   TIER_ACTION_ALLOWANCES,
   resolveActionAllowance,
@@ -70,6 +112,66 @@ beforeEach(() => {
   txState.subRows = [];
   txState.orgRows = [];
   txState.dbCalls = 0;
+  txState.negotiatedColumnMissing = false;
+  txState.orgSelects = [];
+  txState.orgError = undefined;
+  txState.orgErrorOnce = undefined;
+  resetNegotiatedColumnProbeForTests();
+});
+
+describe("a database behind the allowance migration", () => {
+  // Deployment and migration are separate manual steps (pipeline.yml: deploy-node
+  // no longer waits for db-migrate.yml), so production can run this code before
+  // 20260916120000 is applied. The unconditional column reference then raised
+  // 42703 on every call, and because the kernel catches the recorder's error,
+  // governed actions went uncounted and unbilled for the whole window.
+  it("answers on the tier instead of failing the accrual", async () => {
+    txState.negotiatedColumnMissing = true;
+    txState.orgRows = [{ planType: "enterprise" }];
+    expect(await resolveOrgActionEntitlement("org-1")).toEqual({
+      tier: "enterprise",
+      includedActionsAnnual: null,
+    });
+    // The first attempt names the column; the retry does not.
+    expect(txState.orgSelects[0]).toContain("negotiatedActionsAnnual");
+    expect(txState.orgSelects[1]).not.toContain("negotiatedActionsAnnual");
+  });
+
+  it("stops asking for the column once it has been told", async () => {
+    txState.negotiatedColumnMissing = true;
+    txState.orgRows = [{ planType: "enterprise" }];
+    await resolveOrgActionEntitlement("org-1");
+    txState.orgSelects = [];
+    await resolveOrgActionEntitlement("org-2");
+    // The accrual path runs after every governed action; a failed query per
+    // call would be the round trip this module exists to avoid.
+    expect(txState.orgSelects).toEqual([["planType"]]);
+  });
+
+  it("still propagates an error that is not a missing column", async () => {
+    // A connection failure is not a schema fact, and swallowing it would turn
+    // an outage into a silent free tier for every organisation.
+    const boom = new Error("connection reset") as Error & { code: string };
+    boom.code = "08006";
+    txState.orgError = boom;
+    await expect(resolveOrgActionEntitlement("org-1")).rejects.toThrow(
+      "connection reset",
+    );
+    expect(txState.orgSelects).toHaveLength(1);
+  });
+
+  it("finds 42703 wrapped in a driver error's cause chain", async () => {
+    // Drizzle wraps driver failures, so the code is rarely on the top error.
+    const inner = new Error("undefined column") as Error & { code: string };
+    inner.code = "42703";
+    txState.orgErrorOnce = new Error("query failed", { cause: inner });
+    txState.orgRows = [{ planType: "build" }];
+    expect(await resolveOrgActionEntitlement("org-1")).toEqual({
+      tier: "build",
+      includedActionsAnnual: null,
+    });
+    expect(txState.orgSelects).toHaveLength(2);
+  });
 });
 
 // ---------------------------------------------------------------------------
