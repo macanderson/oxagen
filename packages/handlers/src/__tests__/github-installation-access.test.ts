@@ -16,17 +16,23 @@ const mocks = vi.hoisted(() => ({
   resolveIngestionCryptoAdapterForKeyId: vi.fn(),
 }));
 
-vi.mock("@oxagen/database", () => ({
-  schema: {
-    oauthAccounts: {
-      orgId: "oa.orgId",
-      provider: "oa.provider",
-      accessTokenEnc: "oa.accessTokenEnc",
-      updatedAt: "oa.updatedAt",
+vi.mock("@oxagen/database", () => {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    schema: {
+      oauthAccounts: {
+        orgId: "oa.orgId",
+        provider: "oa.provider",
+        accessTokenEnc: "oa.accessTokenEnc",
+        updatedAt: "oa.updatedAt",
+      },
     },
-  },
-  withTenantDb: mocks.withTenantDb,
-}));
+    withTenantDb: mocks.withTenantDb,
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 
 vi.mock("drizzle-orm", async (importOriginal) => {
   const real = await importOriginal<typeof import("drizzle-orm")>();

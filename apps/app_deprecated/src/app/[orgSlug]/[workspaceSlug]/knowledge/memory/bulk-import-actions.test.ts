@@ -46,10 +46,16 @@ vi.mock("drizzle-orm", () => ({ and: vi.fn(), eq: vi.fn() }));
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/agent/register", () => ({}));
 // withTenantDb ignores the query callback and returns the configured role row.
-vi.mock("@oxagen/database", () => ({
-  withTenantDb: mockWithTenantDb,
-  schema: { workspaceUsers: { role: {}, workspaceId: {}, userId: {} } },
-}));
+vi.mock("@oxagen/database", () => {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    withTenantDb: mockWithTenantDb,
+    schema: { workspaceUsers: { role: {}, workspaceId: {}, userId: {} } },
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 
 import { parseImportAction, commitImportAction } from "./bulk-import-actions";
 

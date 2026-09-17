@@ -254,6 +254,60 @@ more than it is:
   `rls-integration` corpus is what moves the evidence back to CI for the part
   that can be decided there.
 
+### A mock that substitutes one seam substitutes all of them
+
+Converting `fetch-authz` and the role lookups turned 555 unit tests red across
+`@oxagen/handlers` and `@oxagen/agent` at once, and the single cause is worth
+recording because it is not what it first looked like.
+
+Every one of those suites writes
+
+```ts
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal();
+  return { ...real, withTenantDb: mocks.withTenantDb };
+});
+```
+
+and the spread leaves `withOrgDb` as the **real** function. `withOrgDb` calls
+`requireScope()` — and so has `withTenantDb`, on its first line, since it was
+written. So the org-wide seam is not stricter than the one it sits beside; it
+was simply unmocked. The suites establish no tenant scope because they replaced
+the seam that would have demanded one, and a role gate that moved to the
+unmocked seam found that out.
+
+**The fix is not to let `withOrgDb` proceed without a scope.** A transaction
+seam that opens without a tenant scope is the class of defect this ADR exists to
+remove, and making the organisation-wide seam lenient to satisfy a harness would
+leave it weaker than `withTenantDb` standing next to it — while the production
+path the leniency would serve is the one that matters most, since `fetch-authz`
+runs on every `invoke()`. The guarantee is asserted in
+`packages/database/src/tenant.test.ts`, the one suite that does not mock the
+seam: `withOrgDb` with no scope rejects.
+
+The fix is that the mock covers both, aliased to **one identity**:
+
+```ts
+const dbMock = { ...real, withTenantDb: mocks.withTenantDb };
+return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+```
+
+Binding first rather than duplicating the initializer is load-bearing.
+`withTenantDb: vi.fn()` and `withTenantDb: async (fn) => …` evaluate to a fresh
+value each time, so copying the text would give the two seams two different
+functions — and `api.key.create.test.ts` has a case named *"withTenantDb is
+called twice: once for role resolution, once for insert"* that would then see
+one. The alias keeps exactly the behaviour those suites had before the role gate
+moved.
+
+`tools/scripts/codemod-db-mock-org-seam.mjs` applied it to 252 factories and
+doubles as `pnpm check:db-mock-seams`, chained into `check:contracts` so it runs
+in `pnpm gate`, on pre-push and in CI. That check is a syntactic question about
+one object literal — decidable from the parse, with no module resolution,
+dataflow or path sensitivity — which is why it is worth having where the check
+this ADR retires was not: a mock it misses raises loudly the first time that
+test authorizes, rather than answering something quietly wrong.
+
 ## Consequences
 
 - `packages/database/integration/org-only-sentinel-refusal.test.ts` drives its

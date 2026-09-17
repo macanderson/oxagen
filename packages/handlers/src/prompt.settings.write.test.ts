@@ -19,7 +19,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
     ...real,
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
@@ -27,6 +30,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         update: () => ({ set: mocks.set }),
       }),
   };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 vi.mock("@oxagen/billing", async (importOriginal) => {
