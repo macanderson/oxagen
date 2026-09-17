@@ -138,6 +138,7 @@ export function orgSource(reads: OrgReads): {
       workspaces: answer(reads.workspaces, "workspaces"),
       apiKeys: answer(reads.apiKeys, "apiKeys"),
     },
+    mandates: { list: refuse },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },

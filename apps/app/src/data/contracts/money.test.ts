@@ -5,10 +5,13 @@
 import { describe, expect, it } from "vitest";
 import {
   Cost,
+  isCurrencyCode,
   Money,
   microsFromDecimal,
+  sumExceeds,
   moneyFromMicros,
   mulMicros,
+  ratioOfIntegers,
   ratioOfMicros,
 } from "./money";
 
@@ -166,4 +169,73 @@ describe("microsFromDecimal", () => {
       expect(microsFromDecimal(text)).toBeNull();
     },
   );
+});
+
+describe("isCurrencyCode", () => {
+  it("knows the ISO 4217 codes a limit may name", () => {
+    for (const code of ["USD", "EUR", "JPY"])
+      expect(isCurrencyCode(code)).toBe(true);
+  });
+
+  it("refuses a well-formed three-letter unit that is not one (negative)", () => {
+    for (const unit of ["GAU", "RPM", "calls", "usd", ""])
+      expect(isCurrencyCode(unit)).toBe(false);
+  });
+});
+
+describe("ratioOfIntegers", () => {
+  it.each([
+    ["1204180000", "2000000000", 0.60209],
+    ["11", "50", 0.22],
+    ["0", "50", 0],
+  ])("reads %s of %s as a fraction", (part, whole, ratio) => {
+    expect(ratioOfIntegers(part, whole)).toBe(ratio);
+  });
+
+  it("holds the fraction at magnitudes a double cannot carry", () => {
+    expect(
+      ratioOfIntegers("500000000000000000000", "1000000000000000000000"),
+    ).toBe(0.5);
+  });
+
+  it("clamps a draw at or past the limit to the whole (negative)", () => {
+    expect(ratioOfIntegers("60", "50")).toBe(1);
+    expect(ratioOfIntegers("50", "50")).toBe(1);
+  });
+
+  it.each([
+    ["5", "0"],
+    ["-5", "50"],
+  ])("answers 0 for %s of %s (negative)", (part, whole) => {
+    expect(ratioOfIntegers(part, whole)).toBe(0);
+  });
+
+  it("refuses a figure that is not an integer string (negative)", () => {
+    expect(() => ratioOfIntegers("1.5", "50")).toThrow(/integer string/);
+  });
+});
+
+describe("sumExceeds", () => {
+  // The question `ratioOfIntegers` destroys: it clamps to 1, so an excess
+  // carried by one component alone is indistinguishable from exactly full.
+  it.each([
+    ["600", "0", "500", true],
+    ["0", "600", "500", true],
+    ["500", "500", "500", true],
+    ["500", "0", "500", false],
+    ["250", "250", "500", false],
+    ["1", "0", "0", true],
+    ["0", "0", "0", false],
+  ])("%s + %s against %s is %s", (a, b, whole, expected) => {
+    expect(sumExceeds(a, b, whole)).toBe(expected);
+  });
+
+  it("is exact past what a double holds", () => {
+    expect(sumExceeds("9007199254740993", "0", "9007199254740992")).toBe(true);
+    expect(sumExceeds("9007199254740992", "0", "9007199254740993")).toBe(false);
+  });
+
+  it("refuses a figure that is not an integer string (negative)", () => {
+    expect(() => sumExceeds("1.5", "0", "5")).toThrow();
+  });
 });

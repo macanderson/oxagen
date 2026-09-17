@@ -138,8 +138,7 @@ function stepsForClaudeDesktop(_wsSlug: string | undefined): InstallStep[] {
         "open ~/Library/Application\\ Support/Claude/claude_desktop_config.json",
     },
     {
-      label:
-        `Add the Oxagen server entry (merge into existing config) and replace ${JSON_API_KEY_PLACEHOLDER} with the key you just generated`,
+      label: `Add the Oxagen server entry (merge into existing config) and replace ${JSON_API_KEY_PLACEHOLDER} with the key you just generated`,
       command: configEntry,
     },
     {
@@ -199,8 +198,7 @@ function stepsForVscode(_wsSlug: string | undefined): InstallStep[] {
       command: API_KEY_URL,
     },
     {
-      label:
-        `Add the Oxagen server to your VS Code settings.json and replace ${JSON_API_KEY_PLACEHOLDER} with the key you just generated`,
+      label: `Add the Oxagen server to your VS Code settings.json and replace ${JSON_API_KEY_PLACEHOLDER} with the key you just generated`,
       command: settingsEntry,
     },
     {

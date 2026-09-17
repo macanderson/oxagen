@@ -28,9 +28,7 @@
     {
       "file": "apps/app/src/data/live/org.ts (members)",
       "capability": "list_members",
-      "tables": [
-        "workspace.workspace_users"
-      ],
+      "tables": ["workspace.workspace_users"],
       "needs": "path sensitivity, then interprocedural constant propagation",
       "reason": "Not a defect. listMembersHandler branches on `input.scope`: the org branch reads org.org_users and org.invitations, both org_only and correct under the sentinel; the workspace branch reads workspace.workspace_users. This call site passes `input: { scope: \"org\" }`, so the workspace branch never runs. The check pools the tables of every withTenantDb region in a handler, because knowing which branch a sentinel-scoped call takes means evaluating a condition on an input supplied in another file. This entry is evidence for ADR-074's assessment that the static approach does not converge: it appeared the moment the table resolver closed the aliasing gap."
     }

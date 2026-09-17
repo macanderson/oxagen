@@ -232,6 +232,7 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
       workspaces: refuse,
       apiKeys: refuse,
     },
+    mandates: { list: refuse },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },

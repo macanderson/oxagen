@@ -18,6 +18,7 @@ import {
   KillSwitchBoard as KillSwitchBoardShape,
   ToolVersionPage as ToolVersionPageShape,
 } from "@/data/contracts/tools";
+import type { MandateList } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import {
   credentialGrantListOutput,
@@ -55,6 +56,9 @@ type ToolsReads = {
   versions?: Read<ToolVersionPage>;
   grants?: Read<CredentialGrantPage>;
   killSwitches?: Read<KillSwitchBoard>;
+  /** The Mandates tab's read (#2957); built by `@/test/mandate-views`, which
+   * three features share because no feature may reach into another's folder. */
+  mandates?: Read<MandateList>;
 };
 
 /** A DataSource answering the Tools reads it was handed; `calls` records each read's arguments. */
@@ -63,6 +67,7 @@ export function toolsSource(reads: ToolsReads) {
     versions: [],
     grants: [],
     killSwitches: [],
+    mandates: [],
   };
   const refuse = () => Promise.reject(new Error("not a Tools read"));
   const answer =
@@ -115,6 +120,7 @@ export function toolsSource(reads: ToolsReads) {
       grants: answer(reads.grants, "grants"),
       killSwitches: answer(reads.killSwitches, "killSwitches"),
     },
+    mandates: { list: answer(reads.mandates, "mandates") },
   };
   return { source, calls };
 }

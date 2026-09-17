@@ -1,16 +1,24 @@
 // @vitest-environment jsdom
 // The Tools page body in each of its states on a fake DataSource: the loaded
-// registry, the grants log, the switch board, each tab's empty state and every
-// refusal a read can answer. A registry row prints what the record carries and
+// registry, the grants log, the switch board, the mandates ledger, each tab's
+// empty state and every refusal a read can answer. A registry row prints what the record carries and
 // nothing it does not — an unclassified version says so, a call count the
 // store did not answer stays "not recorded" — and axe checks the state each
 // test ends in (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readError, readOk } from "@/data/read";
+import type { OrgRole } from "@/data/contracts/common";
+import type { MandateList } from "@/data/contracts/mandates";
+import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import {
+  callsAuthority,
+  mandateAuthority,
+  mandateList,
+  mandateRow,
+} from "@/test/mandate-views";
 
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
@@ -23,8 +31,9 @@ const { unsafeMint } = await import("@/server/viewer.testing");
 const { Tools, ToolsLoading } = await import("./tools");
 const { credentialGrantPage, killSwitchBoard, toolsSource, toolVersionPage } =
   await import("./tools.builders");
+const { TOOLS_TABS } = await import("./view");
 
-function viewer(orgRole: "owner" | "member") {
+function viewer(orgRole: OrgRole) {
   return unsafeMint(WsCtx, {
     userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
     orgId: "7a000000-0000-4000-8000-0000000000a1",
@@ -34,6 +43,10 @@ function viewer(orgRole: "owner" | "member") {
     workspaceId: "7b000000-0000-4000-8000-000000000001",
     wsSlug: "core-platform",
     wsName: "Core platform",
+    // The viewer's role in this workspace (#3145). Independent of the org
+    // role these suites vary, and read by nothing outside `viewer-resolution`
+    // yet, so it is the same constant #3145 used across its own twenty
+    // fixtures rather than a second thing for a reader to interpret.
     wsRole: "member",
   });
 }
@@ -69,6 +82,24 @@ async function renderTools(
 /** The reads a tab that is not open never makes are still handed the switch board. */
 const board = () => readOk(killSwitchBoard());
 
+/**
+ * The Mandates tab (#2957) on the #2958 shell. The tab strip counts the
+ * switches that are denying on every tab, so the board is handed over even
+ * here; `mandates` is the only read the tab body itself makes.
+ */
+async function renderLedger(
+  mandates: Read<MandateList>,
+  as: OrgRole = "billing",
+) {
+  return renderTools(
+    { mandates, killSwitches: board() },
+    { tab: "mandates" },
+    viewer(as),
+  );
+}
+
+const ledger = () => screen.getByRole("region", { name: "Mandates ledger" });
+
 afterEach(async () => {
   try {
     await expectNoAxe(document.body);
@@ -78,6 +109,30 @@ afterEach(async () => {
 });
 
 describe("Tools › tabs", () => {
+  // The strip maps TOOLS_TABS and the body switches on it, joined by nothing
+  // but agreement — and this page was assembled from two lanes, #2958's shell
+  // and #2957's ledger, each of which knew only its own half. A tab whose case
+  // never landed renders the strip over nothing, which reads as "no tools
+  // here" rather than as a bug. So the shape is counted rather than eyeballed:
+  // the shell is the nav and exactly one body, for every tab the strip offers.
+  it.each(TOOLS_TABS.map((tab) => [tab]))(
+    "renders a body behind the %s tab",
+    async (tab) => {
+      const { container } = await renderTools(
+        {
+          versions: readOk(toolVersionPage()),
+          grants: readOk(credentialGrantPage()),
+          killSwitches: board(),
+          mandates: mandateList([mandateRow()]),
+        },
+        { tab },
+      );
+      const shell = element(container.firstElementChild, "tools shell");
+      expect(shell.firstElementChild?.tagName).toBe("NAV");
+      expect(shell.children).toHaveLength(2);
+    },
+  );
+
   it("marks the registry as the default tab and counts the switches that are denying", async () => {
     await renderTools({
       versions: readOk(toolVersionPage()),
@@ -543,5 +598,303 @@ describe("ToolsLoading", () => {
     const skeleton = screen.getByLabelText("Loading tools");
     expect(skeleton).toHaveAttribute("aria-busy", "true");
     expect(skeleton.dataset.state).toBe("loading");
+  });
+});
+
+// The ledger #2957 built, now a tab on #2958's shell rather than the page.
+// The suite carried over whole: what it asserts is about the ledger, not about
+// the layout it sat in, so every case survived the move unchanged except for
+// how it is rendered. The shell's own afterEach axe-checks each state.
+describe("Tools › mandates ledger", () => {
+  it("is reachable as a tab and reads every mandate in the workspace, not one agent's", async () => {
+    const { calls } = await renderLedger(mandateList([mandateRow()]));
+    const ctx = viewer("billing");
+    expect(calls.mandates).toEqual([[ctx, { agentId: null }]]);
+    expect(
+      screen.getByRole("navigation", { name: "Tools sections" }),
+    ).toBeInTheDocument();
+  });
+
+  it("prints the grant and what the ledger has settled, reserved and left", async () => {
+    await renderLedger(mandateList([mandateRow()]));
+    const row = within(ledger()).getByTestId("mandate");
+    expect(row).toHaveAttribute("data-status", "active");
+    const text = row.textContent;
+    for (const figure of [
+      "mnd_4f2a9c",
+      "invoice-bot",
+      "usr_priyanatarajan",
+      "Billing",
+      "monthly infrastructure invoices, PO-4471",
+      "$250.00",
+      "$2,000.00",
+      "$1,204.18",
+      "$180.00",
+      "$615.82",
+      "active",
+    ]) {
+      expect(text).toContain(figure);
+    }
+  });
+
+  it("prints every measure of a mandate that limits more than one", async () => {
+    await renderLedger(
+      mandateList([
+        mandateRow({ authority: [mandateAuthority(), callsAuthority()] }),
+      ]),
+    );
+    const row = within(ledger()).getByTestId("mandate");
+    expect(row.textContent).toContain("50 calls");
+    expect(row.textContent).toContain("38 calls");
+    expect(row.textContent).toContain("$2,000.00");
+  });
+
+  it("prints no granter for a request nobody has granted (negative)", async () => {
+    await renderLedger(
+      mandateList([
+        mandateRow({ status: "draft", grantedBy: null, roleAtGrant: null }),
+      ]),
+    );
+    const row = within(ledger()).getByTestId("mandate");
+    expect(row).toHaveAttribute("data-status", "draft");
+    expect(row.textContent).toContain("not granted");
+    expect(row.textContent).toContain("requested");
+  });
+
+  // An accountability ledger that cannot say who asked for the authority is
+  // not one. `requestedBy` was on the view model and no surface rendered it,
+  // so every ungranted row read only "not granted".
+  it("names the operator who asked, on a row nobody has granted", async () => {
+    await renderLedger(
+      mandateList([
+        mandateRow({
+          status: "draft",
+          grantedBy: null,
+          roleAtGrant: null,
+          requestedBy: "usr_marcusbell",
+        }),
+      ]),
+    );
+    const row = within(ledger()).getByTestId("mandate");
+    expect(row.textContent).toContain("requested by usr_marcusbell");
+  });
+
+  // A granted row keeps the granter and their role at grant; the requester
+  // does not displace the name this column is headed for.
+  it("keeps the granter and the role they held on a granted row", async () => {
+    await renderLedger(mandateList([mandateRow()]));
+    const row = within(ledger()).getByTestId("mandate");
+    expect(row.textContent).toContain("usr_priyanatarajan");
+    expect(row.textContent).toContain("Billing");
+    expect(row.textContent).not.toContain("requested by");
+  });
+
+  // Null only where the row records no requester — a grant written directly,
+  // which never went through a request. The cell says "not granted" and
+  // invents no name.
+  it("names nobody when the row records no requester either (negative)", async () => {
+    await renderLedger(
+      mandateList([
+        mandateRow({
+          status: "draft",
+          grantedBy: null,
+          roleAtGrant: null,
+          requestedBy: null,
+        }),
+      ]),
+    );
+    const row = within(ledger()).getByTestId("mandate");
+    expect(row.textContent).toContain("not granted");
+    expect(row.textContent).not.toContain("requested by");
+  });
+
+  it("says a measure has no limit rather than printing a zero (negative)", async () => {
+    await renderLedger(
+      mandateList([
+        mandateRow({
+          authority: [
+            mandateAuthority({
+              perCall: null,
+              perPeriod: null,
+              remaining: null,
+              settledRatio: null,
+              reservedRatio: null,
+            }),
+          ],
+        }),
+      ]),
+    );
+    expect(
+      within(ledger()).getAllByText("no limit").length,
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  it("says older mandates are not listed when the answer filled its page (negative)", async () => {
+    await renderLedger(mandateList([mandateRow()], 100));
+    const line = within(ledger()).getByText(/older ones are not listed/);
+    expect(line).toHaveAttribute("data-state", "incomplete");
+    expect(line).toHaveAttribute("data-blind-spot", "truncated");
+  });
+
+  it("says nothing about older mandates when the answer was the whole set", async () => {
+    await renderLedger(mandateList([mandateRow()]));
+    expect(
+      within(ledger()).queryByText(/older ones are not listed/),
+    ).toBeNull();
+  });
+
+  it("says the workspace has recorded no mandate, granted or requested", async () => {
+    await renderLedger(mandateList([]));
+    expect(within(ledger()).getByText(/recorded no mandate/)).toHaveAttribute(
+      "data-state",
+      "empty",
+    );
+    expect(within(ledger()).queryByRole("table")).toBeNull();
+  });
+
+  it("says who may read the ledger when the viewer may not (negative)", async () => {
+    await renderLedger({
+      ok: false,
+      reason: "denied",
+      permission: "org.billing",
+    });
+    expect(within(ledger()).getByText(/org\.billing/)).toHaveAttribute(
+      "data-reason",
+      "denied",
+    );
+  });
+
+  it("names the code the ledger answered when it is down (negative)", async () => {
+    await renderLedger(readError("mandate_ledger_unavailable", 503));
+    expect(
+      within(ledger()).getByText(/mandate_ledger_unavailable/),
+    ).toHaveAttribute("data-reason", "error");
+  });
+
+  // The workspace-wide read is narrowed for a non-accountable reader the same
+  // way the per-agent one is, so an empty ledger is not proof of an empty
+  // ledger unless the reader is one this page is written for.
+  it.each([["member" as const], ["viewer" as const]])(
+    "does not tell a %s that the workspace has granted nothing (negative)",
+    async (role) => {
+      await renderLedger(mandateList([]), role);
+      expect(
+        within(ledger()).getByText(/not every mandate this workspace has/),
+      ).toHaveAttribute("data-blind-spot", "reader_scope");
+      expect(
+        within(ledger()).getByText(/not a statement that the workspace/),
+      ).toHaveAttribute("data-state", "empty");
+      expect(within(ledger()).queryByText(/recorded no mandate/)).toBeNull();
+    },
+  );
+
+  // Incompleteness does not depend on length: a narrowed reader answered rows
+  // is looking at a subset under a lead that describes the whole ledger.
+  it.each([["member" as const], ["viewer" as const]])(
+    "says the ledger is partial to a %s answered rows (negative)",
+    async (role) => {
+      await renderLedger(mandateList([mandateRow()]), role);
+      expect(
+        within(ledger()).getByText(/not every mandate this workspace has/),
+      ).toHaveAttribute("data-blind-spot", "reader_scope");
+      expect(within(ledger()).getByRole("table")).toBeInTheDocument();
+      expect(within(ledger()).queryByText(/not a statement/)).toBeNull();
+    },
+  );
+
+  // The lead and the caveats describe whatever `list_mandates` returns, and it
+  // returns every status — the table below labels a draft "requested". A lead
+  // saying the workspace *has granted* these is false of a ledger holding only
+  // drafts, which is what "has granted" hid: it carries no quantifier, so a
+  // pass looking for "every" and "all" walked straight past it.
+  it("describes a ledger of drafts without claiming any was granted", async () => {
+    await renderLedger(mandateList([mandateRow({ status: "draft" })]));
+    const text = ledger().textContent;
+    expect(text).toContain("has recorded");
+    expect(text).not.toMatch(/has granted/);
+    expect(within(ledger()).getByTestId("mandate").textContent).toContain(
+      "requested",
+    );
+  });
+
+  it.each([
+    ["draft" as const],
+    ["active" as const],
+    ["expired" as const],
+    ["revoked" as const],
+  ])("never says a %s row was granted", async (status) => {
+    await renderLedger(mandateList([mandateRow({ status })], 100));
+    expect(ledger().textContent).not.toMatch(/has granted/);
+  });
+
+  it("says nothing of the sort to an accountable reader answered rows", async () => {
+    await renderLedger(mandateList([mandateRow()]), "owner");
+    expect(
+      within(ledger()).queryByText(/not every mandate this workspace has/),
+    ).toBeNull();
+  });
+
+  it.each([["owner" as const], ["admin" as const], ["compliance" as const]])(
+    "tells a %s the workspace has recorded none, because their answer is every one",
+    async (role) => {
+      await renderLedger(mandateList([]), role);
+      expect(within(ledger()).getByText(/recorded no mandate/)).toHaveAttribute(
+        "data-state",
+        "empty",
+      );
+    },
+  );
+
+  // The name is not conditional on there being two: a lone `tax` limit under a
+  // column headed Per call is an unlabelled dollar figure.
+  it("names the measure on a row that limits exactly one", async () => {
+    await renderLedger(
+      mandateList([
+        mandateRow({ authority: [mandateAuthority({ measure: "tax" })] }),
+      ]),
+    );
+    expect(within(ledger()).getByTestId("mandate").textContent).toContain(
+      "tax",
+    );
+  });
+
+  // Two mandates differing only in tool scope rendered as the same row, on the
+  // page an accountable reader uses to review what they granted.
+  it("shows which tools a mandate covers", async () => {
+    await renderLedger(
+      mandateList([
+        mandateRow({ tools: ["payments.read@*", "payments.list@2"] }),
+      ]),
+    );
+    const row = within(ledger()).getByTestId("mandate");
+    expect(row.textContent).toContain("payments.read@*");
+    expect(row.textContent).toContain("payments.list@2");
+    expect(within(row).queryByText("every tool")).toBeNull();
+  });
+
+  // `*` is the difference between one tool and everything, and a reader should
+  // not have to notice one character to see it.
+  it("calls out an unrestricted mandate rather than printing an asterisk", async () => {
+    await renderLedger(mandateList([mandateRow({ tools: ["*"] })]));
+    const row = within(ledger()).getByTestId("mandate");
+    expect(within(row).getByText("every tool")).toHaveAttribute(
+      "data-scope",
+      "every-tool",
+    );
+  });
+
+  // A daily 100 and a monthly 100 are different authorities, and the
+  // settled/reserved/remaining figures mean nothing until the window is named.
+  it("names the accounting window each limit is counted over", async () => {
+    await renderLedger(
+      mandateList([
+        mandateRow({ authority: [mandateAuthority(), callsAuthority()] }),
+      ]),
+    );
+    const row = within(ledger()).getByTestId("mandate");
+    expect(row.textContent).toContain("per month · 2026-09");
+    // A mandate may cap calls daily and money monthly; each window sits with
+    // the limit it belongs to.
+    expect(row.textContent).toContain("per day");
   });
 });

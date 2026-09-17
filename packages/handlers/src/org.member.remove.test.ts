@@ -405,11 +405,9 @@ describe("orgMemberRemoveHandler", () => {
       if (callCount === 8) return build([{ id: "target-principal-id" }]);
       return build([]); // no workspaces
     });
-    mockTx.update = vi
-      .fn()
-      .mockReturnValue({
-        set: vi.fn().mockReturnValue({ where: () => writeResult() }),
-      });
+    mockTx.update = vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({ where: () => writeResult() }),
+    });
     const deletedTables: unknown[] = [];
     mockTx.delete = vi.fn().mockImplementation((table: unknown) => {
       deletedTables.push(table);

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // One agent over a fake DataSource: the header and each of the five sections
 // in its ok, empty, denied and error states, with an axe check in every one.
-// Only the chosen section makes its own read; an unknown agent is a 404.
+// Only the chosen section makes its own read; an unknown agent is a 404. The
+// Mandates section has its own file, mandates.test.tsx.
 import { act, cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -111,7 +112,7 @@ describe("Agent header and tabs", () => {
     );
   });
 
-  it("links the five sections a store backs, and no Mandates, Budgets or Runs tab (negative)", async () => {
+  it("links the six sections a store backs, and no Budgets or Runs tab (negative)", async () => {
     await renderAgent({ get: readOk(agentDetail()) });
     const links = within(
       screen.getByRole("navigation", { name: "Agent sections" }),
@@ -128,8 +129,9 @@ describe("Agent header and tabs", () => {
         "Definition in git",
         "/acme/core-platform/agents/release-bot?tab=definition",
       ],
+      ["Mandates", "/acme/core-platform/agents/release-bot?tab=mandates"],
     ]);
-    expect(document.body).not.toHaveTextContent(/mandate|budget|trust|score/i);
+    expect(document.body).not.toHaveTextContent(/budget|trust|score/i);
   });
 
   it("offers Resume for a suspended agent and no write at all for a retired one", async () => {
@@ -152,7 +154,7 @@ describe("Agent header and tabs", () => {
   });
 
   it("opens Identity for an unknown tab (negative)", async () => {
-    const calls = await renderAgent({ get: readOk(agentDetail()) }, "mandates");
+    const calls = await renderAgent({ get: readOk(agentDetail()) }, "budgets");
     expect(current()).toEqual(["Identity"]);
     expect(calls.toolbelt).toEqual([]);
     expect(calls.incidents).toEqual([]);

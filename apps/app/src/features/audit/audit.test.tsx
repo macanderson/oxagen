@@ -102,6 +102,7 @@ const source: DataSource = {
   audit: { events, exportEvents },
   onboarding: { state: refuse, firstFrame: refuse },
   skills: { inventory: refuse },
+  mandates: { list: refuse },
   steering: { records: refuse, proposals: refuse, contextPr: refuse },
   tools: { versions: refuse, grants: refuse, killSwitches: refuse },
 };

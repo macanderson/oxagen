@@ -27,6 +27,7 @@ import type {
   PlanCard,
   UsageCredits,
 } from "./contracts/billing";
+import type { MandateList } from "./contracts/mandates";
 import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
 import type {
   ApiKey,
@@ -135,6 +136,16 @@ export interface DataSource {
       agent: string,
       q: { cursor: string | null },
     ): Promise<Read<IncidentPage>>;
+  };
+  /**
+   * The mandates of the workspace, or of one agent (#2957): `list_mandates`,
+   * each row carrying the remaining authority its ledger records. Callers:
+   * features/tools/mandates-ledger.tsx (the ledger the accountable office
+   * reads), features/agents/mandates.tsx (the mandates one agent holds) and
+   * features/fleet/fleet.tsx (the bar on an approval card that names one).
+   */
+  mandates: {
+    list(ctx: WsCtx, q: { agentId: string | null }): Promise<Read<MandateList>>;
   };
   /**
    * The cost rollup (#2962), every read noBillingGate; callers:

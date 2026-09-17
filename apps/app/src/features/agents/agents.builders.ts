@@ -8,6 +8,7 @@ import type {
   IncidentPage,
   Toolbelt,
 } from "@/data/contracts/agents";
+import type { MandateList } from "@/data/contracts/mandates";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
 
@@ -205,6 +206,7 @@ type AgentReads = {
   get?: Read<AgentDetail>;
   toolbelt?: Read<Toolbelt>;
   incidents?: Read<IncidentPage>;
+  mandates?: Read<MandateList>;
 };
 
 /** A DataSource answering the agents reads it was handed; `calls` records each read's arguments. */
@@ -214,6 +216,7 @@ export function agentsSource(reads: AgentReads) {
     get: [],
     toolbelt: [],
     incidents: [],
+    mandates: [],
   };
   const refuse = () => Promise.reject(new Error("not an Agents read"));
   const answer =
@@ -242,6 +245,7 @@ export function agentsSource(reads: AgentReads) {
       toolbelt: answer(reads.toolbelt, "toolbelt"),
       incidents: answer(reads.incidents, "incidents"),
     },
+    mandates: { list: answer(reads.mandates, "mandates") },
     spend: {
       byGroup: refuse,
       fleet: refuse,

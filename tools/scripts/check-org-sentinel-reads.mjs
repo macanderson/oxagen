@@ -1240,8 +1240,14 @@ export function findSentinelNarrowedReads(root = ROOT) {
 }
 
 function main() {
-  const { files, policiedTables, findings, waived, acknowledged, staleWaivers } =
-    findSentinelNarrowedReads();
+  const {
+    files,
+    policiedTables,
+    findings,
+    waived,
+    acknowledged,
+    staleWaivers,
+  } = findSentinelNarrowedReads();
 
   if (process.argv.includes("--json")) {
     console.log(JSON.stringify({ findings, waived, staleWaivers }, null, 2));

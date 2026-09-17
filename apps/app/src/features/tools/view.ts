@@ -4,10 +4,10 @@
 // lane adds no route), and a value the page does not know falls back to the
 // default rather than failing the page.
 //
-// The three tabs this lane ships are the three the six #2958 capabilities
-// back. Mandates ledger, Policy and Auto-approvals are their own lanes; each
-// adds its name to TOOLS_TABS and its case to the body, and nothing else here
-// moves.
+// Four of the mockup's six tabs are backed today: the three #2958's
+// capabilities back, and the Mandates ledger #2957 brought. Policy and
+// Auto-approvals are still their own lanes; each adds its name to TOOLS_TABS
+// and its case to the body, and nothing else here moves.
 import type {
   KillSwitch,
   KillSwitchKind,
@@ -15,7 +15,12 @@ import type {
 } from "@/data/contracts/tools";
 import { firstParam, routes, type SafePath } from "@/shared/safe-path";
 
-export const TOOLS_TABS = ["registry", "connections", "switches"] as const;
+export const TOOLS_TABS = [
+  "registry",
+  "connections",
+  "switches",
+  "mandates",
+] as const;
 export type ToolsTab = (typeof TOOLS_TABS)[number];
 
 /** How a tool version is named in the tables: its human label, or its API name. */

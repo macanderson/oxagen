@@ -3,7 +3,7 @@
 // the names toggle, and a cursor whose shape is checked before it goes back
 // to the kernel.
 import { describe, expect, it } from "vitest";
-import { parseToolsView, textValue, toolsLink } from "./view";
+import { parseToolsView, textValue, TOOLS_TABS, toolsLink } from "./view";
 
 const at = { org: "acme", ws: "core-platform" };
 
@@ -17,9 +17,15 @@ describe("parseToolsView", () => {
     });
   });
 
+  // The unknown value is one no lane will ever ship, not the name of a tab
+  // that has not landed yet: `mandates` stood here until #2957 made it real,
+  // and then this case asserted that a live tab was unreachable. A fixture
+  // that is only unknown until someone does their job is not a fixture.
   it("takes a tab it knows and falls back to the registry on one it does not", () => {
-    expect(parseToolsView({ tab: "switches" }).tab).toBe("switches");
-    expect(parseToolsView({ tab: "mandates" }).tab).toBe("registry");
+    for (const tab of TOOLS_TABS) expect(parseToolsView({ tab }).tab).toBe(tab);
+    expect(parseToolsView({ tab: "not-a-tab" }).tab).toBe("registry");
+    expect(parseToolsView({ tab: "" }).tab).toBe("registry");
+    expect(parseToolsView({}).tab).toBe("registry");
   });
 
   it("reads a consequence tag only on the registry, and only in the contract's shape", () => {

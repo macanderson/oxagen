@@ -1,11 +1,13 @@
-// Tools (#2958; ARCHITECTURE.md §1.2, mockup `mockups/pages/tools.md`): the
-// registry of tool versions with their safety classification, the credential
-// grants the broker minted, and the kill switches reaching this workspace.
+// Tools (#2958, #2957; ARCHITECTURE.md §1.2, mockup `mockups/pages/tools.md`):
+// the registry of tool versions with their safety classification, the
+// credential grants the broker minted, the kill switches reaching this
+// workspace, and the ledger of every mandate the workspace has granted.
 //
-// Three tabs, because three of the mockup's six are backed today. Mandates
-// ledger, Policy and Auto-approvals are their own lanes and add their names to
-// TOOLS_TABS and their case to TabBody when they land; nothing else here
-// moves.
+// Four tabs, because four of the mockup's six are backed today. #2958 shipped
+// the shell and the first three and left the slot this comment described;
+// #2957's ledger fills it, adding its name to TOOLS_TABS and its case below
+// and moving nothing else. Policy and Auto-approvals are still their own lanes
+// and arrive the same way.
 //
 // Each tab makes only the reads it shows, except the switch count on the tab
 // strip: a count in navigation appears where something waits on a person, and
@@ -16,6 +18,7 @@ import type { WsCtx } from "@/server/viewer";
 import { panel } from "@/ui/control-styles";
 import { useTranslations } from "next-intl";
 import { Connections } from "./connections";
+import { MandatesLedger } from "./mandates-ledger";
 import { Registry } from "./registry";
 import { Switches, switchesOn } from "./switches";
 import { ToolsTabs } from "./tabs";
@@ -101,6 +104,14 @@ async function TabBody({
           read={read}
         />
       );
+    }
+    case "mandates": {
+      // Every mandate in the workspace, so no agent narrows the read; the
+      // ledger is what the accountable office reads across agents. `orgRole`
+      // goes in because an unaccountable reader is answered a narrowed list
+      // and the section must say so rather than present it as the whole.
+      const read = await source.mandates.list(ctx, { agentId: null });
+      return <MandatesLedger read={read} orgRole={ctx.orgRole} />;
     }
   }
 }

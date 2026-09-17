@@ -13,11 +13,13 @@ import type { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 import type { onboardingFirstFrameGet } from "@oxagen/oxagen/contracts/onboarding.first_frame.get";
 import type { onboardingStateGet } from "@oxagen/oxagen/contracts/onboarding.state.get";
 import type { tachoIncidentList } from "@oxagen/oxagen/contracts/tacho.incident.list";
+import type { mandateList } from "@oxagen/oxagen/contracts/mandate.list";
 import type { runList } from "@oxagen/oxagen/contracts/run.list";
 import type { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import type { ContractOutput } from "@/server/kernel";
 import type { toAgentDetail, toAgentPage, toIncidentPage } from "./agents";
 import type { toApprovalItems } from "./approvals";
+import type { toMandateList } from "./mandates";
 import type { toAuditPage } from "./audit";
 import type { toFirstFrame, toOnboardingGate } from "./onboarding";
 import type { toApiKeys, toRoleCatalog, toWorkspaceList } from "./org";
@@ -48,6 +50,8 @@ type IncidentView = ReturnType<typeof toIncidentPage>["incidents"][number];
 type ApiKeyOut = ContractOutput<typeof apiKeyList>["items"][number];
 type ApiKeyView = ReturnType<typeof toApiKeys>[number];
 
+type MandateOut = ContractOutput<typeof mandateList>["items"][number];
+type MandateView = ReturnType<typeof toMandateList>["mandates"][number];
 type RoleOut = ContractOutput<typeof iamRoleList>["roles"][number];
 type RoleView = ReturnType<typeof toRoleCatalog>["roles"][number];
 type WorkspaceOut = ContractOutput<typeof workspaceList>["workspaces"][number];
@@ -61,6 +65,7 @@ declare const identityView: AgentView["identity"];
 declare const credentialView: AgentView["credentials"][number];
 declare const hostView: AgentView["hosts"][number];
 declare const incidentView: IncidentView;
+declare const mandateView: MandateView;
 declare const roleView: RoleView;
 declare const workspaceView: WorkspaceView;
 declare const apiKeyView: ApiKeyView;
@@ -93,6 +98,8 @@ const _hostsHold: NullableOnlyWhenSourceIs<
 > = hostView;
 const _incidentsHold: NullableOnlyWhenSourceIs<IncidentView, IncidentOut> =
   incidentView;
+const _mandatesHold: NullableOnlyWhenSourceIs<MandateView, MandateOut> =
+  mandateView;
 // A role's description and author are nullable on both sides; a workspace's
 // role and archival date are the two the store may not have recorded.
 const _rolesHold: NullableOnlyWhenSourceIs<RoleView, RoleOut> = roleView;

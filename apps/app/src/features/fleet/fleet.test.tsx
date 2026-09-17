@@ -1,15 +1,20 @@
 // @vitest-environment jsdom
 // Fleet over a fake DataSource: the two-tile stat strip, the approvals panel
 // and the runs table, each in its ok, empty, denied and error states, with an
-// axe check in every one. The tiles count the rows the sections render.
+// axe check in every one. The tiles count the rows the sections render, and a
+// card whose parked call drew on a mandate carries the mandate bar.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApprovalItem } from "@/data/contracts/approvals";
-import type { RunPage } from "@/data/contracts/runs";
-import { type Read, readError, readOk } from "@/data/read";
+import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import {
+  mandateAuthority,
+  mandateList,
+  mandateRow,
+} from "@/test/mandate-views";
 import {
   approvalItem,
   fleetSource,
@@ -52,7 +57,7 @@ const NO_APPROVALS = readOk<ApprovalItem[]>([]);
 const NO_RUNS = runPage([]);
 
 async function renderFleet(
-  reads: { runs: Read<RunPage>; approvals: Read<ApprovalItem[]> },
+  reads: Parameters<typeof fleetSource>[0],
   cursor: string | null = null,
 ) {
   const { source, calls } = fleetSource(reads);
@@ -317,5 +322,187 @@ describe("runs table", () => {
       "Runs could not be loaded: the control plane answered run_index_unavailable.",
     );
     expect(within(runsSection()).queryByRole("table")).toBeNull();
+  });
+});
+
+describe("Fleet approvals › the mandate bar", () => {
+  const parked = approvalItem({ mandateId: "mnd_4f2a9c" });
+
+  it("draws the bar of the mandate a parked call drew on", async () => {
+    const { container, calls } = await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([parked]),
+      mandates: mandateList([mandateRow()]),
+    });
+    expect(calls.mandates).toEqual([[ctx, { agentId: null }]]);
+    const bar = within(approvalsSection()).getByTestId("mandate-bar");
+    expect(bar).toHaveAttribute("data-measure", "amount");
+    expect(bar).toHaveTextContent("$615.82");
+    // The measure is on the card, not only in a data attribute: this panel is
+    // where a mandate draws one bar per measure.
+    expect(bar).toHaveTextContent("Remaining authority · amount · monthly");
+    expect(within(bar).getByRole("img")).toHaveAccessibleName(
+      "amount: $1,204.18 settled, $180.00 reserved by calls in flight, $615.82 remaining of $2,000.00",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("says what the bar's figures are counted over, since a parked call can outlive a period", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([parked]),
+      mandates: mandateList([mandateRow()]),
+    });
+    expect(
+      within(approvalsSection()).getByTestId("mandate-period-basis"),
+    ).toHaveTextContent("A reservation this call made in an earlier period");
+  });
+
+  it("says nothing about a period on a card with no bar (negative)", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([approvalItem()]),
+    });
+    expect(
+      within(approvalsSection()).queryByTestId("mandate-period-basis"),
+    ).toBeNull();
+  });
+
+  it("reads no mandate at all when no parked call names one (negative)", async () => {
+    const { calls } = await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([approvalItem()]),
+    });
+    expect(calls.mandates).toEqual([]);
+    expect(within(approvalsSection()).queryByTestId("mandate-bar")).toBeNull();
+  });
+
+  it("draws the card without its bar when the ledger refuses the viewer (negative)", async () => {
+    const { container } = await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([parked]),
+      mandates: { ok: false, reason: "denied", permission: "org.billing" },
+    });
+    expect(
+      within(approvalsSection()).getByTestId("approval"),
+    ).toBeInTheDocument();
+    expect(within(approvalsSection()).queryByTestId("mandate-bar")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("names a mandate the page did not read rather than drawing nothing (negative)", async () => {
+    const { container } = await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([approvalItem({ mandateId: "mnd_absent" })]),
+      mandates: mandateList([mandateRow()], 100),
+    });
+    const section = approvalsSection();
+    expect(within(section).queryByTestId("mandate-bar")).toBeNull();
+    expect(within(section).getByTestId("mandate-unread")).toHaveTextContent(
+      "Drew on mandate mnd_absent",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("names the mandate on a card the viewer may not read the ledger for (negative)", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([parked]),
+      mandates: { ok: false, reason: "denied", permission: "org.billing" },
+    });
+    expect(
+      within(approvalsSection()).getByTestId("mandate-unread"),
+    ).toHaveTextContent("mnd_4f2a9c");
+  });
+
+  it("names no mandate on a card that drew on none (negative)", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([approvalItem()]),
+    });
+    expect(
+      within(approvalsSection()).queryByTestId("mandate-unread"),
+    ).toBeNull();
+  });
+
+  // A mandate limited per call only has no denominator, so every `MandateBar`
+  // draws nothing — and the card used to print a caveat about the period it
+  // was not counting, over that emptiness, while suppressing the fallback that
+  // would at least have named the mandate.
+  it("names a per-call-only mandate instead of drawing an empty card", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([parked]),
+      mandates: mandateList([
+        mandateRow({
+          authority: [
+            mandateAuthority({
+              perPeriod: null,
+              remaining: null,
+              settledRatio: null,
+              reservedRatio: null,
+            }),
+          ],
+        }),
+      ]),
+    });
+    const card = within(approvalsSection()).getByTestId("approval");
+    expect(within(card).queryByTestId("mandate-bar")).toBeNull();
+    expect(within(card).queryByTestId("mandate-period-basis")).toBeNull();
+    const line = within(card).getByTestId("mandate-per-call-only");
+    expect(line.textContent).toContain("mnd_4f2a9c");
+    expect(line.textContent).toContain("limits these per call only");
+    expect(line.textContent).toContain("$250.00");
+    expect(line.textContent).toContain("amount");
+  });
+
+  it("keeps the period caveat when a measure does have a period limit", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([parked]),
+      mandates: mandateList([mandateRow()]),
+    });
+    const card = within(approvalsSection()).getByTestId("approval");
+    expect(
+      within(card).getByTestId("mandate-period-basis"),
+    ).toBeInTheDocument();
+    expect(within(card).queryByTestId("mandate-per-call-only")).toBeNull();
+  });
+
+  // A mandate's measures are a partition, not an either/or. Keying the
+  // fallback on "are there any bars" hid the per-call measures of a mandate
+  // that had one of each.
+  it("draws the bars and names the per-call-only measures beside them", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: readOk([parked]),
+      mandates: mandateList([
+        mandateRow({
+          authority: [
+            mandateAuthority(),
+            mandateAuthority({
+              measure: "tax",
+              perPeriod: null,
+              remaining: null,
+              settledRatio: null,
+              reservedRatio: null,
+            }),
+          ],
+        }),
+      ]),
+    });
+    const card = within(approvalsSection()).getByTestId("approval");
+    const bars = within(card).getAllByTestId("mandate-bar");
+    expect(bars).toHaveLength(1);
+    expect(bars[0]).toHaveAttribute("data-measure", "amount");
+    // The period caveat belongs to the bar, and the bar is there.
+    expect(
+      within(card).getByTestId("mandate-period-basis"),
+    ).toBeInTheDocument();
+    // And the measure with no period is named rather than dropped.
+    const line = within(card).getByTestId("mandate-per-call-only");
+    expect(line.textContent).toContain("tax");
+    expect(line.textContent).toContain("$250.00");
+    expect(line.textContent).not.toContain("amount");
   });
 });

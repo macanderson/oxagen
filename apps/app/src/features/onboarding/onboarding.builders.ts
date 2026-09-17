@@ -96,6 +96,7 @@ export function onboardingSource(reads: Reads): {
       orgs: refuse("pretenant.orgs"),
       workspaces: refuse("pretenant.workspaces"),
     },
+    mandates: { list: refuse("mandates.list") },
     shell: { context: refuse("shell.context") },
     runs: { list: refuse("runs.list") },
     approvals: { pending: refuse("approvals.pending") },

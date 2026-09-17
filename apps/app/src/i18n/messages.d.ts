@@ -112,6 +112,7 @@ type Messages = {
         enrollment: string;
         incidents: string;
         definition: string;
+        mandates: string;
       };
       identity: {
         title: string;
@@ -352,6 +353,9 @@ type Messages = {
         invalid: string;
         pendingApproval: string;
         unavailable: string;
+        noToolMatches: string;
+        measureNotDeclared: string;
+        measureUnitMismatch: string;
       };
     };
     source: {
@@ -398,6 +402,71 @@ type Messages = {
           source: string;
         };
       };
+    };
+    mandates: {
+      title: string;
+      noneTitle: string;
+      lead: string;
+      none: string;
+      noneDetail: string;
+      authority: string;
+      columns: {
+        mandate: string;
+        effect: string;
+        tools: string;
+        perCall: string;
+        perPeriod: string;
+        remaining: string;
+        validTo: string;
+        status: string;
+      };
+      status: {
+        draft: string;
+        active: string;
+        expired: string;
+        revoked: string;
+      };
+      request: {
+        open: string;
+        title: string;
+        body: string;
+        measure: string;
+        measureHint: string;
+        perCall: string;
+        perPeriod: string;
+        perPeriodHint: string;
+        period: string;
+        periods: {
+          daily: string;
+          weekly: string;
+          monthly: string;
+        };
+        callsPerDay: string;
+        tools: string;
+        toolsHint: string;
+        purpose: string;
+        purposeHint: string;
+        validFrom: string;
+        validTo: string;
+        validToHint: string;
+        confirm: string;
+        pending: string;
+        unit: string;
+        unitHint: string;
+        perCallHint: string;
+        consequenceTags: string;
+        consequenceTagsHint: string;
+        consequenceOther: string;
+      };
+      truncated: string;
+      noneEffective: string;
+      noneListedTitle: string;
+      partial: string;
+      noneListed: string;
+      noneListedDetail: string;
+      retired: string;
+      noneEffectiveUpcoming: string;
+      startsOn: string;
     };
   };
   audit: {
@@ -850,6 +919,9 @@ type Messages = {
       timesOut: string;
       notRecorded: string;
       openRun: string;
+      mandateUnread: string;
+      mandatePeriodBasis: string;
+      mandatePerCallOnly: string;
     };
     runs: {
       title: string;
@@ -1901,6 +1973,7 @@ type Messages = {
       registry: string;
       connections: string;
       switches: string;
+      mandates: string;
       switchesOn: string;
       switchesOnAtLeast: string;
     };
@@ -2165,6 +2238,38 @@ type Messages = {
         unavailable: string;
       };
     };
+    mandates: {
+      title: string;
+      lead: string;
+      empty: string;
+      emptyDetail: string;
+      notGranted: string;
+      requestedBy: string;
+      columns: {
+        mandate: string;
+        agent: string;
+        grantedBy: string;
+        purpose: string;
+        perCall: string;
+        perPeriod: string;
+        settled: string;
+        reserved: string;
+        remaining: string;
+        validTo: string;
+        status: string;
+        tools: string;
+      };
+      status: {
+        draft: string;
+        active: string;
+        expired: string;
+        revoked: string;
+      };
+      truncated: string;
+      partial: string;
+      emptyListed: string;
+      emptyListedDetail: string;
+    };
   };
   ui: {
     brand: {
@@ -2205,6 +2310,37 @@ type Messages = {
       denied: string;
       pendingApproval: string;
       error: string;
+    };
+    measure: {
+      count: string;
+    };
+    mandateBar: {
+      title: string;
+      of: string;
+      period: {
+        daily: string;
+        weekly: string;
+        monthly: string;
+      };
+      settled: string;
+      reserved: string;
+      remaining: string;
+      label: string;
+      labelReserved: string;
+      overLimit: string;
+    };
+    mandateScope: {
+      everyTool: string;
+      noTool: string;
+    };
+    mandateAuthority: {
+      noLimit: string;
+      window: string;
+      period: {
+        daily: string;
+        weekly: string;
+        monthly: string;
+      };
     };
   };
 };

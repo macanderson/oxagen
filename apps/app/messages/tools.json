@@ -18,6 +18,7 @@
       "registry": "Registry",
       "connections": "Connections",
       "switches": "Kill switches",
+      "mandates": "Mandates",
       "switchesOn": "{count, plural, one {# on} other {# on}}",
       "switchesOnAtLeast": "{count, plural, one {# or more on} other {# or more on}}"
     },
@@ -281,6 +282,38 @@
         "pendingApproval": "This is waiting for approval. Access request {accessRequestId}.",
         "unavailable": "Could not be recorded ({code}). Nothing was changed."
       }
+    },
+    "mandates": {
+      "title": "Mandates ledger",
+      "lead": "The mandates this workspace has recorded — granted, requested, expired and revoked — with what each has settled, what calls in flight hold, and what is left. A mandate is the only thing that lets an agent carry a consequence, and every draw on it reserves, then settles or releases.",
+      "empty": "This workspace has recorded no mandate: none granted, and none requested.",
+      "emptyDetail": "A call that carries a consequence tag with no mandate is denied before dispatch, whether or not the tool is on the agent's belt.",
+      "notGranted": "not granted",
+      "requestedBy": "requested by {user}",
+      "columns": {
+        "mandate": "Mandate",
+        "agent": "Agent",
+        "grantedBy": "Granted by",
+        "purpose": "Purpose",
+        "perCall": "Per call",
+        "perPeriod": "Per period",
+        "settled": "Settled",
+        "reserved": "Reserved",
+        "remaining": "Remaining",
+        "validTo": "Valid to",
+        "status": "Status",
+        "tools": "Tools"
+      },
+      "status": {
+        "draft": "requested",
+        "active": "active",
+        "expired": "expired",
+        "revoked": "revoked"
+      },
+      "truncated": "The newest {shown} mandates. This workspace has recorded at least that many, and older ones are not listed here.",
+      "partial": "You see the mandates of the agents you created. This ledger is not every mandate this workspace has recorded.",
+      "emptyListed": "No mandate is listed here. The ledger above is not complete, so that is not a statement that the workspace has recorded none.",
+      "emptyListedDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate this workspace has recorded. This ledger is written for that office."
     }
   }
 }
