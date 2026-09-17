@@ -201,20 +201,21 @@ test.describe("Agent Tools consolidated IA", () => {
 
     // Mobile bottom bar shows the primary destinations (Overview / Sessions /
     // Knowledge / Agents — the first four sidebar items); everything past
-    // them (Tools, Environments, Marketplace, Settings) lands in the "More"
-    // overflow sheet.
+    // them (Tools, Environments, Fleet, Marketplace, Settings) lands in the
+    // "More" overflow sheet.
     await gotoStable(page, `${ws}/workbench/agents`);
     const nav = page.getByRole("navigation", { name: /mobile navigation/i });
     await expect(nav).toBeVisible({ timeout: 20_000 });
     // Primary destinations render directly in the bar.
     await expect(nav.getByRole("link", { name: "Sessions" })).toBeVisible();
     await expect(nav.getByRole("link", { name: "Agents" })).toBeVisible();
-    // Tools is reachable via the "More" sheet.
+    // Tools and Fleet are reachable via the "More" sheet.
     await nav.getByRole("button", { name: /more navigation/i }).click();
     const moreNav = page.getByRole("navigation", {
       name: /more destinations/i,
     });
     await expect(moreNav.getByRole("link", { name: "Tools" })).toBeVisible();
+    await expect(moreNav.getByRole("link", { name: "Fleet" })).toBeVisible();
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "08-mobile-bottom-bar.png"),
       fullPage: false,

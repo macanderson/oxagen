@@ -88,8 +88,8 @@ afterEach(() => {
 
 describe("MobileBottomBar — primary tabs", () => {
   it("renders the workspace destinations as client-routed tabs with resolved hrefs", () => {
-    // Workspace mode has eight nav items in raw declaration order (overview,
-    // sessions, knowledge, agents, tools, environments, marketplace,
+    // Workspace mode has nine nav items in raw declaration order (overview,
+    // sessions, knowledge, agents, tools, environments, fleet, marketplace,
     // settings); only the first four (MAX_BAR_ITEMS) fit the bar — everything
     // from Tools onward overflows into the "More" sheet, covered below.
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
@@ -122,7 +122,7 @@ describe("MobileBottomBar — primary tabs", () => {
     );
   });
 
-  it("overflows Tools, Environments, Marketplace, and Settings into the More sheet while the first four destinations stay in the bar", async () => {
+  it("overflows Tools, Environments, Fleet, Marketplace, and Settings into the More sheet while the first four destinations stay in the bar", async () => {
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(
@@ -132,11 +132,14 @@ describe("MobileBottomBar — primary tabs", () => {
     expect(
       within(nav).getByRole("link", { name: "Agents" }),
     ).toBeInTheDocument();
-    // Items past MAX_BAR_ITEMS never render in the bar itself.
+    // Items past MAX_BAR_ITEMS never render in the bar itself. Fleet (ADR-078)
+    // is declared after Environments precisely so that adding it did not push
+    // Agents out of the four thumb slots (#3163).
     expect(within(nav).queryByRole("link", { name: "Tools" })).toBeNull();
     expect(
       within(nav).queryByRole("link", { name: "Environments" }),
     ).toBeNull();
+    expect(within(nav).queryByRole("link", { name: "Fleet" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Marketplace" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();
     // The excised runtime destinations are gone entirely — bar AND sheet.
@@ -156,6 +159,12 @@ describe("MobileBottomBar — primary tabs", () => {
     expect(screen.getByRole("link", { name: "Environments" })).toHaveAttribute(
       "href",
       "/acme/prod/workbench/environments",
+    );
+    // Fleet is past the cut, so the More sheet is its registered mobile
+    // reflow (ADR-026) — it must actually be reachable there.
+    expect(screen.getByRole("link", { name: "Fleet" })).toHaveAttribute(
+      "href",
+      "/acme/prod/fleet",
     );
     expect(screen.queryByRole("link", { name: "Repos" })).toBeNull();
   });

@@ -73,7 +73,7 @@ export type SidebarConfig = {
 // Workspace mode config — IA spec §4 tree.
 // /{org}/{ws}/... — daily operational surface
 //
-// Groups:  primary (overview, sessions, knowledge)
+// Groups:  primary (overview, sessions, knowledge, fleet)
 //          tools   (agents, tools, environments — the "Agents" group)
 //          footer  (marketplace, settings — pinned to bottom)
 // ---------------------------------------------------------------------------
@@ -167,6 +167,28 @@ const workspaceConfig: SidebarConfig = {
           ? workspace.workbench.environments(ctx as Required<ScopeContext>)
           : `/${ctx.orgSlug}`,
       group: "tools",
+    },
+    {
+      // The fleet is the machines, not the agents: a row here is a laptop with
+      // apps on it, each at its own enforcement tier (ADR-078). It renders in
+      // the Workspace group beside Knowledge — a host is not an agent, so it
+      // does not belong under Agents.
+      //
+      // Declared last in the `primary` group on purpose. The sidebar renders
+      // by group, so position across groups is invisible there; the mobile
+      // bottom bar, by contrast, cuts the raw declaration order at
+      // MAX_BAR_ITEMS (see mobile-bottom-bar.tsx). Declaring Fleet earlier
+      // would push Agents — the product's central destination, and the one
+      // agent-tools-hub.spec.ts pins as thumb-reachable — out of the four bar
+      // slots and into the More sheet. Fleet is reachable from More.
+      id: "fleet",
+      label: "Fleet",
+      icon: MonitorSmartphone,
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.fleet(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "primary",
     },
     {
       id: "marketplace",

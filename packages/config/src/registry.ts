@@ -1918,6 +1918,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "10",
   },
+  MAIN_VERIFIED_GRACE_MINUTES: {
+    group: "Operator scripts",
+    description:
+      "How long after a commit lands check-main-verified.mjs refuses to conclude it has no run. The workflow races the registration of the run it looks for. Defaults to 10.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "10",
+  },
   SCR_OWNER: {
     group: "Operator scripts",
     description:
