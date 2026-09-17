@@ -2064,11 +2064,13 @@ type Messages = {
         reason: string;
         takesEffect: string;
         takesEffectValue: string;
+        takesEffectValueIfChanged: string;
         recordedAs: string;
         recordedAsValue: string;
         confirmDeny: string;
         confirmAllow: string;
         pending: string;
+        unchanged: string;
       };
       noNames: string;
     };

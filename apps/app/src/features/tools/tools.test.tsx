@@ -408,6 +408,22 @@ describe("Tools › kill switches", () => {
     expect(within(tabs).getByText("1 or more on")).toBeInTheDocument();
   });
 
+  it("names who lifted a deny, and keeps who imposed it and why", async () => {
+    await renderTools({ killSwitches: board() }, { tab: "switches" });
+    const cleared = within(cardOf('[data-switch="emd_01k5c2"]'));
+    // Lifting a deny restores access, so the actor is named the way the
+    // imposing actor is.
+    expect(
+      cleared.getByText("7c9e6679-7425-40de-944b-e07fc1f90ae7"),
+    ).toBeInTheDocument();
+    // Clearing a switch rewrites neither the deny's reason nor who made it,
+    // so a cleared card still carries the whole history.
+    expect(cleared.getByText("not recorded")).toBeInTheDocument();
+    expect(
+      cleared.getByText("Rotation confirmed; the security owner signed off."),
+    ).toBeInTheDocument();
+  });
+
   it("says nothing has ever been flipped when the board is empty", async () => {
     await renderTools(
       { killSwitches: readOk(killSwitchBoard({ switches: [] })) },

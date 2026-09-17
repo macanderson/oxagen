@@ -238,11 +238,13 @@
         "reason": "Reason — recorded on every denied call",
         "takesEffect": "Takes effect",
         "takesEffectValue": "next call boundary · deny generation {from} → {to}",
+        "takesEffectValueIfChanged": "next call boundary · deny generation {from} → {to}, if this flip changes the switch. A target already denied at this level is left as it is, and nothing advances.",
         "recordedAs": "Recorded as",
         "recordedAsValue": "a security event, with who, when and why",
         "confirmDeny": "Deny now",
         "confirmAllow": "Allow again",
-        "pending": "Recording…"
+        "pending": "Recording…",
+        "unchanged": "Nothing changed: the switch was already that way, so no deny generation advanced and nothing new was recorded."
       },
       "noNames": "A flip records the user id of whoever made it. The record carries no display name, so this page prints the id rather than guessing at a person."
     },

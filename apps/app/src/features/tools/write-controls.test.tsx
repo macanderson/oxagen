@@ -409,6 +409,57 @@ describe("FlipControls", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
+  it("makes the header's generation claim conditional, and says so when nothing changed", async () => {
+    flipKillSwitch.mockResolvedValue({
+      ok: true,
+      value: {
+        switchId: "emd_01k5c1",
+        on: true,
+        // The target was already denied at this level: the kernel wrote
+        // nothing and no generation advanced.
+        changed: false,
+        denyGeneration: { org: 12, workspace: 4 },
+        grantsRevoked: 0,
+      },
+    });
+    withIntl(
+      <FlipControls at={at} denyGeneration={GENERATION} existing={null} />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    // The header names a target it cannot know the state of, so it promises
+    // the bump only if the flip changes the switch.
+    expect(
+      within(dialog).getByText(/if this flip changes the switch/),
+    ).toBeVisible();
+
+    fill("Target", "moves_money");
+    fill(/^Reason/, "Suspected compromise.");
+    fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
+    expect(await screen.findByTestId("tools-flip-unchanged")).toHaveTextContent(
+      "no deny generation advanced",
+    );
+    // Nothing moved, so the dialog does not close on a reload that shows the
+    // same board.
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("promises the bump outright on a card, whose switch it knows the state of", async () => {
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={classSwitch()}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-emd_01k5c1"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    expect(
+      within(dialog).queryByText(/if this flip changes the switch/),
+    ).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/deny generation 12 → 13/)).toBeVisible();
+  });
+
   it("reads the generation off the level picked, not off the switch it has none of", async () => {
     withIntl(
       <FlipControls at={at} denyGeneration={GENERATION} existing={null} />,

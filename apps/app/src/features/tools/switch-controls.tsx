@@ -65,6 +65,8 @@ export function FlipControls({
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  /** The kernel answered `changed: false`: the switch was already that way. */
+  const [unchanged, setUnchanged] = useState(false);
   const [kind, setKind] = useState<KillSwitch["target"]["kind"]>(
     existing?.target.kind ?? "class",
   );
@@ -94,6 +96,7 @@ export function FlipControls({
     const chosen = parsedKind.success ? parsedKind.data : kind;
     setPending(true);
     setFailure(null);
+    setUnchanged(false);
     try {
       const result = await flipKillSwitch(at.org, at.ws, {
         kind: chosen,
@@ -111,6 +114,16 @@ export function FlipControls({
         reason: textValue(form, "reason"),
       });
       if (result.ok) {
+        // A flip onto the state the switch is already in writes nothing and
+        // advances no generation: `set_kill_switch` answers `changed: false`.
+        // Saying so is the only honest end to a dialog that has just promised
+        // a generation would move — the counter is what every gateway
+        // re-checks against, so an operator told a deny propagated when
+        // nothing propagated is worse off than one told nothing at all.
+        if (!result.value.changed) {
+          setUnchanged(true);
+          return;
+        }
         setOpen(false);
         navigate.replace(routes.tools(at.org, at.ws, { tab: "switches" }));
         return;
@@ -145,7 +158,10 @@ export function FlipControls({
         open={open}
         onOpenChange={(next) => {
           setOpen(next);
-          if (!next) setFailure(null);
+          if (!next) {
+            setFailure(null);
+            setUnchanged(false);
+          }
         }}
         title={turningOn ? t("titleDeny") : t("titleAllow")}
         testId="tools-flip-dialog"
@@ -261,14 +277,34 @@ export function FlipControls({
           <dl className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]">
             <dt className="text-muted-foreground">{t("takesEffect")}</dt>
             <dd className="text-foreground">
-              {t("takesEffectValue", {
-                from: generation,
-                to: generation + 1,
-              })}
+              {/* A card knows the state of the switch it flips, so the counter
+                  moves. The header does not: it names a target and the target
+                  may already be denied at that level, in which case the flip
+                  writes nothing and the generation stays where it is. The
+                  board cannot settle that — past the read's limit it does not
+                  know what is already on — so the dialog states the condition
+                  rather than promising on a page-scoped answer. */}
+              {fromHeader
+                ? t("takesEffectValueIfChanged", {
+                    from: generation,
+                    to: generation + 1,
+                  })
+                : t("takesEffectValue", {
+                    from: generation,
+                    to: generation + 1,
+                  })}
             </dd>
             <dt className="text-muted-foreground">{t("recordedAs")}</dt>
             <dd className="text-foreground">{t("recordedAsValue")}</dd>
           </dl>
+          {unchanged ? (
+            <p
+              data-testid="tools-flip-unchanged"
+              className="rounded-lg border border-border bg-muted px-3 py-2.5 text-sm text-foreground"
+            >
+              {t("unchanged")}
+            </p>
+          ) : null}
           {failure === null ? null : (
             <FormAlert testId="tools-flip-failure">{failure}</FormAlert>
           )}

@@ -50,6 +50,26 @@ function headingNamesTarget(
   return target.kind === "workspace" && target.ref === selfWorkspaceId;
 }
 
+/** Who took a governance action and when; the record carries an id, never a name. */
+function Actor({
+  userRef,
+  at,
+  unrecorded,
+}: {
+  /** The user id the record holds, or null when it was written by another path. */
+  userRef: string | null;
+  at: string;
+  unrecorded: string;
+}) {
+  const date = useDate();
+  return (
+    <span className="flex flex-col gap-0.5">
+      <span className={mono}>{userRef ?? unrecorded}</span>
+      <span className="text-xs text-muted-foreground">{date(at)}</span>
+    </span>
+  );
+}
+
 function SwitchCard({
   at,
   denyGeneration,
@@ -64,7 +84,6 @@ function SwitchCard({
   selfWorkspaceId: string;
 }) {
   const t = useTranslations("tools.switches");
-  const date = useDate();
   const selfEvident = headingNamesTarget(item.target, selfWorkspaceId);
   return (
     <article
@@ -101,25 +120,30 @@ function SwitchCard({
                 : denyGeneration.workspace,
           })}
         </Fact>
-        {item.on ? (
-          <>
-            <Fact name="flippedBy" term={t("facts.flippedBy")}>
-              <span className="flex flex-col gap-0.5">
-                <span className={mono}>
-                  {item.flippedByRef ?? t("flippedByUnrecorded")}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {date(item.flippedAt)}
-                </span>
-              </span>
-            </Fact>
-            <Fact name="reason" term={t("facts.reason")}>
-              {item.reason}
-            </Fact>
-          </>
-        ) : item.clearedAt === null ? null : (
+        {/* Who imposed the deny and why, on a switch that is denying and on one
+            that was: clearing a switch does not rewrite either (`reason` stays
+            the deny's; the clearing reason goes to a column this read does not
+            carry), so dropping them off the cleared card dropped the whole
+            history of the deny rather than the part that had ended. */}
+        <Fact name="flippedBy" term={t("facts.flippedBy")}>
+          <Actor
+            userRef={item.flippedByRef}
+            at={item.flippedAt}
+            unrecorded={t("flippedByUnrecorded")}
+          />
+        </Fact>
+        <Fact name="reason" term={t("facts.reason")}>
+          {item.reason}
+        </Fact>
+        {item.clearedAt === null ? null : (
           <Fact name="clearedAt" term={t("facts.clearedAt")}>
-            {date(item.clearedAt)}
+            {/* Lifting a deny is the action that restores access, so the board
+                names who took it exactly as it names who imposed it. */}
+            <Actor
+              userRef={item.clearedByRef}
+              at={item.clearedAt}
+              unrecorded={t("flippedByUnrecorded")}
+            />
           </Fact>
         )}
       </Facts>
