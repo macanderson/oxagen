@@ -74,8 +74,11 @@ describe("the real ledger", () => {
 
   it("preserves the marketplace and the fourteen de-registered connectors", () => {
     const paths = preservedPaths(markdown)!;
+    // The rebuild renamed apps/app to apps/app_deprecated, so the preserved
+    // marketplace page is at that spelling now. The feature is still
+    // de-registered and still on disk; only the directory moved.
     expect(paths).toContain(
-      "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace",
+      "apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/marketplace",
     );
     expect(paths).toContain(
       "packages/oxagen/src/contracts/plugin.org.install.ts",
