@@ -89,6 +89,8 @@ export interface QueuedPrompt {
   deliveryMode: TachoDeliveryMode | null;
   degradedReason: string | null;
   expiresAt: string | null;
+}
+
 /** The daemon's own chain (`tachod-<ulid>`) is host bookkeeping, not an agent. */
 export function isInternalSession(harnessSessionId: string): boolean {
   return harnessSessionId.startsWith("tachod-");

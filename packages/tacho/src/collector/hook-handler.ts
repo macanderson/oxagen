@@ -149,19 +149,6 @@ function operatorBlock(
 }
 
 /**
- * Inject the queued prompt content at this boundary and chain one
- * `oxagen:command_applied` per item: the `control.steer` frame of the
- * Mission Control spec (§8.2) in the wrapper vocabulary, carrying the
- * requested and the achieved mode, the degradation, and `interrupted`, which
- * the hook adapter can never set. The event's own seq is the frame the
- * control plane records as `applied_at_seq`.
- *
- * An item whose deadline passed while it waited (a session paused past a
- * steer's expiry, then resumed) is dropped here: no injection, no frame, and
- * an `expired` acknowledgement. The row is the host's once it left on the
- * wire (spec §7.4), so the host records that its expiry passed with no
- * boundary reached, and the chain holds no frame for it.
- */
  * Stella issues no tool-use id, so `tacho-hook` derives one from the call
  * itself (`stellaToolUseId`): the same tool with the same input digests to
  * the same id, which is what pairs a PreToolUse with its PostToolUse. Two
@@ -195,6 +182,7 @@ function invocationToolUseId(
   return { ...(raw as Record<string, unknown>), tool_use_id: id };
 }
 
+
 /**
  * Whether a message drained at this boundary actually reaches the agent.
  * Claude Code takes `additionalContext` at SessionStart and at
@@ -212,6 +200,20 @@ function deliversMessages(
   return harness !== "stella" || hookEventName === "SessionStart";
 }
 
+/**
+ * Inject the queued prompt content at this boundary and chain one
+ * `oxagen:command_applied` per item: the `control.steer` frame of the
+ * Mission Control spec (§8.2) in the wrapper vocabulary, carrying the
+ * requested and the achieved mode, the degradation, and `interrupted`, which
+ * the hook adapter can never set. The event's own seq is the frame the
+ * control plane records as `applied_at_seq`.
+ *
+ * An item whose deadline passed while it waited (a session paused past a
+ * steer's expiry, then resumed) is dropped here: no injection, no frame, and
+ * an `expired` acknowledgement. The row is the host's once it left on the
+ * wire (spec §7.4), so the host records that its expiry passed with no
+ * boundary reached, and the chain holds no frame for it.
+ */
 function drainMessages(
   record: SessionRecord,
   deps: HookHandlerDeps,

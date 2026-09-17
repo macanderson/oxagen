@@ -613,7 +613,7 @@ describe("handleHookEvent over the recorded session", () => {
   });
 
   it("keeps an operator message queued when Stella has nowhere to receive it", async () => {
-    const { deps, registry, delivered } = harness();
+    const { deps, registry, acks } = harness();
     const session = "stella-9-fedcba";
     const start = {
       session_id: session,
@@ -623,7 +623,15 @@ describe("handleHookEvent over the recorded session", () => {
     await handleHookEvent(start, {}, deps, undefined, "stella");
     const record = registry.get(session);
     if (record === undefined) throw new Error("no record");
-    record.control.messages.push({ id: "cmd_1", text: "Wrap up and stop." });
+    record.control.messages.push({
+      id: "cmd_1",
+      text: "Wrap up and stop.",
+      command: "message",
+      requestedMode: null,
+      deliveryMode: null,
+      degradedReason: null,
+      expiresAt: null,
+    });
     // Stella answers UserPromptSubmit with a decision document, which has
     // nowhere to carry additionalContext: draining there would seal
     // `message_delivered` and drop the text on the floor.
@@ -639,7 +647,7 @@ describe("handleHookEvent over the recorded session", () => {
       "stella",
     );
     expect(prompt.response).toEqual({});
-    expect(delivered).toEqual([]);
+    expect(acks).toEqual([]);
     expect(record.control.messages).toHaveLength(1);
     expect(prompt.events.some((e) => e.kind === "oxagen:command_applied")).toBe(
       false,
@@ -652,21 +660,30 @@ describe("handleHookEvent over the recorded session", () => {
         additionalContext: "You are governed by Oxagen.\n\nWrap up and stop.",
       },
     });
-    expect(delivered.map((d) => d.id)).toEqual(["cmd_1"]);
+    expect(acks.map((ack) => ack.command_id)).toEqual(["cmd_1"]);
+    expect(acks[0]?.status).toBe("applied");
     expect(record.control.messages).toHaveLength(0);
   });
 
   it("holds an operator message back from a blocked session start", async () => {
-    const { deps, registry, delivered } = harness({}, { hostStatus: "paused" });
+    const { deps, registry, acks } = harness({}, { hostStatus: "paused" });
     const start = loadFixtures()[0] as Fixture;
     await handleHookEvent(start.stdin, start.env, deps);
     const record = registry.get(String(start.stdin["session_id"]));
     if (record === undefined) throw new Error("no record");
-    record.control.messages.push({ id: "cmd_1", text: "Wrap up and stop." });
+    record.control.messages.push({
+      id: "cmd_1",
+      text: "Wrap up and stop.",
+      command: "message",
+      requestedMode: null,
+      deliveryMode: null,
+      degradedReason: null,
+      expiresAt: null,
+    });
     // A blocked start answers `continue: false` and carries no context.
     const blocked = await handleHookEvent(start.stdin, start.env, deps);
     expect(blocked.response).toMatchObject({ continue: false });
-    expect(delivered).toEqual([]);
+    expect(acks).toEqual([]);
     expect(record.control.messages).toHaveLength(1);
   });
 });
