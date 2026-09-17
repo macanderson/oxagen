@@ -1,0 +1,149 @@
+{
+  "name": "dispatch_command",
+  "domain": "control",
+  "description": "Queue a pause, resume, cancel, steer or message command for one run, an agent's live runs, or every live run in the workspace, with a delivery mode on steer and message.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "control"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "target": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "run"
+              },
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "agent"
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "workspace"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "command": {
+        "type": "string",
+        "enum": [
+          "pause",
+          "resume",
+          "cancel",
+          "steer",
+          "message"
+        ]
+      },
+      "payload": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384
+          },
+          "requestedMode": {
+            "type": "string",
+            "enum": [
+              "next_step",
+              "interrupt",
+              "turn_boundary"
+            ],
+            "default": "next_step"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "reason": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512
+      },
+      "expiresInMs": {
+        "type": "integer",
+        "minimum": 10000,
+        "maximum": 86400000,
+        "default": 3600000
+      }
+    },
+    "required": [
+      "target",
+      "command"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "commandIds": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "required": [
+      "commandIds"
+    ],
+    "additionalProperties": false
+  }
+}

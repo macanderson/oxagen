@@ -37,7 +37,7 @@ docs/       VISION.md, capability specs, ADRs, SCRs (docs/scr), specs (docs/spec
 | `handlers` | `src/register.ts` | All built-in capability handler registrations (lazy-loaded) |
 | `agent` | `src/runtime/materialize-tools.ts` | Governed tool materialisation (IAM → entitlement → tool RBAC → consent → approval → telemetry per call), MCP gateway auth, `runGovernedTurn` for the in-app agent |
 | `agent` | `src/handlers/` | Agent registry, approval, MCP, memory, role, trace handlers |
-| `database` | `src/schema/` | 21 Drizzle Postgres domain schema files (org, auth, workspace, agent, chat, content, billing, reseller, security, iam, mcp, plugin, notification, privacy, ingestion, run-evidence-foundation, schema-registry, environments, ai, ratelimit, tacho) plus `_mixins.ts`, `_schemas.ts`, `index.ts` |
+| `database` | `src/schema/` | 21 Drizzle Postgres domain schema files (org, auth, workspace, agent, chat, content, billing, security, iam, mcp, plugin, notification, privacy, ingestion, run-evidence-foundation, schema-registry, environments, ai, ratelimit, tacho, cost) plus `_mixins.ts`, `_schemas.ts`, `index.ts` |
 | `tacho` | `src/` | Leaf package (no `@oxagen/*` runtime dep) that records, gates and evidences agents Oxagen does not run — Claude Code, Agent SDK, custom agents; spec in `docs/specs/tacho/` |
 | `context-provider` | `src/frames.ts` | Serves one workspace's engram memory as budgeted, scored Context Graph Protocol frames |
 | `inngest-functions` | `src/functions/` | Durable background jobs |
@@ -132,7 +132,7 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 | `pnpm check:mobile-parity` | Enforces mobile feature parity (ADR-026) — no desktop-only features without registered reflow/hidden justification |
 | `pnpm check:connector-schemas` | Verifies every built-in plugin connector schema is registered |
 | `pnpm check:deregistered` | Asserts every path in `DEREGISTERED.md` §14 still exists — de-registered features must not be deleted without an ADR |
-| `pnpm check:contracts` | Ensures every contract file is in the barrel index + naming compliance |
+| `pnpm check:contracts` | Ensures every contract file is in the barrel index, every `docs/capabilities` `**Surfaces:**` line matches its contract, and naming compliance |
 | `pnpm check:vision` | LLM-judges PR diff against `docs/VISION.md` |
 | `pnpm env:check` | Validates `.env.local` against the env registry |
 | `pnpm db:migrate` | Apply pending Postgres migrations + seed platform data |
@@ -144,7 +144,7 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 | `pnpm check:naming` | ADR-025 naming compliance |
 | `pnpm check:audit-coverage` | SOC 2 audit-event coverage (runs on every PR in CI) |
 | `pnpm release:patch/minor/major` | Lockstep version bump (all packages) + AI-generated release notes (via Vercel AI Gateway) + git tag + Vercel `PLATFORM_VERSION` sync (`--no-vercel` to skip; production itself runs on AWS, see README → Deployment) + optional NPM publish |
-| `pnpm test:e2e` | Run Playwright e2e tests (`apps/app`) |
+| `pnpm test:e2e` | Run the three Playwright specs (`apps/app/e2e`: `login`, `pay`, `page-load`). The suite holds exactly these three and gains no fourth — every other flow is a component test (`.claude/skills/oxagen-testing`, `apps/app/ARCHITECTURE.md` §6.3). |
 
 **Narrow test runs** (never run all tests): `pnpm --filter @oxagen/<pkg> test:unit <file>.test.ts`
 

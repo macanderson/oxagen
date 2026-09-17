@@ -20,12 +20,21 @@ const mocks = vi.hoisted(() => ({
   roleRows: [] as Record<string, unknown>[],
   countRows: [] as Record<string, unknown>[],
   grantRows: [] as Record<string, unknown>[],
+  userRows: [] as Record<string, unknown>[],
   grantQueries: 0,
+  userQueries: 0,
+  tier: "free" as string,
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return { ...real, withSystemDb: mocks.withSystemDb };
+});
+
+// The org's tier decides `enforcement.enforced`; the real canAccessACL runs.
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/billing")>();
+  return { ...real, resolveOrgTier: vi.fn(async () => mocks.tier) };
 });
 
 // Spy on eq/and while keeping their real drizzle-orm behavior, so assertions
@@ -62,11 +71,17 @@ function makeTx() {
           mocks.grantQueries += 1;
           return { where: () => Promise.resolve(mocks.grantRows) };
         }
+        if (table === schema.users) {
+          mocks.userQueries += 1;
+          return { where: () => Promise.resolve(mocks.userRows) };
+        }
         throw new Error("unexpected table");
       },
     }),
   };
 }
+
+const CREATED_AT = new Date("2026-09-01T00:00:00.000Z");
 
 const ROLE_FIXTURES = [
   {
@@ -77,6 +92,8 @@ const ROLE_FIXTURES = [
     scopeKind: "workspace",
     isSystemDefault: true,
     version: "1",
+    createdAt: CREATED_AT,
+    createdById: "usr-bootstrap",
   },
   {
     id: "uuid-custom",
@@ -86,6 +103,8 @@ const ROLE_FIXTURES = [
     scopeKind: "org",
     isSystemDefault: false,
     version: "1",
+    createdAt: CREATED_AT,
+    createdById: "usr-priya",
   },
   {
     id: "uuid-owner",
@@ -95,6 +114,19 @@ const ROLE_FIXTURES = [
     scopeKind: "org",
     isSystemDefault: true,
     version: "1",
+    createdAt: CREATED_AT,
+    createdById: "usr-bootstrap",
+  },
+  {
+    id: "uuid-agent-op",
+    publicId: "rol_agent_op",
+    name: "Agent Operator",
+    description: null,
+    scopeKind: "workspace",
+    isSystemDefault: true,
+    version: "1",
+    createdAt: CREATED_AT,
+    createdById: "usr-bootstrap",
   },
 ];
 
@@ -103,7 +135,10 @@ beforeEach(() => {
   mocks.roleRows = [...ROLE_FIXTURES];
   mocks.countRows = [];
   mocks.grantRows = [];
+  mocks.userRows = [];
   mocks.grantQueries = 0;
+  mocks.userQueries = 0;
+  mocks.tier = "free";
   mocks.withSystemDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx()),
   );
@@ -116,12 +151,87 @@ describe("iamRoleListHandler", () => {
       CTX,
     );
     expect(out.roles.map((r) => r.id)).toEqual([
+      "rol_agent_op",
       "rol_member",
       "rol_owner",
       "rol_custom",
     ]);
-    expect(out.total).toBe(3);
+    expect(out.total).toBe(4);
     expect(out.hasMore).toBe(false);
+  });
+
+  it("reports the kind: seeded membership roles are human, the seeded agent roles and every custom role are agent roles", async () => {
+    const out = await iamRoleListHandler(
+      { includeGrants: false, limit: 100, offset: 0 },
+      CTX,
+    );
+    const kinds = Object.fromEntries(out.roles.map((r) => [r.id, r.kind]));
+    expect(kinds).toEqual({
+      rol_agent_op: "agent",
+      rol_member: "human",
+      rol_owner: "human",
+      rol_custom: "agent",
+    });
+  });
+
+  it("folds allow grants into catalogue permissions: a permission is held only when every capability it names is allowed", async () => {
+    mocks.grantRows = [
+      {
+        roleId: "uuid-custom",
+        capabilityId: "dispatch_command",
+        effect: "allow",
+      },
+      { roleId: "uuid-custom", capabilityId: "list_runs", effect: "allow" },
+      {
+        roleId: "uuid-owner",
+        capabilityId: "dispatch_command",
+        effect: "deny",
+      },
+    ];
+    const out = await iamRoleListHandler(
+      { includeGrants: true, limit: 100, offset: 0 },
+      CTX,
+    );
+    const byId = Object.fromEntries(
+      out.roles.map((r) => [r.id, r.permissions]),
+    );
+    expect(byId.rol_custom).toEqual(["run.control"]);
+    expect(byId.rol_owner).toEqual([]);
+  });
+
+  it("names the creator of a custom role and leaves a system role's origin as built-in (createdBy null), reading users once for the page", async () => {
+    mocks.userRows = [
+      { id: "usr-priya", displayName: "Priya Natarajan", email: "p@x.test" },
+    ];
+    const out = await iamRoleListHandler(
+      { includeGrants: false, limit: 100, offset: 0 },
+      CTX,
+    );
+    const custom = out.roles.find((r) => r.id === "rol_custom");
+    expect(custom?.createdBy).toBe("Priya Natarajan");
+    expect(custom?.createdAt).toBe("2026-09-01T00:00:00.000Z");
+    expect(out.roles.find((r) => r.id === "rol_owner")?.createdBy).toBeNull();
+    expect(mocks.userQueries).toBe(1);
+  });
+
+  it("carries the catalogue and reports enforcement from the org's tier (free: not enforced; enterprise: enforced)", async () => {
+    const free = await iamRoleListHandler(
+      { includeGrants: false, limit: 100, offset: 0 },
+      CTX,
+    );
+    expect(free.enforcement).toEqual({ tier: "free", enforced: false });
+    expect(free.catalog.map((p) => p.id)).toContain("run.control");
+    expect(free.catalog.every((p) => p.capabilities.length > 0)).toBe(true);
+
+    mocks.tier = "enterprise";
+    const enterprise = await iamRoleListHandler(
+      { includeGrants: false, limit: 100, offset: 0 },
+      CTX,
+    );
+    expect(enterprise.enforcement).toEqual({
+      tier: "enterprise",
+      enforced: true,
+    });
   });
 
   it("maps member counts and grants per role", async () => {
@@ -174,7 +284,7 @@ describe("iamRoleListHandler", () => {
     expect(page.roles).toHaveLength(2);
     expect(page.hasMore).toBe(true);
     const last = await iamRoleListHandler(
-      { includeGrants: false, limit: 2, offset: 2 },
+      { includeGrants: false, limit: 2, offset: 3 },
       CTX,
     );
     expect(last.roles).toHaveLength(1);

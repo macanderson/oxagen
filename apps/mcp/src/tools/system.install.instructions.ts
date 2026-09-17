@@ -8,8 +8,14 @@ import { buildContext } from "../context";
 // Pure computation — no model call. Renders inline via the install-instructions
 // chat component.
 
+// `enrollmentToken` stays off the MCP surface: the single-use token is shown
+// to an operator once and belongs in the app's wrap step, never in a model's
+// tool arguments.
+const { enrollmentToken: _enrollmentToken, ...toolShape } =
+  systemInstallInstructions.input.shape;
+
 export const schema = {
-  ...systemInstallInstructions.input.shape,
+  ...toolShape,
   client: systemInstallInstructions.input.shape.client.describe(
     "AI client to generate installation instructions for (claude-code, cursor, claude-desktop, codex, vscode)",
   ),

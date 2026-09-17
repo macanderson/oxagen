@@ -85,9 +85,10 @@ export interface DistributedRateLimitOptions {
   /**
    * Optional unprefixed bucket suffix for pre-authentication or other custom
    * scopes. The limiter always prepends `keyPrefix`, preventing cross-surface
-   * collisions. Resolvers must return non-secret, bounded values.
+   * collisions. Resolvers must return non-secret, bounded values. A resolver
+   * that reads the request body returns a promise.
    */
-  bucketKey?: (c: Context<AppEnv>) => string;
+  bucketKey?: (c: Context<AppEnv>) => string | Promise<string>;
 }
 
 const DEFAULT_WINDOW_MS = 60_000;
@@ -295,9 +296,13 @@ export function distributedRateLimiter(
   const storeErrorPolicy = opts.storeErrorPolicy ?? "fail-open";
   const localDenyUntilByKey = new Map<string, number>();
 
-  const bucketKeyOf = (c: Context<AppEnv>): string =>
+  // `bucketKey` may be async (main made it `string | Promise<string>`), so this
+  // awaits it. Interpolating it directly would have rendered a pending promise
+  // as the literal string "[object Promise]" — one bucket for every caller,
+  // silently, which is the bug #3167 opened with.
+  const bucketKeyOf = async (c: Context<AppEnv>): Promise<string> =>
     opts.bucketKey
-      ? `${opts.keyPrefix}:${opts.bucketKey(c)}`
+      ? `${opts.keyPrefix}:${await opts.bucketKey(c)}`
       : deriveBucketKey(c, opts.keyPrefix);
 
   /**
@@ -340,7 +345,7 @@ export function distributedRateLimiter(
   return async (c, next) => {
     if (methods !== "all" && !methods.includes(c.req.method)) return next();
 
-    const key = bucketKeyOf(c);
+    const key = await bucketKeyOf(c);
     const now = Date.now();
     const windowStartMs = Math.floor(now / windowMs) * windowMs;
     const resetAtMs = windowStartMs + windowMs;

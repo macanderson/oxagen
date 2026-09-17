@@ -1,14 +1,16 @@
 /**
  * Integration tests for POST /:org_slug/:workspace_slug/chat/stream, mounted in
- * the real Hono app so the auth guard, the org/workspace scoping and the
- * published ingress contract are exercised end to end.
+ * the real Hono app so the auth guard, the org/workspace scoping, the published
+ * ingress contract and the error middleware are exercised end to end.
  *
  * The order the route applies its gates is the thing this file locks in:
- * auth → body validation → the pre-turn CREDIT admission gate → the governed
- * turn. The credit gate is stubbed to DENY here, so a request that gets past
- * validation stops at a 402 and no test ever reaches a model, Neo4j or
- * Postgres. The turn itself — tools, prompt, streaming, usage — is covered in
- * isolation by routes/v1/chat.stream.test.ts.
+ * auth → body validation → `invoke("ask_assistant")`. The pre-turn credit
+ * admission gate runs inside that invoke (prepareAssistantTurn,
+ * @oxagen/agent), so the kernel is stubbed here to refuse the turn the way the
+ * gate does, and a request that gets past validation stops at a 402 without a
+ * model, Neo4j or Postgres. The gate itself is covered by
+ * packages/agent/src/runtime/assistant-turn.test.ts; the streamed turn by
+ * routes/v1/chat.stream.test.ts.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -22,8 +24,6 @@ const mocks = vi.hoisted(() => ({
   resolveOrgScope: vi.fn(),
   resolveWorkspaceScope: vi.fn(),
   invoke: vi.fn(),
-  evaluateTurnCreditGate: vi.fn(),
-  resolveModelFundingSource: vi.fn(),
 }));
 
 vi.mock("@oxagen/auth", () => ({
@@ -37,26 +37,6 @@ vi.mock("@oxagen/auth", () => ({
 vi.mock("@oxagen/oxagen/kernel", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/oxagen/kernel")>();
   return { ...real, invoke: mocks.invoke };
-});
-
-// Only the credit gate is stubbed: it is the first thing the route does after
-// validation, and denying it stops the turn before any store is touched. Every
-// other billing export stays real so the budget schema still validates bodies.
-vi.mock("@oxagen/billing", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@oxagen/billing")>();
-  return { ...real, evaluateTurnCreditGate: mocks.evaluateTurnCreditGate };
-});
-
-// Funding is resolved BEFORE the credit gate (ADR-053 §3), so the gate cannot
-// be reached without it. It reads through withTenantDb; unmocked it throws, the
-// route's catch turns that into a 500, and every 402 assertion below fails on a
-// status that has nothing to do with billing.
-vi.mock("@oxagen/ai", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@oxagen/ai")>();
-  return {
-    ...real,
-    resolveModelFundingSource: mocks.resolveModelFundingSource,
-  };
 });
 
 vi.mock("../middleware/logger", () => ({
@@ -90,20 +70,25 @@ function post(body: unknown, extraHeaders?: Record<string, string>): Request {
   });
 }
 
+/** The credit gate's refusal as the turn throws it (AssistantTurnRefusedError). */
+function creditRefusal(code: string, message: string): Error {
+  return Object.assign(new Error(message), { code });
+}
+
 type ErrorBody = { error?: { code?: string; message?: string } };
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.resolveApiKey.mockResolvedValue(makeApiKeyOk());
-  mocks.invoke.mockResolvedValue(undefined);
-  // Deny by default so a valid request stops at the gate instead of opening a
-  // real turn. The admitted path is covered in routes/v1/chat.stream.test.ts.
-  mocks.resolveModelFundingSource.mockResolvedValue({ fundedBy: "platform" });
-  mocks.evaluateTurnCreditGate.mockResolvedValue({
-    ok: false,
-    code: "insufficient_credits",
-    message: "Insufficient credits: your balance is empty.",
-  });
+  // Refuse by default so a valid request stops before the stream opens instead
+  // of running a real turn. The admitted path is covered in
+  // routes/v1/chat.stream.test.ts.
+  mocks.invoke.mockRejectedValue(
+    creditRefusal(
+      "insufficient_credits",
+      "Insufficient credits: your balance is empty.",
+    ),
+  );
 });
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
@@ -125,13 +110,13 @@ describe("chat stream: auth guard", () => {
     expect(res.status).toBe(401);
   });
 
-  // Auth runs FIRST: an unauthorized caller never reaches billing, so it can
+  // Auth runs FIRST: an unauthorized caller never reaches the turn, so it can
   // never learn anything about the org's balance from this endpoint.
-  it("rejects an unauthorized caller before the credit gate runs", async () => {
+  it("rejects an unauthorized caller before the turn is invoked", async () => {
     mocks.resolveApiKey.mockResolvedValue({ ok: false, kind: "invalid" });
     const res = await app.fetch(post({ content: "hi" }));
     expect(res.status).toBe(401);
-    expect(mocks.evaluateTurnCreditGate).not.toHaveBeenCalled();
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 });
 
@@ -176,13 +161,13 @@ describe("chat stream: body validation", () => {
     expect(res.status).toBe(400);
   });
 
-  // Validation runs BEFORE the credit gate: a caller sending a bad body gets
-  // the specific 400 that tells them what is wrong with it, and is not billed
-  // for the attempt.
-  it("rejects a malformed body with 400 before the credit gate runs", async () => {
+  // Validation runs BEFORE the turn: a caller sending a bad body gets the
+  // specific 400 that tells them what is wrong with it, and is not billed for
+  // the attempt.
+  it("rejects a malformed body with 400 before the turn is invoked", async () => {
     const res = await app.fetch(post({ content: "" }));
     expect(res.status).toBe(400);
-    expect(mocks.evaluateTurnCreditGate).not.toHaveBeenCalled();
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 });
 
@@ -208,15 +193,8 @@ describe("chat stream: credit admission gate", () => {
     expect(res.status).toBe(402);
     const body = (await res.json()) as ErrorBody;
     expect(body.error?.code).toBe("insufficient_credits");
-    expect(mocks.evaluateTurnCreditGate).toHaveBeenCalledTimes(1);
-  });
-
-  // The top-level model call reaches @oxagen/ai directly rather than through
-  // invoke(), which is exactly why this gate exists: without it a turn that
-  // called no tool would run entirely unmetered.
-  it("never reaches the capability kernel when the gate denies", async () => {
-    await app.fetch(post({ content: "Hello" }));
-    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("ask_assistant");
   });
 
   it("answers JSON, not an SSE stream, when it refuses the turn", async () => {
@@ -225,11 +203,9 @@ describe("chat stream: credit admission gate", () => {
   });
 
   it("answers 402 for a suspended org", async () => {
-    mocks.evaluateTurnCreditGate.mockResolvedValue({
-      ok: false,
-      code: "billing_suspended",
-      message: "Billing suspended",
-    });
+    mocks.invoke.mockRejectedValue(
+      creditRefusal("billing_suspended", "Billing suspended"),
+    );
     const res = await app.fetch(post({ content: "Hello" }));
     expect(res.status).toBe(402);
     const body = (await res.json()) as ErrorBody;
@@ -240,7 +216,7 @@ describe("chat stream: credit admission gate", () => {
     const res = await app.fetch(
       post({
         content: "Hello",
-        conversationId: "conv-1",
+        conversationId: "66666666-6666-4666-8666-666666666666",
         activeServerIds: ["mcp-1"],
         tier: "balanced",
         model: "anthropic/claude-sonnet",

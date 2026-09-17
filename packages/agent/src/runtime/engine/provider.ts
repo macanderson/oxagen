@@ -55,8 +55,12 @@ export interface ProviderPortOptions {
   credential?: ModelCredential;
   /** The system prompt, hoisted out of the transcript (see `splitSystem`). */
   system: string;
-  /** Advertised tools, already stripped of `execute`. */
-  tools: ToolSet;
+  /**
+   * The tools the model is shown on a completion, stripped of `execute`. A
+   * function is read on every request, which is how a searchable belt shows
+   * the model what it loaded since the last step.
+   */
+  tools: ToolSet | (() => ToolSet);
   telemetry: StreamAgentReplyArgs["telemetry"];
   fundedBy: TurnFunding;
   effort?: EffortLevel | null;
@@ -124,7 +128,10 @@ export function createProviderPort(options: ProviderPortOptions) {
         streamAgentReply({
           messages,
           system,
-          tools: options.tools,
+          tools:
+            typeof options.tools === "function"
+              ? options.tools()
+              : options.tools,
           model,
           telemetry: options.telemetry,
           fundedBy: options.fundedBy,

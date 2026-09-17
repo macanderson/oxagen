@@ -58,7 +58,7 @@ const UNRESOLVED_SERVICE_PRINCIPAL_ID = "00000000-0000-0000-0000-0000000000ff";
  * degraded — used in two situations:
  *
  * 1. An API-key-authenticated request whose acting identity we cannot
- *    resolve. API keys authorize AS THEIR CREATOR (api_keys.created_by_user_id)
+ *    resolve. API keys authorize AS THEIR CREATOR (api_keys.created_by_id)
  *    — see _fetchAuthz. This fires when that resolution fails: the key row is
  *    missing/soft-deleted/scoped to another org, carries no recorded creator,
  *    or the creator has no principal in this org. In those cases we must NOT
@@ -185,7 +185,7 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
   return withTenantDb(async (tx) => {
     // ── Resolve the EFFECTIVE acting user ─────────────────────────────────────
     // Human session → the session user. API key → the user who CREATED the key
-    // (api_keys.created_by_user_id): the key inherits its creator's role grants.
+    // (api_keys.created_by_id): the key inherits its creator's role grants.
     // This is what lets API keys work on enterprise orgs, which run the full
     // resolver — the prior behaviour fail-closed EVERY API-key call. The key row
     // is org-scoped, so the active tenant scope (the key's own org/workspace,
@@ -195,7 +195,7 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
     let effectiveUserId: string | null = userId;
     if (isApiKey) {
       const keyRows = await tx
-        .select({ createdByUserId: schema.apiKeys.createdByUserId })
+        .select({ createdById: schema.apiKeys.createdById })
         .from(schema.apiKeys)
         .where(
           and(
@@ -205,7 +205,7 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
           ),
         )
         .limit(1);
-      effectiveUserId = keyRows[0]?.createdByUserId ?? null;
+      effectiveUserId = keyRows[0]?.createdById ?? null;
       if (!effectiveUserId) return denyAuthz(orgId, workspaceId, capability);
     }
 

@@ -1,15 +1,21 @@
 import { z } from "zod";
 import { defineTool } from "./_define";
-import { userPreferencesWrite } from "../user.preferences.write";
 import { userPreferencesRead } from "../user.preferences.read";
 import { userWorkspacePreferencesWrite } from "../user.workspace_preferences.write";
 import { userWorkspacePreferencesRead } from "../user.workspace_preferences.read";
 import { pluginSettingsSetAuthAlerts } from "../plugin.settings.set_auth_alerts";
 
 /**
- * Appendix E: `set_preferences`. Absorbs `update_user_preferences`,
+ * Appendix E: `set_preferences`. Absorbs the v1 `set_preferences`,
  * `get_user_preferences`, `update_workspace_user_preferences`,
  * `get_workspace_user_preferences` and `set_auth_alerts`.
+ *
+ * The account write is named `set_preferences` and not `update_user_preferences`
+ * because the v1 contract was rewritten under its Appendix E name (ADR-075) and
+ * `update_user_preferences` no longer exists. Naming the live contract matters
+ * to more than tidiness: `exhaustive.test.ts` skips the field-by-field carry
+ * when an absorbed name is absent from its file, so an absorbs entry pointing
+ * at a deleted name is an entry that proves nothing.
  *
  * **The reads fold in as the return value.** Appendix E's drop list ends with
  * "reads folded into the objects above", and this is that pattern at its
@@ -51,17 +57,25 @@ export const setPreferences = defineTool({
    */
   surfaces: ["api"],
   layers: ["schema", "api", "docs", "unit"],
-  // `update_user_preferences` is unscoped (account-level); the other four are
+  // The account write is unscoped (account-level); the other four are
   // workspace- or org-scoped. Scoped carries: two of the three groups cannot be
   // resolved without a workspace.
   scoped: true,
 
   absorbs: [
-    "update_user_preferences",
+    "set_preferences",
     "get_user_preferences",
     "update_workspace_user_preferences",
     "get_workspace_user_preferences",
     "set_auth_alerts",
+  ],
+  renames: [
+    {
+      source: "set_preferences",
+      from: "locale",
+      to: "language",
+      why: "the v1 account write calls the BCP 47 tag `locale`; the row's column, the read contract's output and this tool's account group all call it `language`. One name wins and it is the column's.",
+    },
   ],
   drops: [
     {
@@ -116,16 +130,20 @@ export const setPreferences = defineTool({
      */
     account: z
       .object({
-        fontSize: userPreferencesWrite.input.shape.fontSize,
-        density: userPreferencesWrite.input.shape.density,
-        enterToSubmit: userPreferencesWrite.input.shape.enterToSubmit,
-        pendingPromptBehavior:
-          userPreferencesWrite.input.shape.pendingPromptBehavior,
+        fontSize: z.enum(["small", "medium", "large"]).optional(),
+        density: z.enum(["compact", "comfortable", "spacious"]).optional(),
+        enterToSubmit: z.boolean().optional(),
+        pendingPromptBehavior: z.enum(["queue", "interrupt"]).optional(),
         /** §4.5's tiers. Null clears it and falls back to workspace routing. */
-        defaultTextTier: userPreferencesWrite.input.shape.defaultTextTier,
-        defaultTextModel: userPreferencesWrite.input.shape.defaultTextModel,
-        timezone: userPreferencesWrite.input.shape.timezone,
-        language: userPreferencesWrite.input.shape.language,
+        defaultTextTier: z
+          .enum(["fast", "balanced", "precise"])
+          .nullable()
+          .optional(),
+        defaultTextModel: z.string().min(1).nullable().optional(),
+        timezone: z.string().min(1).optional(),
+        language: z.string().min(2).optional(),
+        /** `system` follows the device; the v1 write and read both carry it. */
+        theme: z.enum(["system", "light", "dark"]).optional(),
       })
       .optional(),
 
@@ -178,6 +196,7 @@ export const setPreferences = defineTool({
       defaultTextModel: userPreferencesRead.output.shape.defaultTextModel,
       timezone: userPreferencesRead.output.shape.timezone,
       language: userPreferencesRead.output.shape.language,
+      theme: userPreferencesRead.output.shape.theme,
     }),
 
     workspace: z.object({

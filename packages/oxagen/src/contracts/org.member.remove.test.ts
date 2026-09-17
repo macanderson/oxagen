@@ -43,4 +43,8 @@ describe("org.member.remove capability", () => {
     expect(orgMemberRemove.sensitivity).toBe("high");
     expect(orgMemberRemove.defaultEffect).toBe("deny");
   });
+
+  it("is never a charge: membership declares noBillingGate (ADR-052 exclusion 2)", () => {
+    expect(orgMemberRemove.noBillingGate).toBe(true);
+  });
 });

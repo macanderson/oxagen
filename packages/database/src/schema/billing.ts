@@ -1,7 +1,9 @@
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   check,
+  date,
   index,
   integer,
   jsonb,
@@ -12,8 +14,39 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { billingSchema } from "./_schemas";
-import { auditMixin, citext, idMixin, uuidv7Default } from "./_mixins";
+import {
+  auditMixin,
+  citext,
+  idMixin,
+  softDeleteMixin,
+  uuidv7Default,
+} from "./_mixins";
 import { organizations } from "./org";
+
+/**
+ * ADR-055 §2: the four figures that price governed action units. Shared by
+ * billing.plans (published terms) and billing.contract_terms (negotiated
+ * terms) so both tables carry the same columns and the same CHECK.
+ *
+ * `rate_per_gau_micros` is micro-dollars (1 cent = 10,000 micros) so a
+ * sub-cent rate is exact. `(rate_per_gau_micros * block_size_gau) % 10000 = 0`
+ * makes a block price to whole cents, so no Checkout line needs rounding.
+ */
+const gauTermsColumns = () => ({
+  currency: text("currency").notNull().default("usd"),
+  ratePerGauMicros: bigint("rate_per_gau_micros", { mode: "bigint" }).notNull(),
+  // > 0: a zero block size leaves the block price and the purchase step
+  // undefined (quantityGau % blockSizeGau).
+  blockSizeGau: integer("block_size_gau").notNull(),
+  includedGauPerMonth: integer("included_gau_per_month").notNull(),
+});
+
+const gauTermsCheck = (t: {
+  ratePerGauMicros: AnyPgColumn;
+  blockSizeGau: AnyPgColumn;
+  includedGauPerMonth: AnyPgColumn;
+}) =>
+  sql`${t.ratePerGauMicros} >= 0 AND ${t.blockSizeGau} > 0 AND ${t.includedGauPerMonth} >= 0 AND (${t.ratePerGauMicros} * ${t.blockSizeGau}) % 10000 = 0`;
 
 export const plans = billingSchema.table(
   "plans",
@@ -32,17 +65,12 @@ export const plans = billingSchema.table(
     annualCents: integer("annual_cents"),
     includedCreditCents: integer("included_credit_cents").notNull().default(0),
     includedSeats: integer("included_seats").notNull().default(1),
-    /**
-     * ADR-052 §4.2: governed actions included in this plan per entitlement
-     * year. Stored rather than implied — an absent allowance is
-     * indistinguishable from an unlimited one, and enterprise's "negotiated"
-     * figure has to live somewhere a query can read it. CHECK: >= 0.
-     */
-    includedActionsAnnual: bigint("included_actions_annual", {
-      mode: "bigint",
-    })
-      .notNull()
-      .default(sql`25000`),
+    // ADR-055 §2: the published GAU terms of the tier. seed.ts writes them for
+    // Free; pricing.ts writes them for the paid plans through
+    // `pnpm billing:stripe-sync`. resolveContractTerms reads them live for an
+    // org with no negotiated billing.contract_terms row, so nothing copies
+    // them into the org and a plan change shows on the next read.
+    ...gauTermsColumns(),
     features: jsonb("features").notNull().default(sql`'{}'::jsonb`),
     isPublic: boolean("is_public").notNull().default(true),
   },
@@ -51,6 +79,55 @@ export const plans = billingSchema.table(
     tierCheck: check(
       "plans_tier_check",
       sql`${t.tier} IN ('free','build','scale','enterprise')`,
+    ),
+    gauTermsCheck: check("plans_gau_terms_check", gauTermsCheck(t)),
+  }),
+);
+
+// ADR-055 §2: a negotiated agreement, one row per organization with at most
+// one effective (effective_to IS NULL) at a time. Written by an operator
+// migration or a later set_contract_terms capability; never by the app or by
+// create_org. The source is implied by the table, the tier is the
+// entitlement's, the checkout uses price_data and what happens past the
+// allowance is the org's billing mode on org_billing_settings, so there is no
+// source, tier, stripe_price_id, exhaustion_policy or retention column.
+// No public_id (internal, addressed only by org_id).
+export const contractTerms = billingSchema.table(
+  "contract_terms",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    // FK → org.organizations.id. No cascade: a commercial agreement holds its
+    // organization in place, the way invoices and the credit ledger do.
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    agreementRef: text("agreement_ref").notNull(),
+    ...gauTermsColumns(),
+    effectiveFrom: timestamp("effective_from", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    effectiveTo: timestamp("effective_to", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    // One effective agreement per organization; resolveContractTerms reads
+    // the row WHERE effective_to IS NULL.
+    orgEffectiveIdx: uniqueIndex("contract_terms_org_effective_idx")
+      .on(t.orgId)
+      .where(sql`${t.effectiveTo} IS NULL`),
+    gauTermsCheck: check("contract_terms_gau_terms_check", gauTermsCheck(t)),
+    effectiveRangeCheck: check(
+      "contract_terms_effective_range_check",
+      sql`${t.effectiveTo} IS NULL OR ${t.effectiveTo} > ${t.effectiveFrom}`,
     ),
   }),
 );
@@ -120,8 +197,7 @@ export const paymentMethods = billingSchema.table(
   {
     ...idMixin("pm"),
     ...auditMixin(),
-    deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
-    deletedByUserId: uuid("deleted_by_user_id"),
+    ...softDeleteMixin(),
     // FK → org.organizations.id
     orgId: uuid("org_id")
       .notNull()
@@ -240,7 +316,7 @@ export const creditLedger = billingSchema.table(
     reason: text("reason").notNull(),
     referenceType: text("reference_type"),
     referenceId: uuid("reference_id"),
-    createdByUserId: uuid("created_by_user_id"),
+    createdById: uuid("created_by_id"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
@@ -451,6 +527,27 @@ export const orgBillingSettings = billingSchema.table(
       .notNull()
       .default(false),
 
+    // ── GAU billing mode (ADR-055 §5) ───────────────────────────────────────────
+    // The org's Stripe customer id, written once by ensureStripeCustomer. The
+    // authoritative id: the metadata search it replaces is eventually
+    // consistent, so two quick purchases by a subscription-less org could each
+    // create a customer.
+    stripeCustomerId: text("stripe_customer_id"),
+    // true → invoice billing (consumption is never capped; overage is invoiced
+    // at period end or when invoice_gau_max accrues); false → prepaid. Set only
+    // by a platform operator through set_org_billing_terms.
+    approvedForInvoiceBilling: boolean("approved_for_invoice_billing")
+      .notNull()
+      .default(false),
+    // Read only when approved_for_invoice_billing is true; stored and inert
+    // otherwise. CHECK > 0.
+    invoiceGauMax: integer("invoice_gau_max").notNull().default(100000),
+    // Prepaid only: when the bucket reaches remaining ≤ 0 the recorder charges
+    // the saved payment method for auto_topup_blocks blocks. Owner or Admin
+    // through set_auto_topup. CHECK auto_topup_blocks > 0.
+    autoTopupEnabled: boolean("auto_topup_enabled").notNull().default(true),
+    autoTopupBlocks: integer("auto_topup_blocks").notNull().default(1),
+
     // ── Dunning (failed-payment recovery) ───────────────────────────────────────
     // CHECK: dunning_state IN ('active','grace','suspended').
     dunningState: text("dunning_state").notNull().default("active"),
@@ -489,6 +586,17 @@ export const orgBillingSettings = billingSchema.table(
     meterCarryNonNegativeCheck: check(
       "org_billing_settings_meter_carry_non_negative",
       sql`${t.meterCarryMicroCredits} >= 0`,
+    ),
+    stripeCustomerIdx: uniqueIndex(
+      "org_billing_settings_stripe_customer_idx",
+    ).on(t.stripeCustomerId),
+    invoiceGauMaxCheck: check(
+      "org_billing_settings_invoice_gau_max_positive",
+      sql`${t.invoiceGauMax} > 0`,
+    ),
+    autoTopupBlocksCheck: check(
+      "org_billing_settings_auto_topup_blocks_positive",
+      sql`${t.autoTopupBlocks} > 0`,
     ),
     // Ops reconciliation: which orgs are charged but not granted right now.
     openReloadEpisodeIdx: index("org_billing_settings_open_reload_episode_idx")
@@ -637,44 +745,112 @@ export const spendBudgets = billingSchema.table(
   }),
 );
 
-// ── governed_action_counters ─────────────────────────────────────────────────
+// ── spend_counters ───────────────────────────────────────────────────────────
 //
-// ADR-052: the running count of governed actions an organisation has taken in
-// its current entitlement year, and how many of those were charged as overage.
+// The running spend counter the recorders keep for the spend-budget gate
+// (spec §12.5, ADR-060 §5). One row per (org, workspace, UTC day) in micro-USD:
+// every gateway-metered model call (`@oxagen/ai`) and every attested tacho
+// llm_call adds its cost with one INSERT … ON CONFLICT DO UPDATE. The gate and
+// the budget panel sum the rows over the ceiling's window in Postgres, so a
+// ClickHouse stall neither zeroes a ceiling nor denies a call (#2820).
 //
-// This is transactional state, not analytics, and the distinction is load
-// bearing. Deciding whether THIS action falls inside the allowance needs the
-// count INCLUDING this action, atomically. The recorder does one
-// INSERT … ON CONFLICT DO UPDATE … RETURNING, which takes the row lock and
-// answers in a single round trip on the invoke() hot path. The equivalent
-// ClickHouse read would be eventually consistent and a second query per
-// action; the per-capability breakdown stays there, where append-only
-// analytics belongs.
-//
-// `actionsUsed` counts free actions too. Without that an organisation could
-// not see how close it is to its allowance, because the ledger only records
-// what it was charged for.
-export const governedActionCounters = billingSchema.table(
-  "governed_action_counters",
+// workspace_id is NULL for a frame that carried no workspace (a gateway call
+// outside a workspace scope); an org-level ceiling sums every row, a workspace
+// ceiling the rows that name it.
+export const spendCounters = billingSchema.table(
+  "spend_counters",
   {
     id: uuid("id").primaryKey().default(uuidv7Default),
-    // FK → org.organizations.id — CASCADE so the counter vanishes with the org.
     orgId: uuid("org_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
-    /** First instant of the entitlement year this row counts, UTC. */
+    workspaceId: uuid("workspace_id"),
+    day: date("day", { mode: "string" }).notNull(),
+    // `sql\`0\``: drizzle-kit export cannot serialize a BigInt literal default.
+    spentMicros: bigint("spent_micros", { mode: "bigint" })
+      .notNull()
+      .default(sql`0`),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    scopeDayIdx: uniqueIndex("spend_counters_scope_day_idx").on(
+      t.orgId,
+      sql`coalesce(${t.workspaceId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+      t.day,
+    ),
+    spentCheck: check("spend_counters_spent_check", sql`${t.spentMicros} >= 0`),
+  }),
+);
+
+// ── gau_buckets ──────────────────────────────────────────────────────────────
+//
+// ADR-055 §4–5: one row per organization per month, the unit the recorder
+// debits and the gate reads. periodFor (packages/billing/src/gau-bucket.ts)
+// picks the month: the anniversary-day slice of an entitled subscription's
+// cycle, or the UTC calendar month for an org with none.
+//
+// remaining = included + purchased + carried − used and may be negative: the
+// gate checks remaining > 0 before the handler and the recorder debits after
+// it, so concurrent governed actions can drive used_gau past the total. The
+// stored figure is not clamped. On rollover
+// carried_gau = min(prev.purchased + prev.carried, max(0, prev.remaining)):
+// bought units survive a month boundary; included ones do not.
+//
+// The recorder's lazy create and debit are one
+// INSERT … ON CONFLICT (org_id, period_start) DO UPDATE … RETURNING on the
+// caller's executor, the statement shape governed_action_counters had; the
+// unique index is that statement's arbiter. There is no terms_source or
+// terms_ref column: terms are resolved live and every settlement records the
+// rate it charged. No public_id (internal, addressed only by org_id).
+export const gauBuckets = billingSchema.table(
+  "gau_buckets",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    // FK → org.organizations.id — CASCADE so the bucket vanishes with the org.
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    /** First instant of the month this row covers, UTC. */
     periodStart: timestamp("period_start", {
       withTimezone: true,
       mode: "date",
     }).notNull(),
-    /** Governed actions taken in the period, allowance-covered ones included. */
-    actionsUsed: bigint("actions_used", { mode: "bigint" })
+    /** First instant after the month this row covers, UTC. */
+    periodEnd: timestamp("period_end", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    /** included_gau_per_month of the terms in force when the row was created. */
+    includedGau: bigint("included_gau", { mode: "number" }).notNull(),
+    /** Units bought this month: paid checkout and auto_topup settlements. */
+    purchasedGau: bigint("purchased_gau", { mode: "number" })
       .notNull()
       .default(sql`0`),
-    /** Of those, the ones charged as overage past the allowance. */
-    actionsCharged: bigint("actions_charged", { mode: "bigint" })
+    /** Units carried in from the previous month by the rollover formula. */
+    carriedGau: bigint("carried_gau", { mode: "number" })
       .notNull()
       .default(sql`0`),
+    /** Governed actions recorded this month. */
+    usedGau: bigint("used_gau", { mode: "number" }).notNull().default(sql`0`),
+    /** Invoice billing: overage already claimed by an interim or period-close settlement. */
+    overageInvoicedGau: bigint("overage_invoiced_gau", { mode: "number" })
+      .notNull()
+      .default(sql`0`),
+    /** Invoice billing: how many interim settlements this month has claimed. */
+    interimSeq: integer("interim_seq").notNull().default(0),
+    /** Prepaid: how many auto top-up episodes this month has claimed. */
+    topupSeq: integer("topup_seq").notNull().default(0),
+    /**
+     * Prepaid: the one auto top-up episode allowed open at a time. Set by the
+     * claim, cleared when that settlement is paid or a paid Checkout clears it.
+     * Not an FK: the settlement row references this bucket, and a reference
+     * back would make the pair impossible to delete with the org.
+     */
+    openTopupSettlementId: uuid("open_topup_settlement_id"),
+    /** Set by the close job once the month has ended and its overage is claimed. */
+    closedAt: timestamp("closed_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
@@ -683,19 +859,107 @@ export const governedActionCounters = billingSchema.table(
       .defaultNow(),
   },
   (t) => ({
-    // The ON CONFLICT arbiter for the recorder's upsert, and the only read
-    // path, so one index covers both.
-    orgPeriodIdx: uniqueIndex("governed_action_counters_org_period_idx").on(
+    // The ON CONFLICT arbiter for the recorder's upsert and the only read path.
+    orgPeriodIdx: uniqueIndex("gau_buckets_org_period_idx").on(
       t.orgId,
       t.periodStart,
     ),
-    nonNegativeCheck: check(
-      "governed_action_counters_used_non_negative",
-      sql`${t.actionsUsed} >= 0 AND ${t.actionsCharged} >= 0`,
+    countsNonNegativeCheck: check(
+      "gau_buckets_counts_non_negative",
+      sql`${t.includedGau} >= 0 AND ${t.purchasedGau} >= 0 AND ${t.carriedGau} >= 0 AND ${t.usedGau} >= 0 AND ${t.overageInvoicedGau} >= 0 AND ${t.interimSeq} >= 0 AND ${t.topupSeq} >= 0`,
     ),
-    chargedWithinUsedCheck: check(
-      "governed_action_counters_charged_within_used",
-      sql`${t.actionsCharged} <= ${t.actionsUsed}`,
+    overageWithinUsedCheck: check(
+      "gau_buckets_overage_invoiced_within_used",
+      sql`${t.overageInvoicedGau} <= ${t.usedGau}`,
+    ),
+    periodRangeCheck: check(
+      "gau_buckets_period_range_check",
+      sql`${t.periodEnd} > ${t.periodStart}`,
+    ),
+  }),
+);
+
+// ── gau_settlements ──────────────────────────────────────────────────────────
+//
+// ADR-055 §6: the one settlement ledger. Every block purchase, auto top-up,
+// interim and period-close charge is a Stripe Invoice recorded here. `id` is
+// also the Stripe idempotency key. `paid` is the only terminal state: the
+// synchronous result, the first invoice.paid and Stripe's later retry converge
+// on one grant through `UPDATE … WHERE status <> 'paid'`.
+//
+// The amount and the hosted URL are read from the billing.invoices mirror
+// through stripe_invoice_id, the failure reason is the job's log line, and
+// every reader reaches a settlement through its bucket, so there is no
+// amount_cents, failure_reason or hosted_invoice_url column and no
+// (org_id, created_at) index. No public_id (internal).
+export const gauSettlements = billingSchema.table(
+  "gau_settlements",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    // FK → org.organizations.id. No cascade: a settlement is a money record
+    // and holds its organization in place, the way invoices do.
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    // FK → billing.gau_buckets.id. The bucket the settlement was claimed
+    // against; a grant lands on the org's current bucket, which may be later.
+    bucketId: uuid("bucket_id")
+      .notNull()
+      .references(() => gauBuckets.id),
+    // CHECK: kind IN ('checkout','auto_topup','interim_invoice','period_close').
+    kind: text("kind").notNull(),
+    /**
+     * Per bucket and kind: topup_seq for auto_topup, interim_seq for
+     * interim_invoice, 0 for period_close, NULL for checkout (the session id
+     * is that kind's key).
+     */
+    seq: integer("seq"),
+    quantityGau: bigint("quantity_gau", { mode: "number" }).notNull(),
+    /** The contracted rate this settlement charged, recorded at claim time. */
+    ratePerGauMicros: bigint("rate_per_gau_micros", {
+      mode: "bigint",
+    }).notNull(),
+    currency: text("currency").notNull(),
+    // CHECK: status IN ('pending','open','paid','failed').
+    status: text("status").notNull().default("pending"),
+    /** checkout kind: the Checkout Session; the webhook grant's idempotency key. */
+    stripeCheckoutSessionId: text("stripe_checkout_session_id"),
+    /** The Stripe Invoice behind this settlement; NULL until invoices.create returns. */
+    stripeInvoiceId: text("stripe_invoice_id"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    /** When the row reached paid. */
+    settledAt: timestamp("settled_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    // One interim settlement per threshold crossing, one top-up per episode:
+    // the database-level backstop for the claim statements' re-checked WHERE.
+    bucketKindSeqIdx: uniqueIndex("gau_settlements_bucket_kind_seq_idx")
+      .on(t.bucketId, t.kind, t.seq)
+      .where(sql`${t.seq} IS NOT NULL`),
+    // The webhook grant's idempotency key.
+    checkoutSessionIdx: uniqueIndex("gau_settlements_checkout_session_idx")
+      .on(t.stripeCheckoutSessionId)
+      .where(sql`${t.stripeCheckoutSessionId} IS NOT NULL`),
+    // Every reader reaches a settlement through its bucket.
+    bucketIdx: index("gau_settlements_bucket_idx").on(t.bucketId),
+    kindCheck: check(
+      "gau_settlements_kind_check",
+      sql`${t.kind} IN ('checkout','auto_topup','interim_invoice','period_close')`,
+    ),
+    statusCheck: check(
+      "gau_settlements_status_check",
+      sql`${t.status} IN ('pending','open','paid','failed')`,
+    ),
+    // seq is NULL exactly for a checkout row.
+    seqByKindCheck: check(
+      "gau_settlements_seq_by_kind_check",
+      sql`(${t.kind} = 'checkout') = (${t.seq} IS NULL)`,
+    ),
+    amountsCheck: check(
+      "gau_settlements_amounts_check",
+      sql`${t.quantityGau} > 0 AND ${t.ratePerGauMicros} >= 0 AND (${t.seq} IS NULL OR ${t.seq} >= 0)`,
     ),
   }),
 );

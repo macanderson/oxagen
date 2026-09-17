@@ -4,6 +4,7 @@ import { z } from "zod";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
+  recordSpend: vi.fn(),
   generateObject: vi.fn(),
   insertTokenUsage: vi.fn(),
   hashPrompt: vi.fn(),
@@ -52,6 +53,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
     ...real,
     providerCostUsdMicros: mocks.providerCostUsdMicros,
     chargeUsageCredits: mocks.chargeUsageCredits,
+    recordSpend: mocks.recordSpend,
   };
 });
 vi.mock("./models", () => ({

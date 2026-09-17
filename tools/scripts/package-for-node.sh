@@ -157,11 +157,12 @@ case $SERVICE in
   app)
     # The directory that ships as app.oxagen.sh is the one APP_DIR names
     # (tools/scripts/lib/app-dir.mjs), the same source the parity gates read.
-    # During the Mission Control rebuild that is apps/app_deprecated, the app
-    # customers use; apps/app is the rebuild, whose pages still render
-    # NotBacked. The cutover batch flips APP_DIR once and the deploy follows
-    # (implementation plan §6 Q2). Hardcoding @oxagen/app here shipped the
-    # rebuild the moment its integration branch reached main (#2894).
+    # WL-50 flipped APP_DIR to apps/app, so that is what deploys: the Mission
+    # Control rebuild, whose pages are backed by real reads and writes. The
+    # deprecated app stays in the tree, unshipped, until WL-53 deletes it.
+    # The indirection is why the flip was one line rather than a second place to
+    # remember: hardcoding @oxagen/app here shipped the rebuild the moment its
+    # integration branch reached main, before it was ready (#2894).
     # app-dir.mjs exists only while the rebuild is on the tree; without it
     # apps/app is the one app there is (tools/scripts/lib/app-dir.sh).
     . tools/scripts/lib/app-dir.sh

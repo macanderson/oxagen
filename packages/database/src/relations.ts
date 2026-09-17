@@ -260,6 +260,14 @@ export const approvalRequestsRelations = relations(
       fields: [approvalRequests.messageId],
       references: [messages.id],
     }),
+    // The person who answered, when one did. `agent.approval_requests` →
+    // `auth.users` crosses schemas, so it is declared here rather than joined
+    // inside a handler (AGENTS.md, Storage Boundaries). Null on a row a rule
+    // resolved: that approver is `resolved_by_policy`, not a user.
+    resolvedBy: one(users, {
+      fields: [approvalRequests.resolvedByUserId],
+      references: [users.id],
+    }),
   }),
 );
 

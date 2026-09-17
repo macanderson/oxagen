@@ -74,6 +74,8 @@ const ACTIONS = new Set([
   "publish",
   "snapshot",
   "fork",
+  // bisect_runs (#2952): align two recordings and find where they diverge.
+  "bisect",
   "rename",
   "edit",
   "export",
@@ -95,6 +97,8 @@ const ACTIONS = new Set([
   "exec",
   "deploy",
   "resume",
+  "suspend", // pairs with "resume": suspend_agent (MC spec App. E, ADR-057)
+  "retire", // retire_agent: an identity is retired, never deleted (ADR-057)
   "pause",
   "trigger",
   "dispatch",
@@ -117,21 +121,30 @@ const ACTIONS = new Set([
   "install",
   "uninstall",
   "register",
+  "enroll", // a host consumes its one-time token (spec App. E `enroll_host`)
+  "advance", // the onboarding gate moves one step (`advance_onboarding`)
   "reauth",
   "rotate",
   "revoke",
   "assign", // pairs with "revoke" for role assignment; matches iam.principal_role_assignments
+  // grant_mandate / request_mandate — MC spec App. E names both (ADR-059).
+  "grant",
+  "request",
 
   "reveal",
   "pin",
   "purchase",
   "load",
+  // the in-app agent's turn (MC spec App. E, #2968)
+  "ask",
   "map",
   "diff",
   "patch",
   "sync",
   "reconcile",
   "approve",
+  // authorize_cli — the CLI consent mint (apps/app/ARCHITECTURE.md §3.7).
+  "authorize",
   "decline",
   "accept",
   "resolve",
@@ -158,6 +171,11 @@ const ACTIONS = new Set([
   // associative verbs — bind/unbind an agent to an environment (Spec §5.6).
   "bind",
   "unbind",
+  // steering (MC spec App. E, ADR-061): the protocol's append, a proposal,
+  // and the merge that publishes a Context PR.
+  "append",
+  "propose",
+  "merge",
   // snake_case compound actions
   "set_enabled",
   "set_default",

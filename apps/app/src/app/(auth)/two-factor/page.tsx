@@ -1,41 +1,48 @@
-import { OxagenWordmark } from "@/components/ui/brand";
-import { TwoFactorForm } from "./two-factor-form";
-import { safeReturnTo } from "@/lib/return-to";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
+import { TwoFactorForm } from "@/features/auth";
+import { readNext } from "@/shared/safe-path";
+import { AuthColumn, AuthFooter, AuthSkeleton } from "@/ui/auth-shell";
+import { linkText } from "@/ui/control-styles";
+import { PageHeader } from "@/ui/page-header";
 
-/**
- * /two-factor — sign-in second factor step. Public route (the user has only the
- * short-lived 2FA cookie here, not a full session — see proxy.ts PUBLIC_PATHS).
- * A user who reaches this page with no pending 2FA challenge simply can't
- * verify; Better Auth rejects the attempt and they return to /login.
- */
-export default async function TwoFactorPage({
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("pages");
+  return { title: t("twoFactor") };
+}
+
+// Public: after the password step the person holds only Better Auth's short-lived
+// two-factor cookie, not a session (src/proxy.ts PUBLIC_PATHS).
+export default function TwoFactorPage(props: PageProps<"/two-factor">) {
+  return (
+    <Suspense fallback={<AuthSkeleton />}>
+      <TwoFactor searchParams={props.searchParams} />
+    </Suspense>
+  );
+}
+
+async function TwoFactor({
   searchParams,
 }: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  searchParams: PageProps<"/two-factor">["searchParams"];
 }) {
-  const returnTo = safeReturnTo((await searchParams)["returnTo"]);
+  const params = await searchParams;
+  const next = readNext(params);
+  const [t, pages] = await Promise.all([
+    getTranslations("auth"),
+    getTranslations("pages"),
+  ]);
   return (
-    <div className="w-full max-w-sm space-y-6">
-      <div className="flex justify-center">
-        <OxagenWordmark className="h-8" />
-      </div>
-
-      <div className="rounded-xl border border-border/60 bg-card/80 p-8 shadow-xl space-y-6 backdrop-blur-xl">
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Two-factor authentication
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Enter the code from your authenticator app to finish signing in.
-          </p>
-        </div>
-
-        <TwoFactorForm returnTo={returnTo} />
-      </div>
-
-      <p className="text-center text-xs text-muted-foreground">
-        SOC 2 Type II · SSO/SCIM · RBAC-enforced retrieval
-      </p>
-    </div>
+    <AuthColumn>
+      <PageHeader eyebrow={t("twoFactor.eyebrow")} title={pages("twoFactor")} />
+      <TwoFactorForm next={next} />
+      <AuthFooter>
+        <Link href="/login" className={linkText}>
+          {t("twoFactor.back")}
+        </Link>
+      </AuthFooter>
+    </AuthColumn>
   );
 }

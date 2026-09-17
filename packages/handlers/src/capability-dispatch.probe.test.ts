@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { hasHandler, getCapability, listCapabilities } from "@oxagen/oxagen";
-import { resolveHandler as agentResolveHandler } from "@oxagen/agent";
+import {
+  agentHandlerNames,
+  resolveHandler as agentResolveHandler,
+} from "@oxagen/agent";
 import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 
@@ -75,21 +78,20 @@ describe("ADR-025 naming realignment — dispatch probe", () => {
   // ACTUAL DISPATCH (not just registration): drive the agent package's real
   // resolveHandler, which loads the handler MODULE by its snake key and returns
   // the concrete handler function. A dotted key here would throw "No handler
-  // registered". Proves the realigned loader map dispatches end-to-end for the
-  // governance capabilities that were previously dotted call-sites.
-  it("agent handler loaders actually load a function for snake names (real dispatch)", async () => {
-    // A representative slice of the LOADERS-registered capabilities in
-    // @oxagen/agent — previously dotted keys.
-    for (const name of [
-      "list_agent_tools",
-      "recall_memory",
-      "deploy_agent",
-      "get_agent_def",
-      "list_executions",
-      "resolve_approval",
-    ]) {
+  // registered". The list is NOT hand-maintained: it is every name in
+  // @oxagen/agent's LOADERS map, so a capability added to that package is
+  // dispatch-probed the moment it is registered. A hand-list is what let
+  // get_assistant_engine ship unresolvable — its module exported two `*Handler`
+  // functions, which the unique-`*Handler` fallback in resolveHandler refuses,
+  // so every call threw and no test noticed.
+  it.each(agentHandlerNames)(
+    "agent handler loader actually loads a function for %s (real dispatch)",
+    async (name) => {
       const fn = await agentResolveHandler(name);
       expect(typeof fn, `resolved handler for ${name}`).toBe("function");
-    }
-  });
+    },
+    // The first lazy import() cold-starts the module-graph transform; on a
+    // loaded CI runner that can exceed vitest's 5s default.
+    30_000,
+  );
 });

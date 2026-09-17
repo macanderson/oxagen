@@ -6,10 +6,9 @@ import {
   jsonb,
   text,
   uniqueIndex,
-  uuid,
 } from "drizzle-orm/pg-core";
 import { pluginSchema } from "./_schemas";
-import { auditMixin, idMixin, softDeleteMixin } from "./_mixins";
+import { auditMixin, idMixin, orgScopeMixin, softDeleteMixin } from "./_mixins";
 
 /** The six installable plugin types. The discriminator stored in
  *  plugin.installed_plugins.plugin_type and used by the runtime PluginType
@@ -41,8 +40,7 @@ export const pluginInstalledPlugins = pluginSchema.table(
     ...idMixin("porg"),
     ...auditMixin(),
     ...softDeleteMixin(),
-    orgId: uuid("org_id").notNull(),
-    workspaceId: uuid("workspace_id").notNull(),
+    ...orgScopeMixin(),
     pluginType: text("plugin_type").notNull(), // agent_skill | agent_capability | mcp_server | knowledge_source | integration
     source: text("source").notNull(), // registry | custom | oxagen
     name: text("name").notNull(),

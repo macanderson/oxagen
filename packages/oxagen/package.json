@@ -10,6 +10,9 @@
     "./contracts/*": "./src/contracts/*.ts",
     "./registry": "./src/registry.ts",
     "./kernel": "./src/kernel.ts",
+    "./platform-operator": "./src/platform-operator.ts",
+    "./handler-error": "./src/handler-error.ts",
+    "./agent-credential": "./src/agent-credential.ts",
     "./agent-schema": "./src/agent-schema.ts",
     "./avatar": "./src/avatar.ts",
     "./interactive-agent": "./src/interactive-agent.ts",
@@ -20,6 +23,9 @@
     "./contracts": "./src/contracts/index.ts",
     "./plugins": "./src/plugins/index.ts",
     "./tacho/schemas": "./src/tacho/schemas.ts",
+    "./mandates/schemas": "./src/mandates/schemas.ts",
+    "./approval-rules/schemas": "./src/approval-rules/schemas.ts",
+    "./mandates/schemas.sample": "./src/mandates/schemas.sample.ts",
     "./client-ip": "./src/client-ip.ts"
   },
   "scripts": {
@@ -31,6 +37,7 @@
   "dependencies": {
     "@opentelemetry/api": "1.9.1",
     "@oxagen/config": "workspace:*",
+    "@oxagen/run-evidence": "workspace:*",
     "@oxagen/tacho": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "zod": "3.25.76"

@@ -4,7 +4,7 @@
 //
 // Coverage goals (SOC2-critical):
 //   1. The DB schema for security_events contains ONLY append-only columns —
-//      no updated_at, updated_by_user_id, deleted_at, deleted_by_user_id.
+//      no updated_at, updated_by_id, deleted_at, deleted_by_id.
 //   2. recordSecurityEvent calls the insert fn with the expected row shape.
 //   3. recordSecurityEventAsync resolves after the insert fn resolves.
 //   4. recordSecurityEvent retries transient insert failures with backoff
@@ -57,7 +57,7 @@ const flushRetries = () => new Promise((r) => setTimeout(r, 250));
 // ---------------------------------------------------------------------------
 
 describe("SecurityEventInput — append-only column contract", () => {
-  it("does not contain updated_at or updated_by_user_id", () => {
+  it("does not contain updated_at or updated_by_id", () => {
     // Build a valid event and check its keys at the type level.
     const event: SecurityEventInput = {
       eventType: "auth.sign_in",
@@ -74,12 +74,12 @@ describe("SecurityEventInput — append-only column contract", () => {
     const keys = Object.keys(event);
     expect(keys).not.toContain("updated_at");
     expect(keys).not.toContain("updatedAt");
-    expect(keys).not.toContain("updated_by_user_id");
-    expect(keys).not.toContain("updatedByUserId");
+    expect(keys).not.toContain("updated_by_id");
+    expect(keys).not.toContain("updatedById");
     expect(keys).not.toContain("deleted_at");
     expect(keys).not.toContain("deletedAt");
-    expect(keys).not.toContain("deleted_by_user_id");
-    expect(keys).not.toContain("deletedByUserId");
+    expect(keys).not.toContain("deleted_by_id");
+    expect(keys).not.toContain("deletedById");
   });
 
   it("contains the required append-only columns", () => {

@@ -1,0 +1,192 @@
+{
+  "name": "delete_approval_rule",
+  "domain": "approval_rule",
+  "description": "Remove one auto-approval rule from the workspace's rule set",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "ruleId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "required": [
+      "ruleId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "tools": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "maxMeasures": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "default": {}
+            },
+            "allowTargets": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              },
+              "default": {}
+            },
+            "standingWindowMs": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 60000,
+                  "maximum": 2592000000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "businessHours": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "timezone": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "days": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 7
+                      }
+                    },
+                    "start": {
+                      "type": "string"
+                    },
+                    "end": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "timezone",
+                    "days",
+                    "start",
+                    "end"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "createdBy": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "authoredConsequences": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "hits30d": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "skipped30d": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "tools",
+            "createdBy",
+            "createdAt",
+            "hits30d",
+            "skipped30d"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "windowDays": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "items",
+      "windowDays"
+    ],
+    "additionalProperties": false
+  }
+}

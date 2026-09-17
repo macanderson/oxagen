@@ -1,50 +1,50 @@
-import { Panel } from "@/components/ui/panel";
-import { NewOrgForm } from "@/components/org/new-organization-form";
-import { getSessionOrRedirect } from "@/lib/session";
-import { getLinkedSocialProvider } from "./linked-provider";
-import { buildOrgSignupPrefill } from "@/lib/oauth-prefill";
-import { createOrgAction } from "./actions";
-import { safeReturnTo } from "@/lib/return-to";
+import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
+import { NewOrganizationScreen } from "@/features/onboarding";
+import { AuthColumn, AuthShell, AuthSkeleton } from "@/ui/auth-shell";
+import { PageHeader } from "@/ui/page-header";
 
-export default async function NewTenantPage({
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("pages");
+  return { title: t("newOrganization") };
+}
+
+// Create an organization: the address the deprecated app, the docs and the
+// GitHub setup fallback use. The form is the whole page. `?next=` (or the
+// CLI's `?returnTo=`) is where a created organization continues to: the CLI
+// consent page for an account made during `oxagen auth login`.
+export default function NewOrganizationPage(
+  props: PageProps<"/new-organization">,
+) {
+  return (
+    <AuthShell>
+      <Suspense fallback={<AuthSkeleton />}>
+        <NewOrganization searchParams={props.searchParams} />
+      </Suspense>
+    </AuthShell>
+  );
+}
+
+// The heading shares the screen's boundary, so a signed-out visitor sees the
+// skeleton until the screen's sign-in gate redirects.
+async function NewOrganization({
   searchParams,
 }: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  searchParams: PageProps<"/new-organization">["searchParams"];
 }) {
-  const session = await getSessionOrRedirect();
-  // Where to go once the organization exists: the CLI consent page when the
-  // account was created from the installer's browser login, else the new
-  // workspace.
-  const returnTo = safeReturnTo((await searchParams)["returnTo"]);
-
-  // Seed the form from the signed-in user's profile. Better Auth populates
-  // name / email / avatar from the Google or GitHub OAuth profile at sign-in;
-  // we look up which social provider is linked so the form can attribute the
-  // prefilled values ("Prefilled from your Google account").
-  const provider = await getLinkedSocialProvider(session.user.id);
-  const prefill = buildOrgSignupPrefill({
-    name: session.user.name,
-    email: session.user.email,
-    image: session.user.image,
-    provider,
-  });
-
+  const [t, pages] = await Promise.all([
+    getTranslations("onboarding.organization"),
+    getTranslations("pages"),
+  ]);
   return (
-    <div className="relative z-10 flex min-h-dvh items-start justify-center p-4 py-8">
-      <Panel
-        title="Create organization"
-        className="w-full max-w-3xl border-border/60 bg-card/80 shadow-xl backdrop-blur-xl"
-      >
-        <p className="mb-4 text-sm text-muted-foreground">
-          Organizations own billing and member access. A default workspace is
-          created for you.
-        </p>
-        <NewOrgForm
-          action={createOrgAction}
-          prefill={prefill}
-          returnTo={returnTo}
-        />
-      </Panel>
-    </div>
+    <AuthColumn wide>
+      <PageHeader
+        eyebrow={t("eyebrow")}
+        title={pages("newOrganization")}
+        description={t("lead")}
+      />
+      <NewOrganizationScreen searchParams={searchParams} />
+    </AuthColumn>
   );
 }

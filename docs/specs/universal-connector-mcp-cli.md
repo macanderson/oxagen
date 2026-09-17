@@ -158,7 +158,7 @@ ingestion.connector_definitions
   enabled           boolean not null default false
   status            text not null default 'draft'  -- 'draft'|'active'|'paused'|'error'
   last_run_at       timestamptz
-  created_at, updated_at, created_by_user_id, updated_by_user_id
+  created_at, updated_at, created_by_id, updated_by_id
   unique (org_id, workspace_id, name)
 ```
 

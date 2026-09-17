@@ -1,0 +1,74 @@
+{
+  "ui": {
+    "brand": {
+      "name": "Oxagen",
+      "home": "Oxagen home"
+    },
+    "dialog": {
+      "close": "Close"
+    },
+    "record": {
+      "kinds": {
+        "rule": "rule",
+        "constraint": "constraint",
+        "procedure": "procedure",
+        "fact": "fact",
+        "memory": "memory",
+        "preference": "preference"
+      },
+      "unclassified": "unclassified",
+      "force": "force {force}",
+      "effects": {
+        "require": "require",
+        "forbid": "forbid"
+      },
+      "scope": "Scope",
+      "scopes": {
+        "repository": "repository",
+        "workspace": "workspace"
+      },
+      "lineage": "Lineage"
+    },
+    "runStatus": {
+      "live": "live",
+      "sealed": "sealed",
+      "halted": "halted"
+    },
+    "readFailure": {
+      "denied": "You cannot see {section} in this workspace. Your roles do not include {permission}; an organization owner can grant it.",
+      "pendingApproval": "Access to {section} is waiting for approval, request {accessRequestId}.",
+      "error": "{section} could not be loaded: the control plane answered {code}. Nothing was changed, and runs kept recording."
+    },
+    "measure": {
+      "count": "{count} {unit}"
+    },
+    "mandateBar": {
+      "title": "Remaining authority · {measure} · {period} · {periodKey}",
+      "of": "of <limit></limit>",
+      "period": {
+        "daily": "daily",
+        "weekly": "weekly",
+        "monthly": "monthly"
+      },
+      "settled": "settled",
+      "reserved": "reserved by calls in flight",
+      "remaining": "remaining",
+      "label": "{measure}: {settled} settled, {remaining} remaining of {limit}",
+      "labelReserved": "{measure}: {settled} settled, {reserved} reserved by calls in flight, {remaining} remaining of {limit}",
+      "overLimit": "Drawn authority is past this limit: the ledger holds more than the limit now allows, which is what lowering a limit does to authority already drawn. The settled and reserved figures say where it sits."
+    },
+    "mandateScope": {
+      "everyTool": "every tool",
+      "noTool": "covers no tool"
+    },
+    "mandateAuthority": {
+      "noLimit": "no limit",
+      "window": "per {period} · {periodKey}",
+      "period": {
+        "daily": "day",
+        "weekly": "week",
+        "monthly": "month"
+      }
+    }
+  }
+}

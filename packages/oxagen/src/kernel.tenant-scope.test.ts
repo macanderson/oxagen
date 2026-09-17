@@ -6,7 +6,9 @@ import {
   registerHandler,
   clearHandlersForTests,
   clearSecurityEventEmitter,
+  setSecurityEventEmitter,
 } from "./kernel";
+import type { KernelSecurityEvent } from "./kernel";
 import { registerCapability, clearRegistryForTests } from "./registry";
 import type { CapabilityContext } from "./types";
 
@@ -56,7 +58,7 @@ describe("kernel tenant scope", () => {
   });
 
   it("skips the tenant-scope wrapper for unscoped capabilities (scoped:false)", async () => {
-    // Regression: user.preferences.write is scoped:false (keyed on the user, not
+    // Regression: the account-preferences write (now set_preferences) is scoped:false (keyed on the user, not
     // an org) and is invoked with empty org/workspace ids. The kernel must NOT
     // wrap it in runInTenantScope — doing so threw TenantScopeError on the empty
     // ids and silently broke "Save preferences". The handler must run, and see
@@ -131,8 +133,18 @@ describe("kernel tenant scope", () => {
       output: z.object({}),
     });
     registerHandler("test.echo2", async () => async () => ({}));
+    const events: KernelSecurityEvent[] = [];
+    setSecurityEventEmitter((e) => {
+      events.push(e);
+    });
     await expect(invoke("test.echo2", {}, ctx({ orgId: "" }))).rejects.toThrow(
       /tenant scope|orgId/,
     );
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      capability: "test.echo2",
+      outcome: "deny",
+      errorCode: "no_tenant_scope",
+    });
   });
 });

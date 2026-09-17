@@ -138,6 +138,7 @@ describe("resolveMcpContext", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
 
     const result = await resolveMcpContext("Bearer ox_mysecret", requestId);
@@ -163,6 +164,7 @@ describe("resolveMcpContext", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
 
     await resolveMcpContext("Bearer ox_mysecret", requestId, "203.0.113.7");
@@ -246,6 +248,7 @@ describe("resolveMcpContext", () => {
       orgId: "",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
 
     const result = await resolveMcpContext("Bearer ox_emptyorg", requestId);
@@ -258,6 +261,7 @@ describe("resolveMcpContext", () => {
       orgId: "org-1",
       workspaceId: "",
       apiKeyId: "key-1",
+      userId: null,
     });
 
     const result = await resolveMcpContext("Bearer ox_emptyws", requestId);
@@ -270,6 +274,7 @@ describe("resolveMcpContext", () => {
       orgId: "",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
 
     await resolveMcpContext("Bearer ox_emptyorg", requestId);
@@ -283,6 +288,7 @@ describe("resolveMcpContext", () => {
       orgId: "",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
 
     await expect(
@@ -310,6 +316,7 @@ describe("firstHeader (via buildContext header extraction)", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({
       authorization: "Bearer ox_plainstring",
@@ -325,6 +332,7 @@ describe("firstHeader (via buildContext header extraction)", () => {
       orgId: "org-2",
       workspaceId: "ws-2",
       apiKeyId: "key-2",
+      userId: null,
     });
     const ctx = await buildContext({
       // xmcp headers() repeats a header as an array; firstHeader() picks [0]
@@ -341,6 +349,7 @@ describe("firstHeader (via buildContext header extraction)", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
@@ -355,6 +364,7 @@ describe("firstHeader (via buildContext header extraction)", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({ authorization: "Bearer ox_valid" });
     // requestId should be a UUID (no x-request-id supplied)
@@ -379,6 +389,7 @@ describe("extractClientIp (via buildContext clientIp extraction)", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
   });
 
@@ -442,6 +453,7 @@ describe("buildContext", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
@@ -456,6 +468,7 @@ describe("buildContext", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
@@ -470,6 +483,7 @@ describe("buildContext", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({ authorization: "Bearer ox_valid" });
     expect(ctx.requestId).toMatch(
@@ -483,6 +497,7 @@ describe("buildContext", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({
       authorization: "Bearer ox_valid",
@@ -533,6 +548,7 @@ describe("buildContext", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({ authorization: "Bearer ox_valid" });
     expect(ctx.userId).toBeNull();
@@ -544,8 +560,38 @@ describe("buildContext", () => {
       orgId: "org-1",
       workspaceId: "ws-1",
       apiKeyId: "key-1",
+      userId: null,
     });
     const ctx = await buildContext({ authorization: "Bearer ox_valid" });
     expect(ctx.messageId).toBeNull();
+  });
+});
+
+// ── INV-31: no surface builds a platform-operator binding ─────────────────────
+//
+// `set_org_billing_terms` is reachable only from a `CapabilityContext` carrying
+// a binding minted by `createPlatformOperatorContext` (packages/oxagen). The
+// kernel refuses any other value on that field; the second half of the
+// invariant is that no surface's context builder puts one there at all — not
+// even `undefined`, which a later spread could overwrite unnoticed
+// (apps/app/ARCHITECTURE.md §4, INV-31).
+
+describe("buildContext and the platform-operator binding", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("builds no platformOperator key at all", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+      userId: null,
+    });
+
+    const ctx = await buildContext({ authorization: "Bearer ox_valid" });
+
+    expect("platformOperator" in ctx).toBe(false);
   });
 });

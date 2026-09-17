@@ -4,7 +4,7 @@
  *   workspace.model.settings.write, organization.create,
  *   org.member.add, org.member.invite.accept, org.member.invite.decline,
  *   org.member.remove, org.member.role.change,
- *   user.preferences.read, user.preferences.write,
+ *   user.preferences.read,
  *   notifications.list, notifications.mark
  */
 
@@ -414,38 +414,6 @@ describe("user.preferences.read route", () => {
     await app.fetch(get(PATH, V1));
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("get_user_preferences");
     expect(mocks.invoke.mock.calls[0]?.[1]).toEqual({});
-  });
-});
-
-// ── user.preferences.write ───────────────────────────────────────────────
-
-describe("user.preferences.write route", () => {
-  const PATH = "/user/preferences/write";
-
-  it("happy path PATCH: 200", async () => {
-    mocks.invoke.mockResolvedValue({ fontSize: "large" });
-    const res = await app.fetch(
-      makeRequest(`${V1}${PATH}`, {
-        method: "PATCH",
-        headers: { ...authHeaders(), "content-type": "application/json" },
-        body: JSON.stringify({ fontSize: "large" }),
-      }),
-    );
-    expect(res.status).toBe(200);
-  });
-
-  it("calls invoke with 'update_user_preferences'", async () => {
-    await app.fetch(
-      makeRequest(`${V1}${PATH}`, {
-        method: "PATCH",
-        headers: { ...authHeaders(), "content-type": "application/json" },
-        body: JSON.stringify({ density: "compact", enterToSubmit: false }),
-      }),
-    );
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("update_user_preferences");
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.density).toBe("compact");
-    expect(body.enterToSubmit).toBe(false);
   });
 });
 

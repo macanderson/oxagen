@@ -49,7 +49,7 @@ export const repoPauseHandler: CapabilityHandler<typeof repoPause> = async (
       .update(schema.sourceConnections)
       .set({
         status: "paused",
-        updatedByUserId: ctx.userId ?? undefined,
+        updatedById: ctx.userId ?? undefined,
         updatedAt: now,
       })
       .where(eq(schema.sourceConnections.id, existing.id));

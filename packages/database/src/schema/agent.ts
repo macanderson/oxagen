@@ -63,6 +63,16 @@ export const agents = agentSchema.table(
     // cross-schema FK per CLAUDE.md storage rules); provisioned by
     // agent.definition.create and soft-deleted together with the agent.
     principalId: uuid("principal_id"),
+    // The harness the agent runs under (MC spec §6.2): the identity half
+    // records it so the identities table can print it without a host row.
+    // CHECK: harness IN ('stella', 'claude-code', 'claude-agent-sdk', 'custom').
+    harness: text("harness").notNull().default("custom"),
+    // How the identity came to exist (#2967, ADR-065): `ui` (the default),
+    // `cli` (for register_agent to write on the CLI surface), or
+    // `onboarding` — the agent whose first frame opened the organization's
+    // onboarding gate, stamped by ingest_tacho_events at the unlock. CHECK
+    // enforced below.
+    registeredVia: text("registered_via").notNull().default("ui"),
   },
   (t) => ({
     // NON-partial on purpose: covers soft-deleted rows too, so a slug a
@@ -93,6 +103,14 @@ export const agents = agentSchema.table(
       "agents_slug_check",
       sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`,
     ),
+    harnessCheck: check(
+      "agents_harness_check",
+      sql`${t.harness} IN ('stella', 'claude-code', 'claude-agent-sdk', 'custom')`,
+    ),
+    registeredViaCheck: check(
+      "agents_registered_via_check",
+      sql`${t.registeredVia} IN ('ui', 'cli', 'onboarding')`,
+    ),
   }),
 );
 
@@ -109,10 +127,23 @@ export const agentVersions = agentSchema.table(
     // checksum: SHA-256 over canonical config — immutability contract.
     checksum: text("checksum"),
     config: jsonb("config").notNull().default(sql`'{}'::jsonb`),
-    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdById: uuid("created_by_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
+    // The definition of record is the file `.oxagen/agents/<slug>.toml` in the
+    // workspace's repository (ADR-057 decision 1). A version written by
+    // `commit_agent_definition` caches where that file went: its path, the
+    // digest of the file at the commit, the commit, the branch it was pushed
+    // to and the pull request that carries it, plus the file's text so the
+    // definition tab reads the record without a GitHub round trip. Null on
+    // every version the legacy `create/update_agent_def` path inserted.
+    definitionPath: text("definition_path"),
+    definitionDigest: text("definition_digest"),
+    definitionSource: text("definition_source"),
+    commitSha: text("commit_sha"),
+    branch: text("branch"),
+    pullRequestUrl: text("pull_request_url"),
     // No updatedAt by design — INSERT-only once published.
   },
   (t) => ({
@@ -135,14 +166,42 @@ export const approvalRequests = agentSchema.table(
     ...orgScopeMixin(),
     executionStepId: uuid("execution_step_id"),
     toolCallId: uuid("tool_call_id"),
-    messageId: uuid("message_id").notNull(),
+    // The chat turn that parked the call; null on a row the mandate gate
+    // writes, where the call arrived through the kernel with no message.
+    messageId: uuid("message_id"),
     capabilityName: text("capability_name").notNull(),
     inputPreview: jsonb("input_preview").notNull(),
     riskLevel: text("risk_level").notNull(),
+    // The four-hop chain (MC spec App. A.6, ADR-059 decision 4): the mandate
+    // the parked call drew on, the rule ids that required a person, and the
+    // sha256 of the call's canonical input so an approved call can be retried
+    // once. Null / empty on rows the chat approval gate writes.
+    mandateId: uuid("mandate_id"),
+    ruleIds: text("rule_ids").array().notNull().default(sql`'{}'::text[]`),
+    inputDigest: text("input_digest"),
+    // Set when the approved call was retried and proceeded on this approval;
+    // an approval is single-use.
+    tokenUsedAt: timestamp("token_used_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    // The auto-approval clause of the workspace's rule set, evaluated when the
+    // call was parked (MC spec §6.9 part 2, ADR-070): the rule that was read,
+    // and every reason the call did not qualify (empty when it did). Null /
+    // empty when no rule covered the call.
+    autoRuleId: text("auto_rule_id"),
+    resolvedReasons: text("resolved_reasons")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     // resolution null until resolved.
     resolution: text("resolution"),
     resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "date" }),
     resolvedByUserId: uuid("resolved_by_user_id"),
+    // `policy:<rule id>` when an auto-approval rule resolved the request and
+    // no person looked. Exclusive with resolved_by_user_id, so a receipt can
+    // never read a policy decision as somebody's.
+    resolvedByPolicy: text("resolved_by_policy"),
     note: text("note"),
     expiresAt: timestamp("expires_at", {
       withTimezone: true,
@@ -157,6 +216,10 @@ export const approvalRequests = agentSchema.table(
     ),
     orgIdx: index("approval_requests_org_idx").on(t.orgId, t.workspaceId),
     messageIdx: index("approval_requests_message_idx").on(t.messageId),
+    // The retry lookup: an approved, unused row for this call's digest.
+    mandateDigestIdx: index("approval_requests_mandate_digest_idx")
+      .on(t.workspaceId, t.mandateId, t.inputDigest)
+      .where(sql`mandate_id IS NOT NULL`),
     resolutionCheck: check(
       "approval_requests_resolution_check",
       sql`${t.resolution} IN ('approved', 'denied', 'expired') OR ${t.resolution} IS NULL`,
@@ -164,6 +227,36 @@ export const approvalRequests = agentSchema.table(
     riskLevelCheck: check(
       "approval_requests_risk_level_check",
       sql`${t.riskLevel} IN ('low', 'medium', 'high', 'critical')`,
+    ),
+    // The rule-hit counters list_approval_rules reports over a 30-day window.
+    autoRuleIdx: index("approval_requests_auto_rule_idx")
+      .on(t.workspaceId, t.autoRuleId, t.createdAt)
+      .where(sql`auto_rule_id IS NOT NULL`),
+    // The standing-approval lookup an auto-approval rule's window reads
+    // (ADR-070, lastHumanApprovalOf): the newest approval of this exact call
+    // that a PERSON resolved. mandate_digest_idx above cannot serve it — that
+    // one is partial on mandate_id IS NOT NULL and keys on mandate_id, and
+    // this lookup has no mandate and keys on capability_name. Partial on the
+    // same predicate as the query, so it stays small: only resolved rows a
+    // person approved.
+    humanApprovalDigestIdx: index("approval_requests_human_digest_idx")
+      .on(
+        t.workspaceId,
+        t.capabilityName,
+        t.inputDigest,
+        sql`${t.resolvedAt} DESC`,
+      )
+      .where(
+        sql`resolution = 'approved' AND resolved_by_user_id IS NOT NULL AND resolved_at IS NOT NULL`,
+      ),
+    resolvedByPolicyFormCheck: check(
+      "approval_requests_resolved_by_policy_form_check",
+      sql`${t.resolvedByPolicy} IS NULL OR ${t.resolvedByPolicy} ~ '^policy:[a-z0-9][a-z0-9._-]*$'`,
+    ),
+    // One approver, never two: an auto-approval is not somebody's decision.
+    oneApproverCheck: check(
+      "approval_requests_one_approver_check",
+      sql`NOT (${t.resolvedByPolicy} IS NOT NULL AND ${t.resolvedByUserId} IS NOT NULL)`,
     ),
   }),
 );
@@ -368,6 +461,18 @@ export const agentRuns = agentSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+    // ── Generated summary (Mission Control mockup 2821-2835; G14; ADR-058) ──
+    // Written by `summarize_run`: a light-tier model reads the frames and
+    // writes what changed. Labelled generated wherever it renders and never
+    // standing in for the record; the three summary columns are set together
+    // so a summary always names the model and the instant that produced it.
+    name: text("name"),
+    summary: text("summary"),
+    summaryGeneratedAt: timestamp("summary_generated_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    summaryModel: text("summary_model"),
 
     // ── RunSpecV2 typed identity (docs/specs/run-evidence-ingress) ───────────
     //
@@ -464,7 +569,11 @@ export const agentRuns = agentSchema.table(
       sql`${t.specVersion} IN (1, 2)`,
     ),
     // The V1/V2 discriminant. A preserved V1 row carries NONE of the typed V2
-    // identity; a V2 row carries ALL of it. There is no partially-bound run.
+    // identity; a V2 row carries all of it. The seven repository columns follow
+    // run_kind: a `general` run binds no repository and carries NULL in each,
+    // a `repo_edit` run carries every one (migration 20260914190000; the
+    // earlier form required them on every V2 row, so a general run could not
+    // be admitted). There is no partially-bound run.
     v2IdentityCheck: check(
       "agent_runs_v2_identity_check",
       sql`(
@@ -497,16 +606,30 @@ export const agentRuns = agentSchema.table(
         AND ${t.agentVersionId} IS NOT NULL
         AND ${t.agentVersionChecksum} IS NOT NULL
         AND ${t.authorizationSnapshotId} IS NOT NULL
-        AND ${t.repositoryBindingId} IS NOT NULL
-        AND ${t.repositoryProvider} IS NOT NULL
-        AND ${t.providerRepositoryId} IS NOT NULL
-        AND ${t.repositoryConnectionId} IS NOT NULL
-        AND ${t.configuredDefaultRef} IS NOT NULL
-        AND ${t.baseCommitSha} IS NOT NULL
-        AND ${t.baseTreeSha} IS NOT NULL
         AND ${t.retentionPolicyId} IS NOT NULL
         AND ${t.retentionPolicyDigest} IS NOT NULL
         AND ${t.maxAttempts} IS NOT NULL
+        AND (
+          (
+            ${t.runKind} = 'general'
+            AND ${t.repositoryBindingId} IS NULL
+            AND ${t.repositoryProvider} IS NULL
+            AND ${t.providerRepositoryId} IS NULL
+            AND ${t.repositoryConnectionId} IS NULL
+            AND ${t.configuredDefaultRef} IS NULL
+            AND ${t.baseCommitSha} IS NULL
+            AND ${t.baseTreeSha} IS NULL
+          ) OR (
+            ${t.runKind} = 'repo_edit'
+            AND ${t.repositoryBindingId} IS NOT NULL
+            AND ${t.repositoryProvider} IS NOT NULL
+            AND ${t.providerRepositoryId} IS NOT NULL
+            AND ${t.repositoryConnectionId} IS NOT NULL
+            AND ${t.configuredDefaultRef} IS NOT NULL
+            AND ${t.baseCommitSha} IS NOT NULL
+            AND ${t.baseTreeSha} IS NOT NULL
+          )
+        )
       )`,
     ),
     runKindCheck: check(
@@ -532,6 +655,10 @@ export const agentRuns = agentSchema.table(
     nextRunSeqCheck: check(
       "agent_runs_next_run_seq_check",
       sql`${t.nextRunSeq} >= 1`,
+    ),
+    summaryCheck: check(
+      "agent_runs_summary_check",
+      sql`(${t.summary} IS NULL) = (${t.summaryGeneratedAt} IS NULL) AND (${t.summary} IS NULL) = (${t.summaryModel} IS NULL)`,
     ),
     // A run may not be its own parent — the cheapest half of cycle prevention
     // (deeper cycles are prevented by the snapshot-narrowing rule in IAM).
@@ -612,6 +739,22 @@ export const agentRunEvents = agentSchema.table(
     payloadInline: jsonb("payload_inline"),
     encryptedPayloadRef: text("encrypted_payload_ref"),
     observedAt: timestamp("observed_at", { withTimezone: true, mode: "date" }),
+
+    // ── Frame body (Mission Control spec §8.2 `content`, §13.1) ──────────────
+    // The payload above is the frame's receipt metadata; the body is the
+    // content the frame is about (the prompt, the model response, the tool
+    // input and output). Bodies are content-addressed, redacted before write
+    // and encrypted in the organisation's object store; the row holds the
+    // reference, the sha256 of the redacted bytes, their length, the
+    // redactions applied, and `fidelity`: `full` when the bytes were retained,
+    // `digest_only` when the run's pinned retention policy kept the digest
+    // alone (a completeness gap the seal grades `inspect`) or the frame
+    // carried no content. ADR-058.
+    bodyRef: text("body_ref"),
+    bodyDigest: text("body_digest"),
+    bodyBytes: integer("body_bytes"),
+    redactions: jsonb("redactions"),
+    fidelity: text("fidelity").notNull().default("digest_only"),
   },
   (t) => ({
     // Partial: legacy rows only. Replaces the former full
@@ -681,6 +824,27 @@ export const agentRunEvents = agentSchema.table(
       "agent_run_events_digest_check",
       sql`(${t.payloadDigest} IS NULL OR ${t.payloadDigest} ~ '^sha256:[0-9a-f]{64}$') AND (${t.eventDigest} IS NULL OR ${t.eventDigest} ~ '^sha256:[0-9a-f]{64}$')`,
     ),
+    fidelityCheck: check(
+      "agent_run_events_fidelity_check",
+      sql`${t.fidelity} IN ('full', 'digest_only')`,
+    ),
+    // A retained body carries its reference, digest and length together and
+    // is the only `full` frame; a digest-only frame has no reference; a frame
+    // with no content has none of the three and no redactions.
+    bodyShapeCheck: check(
+      "agent_run_events_body_shape_check",
+      sql`(
+        (${t.fidelity} = 'full') = (${t.bodyRef} IS NOT NULL)
+      ) AND (
+        ${t.bodyRef} IS NULL OR (${t.bodyDigest} IS NOT NULL AND ${t.bodyBytes} IS NOT NULL)
+      ) AND (
+        ${t.bodyDigest} IS NOT NULL OR (${t.bodyBytes} IS NULL AND ${t.redactions} IS NULL)
+      ) AND (
+        ${t.bodyDigest} IS NULL OR ${t.bodyDigest} ~ '^sha256:[0-9a-f]{64}$'
+      ) AND (
+        ${t.bodyBytes} IS NULL OR ${t.bodyBytes} >= 0
+      )`,
+    ),
   }),
 );
 
@@ -721,6 +885,12 @@ export const agentRunAttempts = agentSchema.table(
     // provenance chain remains as evidence.
     resumedFromAttemptId: uuid("resumed_from_attempt_id"),
     resumedFromAttemptPublicId: citext("resumed_from_attempt_public_id"),
+    // A fork replay (Mission Control spec §8.4 `fork`, `fork_run`): the
+    // run-global sequence the successor branches from. Frames up to it replay
+    // from the recording; the next model call runs live. Always paired with
+    // the restore tuple, since a fork resumes the attempt that recorded the
+    // frame. ADR-058.
+    forkedFromRunSeq: bigint("forked_from_run_seq", { mode: "number" }),
   },
   (t) => ({
     runAttemptUniq: uniqueIndex("agent_run_attempts_run_attempt_uq").on(
@@ -753,6 +923,10 @@ export const agentRunAttempts = agentSchema.table(
     digestCheck: check(
       "agent_run_attempts_digest_check",
       sql`${t.engineBuildDigest} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+    forkCheck: check(
+      "agent_run_attempts_fork_check",
+      sql`${t.forkedFromRunSeq} IS NULL OR (${t.forkedFromRunSeq} >= 1 AND ${t.resumedFromAttemptId} IS NOT NULL)`,
     ),
   }),
 );
@@ -787,8 +961,37 @@ export const agentRunAttemptSeals = agentSchema.table(
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
+    // ── Replay (Mission Control spec §8.3, §8.4, §13.3; ADR-058) ─────────────
+    // The grade computed at seal from the completeness gaps: the strongest
+    // verb a reader can apply to the recording. Never raised afterwards; the
+    // row is immutable. Null only on a seal written before the recorder
+    // graded (a row this migration backfilled), never on a new seal.
+    replayGrade: text("replay_grade"),
+    // The gaps the grade was computed from (closed vocabulary in
+    // @oxagen/tacho COMPLETENESS_GAP_KINDS), as a JSON array of strings.
+    completenessGaps: jsonb("completeness_gaps")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    // The RFC 6962 root over the attempt's event digests in run_seq order, and
+    // the archive segment (frame envelopes as zstd NDJSON) written once at
+    // seal. Both present on a graded seal; the segment reference is the
+    // storage key a compacted run reads from.
+    merkleRoot: text("merkle_root"),
+    archiveSegmentRef: text("archive_segment_ref"),
+    // The seal's rollup (spec §13.3): model calls, tool calls and distinct
+    // turns folded from the rows at seal, so a run keeps its counts once
+    // compaction (agent.compact_sealed_attempt_events) has removed its hot
+    // frames. `turns` is null when a model call's payload was encrypted,
+    // because the turn index travels inside it.
+    modelCalls: integer("model_calls"),
+    toolCalls: integer("tool_calls"),
+    turns: integer("turns"),
   },
   (t) => ({
+    rollupCheck: check(
+      "agent_run_attempt_seals_rollup_check",
+      sql`(${t.modelCalls} IS NULL OR ${t.modelCalls} >= 0) AND (${t.toolCalls} IS NULL OR ${t.toolCalls} >= 0) AND (${t.turns} IS NULL OR ${t.turns} >= 0) AND (${t.replayGrade} IS NULL) = (${t.modelCalls} IS NULL) AND (${t.replayGrade} IS NULL) = (${t.toolCalls} IS NULL)`,
+    ),
     // An attempt seals exactly once — this uniqueness is what makes the
     // seal/grant/obligation transaction idempotent under duplicate sweeps.
     attemptUniq: uniqueIndex("agent_run_attempt_seals_attempt_uq").on(
@@ -826,6 +1029,16 @@ export const agentRunAttemptSeals = agentSchema.table(
     digestCheck: check(
       "agent_run_attempt_seals_digest_check",
       sql`${t.eventStreamDigest} ~ '^sha256:[0-9a-f]{64}$' AND (${t.finalEventDigest} IS NULL OR ${t.finalEventDigest} ~ '^sha256:[0-9a-f]{64}$')`,
+    ),
+    replayGradeCheck: check(
+      "agent_run_attempt_seals_replay_grade_check",
+      sql`${t.replayGrade} IS NULL OR ${t.replayGrade} IN ('inspect', 'view', 'fork', 'retry')`,
+    ),
+    // A graded seal carries its Merkle root and its archive segment; an
+    // ungraded (pre-recorder) seal carries neither.
+    replayEvidenceCheck: check(
+      "agent_run_attempt_seals_replay_evidence_check",
+      sql`(${t.replayGrade} IS NULL) = (${t.merkleRoot} IS NULL) AND (${t.replayGrade} IS NULL) = (${t.archiveSegmentRef} IS NULL) AND (${t.merkleRoot} IS NULL OR ${t.merkleRoot} ~ '^sha256:[0-9a-f]{64}$') AND jsonb_typeof(${t.completenessGaps}) = 'array'`,
     ),
   }),
 );
@@ -957,6 +1170,10 @@ export const tools = agentSchema.table(
     activeVersionId: uuid("active_version_id").references(
       (): AnyPgColumn => toolVersions.id,
     ),
+    // The mcp.mcp_servers row an imported tool was pulled from (source =
+    // 'mcp'); null for declared tools. Not a foreign key: a server soft-deletes
+    // and its tools keep their rows for replay (#2958).
+    mcpServerId: uuid("mcp_server_id"),
     activatedByUserId: uuid("activated_by_user_id"),
     activatedAt: timestamp("activated_at", {
       withTimezone: true,
@@ -970,6 +1187,9 @@ export const tools = agentSchema.table(
     ),
     orgIdx: index("tools_org_idx").on(t.orgId, t.workspaceId),
     activeVersionIdx: index("tools_active_version_idx").on(t.activeVersionId),
+    mcpServerIdx: index("tools_mcp_server_idx")
+      .on(t.mcpServerId)
+      .where(sql`mcp_server_id IS NOT NULL`),
     sourceCheck: check(
       "tools_source_check",
       sql`${t.source} IN ('builtin', 'custom', 'mcp', 'foundry')`,
@@ -995,6 +1215,47 @@ export const toolVersions = agentSchema.table(
     // SHA-256 hex over the canonical (sorted-key) manifest JSON — immutability
     // contract (see skill_versions.checksum).
     checksum: text("checksum").notNull(),
+    // Where the schema came from (MC spec App. A.5): 'declared' for a
+    // hand-authored manifest (publish_tool_declaration), 'imported' for a
+    // server's tools/list (import_tools). The observed origins arrive with the
+    // recorder that captures tool outputs (ADR-072).
+    schemaOrigin: text("schema_origin").notNull().default("declared"),
+    // Safety classification (spec §6.9 part 1), the shape of
+    // toolClassificationSchema in @oxagen/oxagen/contracts/tool.classification:
+    // side-effect class, egress class, consequence tags, measures, data
+    // classes. Null until an admin classifies the version. Describes the tool
+    // and decides nothing by itself; a class kill switch matches a version by
+    // its tags at call time. A new version of the tool starts with the
+    // classification of the version it replaces (publishTool), and a changed
+    // classification bumps the deny generation in the writer's transaction
+    // (trigger tool_versions_classification_deny_generation), so the gateway's
+    // gate reloads the tags.
+    classification: jsonb("classification"),
+    // The risk grade the classifier set. risk_grade is the declared grade and
+    // part of the checksum; this one is not, so reclassifying never makes an
+    // unchanged manifest look changed.
+    classifiedRiskGrade: text("classified_risk_grade"),
+    classifiedByUserId: uuid("classified_by_user_id"),
+    classifiedAt: timestamp("classified_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    classificationReason: text("classification_reason"),
+    // The mandate gate's half of the same classification (MC spec §6.9 part 1,
+    // ADR-059 decision 6, 20260915202300_mandates_and_ledger.sql): the
+    // consequences invoking this version can cause, the measures it exposes
+    // as paths into its input ({ path, type, unit, scale? } per measure name),
+    // and the path into its output that carries the external effect id a
+    // settlement records. These are columns rather than keys inside
+    // `classification` because a mandate reads them on every gated call and
+    // the kill-switch gate reads the jsonb; both describe the tool and decide
+    // nothing by themselves.
+    consequenceTags: text("consequence_tags")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    measures: jsonb("measures").notNull().default(sql`'{}'::jsonb`),
+    effectIdPath: text("effect_id_path"),
   },
   (t) => ({
     toolIdx: index("tool_versions_tool_idx").on(t.toolId),
@@ -1014,12 +1275,31 @@ export const toolVersions = agentSchema.table(
       "tool_versions_checksum_check",
       sql`${t.checksum} ~ '^[0-9a-f]{64}$'`,
     ),
+    schemaOriginCheck: check(
+      "tool_versions_schema_origin_check",
+      sql`${t.schemaOrigin} IN ('declared', 'imported')`,
+    ),
+    classifiedRiskGradeCheck: check(
+      "tool_versions_classified_risk_grade_check",
+      sql`${t.classifiedRiskGrade} IS NULL OR ${t.classifiedRiskGrade} IN ('low', 'medium', 'high', 'critical')`,
+    ),
+    // A classification names its risk grade and when it was set, or is absent altogether.
+    classificationCheck: check(
+      "tool_versions_classification_check",
+      sql`(${t.classification} IS NULL AND ${t.classifiedAt} IS NULL AND ${t.classifiedRiskGrade} IS NULL) OR (${t.classification} IS NOT NULL AND ${t.classifiedAt} IS NOT NULL AND ${t.classifiedRiskGrade} IS NOT NULL)`,
+    ),
   }),
 );
 
-// Steering/context records — Stella keeps these as .stella/rules/*.toml, one
-// record per file; the slug is the file stem. Lifecycle (status) is driven by
-// the append-only contextPromotions ledger below, never edited directly.
+// Steering/context records — the published registry. Stella keeps these as
+// .oxagen/rules/<lineage>.toml, one record per file; the slug is the file stem
+// and the lineage id (MC spec §10.2). Lifecycle (status) is driven by the
+// append-only contextPromotions ledger below, never edited directly.
+//
+// The classification columns (kind, force, constraint_effect, statement) and
+// the publication columns (commit_sha, path, published_at) are written by
+// merge_context_pr (ADR-061). A record published through publish_context_record
+// carries only the body and has NULL in each of them.
 export const contextRecords = agentSchema.table(
   "context_records",
   {
@@ -1039,6 +1319,25 @@ export const contextRecords = agentSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+    // The six kinds of context-record/v0.1 (Stella's file surface).
+    kind: text("kind"),
+    // How hard the record steers: must | should | may | info.
+    force: text("force"),
+    // require | forbid on a constraint; NULL on every other kind. `allow` is
+    // unrepresentable: a record never grants authority (spec §10.3).
+    constraintEffect: text("constraint_effect"),
+    // repository | workspace (spec §9 Scope, §10.2).
+    sharingScope: text("sharing_scope").notNull().default("workspace"),
+    // The single-sentence claim, as it appears in the file.
+    statement: text("statement"),
+    // The merge commit on the production branch that published this record,
+    // and the file's path in that repository.
+    commitSha: text("commit_sha"),
+    path: text("path"),
+    publishedAt: timestamp("published_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
   },
   (t) => ({
     workspaceSlugIdx: uniqueIndex("context_records_workspace_slug_idx").on(
@@ -1052,6 +1351,26 @@ export const contextRecords = agentSchema.table(
     statusCheck: check(
       "context_records_status_check",
       sql`${t.status} IN ('active', 'retired', 'superseded')`,
+    ),
+    kindCheck: check(
+      "context_records_kind_check",
+      sql`${t.kind} IS NULL OR ${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference')`,
+    ),
+    forceCheck: check(
+      "context_records_force_check",
+      sql`${t.force} IS NULL OR ${t.force} IN ('must', 'should', 'may', 'info')`,
+    ),
+    constraintEffectCheck: check(
+      "context_records_constraint_effect_check",
+      sql`(${t.constraintEffect} IS NULL AND ${t.kind} IS DISTINCT FROM 'constraint') OR (${t.constraintEffect} IN ('require', 'forbid') AND ${t.kind} = 'constraint')`,
+    ),
+    sharingScopeCheck: check(
+      "context_records_sharing_scope_check",
+      sql`${t.sharingScope} IN ('repository', 'workspace')`,
+    ),
+    commitShaCheck: check(
+      "context_records_commit_sha_check",
+      sql`${t.commitSha} IS NULL OR ${t.commitSha} ~ '^[0-9a-f]{7,40}$'`,
     ),
   }),
 );
@@ -1123,6 +1442,167 @@ export const contextPromotions = agentSchema.table(
     chainCheck: check(
       "context_promotions_chain_check",
       sql`${t.chainDigest} ~ '^[0-9a-f]{64}$' AND (${t.prevChainDigest} IS NULL OR ${t.prevChainDigest} ~ '^[0-9a-f]{64}$') AND ((${t.seq} = 1) = (${t.prevChainDigest} IS NULL))`,
+    ),
+  }),
+);
+
+// A record proposal and the Context PR that publishes it (ADR-061, MC spec
+// §9.2, §10.3). One row is one concern: it carries the record it proposes,
+// the support it cites, and the state machine
+//   proposed → pr_open → checks_running → checks_passed | checks_failed → merged
+// with rejected reachable from proposed and from any open-PR state through
+// dismiss_proposal. The promotion event a merge writes is a contextPromotions
+// row (promotion_event_id), never a field here: the ledger is append-only and
+// this row is not.
+export const contextProposals = agentSchema.table(
+  "context_proposals",
+  {
+    ...idMixin("prp"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    lineageId: citext("lineage_id").notNull(),
+    kind: text("kind").notNull(),
+    force: text("force").notNull(),
+    constraintEffect: text("constraint_effect"),
+    sharingScope: text("sharing_scope").notNull(),
+    statement: text("statement").notNull(),
+    rationale: text("rationale").notNull(),
+    // Who raised it, as a label the page prints: `user:<uuid>`,
+    // `api_key:<uuid>`, or the caller's own attribution (a job, a run).
+    source: text("source").notNull(),
+    supportRuns: text("support_runs").array().notNull().default(sql`'{}'`),
+    supportAgents: text("support_agents").array().notNull().default(sql`'{}'`),
+    supportingRecordIds: text("supporting_record_ids")
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
+    evidenceLinks: text("evidence_links").array().notNull().default(sql`'{}'`),
+    status: text("status").notNull().default("proposed"),
+    // ── The Context PR, set by open_context_pr ──────────────────────────────
+    // The governance mode read from .oxagen/rules/governance.toml when the PR
+    // was opened; merge_context_pr reads the file again.
+    governanceMode: text("governance_mode"),
+    repository: text("repository"),
+    baseRef: text("base_ref"),
+    branch: text("branch"),
+    path: text("path"),
+    prNumber: integer("pr_number"),
+    prUrl: text("pr_url"),
+    headSha: text("head_sha"),
+    // The record's stamped identity in the committed file.
+    stampedRecordId: text("stamped_record_id"),
+    recordHash: text("record_hash"),
+    // [{ name, status, summary, detailsUrl, startedAt, completedAt }], one
+    // entry per §10.3 check, in the order they run.
+    checks: jsonb("checks").notNull().default(sql`'[]'::jsonb`),
+    // ── The merge, set by merge_context_pr ──────────────────────────────────
+    mergedCommit: text("merged_commit"),
+    mergedAt: timestamp("merged_at", { withTimezone: true, mode: "date" }),
+    mergedByUserId: uuid("merged_by_user_id"),
+    publishedRecordId: uuid("published_record_id"),
+    promotionEventId: uuid("promotion_event_id"),
+    // ── The dismissal, set by dismiss_proposal ──────────────────────────────
+    dismissedAt: timestamp("dismissed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    dismissedReason: text("dismissed_reason"),
+  },
+  (t) => ({
+    orgIdx: index("context_proposals_org_idx").on(t.orgId, t.workspaceId),
+    lineageIdx: index("context_proposals_lineage_idx").on(
+      t.workspaceId,
+      t.lineageId,
+    ),
+    // One concern, one pull request: at most one open PR per lineage.
+    openPrIdx: uniqueIndex("context_proposals_open_pr_idx")
+      .on(t.workspaceId, t.lineageId)
+      .where(
+        sql`status IN ('pr_open', 'checks_running', 'checks_passed', 'checks_failed')`,
+      ),
+    kindCheck: check(
+      "context_proposals_kind_check",
+      sql`${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference')`,
+    ),
+    forceCheck: check(
+      "context_proposals_force_check",
+      sql`${t.force} IN ('must', 'should', 'may', 'info')`,
+    ),
+    constraintEffectCheck: check(
+      "context_proposals_constraint_effect_check",
+      sql`(${t.constraintEffect} IS NULL AND ${t.kind} <> 'constraint') OR (${t.constraintEffect} IN ('require', 'forbid') AND ${t.kind} = 'constraint')`,
+    ),
+    sharingScopeCheck: check(
+      "context_proposals_sharing_scope_check",
+      sql`${t.sharingScope} IN ('repository', 'workspace')`,
+    ),
+    statusCheck: check(
+      "context_proposals_status_check",
+      sql`${t.status} IN ('proposed', 'pr_open', 'checks_running', 'checks_passed', 'checks_failed', 'merged', 'rejected')`,
+    ),
+    governanceModeCheck: check(
+      "context_proposals_governance_mode_check",
+      sql`${t.governanceMode} IS NULL OR ${t.governanceMode} IN ('solo', 'team', 'regulated')`,
+    ),
+    mergedCheck: check(
+      "context_proposals_merged_check",
+      sql`(${t.status} = 'merged') = (${t.mergedCommit} IS NOT NULL AND ${t.promotionEventId} IS NOT NULL AND ${t.publishedRecordId} IS NOT NULL)`,
+    ),
+  }),
+);
+
+// Records agents append through append_record — the protocol's
+// `context/append` (MC spec §9): observations, memories, knowledge, evidence,
+// context-use records and record proposals, content-addressed by
+// record_hash. Append-only: a correction is a new record on the same lineage
+// and superseded is derived, never stored. A `directive` never lands here;
+// it reaches the workspace only through a Context PR.
+export const contextAppends = agentSchema.table(
+  "context_appends",
+  {
+    ...idMixin("cta"),
+    ...appendOnlyAuditMixin(),
+    ...orgScopeMixin(),
+    kind: text("kind").notNull(),
+    lineageId: citext("lineage_id").notNull(),
+    statement: text("statement").notNull(),
+    sharingScope: text("sharing_scope").notNull(),
+    // `sha256:<64 hex>` over the record's canonical preimage
+    // (packages/run-evidence record-hash.ts).
+    recordHash: text("record_hash").notNull(),
+    // ContextProvenanceV1-style source refs: frames (`frame:<run>/<seq>`) and
+    // records the appended record derives from.
+    sourceRefs: text("source_refs").array().notNull().default(sql`'{}'`),
+    evidenceLinks: text("evidence_links").array().notNull().default(sql`'{}'`),
+    // The proposal a `record_proposal` append opened; NULL on every other kind.
+    proposalId: uuid("proposal_id"),
+  },
+  (t) => ({
+    orgIdx: index("context_appends_org_idx").on(t.orgId, t.workspaceId),
+    lineageIdx: index("context_appends_lineage_idx").on(
+      t.workspaceId,
+      t.lineageId,
+    ),
+    // Re-appending identical content is idempotent.
+    hashIdx: uniqueIndex("context_appends_workspace_hash_idx").on(
+      t.workspaceId,
+      t.recordHash,
+    ),
+    kindCheck: check(
+      "context_appends_kind_check",
+      sql`${t.kind} IN ('observation', 'memory', 'knowledge', 'evidence', 'record_proposal', 'context_use', 'context_use_feedback')`,
+    ),
+    sharingScopeCheck: check(
+      "context_appends_sharing_scope_check",
+      sql`${t.sharingScope} IN ('repository', 'workspace')`,
+    ),
+    hashCheck: check(
+      "context_appends_record_hash_check",
+      sql`${t.recordHash} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+    proposalCheck: check(
+      "context_appends_proposal_check",
+      sql`(${t.proposalId} IS NOT NULL) = (${t.kind} = 'record_proposal')`,
     ),
   }),
 );

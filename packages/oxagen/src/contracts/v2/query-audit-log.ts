@@ -99,6 +99,9 @@ export const queryAuditLog = defineTool({
     // `kind`, which is the same column under the spec's name.
     eventType: auditLogQuery.input.shape.eventType,
     actorUserId: auditLogQuery.input.shape.actorUserId,
+    // The same actor by the id a reader can actually see: `actorUserId` is the
+    // internal uuid, `actorPublicId` the `usr_…` an auditor reads off the page.
+    actorPublicId: auditLogQuery.input.shape.actorPublicId,
     capability: auditLogQuery.input.shape.capability,
     outcome: auditLogQuery.input.shape.outcome,
     workspaceId: auditLogQuery.input.shape.workspaceId,

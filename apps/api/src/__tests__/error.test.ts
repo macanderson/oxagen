@@ -5,6 +5,7 @@
  * - errorCode() full status map
  * - errorMiddleware: HTTPException → {error:{code,message},requestId}
  * - ZodError → includes details.issues
+ * - HandlerError → 403 / 404 / 409 by code, reason in the envelope
  * - Unknown error → "internal_error", never leaks raw message
  * - requestId always present
  */
@@ -398,6 +399,72 @@ describe("errorMiddleware CapabilityError", () => {
   });
 });
 
+// ── HandlerError → 403 / 404 / 409 ───────────────────────────────────────────
+
+describe("errorMiddleware HandlerError", () => {
+  it("forbidden → 403 with the reason in the envelope", async () => {
+    const { HandlerError } = await import("@oxagen/oxagen");
+    const { status, body } = await triggerError(
+      new HandlerError({
+        code: "forbidden",
+        reason: "insufficient_role",
+        message: "Only org Owners and Admins can remove members",
+      }),
+    );
+    expect(status).toBe(403);
+    const b = body as {
+      error: { code: string; reason: string; message: string };
+    };
+    expect(b.error.code).toBe("forbidden");
+    expect(b.error.reason).toBe("insufficient_role");
+    expect(b.error.message).toBe(
+      "Only org Owners and Admins can remove members",
+    );
+  });
+
+  it("not_found → 404", async () => {
+    const { HandlerError } = await import("@oxagen/oxagen");
+    const { status, body } = await triggerError(
+      new HandlerError({ code: "not_found", reason: "target_not_member" }),
+    );
+    expect(status).toBe(404);
+    const b = body as { error: { code: string; reason: string } };
+    expect(b.error.code).toBe("not_found");
+    expect(b.error.reason).toBe("target_not_member");
+  });
+
+  it("conflict → 409", async () => {
+    const { HandlerError } = await import("@oxagen/oxagen");
+    const { status, body } = await triggerError(
+      new HandlerError({ code: "conflict", reason: "last_owner" }),
+    );
+    expect(status).toBe(409);
+    const b = body as { error: { code: string; reason: string } };
+    expect(b.error.code).toBe("conflict");
+    expect(b.error.reason).toBe("last_owner");
+  });
+
+  it("every HandlerError code has a status, so a new code cannot fall to 500", async () => {
+    const { HANDLER_ERROR_CODES, HandlerError } = await import(
+      "@oxagen/oxagen"
+    );
+    for (const code of HANDLER_ERROR_CODES) {
+      const { status } = await triggerError(
+        new HandlerError({ code, reason: "r" }),
+      );
+      expect(status, `${code} must not reach the catch-all`).not.toBe(500);
+    }
+  });
+
+  it("always includes requestId", async () => {
+    const { HandlerError } = await import("@oxagen/oxagen");
+    const { body } = await triggerError(
+      new HandlerError({ code: "conflict", reason: "last_owner" }),
+    );
+    expect(typeof (body as { requestId: string }).requestId).toBe("string");
+  });
+});
+
 // ── Billing errors → 402 Payment Required ────────────────────────────────────
 
 describe("errorMiddleware billing errors", () => {
@@ -445,17 +512,68 @@ describe("errorMiddleware billing errors", () => {
     );
   });
 
+  // ADR-055: the GAU gate's refusal. A prepaid org whose month bucket is
+  // empty and whose auto top-up could not run is a payment decision.
+  it("GauExhaustedError → 402 with the code and no reason when none is set", async () => {
+    const { GauExhaustedError } = await import("@oxagen/billing");
+    const { status, body } = await triggerError(
+      new GauExhaustedError({
+        reason: null,
+        remainingGau: -3,
+        periodEnd: new Date("2026-10-01T00:00:00.000Z"),
+      }),
+    );
+    expect(status).toBe(402);
+    const b = body as { error: { code: string; reason?: string } };
+    expect(b.error.code).toBe("gau_exhausted");
+    expect("reason" in b.error).toBe(false);
+  });
+
+  it("GauExhaustedError carries reason free_no_payment_method in the body when set", async () => {
+    const { GauExhaustedError } = await import("@oxagen/billing");
+    const { status, body } = await triggerError(
+      new GauExhaustedError({
+        reason: "free_no_payment_method",
+        remainingGau: 0,
+        periodEnd: new Date("2026-10-01T00:00:00.000Z"),
+      }),
+    );
+    expect(status).toBe(402);
+    const b = body as { error: { code: string; reason?: string } };
+    expect(b.error.code).toBe("gau_exhausted");
+    expect(b.error.reason).toBe("free_no_payment_method");
+  });
+
+  it("AssistantSpendCapError → 402 with its code, not 500", async () => {
+    const { AssistantSpendCapError } = await import("@oxagen/billing");
+    const { status, body } = await triggerError(
+      new AssistantSpendCapError(500, 500),
+    );
+    expect(status).toBe(402);
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "assistant_spend_cap",
+    );
+  });
+
+  it("BILLING_ERROR_CODES lists gau_exhausted", async () => {
+    const { BILLING_ERROR_CODES } = await import("../middleware/error");
+    expect(BILLING_ERROR_CODES).toContain("gau_exhausted");
+  });
+
   // The middleware's BILLING_ERROR_CODES list is a hand-maintained mirror of the
   // error classes @oxagen/billing throws. This asserts against the REAL classes,
-  // so adding a fourth billing error without mapping it fails here rather than
+  // so adding a fifth billing error without mapping it fails here rather than
   // in production as a 500.
   it("every billing error class @oxagen/billing throws maps to 402", async () => {
     const {
       InsufficientCreditsError,
       BillingSuspendedError,
       BudgetExceededError,
+      GauExhaustedError,
+      AssistantSpendCapError,
     } = await import("@oxagen/billing");
     const thrown: Error[] = [
+      new AssistantSpendCapError(500, 500),
       new InsufficientCreditsError(),
       new BillingSuspendedError(null),
       new BudgetExceededError({
@@ -467,6 +585,11 @@ describe("errorMiddleware billing errors", () => {
         spentMicros: 2_000_000n,
         capability: "send_message",
       }),
+      new GauExhaustedError({
+        reason: null,
+        remainingGau: 0,
+        periodEnd: new Date("2026-10-01T00:00:00.000Z"),
+      }),
     ];
     for (const err of thrown) {
       const { status, body } = await triggerError(err);
@@ -475,6 +598,33 @@ describe("errorMiddleware billing errors", () => {
         (err as unknown as { code: string }).code,
       );
     }
+  });
+});
+
+// ── ask_assistant turn failures (@oxagen/agent) ───────────────────────────────
+
+describe("errorMiddleware assistant turn failures", () => {
+  it.each([
+    ["engine_unavailable", 503],
+    ["assistant_run_not_recorded", 503],
+    ["engine_aborted", 409],
+  ] as const)(
+    "%s → %i with its code and message, never the 500 catch-all",
+    async (code, expected) => {
+      const err = Object.assign(new Error(`turn failed: ${code}`), { code });
+      const { status, body } = await triggerError(err);
+      expect(status).toBe(expected);
+      expect(body).toMatchObject({
+        error: { code, message: `turn failed: ${code}` },
+        requestId: expect.any(String),
+      });
+    },
+  );
+
+  it("an error whose code is not a turn failure still falls to 500 (negative)", async () => {
+    const err = Object.assign(new Error("boom"), { code: "ECONNRESET" });
+    const { status } = await triggerError(err);
+    expect(status).toBe(500);
   });
 });
 

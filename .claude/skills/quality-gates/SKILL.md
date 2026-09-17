@@ -56,9 +56,12 @@ announced to screen readers.
 ## Test gates
 
 Unit tests for domain logic; integration tests for the API contract including
-error codes; component tests covering all five states; one e2e for the
-critical happy path AND one for the primary failure path. Full suite green;
-lint, typecheck, a11y lint pass.
+error codes; component tests covering all five states. No new e2e: `apps/app/e2e`
+is exactly `login`, `pay` and `page-load` (oxagen-testing skill, ARCHITECTURE.md
+§6.3), and a happy path and a failure path are both proven by component tests
+beside the component. A feature touches those three specs only when it changes
+sign-in, payment, or the rev1 route table. Full suite green; lint, typecheck,
+a11y lint pass.
 
 ## Ship checklist
 

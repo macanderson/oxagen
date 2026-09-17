@@ -59,6 +59,7 @@ vi.mock("@oxagen/handlers", () => ({
 
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import {
   capabilityContext,
   __resetTrustedProxyHopsForTests,
@@ -285,7 +286,9 @@ describe("capabilityContext requireOrg", () => {
     // The shape a bootstrap route needs: the caller has an org and is asking
     // for their first workspace. Before this existed the only way to get past
     // the workspace check was requireOrg:false, which dropped the org check
-    // too.
+    // too. The workspace id such a call carries is the org-only sentinel, not
+    // the empty string: the kernel enters a tenant scope that asserts a uuid,
+    // so an empty id was refused before the handler ran (#3029, ADR-068).
     const res = await withContext(
       {},
       (c) => capabilityContext(c, { requireWorkspace: false }),
@@ -294,7 +297,7 @@ describe("capabilityContext requireOrg", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { orgId: string; workspaceId: string };
     expect(body.orgId).toBe("o1");
-    expect(body.workspaceId).toBe("");
+    expect(body.workspaceId).toBe(ORG_ONLY_WORKSPACE_ID);
   });
 
   it("still refuses a missing org when only the workspace check is waived", async () => {
@@ -385,5 +388,41 @@ describe("capabilityContext requireOrg", () => {
     });
     const body = (await res.json()) as { userId: string };
     expect(body.userId).toBe("user-123");
+  });
+});
+
+// ── INV-31: no surface builds a platform-operator binding ─────────────────────
+//
+// `set_org_billing_terms` is reachable only from a `CapabilityContext` carrying
+// a binding minted by `createPlatformOperatorContext` (packages/oxagen). The
+// kernel refuses any other value on that field, and the second half of the
+// invariant is that no surface's context builder puts one there at all — not
+// even `undefined`, which a later spread could overwrite unnoticed
+// (apps/app/ARCHITECTURE.md §4, INV-31).
+
+describe("capabilityContext and the platform-operator binding", () => {
+  it("builds no platformOperator key at all", async () => {
+    const res = await withContext(
+      {},
+      (c) => ({ hasKey: "platformOperator" in capabilityContext(c) }),
+      { orgId: "o1", workspaceId: "w1", userId: "u1", apiKeyId: null },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { hasKey: boolean };
+    expect(body.hasKey).toBe(false);
+  });
+
+  it("builds no platformOperator key on the bootstrap shape either", async () => {
+    const res = await withContext(
+      {},
+      (c) => ({
+        hasKey:
+          "platformOperator" in capabilityContext(c, { requireOrg: false }),
+      }),
+      { orgId: null, workspaceId: null, userId: null, apiKeyId: null },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { hasKey: boolean };
+    expect(body.hasKey).toBe(false);
   });
 });

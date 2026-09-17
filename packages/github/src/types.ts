@@ -15,6 +15,8 @@ export interface GitHubPullRequest {
   baseRef: string;
   headRef: string;
   headSha: string | null;
+  /** The merge commit once `merged` is true; null before. */
+  mergeCommitSha: string | null;
   additions: number;
   deletions: number;
   changedFiles: number;
@@ -103,6 +105,17 @@ export interface GitHubBranch {
  * Swap the backing by providing a different createGitHubClient
  * implementation without changing callers.
  */
+export interface GitHubRepoInfo {
+  /** GitHub's numeric repository id, as text; immutable across renames and transfers. */
+  id: string;
+  /** The owner login and repository name as GitHub reports them. */
+  owner: string;
+  name: string;
+  fullName: string;
+  htmlUrl: string;
+  defaultBranch: string;
+}
+
 export interface GitHubClient {
   /**
    * Create a new repository.
@@ -168,18 +181,29 @@ export interface GitHubClient {
   }): Promise<{ number: number; htmlUrl: string }>;
 
   /**
+   * List pull requests, narrowed by head branch and state. `head` is
+   * `owner:branch`, the filter GitHub applies to `GET /pulls`. The one
+   * `POST /pulls` refuses with 422 — a head that already has an open pull
+   * request — is the one this finds first.
+   */
+  listPullRequests(args: {
+    owner: string;
+    repo: string;
+    head: string;
+    state: "open" | "closed" | "all";
+  }): Promise<{ number: number; htmlUrl: string }[]>;
+
+  /**
    * Return the login of the authenticated user.
    */
   getAuthenticatedUser(): Promise<{ login: string }>;
 
   /**
    * Return basic repository metadata, including the default branch — the
-   * lookup behind the never-write-to-default-branch guard.
+   * lookup behind the never-write-to-default-branch guard — and the numeric
+   * repository id a binding pins.
    */
-  getRepoInfo(args: {
-    owner: string;
-    repo: string;
-  }): Promise<{ fullName: string; htmlUrl: string; defaultBranch: string }>;
+  getRepoInfo(args: { owner: string; repo: string }): Promise<GitHubRepoInfo>;
 
   /**
    * Return the raw UTF-8 content of a file at the given path and optional ref.
@@ -243,10 +267,85 @@ export interface GitHubClient {
   }): Promise<GitHubPrFile[]>;
 
   /**
+   * List the files changed between `base` and `head` as a pull request shows
+   * them: GitHub's three-dot compare, from the merge base to `head`. GitHub
+   * returns up to 300 files.
+   */
+  compareCommits(args: {
+    owner: string;
+    repo: string;
+    base: string;
+    head: string;
+  }): Promise<GitHubPrFile[]>;
+
+  /**
+   * The open pull request from `head` (a branch in this repository) into
+   * `base`, with its body ("" when it has none), or null when there is none.
+   */
+  findOpenPullRequest(args: {
+    owner: string;
+    repo: string;
+    head: string;
+    base: string;
+  }): Promise<{ number: number; htmlUrl: string; body: string } | null>;
+
+  /**
    * List branches in a repository, paginated up to 300 branches (3 pages of
    * 100). Stops early once a page returns fewer than 100 entries.
    */
   listBranches(args: { owner: string; repo: string }): Promise<GitHubBranch[]>;
+
+  /**
+   * Create a completed check run on a commit (Checks API). Needs a GitHub App
+   * installation token with `checks: write`; an OAuth or personal token is
+   * refused by GitHub with 403, which surfaces as the thrown error.
+   */
+  createCheckRun(args: {
+    owner: string;
+    repo: string;
+    name: string;
+    headSha: string;
+    conclusion: "success" | "failure";
+    title: string;
+    summary: string;
+    startedAt: string;
+    completedAt: string;
+  }): Promise<{ id: number; htmlUrl: string }>;
+
+  /**
+   * Merge a pull request. `sha` pins the merge to that head commit: GitHub
+   * refuses with 409 when the head has moved past it. GitHub refuses with 405
+   * when a required review or status is missing, or the PR is already
+   * merged; every refusal surfaces as the thrown error with GitHub's message.
+   */
+  mergePullRequest(args: {
+    owner: string;
+    repo: string;
+    number: number;
+    mergeMethod?: "merge" | "squash" | "rebase";
+    commitTitle?: string;
+    sha?: string;
+  }): Promise<{ sha: string; merged: boolean }>;
+
+  /**
+   * Close a pull request without merging it (PATCH state=closed).
+   */
+  closePullRequest(args: {
+    owner: string;
+    repo: string;
+    number: number;
+  }): Promise<void>;
+
+  /**
+   * Delete a branch (DELETE /git/refs/heads/{branch}). GitHub answers 422
+   * "Reference does not exist" for a branch already gone; that surfaces as
+   * the thrown error.
+   */
+  deleteBranch(args: {
+    owner: string;
+    repo: string;
+    branch: string;
+  }): Promise<void>;
 }
 
 /** Options accepted by createGitHubClient. */

@@ -140,7 +140,7 @@ describe("org.model_credential.verify handler — the stored key", () => {
     expect(written.lastVerifiedAt).toBeInstanceOf(Date);
     // A health fact, not an edit: the audit columns are left alone.
     expect(written).not.toHaveProperty("updatedAt");
-    expect(written).not.toHaveProperty("updatedByUserId");
+    expect(written).not.toHaveProperty("updatedById");
   });
 
   it("stamps NOTHING when the vendor refused — the column records the last yes", async () => {
