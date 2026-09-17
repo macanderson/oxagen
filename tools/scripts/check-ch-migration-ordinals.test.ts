@@ -108,6 +108,24 @@ describe("a new duplicate", () => {
     expect(offending).toEqual(["0020_aaa.sql"]);
   });
 
+  it("is caught as a FIFTH file joining an already-grandfathered group", () => {
+    // The shape that would make the exemption list worthless: if exempting
+    // 0020's two files quietly exempted the ORDINAL 0020, the list would permit
+    // unlimited additions to exactly the ordinals it was meant to freeze. Two
+    // more files under 0020 are both reported, and the grandfathered pair is
+    // not.
+    const withTwoMore = [...REAL, "0020_fourth.sql", "0020_fifth.sql"].sort();
+    const offending = offendingDuplicates(withTwoMore).filter(
+      (g) => g.unexempt.length > 0,
+    );
+    expect(offending).toHaveLength(1);
+    expect(offending[0]!.files).toHaveLength(4);
+    expect(offending[0]!.unexempt).toEqual([
+      "0020_fifth.sql",
+      "0020_fourth.sql",
+    ]);
+  });
+
   it("is NOT reported when it takes the next free ordinal", () => {
     const offending = offendingDuplicates(
       [...REAL, "0028_brand_new.sql"].sort(),
