@@ -47,9 +47,13 @@ export function bootstrapIAMRuntime(): void {
     // gate (it has no org_users row to read), so this is the only thing
     // standing between a narrow machine credential and the whole capability
     // surface. See machine-key-scope.ts for what that cost before.
+    // `userId` goes with it because one purpose — a CLI session — is exempt
+    // from the mandate only when a person came with the key, and this adapter
+    // is the one place that knows what the surface resolved.
     const machineDenial = await machineKeyDenial({
       orgId: args.ctx.orgId,
       apiKeyId: args.ctx.apiKeyId,
+      userId: args.ctx.userId,
       capabilityName: args.capability,
     });
     if (machineDenial !== undefined) {

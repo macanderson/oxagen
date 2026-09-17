@@ -119,6 +119,29 @@ describe("ask_assistant", () => {
     expect(out).toEqual(RESULT);
   });
 
+  // The flyout in apps/app invokes through kernelWrite, which carries no
+  // stream and sets surface "app". Reading only the stream recorded every
+  // in-app turn as api-chat — and `assistant-turn.ts` then wrote its AI
+  // telemetry on the `api` surface — so the ledger said API about a question
+  // a person asked in the product.
+  it("records a turn the app asked from a Server Action on the chat surface, though it carries no stream", async () => {
+    const out = await assistantAskHandler(INPUT, { ...CTX, surface: "app" });
+    expect(mocks.prepareAssistantTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ surface: "chat" }),
+    );
+    expect(out).toEqual(RESULT);
+  });
+
+  it.each(["api", "mcp", "runner"] as const)(
+    "keeps a %s caller on api-chat, which is what excludes it from the customer's own runs (negative)",
+    async (surface) => {
+      await assistantAskHandler(INPUT, { ...CTX, surface });
+      expect(mocks.prepareAssistantTurn).toHaveBeenCalledWith(
+        expect.objectContaining({ surface: "api-chat" }),
+      );
+    },
+  );
+
   it("takes the stream the SSE route carries beside the invoke: its overrides, its prepared signal, its hooks", async () => {
     const hooks = { onPart: () => undefined };
     const onPrepared = vi.fn(() => mocks.log.push("prepared"));

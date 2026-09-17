@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     vi.fn<(fn: (args: unknown) => Promise<string | null>) => void>(),
   checkIAM: vi.fn(),
   createAccessRequest: vi.fn(),
+  machineKeyDenial: vi.fn(async () => undefined as string | undefined),
 }));
 
 vi.mock("@oxagen/oxagen/kernel", () => ({
@@ -23,6 +24,9 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
 }));
 
 vi.mock("./check-iam", () => ({ checkIAM: mocks.checkIAM }));
+vi.mock("./machine-key-scope", () => ({
+  machineKeyDenial: mocks.machineKeyDenial,
+}));
 vi.mock("./access-request", () => ({
   createAccessRequest: mocks.createAccessRequest,
 }));
@@ -32,6 +36,7 @@ import { bootstrapIAMRuntime } from "./bootstrap";
 describe("bootstrapIAMRuntime()", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.machineKeyDenial.mockResolvedValue(undefined);
   });
 
   it("calls setKernelIAMRuntime with the IAM check adapter and enforced=true", () => {
@@ -177,5 +182,67 @@ describe("bootstrapIAMRuntime()", () => {
 
     expect((result as Record<string, unknown>)["outcome"]).toBe("deny");
     expect((result as Record<string, unknown>)["reason"]).toBe("no_grant");
+  });
+
+  it("hands the machine-key gate the person the surface resolved", async () => {
+    // The gate exempts a CLI session key from the machine mandate only when a
+    // person came with it. It cannot ask the surface itself, so this adapter
+    // is the one place that knows — and dropping ctx.userId here would hand
+    // back the exemption the MCP surface used to get for free.
+    mocks.checkIAM.mockResolvedValue({
+      result: { outcome: "allow", trace: { steps: [], decidedBy: undefined } },
+      principal: null,
+    });
+
+    bootstrapIAMRuntime();
+    const [kernelFn] = mocks.setKernelIAMRuntime.mock.calls[0] ?? [];
+    await (kernelFn as (args: unknown) => Promise<unknown>)({
+      capability: "set_model_credential",
+      ctx: {
+        orgId: "org_1",
+        workspaceId: "ws_1",
+        userId: "usr_alice",
+        apiKeyId: "aky_cli",
+        requestId: "req_1",
+        surface: "mcp",
+        messageId: null,
+      },
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    expect(mocks.machineKeyDenial).toHaveBeenCalledWith({
+      orgId: "org_1",
+      apiKeyId: "aky_cli",
+      userId: "usr_alice",
+      capabilityName: "set_model_credential",
+    });
+  });
+
+  it("denies with the gate's reason and never reaches checkIAM", async () => {
+    mocks.machineKeyDenial.mockResolvedValue("Forbidden: outside the mandate");
+
+    bootstrapIAMRuntime();
+    const [kernelFn] = mocks.setKernelIAMRuntime.mock.calls[0] ?? [];
+    const result = await (kernelFn as (args: unknown) => Promise<unknown>)({
+      capability: "set_model_credential",
+      ctx: {
+        orgId: "org_1",
+        workspaceId: "ws_1",
+        userId: null,
+        apiKeyId: "aky_cli",
+        requestId: "req_1",
+        surface: "mcp",
+        messageId: null,
+      },
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    expect((result as Record<string, unknown>)["outcome"]).toBe("deny");
+    expect((result as Record<string, unknown>)["reason"]).toBe(
+      "Forbidden: outside the mandate",
+    );
+    expect(mocks.checkIAM).not.toHaveBeenCalled();
   });
 });

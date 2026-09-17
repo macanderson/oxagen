@@ -42,12 +42,14 @@ describe("messages/shell.json", () => {
   });
 
   it("carries no catalog for the chrome rev1 does not render", () => {
-    // Notifications, the assistant, nav counts and the command menu's runs,
-    // actions and questions (ARCHITECTURE.md §1.2). The Account dialog is no
-    // longer on that list: spec App. F folds the four account pages into it,
-    // and it renders and saves through update_profile.
+    // Notifications, nav counts and the command menu's runs, actions and
+    // questions (ARCHITECTURE.md §1.2). The Account dialog and the assistant
+    // are no longer on that list: spec App. F folds the four account pages
+    // into the dialog, and #2968 is the lane that puts the in-app agent back —
+    // both render, and both write (update_profile, ask_assistant).
     expect(Object.keys(messages).sort()).toEqual([
       "account",
+      "assistant",
       "commands",
       "drawer",
       "loading",

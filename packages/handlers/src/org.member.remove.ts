@@ -57,7 +57,7 @@ import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberRemove } from "@oxagen/oxagen/contracts/org.member.remove";
 import { schema, withSystemDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { CLI_SESSION_SCOPE_PURPOSE } from "@oxagen/auth/cli-auth";
+import { CLI_SESSION_SCOPE_PURPOSE } from "@oxagen/oxagen/cli-session";
 import { and, eq, inArray, isNull, count, sql } from "drizzle-orm";
 import { resolveMemberUserId } from "./lib/org-member";
 import { logger } from "./logger";
