@@ -69,6 +69,15 @@ const ROLE = "00000000-0000-0000-0034-000000000001";
  * test would pass or fail for a reason that has nothing to do with RLS.
  */
 const ROLE_FOR_WRITE = "00000000-0000-0000-0034-000000000002";
+/**
+ * A third role, held by ONE workspace-scoped row and by no workspace-less one,
+ * so the `workspace_id = NULL` update below can only be stopped by RLS.
+ * Re-using ROLE would collide with `pra_sr_org` on that same partial unique
+ * index and the test would pass for a reason that is not the policy — which is
+ * exactly how this defect stayed invisible: the first attempt to write the
+ * proof was answered 23505 by an index, not 42501 by a policy.
+ */
+const ROLE_FOR_MOVE = "00000000-0000-0000-0034-000000000003";
 
 /** invalid_text_representation — the uuid cast refusing the marker. */
 const INVALID_UUID = "22P02";
@@ -148,6 +157,51 @@ async function refusalOf(
   return { code: String(code), message: String(message) };
 }
 
+/** Thrown to force a ROLLBACK; never escapes `inScopeRolledBack`. */
+class Rollback extends Error {}
+
+/**
+ * `inScope`, but the transaction is ROLLED BACK whatever the statements did.
+ *
+ * The destructive cases below have to run a real DELETE/UPDATE against the real
+ * policies to learn how many rows Postgres would let them destroy — a count
+ * from `pg_policies` is a reading of the SQL text, not an observation of a
+ * refused row, and the two have already disagreed once on this branch. Rolling
+ * back is what lets the corpus above keep its rows while these tests still
+ * execute the statement they are about.
+ */
+async function inScopeRolledBack<T>(
+  gucs: {
+    org: string;
+    workspace: string;
+    orgWide?: "on" | "off";
+    bypass?: "on" | "off";
+  },
+  fn: (tx: postgres.TransactionSql) => Promise<T>,
+): Promise<T> {
+  let result: T | undefined;
+  let captured = false;
+  try {
+    await sql.begin(async (tx) => {
+      await tx.unsafe(`SET LOCAL ROLE "${APP_ROLE}"`);
+      await tx`
+        SELECT
+          set_config('app.current_org_id',       ${gucs.org},                true),
+          set_config('app.current_workspace_id', ${gucs.workspace},          true),
+          set_config('app.org_wide',             ${gucs.orgWide ?? "off"},   true),
+          set_config('app.rls_bypass',           ${gucs.bypass ?? "off"},    true)
+      `;
+      result = await fn(tx);
+      captured = true;
+      throw new Rollback();
+    });
+  } catch (err) {
+    if (!(err instanceof Rollback)) throw err;
+  }
+  if (!captured) throw new Error("the rolled-back body did not complete");
+  return result as T;
+}
+
 beforeAll(async () => {
   await sql.begin(async (tx) => {
     await tx`SELECT set_config('app.rls_bypass', 'on', true)`;
@@ -180,7 +234,19 @@ beforeAll(async () => {
         ('pra_sr_org', ${PRINCIPAL}, ${ROLE}, ${ORG}, NULL),
         ('pra_sr_a',   ${PRINCIPAL}, ${ROLE}, ${ORG}, ${WS_A}),
         ('pra_sr_b',   ${PRINCIPAL}, ${ROLE}, ${ORG}, ${WS_B}),
-        ('pra_sr_oth', ${PRINCIPAL}, ${ROLE}, ${OTHER_ORG}, NULL)
+        ('pra_sr_oth', ${PRINCIPAL}, ${ROLE}, ${OTHER_ORG}, NULL),
+        ('pra_sr_move', ${PRINCIPAL}, ${ROLE_FOR_MOVE}, ${ORG}, ${WS_A})
+      ON CONFLICT (public_id) DO NOTHING
+    `;
+    // One `standard` row per workspace. `standard` is the class with NO
+    // workspace-less escape hatch, so it is where an org-wide DELETE would do
+    // its worst: every row in the organisation names a workspace.
+    await tx`
+      INSERT INTO workspace.workspace_slug_history
+        (public_id, org_id, workspace_id, old_slug, new_slug)
+      VALUES
+        ('wsh_sr_a', ${ORG}, ${WS_A}, 'sr-ws-a-old', 'sr-ws-a'),
+        ('wsh_sr_b', ${ORG}, ${WS_B}, 'sr-ws-b-old', 'sr-ws-b')
       ON CONFLICT (public_id) DO NOTHING
     `;
   });
@@ -412,13 +478,180 @@ describe("withOrgDb — the organisation-wide read seam", () => {
   });
 
   it("reads a standard table across the organisation's workspaces", async () => {
-    const rows = await inScope(
+    const [row] = await inScope(
       orgWide,
       (tx) => tx<{ n: string }[]>`
       SELECT count(*)::text AS n FROM workspace.workspace_slug_history
     `,
     );
-    expect(rows).toHaveLength(1);
+    // Two rows, one per workspace. A count is the assertion rather than a
+    // non-empty result because "the seam widened the read" and "the seam
+    // returned something" are different claims.
+    expect(row?.n).toBe("2");
+  });
+
+  it("a workspace scope still sees only its own rows on that table", async () => {
+    const [row] = await inScope(
+      { org: ORG, workspace: WS_A },
+      (tx) => tx<{ n: string }[]>`
+      SELECT count(*)::text AS n FROM workspace.workspace_slug_history
+    `,
+    );
+    expect(row?.n).toBe("1");
+  });
+
+  /**
+   * THE WIDENING IS READ-ONLY BECAUSE OF ITS SHAPE, NOT BECAUSE CALLERS BEHAVE.
+   *
+   * Postgres applies a policy's USING clause to the OLD rows of an UPDATE and
+   * of a DELETE, not only to a SELECT, and WITH CHECK does not run for DELETE
+   * at all. So an org-wide disjunct inside the `tenant_isolation` USING —
+   * which is where it lived when this branch first shipped it — did not widen
+   * the read, it widened the reach of `DELETE` to every workspace in the
+   * organisation, and on a `workspace_nullable` table it let an UPDATE move a
+   * workspace row to `workspace_id = NULL`, where the unchanged WITH CHECK
+   * then admits it. `withOrgDb` is documented as a read seam; that made it a
+   * destructive one.
+   *
+   * The org-wide predicate now lives in its own `FOR SELECT` policy
+   * (`tenant_org_wide_read`), so the destructive path cannot SEE the widened
+   * row set rather than being trusted not to touch it. Permissive policies are
+   * OR'd within a command and AND'd across command types, so the SELECT policy
+   * widens reads while `tenant_isolation`'s FOR ALL USING — which has no
+   * org-wide disjunct any more — still governs UPDATE and DELETE.
+   *
+   * Every case here runs the real statement and reads `count`, then rolls the
+   * transaction back. A refusal and a zero-row statement are both acceptable
+   * answers; what is not acceptable is a row destroyed.
+   */
+  describe("the widening does not reach UPDATE or DELETE", () => {
+    it("deletes 0 rows of another workspace on a standard table", async () => {
+      const count = await inScopeRolledBack(orgWide, async (tx) => {
+        const res = await tx`
+          DELETE FROM workspace.workspace_slug_history WHERE org_id = ${ORG}
+        `;
+        return res.count;
+      });
+      expect(count).toBe(0);
+    });
+
+    it("deletes 0 workspace-scoped rows on a workspace_nullable table", async () => {
+      const count = await inScopeRolledBack(orgWide, async (tx) => {
+        const res = await tx`
+          DELETE FROM iam.principal_role_assignments
+          WHERE public_id IN ('pra_sr_a', 'pra_sr_b')
+        `;
+        return res.count;
+      });
+      expect(count).toBe(0);
+    });
+
+    it("cannot delete the whole organisation's assignments", async () => {
+      const count = await inScopeRolledBack(orgWide, async (tx) => {
+        const res = await tx`
+          DELETE FROM iam.principal_role_assignments WHERE role_id = ${ROLE}
+        `;
+        return res.count;
+      });
+      // The org-wide row (workspace_id IS NULL) is the only one this seam may
+      // reach, and it reaches it through workspace_nullable's own NULL
+      // disjunct — not through the widening. `pra_sr_a` and `pra_sr_b` survive.
+      expect(count).toBe(1);
+    });
+
+    it("updates 0 rows when moving another workspace's row to workspace_id NULL", async () => {
+      const count = await inScopeRolledBack(orgWide, async (tx) => {
+        const res = await tx`
+          UPDATE iam.principal_role_assignments
+          SET workspace_id = NULL
+          WHERE public_id = 'pra_sr_move'
+        `;
+        return res.count;
+      });
+      // WITH CHECK admits workspace_id IS NULL, so nothing downstream of the
+      // old-row test would have stopped this. The old-row test is the whole
+      // defence, which is why it must not carry the org-wide disjunct.
+      expect(count).toBe(0);
+    });
+
+    it("updates 0 rows of another workspace on a standard table", async () => {
+      const count = await inScopeRolledBack(orgWide, async (tx) => {
+        const res = await tx`
+          UPDATE workspace.workspace_slug_history
+          SET redirect_enabled = false
+          WHERE org_id = ${ORG}
+        `;
+        return res.count;
+      });
+      expect(count).toBe(0);
+    });
+
+    // The write `withOrgDb` is documented to accept, held here so the fix above
+    // cannot be "turn the seam off". `org.member_role.change` soft-deletes and
+    // re-inserts exactly this row shape inside one withOrgDb transaction.
+    it("still updates the org-wide row that names no workspace", async () => {
+      const count = await inScopeRolledBack(orgWide, async (tx) => {
+        const res = await tx`
+          UPDATE iam.principal_role_assignments
+          SET deleted_at = now()
+          WHERE public_id = 'pra_sr_org'
+        `;
+        return res.count;
+      });
+      expect(count).toBe(1);
+    });
+
+    // A workspace scope is untouched by any of this: `tenant_isolation` is the
+    // only policy that matches, exactly as before ADR-086.
+    it("leaves a workspace scope able to delete its own row", async () => {
+      const count = await inScopeRolledBack(
+        { org: ORG, workspace: WS_A },
+        async (tx) => {
+          const res = await tx`
+            DELETE FROM iam.principal_role_assignments WHERE public_id = 'pra_sr_a'
+          `;
+          return res.count;
+        },
+      );
+      expect(count).toBe(1);
+    });
+
+    // A catalogue reading, kept deliberately SECONDARY to the row counts above:
+    // it cannot tell you a row was refused, only that the policy that refuses
+    // it is shaped the way the generator emits it. It is here to catch a policy
+    // hand-written past the generator with the org-wide predicate back in a
+    // FOR ALL clause, which the row counts would then not be testing.
+    it("never carries the org-wide predicate in a policy that governs writes", async () => {
+      const rows = await sql<
+        { table: string; policyname: string; cmd: string }[]
+      >`
+        SELECT schemaname || '.' || tablename AS table, policyname, cmd
+        FROM pg_policies
+        WHERE qual LIKE '%app.org_wide%' AND cmd <> 'SELECT'
+      `;
+      expect(rows.map((r) => `${r.table} ${r.policyname} ${r.cmd}`)).toEqual(
+        [],
+      );
+    });
+
+    it("gives every org-wide-read class a live FOR SELECT policy", async () => {
+      const widened = POLICY_MANIFEST.filter(
+        (e) =>
+          e.policyClass === "standard" ||
+          e.policyClass === "workspace_nullable",
+      );
+      expect(widened.length).toBeGreaterThan(0);
+      const rows = await sql<{ table: string }[]>`
+        SELECT schemaname || '.' || tablename AS table
+        FROM pg_policies
+        WHERE policyname = 'tenant_org_wide_read' AND cmd = 'SELECT'
+          AND qual LIKE '%app.org_wide%'
+      `;
+      const live = new Set(rows.map((r) => r.table));
+      expect(widened.map((e) => e.table).filter((t) => !live.has(t))).toEqual(
+        [],
+      );
+    });
   });
 
   // Reads widen; writes are judged by the unchanged WITH CHECK. A row naming a

@@ -163,19 +163,37 @@ export async function withTenantDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
  * `withOrgDb` keeps both. It resolves the organisation's plane and asserts the
  * binding exactly as `withTenantDb` does, and it leaves RLS ON: the policies
  * still fence `org_id`, and `app.org_wide = 'on'` widens only the WORKSPACE
- * half of the predicate. The database, not the caller, is still what keeps one
+ * half of the READ. The database, not the caller, is still what keeps one
  * tenant out of another's rows.
  *
- * Three properties, each of which the generated policies enforce rather than
+ * THE WIDENING IS STRUCTURALLY READ-ONLY. `app.org_wide` is the whole predicate
+ * of a separate `FOR SELECT` policy, `tenant_org_wide_read`, and appears in no
+ * clause of `tenant_isolation`. It has to be: a USING clause is not a read
+ * filter — Postgres applies it to the OLD rows of an UPDATE and of a DELETE too,
+ * and WITH CHECK never runs for a DELETE — so an org-wide disjunct inside
+ * `tenant_isolation` would have let any callback here delete every
+ * workspace-scoped row in the organisation, and move a `workspace_nullable` row
+ * to `workspace_id = NULL` past the unchanged check. Permissive policies are
+ * OR'd within a command type and AND'd across them, so a `FOR SELECT` policy
+ * widens the read and cannot reach an UPDATE's or a DELETE's old-row test.
+ *
+ * Four properties, each of which the generated policies enforce rather than
  * this function:
  *
  *  - **Reads widen, writes are judged by the unchanged WITH CHECK.**
- *    `app.org_wide` appears in USING and never in WITH CHECK, and the workspace
- *    GUC is empty here, so the only rows this seam can write are the ones whose
- *    own `workspace_id` is NULL — an org-wide role assignment on a
+ *    `app.org_wide` is absent from every WITH CHECK, and the workspace GUC is
+ *    empty here, so the only rows this seam can write are the ones whose own
+ *    `workspace_id` is NULL — an org-wide role assignment on a
  *    `workspace_nullable` table. A row naming a workspace, or any row on a
  *    `standard` table, is refused with SQLSTATE 42501. Write those in the
  *    workspace's own scope through `withTenantDb`.
+ *  - **UPDATE and DELETE see the unwidened row set.** The rows a statement here
+ *    may modify or destroy are the ones `tenant_isolation` admits — this
+ *    scope's workspace (empty), plus the workspace-less rows of a
+ *    `workspace_nullable` table. A DELETE aimed at another workspace's row
+ *    inside this organisation affects ZERO rows. `SELECT … FOR UPDATE` is
+ *    narrowed the same way, which is right: a locking read is the first half of
+ *    a write.
  *  - **The org fence is still the database's.** A row belonging to another
  *    organisation is invisible here for the same reason it is invisible in
  *    `withTenantDb`, and an omitted `eq(orgId)` predicate cannot change that.

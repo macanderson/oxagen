@@ -127,17 +127,37 @@ exactly as `withTenantDb` does, sets `app.current_org_id`, leaves
 casts cleanly, where the marker would raise at plan time whatever disjunct stood
 in front of it — and sets `app.org_wide = 'on'`.
 
-The generator emits that GUC as a disjunct in USING, and only in USING:
+The generator emits that GUC as the whole predicate of a **separate `FOR SELECT`
+policy**, `tenant_org_wide_read`, and emits it nowhere inside `tenant_isolation`:
 
-| class | USING (the `app.rls_bypass` disjunct omitted) |
-|---|---|
-| `org_only` | `org_id = ORG` |
-| `org_or_global` | `org_id IS NULL OR org_id = ORG` |
-| `workspace_nullable` | `org_id = ORG AND (ws IS NULL OR ORG_WIDE OR ws = WS)` |
-| `standard` | `org_id = ORG AND (ORG_WIDE OR ws = WS)` |
-| `workspace_only` | `workspace_id = WS` |
+| class | `tenant_isolation` USING (the `app.rls_bypass` disjunct omitted) | `tenant_org_wide_read` (`FOR SELECT`) |
+|---|---|---|
+| `org_only` | `org_id = ORG` | — |
+| `org_or_global` | `org_id IS NULL OR org_id = ORG` | — |
+| `workspace_nullable` | `org_id = ORG AND (ws IS NULL OR ws = WS)` | `ORG_WIDE AND org_id = ORG` |
+| `standard` | `org_id = ORG AND ws = WS` | `ORG_WIDE AND org_id = ORG` |
+| `workspace_only` | `workspace_id = WS` | — |
 
-Four properties follow, and the database enforces each of them rather than the
+**The separation is the mechanism, and the first shape of this change did not
+have it.** `app.org_wide` was originally a disjunct inside `tenant_isolation`'s
+USING. A USING clause is not a read filter: Postgres applies it to the OLD rows
+of an `UPDATE` and of a `DELETE` as well as to a `SELECT`, and `WITH CHECK` does
+not run for a `DELETE` at all. So widening USING to the organisation widened
+**deletion** to the organisation — any `withOrgDb` callback could delete every
+workspace-scoped row in the org — and on a `workspace_nullable` table it also
+let an `UPDATE` move a workspace row to `workspace_id = NULL`, where the
+unchanged `WITH CHECK` then admitted it. A seam documented as a read-only
+widening was a destructive one, and no `WITH CHECK` could have compensated.
+
+Permissive policies are OR'd **within** a command type and AND'd **across** them.
+A `FOR SELECT` policy therefore widens reads and cannot reach the old-row test
+of an `UPDATE` or a `DELETE`: the destructive path cannot *see* the widened row
+set, rather than being trusted not to touch it. `tenant_isolation`'s USING is
+now byte-for-byte what it was before this ADR, which is also what keeps the
+org-only refusal intact — it still casts the workspace GUC, so the marker still
+raises 22P02 at plan time.
+
+Five properties follow, and the database enforces each of them rather than the
 caller:
 
 - **The org fence stays with the database.** A query inside `withOrgDb` that
@@ -149,6 +169,15 @@ caller:
   rows this seam can land are ones whose own `workspace_id` is NULL on a
   `workspace_nullable` table — which is what `change_org_member_role` writes. A
   row naming a workspace is refused 42501.
+- **The widening does not reach `UPDATE` or `DELETE` at all.** Because the
+  org-wide predicate lives in a `FOR SELECT` policy, the rows an `UPDATE` may
+  touch and the rows a `DELETE` may destroy are still the ones
+  `tenant_isolation` admits: this workspace's, plus the workspace-less rows on a
+  `workspace_nullable` table. `org.member_role.change` and the `org` branch of
+  `router.policy.set` write only that second kind, so both keep working. The
+  witness is `integration/org-only-sentinel-refusal.test.ts`, which runs the
+  real `DELETE` against the real policies and reads the row count — a reading of
+  `pg_policies` tells you how a policy is spelled, not that a row was refused.
 - **A conversion to `withOrgDb` cannot change database.** It resolves the same
   plane `withTenantDb` would and asserts the binding the same way. This closes,
   by construction, the coverage gap ADR-074 recorded as unclosable at the static
@@ -323,7 +352,11 @@ test authorizes, rather than answering something quietly wrong.
   returning the wrong answer; this makes the wrongness arrive as an error
   instead of as data. That is the trade the whole change is, and it is worth
   saying plainly rather than describing the change as a pure improvement.
-- `20260917120000_org_wide_read_mode.sql` regenerates all 110 manifest policies.
+- `20260917120000_org_wide_read_mode.sql` regenerates all 110 manifest
+  `tenant_isolation` policies and adds `tenant_org_wide_read` (`FOR SELECT`) to
+  the 83 `standard` and `workspace_nullable` tables. It `DROP POLICY IF EXISTS`
+  both names on every table, so a class that loses its widening loses the policy
+  instead of keeping a stale one.
   Three `ingestion.*` tables carry a transitive `tenant_isolation` policy —
   `EXISTS (SELECT 1 FROM ingestion.source_connections …)` — that the generator
   does not emit and this migration does not touch. They need no change: the
