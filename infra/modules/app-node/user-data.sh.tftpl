@@ -331,6 +331,62 @@ chmod 0755 /opt/oxagen/bin/*.sh || true
 # service restore loop below and turn a Caddy problem into a node with no
 # services on it, which is a worse recovery than a node that is loudly
 # unhealthy. Loud, not fatal.
+# ── The same node-wide lock the installer takes ─────────────────────────────
+#
+# This bootstrap is the SECOND writer of the paths below. `install-node-scripts.sh`
+# writes the same `/tmp/Caddyfile.incoming` and the same
+# `/opt/oxagen/caddy/Caddyfile`, and until this block took the lock only one of
+# the two participants held it — which is a lock over half a transaction. The
+# interleaving is not hypothetical, it is the deployment path: changing this file
+# REPLACES the instance, so a replacement node is running this bootstrap exactly
+# when an operator is most likely to be running the installer.
+#
+#   installer fetches candidate B -> /tmp/Caddyfile.incoming = B
+#   this bootstrap fetches the canonical object -> same path, now A
+#   installer validates and reloads             -> the node runs A
+#   installer exits 0, and its caller publishes B, which nothing validated
+#
+# Same lock file, same `flock`, so there is one mechanism and not two. What
+# differs is the response to not getting it, and the difference is this file's
+# own doctrine rather than a new idea: the installer FAILS (SSM reports Failed,
+# nothing is promoted, an operator retries), because a refused install costs
+# nothing. A bootstrap cannot fail here. Aborting the boot for a lock would be
+# the "fatal" this file rejects three paragraphs up — a node that never joins
+# the target group is worse than a node that is loudly unhealthy — so a bootstrap
+# that cannot take the lock SKIPS the Caddy step, keeps the 503 placeholder, and
+# goes on to restore its services. That is also the correct outcome rather than
+# merely the safe one: whoever holds the lock is an installer that is about to
+# reload this node with a config it validated.
+#
+# Scoped to a subshell rather than held to process exit, which is the opposite of
+# the installer's choice and for the same reason. There the lock must outlive the
+# script so the `trap ... EXIT` restore runs inside it. Here the restore is inline
+# in the `else` below, so the subshell already contains it — and holding the lock
+# to the end of THIS script would keep it through the service-restore loop, for
+# minutes, which would time out every concurrent installer instead of serialising
+# with it.
+#
+# `set -e` is on, so the acquisition is written as a tested `if` and the subshell
+# closes with `|| echo`: neither a lock we did not get nor a step that failed
+# inside may end the boot.
+#
+# The markers around it are load-bearing, for the same reason the installer's
+# are: they let this block be run against stubs in a test, and the defect it was
+# fixed for is an INTERLEAVING of two scripts, which no reading of either one
+# decides.
+# >>> caddy-bootstrap
+(
+if ! command -v flock >/dev/null; then
+  # Proceed unlocked, loudly. A missing flock is a node-image regression rather
+  # than a concurrency event, and turning it into "this node never serves" is
+  # the fatal-not-loud direction this file exists to reject.
+  echo "CADDY BOOTSTRAP: flock is missing — proceeding WITHOUT serialising against a concurrent install" >&2
+elif ! flock -x -w 60 200; then
+  echo "caddy: an install holds /opt/oxagen/caddy-install.lock — skipping the config step" >&2
+  echo "caddy: keeping the 503 placeholder; that install is reloading this node with a config it validated" >&2
+  exit 0
+fi
+
 if aws s3 cp "s3://${deploy_bucket}/_caddy/Caddyfile" /tmp/Caddyfile.incoming \
      --region "$REGION" --only-show-errors; then
   if docker run --rm -v /tmp/Caddyfile.incoming:/etc/caddy/Caddyfile:ro caddy:2 \
@@ -366,6 +422,8 @@ if aws s3 cp "s3://${deploy_bucket}/_caddy/Caddyfile" /tmp/Caddyfile.incoming \
 else
   echo "caddy: no published config yet (first provision) — keeping the 503 placeholder"
 fi
+) 200>/opt/oxagen/caddy-install.lock || echo "CADDY BOOTSTRAP: the caddy config step did not complete — continuing the boot" >&2
+# <<< caddy-bootstrap
 
 # Every service with an artifact. Read from the bucket rather than listed here,
 # so adding a service to the platform does not also mean editing this file and

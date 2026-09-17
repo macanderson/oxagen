@@ -160,6 +160,29 @@ export function remoteTemplate(installer) {
 export const CADDY_BLOCK_OPEN = "# >>> caddy-install";
 export const CADDY_BLOCK_CLOSE = "# <<< caddy-install";
 
+export const BOOT_BLOCK_OPEN = "# >>> caddy-bootstrap";
+export const BOOT_BLOCK_CLOSE = "# <<< caddy-bootstrap";
+
+/** Slice `text` between two markers, or null if either is missing//out of order. */
+function between(text, open, close) {
+  const a = text.indexOf(open);
+  const b = text.indexOf(close);
+  if (a === -1 || b === -1 || b < a) return null;
+  return text.slice(a + open.length, b).trim();
+}
+
+/**
+ * The bootstrap's Caddy block, between its markers.
+ *
+ * Delimited for the same reason the installer's is, and for a defect only
+ * execution decides: the bootstrap and the installer are two SCRIPTS writing one
+ * set of paths, and what goes wrong is the interleaving. Neither file read on its
+ * own shows it.
+ */
+export function caddyBootstrapBlock(bootstrap) {
+  return between(bootstrap, BOOT_BLOCK_OPEN, BOOT_BLOCK_CLOSE);
+}
+
 /**
  * The Caddy install/reload block of the remote script, between its markers.
  *
@@ -396,6 +419,28 @@ export function inspect({ alb, edge, installer, registry, bootstrap }) {
         `${BOOTSTRAP}: never validates the config it fetched. The installer's validation covers the node being installed, not this one.`,
       );
     }
+    // The bootstrap is the SECOND writer of /tmp/Caddyfile.incoming and of the
+    // live config. A lock only the installer takes is a lock over half a
+    // transaction, and the window is the node-replacement window — which is when
+    // this file changes, so it is the deployment path rather than an edge of it.
+    const bootLockAt = lineIndexOf(bootCode, /flock\s+(-\S+\s+)*-x|flock\s+-x/);
+    if (bootLockAt === -1) {
+      problems.push(
+        `${BOOTSTRAP}: takes no \`flock\` on /opt/oxagen/caddy-install.lock, so it shares /tmp/Caddyfile.incoming and the live config with a concurrent \`install-node-scripts.sh\` and only the installer is serialised. The bootstrap can replace the installer's candidate between its fetch and its validate, so the installer validates and reloads one render and its caller publishes another.`,
+      );
+    } else if (bootLockAt > bootFetchAt) {
+      problems.push(
+        `${BOOTSTRAP}: takes the Caddy lock after fetching ${CANONICAL_KEY}, so the staging file is already shared by the time the lock is held.`,
+      );
+    }
+    // A boot that cannot get the lock must keep going. Aborting is the "fatal"
+    // this file's own header rejects: a node that never joins the target group
+    // is worse than a node that is loudly unhealthy.
+    if (bootLockAt !== -1 && !/\)\s*200>[^\n]*\|\|/.test(bootCode)) {
+      problems.push(
+        `${BOOTSTRAP}: the Caddy lock subshell does not tolerate its own failure. Under \`set -e\` a lock this bootstrap did not get, or a step that failed while holding it, would end the boot before the service-restore loop — turning a Caddy problem into a node with no services on it. Close the subshell with \`|| echo ...\`.`,
+      );
+    }
   }
 
   // `|| true` on the reload erases the difference between "no config published
@@ -499,6 +544,33 @@ export function inspect({ alb, edge, installer, registry, bootstrap }) {
         `${BOOTSTRAP}: a validated config whose \`caddy reload\` fails is left on /opt/oxagen/caddy/Caddyfile while the running process keeps the old one. The installer reads that file as "what Caddy accepted", so the next install reports it unchanged and promotes without ever reloading. Restore the running config on the failure branch.`,
       );
     }
+  }
+
+  // ── 8. the caller-side promotion names what it cannot guarantee ─────────
+  //
+  // The node lock orders two installs ON THE NODE and is released when the SSM
+  // command exits, so the promotion below it is outside the lock and is made by
+  // a different machine. A slow caller can therefore overwrite a newer run's
+  // canonical object with its own older render, leaving the node and the object
+  // every future node boots from disagreeing, with nothing reporting an error.
+  //
+  // It cannot be fixed from inside this file — the fix is for the node to make
+  // the write itself, which needs an IAM grant it deliberately does not have —
+  // so what is enforced is that the limitation stays WRITTEN DOWN. An earlier
+  // revision claimed the opposite ("a waiter cannot finish before the run it
+  // waited on, so the later promotion carries the later render"), which is true
+  // of the node and false of the caller. A future reader must not re-derive that.
+  if (
+    /promotion carries the later render|later promotion carries/.test(installer)
+  ) {
+    problems.push(
+      `${INSTALLER}: still claims the later promotion carries the later render. The lock orders the two runs on the NODE; the promotion is a separate S3 write made by each run's caller after an independent polling loop, so node order does not imply caller order.`,
+    );
+  }
+  if (!/OUTSIDE the node lock/.test(installer)) {
+    problems.push(
+      `${INSTALLER}: the canonical promotion no longer records that it happens outside the node lock. That is the one thing a reader has to know before running two installers at one node, and it is not visible from the code.`,
+    );
   }
 
   return problems;

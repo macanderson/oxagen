@@ -243,9 +243,20 @@ ls -l /opt/oxagen/bin
 # A bounded wait rather than an indefinite one: a near-simultaneous double-send
 # is absorbed, a genuine overlap is refused with a reason inside the caller's
 # poll window, and the refusal fails the run — so SSM reports Failed and the
-# caller does not promote. Queueing is safe when it happens, because a waiter
-# cannot finish before the run it waited on, so the later promotion carries the
-# later render.
+# caller does not promote.
+#
+# An earlier revision of this comment went on to argue that queueing was
+# therefore safe, reasoning that a waiter cannot finish before the run it waited
+# on. That premise is true; the conclusion drawn from it — that the promotions
+# then land in the same order — does not follow, and the sentence is paraphrased
+# here rather than quoted because the check that forbids it reads this file as
+# text and a quotation is indistinguishable from a claim. This lock orders the
+# two runs ON THE NODE; the promotion is
+# a separate S3 write made by each run's CALLER, on whatever machine invoked the
+# installer, after a polling loop with five-second granularity. Node order does
+# not imply caller order. See the note on the promotion at the bottom of this
+# file for the interleaving that leaves the node and the canonical object
+# disagreeing, and for why it cannot be closed from inside this lock.
 mkdir -p /opt/oxagen/caddy
 exec 200>/opt/oxagen/caddy-install.lock
 if ! flock -x -w 60 200; then
@@ -384,6 +395,43 @@ fi
 # key the bootstrap reads, as one server-side copy: S3 object writes are atomic
 # for a reader, so a node booting during this instant gets the whole old object
 # or the whole new one.
+#
+# ## This write is OUTSIDE the node lock, and cannot be brought inside it
+#
+# The `flock` in the remote script orders two installs on the node. It is
+# released when the SSM command exits, which is before this line runs, and this
+# line runs here — on the machine that invoked the installer, not on the node. So:
+#
+#   A's node run reloads A and exits; B waits, reloads B, exits
+#   B's caller polls, sees Success, promotes B     <- canonical = B, node = B
+#   A's caller was slower to poll, and promotes A  <- canonical = A, node = B
+#
+# Nothing reports an error. The divergence surfaces when a LATER node boots the
+# canonical object and comes up on A — which, after `TRUST_EDGE_CLIENT_IP_HEADER`
+# is set, means a node whose Caddy does not write `x-oxagen-client-ip` while the
+# application believes that header. Stale is not merely old there.
+#
+# The lock cannot be widened to cover this, and the reason is structural rather
+# than a matter of effort. The only actor that knows, atomically, which render
+# the node most recently accepted is whoever holds the lock, and the lock is on
+# the node. Every caller-side variant is a check followed by a separate act with
+# a window between them: comparing against the canonical object's ETag before the
+# install refuses the WRONG run when A promotes first, and re-reading the node's
+# accepted digest just before this copy narrows the window to one SSM round-trip
+# without closing it. Releasing the lock later does not help either — it is the
+# `trap ... EXIT` restore that requires the lock to outlive the remote script,
+# which is precisely what puts this line outside it.
+#
+# What does close it is for the node to make this write itself, inside the lock,
+# immediately after the reload it just accepted. That is one mechanism rather
+# than two, and it is blocked on a decision rather than on code: the app node's
+# role grants `s3:GetObject` and `s3:ListBucket` on this bucket and nothing more
+# (`infra/stacks-new/ci-deploy/node.tf`, "The read side of the deploy path"), so
+# the node would need `s3:PutObject` on `_caddy/Caddyfile` — the object every
+# future node boots from. That widens what a compromised app node can reach, in
+# the one direction this branch is otherwise narrowing, and it is not a trade to
+# make silently inside a rate-limiter reconciliation. Until it is made, two
+# installers must not be run against one node concurrently.
 echo "==> promoting candidate -> s3://$BUCKET/_caddy/Caddyfile"
 aws s3 cp "s3://$BUCKET/$CANDIDATE_KEY" "s3://$BUCKET/_caddy/Caddyfile" \
   --region "$REGION" --only-show-errors

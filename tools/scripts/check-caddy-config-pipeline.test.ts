@@ -26,6 +26,7 @@ import {
   ALB_SUBNETS_PLACEHOLDER,
   BOOTSTRAP,
   CADDYFILE_ALB,
+  caddyBootstrapBlock,
   caddyInstallBlock,
   CANONICAL_KEY,
   INSTALLER,
@@ -62,6 +63,7 @@ function healthy() {
       "aws elbv2 describe-load-balancers --names oxagen-app",
       'echo "refusing to upload" >&2',
       'aws s3 cp "$RENDERED" "s3://$BUCKET/$CANDIDATE_KEY" --region "$REGION"',
+      "# This write is OUTSIDE the node lock and cannot be brought inside it.",
       "read -r -d '' REMOTE_TEMPLATE <<'REMOTE_EOF' || true",
       "# >>> caddy-install",
       "exec 200>/opt/oxagen/caddy-install.lock",
@@ -87,6 +89,8 @@ function healthy() {
     ].join("\n"),
     bootstrap: [
       "# it used to be: docker exec oxagen-caddy caddy reload ... || true",
+      "(",
+      "flock -x -w 60 200 || exit 0",
       `if aws s3 cp "s3://\${deploy_bucket}/${CANONICAL_KEY}" /tmp/Caddyfile.incoming --region "$REGION"; then`,
       "  if docker run --rm caddy:2 caddy validate --config /etc/caddy/Caddyfile; then",
       "    cp /opt/oxagen/caddy/Caddyfile /tmp/Caddyfile.accepted",
@@ -99,6 +103,7 @@ function healthy() {
       "    fi",
       "  fi",
       "fi",
+      ') 200>/opt/oxagen/caddy-install.lock || echo "continuing the boot" >&2',
     ].join("\n"),
   };
 }
@@ -416,6 +421,80 @@ describe("one install at a time on a node", () => {
     );
     expect(inspect(repo).join("\n")).toContain(
       "`flock` is missing from the remote script's dependency check",
+    );
+  });
+});
+
+describe("the bootstrap is the second writer of the same paths", () => {
+  // `install-node-scripts.sh` and this bootstrap both write
+  // /tmp/Caddyfile.incoming and /opt/oxagen/caddy/Caddyfile. A lock only one of
+  // them takes is a lock over half a transaction, and the window is the
+  // node-replacement window — which is when this file changes, so it is the
+  // deployment path rather than an edge of it.
+
+  it("rejects a bootstrap that takes no lock", () => {
+    const repo = healthy();
+    repo.bootstrap = repo.bootstrap
+      .split("\n")
+      .filter((l) => !l.startsWith("flock "))
+      .join("\n");
+    expect(inspect(repo).join("\n")).toContain("takes no `flock`");
+  });
+
+  it("rejects taking the lock after the fetch, which is after the sharing", () => {
+    const repo = healthy();
+    const lines = repo.bootstrap.split("\n");
+    const lock = lines.findIndex((l) => l.startsWith("flock "));
+    const fetch = lines.findIndex((l) => l.includes("aws s3 cp"));
+    [lines[lock], lines[fetch]] = [
+      lines[fetch] as string,
+      lines[lock] as string,
+    ];
+    repo.bootstrap = lines.join("\n");
+    expect(inspect(repo).join("\n")).toContain(
+      "takes the Caddy lock after fetching",
+    );
+  });
+
+  it("rejects a lock subshell that can end the boot", () => {
+    // Under `set -e` a lock this bootstrap did not get, or a step that failed
+    // while holding it, would skip the service-restore loop below — turning a
+    // Caddy problem into a node with no services on it. That is the "fatal"
+    // the file's own header rejects in favour of "loud".
+    const repo = healthy();
+    repo.bootstrap = repo.bootstrap.replace(
+      ') 200>/opt/oxagen/caddy-install.lock || echo "continuing the boot" >&2',
+      ") 200>/opt/oxagen/caddy-install.lock",
+    );
+    expect(inspect(repo).join("\n")).toContain(
+      "does not tolerate its own failure",
+    );
+  });
+});
+
+describe("the promotion says what it cannot guarantee", () => {
+  // It happens on the caller, after the node lock has been released by the SSM
+  // command exiting. It cannot be fixed from this file — the fix is for the node
+  // to make the write itself, which needs an IAM grant it deliberately does not
+  // have — so what is enforced is that the limitation stays written down.
+
+  it("rejects reviving the claim that the later promotion wins", () => {
+    const repo = healthy();
+    repo.installer +=
+      "\n# queueing is safe: the later promotion carries the later render\n";
+    expect(inspect(repo).join("\n")).toContain(
+      "still claims the later promotion carries the later render",
+    );
+  });
+
+  it("rejects deleting the note that the promotion is outside the lock", () => {
+    const repo = healthy();
+    repo.installer = repo.installer.replace(
+      "# This write is OUTSIDE the node lock and cannot be brought inside it.",
+      "",
+    );
+    expect(inspect(repo).join("\n")).toContain(
+      "no longer records that it happens outside the node lock",
     );
   });
 });
@@ -906,5 +985,230 @@ describe("two installs racing on one node, executed", () => {
     expect(resB.code).toBe(0);
     expect(readFileSync(join(root, "validated.A"), "utf8")).toBe(RENDER_A);
     expect(readFileSync(join(root, "validated.B"), "utf8")).toBe(RENDER_B);
+  });
+});
+
+/**
+ * The installer and a replacement node's BOOTSTRAP racing, EXECUTED.
+ *
+ * The concurrency case above has two copies of one script. This has two
+ * DIFFERENT scripts writing one set of paths, which is the shape no reading of
+ * either file decides — and it is the deployment path rather than an edge of it:
+ * changing `user-data.sh.tftpl` replaces the instance, so a replacement node is
+ * running this bootstrap exactly when an operator is most likely to be running
+ * the installer.
+ *
+ * Unlocked, the bootstrap's fetch of the CANONICAL object lands on
+ * `/tmp/Caddyfile.incoming` between the installer's fetch and its validate. The
+ * installer then validates and reloads the canonical render, exits 0, and its
+ * caller publishes the candidate — which nothing validated.
+ *
+ * The assertion is the same guarantee as the single-script case, and for the
+ * same reason it has to REQUIRE the evidence rather than check it where it
+ * happens to exist: a run destroyed mid-flight is the race with a louder
+ * symptom, not the guarantee holding.
+ */
+describe("an install racing a replacement node's bootstrap, executed", () => {
+  const CANDIDATE = "# the installer's candidate\n:80 {\n}\n";
+  const CANONICAL = "# the published canonical config\n:8080 {\n}\n";
+
+  function stubs(root: string, name: string, renderFile: string): string {
+    const bin = join(root, `bin-${name}`);
+    mkdirSync(bin, { recursive: true });
+    const incoming = join(root, "tmp/Caddyfile.incoming");
+    const live = join(root, "opt/oxagen/caddy/Caddyfile");
+    writeFileSync(
+      join(bin, "aws"),
+      `#!/bin/sh\n` +
+        // `aws s3 cp <key> <dest>`: $4 in the installer, $4 in the bootstrap too.
+        `cp "${renderFile}" "$4"\n` +
+        `touch "${join(root, "fetched")}.${name}"\n` +
+        (name === "installer"
+          ? // Park between fetch and validate — the window the race needs.
+            `i=0\n` +
+            `while [ ! -f "${join(root, "fetched")}.boot" ] && [ $i -lt 40 ]; do\n` +
+            `  sleep 0.05; i=$((i+1))\n` +
+            `done\n`
+          : "") +
+        `exit 0\n`,
+      { mode: 0o755 },
+    );
+    writeFileSync(
+      join(bin, "docker"),
+      `#!/bin/sh\n` +
+        `case "$1" in\n` +
+        `  run) cp "${incoming}" "${join(root, "validated")}.${name}" ;;\n` +
+        `  exec) cp "${live}" "${join(root, "reloaded")}.${name}" ;;\n` +
+        `esac\n` +
+        `exit 0\n`,
+      { mode: 0o755 },
+    );
+    return bin;
+  }
+
+  function rewrite(block: string, root: string): string {
+    return block
+      .replaceAll("${deploy_bucket}", "bucket")
+      .replaceAll("/opt/oxagen", join(root, "opt/oxagen"))
+      .replaceAll("/tmp/Caddyfile", join(root, "tmp/Caddyfile"))
+      .replaceAll("__BUCKET__", "bucket")
+      .replaceAll("__REGION__", "us-east-1")
+      .replaceAll("__CANDIDATE_KEY__", "candidate");
+  }
+
+  function start(
+    script: string,
+    bin: string,
+  ): Promise<{ code: number; stderr: string }> {
+    return new Promise((resolve) => {
+      const child = spawn("bash", ["-c", script], {
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH ?? ""}`,
+          REGION: "us-east-1",
+        },
+      });
+      let stderr = "";
+      child.stderr.on("data", (d) => (stderr += String(d)));
+      child.on("close", (code) => resolve({ code: code ?? -1, stderr }));
+    });
+  }
+
+  async function waitForFile(path: string, ms: number): Promise<void> {
+    const deadline = Date.now() + ms;
+    while (Date.now() < deadline) {
+      if (existsSync(path)) return;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+  }
+
+  it("neither script validates the other's render", async () => {
+    const installBlock = caddyInstallBlock(
+      readFileSync(join(repoRoot, INSTALLER), "utf8"),
+    );
+    const bootBlock = caddyBootstrapBlock(
+      readFileSync(join(repoRoot, BOOTSTRAP), "utf8"),
+    );
+    expect(installBlock).not.toBeNull();
+    expect(
+      bootBlock,
+      `${BOOTSTRAP} has no \`# >>> caddy-bootstrap\` block to execute`,
+    ).not.toBeNull();
+
+    const root = mkdtempSync(join(tmpdir(), "caddy-cross-"));
+    mkdirSync(join(root, "opt/oxagen/caddy"), { recursive: true });
+    mkdirSync(join(root, "tmp"), { recursive: true });
+    // The node already serves something, so the bootstrap's `.accepted` copy has
+    // a source and the swap is a real swap rather than a first install.
+    writeFileSync(join(root, "opt/oxagen/caddy/Caddyfile"), "# placeholder\n");
+
+    const candidateFile = join(root, "render-candidate");
+    const canonicalFile = join(root, "render-canonical");
+    writeFileSync(candidateFile, CANDIDATE);
+    writeFileSync(canonicalFile, CANONICAL);
+
+    const installerBin = stubs(root, "installer", candidateFile);
+    const bootBin = stubs(root, "boot", canonicalFile);
+
+    const installer = start(
+      "set -euo pipefail\n" + rewrite(installBlock!, root),
+      installerBin,
+    );
+    await waitForFile(join(root, "fetched.installer"), 5_000);
+
+    // The replacement node reaches its Caddy step while the installer is between
+    // its fetch and its validate.
+    const boot = start(
+      "set -euxo pipefail\n" + rewrite(bootBlock!, root),
+      bootBin,
+    );
+    const [resInstall, resBoot] = await Promise.all([installer, boot]);
+
+    // The installer must have validated and reloaded ITS candidate. Unlocked it
+    // validates the canonical render instead — or never validates at all,
+    // because the bootstrap removed the shared staging file first.
+    const validatedPath = join(root, "validated.installer");
+    expect(
+      existsSync(validatedPath),
+      "the installer never validated anything",
+    ).toBe(true);
+    expect(readFileSync(validatedPath, "utf8")).toBe(CANDIDATE);
+    const reloadedPath = join(root, "reloaded.installer");
+    expect(
+      existsSync(reloadedPath),
+      "the installer never reloaded anything",
+    ).toBe(true);
+    expect(readFileSync(reloadedPath, "utf8")).toBe(CANDIDATE);
+    expect(resInstall.code).toBe(0);
+
+    // And the bootstrap either did its own work on its own render, or stood
+    // down because the installer held the lock — never a mixture. Standing down
+    // is a success for the boot: the installer is reloading this node with a
+    // config it validated, and the service-restore loop below it must still run.
+    expect(resBoot.code).toBe(0);
+    const bootValidated = join(root, "validated.boot");
+    if (existsSync(bootValidated)) {
+      expect(readFileSync(bootValidated, "utf8")).toBe(CANONICAL);
+    } else {
+      expect(resBoot.stderr).toContain("skipping the config step");
+    }
+  });
+
+  it("stands down rather than blocking the boot when it cannot get the lock", async () => {
+    // The deadlock question, which is the one a lock in a boot path has to
+    // answer: a bootstrap that waits for ever is a node that never joins the
+    // target group, and that is worse than the race. So the wait is bounded and
+    // expiry is a SKIP, not an abort — the 503 placeholder stays, the node is
+    // loudly unhealthy, and the service-restore loop after this block still runs.
+    //
+    // The bound is rewritten from 60s to 1s for this case alone. The value is a
+    // tuning choice; the invariant under test is what happens when it expires,
+    // and waiting a real minute to observe it would only make the suite slower.
+    const bootBlock = caddyBootstrapBlock(
+      readFileSync(join(repoRoot, BOOTSTRAP), "utf8"),
+    );
+    expect(bootBlock).not.toBeNull();
+
+    const root = mkdtempSync(join(tmpdir(), "caddy-boot-standdown-"));
+    mkdirSync(join(root, "opt/oxagen/caddy"), { recursive: true });
+    mkdirSync(join(root, "tmp"), { recursive: true });
+    const live = join(root, "opt/oxagen/caddy/Caddyfile");
+    writeFileSync(live, "# placeholder\n");
+    const canonicalFile = join(root, "render-canonical");
+    writeFileSync(canonicalFile, CANONICAL);
+    const bootBin = stubs(root, "boot", canonicalFile);
+
+    // Something else holds the node lock for longer than the bootstrap will wait.
+    const lockPath = join(root, "opt/oxagen/caddy-install.lock");
+    const holder = spawn("bash", [
+      "-c",
+      `exec 200>"${lockPath}"; flock -x 200; sleep 5`,
+    ]);
+    await new Promise((r) => setTimeout(r, 300));
+
+    const res = await start(
+      "set -euxo pipefail\n" +
+        rewrite(bootBlock!, root).replace("-w 60", "-w 1"),
+      bootBin,
+    );
+    holder.kill();
+
+    expect(res.code).toBe(0);
+    expect(res.stderr).toContain("skipping the config step");
+    // Standing down deliberately must not be REPORTED as a failed step. The
+    // subshell's `|| echo` swallows a non-zero exit either way, so the boot
+    // continues whichever this is — the whole difference is the line an operator
+    // reads, and it is read during a node replacement, which is already the
+    // moment they are hunting for something wrong. "did not complete" sends them
+    // after a step that completed exactly as designed.
+    //
+    // Without this assertion `exit 0` on the stand-down branch is pinned by
+    // nothing: flipping it to `exit 1` is invisible at the block boundary and
+    // survived as a mutant.
+    expect(res.stderr).not.toContain("did not complete");
+    // And it touched nothing: the placeholder is intact and no staging file was
+    // written over whatever the lock holder is using.
+    expect(readFileSync(live, "utf8")).toBe("# placeholder\n");
+    expect(existsSync(join(root, "validated.boot"))).toBe(false);
   });
 });
