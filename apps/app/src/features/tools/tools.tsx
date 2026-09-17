@@ -28,27 +28,45 @@ import { parseToolsView, type ToolsAt, type ToolsView } from "./view";
  * An org Owner or Admin: exactly what `set_tool_classification` and
  * `set_kill_switch` declare (both grant no workspace role at all), so hiding
  * their controls from anyone else hides nothing the kernel would have allowed.
+ * Each of those handlers asserts the same pair itself, on every org tier, and
+ * INV-29 pins the assertion — see the note on `canImportTools`.
  */
 function canAdministerOrg(ctx: WsCtx): boolean {
   return ctx.orgRole === "owner" || ctx.orgRole === "admin";
 }
 
 /**
- * The same org roles, for the import control — knowingly narrower than the
- * capability.
+ * The same org roles, for the import control — and the contradiction behind
+ * that, because a gate that merely looked exact here would hide it.
  *
- * `import_tools` allows an org Owner or Admin *or a workspace Owner*
- * (packages/oxagen/src/contracts/tool.import.ts defaultRoles), and the
- * organization role is the only role `WsCtx` carries, so this gate cannot
- * represent that third case: a workspace Owner whose org role is `member` is
- * authorized by the handler and offered no control here. The gate that matches
- * the capability wants the viewer's workspace role on `WsFields`
- * (apps/app/src/server/viewer.ts), which `workspace.workspace_users.role`
- * stores and `systemLookups.workspaceMember` does not select today. Widening
- * the viewer seam is not this lane's change, so the narrower gate stands and
- * is named rather than left to look exact.
+ * `import_tools` declares `workspace: { Owner: "allow" }` and its handler
+ * asserts `workspace: ["Owner"]` (packages/handlers/src/tool.import.ts:141),
+ * so on paper this workspace's Owner may import whatever their org role. No
+ * person can satisfy that clause. `assertOrgRole` resolves a workspace role
+ * from `iam.principal_role_assignments`, and nothing in the tree writes one
+ * for a human: `workspace-bootstrap.ts` records the creator in
+ * `workspace.workspace_users` and assigns no IAM role,
+ * `iam-provision.ts` creates the workspace-scoped roles and hands them to
+ * nobody, and the one insert setting a non-null `workspace_id`
+ * (`agent.role.assign.ts`) refuses human system roles. The org half has no
+ * such gap — every path writing `org_users.role` writes the matching IAM
+ * assignment in the same transaction — which is why `ctx.orgRole` is a
+ * faithful proxy for what the handler will find and `ctx.wsRole` is not.
+ *
+ * So this reads only the role that is enforceable. Widening it to
+ * `ctx.wsRole === "owner"` would promise authority nothing can grant, and
+ * would promise it to a viewer who cannot reach the control anyway:
+ * `list_tool_versions` asserts the same empty workspace clause, so an org
+ * `member` is denied the registry read and `Registry` answers `ReadFailure`
+ * before `ImportControls` is reached.
+ *
+ * The gate is not the decision. Whether workspace membership should confer
+ * IAM authority at all — for this capability and the 215 others declaring a
+ * `workspace:` clause — is #3198, and it wants an ADR. When that lands, this
+ * reads `ctx.wsRole` again and `tools.test.tsx` derives from the full
+ * `defaultRoles` rather than the org clause alone.
  */
-function canImportUnderOrgRole(ctx: WsCtx): boolean {
+function canImportTools(ctx: WsCtx): boolean {
   return canAdministerOrg(ctx);
 }
 
@@ -76,7 +94,7 @@ async function TabBody({
           names={view.names}
           category={view.category}
           cursor={view.cursor}
-          canImport={canImportUnderOrgRole(ctx)}
+          canImport={canImportTools(ctx)}
           canClassify={canAdministerOrg(ctx)}
           read={read}
         />

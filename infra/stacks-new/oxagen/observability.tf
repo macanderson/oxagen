@@ -26,7 +26,15 @@
 # ---------------------------------------------------------------------------
 
 locals {
-  log_group_services = ["docs", "stella", "app", "api", "mcp", "neo4j", "caddy", "clickhouse", "worker"]
+  # Nine services, plus one group that is not a service: `docker-events` is the
+  # node's container start stream, written by the collector in
+  # modules/app-node/monitoring.tf and counted by
+  # `aws_cloudwatch_log_metric_filter.container_starts` in alarms.tf. It is in
+  # this list rather than standing alone so it inherits the same 30-day
+  # retention, the same tags and the same S3 archive as everything else here —
+  # the worker's log group was outside this list for exactly that reason and was
+  # the one stream neither archived nor watched.
+  log_group_services = ["docs", "stella", "app", "api", "mcp", "neo4j", "caddy", "clickhouse", "worker", "docker-events"]
 }
 
 # `/oxagen-app/worker` already exists. It was created by the first thing that
