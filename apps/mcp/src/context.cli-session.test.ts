@@ -162,11 +162,9 @@ describe("a CLI session key on MCP acts for the person who approved it", () => {
     cliSessionKeyFor(ALICE);
     await resolveMcpContext("Bearer ox_cli_session", "req-audit", "203.0.113.7");
     expect(emitSecurityEvent).toHaveBeenCalledOnce();
-    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0] as [
-      Record<string, unknown>,
-    ];
-    expect(event.eventType).toBe("api_key.used");
-    expect(event.actorUserId).toBe(ALICE);
+    const event = vi.mocked(emitSecurityEvent).mock.calls[0]?.[0];
+    expect(event?.eventType).toBe("api_key.used");
+    expect(event?.actorUserId).toBe(ALICE);
   });
 
   it("leaves every other key resolving to no person, exactly as before", async () => {

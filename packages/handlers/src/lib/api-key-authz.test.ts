@@ -127,6 +127,32 @@ describe("resolveOperatorUserId", () => {
     expect(await resolveOperatorUserId(KEY_CTX)).toBeNull();
   });
 
+  it("takes the surface's person for a CLI session key without reading the scope", async () => {
+    // The five sites that answer "what principal is a `cli_session_v1` key?"
+    // have to agree, and this one agrees by never being asked: `resolveApiKey`
+    // resolves the key to its creator, both surfaces put that person on the
+    // context, and the first line of the function returns it. The scope read —
+    // whose predicate would call any purposed key a machine — is unreachable
+    // for such a key.
+    const findFirst = stubKey({
+      ...CLI_KEY,
+      scope: { purpose: "cli_session_v1" },
+    });
+    expect(
+      await resolveOperatorUserId({ ...KEY_CTX, userId: "user_approver" }),
+    ).toBe("user_approver");
+    expect(findFirst).not.toHaveBeenCalled();
+  });
+
+  it("still finds no person in a CLI session key no surface resolved one for", async () => {
+    // The fail-closed corner, and why the scope predicate stays as it is. A
+    // context with no person is a surface that did not resolve one, and this
+    // function must not invent one from `created_by_id` — `machineKeyDenial`
+    // denies that same credential for the same reason.
+    stubKey({ ...CLI_KEY, scope: { purpose: "cli_session_v1" } });
+    expect(await resolveOperatorUserId(KEY_CTX)).toBeNull();
+  });
+
   it("returns null for an unknown or revoked key, a key with no creator, or no credential", async () => {
     stubKey(undefined);
     expect(await resolveOperatorUserId(KEY_CTX)).toBeNull();

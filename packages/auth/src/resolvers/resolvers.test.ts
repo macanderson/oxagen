@@ -462,6 +462,55 @@ describe("resolveApiKey", () => {
     expect(result).toMatchObject({ ok: true, userId: null });
   });
 
+  it("carries a user for the CLI session purpose and for no other purpose the tree mints", async () => {
+    // The MCP surface now puts `resolveApiKey`'s `userId` on the context
+    // instead of hard-coding null, so the blast radius of that change is
+    // exactly the set of purposes this resolver attaches a user to. Every
+    // purpose written to `auth.api_keys.scope` anywhere in the tree is listed
+    // here, with where it is minted, so adding a sixth is a failing test
+    // rather than a silent widening of who a machine key speaks for.
+    const MINTED_PURPOSES: ReadonlyArray<[string, string]> = [
+      // lib/tacho-host-enroll.ts
+      ["tacho_host_v1", "Tacho host enrollment"],
+      ["tacho_gateway_v1", "Tacho local MCP gateway"],
+      // telemetry.stella.enroll.ts
+      ["stella_operational_telemetry_v1", "Stella telemetry enrollment"],
+    ];
+    for (const [purpose, where] of MINTED_PURPOSES) {
+      mockQuery.apiKeys.findFirst.mockResolvedValueOnce({
+        id: "aky_machine",
+        keyHash: sha256hex(RAW_KEY),
+        orgId: "org_abc",
+        workspaceId: "wrk_xyz",
+        expiresAt: null,
+        scope: { purpose },
+        // A creator IS recorded on every one of these — an Owner or Admin
+        // enrolled the machine. Attaching it is what would widen.
+        createdById: "user_operator",
+      });
+      const result = await resolveApiKey(RAW_KEY);
+      expect(result, where).toMatchObject({ ok: true, userId: null });
+    }
+
+    // A key with no purpose at all (create_api_key) is the fifth case, and it
+    // carries no user either.
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce({
+      id: "aky_plain",
+      keyHash: sha256hex(RAW_KEY),
+      orgId: "org_abc",
+      workspaceId: "wrk_xyz",
+      expiresAt: null,
+      scope: {},
+      createdById: "user_operator",
+    });
+    expect(await resolveApiKey(RAW_KEY)).toMatchObject({
+      ok: true,
+      userId: null,
+    });
+
+    // `agent_credential_v1`, the sixth, never resolves at all — see below.
+  });
+
   it("an agent credential is refused as purpose_locked before any user is attached", async () => {
     mockQuery.apiKeys.findFirst.mockResolvedValueOnce({
       id: "aky_agent",

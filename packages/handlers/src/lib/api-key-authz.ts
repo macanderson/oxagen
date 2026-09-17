@@ -25,17 +25,29 @@ export interface OperatorContext {
 /**
  * The person an operator capability acts for, or null when there is none.
  *
- * A session carries its user. An API key acts for the user who minted it:
- * `oxagen login` mints one per sign-in (POST /v1/auth/cli/token, approved only
- * for an Owner or Admin), and it is the only credential the `tacho` CLI and the
- * desktop app hold — refusing every key made host enrollment impossible from
- * the one client built to do it. The API sets `userId` to null for every
- * bearer key, so without this the handlers saw no person at all.
+ * A context that already carries a person is that person, and that is the
+ * first line of the function for a reason: `resolveApiKey` is the authority on
+ * who a credential speaks for, and where it resolved somebody — a
+ * `cli_session_v1` key resolves to the user who approved `oxagen login`, with
+ * their org and workspace membership re-checked on every call — the surfaces
+ * put that person on the context and this function must not re-litigate it
+ * from the scope column.
  *
- * A key whose scope names a purpose was issued to a machine by an enrollment
- * workflow (a Tacho host, a Stella telemetry install) and never acts for a
- * person: an enrolled machine must not be able to mint, revoke or command
- * enrollments. Any purpose fails closed, including ones added later.
+ * The scope read below is therefore only ever reached for a credential that
+ * resolved to NOBODY. It exists for an unscoped key: `oxagen login` used to
+ * mint one per sign-in, it is still the only credential some clients hold, and
+ * refusing every bearer key made host enrollment impossible from the one
+ * client built to do it, so the key's recorded creator stands in.
+ *
+ * A key whose scope names a purpose and that still arrived with no person is
+ * a machine credential — a Tacho host, a Stella telemetry install — and never
+ * acts for one: an enrolled machine must not be able to mint, revoke or
+ * command enrollments. Any purpose fails closed, including ones added later.
+ * Note what that sentence does NOT say: it is not "a purposed key is never a
+ * person", which is false of `cli_session_v1` and was the reading that let the
+ * five sites answering "what principal is a CLI session key?" disagree with
+ * each other. It is "a purposed key that reached here is not one", which is
+ * true because reaching here means no surface resolved a person for it.
  *
  * Callers still run their role gate on the returned user, so a key never
  * outlives its creator's Owner/Admin role.
