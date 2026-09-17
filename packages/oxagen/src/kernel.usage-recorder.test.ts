@@ -176,6 +176,46 @@ describe("kernel governed-action usage recorder", () => {
     ]);
   });
 
+  it("holds the outside-frame across every await, not only until the first one", async () => {
+    // The regression this pins: runOutsideGovernedAction used
+    // AsyncLocalStorage.exit(fn), and on the async_hooks-backed ALS `exit` is
+    // disable / call / re-enable in a `finally`. `fn` is async, so the
+    // `finally` fires at its FIRST await and the store returns for everything
+    // after it — every tool call in a turn but the first reads an enclosing
+    // frame, counts as nested, and is never billed. Under-billing, and silent.
+    //
+    // Honest about what runs this down: the two forms diverge only on the
+    // async_hooks implementation (Node <= 22, or 24 without AsyncContextFrame).
+    // Node 24 defaults to AsyncContextFrame, where `exit` does hold across
+    // awaits, so on the supported runtime this passes under both forms and
+    // stands as a guard that the `run(undefined, ...)` form did not change the
+    // contract. It fails under `exit` wherever async_hooks backs the store.
+    //
+    // Five calls with awaits between them, because one await is what the old
+    // form survived.
+    defineCap({ name: "accrual_turn_many", noBillingGate: true });
+    defineCap({ name: "accrual_tool_many" });
+    registerHandler("accrual_tool_many", async () => async () => ({
+      tool: true,
+    }));
+    registerHandler("accrual_turn_many", async () => async () => {
+      await runOutsideGovernedAction(async () => {
+        for (let i = 0; i < 5; i++) {
+          await invoke("accrual_tool_many", {}, ctx, { surface: "api" });
+          await Promise.resolve();
+        }
+      });
+      return { turn: true };
+    });
+
+    await invoke("accrual_turn_many", {}, ctx, { surface: "api" });
+
+    // Five tool calls the agent made, five governed actions sold.
+    expect(recorded.map((r) => r.capability)).toEqual(
+      Array(5).fill("accrual_tool_many"),
+    );
+  });
+
   it("bills two sequential top-level calls twice — nesting is per call tree, not per process", async () => {
     defineCap({ name: "accrual_seq" });
     registerHandler("accrual_seq", async () => async () => ({ ok: true }));
