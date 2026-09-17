@@ -125,25 +125,58 @@ async function ensureLedgerTable(ch: ClickHouseClient): Promise<void> {
 }
 
 /**
- * True when the target database already contains at least one table OTHER
- * than the ledger. Called BEFORE `ensureLedgerTable` creates `_migrations`,
- * so the ledger table itself never counts. This is the fresh-install /
- * existing-deployment fork: a genuinely empty database has never run any
- * migration, so every file must still execute in full (0021's `DROP TABLE
- * IF EXISTS` is a no-op against a table that was never created); a database
- * that already has tables reached that state through a PRIOR successful
- * `migrate()` run — a failed one would have thrown and failed the deploy —
- * so every migration file present at that time is known-applied.
+ * What the target database looked like BEFORE this call created anything:
+ * whether `_migrations` was already there, and whether any OTHER table was.
+ *
+ * Both bits answer one question — does this database predate the ledger? —
+ * and that is the question the one-time baseline bootstrap turns on, so
+ * getting it wrong skips migrations that never ran.
+ *
+ *   ledger absent, other tables present → a pre-ledger deployment. It reached
+ *       that state through prior successful `migrate()` runs under
+ *       replay-everything semantics, so every file present then is
+ *       known-applied and the bootstrap records them without re-executing.
+ *   ledger absent, no other tables      → a genuinely empty database. Every
+ *       file executes in full; 0021's `DROP TABLE IF EXISTS` is a no-op
+ *       against a table that was never created.
+ *   ledger present                      → the ledger is already in charge of
+ *       this database, whatever else is in it. Trust it verbatim, never
+ *       bootstrap.
+ *
+ * That last case is why this reads two bits rather than one (#2972). The
+ * previous version counted ALL tables and claimed the ledger "never counts"
+ * because the call happens before `ensureLedgerTable` — true only on the FIRST
+ * call. A fresh database whose first `migrate()` created `_migrations` and part
+ * of schema.sql and then failed (a ClickHouse blip mid-run; the process exits
+ * 1) comes back on the next attempt with tables present and an empty ledger,
+ * which the old fork read as a pre-ledger deployment. It would bootstrap every
+ * file up to the cutover as applied WITHOUT running it, so a brand-new
+ * deployment would permanently lack error_events, claude_sessions,
+ * usage_events, memory_changes, schema_conformance_events and
+ * stella_operational_events, every insert into them failing forever with
+ * nothing in the migration output saying why. Excluding `_migrations` from the
+ * count does not fix it on its own — the tables from the partial run still
+ * count. The presence of the ledger is what tells the two apart.
  */
-async function databaseHasPreExistingTables(
-  ch: ClickHouseClient,
-): Promise<boolean> {
+async function inspectDatabase(ch: ClickHouseClient): Promise<{
+  hasLedgerTable: boolean;
+  hasOtherTables: boolean;
+}> {
   const result = await ch.query({
-    query: `SELECT count() AS c FROM system.tables WHERE database = currentDatabase()`,
+    query: `
+      SELECT
+          countIf(name = '${LEDGER_TABLE}')  AS ledger,
+          countIf(name != '${LEDGER_TABLE}') AS c
+      FROM system.tables
+      WHERE database = currentDatabase()
+    `,
     format: "JSONEachRow",
   });
-  const rows = await result.json<{ c: string }>();
-  return Number(rows[0]?.c ?? "0") > 0;
+  const rows = await result.json<{ ledger?: string; c?: string }>();
+  return {
+    hasLedgerTable: Number(rows[0]?.ledger ?? "0") > 0,
+    hasOtherTables: Number(rows[0]?.c ?? "0") > 0,
+  };
 }
 
 /** Filenames already recorded in the ledger. */
@@ -194,8 +227,15 @@ async function migrateOnce(): Promise<void> {
   await ensureDatabase();
   const ch = clickhouse();
 
-  // Snapshot taken BEFORE the ledger table exists, so it can never see itself.
-  const isExistingDeployment = await databaseHasPreExistingTables(ch);
+  // Snapshot taken BEFORE this call creates anything, so it describes the
+  // database as it arrived rather than as this run leaves it.
+  const { hasLedgerTable, hasOtherTables } = await inspectDatabase(ch);
+  // A database that already carries `_migrations` is under the ledger's
+  // management, so its ledger is the whole truth about what has been applied —
+  // including when that ledger is empty because an earlier attempt created the
+  // table and then failed. Only a database with tables and NO ledger predates
+  // the ledger and needs the one-time baseline.
+  const isPreLedgerDeployment = hasOtherTables && !hasLedgerTable;
   await ensureLedgerTable(ch);
 
   const schemaSql = readFileSync(join(here, "schema.sql"), "utf8");
@@ -216,12 +256,28 @@ async function migrateOnce(): Promise<void> {
     // record that WITHOUT re-running it. See PRE_LEDGER_BASELINE_CUTOVER for
     // why a file that sorts after the cutover is deliberately excluded here
     // and always runs for real below.
-    if (isExistingDeployment && applied.size === 0) {
+    if (isPreLedgerDeployment && applied.size === 0) {
       const baseline = files.filter((f) => f <= PRE_LEDGER_BASELINE_CUTOVER);
       await recordApplied(ch, baseline);
       for (const f of baseline) applied.add(f);
     }
 
+    // A file is recorded only AFTER all of its statements have returned. A
+    // failure part-way through one throws out of this loop and out of
+    // migrate(), so the file stays unrecorded and the next run replays it from
+    // its first statement — which is the right default: a half-applied file
+    // that the ledger called applied would be invisible forever.
+    //
+    // The cost of that default is that the replay needs every statement in the
+    // file to be individually idempotent, and nothing here checks that. Every
+    // file on disk today qualifies (`CREATE TABLE IF NOT EXISTS`,
+    // `ALTER ... ADD COLUMN/INDEX IF NOT EXISTS`, `DROP TABLE IF EXISTS`), so
+    // this is a constraint on what a future migration may contain rather than a
+    // live defect: a file whose second statement cannot run twice will fail
+    // differently on the retry, and the operator will be reading the SECOND
+    // error rather than the one that actually stopped the deploy. Closing it
+    // properly means per-statement ledger granularity, which ClickHouse's lack
+    // of DDL transactions makes its own piece of work; #2972 carries it.
     for (const file of files) {
       if (applied.has(file)) continue;
       const body = readFileSync(join(migrationsDir, file), "utf8");

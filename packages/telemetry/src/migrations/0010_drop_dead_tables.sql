@@ -18,6 +18,18 @@
 -- value is lost. The TS inserter fns + row types + barrel re-exports for the
 -- dropped tables are deleted in the same commit (no dead code left behind).
 
+-- THESE DROPS STAY (#2972)
+--   All five are replay-safe: nothing after this file recreates any of them,
+--   so a re-run drops absent tables. The ledger in migrate.ts skips the file
+--   on an existing deployment regardless.
+--
+--   They are not removable either. traces, spans, api_key_events and
+--   agent_logs have no CREATE left anywhere in schema.sql or migrations/, so
+--   those four lines are already inert on a fresh database and deleting them
+--   would buy nothing while losing the record of what went and why.
+--   session_recaps is different: 0005_session_telemetry.sql still creates it,
+--   so on a fresh database its DROP below is the only thing that removes it.
+
 DROP TABLE IF EXISTS traces;
 DROP TABLE IF EXISTS spans;
 DROP TABLE IF EXISTS api_key_events;

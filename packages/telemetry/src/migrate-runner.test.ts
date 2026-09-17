@@ -597,6 +597,114 @@ describe("migrate() — applied-migrations ledger (#2632)", () => {
     expect(recorded).toContain("0027_new_thing.sql");
   });
 
+  it("a fresh database whose FIRST run failed part-way does NOT get bootstrapped (#2972)", async () => {
+    // The witness. Run 1 on an empty database creates _migrations and part of
+    // schema.sql, then dies (ClickHouse blip; the process exits 1). Run 2
+    // arrives at a database that HAS tables and has an EMPTY ledger — which the
+    // old single-count fork read as "a pre-ledger deployment", bootstrapping
+    // every pre-cutover file as applied without ever running it. A brand-new
+    // deployment would then permanently lack the tables those files create.
+    readdirSyncMock.mockReturnValue(["0001_a.sql", "0002_b.sql"]);
+    readFileSyncMock.mockImplementation((p: unknown) => {
+      const path = String(p);
+      if (path.endsWith("0001_a.sql"))
+        return "CREATE TABLE IF NOT EXISTS needed_a (id UInt32) ENGINE=MergeTree() ORDER BY id;";
+      if (path.endsWith("0002_b.sql"))
+        return "CREATE TABLE IF NOT EXISTS needed_b (id UInt32) ENGINE=MergeTree() ORDER BY id;";
+      return SCHEMA_SQL;
+    });
+    chQueryMock.mockImplementation(async (opts: { query: string }) => {
+      if (opts.query.includes("system.tables")) {
+        // The shape run 1 left behind: the ledger exists, and so do the
+        // tables schema.sql managed to create before it failed.
+        return jsonResult([{ ledger: "1", c: "3" }]);
+      }
+      return jsonResult([]); // ledger table exists but holds nothing
+    });
+
+    await migrate();
+
+    const queries = chCommandMock.mock.calls.map(
+      (c) => (c[0] as { query: string }).query,
+    );
+    // Both files actually ran. Under the old fork neither did.
+    expect(queries.some((q) => q.includes("needed_a"))).toBe(true);
+    expect(queries.some((q) => q.includes("needed_b"))).toBe(true);
+
+    const recorded = chInsertMock.mock.calls
+      .filter((c) => (c[0] as { table: string }).table === "_migrations")
+      .flatMap(
+        (c) => (c[0] as { values: readonly { filename: string }[] }).values,
+      )
+      .map((v) => v.filename);
+    // Recorded one at a time, after executing — not swept in as a baseline.
+    expect(recorded).toEqual(["0001_a.sql", "0002_b.sql"]);
+    expect(chInsertMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("a pre-ledger deployment (tables, and NO ledger table) still bootstraps", async () => {
+    // The other side of the same fork: this is the shape the bootstrap exists
+    // for, and the #2972 change must not take it away. Distinguished from the
+    // case above by `ledger: "0"` alone.
+    readdirSyncMock.mockReturnValue(["0001_a.sql"]);
+    readFileSyncMock.mockImplementation((p: unknown) => {
+      const path = String(p);
+      if (path.endsWith("0001_a.sql")) return "DROP TABLE IF EXISTS doomed;";
+      return SCHEMA_SQL;
+    });
+    chQueryMock.mockImplementation(async (opts: { query: string }) => {
+      if (opts.query.includes("system.tables"))
+        return jsonResult([{ ledger: "0", c: "12" }]);
+      return jsonResult([]);
+    });
+
+    await migrate();
+
+    const queries = chCommandMock.mock.calls.map(
+      (c) => (c[0] as { query: string }).query,
+    );
+    expect(queries.some((q) => q.includes("doomed"))).toBe(false);
+
+    const recorded = chInsertMock.mock.calls
+      .filter((c) => (c[0] as { table: string }).table === "_migrations")
+      .flatMap(
+        (c) => (c[0] as { values: readonly { filename: string }[] }).values,
+      )
+      .map((v) => v.filename);
+    expect(recorded).toEqual(["0001_a.sql"]);
+  });
+
+  it("counts the ledger table separately from everything else", async () => {
+    // A database holding ONLY _migrations (created by a run that failed before
+    // schema.sql) is not "a database with pre-existing tables". The old query
+    // counted it as one.
+    readdirSyncMock.mockReturnValue(["0001_a.sql"]);
+    readFileSyncMock.mockImplementation((p: unknown) => {
+      const path = String(p);
+      if (path.endsWith("0001_a.sql"))
+        return "CREATE TABLE IF NOT EXISTS needed_a (id UInt32) ENGINE=MergeTree() ORDER BY id;";
+      return SCHEMA_SQL;
+    });
+    chQueryMock.mockImplementation(async (opts: { query: string }) => {
+      if (opts.query.includes("system.tables"))
+        return jsonResult([{ ledger: "1", c: "0" }]);
+      return jsonResult([]);
+    });
+
+    await migrate();
+
+    const queries = chCommandMock.mock.calls.map(
+      (c) => (c[0] as { query: string }).query,
+    );
+    expect(queries.some((q) => q.includes("needed_a"))).toBe(true);
+    // And the query it asked is the one that can tell them apart at all.
+    const inspect = chQueryMock.mock.calls
+      .map((c) => (c[0] as { query: string }).query)
+      .find((q) => q.includes("system.tables"));
+    expect(inspect).toContain("countIf(name = '_migrations')");
+    expect(inspect).toContain("countIf(name != '_migrations')");
+  });
+
   it("skips a file already recorded in the ledger and only executes the unrecorded one", async () => {
     readdirSyncMock.mockReturnValue(["0001_a.sql", "0002_b.sql"]);
     readFileSyncMock.mockImplementation((p: unknown) => {
