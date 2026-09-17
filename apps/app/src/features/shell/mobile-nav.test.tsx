@@ -28,15 +28,17 @@ import { phoneWidth } from "@/test/phone";
 import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
+import workspaceSettingsMessages from "../../../messages/workspace-settings.json";
 import { shellData } from "./shell.builders";
 import { ShellClient } from "./shell-client";
 import type { ShellData } from "./shell-data";
 
-const nav = vi.hoisted(() => ({ pathname: "/acme/core-platform" }));
+const nav = vi.hoisted(() => ({ pathname: "/acme/core-platform", query: "" }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname,
-  useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(nav.query),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
 
 vi.mock("next/link", () => ({
@@ -104,7 +106,12 @@ function renderPhone(data: ShellData, page: ReactNode = null) {
     <NextIntlClientProvider
       locale="en"
       timeZone="UTC"
-      messages={{ ...en, ...shellMessages, ...uiMessages }}
+      messages={{
+        ...en,
+        ...shellMessages,
+        ...uiMessages,
+        ...workspaceSettingsMessages,
+      }}
     >
       <ShellClient data={data} />
       <div data-shell-page="">
@@ -346,7 +353,12 @@ describe("card tables", () => {
       <NextIntlClientProvider
         locale="en"
         timeZone="UTC"
-        messages={{ ...en, ...shellMessages, ...uiMessages }}
+        messages={{
+          ...en,
+          ...shellMessages,
+          ...uiMessages,
+          ...workspaceSettingsMessages,
+        }}
       >
         <ShellClient data={shellData()} />
         <div data-shell-page="">

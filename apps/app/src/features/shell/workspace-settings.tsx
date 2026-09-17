@@ -33,7 +33,7 @@ import type {
   InstallationRepositories,
   WorkspaceRepository,
 } from "@/data/contracts/repository";
-import type { GitHubUrl } from "@/shared/github-url";
+import { parseGitHubUrl } from "@/shared/github-url";
 import { routes, sanitizeNext } from "@/shared/safe-path";
 import {
   buttonSecondary,
@@ -251,13 +251,14 @@ function MainRepositoryPanel({
 }
 
 /** No installation is attached: the App's install door, or the honest reason there is none. */
-function InstallPanel({ installUrl }: { installUrl: GitHubUrl | null }) {
+function InstallPanel({ installUrl }: { installUrl: string | null }) {
   const t = useTranslations("workspaceSettings.mainRepository");
+  const href = parseGitHubUrl(installUrl);
   return (
     <div data-testid="workspace-repository-install" className={`${panel} p-4`}>
       <h4 className={sectionTitle}>{t("install.heading")}</h4>
       <p className={`mt-1.5 ${prose}`}>{t("install.body")}</p>
-      {installUrl === null ? (
+      {href === null ? (
         <p
           data-testid="workspace-github-unconfigured"
           className={`mt-3 ${prose}`}
@@ -266,7 +267,7 @@ function InstallPanel({ installUrl }: { installUrl: GitHubUrl | null }) {
         </p>
       ) : (
         <GitHubLink
-          to={installUrl}
+          to={href}
           data-testid="workspace-github-install"
           data-touch-target=""
           className={`mt-3 ${buttonSecondary}`}
@@ -284,9 +285,10 @@ function BoundRepositoryPanel({
   manageUrl,
 }: {
   repository: NonNullable<WorkspaceRepository["repository"]>;
-  manageUrl: GitHubUrl | null;
+  manageUrl: string | null;
 }) {
   const t = useTranslations("workspaceSettings.mainRepository");
+  const href = parseGitHubUrl(repository.htmlUrl);
   return (
     <div data-testid="workspace-repository-bound" className={`${panel} p-4`}>
       <p className={eyebrow}>{t("bound.heading")}</p>
@@ -299,9 +301,9 @@ function BoundRepositoryPanel({
       <p className={`mt-1 ${prose}`}>
         <BoundAt iso={repository.boundAt} />
       </p>
-      {repository.htmlUrl === null ? null : (
+      {href === null ? null : (
         <GitHubLink
-          to={repository.htmlUrl}
+          to={href}
           data-testid="workspace-repository-open"
           className={`mt-2 inline-block ${linkText}`}
         >
@@ -327,12 +329,13 @@ function BoundAt({ iso }: { iso: string }) {
   );
 }
 
-function ManageLink({ manageUrl }: { manageUrl: GitHubUrl | null }) {
+function ManageLink({ manageUrl }: { manageUrl: string | null }) {
   const t = useTranslations("workspaceSettings.mainRepository");
-  if (manageUrl === null) return null;
+  const href = parseGitHubUrl(manageUrl);
+  if (href === null) return null;
   return (
     <GitHubLink
-      to={manageUrl}
+      to={href}
       data-testid="workspace-github-manage"
       className={`mt-3 inline-block ${linkText}`}
     >
@@ -352,7 +355,7 @@ function RepositoryPicker({
   org: string;
   ws: string;
   listing: Load<InstallationRepositories> | null;
-  manageUrl: GitHubUrl | null;
+  manageUrl: string | null;
   onBound: () => void;
 }) {
   const t = useTranslations("workspaceSettings.mainRepository");

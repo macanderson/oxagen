@@ -21,9 +21,7 @@
 import { repositoryInstallationList } from "@oxagen/oxagen/contracts/repository.installation.list";
 import { repositoryMainBind } from "@oxagen/oxagen/contracts/repository.main.bind";
 import { repositoryMainGet } from "@oxagen/oxagen/contracts/repository.main.get";
-import { captureError } from "@oxagen/telemetry";
-import type { z } from "zod";
-import {
+import type {
   InstallationRepositories,
   WorkspaceRepository,
 } from "@/data/contracts/repository";
@@ -61,25 +59,6 @@ function asActionResult<T>(read: Read<T>): ActionResult<T> {
   }
 }
 
-/** The mapped record parsed at the boundary; one the view model refuses is `record_unmappable`, reported once. */
-function view<S extends z.ZodType>(
-  orgId: string,
-  schema: S,
-  result: ActionResult<z.input<S>>,
-  read: string,
-): ActionResult<z.output<S>> {
-  if (!result.ok) return result;
-  const parsed = schema.safeParse(result.value);
-  if (parsed.success) return { ok: true, value: parsed.data };
-  captureError({
-    error: parsed.error,
-    source: "app",
-    orgId,
-    context: `${read} record_unmappable`,
-  });
-  return { ok: false, reason: "unavailable", code: "record_unmappable" };
-}
-
 /**
  * The workspace's main repository, whether an installation is attached, and
  * the doors to GitHub. Answering all three at once is the point: they are
@@ -96,12 +75,7 @@ export async function readWorkspaceRepository(
     input: {},
     page: "workspaceSettings",
   });
-  return view(
-    ctx.orgId,
-    WorkspaceRepository,
-    asActionResult(read),
-    "repository.main",
-  );
+  return asActionResult(read);
 }
 
 /**
@@ -121,12 +95,7 @@ export async function listInstallationRepositories(
     input: {},
     page: "workspaceSettings",
   });
-  return view(
-    ctx.orgId,
-    InstallationRepositories,
-    asActionResult(read),
-    "repository.installations",
-  );
+  return asActionResult(read);
 }
 
 /**
