@@ -13,7 +13,7 @@
   `packages/rules/src/auto-approval.ts`,
   `packages/rules/src/auto-approval-path.ts`,
   `packages/rules/src/call-facts.ts`, `packages/rules/src/rule-store.ts`,
-  `packages/database/atlas/migrations/20260916120000_auto_approval_columns.sql`.
+  `packages/database/atlas/migrations/20260916120200_auto_approval_columns.sql`.
 
 ## Context
 

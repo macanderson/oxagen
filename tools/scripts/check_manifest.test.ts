@@ -161,6 +161,9 @@ describe("manifestContentChanged", () => {
   it("reports a missing or unparseable file as changed", () => {
     expect(manifestContentChanged("", manifest)).toBe(true);
     expect(manifestContentChanged("{ not json", manifest)).toBe(true);
+  });
+});
+
 describe("buildUiProofIndex", () => {
   it("reads the e2e proofs out of the bindings, not off the top level", () => {
     // The map's real shape: `$doc` and `$binding_shape` sit beside `bindings`,

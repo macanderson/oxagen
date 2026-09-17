@@ -444,12 +444,13 @@ async function upsertPlans(
       currency: plan.gauTerms.currency,
       ratePerGauMicros: plan.gauTerms.ratePerGauMicros,
       blockSizeGau: plan.gauTerms.blockSizeGau,
+      // The published allowance is `included_gau_per_month` now. #2999 had this
+      // row also write `included_actions_annual`, because that column was NOT
+      // NULL DEFAULT 25000 and omitting it put every paid plan this script
+      // created on the free allowance. The 2026-09-15 counter drop removed the
+      // column, so the figure it protected is the monthly GAU allowance above
+      // and there is nothing left to omit.
       includedGauPerMonth: plan.gauTerms.includedGauPerMonth,
-      // `billing.plans.included_actions_annual` is NOT NULL DEFAULT 25000 — the
-      // FREE allowance. Omitting it here priced every paid plan this script
-      // created at one fifteenth of Scale's allowance and billed governed-action
-      // overage from action 25,001, on the PRIMARY meter under ADR-052.
-      includedActionsAnnual: BigInt(plan.includedActionsAnnual),
       features: plan.features,
       isPublic: true,
     };
@@ -478,7 +479,6 @@ async function upsertPlans(
           ratePerGauMicros: row.ratePerGauMicros,
           blockSizeGau: row.blockSizeGau,
           includedGauPerMonth: row.includedGauPerMonth,
-          includedActionsAnnual: row.includedActionsAnnual,
           features: row.features,
           updatedAt: new Date(),
         },
