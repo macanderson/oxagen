@@ -42,6 +42,7 @@
             "name": {
               "type": "string",
               "minLength": 1,
+              "maxLength": 128,
               "description": "Tool name (snake_case identifier, e.g. read_file) — the workspace-unique key"
             },
             "description": {
