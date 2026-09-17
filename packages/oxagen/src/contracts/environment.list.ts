@@ -13,7 +13,7 @@ export const environmentList = registerCapability({
     riskLevel: "low",
     category: "introspection",
   },
-  layers: ["api", "mcp", "unit", "docs", "app"],
+  layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   sensitivity: "low",
   mutates: false,

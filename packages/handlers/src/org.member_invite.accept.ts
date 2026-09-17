@@ -12,7 +12,7 @@
 //      d. Assign the invited `role` to the new principal.
 //   5. Return the org_users row shape.
 
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { orgMemberInviteAccept } from "@oxagen/oxagen/contracts/org.member_invite.accept";
 import { schema, withSystemDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
@@ -55,12 +55,18 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<
   );
 
   if (!invitation) {
-    throw new Error(`Invitation '${input.invitationPublicId}' not found`);
+    throw new HandlerError({
+      code: "not_found",
+      reason: "invitation_not_found",
+      message: `Invitation '${input.invitationPublicId}' not found`,
+    });
   }
   if (invitation.status !== "pending") {
-    throw new Error(
-      `Invitation '${input.invitationPublicId}' is no longer pending (status: ${invitation.status})`,
-    );
+    throw new HandlerError({
+      code: "conflict",
+      reason: "invitation_closed",
+      message: `Invitation '${input.invitationPublicId}' is no longer pending (status: ${invitation.status})`,
+    });
   }
   if (invitation.expiresAt && invitation.expiresAt < new Date()) {
     // Mark expired to keep state consistent; don't block on failure.
@@ -70,7 +76,7 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<
         .set({
           status: "expired",
           updatedAt: new Date(),
-          updatedByUserId: ctx.userId,
+          updatedById: ctx.userId,
         })
         .where(eq(schema.invitations.id, invitation.id)),
     ).catch((err) =>
@@ -79,7 +85,11 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<
         "invite.accept: failed to mark expired invitation — row remains pending",
       ),
     );
-    throw new Error(`Invitation '${input.invitationPublicId}' has expired`);
+    throw new HandlerError({
+      code: "conflict",
+      reason: "invitation_expired",
+      message: `Invitation '${input.invitationPublicId}' has expired`,
+    });
   }
 
   // ── Verify email matches ──────────────────────────────────────────────────────
@@ -102,7 +112,11 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<
       },
       "org.member.invite.accept: email mismatch",
     );
-    throw new Error("This invitation was not issued to your email address");
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "wrong_email",
+      message: "This invitation was not issued to your email address",
+    });
   }
 
   // ── Transaction: accept + create membership + provision IAM ──────────────────
@@ -122,7 +136,7 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<
         status: "accepted",
         acceptedUserId: ctx.userId,
         updatedAt: joinedAt,
-        updatedByUserId: ctx.userId,
+        updatedById: ctx.userId,
       })
       .where(eq(schema.invitations.id, invitation.id));
 
@@ -134,8 +148,8 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<
         userId: ctx.userId!,
         role: invitation.role,
         joinedAt,
-        createdByUserId: ctx.userId,
-        updatedByUserId: ctx.userId,
+        createdById: ctx.userId,
+        updatedById: ctx.userId,
       })
       .onConflictDoNothing()
       .returning({ publicId: schema.orgUsers.publicId });
@@ -192,8 +206,8 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<
           roleId: roleRow.id,
           orgId: invitation.orgId,
           assignedBy: ctx.userId,
-          createdByUserId: ctx.userId,
-          updatedByUserId: ctx.userId,
+          createdById: ctx.userId,
+          updatedById: ctx.userId,
         })
         .onConflictDoNothing();
     } else {

@@ -81,6 +81,7 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
 // Import AFTER mocks are wired. Kernel + registry + resolver are REAL.
 import { bootstrapIAMRuntime } from "./bootstrap";
 import { checkIAM } from "./check-iam";
+import { resourceScopeDigestOf } from "./resource-scope";
 import {
   CapabilityError,
   clearHandlersForTests,
@@ -340,6 +341,7 @@ function agentCtx(agentRun: AgentRunIAMContext): CapabilityContext {
 const handlerSpies = {
   read: vi.fn(),
   mutate: vi.fn(),
+  classify: vi.fn(),
   deploy: vi.fn(),
 };
 
@@ -380,6 +382,14 @@ function registerTestCapabilities(): void {
     sensitivity: "high" as const,
     defaultEffect: "allow" as const,
   });
+  registerCapability({
+    ...common,
+    name: "test.agent.classify",
+    description: "targeted exemplar — declares the object it acts on",
+    sensitivity: "high" as const,
+    defaultEffect: "allow" as const,
+    audit: { targetKind: "tool_version", targetIdField: "value" },
+  });
   registerHandler("test.agent.read", async () => async (input) => {
     handlerSpies.read(input);
     return input;
@@ -390,6 +400,10 @@ function registerTestCapabilities(): void {
   });
   registerHandler("test.agent.deploy", async () => async (input) => {
     handlerSpies.deploy(input);
+    return input;
+  });
+  registerHandler("test.agent.classify", async () => async (input) => {
+    handlerSpies.classify(input);
     return input;
   });
 }
@@ -603,6 +617,70 @@ describe("Agent RBAC Phase 2 — kernel enforcement via checkIAM", () => {
       outcome: "deny",
       reasonCode: "emergency_deny",
     });
+  });
+
+  it("a resource_scope emergency deny naming the call's audit target refuses it (#1261)", async () => {
+    const agentRun = makeAgentRun();
+    const ctx = agentCtx(agentRun);
+
+    primeLiveAuthority({
+      emergencyDenies: [
+        {
+          publicId: "emd_version",
+          denyKind: "resource_scope",
+          capabilityId: null,
+          resourceScopeDigest: resourceScopeDigestOf({
+            kind: "tool_version",
+            id: "tlv_bad",
+          }),
+          principalId: null,
+          reason: "bad version",
+        },
+      ],
+    });
+
+    // Another version of the same capability is untouched.
+    await invoke("test.agent.classify", { value: "tlv_ok" }, ctx, {
+      surface: "agent",
+    });
+    expect(handlerSpies.classify).toHaveBeenCalledTimes(1);
+
+    await expect(
+      invoke("test.agent.classify", { value: "tlv_bad" }, ctx, {
+        surface: "agent",
+      }),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(handlerSpies.classify).toHaveBeenCalledTimes(1);
+    expect(mocks.decisionRows[1]).toMatchObject({
+      outcome: "deny",
+      reasonCode: "emergency_deny",
+    });
+  });
+
+  it("a kill switch on the agent reaches a call whose contract names no target", async () => {
+    const agentRun = makeAgentRun();
+    const ctx = agentCtx(agentRun);
+
+    primeLiveAuthority({
+      emergencyDenies: [
+        {
+          publicId: "emd_agent",
+          denyKind: "resource_scope",
+          capabilityId: null,
+          resourceScopeDigest: resourceScopeDigestOf({
+            kind: "agent",
+            id: "agt_rbac_test",
+          }),
+          principalId: null,
+          reason: "agent compromised",
+        },
+      ],
+    });
+
+    await expect(
+      invoke("test.agent.read", { value: "x" }, ctx, { surface: "agent" }),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(handlerSpies.read).not.toHaveBeenCalled();
   });
 
   it("a grant issued AFTER admission cannot widen the run", async () => {

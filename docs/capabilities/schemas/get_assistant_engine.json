@@ -1,0 +1,96 @@
+{
+  "name": "get_assistant_engine",
+  "domain": "assistant",
+  "description": "Probe the in-app agent's engine: its readiness state as the engine reported it, or unreachable after the attempts made, with the host the probe was aimed at.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "state": {
+        "type": "string",
+        "enum": [
+          "ready",
+          "starting",
+          "draining",
+          "unreachable",
+          "unconfigured"
+        ]
+      },
+      "endpoint": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "attempts": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 3
+      },
+      "error": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "checkedAt": {
+        "type": "string"
+      },
+      "incident": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "state",
+      "endpoint",
+      "attempts",
+      "error",
+      "checkedAt",
+      "incident"
+    ],
+    "additionalProperties": false
+  }
+}

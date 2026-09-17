@@ -81,7 +81,7 @@ export const capabilityRegistryList = registerCapability({
     "List the platform's typed capability contracts from the live in-process registry — name, domain, surfaces, layers, sensitivity, default IAM grants, entitlement gate, and audit binding for each. Read-only platform metadata; powers the org governance catalog.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["api", "mcp", "unit", "docs", "app"],
+  layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   // Reading contract metadata must never consume credits or be blocked by a
   // zero balance — it is how an org inspects its own governance posture.

@@ -1,0 +1,168 @@
+{
+  "name": "propose_record",
+  "domain": "context",
+  "description": "Open a proposal on a lineage: the record it should become (kind, force, constraint effect, scope, statement), the rationale and the supporting runs, agents, records and evidence. Steers nothing until its Context PR merges.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "record": {
+        "type": "object",
+        "properties": {
+          "lineageId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "The lineage this proposal is about; the file stem under .oxagen/rules/"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "rule",
+              "constraint",
+              "procedure",
+              "fact",
+              "memory",
+              "preference"
+            ]
+          },
+          "force": {
+            "type": "string",
+            "enum": [
+              "must",
+              "should",
+              "may",
+              "info"
+            ]
+          },
+          "constraintEffect": {
+            "type": "string",
+            "enum": [
+              "require",
+              "forbid"
+            ]
+          },
+          "sharingScope": {
+            "type": "string",
+            "enum": [
+              "repository",
+              "workspace"
+            ],
+            "description": "Decides which repo the Context PR targets (spec §10.3 step 1)"
+          },
+          "statement": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "The single-sentence claim"
+          }
+        },
+        "required": [
+          "lineageId",
+          "kind",
+          "force",
+          "sharingScope",
+          "statement"
+        ],
+        "additionalProperties": false
+      },
+      "rationale": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000
+      },
+      "source": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "support": {
+        "type": "object",
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "default": []
+          },
+          "agents": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "default": []
+          },
+          "recordIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "default": []
+          },
+          "evidenceLinks": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "default": {}
+      }
+    },
+    "required": [
+      "record",
+      "rationale"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposalId": {
+        "type": "string"
+      },
+      "lineageId": {
+        "type": "string"
+      },
+      "status": {
+        "const": "proposed"
+      }
+    },
+    "required": [
+      "proposalId",
+      "lineageId",
+      "status"
+    ],
+    "additionalProperties": false
+  }
+}

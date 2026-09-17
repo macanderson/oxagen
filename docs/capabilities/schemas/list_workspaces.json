@@ -28,6 +28,10 @@
         "type": "string",
         "minLength": 1,
         "description": "Slug of the organization whose workspaces to list"
+      },
+      "includeArchived": {
+        "type": "boolean",
+        "default": false
       }
     },
     "required": [
@@ -96,6 +100,16 @@
                   "type": "null"
                 }
               ]
+            },
+            "archivedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
@@ -104,7 +118,8 @@
             "slug",
             "namespace",
             "name",
-            "role"
+            "role",
+            "archivedAt"
           ],
           "additionalProperties": false
         }

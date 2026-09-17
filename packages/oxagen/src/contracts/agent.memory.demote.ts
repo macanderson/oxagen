@@ -18,7 +18,7 @@ export const agentMemoryDemote = registerCapability({
     "Demote a memory to RULE or OBSERVATION, recording an auditable demotion event. Leaving FACT clears human confirmation; demoting to OBSERVATION clears enforcement.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "medium", category: "memory" },
   sensitivity: "medium",

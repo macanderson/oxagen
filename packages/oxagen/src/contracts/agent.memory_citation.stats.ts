@@ -34,7 +34,7 @@ export const agentMemoryCitationStats = registerCapability({
     "Workspace citation analytics: totals and influence/compliance breakdowns, daily citation series, most-cited and least-useful memories, most-cited graph nodes, and most-violated rules.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "memory" },
   sensitivity: "low",

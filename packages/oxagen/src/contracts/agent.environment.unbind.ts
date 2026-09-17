@@ -13,7 +13,7 @@ export const agentEnvironmentUnbind = registerCapability({
     riskLevel: "medium",
     category: "configuration",
   },
-  layers: ["api", "mcp", "unit", "docs", "app"],
+  layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   sensitivity: "medium",
   defaultEffect: "deny",

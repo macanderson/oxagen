@@ -11,6 +11,7 @@
  */
 import type { PluginType as PluginTypeName } from "@oxagen/database";
 import type { CapabilityContext } from "../types";
+import type { KillSwitchGate } from "./kill-switch-gate";
 
 /** A raw tool contributed by a plugin, before IAM/telemetry wrapping. */
 export interface ContributedRawTool {
@@ -40,18 +41,32 @@ export interface ContributedRawTool {
   externalServerName?: string;
   /** Bare tool name (no server prefix) for the "server:tool" rule key. */
   externalToolName?: string;
+  /**
+   * The stored credential (`mcp.credentials.id`) the server was reached with,
+   * when the broker presented one — the connection a kill switch of kind
+   * `connection` names. Absent when the server needs no credential.
+   */
+  externalConnectionId?: string | null;
 }
 
 export interface PluginContributeOptions {
   /** When provided, only servers whose publicId is in this set are loaded. */
   serverAllowlist?: Set<string>;
+  /**
+   * The turn's kill-switch gate (runtime/kill-switch-gate.ts). A contributor
+   * that reaches an external server consults it before anything is presented
+   * to the server: a switch on the server, on the connection it would be
+   * reached with, or on the agent, operator, workspace or organisation
+   * leaves the server out of the turn.
+   */
+  killSwitches: KillSwitchGate;
 }
 
 export interface PluginTypeContributor {
   type: PluginTypeName;
   contributeTools(
     ctx: CapabilityContext,
-    options?: PluginContributeOptions,
+    options: PluginContributeOptions,
   ): Promise<ContributedRawTool[]>;
 }
 

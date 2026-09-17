@@ -53,7 +53,7 @@ export const schemaRelationshipDeleteHandler: CapabilityHandler<
     // Soft-delete properties owned by this relationship type
     await tx
       .update(db.schemaProperties)
-      .set({ deletedAt: now, updatedByUserId: ctx.userId })
+      .set({ deletedAt: now, updatedById: ctx.userId })
       .where(
         and(
           eq(db.schemaProperties.relationshipTypeId, relRow.id),
@@ -64,7 +64,7 @@ export const schemaRelationshipDeleteHandler: CapabilityHandler<
     // Soft-delete the relationship type
     await tx
       .update(db.relationshipTypes)
-      .set({ deletedAt: now, updatedByUserId: ctx.userId })
+      .set({ deletedAt: now, updatedById: ctx.userId })
       .where(eq(db.relationshipTypes.id, relRow.id));
 
     return true;

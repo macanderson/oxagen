@@ -9,7 +9,7 @@ export const agentDefinitionGet = registerCapability({
     "Fetch an agent definition with its active (or latest) version config, parsed and validated via parseAgentDefinitionConfig",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
   agent: {
     requiresApproval: false,

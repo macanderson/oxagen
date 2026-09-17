@@ -12,7 +12,7 @@ export const connectionUpdateHandler: CapabilityHandler<
   typeof connectionUpdate
 > = async (input, ctx) => {
   const updates: Record<string, unknown> = {
-    updatedByUserId: ctx.userId ?? undefined,
+    updatedById: ctx.userId ?? undefined,
   };
   if (input.displayName !== undefined) updates.displayName = input.displayName;
   if (input.deliveryConfig !== undefined)

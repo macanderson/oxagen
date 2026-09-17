@@ -40,8 +40,8 @@ export const userWorkspacePreferencesWriteHandler: CapabilityHandler<
     userId,
     orgId,
     workspaceId,
-    createdByUserId: userId,
-    updatedByUserId: userId,
+    createdById: userId,
+    updatedById: userId,
     ...("defaultRepoConnectionId" in input
       ? { defaultRepoConnectionId: input.defaultRepoConnectionId }
       : {}),
@@ -59,9 +59,9 @@ export const userWorkspacePreferencesWriteHandler: CapabilityHandler<
 
   // Partial update — only touch fields explicitly provided; leave the rest.
   const updateSet: Partial<NewWorkspaceUserPreferences> & {
-    updatedByUserId: string;
+    updatedById: string;
   } = {
-    updatedByUserId: userId,
+    updatedById: userId,
     updatedAt: now,
   };
   if ("defaultRepoConnectionId" in input)

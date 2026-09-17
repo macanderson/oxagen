@@ -42,6 +42,7 @@ const dbQueryMocks = {
   plans: { findFirst: vi.fn() },
   subscriptions: { findFirst: vi.fn() },
   organizations: { findFirst: vi.fn() },
+  orgBillingSettings: { findFirst: vi.fn() },
 };
 
 const dbMocks = {
@@ -49,6 +50,33 @@ const dbMocks = {
   insert: vi.fn(),
   select: vi.fn(),
 };
+
+/**
+ * The insert chain both writers on this path use.
+ *
+ * `syncSubscriptionFromStripe` awaits `…onConflictDoUpdate()` directly, while
+ * `ensureStripeCustomer` calls `.returning()` on it and destructures the first
+ * row, so the object the conflict clause answers with must be awaitable *and*
+ * carry `returning`. A plain `mockResolvedValue(undefined)` satisfies only the
+ * first caller and makes the second throw on a missing method.
+ */
+function stubInsertChain() {
+  const afterConflict = Promise.resolve(undefined) as Promise<undefined> & {
+    returning: ReturnType<typeof vi.fn>;
+  };
+  // The column is written with the id the caller resolved, which on this path
+  // is the one `createCustomer` answers with — so no concurrent-write branch.
+  afterConflict.returning = vi
+    .fn()
+    .mockResolvedValue([{ stripeCustomerId: "cus_new" }]);
+  dbMocks.insert.mockReturnValue({
+    values: vi.fn().mockReturnValue({
+      onConflictDoUpdate: vi.fn().mockReturnValue(afterConflict),
+    }),
+  });
+  // No stored customer id, so `ensureStripeCustomer` resolves one and writes it.
+  dbQueryMocks.orgBillingSettings.findFirst.mockResolvedValue(undefined);
+}
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
@@ -130,12 +158,7 @@ describe("changeOrgPlan", () => {
       // sync uses stripeProductId; changeOrgPlan uses slug
       return Promise.resolve(BUILD_PLAN);
     });
-    const upsertChain = {
-      onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
-    };
-    dbMocks.insert.mockReturnValue({
-      values: vi.fn().mockReturnValue(upsertChain),
-    });
+    stubInsertChain();
   });
 
   it("no active subscription → returns checkoutUrl", async () => {
@@ -217,6 +240,7 @@ describe("changeOrgPlan", () => {
 describe("createCheckoutSession — active subscription guard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    stubInsertChain();
   });
 
   it("org already has active subscription → throws ActiveSubscriptionError", async () => {

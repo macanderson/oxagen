@@ -168,7 +168,7 @@ export async function agentMcpRegisterHandler(
         healthStatus: probe.status,
         lastHealthcheckAt: new Date(),
         discoveredTools: probe.discoveredTools as object,
-        createdByUserId: ctx.userId,
+        createdById: ctx.userId,
       })
       .returning({
         id: schema.mcpServers.id,
@@ -185,7 +185,7 @@ export async function agentMcpRegisterHandler(
       workspaceId: ctx.workspaceId,
       mcpServerId: row.id,
       descriptors: probe.descriptors,
-      createdByUserId: ctx.userId,
+      createdById: ctx.userId,
     }).catch(() => {
       /* swallow — server is registered; snapshots can be re-captured on re-enable */
     });

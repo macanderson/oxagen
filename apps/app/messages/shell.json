@@ -1,0 +1,72 @@
+{
+  "shell": {
+    "skipToContent": "Skip to content",
+    "loading": "Loading Mission Control",
+    "sidebar": {
+      "label": "Sidebar",
+      "navLabel": "Main",
+      "sections": {
+        "workspace": "Workspace",
+        "organization": "Organization"
+      }
+    },
+    "nav": {
+      "fleet": "Fleet",
+      "agents": "Agent IAM",
+      "tools": "Tools",
+      "skills": "Skills",
+      "steering": "Steering",
+      "spend": "Spend",
+      "organization": "Organization",
+      "billing": "Billing",
+      "audit": "Audit",
+      "roles": "Roles",
+      "apiKeys": "API keys"
+    },
+    "switcher": {
+      "org": "Switch organization",
+      "ws": "Switch workspace",
+      "current": "current",
+      "denied": "You do not have permission to list these.",
+      "unavailable": "This list could not be loaded. Reload the page to try again."
+    },
+    "topbar": {
+      "label": "Top bar",
+      "menu": "Open navigation",
+      "breadcrumbs": "Breadcrumb",
+      "search": "Go to a page",
+      "searchShortcut": "⌘K",
+      "userMenu": "User menu for {name}"
+    },
+    "userMenu": {
+      "switchTheme": "Switch theme",
+      "themeNow": "now {theme, select, light {Paper} dark {Ink} other {system}}"
+    },
+    "commands": {
+      "title": "Command menu",
+      "input": "Go to a page",
+      "empty": "Nothing matches “{query}”.",
+      "footer": {
+        "move": "move",
+        "open": "open",
+        "escape": "esc",
+        "close": "close"
+      }
+    },
+    "mobileNav": {
+      "label": "Primary",
+      "slots": {
+        "fleet": "Fleet",
+        "agents": "Agents",
+        "tools": "Tools",
+        "spend": "Spend"
+      },
+      "more": "More",
+      "waiting": ", {count, plural, one {# approval waiting} other {# approvals waiting}}"
+    },
+    "drawer": {
+      "title": "Navigation",
+      "close": "Close navigation"
+    }
+  }
+}

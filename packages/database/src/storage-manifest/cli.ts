@@ -47,6 +47,61 @@ function summarize(json: string): string {
   ].join("\n");
 }
 
+/**
+ * The lines `--check` prints when the committed bytes differ from the
+ * regenerated ones.
+ *
+ * Split out from `main` so the wording is testable, and because getting it
+ * wrong costs more than it looks. `--check` compares BYTES, and a manifest has
+ * two independent ways to differ: its body, and the `contentHash` field
+ * recording that body. Reporting only one of them describes a file nobody has.
+ *
+ * The earlier version printed `contentHashOf(committed)` against the
+ * regenerated hash, to avoid a stale recorded value reading as a match on a
+ * file that had really drifted. That defeated the diagnostic in the opposite
+ * case, which is the one that actually occurred: when the body is current and
+ * only the recorded field is stale, both recomputed hashes are equal, so the
+ * check printed two identical hashes under a DRIFT DETECTED banner and gave a
+ * reader no way to tell a real difference from a bug in the check. It cost a
+ * cutover a CI cycle.
+ *
+ * So both numbers are printed, and the two cases are named rather than left to
+ * be inferred from them.
+ */
+export function driftReport(
+  committed: string,
+  regeneratedHash: string,
+): string[] {
+  const out = ["storage-manifest DRIFT DETECTED — committed file is stale."];
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(committed) as Record<string, unknown>;
+  } catch {
+    // An unparseable file has no body to hash and no recorded field to read.
+    out.push("  committed file is not valid JSON.");
+    out.push(`  regenerated contentHash: ${regeneratedHash}`);
+    out.push("  Run `pnpm schema:manifest` and commit the result.");
+    return out;
+  }
+
+  const recorded = typeof body.contentHash === "string" ? body.contentHash : "";
+  const recomputed = contentHashOf(body);
+
+  out.push(`  committed contentHash field:     ${recorded || "(absent)"}`);
+  out.push(`  recomputed over committed body:  ${recomputed}`);
+  out.push(`  regenerated contentHash:         ${regeneratedHash}`);
+
+  if (recomputed === regeneratedHash) {
+    out.push(
+      "  The body is current; only the recorded contentHash field is stale.",
+    );
+  } else {
+    out.push("  The body itself has drifted.");
+  }
+  out.push("  Run `pnpm schema:manifest` and commit the result.");
+  return out;
+}
+
 function main(): void {
   const check = process.argv.includes("--check");
   const manifest = buildManifest();
@@ -61,22 +116,9 @@ function main(): void {
     }
     const committed = readFileSync(MANIFEST_PATH, "utf8");
     if (committed !== json) {
-      console.error(
-        "storage-manifest DRIFT DETECTED — committed file is stale.",
-      );
-      const committedManifest = JSON.parse(committed) as StorageManifest;
-      // Recompute over the committed body rather than printing its recorded
-      // `contentHash` field: a hand-edited manifest carries a hash of the
-      // content it used to have, so the recorded value can match the
-      // regenerated one on a file that has genuinely drifted — two identical
-      // hashes under a DRIFT DETECTED banner read as a bug in the check.
-      console.error(
-        `  committed contentHash: ${contentHashOf(
-          committedManifest as unknown as Record<string, unknown>,
-        )}`,
-      );
-      console.error(`  regenerated contentHash: ${manifest.contentHash}`);
-      console.error("  Run `pnpm schema:manifest` and commit the result.");
+      for (const line of driftReport(committed, manifest.contentHash)) {
+        console.error(line);
+      }
       process.exit(1);
     }
     console.log("storage-manifest is up to date.");

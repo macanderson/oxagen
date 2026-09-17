@@ -29,10 +29,10 @@ describe("billing.budget.set capability", () => {
       scope: "org",
       enabled: true,
       period: "monthly",
-      limitUsd: 500,
+      limit: { micros: "500000000", currency: "USD" },
     });
     expect(parsed.period).toBe("monthly");
-    expect(parsed.limitUsd).toBe(500);
+    expect(parsed.limit).toEqual({ micros: "500000000", currency: "USD" });
   });
 
   it("parses a valid rolling ceiling with a window", () => {
@@ -41,7 +41,7 @@ describe("billing.budget.set capability", () => {
       enabled: true,
       period: "rolling",
       windowDays: 7,
-      limitUsd: 50,
+      limit: { micros: "50000000", currency: "USD" },
     });
     expect(parsed.windowDays).toBe(7);
   });
@@ -52,7 +52,7 @@ describe("billing.budget.set capability", () => {
         scope: "org",
         enabled: true,
         period: "rolling",
-        limitUsd: 50,
+        limit: { micros: "50000000", currency: "USD" },
       }),
     ).toThrow();
   });
@@ -64,20 +64,44 @@ describe("billing.budget.set capability", () => {
         enabled: true,
         period: "monthly",
         windowDays: 30,
-        limitUsd: 50,
+        limit: { micros: "50000000", currency: "USD" },
       }),
     ).toThrow();
   });
 
   it("rejects a non-positive limit", () => {
+    for (const micros of ["0", "-1", "12.5", "1e6"]) {
+      expect(() =>
+        billingBudgetSet.input.parse({
+          scope: "org",
+          enabled: true,
+          period: "monthly",
+          limit: { micros, currency: "USD" },
+        }),
+      ).toThrow();
+    }
+  });
+
+  it("rejects a float ceiling: money travels as micros, never as dollars", () => {
     expect(() =>
       billingBudgetSet.input.parse({
         scope: "org",
         enabled: true,
         period: "monthly",
-        limitUsd: 0,
+        limitUsd: 500,
       }),
     ).toThrow();
+  });
+
+  it("rejects a currency the store cannot record", () => {
+    expect(() =>
+      billingBudgetSet.input.parse({
+        scope: "org",
+        enabled: true,
+        period: "monthly",
+        limit: { micros: "1000000", currency: "EUR" },
+      }),
+    ).toThrow(/USD/);
   });
 
   it("rejects an unknown scope", () => {
@@ -86,7 +110,7 @@ describe("billing.budget.set capability", () => {
         scope: "global",
         enabled: true,
         period: "monthly",
-        limitUsd: 5,
+        limit: { micros: "5000000", currency: "USD" },
       }),
     ).toThrow();
   });

@@ -9,16 +9,19 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**225 capabilities across 34 domains.**
+**302 capabilities across 47 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
 `toolPolicy.ontology` opt-in.
 
-## Agent (48)
+## Agent (57)
 
+- [agent.approval.list](agent.approval.list.md) — List the workspace's pending tool-call approvals, soonest expiry first, cursor-paged, optionally narrowed to one run
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
+- [agent.credential.rotate](agent.credential.rotate.md) — Rotate an agent's long-lived credential: retire the current key and mint a replacement, returned once
 - [agent.debug.trace](agent.debug.trace.md) — Diagnose why an agent execution failed as a structured failure frame: failing step, error class, parsed top stack frames, related spans, and deterministically-ranked suspect files (optional LLM diagnosis via summarize)
+- [agent.definition.commit](agent.definition.commit.md) — Commit an agent's definition file (.oxagen/agents/<slug>.toml) to a branch of the workspace repository and open the pull request that publishes it, or add to the branch's open pull request; the default branch is never written
 - [agent.definition.create](agent.definition.create.md) — Create a new agent definition — inserts the agent identity row (draft, inactive) and an immutable v1 version snapshot with the supplied, schema-validated config
 - [agent.definition.delete](agent.definition.delete.md) — Soft-delete an agent definition and its delegated IAM principal together, in one lifecycle
 - [agent.definition.get](agent.definition.get.md) — Fetch an agent definition with its active (or latest) version config, parsed and validated
@@ -33,6 +36,8 @@ Capabilities granted to an agent as a set have a page of their own:
 - [agent.environment.unbind](agent.environment.unbind.md) — Remove an agent's binding to an environment; falls back to the workspace default environment and template when the removed binding was primary
 - [agent.execution.list](agent.execution.list.md) — List recent top-level agent runs for the workspace, newest first, with keyset pagination — each row's status, origin, duration, and token/cost figures
 - [agent.execution.record](agent.execution.record.md) — Persist a complete agent execution record including steps, tool calls, and result summary for observability and audit
+- [agent.get](agent.get.md) — Read one agent identity: principal, harness, operator and status; its long-lived credentials; the roles on its principal; the hosts enrolled under it; and the definition of record the last commit cached
+- [agent.list](agent.list.md) — List the agent identities registered in this workspace with their principal, harness, operator, status, enrollment and credential counts, and the 30-day run, spend and incident figures the stores record
 - [agent.mcp.delete](agent.mcp.delete.md) — Soft-delete a registered external MCP server; its tools stop registering immediately while tool-descriptor snapshots are retained for replay
 - [agent.mcp.list](agent.mcp.list.md) — List registered external MCP servers in the active workspace with status, transport, auth kind, and tool inventory
 - [agent.mcp.register](agent.mcp.register.md) — Register an external MCP server with the workspace; the runner runs a separate process and injects its tools into the agent
@@ -58,37 +63,65 @@ Capabilities granted to an agent as a set have a page of their own:
 - [agent.memory_promotion.dismiss](agent.memory_promotion.dismiss.md) — Dismiss a memory from the promotion-candidate queue (or restore it) so the next candidate fills the slot, without archiving the memory
 - [agent.memory_promotion.list](agent.memory_promotion.list.md) — Return the top OBSERVATION memories ripe for promotion to RULE/FACT, ranked by citation pressure
 - [agent.memory_promotion.rationales](agent.memory_promotion.rationales.md) — Draft short, context-grounded rationales for a promotion/demotion via a low-cost model, with a deterministic fallback built from citation signals
+- [agent.register](agent.register.md) — Register an agent identity in this workspace: its principal, default role and a long-lived credential shown once; the definition is committed to the repository separately
+- [agent.retire](agent.retire.md) — Retire an agent identity: archive the agent, suspend its principal, revoke every credential and host enrollment; runs keep their identity, nothing is deleted
 - [agent.role.assign](agent.role.assign.md) — Assign an IAM role to an agent's delegated principal; system agent roles at every tier, custom roles enterprise-only, rejected when the role's grants exceed the assigner's own effective grants (delegation ceiling)
 - [agent.role.get](agent.role.get.md) — Get one IAM role's status relative to an agent: held or not, assignment provenance, and the role's capability grant list
 - [agent.role.list](agent.role.list.md) — List the IAM roles attached to an agent's delegated principal with assignment provenance
 - [agent.role.revoke](agent.role.revoke.md) — Revoke an IAM role from an agent's delegated principal — soft-deletes the assignment (audit trail preserved); idempotent
+- [agent.suspend](agent.suspend.md) — Suspend or resume an agent identity: a suspended principal anchors no governed run and its belt is empty; resuming restores it without re-issuing anything
+- [agent.toolbelt.get](agent.toolbelt.get.md) — Compute the toolbelt an agent would be shown without executing anything: the decision and rule per tool, how the belt was computed, what the model receives, and what the agent cannot see
 - [agent.tool.list](agent.tool.list.md) — List the capabilities surfaced as agent tools for the active workspace, filtered by role, entitlements, and denylist
 - [agent.trace.get](agent.trace.get.md) — Fetch one agent execution as a collapsible span tree: the run, its ordered steps, each step's tool calls with durations/tokens/cost/status, and child executions (subagent/A2A lineage)
 - [revise_agent_def](revise_agent_def.md) — AI-driven edit of an existing agent definition from a plain-language prompt; the model designs the revised config grounded in the workspace and a new unpublished version is bumped (slug immutable, publish stays separate)
 
-## Api (3)
+## Api (4)
 
 - [api.key.create](api.key.create.md) — Create a new API key scoped to the requesting org; the raw key is shown once and never retrievable
+- [api.key.list](api.key.list.md) — List the API keys in scope with their metadata; never returns a key's secret or its hash
 - [api.key.revoke](api.key.revoke.md) — Revoke an API key by its public ID; the key is soft-deleted and immediately invalid for all subsequent requests
 - [api.key.rotate](api.key.rotate.md) — Atomically issue a replacement API key and revoke the old one; the new raw key is shown once
+
+## Approval_rule (5)
+
+- [delete_approval_rule](delete_approval_rule.md) — Remove one auto-approval rule from the workspace's rule set
+- [get_auto_eligibility](get_auto_eligibility.md) — The auto-approval evaluation recorded for one approval request, and who resolved it
+- [list_approval_rules](list_approval_rules.md) — List the workspace's auto-approval rules, with the calls each released and held in the last 30 days
+- [set_approval_rule_enabled](set_approval_rule_enabled.md) — Switch one auto-approval rule on or off
+- [set_approval_rules](set_approval_rules.md) — Replace the workspace's auto-approval rules — the conditions under which a call a policy sent to a person may skip them
+
+## Assistant (2)
+
+- [assistant.ask](assistant.ask.md) — Take one turn with the in-app agent on stella-serve: the message appended to a conversation, the turn recorded and sealed as a run of its own, the reply returned with its run id and any governed write parked for a person
+- [assistant.engine.get](assistant.engine.get.md) — Probe the in-app agent's engine: the readiness state it reported, or unreachable after three attempts, with the host the probe was aimed at
 
 ## Asset (1)
 
 - [asset.upload](asset.upload.md) — Ingest a binary asset from a publicly reachable source URL into object storage
 
-## Audit (1)
+## Auth (1)
 
-- [audit.log.query](audit.log.query.md) — Query the org's security and automation audit events with structured filters, newest-first
+- [auth.cli.authorize](auth.cli.authorize.md) — Mint the single-use PKCE authorization code that lets the Oxagen CLI obtain an API key for one org and workspace after the signed-in person consents
 
-## Billing (26)
+## Audit (2)
+
+- [audit.events.export](audit.events.export.md) — Export the org's security audit events as CSV or NDJSON over the query_audit_log filters, signed with HMAC-SHA256; up to 50,000 events
+- [audit.log.query](audit.log.query.md) — Query the org's security audit events with structured filters, newest first
+
+## Billing (15)
 
 - [billing.action_estimate](billing.action_estimate.md) — Convert a projected number of agent runs into governed actions and a price, using the published run-class conversion and volume bands; shows its assumptions
 - [billing.action_rate_card](billing.action_rate_card.md) — The published rate card for governed actions: volume bands, per-tier included allowances, evidence-retention price, and confirmation that model tokens are reported at zero
-- [billing.action_usage](billing.action_usage.md) — Governed-action usage for the organisation's current entitlement year: actions taken, allowance-covered, overage, band, credits charged, and model spend reported at zero
+- [billing.auto_topup.set](billing.auto_topup.set.md) — Turn automatic top-up on or off for the organization and set how many governed-action-unit blocks each top-up buys. Owner/Admin only
 - [billing.budget.get](billing.budget.get.md) — Read the hard period-to-date spend ceilings (org + workspace) governing the active scope, each with live burn: period-to-date spend, projection, percent-of-ceiling, and whether the gate is denying
 - [billing.budget.set](billing.budget.set.md) — Create or replace one scope's hard period-to-date spend ceiling (org or workspace; monthly or rolling window; USD limit). Raising a ceiling is the audited org-admin override that clears a budget_exceeded denial. Owner/Admin/Billing only
+- [billing.contract_rate.get](billing.contract_rate.get.md) — The organisation's contracted governed-action terms: per-GAU rate in micro-dollars, block size, currency, included GAUs per month, effective dates, and whether they are the published tier's figures or a negotiated agreement's
 - [billing.credits.purchase](billing.credits.purchase.md) — Initiate a dynamic usage-credit purchase via Stripe Checkout with automatic volume discount
 - [billing.evidence_retention](billing.evidence_retention.md) — Evidence-retention posture and its price: included window, effective retention window, whether extended retention is opted in, rate, and credits charged this period
+- [billing.gau_bucket.get](billing.gau_bucket.get.md) — The organization's governed action unit bucket for the current month: billing mode, period, units included, purchased, carried forward, used and remaining, plus invoice thresholds or auto top-up state
+- [billing.gau_bucket.purchase](billing.gau_bucket.purchase.md) — Buy governed action units in block quantities at the organisation's contracted rate through Stripe Checkout; returns the Checkout URL, the quantity, the block size and the number of blocks
+- [billing.invoice.list](billing.invoice.list.md) — List the organization's invoices newest first, cursor-paged, each with the kind of charge it settled (subscription, block purchase, auto top-up, interim, period close), amounts, period and the Stripe-hosted page
+- [billing.org_terms.set](billing.org_terms.set.md) — Platform-operator only: approve an organization for invoice billing or return it to prepaid, and set the uninvoiced-overage ceiling at which an interim invoice is cut. On no surface; run through `pnpm billing:terms`
 - [billing.subscription.read](billing.subscription.read.md) — Return the active subscription, plan slug, current period bounds, and available credits
 - [billing.subscription_upgrade.start](billing.subscription_upgrade.start.md) — Begin a plan change; returns a Stripe Checkout URL, completed via webhook
 - [billing.usage.breakdown](billing.usage.breakdown.md) — Aggregated usage (tokens, cost, calls) for a window, broken down by model, surface, and workspace, plus a daily time series
@@ -97,6 +130,10 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [budget.policy.read](budget.policy.read.md) — Read the calling user's saved per-turn dollar budget (enabled, limit, enforcement mode, grace cushion)
 - [budget.policy.write](budget.policy.write.md) — Update the calling user's saved per-turn dollar budget (partial update): on/off, USD limit, mode (grace/prompt/enforce), grace cushion
+
+## Cost (1)
+
+- [cost.price_entry.list](cost.price_entry.list.md) — List the price book this organization is priced against: every provider list price effective at an instant and the organization's negotiated rows, in integer micros per million units with the window each is effective over
 
 ## Capability (2)
 
@@ -126,11 +163,20 @@ Capabilities granted to an agent as a set have a page of their own:
 - [connection.preview](connection.preview.md) — Preview sample records from a data source connection for the setup wizard
 - [connection.update](connection.update.md) — Rename a connection and/or adjust its delivery configuration (sync schedule/scope)
 
-## Context (3)
+## Context (12)
 
 - [context.record.list](context.record.list.md) — List the steering context records registered in the active workspace with lifecycle status
 - [context.record.promote](context.record.promote.md) — Append a lifecycle action to a context record's hash-chained promotions ledger
 - [context.record.publish](context.record.publish.md) — Publish a steering context record into the workspace agent-asset registry
+- [context.records.list](context.records.list.md) — List the workspace's published steering records with kind, force, constraint effect, scope, lineage, commit and path
+- [context.records.get](context.records.get.md) — Get one published record (with versions and its publishing PR) or one appended record
+- [context.records.append](context.records.append.md) — Append one context record, the protocol's context/append; a directive is refused
+- [context.proposal.create](context.proposal.create.md) — Open a record proposal: the record it should become, the rationale and its support
+- [context.proposal.list](context.proposal.list.md) — List the workspace's record proposals with their Context PR state
+- [context.proposal.dismiss](context.proposal.dismiss.md) — Reject a record proposal with a reason
+- [context.pr.open](context.pr.open.md) — Open a proposal's Context PR: branch, record file, pull request and the six checks as GitHub check runs
+- [context.pr.get](context.pr.get.md) — Get a proposal's Context PR: state, checks, what merge will do, the promotion event once merged
+- [context.pr.merge](context.pr.merge.md) — Merge a proposal's Context PR and publish its record: promotion event, steering version, steering.published
 
 ## Conversation (9)
 
@@ -153,6 +199,17 @@ Capabilities granted to an agent as a set have a page of their own:
 - [environment.set_default](environment.set_default.md) — Promote an environment to the workspace default via an atomic swap
 - [environment.update](environment.update.md) — Update a workspace environment's name, slug, description, or active state; the default cannot be deactivated
 
+## Evidence (1)
+
+- [evidence.disclosure_grain.set](evidence.disclosure_grain.set.md) — Set the workspace's witness disclosure grain, from L0 (the worker hears only pass or fail) to L3, recorded as a security event
+
+## Finding (4)
+
+- [finding.dismiss](finding.dismiss.md) — Dismiss an open finding without applying its fix (org Owner or Admin); later passes cite only runs that start after the dismissal
+- [finding.evidence.get](finding.evidence.get.md) — Get the evidence behind one finding: the calls it cites and how many the counterfactual covers, the tokens and money they cost against the counterfactual, and the cited runs with the largest saving
+- [finding.fix.record](finding.fix.record.md) — Record that the fix an open finding names was applied (org Owner or Admin): the finding becomes applied with the request id of this call, and later passes cite only runs that start after it
+- [finding.list](finding.list.md) — List this workspace's costed findings ranked by the money at stake, each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend and that saving annualised
+
 ## Graph (6)
 
 - [graph.node.get](graph.node.get.md) — Retrieve a single `KnowledgeNode` from the workspace graph by its `publicId`
@@ -162,9 +219,12 @@ Capabilities granted to an agent as a set have a page of their own:
 - [graph.search](graph.search.md) — Natural-language semantic search across eligible shared workspace knowledge, ranked by vector similarity
 - [graph.stats](graph.stats.md) — Workspace graph statistics: node count, edge count, inferred edge count, breakdown by type
 
-## Iam (1)
+## Iam (4)
 
-- [iam.role.list](iam.role.list.md) — List the org's IAM roles with capability grants and active assignment counts; read-only (writes remain provisioning-script-only)
+- [iam.role.create](iam.role.create.md) — `create_role`: a custom role from the permission catalogue; one allow grant per capability, within the granter's ceiling (ADR-063)
+- [iam.role.delete](iam.role.delete.md) — `delete_role`: remove a custom role nobody holds
+- [iam.role.grants.set](iam.role.grants.set.md) — `set_role_grants`: replace a custom role's grants with a permission set
+- [iam.role.list](iam.role.list.md) — List the org's IAM roles with grants, catalogue permissions, origin and holder counts, the catalogue and whether roles are enforced for the org
 
 ## Integration (7)
 
@@ -176,6 +236,15 @@ Capabilities granted to an agent as a set have a page of their own:
 - [integration.metrics](integration.metrics.md) — Get sync statistics and metrics for a plugin instance
 - [integration.sync](integration.sync.md) — Trigger synchronization of a plugin instance (async)
 
+## Mandate (6)
+
+- [get_mandate](get_mandate.md) — Read one mandate: the grant, remaining authority by measure from the ledger, and the ledger rows newest first
+- [grant_mandate](grant_mandate.md) — Grant an agent bounded, expiring authority for a consequence within limits over the tool's declared measures
+- [list_mandates](list_mandates.md) — List the workspace's mandates with remaining authority by measure, optionally narrowed to one agent or one status
+- [request_mandate](request_mandate.md) — Ask for a mandate on behalf of an agent, recorded as a draft for the accountable role to grant or decline
+- [revoke_mandate](revoke_mandate.md) — Revoke a mandate with a reason; releases every reservation held by a call that has not dispatched
+- [update_mandate_limits](update_mandate_limits.md) — Change an active mandate's limits, targets, approval rule or validity end
+
 ## Model (1)
 
 - [model.capability.list](model.capability.list.md) — List the provider capability posture matrix — per vendor, how its prompt cache is engaged (explicit opt-in vs implicit), how its reasoning budget is controlled, how structured output is obtained, and which attachment kinds it accepts
@@ -184,6 +253,12 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [notification.list](notification.list.md) — List in-app notifications for the calling user, with unread filtering and pagination
 - [notification.mark](notification.mark.md) — Mark a notification as read and/or archived for the calling user
+
+## Onboarding (3)
+
+- [onboarding.advance](onboarding.advance.md) — Move the onboarding gate between the wrap and run steps; the run step completes only on the first frame, so unlocked is never a target
+- [onboarding.first_frame.get](onboarding.first_frame.get.md) — For one registered agent: the host enrolled for it, what that host last reported, and the first frame ingested from it, long-polled for up to waitMs
+- [onboarding.state.get](onboarding.state.get.md) — Where the signed-in person is in the onboarding gate: the current step, the gate's workspace, the first frame once one arrived, and the provisional window until a main repository is bound
 
 ## Ontology (2)
 
@@ -252,12 +327,30 @@ Capabilities granted to an agent as a set have a page of their own:
 - [repo.resume](repo.resume.md) — Resume automatic syncing for a paused repository connection
 - [repo.sync](repo.sync.md) — Trigger incremental or full re-index of a repository connection (async)
 
+## Repository (1)
+
+- [repository.main.bind](repository.main.bind.md) — Bind a GitHub repository the workspace's GitHub App installation reaches as its main repo, and close the onboarding gate's provisional window
+
 ## Router (4)
 
 - [router.decision.preview](router.decision.preview.md) — Dry-run the market router for a prompt: task class, observed outcomes, and the full decision (chosen model + candidate audit trail); changes nothing
 - [router.policy.get](router.policy.get.md) — Read the effective market-router policy for the current scope (mode, threshold, samples, window, escalation) plus its provenance (workspace / org / default)
 - [router.policy.set](router.policy.set.md) — Set the market-router policy for this org or workspace (partial update) — mode, thresholds, and tier-escalation; changes model spend behavior, Owner/Admin only
 - [router.stats.list](router.stats.list.md) — List observed outcomes per (task class, model) — samples, verified rate, cost, latency — plus the cheapest model currently clearing the bar per class
+
+## Run (11)
+
+- [run.bisect](run.bisect.md) — Align two runs frame by frame on each frame's kind and call identity and answer the first sequence at which they diverge, with both keys there; null when they agree throughout
+- [run.cost](run.cost.md) — Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps, model and tool calls, and the per-model and per-tool breakdown; null until the rollup has rebuilt the run from its frames
+- [run.export](run.export.md) — Queue a signed, offline-verifiable evidence bundle for one sealed run: frame envelopes as NDJSON, the Merkle root, an attestation, the verifying key id and a verifier script
+- [run.fork](run.fork.md) — Mint a new attempt of an evidence-ledger run that replays the recording up to a frame and runs live from there; refused unless the seal recorded grade fork and every frame before the branch point kept its body
+- [run.frame_body.get](run.frame_body.get.md) — Read the redacted body of one frame of a run by its sequence: the content type and bytes when the workspace retained bodies, the digest and no bytes under digest_only
+- [run.get](run.get.md) — Read one run's header and one page of its frames, each with its body reference, from an opaque cursor, optionally waiting for a new frame
+- [run.list](run.list.md) — List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, status, counts and metered cost each row recorded
+- [run.proof.get](run.proof.get.md) — Read one run's proof record: every witness that reported on it with each attempt's target and head results, fingerprints and attestation, the run's verdict, the cost of each witness run, and the workspace's disclosure grain
+- [run.recent.list](run.recent.list.md) — The newest runs of this workspace for the command menu: id, agent key, status and start time, the in-app agent's own turns excluded
+- [run.summarize](run.summarize.md) — Queue a fast-tier model to read a sealed run's transcript and write its generated name and summary; refused on a live run and on a digest_only recording
+- [run.transcript.get](run.transcript.get.md) — Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies, with the cost each entry folds
 
 ## Schema (23)
 
@@ -285,6 +378,21 @@ Capabilities granted to an agent as a set have a page of their own:
 - [schema.version.list](schema.version.list.md) — List all schema versions with status, label, and change summary
 - [schema.version.pin](schema.version.pin.md) — Pin the workspace to a specific published schema version
 
+## Shell (1)
+
+- [shell.nav_counts.get](shell.nav_counts.get.md) — The sidebar's counts for this workspace: pending approvals, open proposals and open critical incidents, each null when its store does not exist
+
+## Skill (1)
+
+- [skill.list](skill.list.md) — List the skills this workspace's harness sessions reported when they started, over a window of session start times: each name with the sessions that reported it, their harnesses and when it was first and last seen, plus the window's session count and how many sessions reported no inventory
+
+## Spend (4)
+
+- [spend.drill](spend.drill.md) — Read one operator, agent or tool's spend over a trailing window in this workspace: the daily series, the average per call and per run, its share of the workspace's spend, and the tools its runs called, every figure in micros with its basis
+- [spend.get](spend.get.md) — Read this workspace's spend over a day range, rolled up by operator, agent, model, tool or task from the cost rollup, with every figure in micros and the basis that says who observed it, plus the period total with proven and accepted spend kept apart
+- [spend.statement.export](spend.statement.export.md) — Export this workspace's monthly spend statement as CSV: one line per operator, agent, model, tool and task with runs, calls, cost in micros and in cents rounded half to even once, the basis, and proven and accepted spend kept apart
+- [spend.waste](spend.waste.md) — List this workspace's wasted spend over a day range by cause, each cause a pattern read off the cost rollup with the runs that prove it: the total wasted with its basis, its share of spend, and the largest cause
+
 ## Secret (8)
 
 - [secret.export](secret.export.md) — Export an environment's resolved secret set as decrypted key/value pairs and .env text; Owner/Admin only, every export is audited (api, mcp)
@@ -300,15 +408,19 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [system.install.instructions](system.install.instructions.md) — Return ordered, copy-ready MCP/CLI installation instructions per client
 
-## Tacho (9)
+## Tacho (13)
 
 - [tacho.bundle.get](tacho.bundle.get.md) — The signed policy bundle a host caches and evaluates locally (docs/specs/tacho/spec
-- [tacho.command.dispatch](tacho.command.dispatch.md) — Queue a control command for a host or one of its sessions (docs/specs/tacho/spec
-- [tacho.command.fetch](tacho.command.fetch.md) — The idle-host control poll: acknowledge the outcomes of commands the collector applied, and receive pending ones together with the same control envelope every ingest carries
+- [tacho.command.dispatch](tacho.command.dispatch.md) — `dispatch_command`: queue a pause, resume, cancel, steer or message for one run, an agent's live runs or every live run in the workspace, with a delivery mode on steer and message resolved per recipient
+- [tacho.command.fetch](tacho.command.fetch.md) — `fetch_commands`: the idle-host control poll; acknowledge in the §7.4 status vocabulary and receive queued commands with their modes and the control envelope
+- [tacho.command.list](tacho.command.list.md) — `list_commands`: the delivery report for one run, newest first, with the status, the requested and achieved delivery mode, and the frame an applied command landed on
 - [tacho.enrollment.create](tacho.enrollment.create.md) — Enrol a machine as a Tacho host (docs/specs/tacho/spec
 - [tacho.enrollment.revoke](tacho.enrollment.revoke.md) — Revoke a Tacho host
+- [tacho.enrollment_token.create](tacho.enrollment_token.create.md) — Mint the single-use enrollment token a machine presents to enroll_host to become the named agent's host; shown once, expires unused after its TTL
 - [tacho.events.ingest](tacho.events.ingest.md) — Ingest a batch of hash-chained tacho/1
+- [tacho.host.enroll](tacho.host.enroll.md) — Enrol this machine as a registered agent's host by presenting a single-use enrollment token: mint its scoped API key, signed enrollment and initial policy bundle
 - [tacho.host.list](tacho.host.list.md) — List the machines enrolled as Tacho hosts in this workspace, newest first, with status, mode, harness and version facts, liveness (last seen, last ingest, hooks and OpenTelemetry health, spool depth), and counters (sessions, unobserved sessions, open incidents)
+- [tacho.incident.list](tacho.incident.list.md) — List the workspace's tamper and integrity incidents, newest first, cursor-paged, optionally narrowed to one agent or to open incidents
 - [tacho.session.get](tacho.session.get.md) — One session's flight-recorder index (docs/specs/tacho/data-model
 - [tacho.session.list](tacho.session.list.md) — List Tacho sessions in this workspace, newest first
 
@@ -317,26 +429,35 @@ Capabilities granted to an agent as a set have a page of their own:
 - [telemetry.error.cluster](telemetry.error.cluster.md) — Cluster recent captured errors by fingerprint to see which error classes are recurring and how often across the org — the triage overview
 - [telemetry.stella.ingest](telemetry.stella.ingest.md) — Ingest an authenticated, content-free batch of Stella operational execution rollups for an explicitly enrolled Enterprise workspace
 
-## Tool (2)
+## Tool (10)
 
 - [tool.declaration.list](tool.declaration.list.md) — List the tool declarations registered in the active workspace with their pinned version facts
 - [tool.declaration.publish](tool.declaration.publish.md) — Publish a tool declaration into the workspace agent-asset registry, versioned and idempotent
+- [tool.version.list](tool.version.list.md) — List the workspace registry's active tool versions with classification, schema origin and digest, the kill switch that stops each one today, and 30-day calls; cursor-paged, filterable by consequence tag
+- [tool.classification.set](tool.classification.set.md) — Set a tool version's safety classification (risk grade, side-effect class, egress class, consequence tags, measures, data classes), recording who and why
+- [tool.import](tool.import.md) — Import a registered MCP server's pinned tools into the registry, or publish declarations against it; one immutable version per changed manifest
+- [credential.grant.list](credential.grant.list.md) — List the credential broker's grants: every credential put to use for a tool server on behalf of a run, with scope, TTL and status; never a secret
+- [kill_switch.set](kill_switch.set.md) — Flip a kill switch on or off at any level of spec §6.11; bumps the deny generation in the same transaction; a security event
+- [kill_switch.list](kill_switch.list.md) — List the kill switches reaching this workspace with the current deny generation
+- [tools.load](tools.load.md) — Return the full definitions of capabilities the in-app agent may call, by name; a name outside that set is reported as unknown
+- [tools.search](tools.search.md) — Rank-search the capabilities the in-app agent may call and the workspace's runs, agents and pending approvals; at most eight rows with ids
 
 ## User (4)
 
 - [get_workspace_user_preferences](get_workspace_user_preferences.md) — Read the calling user's per-workspace coding-agent defaults: default repo connection/slug, default environment, and whether the one-time repo-default prompt has been shown
 - [update_workspace_user_preferences](update_workspace_user_preferences.md) — Update the calling user's per-workspace coding-agent defaults (partial update); app-only surface
 - [user.preferences.read](user.preferences.read.md) — Read the calling user's UI and model preferences
-- [user.preferences.write](user.preferences.write.md) — Update the calling user's UI and model preferences (partial update)
+- [user.preferences.set](user.preferences.set.md) — Set the calling user's account preferences (locale, theme, timezone) as a partial write and return the whole set
 
-## Workspace (10)
+## Workspace (11)
 
 - [workspace.budget_policy.read](workspace.budget_policy.read.md) — Read the workspace's governed per-turn dollar budget and enforcement mode
 - [workspace.budget_policy.write](workspace.budget_policy.write.md) — Set the workspace's governed per-turn dollar budget (partial update); Owner/Admin only
-- [workspace.create](workspace.create.md) — Create a workspace inside the caller's active tenant
+- [workspace.archive](workspace.archive.md) — `archive_workspace`: freeze a workspace; it leaves the lists, its slug stays taken, its records stay readable
+- [workspace.create](workspace.create.md) — Create a workspace inside the caller's active tenant; org Owner or Admin, refused for a taken slug
 - [workspace.invite.send](workspace.invite.send.md) — Send a workspace invitation to an email address with 7-day expiry
 - [workspace.list](workspace.list.md) — List the workspaces inside an organization the caller belongs to; backs the CLI workspace picker in oxagen init
-- [workspace.member.list](workspace.member.list.md) — List members of a workspace
+- [workspace.member.list](workspace.member.list.md) — `list_members`: the org's members and pending invitations, or a workspace's members
 - [workspace.model_settings.read](workspace.model_settings.read.md) — Read the workspace-level model defaults for text/image/video tiers
 - [workspace.model_settings.write](workspace.model_settings.write.md) — Update the workspace-level model defaults (partial update); Owner/Admin only
 - [workspace.settings.read](workspace.settings.read.md) — Read the workspace's general settings: name, slug, description

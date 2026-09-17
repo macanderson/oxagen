@@ -66,7 +66,7 @@ const PRINCIPAL_ROW = {
 
 // Mock for the API-key path, where _fetchAuthz fires an EXTRA leading query to
 // resolve the key's creator before the principal lookup. Query order:
-//   1: api_keys (created_by_user_id, with limit 1)
+//   1: api_keys (created_by_id, with limit 1)
 //   2: principals (with limit 1)
 //   3: roles (no limit)
 //   4: roleGrants (no limit, only if roleIds.length > 0)
@@ -80,7 +80,7 @@ function buildApiKeyDbMock(
     pra?: unknown[];
   } = {},
 ) {
-  const apiKey = overrides.apiKey ?? [{ createdByUserId: "usr_creator" }];
+  const apiKey = overrides.apiKey ?? [{ createdById: "usr_creator" }];
   const principals = overrides.principals ?? [
     { ...PRINCIPAL_ROW, parentUserId: "usr_creator" },
   ];
@@ -299,7 +299,7 @@ describe("fetchAuthz()", () => {
     };
     mocks.dbFn.mockReturnValue(
       buildApiKeyDbMock({
-        apiKey: [{ createdByUserId: "usr_creator" }],
+        apiKey: [{ createdById: "usr_creator" }],
         principals: [{ ...PRINCIPAL_ROW, parentUserId: "usr_creator" }],
         roles: [roleRow],
         pra: [{ roleId: "role_admin" }],
@@ -354,7 +354,7 @@ describe("fetchAuthz()", () => {
 
   it("fails closed when the API key has no recorded creator", async () => {
     mocks.dbFn.mockReturnValue(
-      buildApiKeyDbMock({ apiKey: [{ createdByUserId: null }] }),
+      buildApiKeyDbMock({ apiKey: [{ createdById: null }] }),
     );
 
     const result = await fetchAuthz({
@@ -375,7 +375,7 @@ describe("fetchAuthz()", () => {
   it("fails closed when the key's creator has no principal in this org", async () => {
     mocks.dbFn.mockReturnValue(
       buildApiKeyDbMock({
-        apiKey: [{ createdByUserId: "usr_creator" }],
+        apiKey: [{ createdById: "usr_creator" }],
         principals: [],
       }),
     );

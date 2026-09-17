@@ -273,10 +273,11 @@ describe("audit.log.query route", () => {
   });
 
   it("passes optional filter fields to invoke", async () => {
+    const actorUserId = "0192d4a8-7c1e-7a00-8000-0000000005e1";
     const filters = {
       source: "security",
       eventType: "billing.plan_changed",
-      actorUserId: "user-123",
+      actorUserId,
       limit: 25,
       offset: 10,
     };
@@ -284,9 +285,18 @@ describe("audit.log.query route", () => {
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.source).toBe("security");
     expect(body.eventType).toBe("billing.plan_changed");
-    expect(body.actorUserId).toBe("user-123");
+    expect(body.actorUserId).toBe(actorUserId);
     expect(body.limit).toBe(25);
     expect(body.offset).toBe(10);
+  });
+
+  it("an actorUserId that is not a uuid → 400, invoke not called", async () => {
+    // security_events.actor_user_id is a uuid column: an arbitrary string
+    // reached PostgreSQL and failed the cast there, answering a store error
+    // where the caller's input is what is wrong.
+    const res = await app.fetch(post(PATH, { actorUserId: "user-123" }));
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
   it("limit over 200 → 400, invoke not called", async () => {

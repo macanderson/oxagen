@@ -116,8 +116,8 @@ export const orgMemberAddHandler: CapabilityHandler<
           status: "pending",
           invitedByUserId: actorId,
           expiresAt,
-          createdByUserId: actorId,
-          updatedByUserId: actorId,
+          createdById: actorId,
+          updatedById: actorId,
         })
         .returning({
           publicId: schema.invitations.publicId,

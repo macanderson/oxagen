@@ -24,8 +24,8 @@ export const schema = {
   windowDays: spendBudgetSetInputObject.shape.windowDays.describe(
     "For 'rolling' only: trailing window length in days (> 0). Omit for 'monthly'",
   ),
-  limitUsd: spendBudgetSetInputObject.shape.limitUsd.describe(
-    "The hard ceiling in USD, e.g. 500 for $500 (> 0)",
+  limit: spendBudgetSetInputObject.shape.limit.describe(
+    "The hard ceiling as money: { micros: '500000000', currency: 'USD' } is $500 (micros > 0, USD only)",
   ),
 };
 

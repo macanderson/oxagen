@@ -44,6 +44,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.context_records", policyClass: "standard" },
   { table: "agent.context_record_versions", policyClass: "standard" },
   { table: "agent.context_promotions", policyClass: "standard" },
+  // Steering proposals and the Context PR state machine, and the records
+  // agents append through append_record (ADR-061); org_id + workspace_id NOT NULL.
+  { table: "agent.context_proposals", policyClass: "standard" },
+  { table: "agent.context_appends", policyClass: "standard" },
   { table: "agent.agent_executions", policyClass: "standard" },
   { table: "agent.agent_execution_steps", policyClass: "standard" },
   { table: "agent.agent_tool_calls", policyClass: "standard" },
@@ -93,10 +97,14 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "billing.credit_lots", policyClass: "org_only" },
   { table: "billing.org_billing_settings", policyClass: "org_only" },
   { table: "billing.billing_disputes", policyClass: "org_only" },
-  // ADR-052 governed-action counter. org_id NOT NULL, no workspace_id — the
-  // allowance and the volume band are both annual and org-wide, so a workspace
-  // column would imply a per-workspace allowance that does not exist.
-  { table: "billing.governed_action_counters", policyClass: "org_only" },
+  // ADR-055 GAU model (20260914165423_gau_buckets_and_contract_terms.sql).
+  // All three carry org_id NOT NULL and no workspace_id: terms, the month
+  // bucket and the settlement ledger are org-wide. The recorder reads and
+  // writes them through withTenantDb; the webhook branches and the close job
+  // through withSystemDb.
+  { table: "billing.contract_terms", policyClass: "org_only" },
+  { table: "billing.gau_buckets", policyClass: "org_only" },
+  { table: "billing.gau_settlements", policyClass: "org_only" },
   // Period-to-date spend ceiling. org_id NOT NULL + workspace_id NULLABLE
   // (a NULL-workspace row is the org-level ceiling) → workspace_nullable.
   { table: "billing.spend_budgets", policyClass: "workspace_nullable" },
@@ -113,6 +121,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Derived spend rollups, rebuilt from frames; org_id + workspace_id NOT NULL.
   { table: "cost.run_totals", policyClass: "standard" },
   { table: "cost.daily_totals", policyClass: "standard" },
+  // The findings job's output (ADR-062); org_id + workspace_id NOT NULL.
+  { table: "cost.findings", policyClass: "standard" },
 
   // ── chat.* / content.* (orgScopeMixin) ───────────────────────────────────
   { table: "chat.conversations", policyClass: "standard" },
@@ -175,6 +185,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Both carry orgScopeMixin (org_id + workspace_id NOT NULL) → standard.
   { table: "mcp.consents", policyClass: "standard" },
   { table: "mcp.tool_snapshots", policyClass: "standard" },
+  // The credential broker's grant log (#2958): orgScopeMixin → standard.
+  { table: "mcp.credential_grants", policyClass: "standard" },
 
   // ── notification.* (org_id NOT NULL, workspace_id nullable) ──────────────
   { table: "notification.notifications", policyClass: "workspace_nullable" },
@@ -196,6 +208,11 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // ADR-053: the organisation's model-vendor key. Org-only, read through
   // withTenantDb — nothing resolves through it, so RLS is the filter here.
   { table: "org.model_credentials", policyClass: "org_only" },
+  // The onboarding gate (#2967): one row per organization, org_id is the
+  // primary key and there is no workspace_id (the gate's workspace is a plain
+  // column) → org_only. Read and written through withTenantDb by the gate
+  // handlers; create_org writes the first row through withSystemDb.
+  { table: "org.onboarding_state", policyClass: "org_only" },
 
   // ── plugin.* (workspace-scoped) ────────────────────────────────────────────
   { table: "plugin.installed_plugins", policyClass: "standard" },
@@ -261,6 +278,18 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   //   manifest/blob ledger lands in the evidence-ledger PR. org_id +
   //   workspace_id both NOT NULL → standard tenant_isolation.
   { table: "evidence.retention_policy_versions", policyClass: "standard" },
+  // The export job `export_run` queues (ADR-058): org_id + workspace_id NOT NULL.
+  { table: "evidence.run_exports", policyClass: "standard" },
+  // Proof (ADR-064): witnesses and their verdicts, written by tacho ingest, and
+  // the workspace's disclosure grain. org_id + workspace_id NOT NULL.
+  { table: "evidence.witnesses", policyClass: "standard" },
+  { table: "evidence.verdicts", policyClass: "standard" },
+  { table: "evidence.disclosure_policies", policyClass: "standard" },
+
+  // ── tools.* — mandates and their append-only ledger (ADR-059,
+  //   20260915202300_mandates_and_ledger.sql). Both carry orgScopeMixin.
+  { table: "tools.mandates", policyClass: "standard" },
+  { table: "tools.mandate_ledger", policyClass: "standard" },
 
   // ── tacho.* — hosts, sessions, and control state for agents Oxagen does
   //   not run (docs/specs/tacho/data-model.md section 3). All eight carry
@@ -273,4 +302,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "tacho.control_commands", policyClass: "standard" },
   { table: "tacho.incidents", policyClass: "standard" },
   { table: "tacho.checkpoints", policyClass: "standard" },
+  // Single-use enrollment tokens (#2967): orgScopeMixin, consumed by
+  // enroll_host inside the token's own tenant scope.
+  { table: "tacho.enrollment_tokens", policyClass: "standard" },
 ];

@@ -165,7 +165,7 @@ export async function bindAgentEnvironment(
         .set({
           isPrimary: false,
           updatedAt: new Date(),
-          updatedByUserId: actor.userId ?? null,
+          updatedById: actor.userId ?? null,
         })
         .where(
           and(
@@ -186,7 +186,7 @@ export async function bindAgentEnvironment(
         .set({
           isPrimary: desiredPrimary,
           updatedAt: new Date(),
-          updatedByUserId: actor.userId ?? null,
+          updatedById: actor.userId ?? null,
         })
         .where(eq(schema.agentEnvironmentBindings.id, existing.id))
         .returning({ publicId: schema.agentEnvironmentBindings.publicId });
@@ -200,8 +200,8 @@ export async function bindAgentEnvironment(
           agentId: agentInternalId,
           environmentId: env.id,
           isPrimary: desiredPrimary,
-          createdByUserId: actor.userId ?? null,
-          updatedByUserId: actor.userId ?? null,
+          createdById: actor.userId ?? null,
+          updatedById: actor.userId ?? null,
         })
         .returning({ publicId: schema.agentEnvironmentBindings.publicId });
       publicId = inserted!.publicId;

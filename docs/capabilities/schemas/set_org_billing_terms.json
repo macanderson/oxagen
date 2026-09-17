@@ -1,0 +1,63 @@
+{
+  "name": "set_org_billing_terms",
+  "domain": "billing",
+  "description": "Platform-operator only: approve an organization for invoice billing or return it to prepaid, and set the uninvoiced-overage ceiling at which an interim invoice is cut.",
+  "mode": "sync",
+  "surfaces": [],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "orgId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "approvedForInvoiceBilling": {
+        "type": "boolean"
+      },
+      "invoiceGauMax": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100000000
+      }
+    },
+    "required": [
+      "orgId",
+      "approvedForInvoiceBilling",
+      "invoiceGauMax"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "orgId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "approvedForInvoiceBilling": {
+        "type": "boolean"
+      },
+      "invoiceGauMax": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100000000
+      }
+    },
+    "required": [
+      "orgId",
+      "approvedForInvoiceBilling",
+      "invoiceGauMax"
+    ],
+    "additionalProperties": false
+  }
+}

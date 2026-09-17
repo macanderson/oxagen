@@ -1,33 +1,59 @@
-import { OxagenWordmark } from "@/components/ui/brand";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
+import { AFTER_SIGNUP, VerifyPanel } from "@/features/auth";
+import { firstParam, readNext } from "@/shared/safe-path";
+import { AuthColumn, AuthFooter, AuthSkeleton } from "@/ui/auth-shell";
+import { linkText } from "@/ui/control-styles";
+import { PageHeader } from "@/ui/page-header";
 
-export default function VerifyPage(_props: {
-  searchParams: Promise<{ email?: string }>;
-}) {
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("pages");
+  return { title: t("verify") };
+}
+
+export default function VerifyPage(props: PageProps<"/verify">) {
   return (
-    <div className="w-full max-w-sm space-y-6">
-      <div className="flex justify-center">
-        <OxagenWordmark className="h-8" />
-      </div>
+    <Suspense fallback={<AuthSkeleton />}>
+      <Verify searchParams={props.searchParams} />
+    </Suspense>
+  );
+}
 
-      <div className="rounded-xl border bg-card p-8 shadow-md space-y-6">
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Verify your email
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            We sent you a verification link. Open it to finish signing in.
-          </p>
-        </div>
+const EMAIL_SHAPE = /^[^\s@]{1,64}@[^\s@]{1,190}$/;
 
-        <p className="text-sm text-muted-foreground">
-          Once you&rsquo;ve verified, you&rsquo;ll be redirected to your
-          workspace.
-        </p>
-      </div>
-
-      <p className="text-center text-xs text-muted-foreground">
-        SOC 2 Type II · SSO/SCIM · RBAC-enforced retrieval
-      </p>
-    </div>
+async function Verify({
+  searchParams,
+}: {
+  searchParams: PageProps<"/verify">["searchParams"];
+}) {
+  const params = await searchParams;
+  const raw = firstParam(params.email)?.trim() ?? "";
+  // Shown back to the person who typed it, never looked up: a malformed value is simply not echoed.
+  const email = EMAIL_SHAPE.test(raw) ? raw : null;
+  const expired = firstParam(params.error) !== undefined;
+  const next = readNext(params, AFTER_SIGNUP);
+  const [t, pages] = await Promise.all([
+    getTranslations("auth"),
+    getTranslations("pages"),
+  ]);
+  return (
+    <AuthColumn>
+      <PageHeader
+        eyebrow={t("verify.eyebrow")}
+        title={pages("verify")}
+        description={
+          email ? t("verify.lead", { email }) : t("verify.leadNoEmail")
+        }
+      />
+      <VerifyPanel email={email} expired={expired} next={next} />
+      <AuthFooter>
+        {t("verify.wrongAddress")}{" "}
+        <Link href="/signup" className={linkText}>
+          {t("verify.startOver")}
+        </Link>
+      </AuthFooter>
+    </AuthColumn>
   );
 }

@@ -111,9 +111,9 @@ Every Postgres table is built from small, reusable pieces
 | Mixin | Adds | Used on |
 |---|---|---|
 | `idMixin` | UUID `id` + a readable `public_id` (e.g. `agt_9f2k...`) | every table |
-| `auditMixin` | `created_at`, `updated_at`, `created_by_user_id`, `updated_by_user_id` | tables people edit |
-| `appendOnlyAuditMixin` | `created_at`, `created_by_user_id` only | log/event tables, never updated |
-| `softDeleteMixin` | `deleted_at`, `deleted_by_user_id` | almost every org-owned table — hard deletes are banned |
+| `auditMixin` | `created_at`, `updated_at`, `created_by_id`, `updated_by_id` | tables people edit |
+| `appendOnlyAuditMixin` | `created_at`, `created_by_id` only | log/event tables, never updated |
+| `softDeleteMixin` | `deleted_at`, `deleted_by_id` | almost every org-owned table — hard deletes are banned |
 | `orgScopeMixin` | `org_id`, `workspace_id` | every org-owned table |
 | `versionMixin` | `version_number`, `is_latest`, `parent_version_id`, `published_at` | immutable snapshots (agent versions, playbook versions) |
 | `executionStatusMixin` | `status` + start/complete/fail/cancel timestamps | anything that runs (executions, jobs, runs) |

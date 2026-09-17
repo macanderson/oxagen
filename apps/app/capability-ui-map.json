@@ -1,599 +1,574 @@
 {
-  "$doc": "UI Capability Parity registry \u2014 the single source of truth binding every capability that is operable in the Next.js app (apps/app) to the concrete UI that invokes it. Law: a capability that declares the \"app\" layer in its contract MUST have a binding here whose `page` exists and renders without an error page; and any capability the app actually invokes MUST be declared + bound here. Enforced by `pnpm check:ui-parity` (tools/scripts/check_ui_parity.mjs). Do NOT hand-wave an entry \u2014 every binding must carry a runtime proof (screenshot committed under verifications/<session>/, or an e2e spec) captured against a working page.",
+  "$doc": "UI Capability Parity (CLAUDE.md): every capability whose contract declares the `app` layer is bound here to the page a person operates it on, and to the runtime artifact that proves that page works. Law: a capability that declares \"app\" MUST have a binding whose `page` exists and renders without an error page. Enforced by `pnpm check:ui-parity --strict` (tools/scripts/check_ui_parity.mjs), which reads this file because tools/scripts/lib/app-dir.mjs now points APP_DIR at apps/app (WL-50). A capability with no rev1 surface does not get a binding here — its `app` layer is retired instead, and ADR-081 names it with the lane that restores it.",
   "$binding_shape": {
-    "route": "URL path pattern the human navigates to, e.g. /[orgSlug]/[workspaceSlug]/workbench/tools/mcp",
+    "route": "URL path pattern the human navigates to, e.g. /[org]/[ws]/tools",
     "page": "repo-relative page.tsx (or route.ts) that renders/handles the surface",
-    "entry": "the concrete UI affordance that invokes the capability (form submit, button, toggle) \u2014 human-readable",
-    "testid": "optional data-testid on the entry-point element, for e2e assertion",
-    "proof": "path to the runtime proof: verifications/<session>/<name>.png OR an apps/app/e2e/<slug>.spec.ts",
+    "entry": "the concrete UI affordance that invokes the capability — human-readable",
+    "testid": "optional data-testid on the entry-point element",
+    "proof": "path to the runtime proof: an apps/app component or action test, or verifications/<session>/<name>.png",
     "verifiedAt": "YYYY-MM-DD the proof was captured against a working page",
-    "verifiedBy": "session id / agent that captured the proof"
+    "verifiedBy": "session id that captured it"
   },
   "bindings": {
-    "assign_agent_role": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/page.tsx",
-      "entry": "Agent Builder \u2192 Access step role picker; selection persists on Save draft/Publish (assignAgentRoleAction \u2192 assign_agent_role)",
-      "testid": "agent-role-picker",
-      "proof": "apps/app/e2e/agent-rbac-builder.spec.ts",
-      "verifiedAt": "2026-07-21",
-      "verifiedBy": "session-77f78a54-agent-rbac"
+    "accept_member_invite": {
+      "route": "/invite/[token]",
+      "page": "apps/app/src/app/(auth)/invite/[token]/page.tsx",
+      "entry": "/invite/[token] — the rev1 surface that invokes accept_member_invite (features/auth/invite-actions.ts, server/kernel.ts)",
+      "proof": "apps/app/src/features/auth/invite-actions.test.ts",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "revoke_agent_role": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/page.tsx",
-      "entry": "Agent Builder \u2192 Access step: changing the role revokes the previously-held role after the new assign lands (assignAgentRoleAction \u2192 revoke_agent_role)",
-      "testid": "agent-role-picker",
-      "proof": "apps/app/e2e/agent-rbac-builder.spec.ts",
-      "verifiedAt": "2026-07-21",
-      "verifiedBy": "session-77f78a54-agent-rbac"
+    "advance_onboarding": {
+      "route": "/[org]/[ws]/register/[step]",
+      "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
+      "entry": "/[org]/[ws]/register/[step] — the rev1 surface that invokes advance_onboarding (features/onboarding/actions.ts)",
+      "proof": "apps/app/src/features/onboarding/register.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "list_agent_roles": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/agents",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/page.tsx",
-      "entry": "Agents list role badge per card (getAssignedAgentRoles \u2192 list_agent_roles); also seeds the builder's Access step current-role state",
-      "testid": "agent-role-*",
-      "proof": "apps/app/e2e/agent-rbac-builder.spec.ts",
-      "verifiedAt": "2026-07-21",
-      "verifiedBy": "session-77f78a54-agent-rbac"
+    "archive_workspace": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org] — the rev1 surface that invokes archive_workspace (features/organization/actions.ts)",
+      "proof": "apps/app/src/features/organization/workspace-actions.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "get_agent_role": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/page.tsx",
-      "entry": "Agent Builder edit-mode load refreshes the assigned role's grant preview for the Review step's effective-scope panel (getAgentRolePreview \u2192 get_agent_role)",
-      "testid": "effective-scope-panel",
-      "proof": "apps/app/e2e/agent-rbac-builder.spec.ts",
-      "verifiedAt": "2026-07-21",
-      "verifiedBy": "session-77f78a54-agent-rbac"
+    "authorize_cli": {
+      "route": "/cli/authorize",
+      "page": "apps/app/src/app/cli/authorize/page.tsx",
+      "entry": "/cli/authorize — the rev1 surface that invokes authorize_cli (features/auth/cli-actions.ts, features/auth/cli-authorize.ts)",
+      "proof": "apps/app/src/features/auth/cli-consent.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "get_plugin_schema": {
-      "route": "/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]/page.tsx",
-      "entry": "Page load SSR-prefetches the connector schema (getConnectorSetupSchemaAction) to drive ConnectorConfigForm's dynamic fields",
-      "testid": null,
-      "proof": "apps/app/e2e/connector-setup-wizard.spec.ts",
-      "verifiedAt": "2026-07-10",
-      "verifiedBy": "session_0171c9SvAk9sxjKLzCr7uBWL"
-    },
-    "install_integration": {
-      "route": "/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]/page.tsx",
-      "entry": "ConnectorConfigForm \"Connect\" submit \u2192 POST /integrations",
-      "testid": null,
-      "proof": "apps/app/e2e/connector-setup-wizard.spec.ts",
-      "verifiedAt": "2026-07-10",
-      "verifiedBy": "session_0171c9SvAk9sxjKLzCr7uBWL"
-    },
-    "configure_integration": {
-      "route": "/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]/page.tsx",
-      "entry": "ConnectorConfigForm \"Save changes\" submit (mode=\"configure\") \u2192 PATCH /integrations/:id/configure",
-      "testid": null,
-      "proof": "apps/app/e2e/connector-setup-wizard.spec.ts",
-      "verifiedAt": "2026-07-10",
-      "verifiedBy": "session_0171c9SvAk9sxjKLzCr7uBWL"
-    },
-    "search_references": {
-      "route": "/[orgSlug]/[workspaceSlug]/ask",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/_shared/conversation-page.tsx",
-      "entry": "Composer @-mention picker (type '@' \u2192 pick a reference type \u2192 scoped search) and mention-chip hover hydration \u2192 POST /api/reference-search \u2192 invoke(\"search_references\")",
-      "testid": "mention-menu",
-      "proof": "apps/app/e2e/chat-mentions.spec.ts",
-      "verifiedAt": "2026-07-09",
-      "verifiedBy": "session_019E1ntgMUqV3uXN8gfsbkSG"
-    },
-    "install_skill": {
-      "route": "/[orgSlug]/[workspaceSlug]/marketplace/agent-tools",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/agent-tools/page.tsx",
-      "entry": "\"Install\" on an agent_skill marketplace row \u2192 installPlugin",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
-    },
-    "install_plugin": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/mcp",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/mcp/page.tsx",
-      "entry": "\"Install\" on a catalog search row (McpCatalogSearch \u2192 installPlugin); also marketplace agent-tools browse",
-      "testid": "mcp-catalog-install-*",
-      "proof": "apps/app/e2e/mcp-servers-authenticate.spec.ts",
-      "verifiedAt": "2026-07-08",
-      "verifiedBy": "session_012L8WKM81ZqYaiLYsqLvkw6"
-    },
-    "set_plugin_secret": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/mcp",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/mcp/page.tsx",
-      "entry": "\"Enter API key\" / \"Update API key\" on a secret-auth MCP server row (McpServerList \u2192 SecretDialog \u2192 setMcpServerSecret \u2192 invoke(\"set_plugin_secret\"))",
-      "testid": "mcp-server-set-secret-*",
-      "proof": "apps/app/e2e/mcp-servers-authenticate.spec.ts",
-      "verifiedAt": "2026-07-11",
-      "verifiedBy": "session_09b551c7"
-    },
-    "install_plugins_bulk": {
-      "route": "/[orgSlug]/[workspaceSlug]/marketplace/agent-tools",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/agent-tools/browse-panel.tsx",
-      "entry": "Card checkbox multi-select -> selection toolbar -> \"Install selected\" (handleBulkInstall) -> installBulkAction -> installBulkPlugin -> invoke(\"install_plugins_bulk\")",
-      "testid": "marketplace-browse-bulk-install-btn",
-      "proof": "apps/app/e2e/marketplace-agent-tools-bulk.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "set_plugin_enabled": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities/page.tsx",
-      "entry": "Per-plugin enable/disable toggle (togglePlugin)",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
-    },
-    "uninstall_plugin": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities/page.tsx",
-      "entry": "\"Remove\" on an installed-plugin row (uninstallPlugin)",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
-    },
-    "list_plugin_registries": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/tools/capabilities/page.tsx",
-      "entry": "Registry manager section (WorkspacePluginsPanel initialRegistries)",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
-    },
-    "list_conversations": {
-      "route": "/[orgSlug]/[workspaceSlug]/ask",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/_shared/conversation-page.tsx",
-      "entry": "Conversation history nav \u2014 initial list, Load more, Archived expander",
-      "testid": null,
-      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "rename_conversation": {
-      "route": "/[orgSlug]/[workspaceSlug]/ask",
-      "page": "apps/app/src/components/conversations/conversation-item.tsx",
-      "entry": "Row \u22ef menu \u2192 Rename \u2192 RenameDialog submit",
-      "testid": null,
-      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "archive_conversation": {
-      "route": "/[orgSlug]/[workspaceSlug]/ask",
-      "page": "apps/app/src/components/conversations/conversation-item.tsx",
-      "entry": "Row \u22ef menu \u2192 Archive/Unarchive",
-      "testid": null,
-      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "delete_conversation": {
-      "route": "/[orgSlug]/[workspaceSlug]/ask",
-      "page": "apps/app/src/components/conversations/conversation-item.tsx",
-      "entry": "Row \u22ef menu \u2192 Delete \u2192 DeleteConfirmDialog",
-      "testid": null,
-      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "purge_conversations": {
-      "route": "/[orgSlug]/[workspaceSlug]/ask",
-      "page": "apps/app/src/components/conversations/conversation-list.tsx",
-      "entry": "Archived section \u2192 \"Delete all\" \u2192 DeleteConfirmDialog",
-      "testid": null,
-      "proof": "apps/app/e2e/conversation-lifecycle.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "list_notifications": {
-      "route": "/[orgSlug]/[workspaceSlug]/* (shell)",
-      "page": "apps/app/src/components/shell/notifications-bell.tsx",
-      "entry": "Bell icon \u2192 Sheet drawer loads feed",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
-    },
-    "mark_notification": {
-      "route": "/[orgSlug]/[workspaceSlug]/* (shell)",
-      "page": "apps/app/src/components/shell/notifications-bell.tsx",
-      "entry": "Notification click (mark read) + hover Archive button",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
-    },
-    "update_user_preferences": {
-      "route": "/account/preferences",
-      "page": "apps/app/src/app/account/preferences/preferences-form.tsx",
-      "entry": "\"Save preferences\" submit",
-      "testid": null,
-      "proof": "apps/app/e2e/account-nav.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "suggest_commands": {
-      "route": "/[orgSlug]/[workspaceSlug]/* (Cmd+K)",
-      "page": "apps/app/src/components/shell/ask/command-menu.tsx",
-      "entry": "Command Menu \"Suggested for this page\" (empty-query) via use-suggestions",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
-    },
-    "get_model_settings": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/page.tsx",
-      "entry": "Agent Defaults \u2192 Models sub-tab: models-form.tsx reads server-fetched settings",
-      "testid": null,
-      "proof": "apps/app/e2e/settings-consolidation.spec.ts",
-      "verifiedAt": null,
-      "verifiedBy": "web-app-2.0-phase-2"
-    },
-    "update_model_settings": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/models-action.ts",
-      "entry": "Agent Defaults \u2192 Models sub-tab \"Save changes\" \u2192 updateWorkspaceModelsAction",
-      "testid": null,
-      "proof": "apps/app/e2e/settings-consolidation.spec.ts",
-      "verifiedAt": null,
-      "verifiedBy": "web-app-2.0-phase-2"
-    },
-    "get_budget_policy": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/page.tsx",
-      "entry": "Agent Defaults \u2192 Budget sub-tab: budget-form.tsx reads server-fetched policy",
-      "testid": null,
-      "proof": "apps/app/e2e/settings-consolidation.spec.ts",
-      "verifiedAt": null,
-      "verifiedBy": "web-app-2.0-phase-2"
-    },
-    "update_budget_policy": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/budget-action.ts",
-      "entry": "Agent Defaults \u2192 Budget sub-tab \"Save changes\" \u2192 updateWorkspaceBudgetAction",
-      "testid": null,
-      "proof": "apps/app/e2e/settings-consolidation.spec.ts",
-      "verifiedAt": null,
-      "verifiedBy": "web-app-2.0-phase-2"
-    },
-    "get_spend_budget": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/spend-budgets",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/spend-budgets/page.tsx",
-      "entry": "Spend Budgets page load \u2192 getSpendBudgetsAction fetches both org + workspace ceiling status, rendered by SpendBudgetsPanel",
-      "testid": "spend-budgets-panel",
-      "proof": "apps/app/e2e/spend-budgets.spec.ts",
-      "verifiedAt": null,
-      "verifiedBy": "OXA-1079"
-    },
-    "set_spend_budget": {
-      "route": "/[orgSlug]/[workspaceSlug]/settings/spend-budgets",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/spend-budgets/scope-budget-card.tsx",
-      "entry": "Spend Budgets \u2192 per-scope card \"Set a ceiling\" / \"Edit ceiling\" form \"Save ceiling\" submit \u2192 setSpendBudgetAction",
-      "testid": "spend-budget-workspace-save",
-      "proof": "apps/app/e2e/spend-budgets.spec.ts",
-      "verifiedAt": null,
-      "verifiedBy": "OXA-1079"
-    },
-    "get_workspace_user_preferences": {
-      "route": "/[orgSlug]/[workspaceSlug]/sessions",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/_shared/conversation-page.tsx",
-      "entry": "Sessions chat page load \u2014 seeds the agent picker's default-assistant star and the session model/budget defaults (userWorkspacePreferencesReadHandler \u2192 get_workspace_user_preferences)",
-      "testid": "agent-picker-default-star",
-      "proof": "apps/app/e2e/chat-agent-picker.spec.ts",
-      "verifiedAt": "2026-09-07",
-      "verifiedBy": "session_01R1rEhwUGi1z1ob1v4jbtax"
-    },
-    "update_workspace_user_preferences": {
-      "route": "/[orgSlug]/[workspaceSlug]/sessions",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/_shared/agent-prefs-actions.ts",
-      "entry": "Agent picker \u2192 default-assistant star toggle (setDefaultAgentAction \u2192 update_workspace_user_preferences)",
-      "testid": "agent-picker-default-star",
-      "proof": "apps/app/e2e/chat-agent-picker.spec.ts",
-      "verifiedAt": "2026-09-07",
-      "verifiedBy": "session_01R1rEhwUGi1z1ob1v4jbtax"
-    },
-    "update_user_budget": {
-      "route": "/[orgSlug]/[workspaceSlug]/ask (chat composer)",
-      "page": "apps/app/src/components/chat/budget-actions.ts",
-      "entry": "\"Save as default\" in BudgetControl popover \u2192 saveBudgetDefaultAction",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
-    },
-    "remove_org_member": {
-      "route": "/[orgSlug]/members",
-      "page": "apps/app/src/app/[orgSlug]/members/page.tsx",
-      "entry": "MembersPanel \u2192 RemoveMemberDialog confirm \u2192 removeMemberAction",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+    "bind_main_repository": {
+      "route": "/[org]/[ws]/register/[step]",
+      "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
+      "entry": "/[org]/[ws]/register/[step] — the rev1 surface that invokes bind_main_repository (features/onboarding/actions.ts)",
+      "proof": "apps/app/src/features/onboarding/register.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
     "change_member_role": {
-      "route": "/[orgSlug]/members",
-      "page": "apps/app/src/app/[orgSlug]/members/page.tsx",
-      "entry": "MembersPanel \u2192 RoleSelector \u2192 changeMemberRoleAction",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org] — the rev1 surface that invokes change_member_role (features/organization/actions.ts)",
+      "proof": "apps/app/src/features/organization/member-row-actions.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "commit_agent_definition": {
+      "route": "/[org]/[ws]/agents/[agent]/source",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/source/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent]/source — the rev1 surface that invokes commit_agent_definition (features/agents/actions.ts, features/agents/agent-source.tsx)",
+      "proof": "apps/app/src/features/agents/agent-source.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
     "create_api_key": {
-      "route": "/[orgSlug]/developer/tokens",
-      "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
-      "entry": "TokensPanel \u2192 CreateKeyDialog form \u2192 createApiKeyAction",
-      "testid": null,
-      "proof": "apps/app/e2e/developer-tokens.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+      "route": "/[org]/api-keys",
+      "page": "apps/app/src/app/[org]/api-keys/page.tsx",
+      "entry": "/[org]/api-keys — the rev1 surface that invokes create_api_key (features/organization/api-key-actions.ts)",
+      "proof": "apps/app/src/features/organization/create-key-dialog.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "revoke_api_key": {
-      "route": "/[orgSlug]/developer/tokens",
-      "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
-      "entry": "ActiveKeyRow Revoke/Confirm \u2192 revokeApiKeyAction",
-      "testid": null,
-      "proof": "apps/app/e2e/developer-tokens.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    "create_enrollment_token": {
+      "route": "/[org]/[ws]/register/[step]",
+      "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
+      "entry": "/[org]/[ws]/register/[step] — the rev1 surface that invokes create_enrollment_token (features/onboarding/actions.ts)",
+      "proof": "apps/app/src/features/onboarding/register.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "rotate_api_key": {
-      "route": "/[orgSlug]/developer/tokens",
-      "page": "apps/app/src/app/[orgSlug]/developer/tokens/page.tsx",
-      "entry": "ActiveKeyRow Rotate \u2192 rotateApiKeyAction",
-      "testid": null,
-      "proof": "apps/app/e2e/developer-tokens.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
+    "create_org": {
+      "route": "/new-organization",
+      "page": "apps/app/src/app/(onboarding)/new-organization/page.tsx",
+      "entry": "/new-organization — the rev1 surface that invokes create_org (features/onboarding/actions.ts, features/onboarding/org-form.ts)",
+      "proof": "apps/app/src/features/onboarding/new-organization.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "list_connections": {
-      "route": "/[orgSlug]/[workspaceSlug]/knowledge/sources",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/sources/connections-section.tsx",
-      "entry": "ConnectionsSection RSC invoke(connection.list) \u2192 KnowledgeConnectionsClient",
-      "testid": "connection-row-{publicId}",
-      "proof": "apps/app/e2e/knowledge-connect-wizard.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+    "create_role": {
+      "route": "/[org]/roles",
+      "page": "apps/app/src/app/[org]/roles/page.tsx",
+      "entry": "/[org]/roles — the rev1 surface that invokes create_role (features/organization/actions.ts)",
+      "proof": "apps/app/src/features/organization/roles.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "get_graph_stats": {
-      "route": "/[orgSlug]/[workspaceSlug]/knowledge/graph",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/graph/_panels/graph-side-panel.tsx",
-      "entry": "Graph side-panel header shows summary counts via get_graph_stats (also on the Inference stats section)",
-      "testid": "graph-stats",
-      "proof": "apps/app/e2e/knowledge-graph.spec.ts",
-      "verifiedAt": null,
-      "verifiedBy": "web-app-2.0-phase-2"
+    "create_workspace": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org] — the rev1 surface that invokes create_workspace (features/organization/actions.ts)",
+      "proof": "apps/app/src/features/organization/workspace-actions.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "get_node": {
-      "route": "/[orgSlug]/[workspaceSlug]/knowledge/graph/[nodeId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/graph/[nodeId]/page.tsx",
-      "entry": "Node detail page server-fetch (deep-linked from Graph canvas/browse and chat citations)",
-      "testid": null,
-      "proof": "apps/app/e2e/knowledge-node-detail.spec.ts",
-      "verifiedAt": null,
-      "verifiedBy": "web-app-2.0-phase-2"
+    "decline_member_invite": {
+      "route": "/invite/[token]",
+      "page": "apps/app/src/app/(auth)/invite/[token]/page.tsx",
+      "entry": "/invite/[token] — the rev1 surface that invokes decline_member_invite (features/auth/invite-actions.ts, server/kernel.ts)",
+      "proof": "apps/app/src/features/auth/invite-actions.test.ts",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "get_citation_stats": {
-      "route": "/[orgSlug]/[workspaceSlug]/knowledge/citations",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/citations/page.tsx",
-      "entry": "CitationsDashboardSection RSC invoke(get_citation_stats) \u2192 CitationsDashboard",
-      "testid": null,
-      "proof": "apps/app/e2e/knowledge-citations.spec.ts",
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_01LvTjUhzMz5nF1WWPn6K7N5"
+    "delete_role": {
+      "route": "/[org]/roles",
+      "page": "apps/app/src/app/[org]/roles/page.tsx",
+      "entry": "/[org]/roles — the rev1 surface that invokes delete_role (features/organization/actions.ts)",
+      "proof": "apps/app/src/features/organization/role-actions.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "get_agent_def": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/page.tsx",
-      "entry": "EditAgentPage RSC \u2192 getAgent() \u2192 AgentBuilder edit mode",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+    "dismiss_finding": {
+      "route": "/[org]/[ws]/spend",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes dismiss_finding (features/spend/actions.ts)",
+      "proof": "apps/app/src/features/spend/dialogs.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "write_memory": {
-      "route": "/[orgSlug]/[workspaceSlug]/ask",
-      "page": "apps/app/src/components/chat/message-footer.tsx",
-      "entry": "\"Save as Memory\" under assistant messages \u2192 saveAsMemoryAction",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
+    "dismiss_proposal": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "/[org]/[ws]/steering — the rev1 surface that invokes dismiss_proposal (features/steering/actions.ts)",
+      "proof": "apps/app/src/features/steering/write-controls.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "dismiss_memory_promotion": {
-      "route": "/[orgSlug]/[workspaceSlug]/knowledge/memory",
-      "page": "apps/app/src/components/knowledge/memories/memory-promotion-queue.tsx",
-      "entry": "\"Dismiss\" on a promotion candidate (queue + inline suggested-to-promote panel) \u2192 dismissPromotionAction",
-      "testid": null,
-      "proof": "apps/app/e2e/memories-management.spec.ts",
-      "verifiedAt": null,
-      "verifiedBy": "session_01LvTjUhzMz5nF1WWPn6K7N5"
+    "export_audit_events": {
+      "route": "/[org]/audit/export",
+      "page": "apps/app/src/app/[org]/audit/export/route.ts",
+      "entry": "/[org]/audit/export — the rev1 surface that invokes export_audit_events (data/live/audit.ts, data/live/mappers/audit.ts)",
+      "proof": "apps/app/src/features/audit/export.test.ts",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "demote_memory": {
-      "route": "/[orgSlug]/[workspaceSlug]/knowledge/memory",
-      "page": "apps/app/src/components/knowledge/memories/memories-client.tsx",
-      "entry": "\"Demote\" in the memory detail sheet (RULE/FACT) \u2192 demoteMemoryAction",
-      "testid": null,
-      "proof": "apps/app/e2e/memories-management.spec.ts",
-      "verifiedAt": null,
-      "verifiedBy": "session_01LvTjUhzMz5nF1WWPn6K7N5"
+    "export_statement": {
+      "route": "/[org]/[ws]/spend",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes export_statement (features/spend/actions.ts)",
+      "proof": "apps/app/src/features/spend/spend.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "suggest_promotion_rationales": {
-      "route": "/[orgSlug]/[workspaceSlug]/knowledge/memory",
-      "page": "apps/app/src/components/knowledge/memories/rationale-picker.tsx",
-      "entry": "RationalePicker select, opened from any promote/demote flow \u2192 suggestRationalesAction",
-      "testid": null,
-      "proof": "apps/app/e2e/memories-management.spec.ts",
-      "verifiedAt": null,
-      "verifiedBy": "session_01LvTjUhzMz5nF1WWPn6K7N5"
+    "get_agent": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent] — the rev1 surface that invokes get_agent (data/live/agents.ts, data/live/mappers/agents.ts, data/live/mappers/mappers.type-test.ts)",
+      "proof": "apps/app/src/features/agents/agent.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "list_agent_environments": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/environments-actions.ts",
-      "entry": "AgentEnvironmentsCard bindings list via readAgentBindingsAction",
-      "testid": "agent-environments-card",
-      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
-      "verifiedAt": "2026-07-08",
-      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    "get_agent_toolbelt": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent] — the rev1 surface that invokes get_agent_toolbelt (data/live/agents.ts, data/live/mappers/agents.ts)",
+      "proof": "apps/app/src/features/agents/agent.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "bind_agent_environment": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/environments-actions.ts",
-      "entry": "AgentEnvironmentsCard \"Bind\" / \"Make primary\" \u2192 bindAgentEnvironmentAction",
-      "testid": "agent-bind-submit",
-      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
-      "verifiedAt": "2026-07-08",
-      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    "get_context_pr": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "/[org]/[ws]/steering — the rev1 surface that invokes get_context_pr (data/live/mappers/steering.ts, data/live/steering.ts)",
+      "proof": "apps/app/src/features/steering/steering.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "unbind_agent_environment": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/environments-actions.ts",
-      "entry": "AgentEnvironmentsCard \"Unbind\" per row \u2192 unbindAgentEnvironmentAction",
-      "testid": "agent-binding-unbind-production",
-      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
-      "verifiedAt": "2026-07-08",
-      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    "get_contract_rate": {
+      "route": "/[org]/billing",
+      "page": "apps/app/src/app/[org]/billing/page.tsx",
+      "entry": "/[org]/billing — the rev1 surface that invokes get_contract_rate (data/live/billing.ts, data/live/mappers/billing.ts)",
+      "proof": "apps/app/src/features/billing/contract-rate.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "list_environments": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/environments",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/environments/actions.ts",
-      "entry": "EnvironmentsBar list from readEnvironmentsAction",
-      "testid": null,
-      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
-      "verifiedAt": "2026-07-08",
-      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    "get_finding_evidence": {
+      "route": "/[org]/[ws]/spend",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes get_finding_evidence (data/live/mappers/spend.ts, data/live/spend.ts)",
+      "proof": "apps/app/src/features/spend/spend.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "list_secret_keys": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/environments",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/environments/actions.ts",
-      "entry": "SecretsSection table from readSecretKeysAction",
-      "testid": null,
-      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
-      "verifiedAt": "2026-07-08",
-      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    "get_first_frame": {
+      "route": "/[org]/[ws]/register/[step]",
+      "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
+      "entry": "/[org]/[ws]/register/[step] — the rev1 surface that invokes get_first_frame (data/live/mappers/mappers.type-test.ts, data/live/mappers/onboarding.ts, data/live/onboarding.ts)",
+      "proof": "apps/app/src/features/onboarding/register.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "delete_secret_key": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/environments",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/environments/actions.ts",
-      "entry": "\"Delete\" per row in SecretsSection \u2192 deleteKeyAction",
-      "testid": null,
-      "proof": "apps/app/e2e/sandbox-templates.spec.ts",
-      "verifiedAt": "2026-07-08",
-      "verifiedBy": "session_01NwQYbMXBT77CTwujnPHRH7"
+    "get_gau_bucket": {
+      "route": "/[org]/billing",
+      "page": "apps/app/src/app/[org]/billing/page.tsx",
+      "entry": "/[org]/billing — the rev1 surface that invokes get_gau_bucket (data/live/billing.ts, data/live/mappers/billing.ts)",
+      "proof": "apps/app/src/features/billing/billing.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "list_capability_registry": {
-      "route": "/[orgSlug]/governance/capabilities",
-      "page": "apps/app/src/app/[orgSlug]/governance/capabilities/page.tsx",
-      "entry": "CatalogView renders the contract registry table on page load (invokeOrgCapability list_capability_registry)",
-      "testid": "capability-catalog",
-      "proof": "apps/app/e2e/governance.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_e448d4cc"
+    "get_onboarding_state": {
+      "route": "/[org]/[ws]/register/[step]",
+      "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
+      "entry": "/[org]/[ws]/register/[step] — the rev1 surface that invokes get_onboarding_state (data/live/mappers/mappers.type-test.ts, data/live/mappers/onboarding.ts, data/live/onboarding.ts)",
+      "proof": "apps/app/src/features/onboarding/register.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "get_capability_registry": {
-      "route": "/[orgSlug]/governance/capabilities",
-      "page": "apps/app/src/app/[orgSlug]/governance/capabilities/page.tsx",
-      "entry": "Clicking a capability row opens ContractDrawer which loads full contract detail (get_capability_registry)",
-      "testid": "capability-row-",
-      "proof": "apps/app/e2e/governance.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_e448d4cc"
+    "get_spend": {
+      "route": "/[org]/[ws]/spend",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes get_spend (data/live/mappers/spend.ts, data/live/spend.ts)",
+      "proof": "apps/app/src/features/spend/spend.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "get_spend_budget": {
+      "route": "/[org]/[ws]/spend",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes get_spend_budget (data/live/mappers/spend.ts, data/live/spend.ts)",
+      "proof": "apps/app/src/features/spend/spend.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "get_spend_drill": {
+      "route": "/[org]/[ws]/spend",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes get_spend_drill (data/live/mappers/spend.ts, data/live/spend.ts)",
+      "proof": "apps/app/src/features/spend/spend.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "get_subscription": {
+      "route": "/[org]/billing",
+      "page": "apps/app/src/app/[org]/billing/page.tsx",
+      "entry": "/[org]/billing — the rev1 surface that invokes get_subscription (data/live/billing.ts, data/live/mappers/billing.ts)",
+      "proof": "apps/app/src/features/billing/billing.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "import_tools": {
+      "route": "/[org]/[ws]/tools",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "/[org]/[ws]/tools — the rev1 surface that invokes import_tools (features/tools/actions.ts)",
+      "proof": "apps/app/src/features/tools/write-controls.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_agents": {
+      "route": "/[org]/[ws]/register/[step]",
+      "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
+      "entry": "/[org]/[ws]/register/[step] — the rev1 surface that invokes list_agents (data/live/agents.ts, data/live/mappers/agents.ts, data/live/mappers/mappers.type-test.ts, features/onboarding/agent-form.ts)",
+      "proof": "apps/app/src/features/onboarding/register.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_api_keys": {
+      "route": "/[org]/api-keys",
+      "page": "apps/app/src/app/[org]/api-keys/page.tsx",
+      "entry": "/[org]/api-keys — the rev1 surface that invokes list_api_keys (data/live/mappers/mappers.type-test.ts, data/live/mappers/org.ts, data/live/org.ts)",
+      "proof": "apps/app/src/features/organization/api-keys.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_approvals": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/page.tsx",
+      "entry": "/[org]/[ws] — the rev1 surface that invokes list_approvals (data/live/approvals.ts, data/live/mappers/approvals.ts, data/live/mappers/mappers.type-test.ts)",
+      "proof": "apps/app/src/features/fleet/fleet.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_credential_grants": {
+      "route": "/[org]/[ws]/tools",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "/[org]/[ws]/tools — the rev1 surface that invokes list_credential_grants (data/live/mappers/tools.ts, data/live/tools.ts)",
+      "proof": "apps/app/src/features/tools/tools.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_findings": {
+      "route": "/[org]/[ws]/spend",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes list_findings (data/live/mappers/spend.ts, data/live/spend.ts)",
+      "proof": "apps/app/src/features/spend/spend.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
     "list_iam_roles": {
-      "route": "/[orgSlug]/governance/policies",
-      "page": "apps/app/src/app/[orgSlug]/governance/policies/page.tsx",
-      "entry": "Roles & permissions table (server read list_iam_roles on page load)",
-      "testid": "roles-table",
-      "proof": "apps/app/e2e/governance.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_e448d4cc"
+      "route": "/[org]/roles",
+      "page": "apps/app/src/app/[org]/roles/page.tsx",
+      "entry": "/[org]/roles — the rev1 surface that invokes list_iam_roles (data/live/mappers/mappers.type-test.ts, data/live/mappers/org.ts, data/live/org.ts)",
+      "proof": "apps/app/src/features/organization/roles.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "get_auth_alerts": {
-      "route": "/[orgSlug]/governance/policies",
-      "page": "apps/app/src/app/[orgSlug]/governance/policies/page.tsx",
-      "entry": "MCP auth alerts panel reflects current per-role alert settings (get_auth_alerts on page load)",
-      "testid": "auth-alerts-panel",
-      "proof": "apps/app/e2e/governance.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_e448d4cc"
+    "list_incidents": {
+      "route": "/[org]/[ws]/agents",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "/[org]/[ws]/agents — the rev1 surface that invokes list_incidents (data/live/agents.ts, data/live/mappers/agents.ts, data/live/mappers/mappers.type-test.ts)",
+      "proof": "apps/app/src/features/agents/agents.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
-    "set_auth_alerts": {
-      "route": "/[orgSlug]/governance/policies",
-      "page": "apps/app/src/app/[orgSlug]/governance/policies/page.tsx",
-      "entry": "MCP auth alerts panel \"Save\" submit \u2192 saveAuthAlertsAction \u2192 set_auth_alerts",
-      "testid": "auth-alerts-save",
-      "proof": "apps/app/e2e/governance.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_e448d4cc"
+    "list_invoices": {
+      "route": "/[org]/billing",
+      "page": "apps/app/src/app/[org]/billing/page.tsx",
+      "entry": "/[org]/billing — the rev1 surface that invokes list_invoices (data/live/billing.ts, data/live/mappers/billing.ts)",
+      "proof": "apps/app/src/features/billing/billing.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_kill_switches": {
+      "route": "/[org]/[ws]/tools",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "/[org]/[ws]/tools — the rev1 surface that invokes list_kill_switches (data/live/mappers/tools.ts, data/live/tools.ts)",
+      "proof": "apps/app/src/features/tools/tools.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_mandates": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/page.tsx",
+      "entry": "/[org]/[ws] — the rev1 surface that invokes list_mandates (data/live/mandates.ts, data/live/mappers/mandates.ts, data/live/mappers/mappers.type-test.ts)",
+      "proof": "apps/app/src/features/agents/mandates.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_members": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org] — the rev1 surface that invokes list_members (data/live/mappers/org.ts, data/live/org.ts)",
+      "proof": "apps/app/src/features/organization/people.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_orgs": {
+      "route": "/new-organization",
+      "page": "apps/app/src/app/(onboarding)/new-organization/page.tsx",
+      "entry": "/new-organization — the rev1 surface that invokes list_orgs (data/live/mappers/pretenant.ts, data/live/pretenant.ts, data/live/shell.ts)",
+      "proof": "apps/app/src/features/onboarding/new-organization.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_proposals": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "/[org]/[ws]/steering — the rev1 surface that invokes list_proposals (data/live/mappers/steering.ts, data/live/steering.ts)",
+      "proof": "apps/app/src/features/steering/steering.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_records": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "/[org]/[ws]/steering — the rev1 surface that invokes list_records (data/live/mappers/steering.ts, data/live/steering.ts)",
+      "proof": "apps/app/src/features/steering/steering.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_runs": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/page.tsx",
+      "entry": "/[org]/[ws] — the rev1 surface that invokes list_runs (data/live/mappers/mappers.type-test.ts, data/live/mappers/runs.ts, data/live/runs.ts)",
+      "proof": "apps/app/src/features/fleet/fleet.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_skills": {
+      "route": "/[org]/[ws]/skills",
+      "page": "apps/app/src/app/[org]/[ws]/skills/page.tsx",
+      "entry": "/[org]/[ws]/skills — the rev1 surface that invokes list_skills (data/live/mappers/skills.ts, data/live/skills.ts)",
+      "proof": "apps/app/src/features/skills/skills.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_tool_versions": {
+      "route": "/[org]/[ws]/tools",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "/[org]/[ws]/tools — the rev1 surface that invokes list_tool_versions (data/live/mappers/tools.ts, data/live/tools.ts)",
+      "proof": "apps/app/src/features/tools/tools.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_waste": {
+      "route": "/[org]/[ws]/spend",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes list_waste (data/live/mappers/spend.ts, data/live/spend.ts)",
+      "proof": "apps/app/src/features/spend/spend.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_workspaces": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org] — the rev1 surface that invokes list_workspaces (data/live/mappers/mappers.type-test.ts, data/live/mappers/org.ts, data/live/mappers/pretenant.ts, data/live/org.ts, data/live/pretenant.ts, data/live/shell.ts)",
+      "proof": "apps/app/src/features/organization/workspaces.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "merge_context_pr": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "/[org]/[ws]/steering — the rev1 surface that invokes merge_context_pr (features/steering/actions.ts)",
+      "proof": "apps/app/src/features/steering/context-pr-panel.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "open_context_pr": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "/[org]/[ws]/steering — the rev1 surface that invokes open_context_pr (features/steering/actions.ts)",
+      "proof": "apps/app/src/features/steering/context-pr-panel.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "purchase_credits": {
+      "route": "/[org]/billing",
+      "page": "apps/app/src/app/[org]/billing/page.tsx",
+      "entry": "/[org]/billing — the rev1 surface that invokes purchase_credits (features/billing/actions.ts, features/billing/billing.tsx)",
+      "proof": "apps/app/src/features/billing/usage-credits.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "purchase_gau_bucket": {
+      "route": "/[org]/billing",
+      "page": "apps/app/src/app/[org]/billing/page.tsx",
+      "entry": "/[org]/billing — the rev1 surface that invokes purchase_gau_bucket (features/billing/actions.ts, features/billing/billing.tsx)",
+      "proof": "apps/app/src/features/billing/purchase-form.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     },
     "query_audit_log": {
-      "route": "/[orgSlug]/governance",
-      "page": "apps/app/src/app/[orgSlug]/governance/page.tsx",
-      "entry": "Governance hub \"Recent denied invocations\" panel + Audit events tile (the only governance page that invokes query_audit_log \u2014 capabilities/policies invoke list_capability_registry/get_capability_registry/list_iam_roles/get_auth_alerts instead)",
-      "testid": "denied-feed",
-      "proof": "apps/app/e2e/governance-hub.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_e448d4cc"
-    },
-    "get_usage_breakdown": {
-      "route": "/[orgSlug]/billing/usage",
-      "page": "apps/app/src/app/[orgSlug]/billing/usage/page.tsx",
-      "entry": "Usage dashboard page load (assertOrgMember + assertBillingManager, then invoke) renders KPI tiles, daily trend, and per-model/surface/workspace/capability/principal breakdown tables",
-      "testid": null,
-      "proof": "apps/app/e2e/billing-usage-breakdown.spec.ts",
-      "verifiedAt": "2026-07-12",
-      "verifiedBy": "session_01MKXSEq5nM327ymLDmyRnMC"
-    },
-    "get_action_usage": {
-      "route": "/[orgSlug]/billing/governed-actions",
-      "page": "apps/app/src/app/[orgSlug]/billing/governed-actions/page.tsx",
-      "entry": "Governed actions tab \u2192 'This entitlement year' panel; page load invokes get_action_usage via loadActionUsage (data.ts). ?breakdown=1 requests the per-capability rows.",
-      "testid": "model-tokens-zero-row",
-      "proof": "apps/app/e2e/billing-governed-actions.spec.ts",
-      "verifiedAt": "2026-09-11",
-      "verifiedBy": "session-51ff1c81-governed-action-meter"
-    },
-    "get_rate_card": {
-      "route": "/[orgSlug]/billing/governed-actions",
-      "page": "apps/app/src/app/[orgSlug]/billing/governed-actions/page.tsx",
-      "entry": "Governed actions tab \u2192 'Rate card' panel (volume bands, per-tier allowances, retention price, the zero model-token row); page load invokes get_rate_card via loadRateCard (data.ts).",
-      "testid": "rate-card-model-tokens",
-      "proof": "apps/app/e2e/billing-governed-actions.spec.ts",
-      "verifiedAt": "2026-09-11",
-      "verifiedBy": "session-51ff1c81-governed-action-meter"
-    },
-    "preview_action_cost": {
-      "route": "/[orgSlug]/billing/governed-actions",
-      "page": "apps/app/src/app/[orgSlug]/billing/governed-actions/page.tsx",
-      "entry": "Governed actions tab \u2192 'Estimate your cost' form; Calculate submits previewActionCostAction (actions.ts) \u2192 preview_action_cost and renders the assumptions with the quote.",
-      "testid": "calc-submit",
-      "proof": "apps/app/e2e/billing-governed-actions.spec.ts",
-      "verifiedAt": "2026-09-11",
-      "verifiedBy": "session-51ff1c81-governed-action-meter"
-    },
-    "get_evidence_retention": {
-      "route": "/[orgSlug]/billing/governed-actions",
-      "page": "apps/app/src/app/[orgSlug]/billing/governed-actions/page.tsx",
-      "entry": "Governed actions tab \u2192 'Evidence retention' panel (included window, opt-in state, per-GB-month price, retention charged); page load invokes get_evidence_retention via loadEvidenceRetention (data.ts).",
-      "testid": "retention-opt-in-off",
-      "proof": "apps/app/e2e/billing-governed-actions.spec.ts",
-      "verifiedAt": "2026-09-11",
-      "verifiedBy": "session-51ff1c81-governed-action-meter"
-    },
-    "list_tacho_hosts": {
-      "route": "/[orgSlug]/[workspaceSlug]/fleet",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/fleet/page.tsx",
-      "entry": "Fleet page: the server component calls listFleetAction on load, which invokes list_tacho_hosts and renders one row per machine with the enforcement tier of each app on it (ADR-078)",
-      "testid": "fleet-page",
-      "proof": "apps/app/e2e/fleet.spec.ts",
+      "route": "/[org]/audit",
+      "page": "apps/app/src/app/[org]/audit/page.tsx",
+      "entry": "/[org]/audit — the rev1 surface that invokes query_audit_log (data/live/audit.ts, data/live/mappers/audit.ts, data/live/mappers/mappers.type-test.ts)",
+      "proof": "apps/app/src/features/audit/audit.test.tsx",
       "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-cdf1766d-desktop-control-plane"
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "record_finding_fix": {
+      "route": "/[org]/[ws]/spend",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes record_finding_fix (features/spend/actions.ts)",
+      "proof": "apps/app/src/features/spend/dialogs.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "register_agent": {
+      "route": "/[org]/[ws]/register/[step]",
+      "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
+      "entry": "/[org]/[ws]/register/[step] — the rev1 surface that invokes register_agent (features/onboarding/actions.ts)",
+      "proof": "apps/app/src/features/onboarding/register.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "remove_org_member": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org] — the rev1 surface that invokes remove_org_member (features/organization/actions.ts)",
+      "proof": "apps/app/src/features/organization/member-row-actions.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "request_mandate": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent] — the rev1 surface that invokes request_mandate (features/agents/actions.ts)",
+      "proof": "apps/app/src/features/agents/mandate-request.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "retire_agent": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent] — the rev1 surface that invokes retire_agent (features/agents/actions.ts)",
+      "proof": "apps/app/src/features/agents/agent-actions.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "revoke_api_key": {
+      "route": "/[org]/api-keys",
+      "page": "apps/app/src/app/[org]/api-keys/page.tsx",
+      "entry": "/[org]/api-keys — the rev1 surface that invokes revoke_api_key (features/organization/api-key-actions.ts)",
+      "proof": "apps/app/src/features/organization/key-row.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "rotate_agent_credential": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent] — the rev1 surface that invokes rotate_agent_credential (features/agents/actions.ts)",
+      "proof": "apps/app/src/features/agents/agent-actions.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "rotate_api_key": {
+      "route": "/[org]/api-keys",
+      "page": "apps/app/src/app/[org]/api-keys/page.tsx",
+      "entry": "/[org]/api-keys — the rev1 surface that invokes rotate_api_key (features/organization/api-key-actions.ts)",
+      "proof": "apps/app/src/features/organization/key-row.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "set_auto_topup": {
+      "route": "/[org]/billing",
+      "page": "apps/app/src/app/[org]/billing/page.tsx",
+      "entry": "/[org]/billing — the rev1 surface that invokes set_auto_topup (features/billing/actions.ts)",
+      "proof": "apps/app/src/features/billing/auto-topup.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "set_kill_switch": {
+      "route": "/[org]/[ws]/tools",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "/[org]/[ws]/tools — the rev1 surface that invokes set_kill_switch (features/tools/actions.ts)",
+      "proof": "apps/app/src/features/tools/write-controls.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "set_role_grants": {
+      "route": "/[org]/roles",
+      "page": "apps/app/src/app/[org]/roles/page.tsx",
+      "entry": "/[org]/roles — the rev1 surface that invokes set_role_grants (features/organization/actions.ts)",
+      "proof": "apps/app/src/features/organization/role-actions.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "set_spend_budget": {
+      "route": "/[org]/[ws]/spend",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "/[org]/[ws]/spend — the rev1 surface that invokes set_spend_budget (features/spend/actions.ts)",
+      "proof": "apps/app/src/features/spend/dialogs.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "set_tool_classification": {
+      "route": "/[org]/[ws]/tools",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "/[org]/[ws]/tools — the rev1 surface that invokes set_tool_classification (features/tools/actions.ts)",
+      "proof": "apps/app/src/features/tools/write-controls.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "suspend_agent": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent] — the rev1 surface that invokes suspend_agent (features/agents/actions.ts)",
+      "proof": "apps/app/src/features/agents/agent-actions.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
+    },
+    "update_workspace_settings": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org] — the rev1 surface that invokes update_workspace_settings (features/organization/actions.ts)",
+      "proof": "apps/app/src/features/organization/workspaces.test.tsx",
+      "verifiedAt": "2026-09-16",
+      "verifiedBy": "session-20daa43b-cutover"
     }
   }
 }

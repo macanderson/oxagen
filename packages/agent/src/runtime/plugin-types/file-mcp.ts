@@ -22,6 +22,12 @@
  *
  * Both contributors feed into the same materializeTools() pipeline, which
  * applies the uniform IAM gate + ClickHouse telemetry wrapping.
+ *
+ * KILL SWITCHES (spec §6.11): the turn's gate is asked about every server
+ * before it is connected, so an org, workspace, operator or agent switch means
+ * no connect, no tools/list and no static credential presented — the same
+ * containment mcp.ts promises. A file server has no mcp_servers row and no
+ * stored connection, so server- and connection-level switches cannot name one.
  */
 import pino from "pino";
 import { resolveSettings, findProjectRoot } from "@oxagen/mcp-config/resolve";
@@ -146,7 +152,7 @@ function collectAllowedTools(
 
 async function contributeFileBasedMcpTools(
   _ctx: CapabilityContext,
-  _options?: PluginContributeOptions,
+  options?: PluginContributeOptions,
 ): Promise<ContributedRawTool[]> {
   // Resolve the effective file-based config
   const projectRoot = findProjectRoot();
@@ -165,6 +171,35 @@ async function contributeFileBasedMcpTools(
   for (const [serverName, config] of Object.entries(allServers)) {
     // Skip disabled servers
     if ("disabled" in config && config.disabled) continue;
+
+    // Kill switch (spec §6.11), before anything is spawned or any request
+    // leaves the machine. A file-configured server has no mcp_servers row and
+    // no stored connection, so only the scope switches — agent, operator,
+    // workspace, organisation — can match; the capability id is synthetic and
+    // matches a `tool_version` switch nobody can flip on it. The shared
+    // external-tool execute closure in materialize-tools refuses the CALL
+    // either way, so this is containment rather than authorization: without
+    // it, an org switch still left the process connecting to a third party,
+    // pulling tools/list and presenting the static headers or token from
+    // .oxagen/settings.json. That is the promise mcp.ts makes for DB-backed
+    // servers ("no connect, no tools/list") and it now holds here too.
+    const killed = await options?.killSwitches.check({
+      capabilityId: `file-mcp.${serverName}`,
+      serverId: null,
+      connectionId: null,
+      readOnly: false,
+    });
+    if (killed) {
+      logger.warn(
+        {
+          serverName,
+          killSwitch: killed.publicId,
+          target: `${killed.targetKind} ${killed.targetId}`,
+        },
+        "file-based MCP server left out of the turn by kill switch",
+      );
+      continue;
+    }
 
     // Managed policy, before anything is spawned or any request leaves the
     // machine. This is the enforcement point managed.ts's header always named

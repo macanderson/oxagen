@@ -1,6 +1,6 @@
 # iam.role.list
 
-List the org's IAM roles with their capability grants (`allow` / `deny` / `require_approval`) and the number of principals actively assigned to each. Read-only — the human-readable face of the permitted-action link of the accountability chain. Role and grant writes remain provisioning-script-only (`db:seed-iam` / `db:backfill-iam`) until dedicated write contracts are authored (ship-read-first). Powers the org Governance → Policies roles table.
+List the org's IAM roles with their capability grants (`allow` / `deny` / `require_approval`), the catalogue permissions those grants cover, who created each role, and the number of principals actively assigned to each — with the permission catalogue the editor speaks and whether the kernel enforces roles for the org's tier (ADR-063). Read-only: `create_role`, `set_role_grants` and `delete_role` are the writes. Powers the Organization › Roles page.
 
 ## Mode
 **sync**
@@ -9,7 +9,7 @@ List the org's IAM roles with their capability grants (`allow` / `deny` / `requi
 - API: `GET /v1/iam/roles/list`
 - MCP: `list_iam_roles`
 - Agent: callable (no approval required, risk: low)
-- App: org → Governance → Policies
+- App: Organization › Roles (`/{org}/roles`)
 
 ## Access
 Admin-level. Default roles: org `Owner`/`Admin`/`Compliance`. Sensitivity: **medium** (reveals the org's permission model). `noBillingGate`. Tenant isolation is enforced in the handler — every underlying query filters by the caller's `orgId`.
@@ -30,5 +30,7 @@ Admin-level. Default roles: org `Owner`/`Admin`/`Compliance`. Sensitivity: **med
 | `hasMore` | boolean | Whether more roles exist beyond this page |
 | `limit` | number | Echoed page size |
 | `offset` | number | Echoed offset |
+| `catalog` | PermissionCatalogEntry[] | The permission catalogue in catalogue order: `{ id, group, description, capabilities[] }`, seven groups (Runs, Agents, Tools and policy, Repository, Graph and steering, Money, Audit) |
+| `enforcement` | `{ tier, enforced }` | `enforced` is true when the kernel's IAM check runs the resolver for this org (the enterprise tier); false when every capability is allowed for the org and the roles listed are documentation |
 
-Each `RoleRow` carries: `id` (public `rol_…` id), `name`, `description`, `scopeKind`, `isSystemDefault`, `version`, `memberCount` (active, non-expired assignments), and `grants[]` (`{ capability, effect }`, empty when `includeGrants=false`).
+Each `RoleRow` carries: `id` (public `rol_…` id), `name`, `description`, `scopeKind`, `kind` (`human` for the seeded membership roles; `agent` for the seeded agent roles and every custom role, which only `assign_agent_role` binds), `isSystemDefault`, `version`, `memberCount` (active, non-expired assignments), `grants[]` (`{ capability, effect }`, empty when `includeGrants=false`), `permissions[]` (catalogue ids every capability of which the role allows — a partial cover is not the permission; empty when `includeGrants=false`), `createdAt` and `createdBy` (the creator's display name for a custom role; `null` for a system role, which the page shows as built-in).

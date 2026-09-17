@@ -9,7 +9,7 @@ export const agentMemoryWrite = registerCapability({
     "Persist a two-axis memory (class + kind) tied to a graph node per the oxagen-feature skill memory contract",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "memory" },
   sensitivity: "medium",

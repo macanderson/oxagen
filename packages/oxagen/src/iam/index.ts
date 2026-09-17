@@ -6,3 +6,4 @@
 export * from "./resolve";
 export * from "./conditions";
 export * from "./agent-run";
+export * from "./permission-catalog";

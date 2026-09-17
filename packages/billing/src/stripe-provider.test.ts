@@ -38,6 +38,14 @@ const stripeMethods = {
   invoices: {
     retrieve: vi.fn(),
     createPreview: vi.fn(),
+    create: vi.fn(),
+    finalizeInvoice: vi.fn(),
+    pay: vi.fn(),
+    del: vi.fn(),
+    voidInvoice: vi.fn(),
+  },
+  invoiceItems: {
+    create: vi.fn(),
   },
   paymentMethods: {
     list: vi.fn(),
@@ -52,6 +60,7 @@ const stripeMethods = {
   checkout: {
     sessions: {
       create: vi.fn(),
+      retrieve: vi.fn(),
       listLineItems: vi.fn(),
     },
   },
@@ -575,6 +584,48 @@ describe("StripeProvider", () => {
       expect(invoice.paidAt).toBeInstanceOf(Date);
     });
 
+    it("binds a Checkout-issued GAU invoice to its org from invoice.metadata.org_id with no subscription", async () => {
+      // A payment-mode session with invoice_creation issues an invoice whose
+      // only tenant reference is the metadata the session carried.
+      stripeMethods.invoices.retrieve.mockResolvedValue(
+        makeStripeInvoice({
+          subscription: null,
+          parent: null,
+          billing_reason: "manual",
+          metadata: { oxagen_kind: "gau_purchase", org_id: "org-gau" },
+        }),
+      );
+      const invoice = await provider.getInvoice("in_gau_001");
+      expect(invoice.orgId).toBe("org-gau");
+      expect(invoice.subscriptionId).toBeNull();
+      expect(invoice.billingReason).toBe("manual");
+    });
+
+    it("reads the settlement a governed-action invoice settles from metadata.gau_settlement_id", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue(
+        makeStripeInvoice({
+          subscription: null,
+          metadata: {
+            org_id: "org-gau",
+            oxagen_kind: "gau_auto_topup",
+            gau_settlement_id: "0192d4a8-7c1e-7a00-8000-0000000005e7",
+          },
+        }),
+      );
+      const invoice = await provider.getInvoice("in_gau_002");
+      expect(invoice.gauSettlementId).toBe(
+        "0192d4a8-7c1e-7a00-8000-0000000005e7",
+      );
+      expect(invoice.orgId).toBe("org-gau");
+    });
+
+    it("leaves gauSettlementId null on every other invoice", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue(makeStripeInvoice());
+      expect(
+        (await provider.getInvoice("in_test_001")).gauSettlementId,
+      ).toBeNull();
+    });
+
     it("maps unknown invoice status to 'draft'", async () => {
       stripeMethods.invoices.retrieve.mockResolvedValue(
         makeStripeInvoice({ status: "unknown_status" }),
@@ -696,6 +747,450 @@ describe("StripeProvider", () => {
     });
   });
 
+  describe("createGauInvoice", () => {
+    const input = {
+      customerId: "cus_test_001",
+      orgId: "org-1",
+      settlementId: "set_001",
+      kind: "gau_auto_topup" as const,
+      quantityGau: 5_000,
+      ratePerGauMicros: 5_000n,
+      currency: "usd",
+      description: "Oxagen governed action units: auto top-up",
+      collection: {
+        method: "charge_automatically" as const,
+        defaultPaymentMethodId: "pm_test_001",
+      },
+    };
+
+    beforeEach(() => {
+      stripeMethods.invoices.create.mockResolvedValue({ id: "in_gau_001" });
+      stripeMethods.invoiceItems.create.mockResolvedValue({ id: "ii_001" });
+    });
+
+    it("creates a draft with auto_advance false, excluding pending items, keyed on the settlement, then its one line, and returns the invoice id", async () => {
+      const result = await provider.createGauInvoice(input);
+
+      expect(result).toEqual({ invoiceId: "in_gau_001" });
+      expect(stripeMethods.invoices.create).toHaveBeenCalledWith(
+        {
+          customer: "cus_test_001",
+          auto_advance: false,
+          pending_invoice_items_behavior: "exclude",
+          metadata: {
+            org_id: "org-1",
+            oxagen_kind: "gau_auto_topup",
+            gau_settlement_id: "set_001",
+            gau_quantity: "5000",
+            rate_per_gau_micros: "5000",
+            currency: "usd",
+          },
+          collection_method: "charge_automatically",
+          default_payment_method: "pm_test_001",
+        },
+        { idempotencyKey: "set_001:invoice" },
+      );
+      expect(stripeMethods.invoiceItems.create).toHaveBeenCalledWith(
+        {
+          customer: "cus_test_001",
+          invoice: "in_gau_001",
+          quantity: 5_000,
+          unit_amount_decimal: "0.5",
+          currency: "usd",
+          description: "Oxagen governed action units: auto top-up",
+        },
+        { idempotencyKey: "set_001:item" },
+      );
+      expect(
+        stripeMethods.invoices.create.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        stripeMethods.invoiceItems.create.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it("emails a send_invoice invoice due in the given days when the org has no default card", async () => {
+      await provider.createGauInvoice({
+        ...input,
+        kind: "gau_interim",
+        collection: { method: "send_invoice", daysUntilDue: 30 },
+      });
+      const params = stripeMethods.invoices.create.mock.calls[0]![0] as Record<
+        string,
+        unknown
+      >;
+      expect(params).toMatchObject({
+        collection_method: "send_invoice",
+        days_until_due: 30,
+        metadata: expect.objectContaining({ oxagen_kind: "gau_interim" }),
+      });
+      expect(params).not.toHaveProperty("default_payment_method");
+    });
+
+    it.each([
+      [6_000n, "0.6"],
+      [12_345n, "1.2345"],
+      [10_000n, "1"],
+      [2_000n, "0.2"],
+    ])(
+      "sends a rate of %s micros as unit_amount_decimal %s cents",
+      async (rate, decimal) => {
+        await provider.createGauInvoice({ ...input, ratePerGauMicros: rate });
+        expect(stripeMethods.invoiceItems.create).toHaveBeenCalledWith(
+          expect.objectContaining({ unit_amount_decimal: decimal }),
+          expect.anything(),
+        );
+      },
+    );
+
+    it("adds no line when Stripe refuses the invoice", async () => {
+      stripeMethods.invoices.create.mockRejectedValue(new Error("down"));
+      await expect(provider.createGauInvoice(input)).rejects.toThrow("down");
+      expect(stripeMethods.invoiceItems.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("finalizeAndPayGauInvoice", () => {
+    const ref = { settlementId: "set_001", invoiceId: "in_gau_001" };
+    const invoice = (over: Record<string, unknown>) => ({
+      id: "in_gau_001",
+      amount_due: 2_500,
+      hosted_invoice_url: "https://invoice.stripe.com/i/gau",
+      collection_method: "charge_automatically",
+      ...over,
+    });
+    const stripeError = (over: Record<string, unknown>) =>
+      Object.assign(new Error(String(over.message ?? "stripe error")), over);
+
+    it("finalizes a draft with auto_advance true, pays it off-session, each keyed on the settlement, and answers paid", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue(
+        invoice({ status: "draft" }),
+      );
+      stripeMethods.invoices.finalizeInvoice.mockResolvedValue(
+        invoice({ status: "open" }),
+      );
+      stripeMethods.invoices.pay.mockResolvedValue(invoice({ status: "paid" }));
+
+      const result = await provider.finalizeAndPayGauInvoice(ref);
+
+      expect(result).toEqual({
+        status: "paid",
+        amountCents: 2_500,
+        hostedInvoiceUrl: "https://invoice.stripe.com/i/gau",
+      });
+      expect(stripeMethods.invoices.finalizeInvoice).toHaveBeenCalledWith(
+        "in_gau_001",
+        { auto_advance: true },
+        { idempotencyKey: "set_001:finalize" },
+      );
+      expect(stripeMethods.invoices.pay).toHaveBeenCalledWith(
+        "in_gau_001",
+        { off_session: true },
+        { idempotencyKey: "set_001:pay" },
+      );
+    });
+
+    it("pays an invoice that is already open without finalizing it again", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue(
+        invoice({ status: "open" }),
+      );
+      stripeMethods.invoices.pay.mockResolvedValue(invoice({ status: "paid" }));
+      expect((await provider.finalizeAndPayGauInvoice(ref)).status).toBe(
+        "paid",
+      );
+      expect(stripeMethods.invoices.finalizeInvoice).not.toHaveBeenCalled();
+    });
+
+    it("answers paid for an invoice already paid, with no request beyond the retrieve", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue(
+        invoice({ status: "paid" }),
+      );
+      expect((await provider.finalizeAndPayGauInvoice(ref)).status).toBe(
+        "paid",
+      );
+      expect(stripeMethods.invoices.finalizeInvoice).not.toHaveBeenCalled();
+      expect(stripeMethods.invoices.pay).not.toHaveBeenCalled();
+    });
+
+    it("never calls pay on a send_invoice invoice and answers open", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue(
+        invoice({ status: "draft", collection_method: "send_invoice" }),
+      );
+      stripeMethods.invoices.finalizeInvoice.mockResolvedValue(
+        invoice({ status: "open", collection_method: "send_invoice" }),
+      );
+      expect((await provider.finalizeAndPayGauInvoice(ref)).status).toBe(
+        "open",
+      );
+      expect(stripeMethods.invoices.pay).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["a card error", { rawType: "card_error", code: "card_declined" }],
+      [
+        "invoice_payment_intent_requires_action",
+        {
+          rawType: "invalid_request_error",
+          code: "invoice_payment_intent_requires_action",
+        },
+      ],
+      [
+        "a customer with no payment source",
+        {
+          rawType: "invalid_request_error",
+          message:
+            "This customer has no attached payment source or default payment method.",
+        },
+      ],
+    ])("answers open when pay fails with %s", async (_n, err) => {
+      stripeMethods.invoices.retrieve.mockResolvedValue(
+        invoice({ status: "open" }),
+      );
+      stripeMethods.invoices.pay.mockRejectedValue(stripeError(err));
+      expect(await provider.finalizeAndPayGauInvoice(ref)).toEqual({
+        status: "open",
+        amountCents: 2_500,
+        hostedInvoiceUrl: "https://invoice.stripe.com/i/gau",
+      });
+    });
+
+    it("throws any other pay error", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue(
+        invoice({ status: "open" }),
+      );
+      stripeMethods.invoices.pay.mockRejectedValue(
+        stripeError({ rawType: "api_error", message: "stripe is down" }),
+      );
+      await expect(provider.finalizeAndPayGauInvoice(ref)).rejects.toThrow(
+        "stripe is down",
+      );
+    });
+
+    it("throws for an invoice that is neither paid nor open", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue(
+        invoice({ status: "void" }),
+      );
+      await expect(provider.finalizeAndPayGauInvoice(ref)).rejects.toThrow(
+        /is void/,
+      );
+    });
+  });
+
+  describe("deleteOrVoidDraftInvoice", () => {
+    const ref = { settlementId: "set_001", invoiceId: "in_gau_001" };
+    const missing = () =>
+      Object.assign(new Error("No such invoice"), {
+        rawType: "invalid_request_error",
+        code: "resource_missing",
+      });
+
+    it("deletes a draft", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue({ status: "draft" });
+      stripeMethods.invoices.del.mockResolvedValue({ deleted: true });
+      expect(await provider.deleteOrVoidDraftInvoice(ref)).toEqual({
+        outcome: "deleted",
+      });
+      expect(stripeMethods.invoices.del).toHaveBeenCalledWith("in_gau_001");
+      expect(stripeMethods.invoices.voidInvoice).not.toHaveBeenCalled();
+    });
+
+    it("voids an open invoice, keyed on the settlement", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue({ status: "open" });
+      stripeMethods.invoices.voidInvoice.mockResolvedValue({ status: "void" });
+      expect(await provider.deleteOrVoidDraftInvoice(ref)).toEqual({
+        outcome: "voided",
+      });
+      expect(stripeMethods.invoices.voidInvoice).toHaveBeenCalledWith(
+        "in_gau_001",
+        {},
+        { idempotencyKey: "set_001:void" },
+      );
+      expect(stripeMethods.invoices.del).not.toHaveBeenCalled();
+    });
+
+    it("answers paid for a paid invoice and writes nothing", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue({ status: "paid" });
+      expect(await provider.deleteOrVoidDraftInvoice(ref)).toEqual({
+        outcome: "paid",
+      });
+      expect(stripeMethods.invoices.del).not.toHaveBeenCalled();
+      expect(stripeMethods.invoices.voidInvoice).not.toHaveBeenCalled();
+    });
+
+    it("answers absent for a void invoice and writes nothing", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue({ status: "void" });
+      expect(await provider.deleteOrVoidDraftInvoice(ref)).toEqual({
+        outcome: "absent",
+      });
+      expect(stripeMethods.invoices.del).not.toHaveBeenCalled();
+      expect(stripeMethods.invoices.voidInvoice).not.toHaveBeenCalled();
+    });
+
+    it("answers absent for a deleted invoice (resource_missing on retrieve) and writes nothing", async () => {
+      stripeMethods.invoices.retrieve.mockRejectedValue(missing());
+      expect(await provider.deleteOrVoidDraftInvoice(ref)).toEqual({
+        outcome: "absent",
+      });
+      expect(stripeMethods.invoices.del).not.toHaveBeenCalled();
+    });
+
+    it("answers absent when del finds the draft already deleted", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue({ status: "draft" });
+      stripeMethods.invoices.del.mockRejectedValue(missing());
+      expect(await provider.deleteOrVoidDraftInvoice(ref)).toEqual({
+        outcome: "absent",
+      });
+    });
+
+    it("throws an error it does not recognise", async () => {
+      stripeMethods.invoices.retrieve.mockRejectedValue(new Error("timeout"));
+      await expect(provider.deleteOrVoidDraftInvoice(ref)).rejects.toThrow(
+        "timeout",
+      );
+    });
+  });
+
+  describe("createGauCheckout", () => {
+    const input = {
+      customerId: "cus_test_001",
+      orgId: "org-1",
+      quantityGau: 10_000,
+      blocks: 2,
+      blockPriceCents: 2_500,
+      ratePerGauMicros: 5_000n,
+      currency: "usd",
+      successUrl: "https://app.example.com/acme/billing?checkout=success",
+      cancelUrl: "https://app.example.com/acme/billing?checkout=cancel",
+    };
+    const metadata = {
+      oxagen_kind: "gau_purchase",
+      org_id: "org-1",
+      gau_quantity: "10000",
+      block_size_gau: "5000",
+      rate_per_gau_micros: "5000",
+      currency: "usd",
+    };
+
+    it("builds a payment-mode session from one price_data line at the block price, quantity blocks, with an invoice and the card saved off-session", async () => {
+      stripeMethods.checkout.sessions.create.mockResolvedValue(
+        makeStripeCheckoutSession(),
+      );
+
+      const result = await provider.createGauCheckout(input);
+
+      expect(result).toEqual({
+        sessionId: "cs_test_001",
+        url: "https://checkout.stripe.com/pay/test_001",
+      });
+      expect(stripeMethods.checkout.sessions.create).toHaveBeenCalledOnce();
+      expect(stripeMethods.checkout.sessions.create).toHaveBeenCalledWith({
+        mode: "payment",
+        customer: "cus_test_001",
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              unit_amount: 2_500,
+              product_data: {
+                name: "Oxagen governed action units",
+                metadata: { oxagen_kind: "gau_block" },
+              },
+            },
+            quantity: 2,
+          },
+        ],
+        metadata,
+        invoice_creation: { enabled: true, invoice_data: { metadata } },
+        payment_method_types: ["card"],
+        payment_intent_data: { setup_future_usage: "off_session" },
+        success_url: "https://app.example.com/acme/billing?checkout=success",
+        cancel_url: "https://app.example.com/acme/billing?checkout=cancel",
+        automatic_tax: { enabled: false },
+        customer_update: undefined,
+      });
+    });
+
+    it("never sends a pre-created price: the one line is price_data", async () => {
+      stripeMethods.checkout.sessions.create.mockResolvedValue(
+        makeStripeCheckoutSession(),
+      );
+      await provider.createGauCheckout(input);
+      const params = stripeMethods.checkout.sessions.create.mock
+        .calls[0]![0] as { line_items: Array<Record<string, unknown>> };
+      expect(params.line_items).toHaveLength(1);
+      expect(params.line_items[0]).not.toHaveProperty("price");
+    });
+
+    it("throws when Stripe returns no checkout URL", async () => {
+      stripeMethods.checkout.sessions.create.mockResolvedValue(
+        makeStripeCheckoutSession({ url: null }),
+      );
+      await expect(provider.createGauCheckout(input)).rejects.toThrow(
+        "checkout URL",
+      );
+    });
+  });
+
+  describe("getCheckoutPaymentMethod", () => {
+    it("retrieves the session with payment_intent.payment_method expanded and returns the card", async () => {
+      stripeMethods.checkout.sessions.retrieve.mockResolvedValue({
+        id: "cs_test_001",
+        payment_intent: {
+          id: "pi_001",
+          payment_method: makeStripePaymentMethod(),
+        },
+      });
+
+      const pm = await provider.getCheckoutPaymentMethod("cs_test_001");
+
+      expect(stripeMethods.checkout.sessions.retrieve).toHaveBeenCalledWith(
+        "cs_test_001",
+        { expand: ["payment_intent.payment_method"] },
+      );
+      expect(pm).toEqual({
+        id: "pm_test_001",
+        type: "card",
+        brand: "visa",
+        last4: "4242",
+        expMonth: 12,
+        expYear: 2028,
+      });
+    });
+
+    it("returns null when the payment method arrived as an id, the shape a one-level expansion leaves", async () => {
+      stripeMethods.checkout.sessions.retrieve.mockResolvedValue({
+        id: "cs_test_001",
+        payment_intent: { id: "pi_001", payment_method: "pm_test_001" },
+      });
+      expect(await provider.getCheckoutPaymentMethod("cs_test_001")).toBeNull();
+    });
+
+    it("returns null when the session has no payment intent", async () => {
+      stripeMethods.checkout.sessions.retrieve.mockResolvedValue({
+        id: "cs_test_001",
+        payment_intent: null,
+      });
+      expect(await provider.getCheckoutPaymentMethod("cs_test_001")).toBeNull();
+    });
+
+    it("returns null card details for a non-card payment method", async () => {
+      stripeMethods.checkout.sessions.retrieve.mockResolvedValue({
+        id: "cs_test_001",
+        payment_intent: {
+          id: "pi_001",
+          payment_method: { id: "pm_link_001", type: "link" },
+        },
+      });
+      expect(await provider.getCheckoutPaymentMethod("cs_test_001")).toEqual({
+        id: "pm_link_001",
+        type: "link",
+        brand: null,
+        last4: null,
+        expMonth: null,
+        expYear: null,
+      });
+    });
+  });
+
   describe("getCheckoutSessionCreditPacks", () => {
     it("extracts creditsPerUnit from price metadata", async () => {
       const mockPaginatorResult = [
@@ -771,6 +1266,40 @@ describe("StripeProvider", () => {
       expect(event.type).toBe("checkout.session.completed");
       expect(event.checkoutSession?.id).toBe("cs_001");
       expect(event.checkoutSession?.mode).toBe("payment");
+      expect(event.checkoutSession?.invoiceId).toBeNull();
+      expect(event.checkoutSession?.customerId).toBeNull();
+    });
+
+    it("carries the invoice and customer of a checkout.session.completed event, whether Stripe sent ids or expanded objects", () => {
+      stripeMethods.webhooks.constructEvent.mockReturnValue(
+        makeStripeEvent("checkout.session.completed", {
+          id: "cs_002",
+          mode: "payment",
+          payment_status: "paid",
+          customer: "cus_002",
+          metadata: { oxagen_kind: "gau_purchase", org_id: "org-1" },
+          subscription: null,
+          invoice: "in_002",
+        }),
+      );
+      const byId = provider.parseWebhookEvent("raw_body", "sig_003b");
+      expect(byId.checkoutSession?.invoiceId).toBe("in_002");
+      expect(byId.checkoutSession?.customerId).toBe("cus_002");
+
+      stripeMethods.webhooks.constructEvent.mockReturnValue(
+        makeStripeEvent("checkout.session.completed", {
+          id: "cs_003",
+          mode: "payment",
+          payment_status: "paid",
+          customer: { id: "cus_003" },
+          metadata: {},
+          subscription: null,
+          invoice: { id: "in_003" },
+        }),
+      );
+      const expanded = provider.parseWebhookEvent("raw_body", "sig_003c");
+      expect(expanded.checkoutSession?.invoiceId).toBe("in_003");
+      expect(expanded.checkoutSession?.customerId).toBe("cus_003");
     });
 
     it("parses a payment_method.attached event", () => {

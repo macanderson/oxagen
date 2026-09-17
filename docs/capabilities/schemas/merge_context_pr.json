@@ -1,0 +1,120 @@
+{
+  "name": "merge_context_pr",
+  "domain": "context",
+  "description": "Merge a proposal's Context PR on GitHub and publish its record: refused until every check passed and unless the caller is a reviewer the governance mode allows; writes the promotion event to the ledger, bumps the steering version and emits steering.published",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposalId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "proposalId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposalId": {
+        "type": "string"
+      },
+      "status": {
+        "const": "merged"
+      },
+      "record": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "lineageId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "lineageId",
+          "version",
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "mergedCommit": {
+        "type": "string"
+      },
+      "promotionEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "chainDigest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "seq",
+          "chainDigest"
+        ],
+        "additionalProperties": false
+      },
+      "bundleVersion": {
+        "type": "object",
+        "properties": {
+          "before": {
+            "type": "integer"
+          },
+          "after": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "before",
+          "after"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "proposalId",
+      "status",
+      "record",
+      "mergedCommit",
+      "promotionEvent",
+      "bundleVersion"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -64,7 +64,7 @@ export async function agentDefinitionUpdateHandler(
         isPublished: false,
         checksum: null,
         config,
-        createdByUserId: userId,
+        createdById: userId,
       })
       .returning({
         version: schema.agentVersions.version,
@@ -92,7 +92,7 @@ export async function agentDefinitionUpdateHandler(
           ...(input.avatarUrl !== undefined
             ? { avatarUrl: input.avatarUrl }
             : {}),
-          updatedByUserId: userId,
+          updatedById: userId,
         })
         .where(
           and(

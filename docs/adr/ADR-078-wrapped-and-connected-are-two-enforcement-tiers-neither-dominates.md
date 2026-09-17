@@ -6,9 +6,9 @@
 - **Related:** `docs/specs/tacho/spec.md` §2 item 2 and §6.3 (the `enforcement_tier`
   field and the honesty rule), `docs/specs/oxagen-desktop/spec.md` §6 (the wrapper
   table), ADR-040 §4 (attestation versus gateway enforcement), ADR-043 (runtime
-  excision — Oxagen governs agents, it does not run them), ADR-055 (an agent
+  excision — Oxagen governs agents, it does not run them), ADR-066 (an agent
   requests a system, scope or action; a decision rule answers), ADR-067 (Mission
-  Control leads, the control plane is the category), ADR-068 (Stella is wrapped
+  Control leads, the control plane is the category), ADR-080 (Stella is wrapped
   through its hooks)
 
 ## Context

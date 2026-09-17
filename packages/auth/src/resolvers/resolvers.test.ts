@@ -376,6 +376,7 @@ describe("resolveApiKey", () => {
       apiKeyId: "aky_3",
       orgId: "org_abc",
       workspaceId: "wrk_xyz",
+      userId: null,
     });
   });
 
@@ -393,7 +394,90 @@ describe("resolveApiKey", () => {
       apiKeyId: "aky_4",
       orgId: "org_abc",
       workspaceId: "wrk_xyz",
+      userId: null,
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // The scope purpose decides who the bearer is.
+  // -------------------------------------------------------------------------
+  const cliKeyRow = (createdById: string | null = "user_approver") => ({
+    id: "aky_cli",
+    keyHash: sha256hex(RAW_KEY),
+    orgId: "org_abc",
+    workspaceId: "wrk_xyz",
+    expiresAt: null,
+    scope: { purpose: "cli_session_v1" },
+    createdById,
+  });
+
+  it("a CLI session key authenticates as the user who approved the authorize flow", async () => {
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce(cliKeyRow());
+    mockQuery.orgUsers.findFirst.mockResolvedValueOnce({ id: "ou_1" });
+    mockQuery.workspaceUsers.findFirst.mockResolvedValueOnce({ id: "wsu_1" });
+    const result = await resolveApiKey(RAW_KEY);
+    expect(result).toEqual({
+      ok: true,
+      apiKeyId: "aky_cli",
+      orgId: "org_abc",
+      workspaceId: "wrk_xyz",
+      userId: "user_approver",
+    });
+  });
+
+  it("a CLI session key whose creator was removed from the org is invalid", async () => {
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce(cliKeyRow());
+    mockQuery.orgUsers.findFirst.mockResolvedValueOnce(undefined);
+    const result = await resolveApiKey(RAW_KEY);
+    expect(result).toEqual({ ok: false, kind: "invalid" });
+    expect(mockQuery.workspaceUsers.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("a CLI session key whose creator was removed from the key's workspace is invalid", async () => {
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce(cliKeyRow());
+    mockQuery.orgUsers.findFirst.mockResolvedValueOnce({ id: "ou_1" });
+    mockQuery.workspaceUsers.findFirst.mockResolvedValueOnce(undefined);
+    const result = await resolveApiKey(RAW_KEY);
+    expect(result).toEqual({ ok: false, kind: "invalid" });
+  });
+
+  it("a CLI session key with no recorded creator is invalid without a membership read", async () => {
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce(cliKeyRow(null));
+    const result = await resolveApiKey(RAW_KEY);
+    expect(result).toEqual({ ok: false, kind: "invalid" });
+    expect(mockQuery.orgUsers.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("a key whose creator is recorded but whose purpose is not the CLI session carries no user", async () => {
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce({
+      id: "aky_host",
+      keyHash: sha256hex(RAW_KEY),
+      orgId: "org_abc",
+      workspaceId: "wrk_xyz",
+      expiresAt: null,
+      scope: { purpose: "tacho_host_v1", host_enrollment_id: "tch_x" },
+      createdById: "user_operator",
+    });
+    const result = await resolveApiKey(RAW_KEY);
+    expect(result).toMatchObject({ ok: true, userId: null });
+  });
+
+  it("an agent credential is refused as purpose_locked before any user is attached", async () => {
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce({
+      id: "aky_agent",
+      keyHash: sha256hex(RAW_KEY),
+      orgId: "org_abc",
+      workspaceId: "wrk_xyz",
+      expiresAt: null,
+      scope: {
+        purpose: "agent_credential_v1",
+        agent_id: "agt_x",
+        principal_id: "prn_x",
+      },
+      createdById: "user_admin",
+    });
+    const result = await resolveApiKey(RAW_KEY);
+    expect(result).toEqual({ ok: false, kind: "purpose_locked" });
   });
 
   // -------------------------------------------------------------------------
