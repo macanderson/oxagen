@@ -40,12 +40,29 @@ describe("isEffective", () => {
     expect(isEffective(row({ validFrom: from }), new Date(from))).toBe(true);
   });
 
-  it("is true on the last instant and false after it", () => {
+  // The window is half-open because enforcement's is: `findCoveringMandate`
+  // selects on `gt(m.validTo, args.at)` (packages/rules/src/mandates.ts:472).
+  // This read `now <= validTo`, so for the one instant at `validTo` the page
+  // reported live authority while the gate was already denying every call
+  // carrying its consequence.
+  //
+  // Both assertions are at the boundary itself. A pair at `validTo - 1s` and
+  // `validTo + 1s` passes under the inclusive comparison and the exclusive one
+  // alike, so it would have let this ship — which is how it did.
+  it("is false at validTo itself, and true the millisecond before", () => {
     const to = "2026-09-16T23:59:59.999Z";
-    expect(isEffective(row({ validTo: to }), new Date(to))).toBe(true);
-    expect(
-      isEffective(row({ validTo: to }), new Date("2026-09-17T00:00:00.000Z")),
-    ).toBe(false);
+    const at = Date.parse(to);
+    expect(isEffective(row({ validTo: to }), new Date(at))).toBe(false);
+    expect(isEffective(row({ validTo: to }), new Date(at - 1))).toBe(true);
+  });
+
+  // The other end of the same window, for the same reason: enforcement's lower
+  // bound is `lte(m.validFrom, args.at)`, so the first instant is inside.
+  it("is true at validFrom itself, and false the millisecond before", () => {
+    const from = "2026-09-17T00:00:00.000Z";
+    const at = Date.parse(from);
+    expect(isEffective(row({ validFrom: from }), new Date(at))).toBe(true);
+    expect(isEffective(row({ validFrom: from }), new Date(at - 1))).toBe(false);
   });
 });
 
@@ -62,6 +79,22 @@ describe("isUpcoming", () => {
       false,
     );
     expect(isUpcoming(mandateRow({}), at)).toBe(false);
+  });
+
+  // The two predicates partition an active mandate's timeline at `validFrom`
+  // with no gap and no overlap. A gap is an instant the page can say nothing
+  // about; an overlap is an instant it says two contradictory things about.
+  it("hands over to isEffective at validFrom exactly", () => {
+    const start = Date.parse(ahead);
+    const row = mandateRow({ validFrom: ahead });
+    expect([
+      isUpcoming(row, new Date(start - 1)),
+      isEffective(row, new Date(start - 1)),
+    ]).toEqual([true, false]);
+    expect([
+      isUpcoming(row, new Date(start)),
+      isEffective(row, new Date(start)),
+    ]).toEqual([false, true]);
   });
 
   // The page uses this to say something the status column contradicts

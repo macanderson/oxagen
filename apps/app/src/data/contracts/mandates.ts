@@ -147,12 +147,28 @@ function readsEveryMandate(role: OrgRole): boolean {
  * operator asks for a mandate — the moment they have none and most need
  * telling. The rows themselves are still listed; what they may not do is stand
  * in for authority the agent does not have.
+ *
+ * **The window is half-open, `[validFrom, validTo)`, because enforcement's
+ * is.** `findCoveringMandate` selects on `lte(m.validFrom, args.at)` and
+ * `gt(m.validTo, args.at)` (`packages/rules/src/mandates.ts:471-472`), so at
+ * exactly `validTo` the gate has already stopped honouring the mandate. This
+ * read `now <= validTo` and for that one instant told an accountable office
+ * the agent held live authority while every call carrying its consequence was
+ * being denied — the page wrong about the only thing it is for. A boundary is
+ * the cheapest place for a mirror to disagree and the hardest place to notice,
+ * so both ends are quoted here and pinned at the instant itself.
+ *
+ * What this deliberately does not mirror: the gate also requires the mandate
+ * to name every consequence the tool declares and to match the tool pattern.
+ * Those are questions about a call, and no call is named on this page, so
+ * `isEffective` answers the weaker "could this mandate authorize anything now"
+ * — which is the claim the surfaces actually make.
  */
 export function isEffective(mandate: MandateRow, at: Date): boolean {
   if (mandate.status !== "active") return false;
   const now = at.getTime();
   return (
-    Date.parse(mandate.validFrom) <= now && now <= Date.parse(mandate.validTo)
+    Date.parse(mandate.validFrom) <= now && now < Date.parse(mandate.validTo)
   );
 }
 
@@ -168,6 +184,12 @@ export function isEffective(mandate: MandateRow, at: Date): boolean {
  * Deliberately not the negation of `isEffective`: a draft, a revoked row and
  * an expired one are all not-effective and none of them is upcoming. The
  * question is about a grant that exists and has a start date still ahead.
+ *
+ * The comparison is the exact negation of enforcement's lower bound,
+ * `lte(m.validFrom, args.at)` (`packages/rules/src/mandates.ts:471`) — strict,
+ * so a mandate is upcoming up to but not including the instant it starts, and
+ * effective from that instant on. The two predicates meet with no gap and no
+ * overlap at `validFrom`, which is pinned on both sides.
  */
 export function isUpcoming(mandate: MandateRow, at: Date): boolean {
   return (
@@ -210,6 +232,44 @@ export function blindSpotOf(
   if (list.truncatedAt !== null) return "truncated";
   return null;
 }
+
+// ── The authority questions this app answers locally ──────────────────────
+//
+// §2 keeps `packages/rules` and `packages/handlers` out of the app, so every
+// question the surfaces ask about what an agent may do is answered against a
+// copy of a rule enforcement owns. A copy that disagrees with the gate makes
+// the page wrong about the only thing it is for, and a boundary is the
+// cheapest place for one to disagree and the hardest place to notice — which
+// is how `isEffective` shipped reporting live authority for the one instant at
+// `validTo` while the gate was already denying. Each is listed with what it
+// mirrors, whether it provably matches, and which way it errs when it cannot.
+//
+// - `isEffective` / `isUpcoming` — mirror `findCoveringMandate`'s status and
+//   window clauses (`packages/rules/src/mandates.ts:467-472`). Provably match:
+//   the window is half-open at both ends and every boundary instant is pinned,
+//   including the handover between the two predicates at `validFrom`. They do
+//   not mirror the gate's consequence-coverage and tool-pattern clauses, on
+//   purpose — those are questions about a call, and no call is named here.
+// - `EVERY_TOOL` (`@/ui/mandate-scope`) — decides that a mandate covers every
+//   tool. Provably sound: `toolMatches` reaches `matchGlob`, which returns
+//   true for the literal pattern `*` before any conversion
+//   (`packages/mcp-config/src/permissions.ts:65`). Not complete — `**` would
+//   also match everything and renders as its literal text instead. That under-
+//   claims, leaving the reader the pattern to judge, which is the direction
+//   that cannot mislead.
+// - `ACCOUNTABLE_READERS` (below) — a copy of `ACCOUNTABLE_ORG_ROLES` in
+//   `packages/handlers/src/_mandate.ts` that **cannot be made to match** from
+//   here, because the handler never reports whether it narrowed. It is written
+//   to err toward hedging, and the durable answer is a visibility flag on
+//   `list_mandates`' own output (ARCHITECTURE.md §9), not a better copy.
+// - The retirement gate (`features/agents/mandates.tsx`) — the page declines to
+//   offer a request that `request_mandate` would accept, because retirement
+//   suspends the principal and the handler does not resolve that status. The
+//   app is deliberately stricter than the kernel; closing it on the other
+//   surfaces is filed as #3124.
+// - The bounds block below — copies of the request schemas, each naming its
+//   rule and each pinned by an assertion that quotes the rule as a literal
+//   rather than importing the copy under test.
 
 // ── The contract bounds this app mirrors ──────────────────────────────────
 //

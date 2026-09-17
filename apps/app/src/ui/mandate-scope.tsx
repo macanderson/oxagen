@@ -15,6 +15,18 @@ import { mono } from "./control-styles";
  * may call everything and one that may call a single tool. It is called out
  * rather than printed, because a reader should not have to notice one
  * character among a list of patterns to see that a mandate is unrestricted.
+ *
+ * This is a claim about authority, so it is checked against the gate rather
+ * than assumed: `toolMatches` reaches `matchGlob`, which returns true for the
+ * literal pattern `*` before any conversion
+ * (`packages/mcp-config/src/permissions.ts:65`). So the badge is sound — `*`
+ * really does match every tool the gate will ever be asked about.
+ *
+ * It is not complete, and deliberately so. `**` matches everything too and
+ * renders here as its own text. A badge that guessed at every unrestricted
+ * spelling would be claiming more than it can check; leaving the pattern
+ * visible under-claims and hands the reader the evidence, which is the
+ * direction a mandate surface may be wrong in.
  */
 const EVERY_TOOL = "*";
 
