@@ -448,6 +448,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [update_workspace_user_preferences](update_workspace_user_preferences.md) — Update the calling user's per-workspace coding-agent defaults (partial update); app-only surface
 - [user.preferences.read](user.preferences.read.md) — Read the calling user's UI and model preferences
 - [user.preferences.set](user.preferences.set.md) — Set the calling user's account preferences (locale, theme, timezone) as a partial write and return the whole set
+- [user.profile.update](user.profile.update.md) — Update the calling user's own display name and avatar
 
 ## Workspace (11)
 

@@ -18,6 +18,8 @@ type ShellState = {
   setCommandOpen: (open: boolean) => void;
   drawerOpen: boolean;
   setDrawerOpen: (open: boolean) => void;
+  accountOpen: boolean;
+  setAccountOpen: (open: boolean) => void;
   theme: Theme;
   setTheme: (theme: Theme) => void;
 };
@@ -46,6 +48,7 @@ function isCommandShortcut(
 export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [commandOpen, setCommandOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
@@ -67,10 +70,12 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       setCommandOpen,
       drawerOpen,
       setDrawerOpen,
+      accountOpen,
+      setAccountOpen,
       theme,
       setTheme,
     }),
-    [commandOpen, drawerOpen, theme, setTheme],
+    [commandOpen, drawerOpen, accountOpen, theme, setTheme],
   );
   return <ShellStateContext value={value}>{children}</ShellStateContext>;
 }

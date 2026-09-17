@@ -21,7 +21,11 @@ export async function shellSource(
   if (user === null) throw new Error("shell_without_session");
   return {
     org: { slug: ctx.orgSlug, name: ctx.orgName },
-    viewer: { name: user.name || null, email: user.email },
+    viewer: {
+      name: user.name || null,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+    },
     context,
     fleetWaiting: null,
   };

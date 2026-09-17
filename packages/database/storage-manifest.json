@@ -3188,6 +3188,15 @@
       "writes": []
     },
     {
+      "domain": "user",
+      "name": "update_profile",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "workspace",
       "name": "update_prompt_settings",
       "reads": [],
@@ -3344,7 +3353,7 @@
       "writes": []
     }
   ],
-  "contentHash": "f217e8ef16da61f9fe16f477d690084eac0dcc1917292801cea099ecb1c34dd8",
+  "contentHash": "4518328a02a995494870939c99553fc95d7d2f68e93125e10df627be7f0a7fc9",
   "domains": [
     {
       "name": "agent",
