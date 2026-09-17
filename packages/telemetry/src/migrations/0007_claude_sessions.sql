@@ -8,6 +8,18 @@
 -- Cost is computed at insert time using published Anthropic rates.
 -- 1h ephemeral cache writes are charged at 2x the standard cache write rate.
 
+-- THIS DROP STAYS (#2972)
+--   It is replay-safe on its own terms: nothing after this file recreates
+--   agent_executions, so re-running the file drops an absent table — a genuine
+--   no-op, not data loss. The applied-migrations ledger in migrate.ts skips
+--   the file entirely on an existing deployment anyway.
+--
+--   It is NOT removable, because a FRESH database still runs every file in
+--   order: 0006_claude_telemetry.sql creates agent_executions, and this line
+--   is the only thing that takes it away again. Delete it and a new deployment
+--   ends up with an orphan table that no existing deployment has, read and
+--   written by nothing, with nothing to notice the difference.
+
 DROP TABLE IF EXISTS agent_executions;
 
 CREATE TABLE IF NOT EXISTS claude_sessions (

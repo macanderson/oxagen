@@ -16,14 +16,16 @@ import { routes, type SafePath, sanitizeNext } from "@/shared/safe-path";
  * person holds only Better Auth's short-lived two-factor cookie. The CLI and
  * GitHub callbacks are public so an invalid CLI request renders its error
  * without a detour, and each sends a signed-out visitor to /login itself with
- * the exact request as `next`. Organization creation (/new-organization) is not
- * public.
+ * the exact request as `next`. /cli/complete is public because the browser the
+ * CLI's loopback listener 302s there may hold no app cookie at all — the token
+ * is already in the terminal — so a gate would end a successful sign-in on
+ * /login (#3091). Organization creation (/new-organization) is not public.
  */
 export const PUBLIC_PATHS: readonly RegExp[] = [
   /^\/(login|signup|verify|two-factor|forgot-password|reset-password)(\/|$)/,
   /^\/invite\//,
   /^\/api\/auth\//,
-  /^\/cli\/authorize(\/|$)/,
+  /^\/cli\/(authorize|complete)(\/|$)/,
   /^\/github\/setup(\/|$)/,
 ];
 

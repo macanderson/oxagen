@@ -28,7 +28,6 @@ const ENVELOPE_COLUMN_TYPES: Record<(typeof ENVELOPE_COLUMNS)[number], string> =
     enforcement_tier: "LowCardinality(String)",
     fleet_id: "String",
     anthropic_user_id_hash: "String",
-    anthropic_user_email: "String",
     anthropic_account_uuid: "String",
     anthropic_account_id: "String",
     anthropic_org_uuid: "String",
@@ -153,6 +152,36 @@ export function bodyColumnType(schema: z.ZodTypeAny): string {
   return "String";
 }
 
+/**
+ * Columns the table still carries that nothing writes any more.
+ *
+ * This migration is GENERATED from the live column set and 0027 has already
+ * been applied, so dropping a name from `ENVELOPE_COLUMNS` rewrites a migration
+ * that real clusters ran months ago. Existing clusters keep the column, because
+ * the ledger skips an applied filename; a cluster bootstrapped from the
+ * rewritten file never gets it. The two populations then disagree, and rolling
+ * the API back to a release that still sends the field fails ingestion on the
+ * fresh one with an unknown column.
+ *
+ * Retiring a column names it here instead: it stays in the DDL, in its original
+ * position, so the generated file still describes what was applied, while the
+ * producer column sets (`ENVELOPE_COLUMNS`, `BODY_MEMBER_NAMES`) no longer carry
+ * it and nothing writes it. Actually removing the column from the table is a
+ * separate forward migration, taken once no supported release still writes it.
+ */
+export const RETIRED_COLUMNS: ReadonlyArray<{
+  readonly name: string;
+  readonly type: string;
+  /** The column it followed when the table was created. */
+  readonly after: string;
+}> = [
+  {
+    name: "anthropic_user_email",
+    type: "String",
+    after: "anthropic_user_id_hash",
+  },
+];
+
 export interface TachoEventsColumn {
   name: string;
   type: string;
@@ -171,6 +200,15 @@ export function tachoEventsColumns(): TachoEventsColumn[] {
   }
   for (const [name, type] of SERVER_COLUMN_TYPES.slice(2)) {
     columns.push({ name, type });
+  }
+  for (const { name, type, after } of RETIRED_COLUMNS) {
+    const at = columns.findIndex((column) => column.name === after);
+    if (at < 0) {
+      throw new Error(
+        `retired column ${name} follows ${after}, which is not in the table`,
+      );
+    }
+    columns.splice(at + 1, 0, { name, type });
   }
   return columns;
 }

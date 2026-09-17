@@ -20,6 +20,14 @@
  *
  * A settings write is never a governed action (ADR-052 exclusion 2):
  * `noBillingGate: true`.
+ *
+ * API only, no MCP surface. MCP authenticates with an API key and
+ * `resolveMcpContext` (`apps/mcp/src/context.ts`) builds every context with
+ * `userId: null` — machine credentials carry no person. "Change my own name"
+ * has no meaning for an API key, so an MCP tool here could only ever return
+ * `forbidden`/`no_principal`. Advertising a tool that cannot succeed is worse
+ * than not advertising one; the surface returns if and when MCP grows a
+ * session principal.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -37,8 +45,8 @@ export const userProfileUpdate = registerCapability({
   description:
     "Update the calling user's own display name and avatar, and return the persisted values.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  surfaces: ["api"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: false,
   mutates: true,
   noBillingGate: true,

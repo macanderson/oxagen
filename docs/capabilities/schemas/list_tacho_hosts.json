@@ -4,7 +4,8 @@
   "description": "List the machines enrolled as Tacho hosts in this workspace with their status, liveness, and counters.",
   "mode": "sync",
   "surfaces": [
-    "api"
+    "api",
+    "mcp"
   ],
   "sensitivity": "medium",
   "agent": null,
@@ -89,6 +90,16 @@
               "type": "array",
               "items": {
                 "type": "string"
+              }
+            },
+            "tiers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string",
+                "enum": [
+                  "gateway",
+                  "harness"
+                ]
               }
             },
             "claudeVersionAtEnroll": {
@@ -192,6 +203,7 @@
             "status",
             "mode",
             "harnesses",
+            "tiers",
             "claudeVersionAtEnroll",
             "wrapperVersion",
             "managed",

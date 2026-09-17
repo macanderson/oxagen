@@ -57,7 +57,9 @@
           "type": "string",
           "enum": [
             "claude-code",
-            "codex"
+            "codex",
+            "stella",
+            "claude-desktop"
           ]
         }
       },
@@ -126,6 +128,14 @@
         "type": "string",
         "minLength": 1
       },
+      "gatewayApiKeyPublicId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "gatewayApiKey": {
+        "type": "string",
+        "minLength": 1
+      },
       "enrollment": {
         "type": "object",
         "properties": {
@@ -170,6 +180,10 @@
                 "type": "string",
                 "format": "uri"
               },
+              "mcp_endpoint": {
+                "type": "string",
+                "format": "uri"
+              },
               "credential_env": {
                 "type": "string"
               },
@@ -183,7 +197,9 @@
                   "type": "string",
                   "enum": [
                     "claude-code",
-                    "codex"
+                    "codex",
+                    "stella",
+                    "claude-desktop"
                   ]
                 }
               },
@@ -413,6 +429,31 @@
               "observe",
               "enforce"
             ]
+          },
+          "tool_ceiling": {
+            "type": "object",
+            "properties": {
+              "model_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "max_tools": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              }
+            },
+            "required": [
+              "model_id",
+              "max_tools",
+              "source"
+            ],
+            "additionalProperties": false
           },
           "signature": {
             "type": "object",
