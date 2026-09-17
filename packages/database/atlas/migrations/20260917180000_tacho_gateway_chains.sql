@@ -86,13 +86,25 @@ CREATE TABLE IF NOT EXISTS "tacho"."gateway_chains" (
 CREATE UNIQUE INDEX IF NOT EXISTS "tacho_gateway_chains_host_chain_uniq"
   ON "tacho"."gateway_chains" USING btree ("host_id","chain_session_uuid");
 
--- ── RLS — tenant_isolation ────────────────────────────────────────────────────
+-- ── RLS — tenant_isolation + the org-wide read (20260917120000, ADR-074) ──────
+-- A `standard` table gets BOTH policies. The org-wide one is what `withOrgDb`
+-- reads through, and `org-only-sentinel-refusal.test.ts` asserts that every
+-- manifest table of this class has one — a table with only `tenant_isolation`
+-- reads EMPTY from an organisation-wide query rather than erroring, which is
+-- the silent under-read that test exists to catch.
+--
+-- FOR SELECT only, and the predicate is deliberately absent from WITH CHECK: a
+-- widened READ must not become a widened write.
 ALTER TABLE tacho.gateway_chains ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tacho.gateway_chains FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON tacho.gateway_chains;
+DROP POLICY IF EXISTS tenant_org_wide_read ON tacho.gateway_chains;
 CREATE POLICY tenant_isolation ON tacho.gateway_chains
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
+CREATE POLICY tenant_org_wide_read ON tacho.gateway_chains
+  FOR SELECT
+  USING (current_setting('app.org_wide', true) = 'on' AND org_id = nullif(current_setting('app.current_org_id', true), '')::uuid);
 
 -- ── oxagen_app grants ─────────────────────────────────────────────────────────
 -- UPDATE included because the row is upserted: `last_seen_at` moves forward on
