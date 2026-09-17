@@ -497,6 +497,65 @@ export async function setSubscriptionSeats(
  *
  * Current seat count is preserved through a plan swap.
  */
+/**
+ * Write down which plan a change is moving away from, before the provider is
+ * asked to move it.
+ *
+ * The prorated upgrade grant is sized from the allowance of the plan moved
+ * FROM, and the swap destroys that: `upgradeSubscription` syncs the
+ * subscription synchronously and the sync repoints `planId` at the target. A
+ * call that died between those two points left a customer upgraded and
+ * uncredited, and a retry had nothing left to recompute the grant from — the
+ * row it would have read was already rewritten (#3157, PR #3171 review).
+ *
+ * This runs BEFORE any provider mutation deliberately. If it fails, nothing
+ * has been swapped and nothing has been charged, so failing here is the
+ * cheapest place in the operation to fail: the caller retries a plan change
+ * that has not yet begun. Recording the intent after the swap would reopen the
+ * exact window it exists to close.
+ */
+async function recordPlanUpgradeIntent(
+  stripeSubscriptionId: string,
+  fromPlanId: string,
+): Promise<void> {
+  await withTenantDb((tx) =>
+    tx
+      .update(schema.subscriptions)
+      .set({ pendingUpgradeFromPlanId: fromPlanId, updatedAt: new Date() })
+      .where(
+        eq(schema.subscriptions.stripeSubscriptionId, stripeSubscriptionId),
+      ),
+  );
+}
+
+/**
+ * Retire the intent once the grant it exists for has settled.
+ *
+ * Best-effort: a stale intent costs nothing. It is only ever read on the
+ * already-applied branch, and the grant it would drive is idempotent on
+ * (org, target plan, period) and delta-guarded, so re-running it grants
+ * nothing a second time.
+ */
+async function clearPlanUpgradeIntent(
+  stripeSubscriptionId: string,
+): Promise<void> {
+  try {
+    await withTenantDb((tx) =>
+      tx
+        .update(schema.subscriptions)
+        .set({ pendingUpgradeFromPlanId: null, updatedAt: new Date() })
+        .where(
+          eq(schema.subscriptions.stripeSubscriptionId, stripeSubscriptionId),
+        ),
+    );
+  } catch (err) {
+    logger.warn(
+      { stripeSubId: stripeSubscriptionId, err },
+      "billing: could not clear the plan-upgrade intent after its grant settled — harmless, the grant is idempotent",
+    );
+  }
+}
+
 export async function changeOrgPlan(
   orgId: string,
   targetPlanSlug: string,
@@ -553,6 +612,11 @@ export async function changeOrgPlan(
           // and dates the grant that retry has to check for.
           stripePriceId: true,
           currentPeriodStart: true,
+          // The plan a change in flight is moving away from. Written before
+          // the swap, because the swap destroys it: the sync inside
+          // `upgradeSubscription` repoints `planId` at the target. It is what
+          // lets a retry finish a grant the first attempt never reached.
+          pendingUpgradeFromPlanId: true,
         },
       }),
     ),
@@ -617,25 +681,46 @@ export async function changeOrgPlan(
       requestId: null,
     });
 
-    // The prorated credit grant is NOT reconstructible here. Its size depends
-    // on the allowance of the plan moved FROM, and `syncSubscriptionFromStripe`
-    // has already repointed this row at the target, so that plan id is gone.
-    // Re-calling the grant with what the row now holds is a silent no-op: from
-    // and to are the same plan, `delta <= 0`, and it returns without granting
-    // (grants.ts). So the gap is detected and raised rather than papered over.
-    // Closing it properly needs either durable intent captured before the swap
-    // or the grant driven off the observed transition in the subscription
-    // webhook, which is a design choice the maintainer owns.
+    // The swap is a no-op on a retry; the prorated credit grant is not. If the
+    // first attempt died between the two, the customer is on the new plan
+    // without the included credits that came with it, and nothing about the
+    // provider state says so — which is why the credit ledger is asked
+    // directly rather than inferred.
+    //
+    // The grant's size depends on the allowance of the plan moved FROM, and
+    // `syncSubscriptionFromStripe` has already repointed this row at the
+    // target, so `planId` cannot supply it. `pendingUpgradeFromPlanId` can:
+    // it was written before the swap for exactly this moment, and the sync
+    // does not touch it. With it, the retry finishes the job instead of
+    // reporting a job it did not finish.
     try {
       const granted = await hasPlanUpgradeGrant(
         orgId,
         targetPlan.id,
         activeSubRow.currentPeriodStart,
       );
-      if (!granted) {
+      const fromPlanId = activeSubRow.pendingUpgradeFromPlanId;
+      if (granted) {
+        // Nothing left owed on this move; retire the intent.
+        if (fromPlanId) {
+          await clearPlanUpgradeIntent(activeSubRow.stripeSubscriptionId);
+        }
+      } else if (fromPlanId) {
+        const { grantProratedPlanUpgradeCredits } = await import("./grants");
+        await grantProratedPlanUpgradeCredits(orgId, fromPlanId, targetPlan.id);
+        await clearPlanUpgradeIntent(activeSubRow.stripeSubscriptionId);
+        logger.info(
+          { orgId, targetPlanSlug, fromPlanId, toPlanId: targetPlan.id },
+          "billing: resumed the prorated credit grant for a plan change whose swap had already been applied",
+        );
+      } else {
+        // No intent recorded — the swap predates this column, or the intent
+        // was already retired and the ledger disagrees. Nothing is
+        // recoverable in code; say so at error level rather than report the
+        // operation complete.
         logger.error(
           { orgId, targetPlanSlug, targetPlanId: targetPlan.id, newPriceId },
-          "billing: plan change was already applied but its prorated credit grant is missing — the first attempt died between the swap and the grant, and the plan it moved from is no longer recoverable; grant needs manual repair",
+          "billing: plan change was already applied but its prorated credit grant is missing and no origin plan was recorded for it; grant needs manual repair",
         );
       }
     } catch (err) {
@@ -686,6 +771,16 @@ export async function changeOrgPlan(
     "billing: changeOrgPlan — swapping price on active subscription",
   );
 
+  // Durable intent, written before the provider is touched. `upgradeSubscription`
+  // syncs the subscription synchronously and that sync repoints `planId` at
+  // the target, so from this line on the plan being left exists nowhere else.
+  // A crash between the swap and the grant is what this is for: the retry
+  // reads it on the already-applied branch above and finishes the grant.
+  await recordPlanUpgradeIntent(
+    activeSub.stripeSubscriptionId,
+    activeSub.planId,
+  );
+
   await upgradeSubscription(
     activeSub.stripeSubscriptionId,
     newPriceId,
@@ -715,6 +810,10 @@ export async function changeOrgPlan(
   // through the price swap automatically — no extra call needed.
 
   // After a successful in-place upgrade, grant prorated plan upgrade credits.
+  // The intent recorded before the swap is retired only once this has settled:
+  // if the grant throws, the intent stays, and the next call on this
+  // subscription finishes it from the already-applied branch.
+  let grantSettled = !isUpgrade;
   if (isUpgrade) {
     try {
       const { grantProratedPlanUpgradeCredits } = await import("./grants");
@@ -723,13 +822,18 @@ export async function changeOrgPlan(
         activeSub.planId,
         targetPlan.id,
       );
+      grantSettled = true;
     } catch (err) {
-      // Grant failure must never fail the plan swap — log and continue.
+      // Grant failure must never fail the plan swap — log and continue. The
+      // intent is deliberately left standing so the grant is recoverable.
       logger.error(
         { orgId, fromPlanId: activeSub.planId, toPlanId: targetPlan.id, err },
-        "billing: grantProratedPlanUpgradeCredits failed after plan swap — continuing",
+        "billing: grantProratedPlanUpgradeCredits failed after plan swap — continuing; the recorded upgrade intent is left in place so a retry can finish it",
       );
     }
+  }
+  if (grantSettled) {
+    await clearPlanUpgradeIntent(activeSub.stripeSubscriptionId);
   }
 
   return null;

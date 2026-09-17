@@ -164,6 +164,29 @@ export const subscriptions = billingSchema.table(
      * that sync carries none.
      */
     stripePriceId: text("stripe_price_id"),
+    /**
+     * The plan a plan change is moving this subscription AWAY from, written
+     * before the provider is asked to swap the price and cleared once the
+     * prorated upgrade grant for that move has landed.
+     *
+     * Durable intent, and the only durable record of it. The grant's size is
+     * `toPlan.includedCreditCents - fromPlan.includedCreditCents`, so it needs
+     * the plan moved from — but `syncSubscriptionFromStripe` repoints
+     * `plan_id` at the target as part of the swap. A call that died between
+     * the swap and the grant therefore left a customer upgraded and
+     * uncredited, with nothing left in the row to recompute the grant from
+     * (#3157, PR #3171 review). This column is what the retry reads.
+     *
+     * Deliberately NOT in the `onConflictDoUpdate` set of
+     * `syncSubscriptionFromStripe`: a provider sync must not erase an intent
+     * the swap it is reporting has not finished acting on.
+     *
+     * Nullable, and null is the steady state — a subscription with no plan
+     * change in flight carries none.
+     */
+    pendingUpgradeFromPlanId: uuid("pending_upgrade_from_plan_id").references(
+      () => plans.id,
+    ),
     status: text("status").notNull(),
     // CHECK: billing_interval IN ('month','year') — Stripe only emits these two
     billingInterval: text("billing_interval").notNull(),

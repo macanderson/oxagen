@@ -65,10 +65,24 @@ const dbQueryMocks = {
   orgBillingSettings: { findFirst: vi.fn() },
 };
 
+/**
+ * Every `set(...)` payload written to billing.subscriptions in a test, in
+ * order. The plan-upgrade intent is a write, not a return value, so this is
+ * how "the plan being left was recorded before the provider was touched" is
+ * asserted at all.
+ */
+const subscriptionUpdates: Array<Record<string, unknown>> = [];
+
 const dbMocks = {
   query: dbQueryMocks,
   insert: vi.fn(),
   select: vi.fn(),
+  update: vi.fn(() => ({
+    set: (values: Record<string, unknown>) => {
+      subscriptionUpdates.push(values);
+      return { where: vi.fn().mockResolvedValue(undefined) };
+    },
+  })),
 };
 
 /**
@@ -121,9 +135,12 @@ const loggerMock = vi.hoisted(() => ({
 vi.mock("./logger", () => ({ logger: loggerMock }));
 
 const hasPlanUpgradeGrantMock = vi.fn().mockResolvedValue(true);
+const grantProratedPlanUpgradeCreditsMock = vi
+  .fn()
+  .mockResolvedValue(undefined);
 vi.mock("./grants", () => ({
   hasPlanUpgradeGrant: hasPlanUpgradeGrantMock,
-  grantProratedPlanUpgradeCredits: vi.fn().mockResolvedValue(undefined),
+  grantProratedPlanUpgradeCredits: grantProratedPlanUpgradeCreditsMock,
 }));
 
 vi.mock("@oxagen/config/env", () => ({
@@ -190,6 +207,7 @@ function makeActiveSub(
     billingInterval: string;
     stripePriceId: string | null;
     currentPeriodStart: Date;
+    pendingUpgradeFromPlanId: string | null;
     plan: { tier: string };
   }> = {},
 ) {
@@ -198,6 +216,9 @@ function makeActiveSub(
     seatCount: 1,
     planId: "plan-build-id",
     billingInterval: "month",
+    // No plan change in flight. Set by a caller that is exercising a retry of
+    // one that is.
+    pendingUpgradeFromPlanId: null,
     // WHICH price the subscription sits on. An identity, not an amount: it is
     // how a retry of an already-applied swap is recognised. The direction
     // comes from the previewed invoice (#3157).
@@ -536,6 +557,8 @@ describe("changeOrgPlan proration direction (#3157)", () => {
 describe("changeOrgPlan — a retried swap is a no-op, not a second decision", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    subscriptionUpdates.length = 0;
+    grantProratedPlanUpgradeCreditsMock.mockResolvedValue(undefined);
     const upsertChain = {
       onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
     };
@@ -594,6 +617,91 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
     expect(raised).toBeDefined();
   });
 
+  it("a retry finishes the grant the first attempt never reached", async () => {
+    // The defect this is keyed on is a WRONG VALUE, not a crash: the retry
+    // returned null and logged success while the customer sat on the new plan
+    // with none of its included credits. So the assertion is on the grant
+    // actually being issued, for the plan actually moved from — which is
+    // `pendingUpgradeFromPlanId`, not `planId`. `planId` already reads
+    // "scale" here, because the sync that ran as part of the first attempt
+    // repointed it at the target; granting scale → scale is a delta of zero
+    // and grants nothing, which is precisely the silent no-op this replaced.
+    hasPlanUpgradeGrantMock.mockResolvedValue(false);
+    previewingProration(0);
+    stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({
+        planId: "plan-scale-id",
+        stripePriceId: "price_scale_m",
+        pendingUpgradeFromPlanId: "plan-build-id",
+      }),
+    );
+
+    await changeOrgPlan("org-abc", "scale-v2", "month");
+
+    expect(grantProratedPlanUpgradeCreditsMock).toHaveBeenCalledWith(
+      "org-abc",
+      "plan-build-id",
+      SCALE_PLAN.id,
+    );
+    // And the provider is still not asked to swap anything.
+    expect(upgradeSubscriptionMock).not.toHaveBeenCalled();
+    // Settled work retires its intent, so the next retry does not re-run it.
+    expect(subscriptionUpdates).toContainEqual(
+      expect.objectContaining({ pendingUpgradeFromPlanId: null }),
+    );
+    hasPlanUpgradeGrantMock.mockResolvedValue(true);
+  });
+
+  it("a retry whose grant already landed does not grant a second time", async () => {
+    hasPlanUpgradeGrantMock.mockResolvedValue(true);
+    previewingProration(0);
+    stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({
+        planId: "plan-scale-id",
+        stripePriceId: "price_scale_m",
+        pendingUpgradeFromPlanId: "plan-build-id",
+      }),
+    );
+
+    await changeOrgPlan("org-abc", "scale-v2", "month");
+
+    expect(grantProratedPlanUpgradeCreditsMock).not.toHaveBeenCalled();
+    // The intent is retired anyway — its work is done.
+    expect(subscriptionUpdates).toContainEqual(
+      expect.objectContaining({ pendingUpgradeFromPlanId: null }),
+    );
+  });
+
+  it("a resumed grant that fails leaves the intent standing for the next retry", async () => {
+    hasPlanUpgradeGrantMock.mockResolvedValue(false);
+    grantProratedPlanUpgradeCreditsMock.mockRejectedValue(
+      new Error("ledger unavailable"),
+    );
+    previewingProration(0);
+    stubPlanLookups(SCALE_PLAN, SCALE_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({
+        planId: "plan-scale-id",
+        stripePriceId: "price_scale_m",
+        pendingUpgradeFromPlanId: "plan-build-id",
+      }),
+    );
+
+    await expect(
+      changeOrgPlan("org-abc", "scale-v2", "month"),
+    ).resolves.toBeNull();
+
+    // Clearing it would make the customer's missing credits unrecoverable —
+    // the one record of the plan they moved from would be gone.
+    expect(subscriptionUpdates).not.toContainEqual(
+      expect.objectContaining({ pendingUpgradeFromPlanId: null }),
+    );
+    grantProratedPlanUpgradeCreditsMock.mockResolvedValue(undefined);
+    hasPlanUpgradeGrantMock.mockResolvedValue(true);
+  });
+
   it("a retry whose grant did land reports nothing", async () => {
     hasPlanUpgradeGrantMock.mockResolvedValue(true);
     previewingProration(0);
@@ -634,6 +742,64 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
     );
     expect(raised).toBeDefined();
     hasPlanUpgradeGrantMock.mockResolvedValue(true);
+  });
+
+  it("records the plan being left before the provider is asked to swap it", async () => {
+    // Order is the whole point. `upgradeSubscription` syncs the subscription
+    // synchronously, and that sync repoints planId at the target — so a record
+    // written afterwards would record the destination, and the window it
+    // exists to close would still be open.
+    previewingProration(49_900);
+    stubPlanLookups(SCALE_PLAN, ENTERPRISE_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({
+        planId: "plan-enterprise-id",
+        stripePriceId: "price_enterprise_m",
+      }),
+    );
+
+    await changeOrgPlan("org-abc", "scale-v2", "month");
+
+    expect(subscriptionUpdates[0]).toMatchObject({
+      pendingUpgradeFromPlanId: "plan-enterprise-id",
+    });
+    expect(dbMocks.update.mock.invocationCallOrder[0]).toBeLessThan(
+      upgradeSubscriptionMock.mock.invocationCallOrder[0] as number,
+    );
+    // Once the grant lands, the intent is retired.
+    expect(grantProratedPlanUpgradeCreditsMock).toHaveBeenCalledWith(
+      "org-abc",
+      "plan-enterprise-id",
+      SCALE_PLAN.id,
+    );
+    expect(subscriptionUpdates).toContainEqual(
+      expect.objectContaining({ pendingUpgradeFromPlanId: null }),
+    );
+  });
+
+  it("a grant that fails after the swap leaves the intent for a retry to finish", async () => {
+    grantProratedPlanUpgradeCreditsMock.mockRejectedValue(
+      new Error("ledger unavailable"),
+    );
+    previewingProration(49_900);
+    stubPlanLookups(SCALE_PLAN, ENTERPRISE_PLAN);
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({
+        planId: "plan-enterprise-id",
+        stripePriceId: "price_enterprise_m",
+      }),
+    );
+
+    // The swap is real and must not be undone by a failed grant…
+    await expect(
+      changeOrgPlan("org-abc", "scale-v2", "month"),
+    ).resolves.toBeNull();
+    expect(upgradeSubscriptionMock).toHaveBeenCalled();
+    // …but the origin plan stays recorded, because the credits are still owed.
+    expect(subscriptionUpdates).not.toContainEqual(
+      expect.objectContaining({ pendingUpgradeFromPlanId: null }),
+    );
+    grantProratedPlanUpgradeCreditsMock.mockResolvedValue(undefined);
   });
 
   it("a subscription on a different price is still swapped", async () => {
