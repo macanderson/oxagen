@@ -130,6 +130,33 @@ function enrollmentResponse(
   };
 }
 
+/**
+ * An enrollment fetch whose signed claims carry an `mcp_endpoint`, so a test
+ * can tell "the control plane stated this endpoint" apart from "a pin decided
+ * it". The signer is this fetch's own: `verifyBundle` checks the bundle
+ * against the key delivered beside it, so any self-consistent pair verifies.
+ */
+function signedMcpClaimFetch(mcpEndpoint: string): FetchLike {
+  const signer = bundleSigner();
+  return async (url) => {
+    if (!url.endsWith("/tacho/enrollments"))
+      return { ok: false, status: 404, text: async () => "no" };
+    const base = enrollmentResponse(signer, "core");
+    return {
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          ...base,
+          enrollment: {
+            ...base.enrollment,
+            claims: { ...base.enrollment.claims, mcp_endpoint: mcpEndpoint },
+          },
+        }),
+    };
+  };
+}
+
 function deps(overrides: Partial<CliDeps> = {}): CliDeps & {
   lines: string[];
   errors: string[];
@@ -581,6 +608,234 @@ describe("enroll → status → unenroll", () => {
     expect(
       readHostFile(bad.paths.hostFile)?.mcp_endpoint_override,
     ).toBeUndefined();
+  });
+
+  it("warns on a re-apply whose TACHO_MCP_ENDPOINT is not a URL, and keeps the endpoint it had", async () => {
+    // The fresh-enrollment path already warns for this input. An operator who
+    // reaches the re-apply path is by definition repairing a setup that is
+    // already wrong, so silence costs most here: they export the variable, the
+    // command reports success, and the endpoint they asked for is ignored.
+    const d = deps({
+      env: {
+        PATH: "/usr/bin",
+        TACHO_HOME: scratchPaths().root,
+        TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
+      },
+    });
+    expect(
+      (
+        await enroll(
+          {
+            token: "tok",
+            org: "acme",
+            workspace: "core",
+            apiUrl: "http://localhost:4000",
+          },
+          d,
+        )
+      ).ok,
+    ).toBe(true);
+    const before = readHostFile(d.paths.hostFile);
+    expect(before?.mcp_endpoint_override).toBe("http://127.0.0.1:4100/mcp");
+
+    const typo = deps({
+      paths: d.paths,
+      env: { ...d.env, TACHO_MCP_ENDPOINT: "4100" },
+    });
+    const result = await enroll({}, typo);
+    expect(result.ok).toBe(true);
+    // The warning names the value that was ignored, not just the variable.
+    expect(result.warnings.some((w) => w.includes("4100"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("TACHO_MCP_ENDPOINT"))).toBe(
+      true,
+    );
+    expect(typo.errors.join("\n")).toContain("TACHO_MCP_ENDPOINT");
+    // And the effective endpoint is exactly what it was.
+    const after = readHostFile(typo.paths.hostFile);
+    expect(after?.mcp_endpoint_override).toBe("http://127.0.0.1:4100/mcp");
+    expect(mcpEndpointFor(after as NonNullable<typeof after>, {})).toBe(
+      mcpEndpointFor(before as NonNullable<typeof before>, {}),
+    );
+  });
+
+  it("honours a well-formed override on a re-apply with no warning", async () => {
+    // The discriminating negative for the warning above: a usable value must
+    // still pin silently, or the fix would have turned every re-apply noisy.
+    const clean = deps();
+    expect(
+      (
+        await enroll(
+          {
+            token: "tok",
+            org: "acme",
+            workspace: "core",
+            apiUrl: "http://localhost:4000",
+          },
+          clean,
+        )
+      ).ok,
+    ).toBe(true);
+
+    const reapply = deps({
+      paths: clean.paths,
+      env: { ...clean.env, TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp" },
+    });
+    const result = await enroll({}, reapply);
+    expect(result.ok).toBe(true);
+    expect(readHostFile(clean.paths.hostFile)?.mcp_endpoint_override).toBe(
+      "http://127.0.0.1:4100/mcp",
+    );
+    expect(result.warnings.some((w) => w.includes("TACHO_MCP_ENDPOINT"))).toBe(
+      false,
+    );
+    expect(reapply.errors.join("\n")).not.toContain("TACHO_MCP_ENDPOINT");
+  });
+
+  it("drops a stale pin on a forced enrollment, so traffic follows the new deployment", async () => {
+    // `--force` (and `reassign`, which calls enroll with force) means "set this
+    // host up as if fresh". `mcpEndpointFor` ranks the pin above the signed
+    // claim, so inheriting the previous deployment's pin kept every
+    // connected-app call aimed at a local server the new control plane knows
+    // nothing about — while the enrollment reported success.
+    const pinned = deps({
+      env: {
+        PATH: "/usr/bin",
+        TACHO_HOME: scratchPaths().root,
+        TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
+      },
+    });
+    expect(
+      (
+        await enroll(
+          {
+            token: "tok",
+            org: "acme",
+            workspace: "core",
+            apiUrl: "http://localhost:4000",
+          },
+          pinned,
+        )
+      ).ok,
+    ).toBe(true);
+    expect(readHostFile(pinned.paths.hostFile)?.mcp_endpoint_override).toBe(
+      "http://127.0.0.1:4100/mcp",
+    );
+
+    const forced = deps({
+      paths: pinned.paths,
+      env: { PATH: "/usr/bin", TACHO_HOME: pinned.paths.root },
+      fetch: signedMcpClaimFetch("https://mcp.other.test/mcp"),
+    });
+    const result = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.other.test",
+        force: true,
+      },
+      forced,
+    );
+    expect(result.ok).toBe(true);
+    const host = readHostFile(forced.paths.hostFile);
+    expect(host?.mcp_endpoint_override).toBeUndefined();
+    // Resolved the way the daemon resolves it: the newly signed claim wins.
+    expect(mcpEndpointFor(host as NonNullable<typeof host>, {})).toBe(
+      "https://mcp.other.test/mcp",
+    );
+  });
+
+  it("still pins a forced enrollment's own TACHO_MCP_ENDPOINT", async () => {
+    // The discriminating negative for the drop above: forgetting the variable
+    // clears the pin, supplying it does not.
+    const pinned = deps({
+      env: {
+        PATH: "/usr/bin",
+        TACHO_HOME: scratchPaths().root,
+        TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
+      },
+    });
+    expect(
+      (
+        await enroll(
+          {
+            token: "tok",
+            org: "acme",
+            workspace: "core",
+            apiUrl: "http://localhost:4000",
+          },
+          pinned,
+        )
+      ).ok,
+    ).toBe(true);
+
+    const forced = deps({
+      paths: pinned.paths,
+      env: { ...pinned.env, TACHO_MCP_ENDPOINT: "http://127.0.0.1:4242/mcp" },
+      fetch: signedMcpClaimFetch("https://mcp.other.test/mcp"),
+    });
+    expect(
+      (
+        await enroll(
+          {
+            token: "tok",
+            org: "acme",
+            workspace: "core",
+            apiUrl: "https://api.other.test",
+            force: true,
+          },
+          forced,
+        )
+      ).ok,
+    ).toBe(true);
+    const host = readHostFile(forced.paths.hostFile);
+    expect(host?.mcp_endpoint_override).toBe("http://127.0.0.1:4242/mcp");
+    expect(mcpEndpointFor(host as NonNullable<typeof host>, {})).toBe(
+      "http://127.0.0.1:4242/mcp",
+    );
+  });
+
+  it("keeps the pin when a harness is added, which is not a fresh enrollment", async () => {
+    // The third discriminating negative, and the reason the drop is keyed to
+    // `live` rather than to "the else branch": adding a harness re-enrolls in
+    // place and deliberately carries this machine's local settings (device
+    // key, port, local token). The pin is one of them.
+    const d = deps({
+      env: {
+        PATH: "/usr/bin",
+        TACHO_HOME: scratchPaths().root,
+        TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
+      },
+    });
+    expect(
+      (
+        await enroll(
+          {
+            token: "tok",
+            org: "acme",
+            workspace: "core",
+            apiUrl: "https://api.test",
+          },
+          d,
+        )
+      ).ok,
+    ).toBe(true);
+
+    const adding = deps({
+      paths: d.paths,
+      env: { ...d.env, TACHO_MCP_ENDPOINT: undefined },
+    });
+    expect(
+      (
+        await enroll(
+          { token: "tok", harnesses: ["claude-code", "codex"] },
+          adding,
+        )
+      ).ok,
+    ).toBe(true);
+    const host = readHostFile(adding.paths.hostFile);
+    expect(host?.harnesses).toEqual(["claude-code", "codex"]);
+    expect(host?.mcp_endpoint_override).toBe("http://127.0.0.1:4100/mcp");
   });
 
   it("enrolls with a one-time token and no session, recording the tenant the control plane answered", async () => {

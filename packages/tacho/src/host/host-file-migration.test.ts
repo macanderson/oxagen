@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
 import {
   hostFileSchema,
   mcpEndpointFor,
-  mcpEndpointOverrideFrom,
+  mcpEndpointOverrideRequestFrom,
   readHostFile,
 } from "./host-file";
 import { mkdtempSync, writeFileSync } from "node:fs";
@@ -182,19 +182,30 @@ describe("the persisted endpoint override", () => {
     ).toBeUndefined();
   });
 
-  it("only takes a URL, so one typo cannot brick every later read", () => {
+  it("only takes a URL, and says so when it refuses one", () => {
     // writeHostFile does not validate and readHostFile does. Persisting
     // `TACHO_MCP_ENDPOINT=4100` would write a file the next start rejects.
+    // Refusing it is right; refusing it silently left an operator repairing a
+    // live host with no sign their value had been ignored, so the reason comes
+    // back with the verdict and every caller reports it identically.
+    const typo = mcpEndpointOverrideRequestFrom({ TACHO_MCP_ENDPOINT: "4100" });
+    expect(typo.pinned).toBeUndefined();
+    expect(typo.warning).toContain("TACHO_MCP_ENDPOINT");
+    expect(typo.warning).toContain("4100");
+
+    // Absent and empty are not a refusal — there is nothing to report.
+    for (const env of [{ TACHO_MCP_ENDPOINT: "" }, {}]) {
+      expect(mcpEndpointOverrideRequestFrom(env)).toEqual({
+        pinned: undefined,
+        warning: undefined,
+      });
+    }
+
     expect(
-      mcpEndpointOverrideFrom({ TACHO_MCP_ENDPOINT: "4100" }),
-    ).toBeUndefined();
-    expect(mcpEndpointOverrideFrom({ TACHO_MCP_ENDPOINT: "" })).toBeUndefined();
-    expect(mcpEndpointOverrideFrom({})).toBeUndefined();
-    expect(
-      mcpEndpointOverrideFrom({
+      mcpEndpointOverrideRequestFrom({
         TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
       }),
-    ).toBe("http://127.0.0.1:4100/mcp");
+    ).toEqual({ pinned: "http://127.0.0.1:4100/mcp", warning: undefined });
   });
 });
 

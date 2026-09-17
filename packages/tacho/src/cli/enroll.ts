@@ -17,7 +17,7 @@ import { mergeStellaHooks, stellaHookPresence } from "../host/stella-writer";
 import {
   HOST_FILE_SCHEMA,
   type HostFile,
-  mcpEndpointOverrideFrom,
+  mcpEndpointOverrideRequestFrom,
   readHostFile,
   writeHostFile,
 } from "../host/host-file";
@@ -202,6 +202,27 @@ function controlErrorReason(body: string): string {
   return reason === "" ? "" : ` — ${reason.slice(0, 200)}`;
 }
 
+/**
+ * The requested `TACHO_MCP_ENDPOINT`, reporting it once when it is unusable.
+ *
+ * Both enrollment paths go through here rather than each judging the variable
+ * for itself. They disagreed before: a fresh enrollment warned on a malformed
+ * value, a re-apply ignored it in silence — and the re-apply path is reached
+ * by an operator repairing a setup that is already wrong, so it is the path
+ * where saying nothing costs most.
+ */
+function requestedMcpEndpoint(
+  deps: CliDeps,
+  warnings: string[],
+): string | undefined {
+  const request = mcpEndpointOverrideRequestFrom(deps.env);
+  if (request.warning !== undefined) {
+    warnings.push(request.warning);
+    deps.err(`      ${request.warning}`);
+  }
+  return request.pinned;
+}
+
 export async function enroll(
   options: EnrollOptions,
   deps: CliDeps,
@@ -248,7 +269,7 @@ export async function enroll(
     // enrolled: the value belongs to this machine, not to the enrollment, so
     // picking it up here saves a --force re-enrollment just to point tachod at
     // a local MCP server.
-    const pinned = mcpEndpointOverrideFrom(deps.env);
+    const pinned = requestedMcpEndpoint(deps, warnings);
     if (pinned !== undefined && pinned !== existing.mcp_endpoint_override) {
       host = { ...existing, mcp_endpoint_override: pinned };
       writeHostFile(deps.paths.hostFile, host);
@@ -429,17 +450,20 @@ export async function enroll(
     }
     const port = options.port ?? existing?.port ?? (await deps.findFreePort());
     const now = toProtocolTimestamp(deps.now());
+    // A pin outranks the signed claim in `mcpEndpointFor`, so it is inherited
+    // only where the rest of this machine's local settings are — a harness
+    // addition, which re-enrolls in place and keeps the device key, the port
+    // and the local token. A fresh, forced or post-revoke enrollment (the path
+    // `reassign` takes) re-states the host against whichever control plane it
+    // is now enrolling with, and carrying the previous deployment's pin there
+    // aimed every connected-app call at a local server the new control plane
+    // knows nothing about — while the enrollment reported success. Dropping it
+    // is what `--force` already promises: set this host up as if fresh. An
+    // operator who still wants the pin exports `TACHO_MCP_ENDPOINT`, which is
+    // the same thing they did to create it.
     const mcpEndpointOverride =
-      mcpEndpointOverrideFrom(deps.env) ?? existing?.mcp_endpoint_override;
-    if (
-      mcpEndpointOverride === undefined &&
-      (deps.env["TACHO_MCP_ENDPOINT"] ?? "") !== ""
-    ) {
-      warnings.push(
-        `TACHO_MCP_ENDPOINT is not a URL (${deps.env["TACHO_MCP_ENDPOINT"] ?? ""}); ignoring it rather than writing a host.json that will not load`,
-      );
-      deps.err(`      ${warnings[warnings.length - 1] ?? ""}`);
-    }
+      requestedMcpEndpoint(deps, warnings) ??
+      (live ? existing?.mcp_endpoint_override : undefined);
     host = {
       schema: HOST_FILE_SCHEMA,
       host_enrollment_id: response.hostEnrollmentId,

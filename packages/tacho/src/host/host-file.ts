@@ -127,27 +127,46 @@ export const hostFileSchema = z
 
 export type HostFile = z.output<typeof hostFileSchema>;
 
+/** What `TACHO_MCP_ENDPOINT` asked for, and whether it can be honoured. */
+export interface McpEndpointOverrideRequest {
+  /** The value to write into `host.json`, or undefined to pin nothing. */
+  readonly pinned: string | undefined;
+  /**
+   * Set when the variable carried something non-empty that cannot be pinned.
+   * It is returned rather than logged so every caller reports it the same
+   * way — which is the whole point of deciding here. When the fresh-enrollment
+   * and re-apply paths each judged the variable for themselves, they drifted:
+   * one warned, the other silently kept the endpoint it already had.
+   */
+  readonly warning: string | undefined;
+}
+
 /**
- * The `TACHO_MCP_ENDPOINT` value worth writing into `host.json`, or undefined.
+ * Read `TACHO_MCP_ENDPOINT` into the decision both enrollment paths act on.
  *
  * The URL parse is not decoration. `mcp_endpoint_override` is declared
  * `z.string().url()`, `writeHostFile` does not validate and `readHostFile`
  * does, so persisting whatever the shell happened to export would let one
  * malformed variable write a `host.json` that every later read rejects — the
  * host would be bricked by a typo rather than falling back to the endpoint it
- * would otherwise derive.
+ * would otherwise derive. Refusing it is right; refusing it quietly is not,
+ * so the reason travels back with the verdict.
  */
-export function mcpEndpointOverrideFrom(
+export function mcpEndpointOverrideRequestFrom(
   env: Record<string, string | undefined>,
-): string | undefined {
+): McpEndpointOverrideRequest {
   const raw = env["TACHO_MCP_ENDPOINT"];
-  if (typeof raw !== "string" || raw.length === 0) return undefined;
+  if (typeof raw !== "string" || raw.length === 0)
+    return { pinned: undefined, warning: undefined };
   try {
     new URL(raw);
   } catch {
-    return undefined;
+    return {
+      pinned: undefined,
+      warning: `TACHO_MCP_ENDPOINT is not a URL (${raw}); ignoring it rather than writing a host.json that will not load`,
+    };
   }
-  return raw;
+  return { pinned: raw, warning: undefined };
 }
 
 /**
