@@ -153,10 +153,22 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
             MATCH (other:EntityNode)-[old:ALIAS_OF]->(principal)
             WHERE other <> promoted
             MERGE (other)-[newEdge:ALIAS_OF]->(promoted)
-              ON CREATE SET newEdge.confidence  = old.confidence,
-                            newEdge.matchReason = old.matchReason,
-                            newEdge.tentative   = old.tentative,
-                            newEdge.createdAt   = old.createdAt
+              // Rerouting an existing edge, so every property is COPIED rather
+              // than re-stamped: a reroute is not a new observation, and a
+              // fresh validFrom would rewrite the dedup ledger's history.
+              // is_system is copied for the same reason upsert-entity.ts sets
+              // it — it is the marker that keeps schema reconciliation off
+              // platform-owned edges, and an edge that lost it here would be
+              // pruned as user data.
+              ON CREATE SET newEdge.confidence    = old.confidence,
+                            newEdge.matchReason   = old.matchReason,
+                            newEdge.tentative     = old.tentative,
+                            newEdge.is_system     = coalesce(old.is_system, true),
+                            newEdge.createdAt     = old.createdAt,
+                            newEdge.validFrom     = old.validFrom,
+                            newEdge.validTo       = old.validTo,
+                            newEdge.recordedAt    = old.recordedAt,
+                            newEdge.invalidatedAt = old.invalidatedAt
             DELETE old
             RETURN count(promoted) AS promoted
             `,

@@ -40,18 +40,30 @@ export function buildPrunedProperties(
 const EMPTY_RESERVED: ReadonlySet<string> = new Set<string>();
 
 /**
- * Relationship properties the PLATFORM owns. They never appear in a user
- * schema, so a prune pass computed from schema keys alone classifies every one
- * of them as off-schema.
+ * Relationship properties the PLATFORM owns on an ORGANISATION'S OWN edges.
  *
- * That was harmless only while the write merged (`SET r += $props`), which
- * cannot delete. The moment the write gained removal semantics, pruning a
- * relationship would have stripped its bi-temporal history (`validFrom`,
- * `validTo`, `recordedAt`, `invalidatedAt`) and its tenancy stamp (`orgId`,
- * `workspaceId`) — strictly worse than the bug being fixed. The reserved set is
- * what makes replacement safe, and it is checked by
- * `RESERVED_RELATIONSHIP_PROPERTY_KEYS` covering every `r.<key>` this repo
- * writes onto a relationship.
+ * They never appear in a user schema, so a prune pass computed from schema keys
+ * alone classifies every one of them as off-schema. That was harmless only
+ * while the write merged (`SET r += $props`), which cannot delete. The moment
+ * the write gained removal semantics, pruning a relationship would have
+ * stripped its bi-temporal history (`validFrom`, `validTo`, `recordedAt`,
+ * `invalidatedAt`) and its tenancy stamp (`orgId`, `workspaceId`) — strictly
+ * worse than the bug being fixed.
+ *
+ * This set is deliberately NOT the whole defence, and must not be read as the
+ * closed list of platform-owned relationship properties. There is no such list:
+ * nothing registers, types or checks the properties an edge writer puts on a
+ * relationship, so `ALIAS_OF` carries `confidence`/`matchReason`/`tentative`
+ * (packages/ingestion/src/mutations/upsert-entity.ts), `ABOUT` carries
+ * `role`/`weight` and `INVOKED` carries `callCount`/`failedCallCount`/
+ * `firstInvokedAt`/`lastInvokedAt` (packages/agent), and every one of those
+ * would be off-schema here. An enumerated list of names is a set that can only
+ * ever be too narrow, which is the failure this file has now hit twice.
+ *
+ * The defence that closes the class is {@link NON_SYSTEM_RELATIONSHIP_FILTER}:
+ * platform-owned edges are excluded from schema reconciliation altogether. This
+ * set remains for the edges reconciliation DOES touch — an organisation's own
+ * relationships, which carry the tenancy and temporal stamps above.
  */
 export const RESERVED_RELATIONSHIP_PROPERTY_KEYS: ReadonlySet<string> = new Set(
   [
@@ -68,63 +80,124 @@ export const RESERVED_RELATIONSHIP_PROPERTY_KEYS: ReadonlySet<string> = new Set(
 );
 
 /**
- * Quote a property name for interpolation into a REMOVE clause.
+ * The predicate that keeps schema reconciliation off PLATFORM-OWNED edges.
  *
- * Cypher has no parameter form for a property NAME, so the key has to be
- * interpolated. The safe move is to ESCAPE every legal name, not to restrict to
- * the subset that needs no escaping: `schema.property.upsert` accepts any
- * non-empty string up to 200 characters, so `legacy-note` and `display name`
- * are ordinary valid property names. A guard that only admitted
- * JavaScript-identifier syntax would throw on data the prune exists to handle,
- * failing the reconcile step on exactly the legacy keys it was meant to clean
- * up.
+ * Reconciliation exists to make an organisation's own graph conform to the
+ * schema that organisation pinned. A platform edge is not that: `ALIAS_OF`
+ * records how ingestion deduplicated two entities, `INVOKED` records what an
+ * execution called, `ABOUT`/`REMEMBERS` wire agent memory to the graph. None of
+ * them is described by a user schema, and a pinned schema that happens to NAME
+ * one of those types — `ALIAS_OF` is an ordinary-looking relationship type —
+ * drags the whole family into the prune, where the explicit removal now deletes
+ * the operational metadata the platform runs on.
  *
- * Backtick-quoting covers every such name, and an embedded backtick is escaped
- * by doubling it — which is Cypher's own rule for quoted identifiers, and what
- * stops a crafted key from closing the quote and injecting a clause.
+ * Excluding them is preferred to widening the reserved-key set because the set
+ * of platform-owned relationship PROPERTIES is open (see
+ * {@link RESERVED_RELATIONSHIP_PROPERTY_KEYS}) while the set of platform-owned
+ * relationship WRITERS is closed and small. Thirteen Cypher sites in this
+ * repository create a relationship; only four can produce one between two
+ * `:GraphNode`s, which is the only shape this MATCH can reach:
+ *
+ *   - `ALIAS_OF`   packages/ingestion/src/mutations/upsert-entity.ts
+ *                  packages/inngest-functions/src/functions/ingestion.delete.ts
+ *   - `REMEMBERS`  packages/agent/src/memory/neo4j.ts
+ *   - `ABOUT`      packages/agent/src/memory/neo4j.ts
+ *   - `INVOKED`    packages/agent/src/dispatch/tool-projection.ts
+ *
+ * (The rest — `PROMOTED`, `DEMOTED`, `BASED_ON`, `CITED`, `OF`, `SUPPORTS`,
+ * `REFUTES` — hang off `:Promotion` / `:Demotion` / `:Citation` / `:Evidence`
+ * nodes, which never receive the `:GraphNode` anchor label, so the reconcile
+ * MATCH cannot bind them.) All four set `is_system = true` on the relationship.
+ *
+ * Both halves of the predicate are load-bearing. The relationship flag is the
+ * direct marker, and the endpoint flags are the backstop for an edge writer
+ * that forgets it — `ingestion.delete`'s alias-promotion reroute did forget,
+ * and is fixed in the same change as this. `coalesce(…, false)` because an edge
+ * or node predating a writer that sets the flag has it absent, not false.
  */
-function quotePropertyKey(key: string): string {
-  return `\`${key.replace(/`/g, "``")}\``;
-}
+export const NON_SYSTEM_RELATIONSHIP_FILTER = `coalesce(r.is_system, false) = false
+               AND coalesce(a.is_system, false) = false
+               AND coalesce(b.is_system, false) = false`;
 
 /**
- * Build the write-back for one relationship.
+ * The relationship write-back, in full. It is a CONSTANT: no property name and
+ * no key of any kind is interpolated into it, which is what makes the property
+ * names in {@link buildRelationshipWriteBackProps} unable to be parsed as
+ * Cypher (see that function for the escape that defeats quoting).
+ *
+ * The write is anchored to the SAME tenant the batch read anchored to. An
+ * elementId is a global graph address, so an unanchored `MATCH ()-[r]->()`
+ * would write any relationship in the store whose id happened to collide — and
+ * it would never run at all, because the scoped-session tenancy guard rejects
+ * Cypher that binds no orgId. `$orgId`/`$workspaceId` are injected by the seam.
+ */
+export const RELATIONSHIP_WRITE_BACK_CYPHER = `MATCH (a:GraphNode)-[r]->(b:GraphNode)
+   WHERE elementId(r) = $relElemId
+     AND a.orgId = $orgId AND a.workspaceId = $workspaceId
+     AND ${NON_SYSTEM_RELATIONSHIP_FILTER}
+   SET r += $props`;
+
+/**
+ * Build the parameter map for one relationship's write-back.
  *
  * `SET r += $props` MERGES: a key omitted from the map stays on the
  * relationship. So pruning that only omits keys removes nothing while the job
  * increments `prunedRelationships` and reports success — the counter would have
- * looked healthy for work that never happened. Removal has to be stated, so
- * rejected keys get an explicit `REMOVE r.\`key\``.
+ * looked healthy for work that never happened. Removal has to be STATED.
  *
- * Removal is enumerated rather than achieved by replacement (`SET r = $props`)
- * on purpose: with replacement, one key missing from the reserved set silently
- * deletes data, whereas here deleting a property requires naming it.
+ * It is stated as DATA, not as query text. Cypher has no parameter form for a
+ * property name, so the obvious spelling of removal — `REMOVE r.\`key\`` — has
+ * to interpolate the key, and no amount of escaping makes that safe. Escaping
+ * doubles a literal backtick; Cypher then decodes `\uXXXX` escapes inside the
+ * quoted name at PARSE time, i.e. after the doubling has run, so a key carrying
+ * the six ASCII characters `\u0060` becomes a real backtick that terminates the
+ * identifier and appends whatever follows it as Cypher. `schema.property.upsert`
+ * accepts any non-empty string up to 200 characters, so such a key is a legal
+ * input that reconciliation itself can write through the parameterized property
+ * map before a later prune reads it back. Normalising that one escape would
+ * leave the next encoding to find; the whole class closes only when the name
+ * stops being query text.
  *
- * Every key is backtick-quoted, so a legal-but-awkward property name —
- * `legacy-note`, `display name`, one containing a backtick — is pruned rather
- * than rejected.
+ * Neo4j gives exactly that form: in a `+=` map, "if any property in the map is
+ * `null`, it will be removed from the node or relationship" (Cypher manual,
+ * SET). So a removed key rides in `$props` with a `null` value, the Cypher is
+ * the constant {@link RELATIONSHIP_WRITE_BACK_CYPHER}, and a property name is
+ * never parsed as anything but a map key.
+ *
+ * This keeps the property the enumerated `REMOVE` was chosen for: deleting a
+ * property still requires NAMING it. Replacement (`SET r = $props`) is what
+ * silently deletes when a key is missing from the reserved set, and that is
+ * still not what this does.
  */
-export function buildRelationshipWriteBack(removedKeys: readonly string[]): {
-  setClause: string;
-  removeClause: string;
-} {
+export function buildRelationshipWriteBackProps(
+  retained: Record<string, unknown>,
+  removedKeys: readonly string[],
+): Record<string, unknown> {
+  const props: Record<string, unknown> = {};
+  // A RETAINED key is omitted when its value is null or undefined, because
+  // `null` is this map's removal instruction and a retained key must not carry
+  // one. Omitting it is also the correct semantics on its own terms: `+=`
+  // merges, so a key the map does not mention is left exactly as it is, which
+  // is what "retain" means. Neo4j cannot store a null property value, so a
+  // null here is never the graph's own state — it is an AI-derived property
+  // the model returned as null, or a caller-supplied bag. Either way it must
+  // not delete anything.
+  for (const [key, value] of Object.entries(retained)) {
+    if (value !== null && value !== undefined) props[key] = value;
+  }
   for (const key of removedKeys) {
-    // The only input that cannot be expressed as a quoted identifier. Kept as a
-    // throw rather than a skip: skipping is how a prune reports success having
-    // removed nothing, which is the defect this builder exists to fix.
+    // The one key a property map cannot express, and the one this platform
+    // cannot have authored: `schema.property.upsert` requires a non-empty name.
+    // Kept as a throw rather than a skip — skipping is how a prune reports
+    // success having removed nothing, which is the defect this builder fixes.
     if (key.length === 0) {
       throw new Error(
         "schema.reconcile: an empty relationship property key cannot be pruned",
       );
     }
+    props[key] = null;
   }
-  return {
-    setClause: "SET r += $props",
-    removeClause:
-      removedKeys.length > 0
-        ? ` REMOVE ${removedKeys.map((k) => `r.${quotePropertyKey(k)}`).join(", ")}`
-        : "",
-  };
+  return props;
 }
 
 /**
@@ -511,8 +584,14 @@ export const [schemaReconcile] = createFunction(
 
         if (schemaDefinition.relTypeNames.length > 0) {
           const relResult = await session.run(
-            `MATCH (n:GraphNode)-[r]->(m:GraphNode)
-             WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId AND type(r) IN $relTypes
+            // Platform-owned edges are excluded here as well as in the
+            // reconcile pass, so `totalRelationships` counts the work that is
+            // actually going to be done. A total that includes rows the pass
+            // skips reports a reconcile as incomplete forever.
+            `MATCH (a:GraphNode)-[r]->(b:GraphNode)
+             WHERE a.orgId = $orgId AND a.workspaceId = $workspaceId
+               AND type(r) IN $relTypes
+               AND ${NON_SYSTEM_RELATIONSHIP_FILTER}
              RETURN count(r) AS total`,
             { orgId, workspaceId, relTypes: schemaDefinition.relTypeNames },
           );
@@ -726,7 +805,9 @@ Return only the derived property key-value pairs in the derivedProps field.`,
           for (;;) {
             const batchResult = await session.run(
               `MATCH (a:GraphNode)-[r]->(b:GraphNode)
-             WHERE a.orgId = $orgId AND a.workspaceId = $workspaceId AND type(r) IN $relTypes
+             WHERE a.orgId = $orgId AND a.workspaceId = $workspaceId
+               AND type(r) IN $relTypes
+               AND ${NON_SYSTEM_RELATIONSHIP_FILTER}
              RETURN elementId(r) AS relElemId, type(r) AS relType, properties(r) AS props
              SKIP $skip LIMIT $batchSize`,
               {
@@ -834,15 +915,13 @@ Return only the derived property key-value pairs in the derivedProps field.`,
                 // whose id happened to collide — and it never ran at all,
                 // because the scoped-session tenancy guard rejects Cypher that
                 // binds no orgId. $orgId/$workspaceId are injected by the seam.
-                const { setClause, removeClause } =
-                  buildRelationshipWriteBack(removedRelKeys);
-                await session.run(
-                  `MATCH (a:GraphNode)-[r]->(b:GraphNode)
-                   WHERE elementId(r) = $relElemId
-                     AND a.orgId = $orgId AND a.workspaceId = $workspaceId
-                   ${setClause}${removeClause}`,
-                  { relElemId, props: newProps },
-                );
+                await session.run(RELATIONSHIP_WRITE_BACK_CYPHER, {
+                  relElemId,
+                  props: buildRelationshipWriteBackProps(
+                    newProps,
+                    removedRelKeys,
+                  ),
+                });
                 updatedRelationships++;
               }
 

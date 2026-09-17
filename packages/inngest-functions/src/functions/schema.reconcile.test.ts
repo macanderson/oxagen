@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPrunedProperties,
-  buildRelationshipWriteBack,
+  buildRelationshipWriteBackProps,
+  NON_SYSTEM_RELATIONSHIP_FILTER,
   parseNodeProps,
+  RELATIONSHIP_WRITE_BACK_CYPHER,
   RESERVED_RELATIONSHIP_PROPERTY_KEYS,
 } from "./schema.reconcile";
 
@@ -153,18 +155,22 @@ describe("parseNodeProps (schema.reconcile — canonical JSON-string property ba
 // matters: if it implemented `+=` as a replacement it would report these tests
 // green against the broken code.
 
-/** Apply `SET r += $props [REMOVE r.`k`, …]` to a property bag, as Neo4j would. */
+/**
+ * Apply `SET r += $props` to a property bag, as Neo4j does: `+=` MERGES, so a
+ * key absent from the map survives, and "if any property in the map is `null`,
+ * it will be removed" (Cypher manual, SET). Modelling both halves is what makes
+ * these tests meaningful — an applier that treated `+=` as a replacement would
+ * report green against a builder that removed nothing, and one that ignored
+ * nulls would report green against the merge-only write that was the defect.
+ */
 function applyWriteBack(
   stored: Record<string, unknown>,
   props: Record<string, unknown>,
-  removeClause: string,
 ): Record<string, unknown> {
-  const next = { ...stored, ...props }; // `+=` merges; it never deletes.
-  // Parse `r.`key`` the way Cypher reads a quoted identifier: a doubled
-  // backtick is one literal backtick, a single one ends the name. Modelling
-  // this rather than a naive [^`]+ is what makes the escaping test meaningful.
-  for (const m of removeClause.matchAll(/r\.`((?:[^`]|``)*)`/g)) {
-    delete next[m[1]!.replace(/``/g, "`")];
+  const next = { ...stored };
+  for (const [key, value] of Object.entries(props)) {
+    if (value === null) delete next[key];
+    else next[key] = value;
   }
   return next;
 }
@@ -187,16 +193,29 @@ describe("relationship prune write-back", () => {
   });
   const schemaKeys = ["confidence"];
 
-  it("removes the off-schema property from the relationship", () => {
-    const before = stored();
+  /** The prune exactly as the job runs it. */
+  function prune(
+    before: Record<string, unknown>,
+    keys: string[] = schemaKeys,
+    reserved = RESERVED_RELATIONSHIP_PROPERTY_KEYS,
+  ) {
     const { pruned, removedKeys } = buildPrunedProperties(
       before,
-      schemaKeys,
-      RESERVED_RELATIONSHIP_PROPERTY_KEYS,
+      keys,
+      reserved,
     );
-    const { removeClause } = buildRelationshipWriteBack(removedKeys);
-    const after = applyWriteBack(before, pruned, removeClause);
+    return {
+      removedKeys,
+      after: applyWriteBack(
+        before,
+        buildRelationshipWriteBackProps(pruned, removedKeys),
+      ),
+    };
+  }
 
+  it("removes the off-schema property from the relationship", () => {
+    const before = stored();
+    const { removedKeys, after } = prune(before);
     expect(removedKeys).toEqual(["legacyNote"]);
     expect(after).not.toHaveProperty("legacyNote");
   });
@@ -208,21 +227,14 @@ describe("relationship prune write-back", () => {
       schemaKeys,
       RESERVED_RELATIONSHIP_PROPERTY_KEYS,
     );
-    // The previous write: `SET r += $props`, no REMOVE.
-    const after = applyWriteBack(before, pruned, "");
+    // The previous write: `SET r += $props` with the key merely OMITTED.
+    const after = applyWriteBack(before, pruned);
     expect(after.legacyNote).toBe("written by an older schema version");
   });
 
-  it("preserves every platform-owned property through the prune", () => {
+  it("preserves every reserved property through the prune", () => {
     const before = stored();
-    const { pruned, removedKeys } = buildPrunedProperties(
-      before,
-      schemaKeys,
-      RESERVED_RELATIONSHIP_PROPERTY_KEYS,
-    );
-    const { removeClause } = buildRelationshipWriteBack(removedKeys);
-    const after = applyWriteBack(before, pruned, removeClause);
-
+    const { after } = prune(before);
     for (const key of RESERVED_RELATIONSHIP_PROPERTY_KEYS) {
       expect(after[key]).toEqual(before[key]);
     }
@@ -233,18 +245,32 @@ describe("relationship prune write-back", () => {
     // The same prune computed from schema keys alone, which is what the code
     // did before this change. Every platform property lands in removedKeys.
     const before = stored();
-    const { pruned, removedKeys } = buildPrunedProperties(before, schemaKeys);
-    const { removeClause } = buildRelationshipWriteBack(removedKeys);
-    const after = applyWriteBack(before, pruned, removeClause);
-
+    const { removedKeys, after } = prune(before, schemaKeys, new Set<string>());
     expect(removedKeys).toContain("validFrom");
     expect(removedKeys).toContain("orgId");
     expect(after).not.toHaveProperty("recordedAt");
   });
 
-  it("emits no REMOVE when nothing was pruned", () => {
-    expect(buildRelationshipWriteBack([]).removeClause).toBe("");
-    expect(buildRelationshipWriteBack([]).setClause).toBe("SET r += $props");
+  it("carries no null when nothing was pruned", () => {
+    const props = buildRelationshipWriteBackProps({ confidence: 0.9 }, []);
+    expect(props).toEqual({ confidence: 0.9 });
+    expect(Object.values(props)).not.toContain(null);
+  });
+
+  it("a retained null is omitted, not turned into a removal", () => {
+    // `null` is this map's removal instruction, so a retained key may never
+    // carry one. Omitting it is also what "retain" means under `+=`: a key the
+    // map does not mention is left exactly as it is. Without this, an
+    // AI-derived property the model returned as null would delete whatever the
+    // relationship already had under that name.
+    const props = buildRelationshipWriteBackProps(
+      { confidence: 0.9, validTo: null, note: undefined },
+      ["legacyNote"],
+    );
+    expect(props).toEqual({ confidence: 0.9, legacyNote: null });
+    expect(
+      applyWriteBack({ validTo: "2026-06-01T00:00:00Z" }, props).validTo,
+    ).toBe("2026-06-01T00:00:00Z");
   });
 
   // `schema.property.upsert` accepts any non-empty string up to 200 characters,
@@ -252,62 +278,43 @@ describe("relationship prune write-back", () => {
   // version of this builder restricted keys to JavaScript-identifier syntax and
   // threw on them — failing the reconcile step on exactly the legacy keys the
   // prune exists to clean up.
-  it("prunes legal property names that need escaping", () => {
+  it("prunes legal property names that no identifier syntax would admit", () => {
     const keys = [
       "legacy-note",
       "display name",
       "with`backtick",
       "a".repeat(200),
     ];
-    const stored: Record<string, unknown> = { confidence: 0.9 };
-    for (const k of keys) stored[k] = "x";
+    const before: Record<string, unknown> = { confidence: 0.9 };
+    for (const k of keys) before[k] = "x";
 
-    const { pruned, removedKeys } = buildPrunedProperties(
-      stored,
-      ["confidence"],
-      RESERVED_RELATIONSHIP_PROPERTY_KEYS,
-    );
-    const { removeClause } = buildRelationshipWriteBack(removedKeys);
-    const after = applyWriteBack(stored, pruned, removeClause);
-
+    const { after } = prune(before, ["confidence"]);
     for (const k of keys) expect(after).not.toHaveProperty(k);
     expect(after.confidence).toBe(0.9);
-  });
-
-  it("escapes an embedded backtick by doubling, so a key cannot close the quote", () => {
-    // Without doubling, a key of "a`) DETACH DELETE r //" would end the quoted
-    // identifier and append a clause.
-    const { removeClause } = buildRelationshipWriteBack([
-      "a`) DETACH DELETE r //",
-    ]);
-    expect(removeClause).toBe(" REMOVE r.`a``) DETACH DELETE r //`");
-    // Exactly one quoted identifier: every backtick inside it is doubled.
-    expect(removeClause.match(/`/g)?.length).toBe(4);
-  });
-
-  it("quotes a 200-character key without truncating it", () => {
-    const key = "k".repeat(200);
-    expect(buildRelationshipWriteBack([key]).removeClause).toBe(
-      ` REMOVE r.\`${key}\``,
-    );
   });
 
   it("throws rather than silently skipping an unexpressable key", () => {
     // Skipping would restore the original defect: a prune that reports success
     // and removes nothing.
-    expect(() => buildRelationshipWriteBack([""])).toThrow(/empty/);
+    expect(() => buildRelationshipWriteBackProps({}, [""])).toThrow(/empty/);
   });
 });
 
-// ── The escape the doubling cannot see ───────────────────────────────────────
+// ── The escape that defeats quoting ──────────────────────────────────────────
 //
 // Cypher decodes `\uXXXX` escapes INSIDE a backtick-quoted name, and it does so
-// at PARSE time — after any doubling the builder applied to the string. So the
-// builder and the parser disagree about what a backtick is, and the parser is
-// the one that runs the query. `schema.property.upsert` accepts any non-empty
-// string up to 200 characters, so a key carrying the six ASCII characters
-// ``` is a LEGAL property name that reconciliation can write through the
-// parameterized property map and a later prune then interpolates.
+// at PARSE time — after any doubling a builder applied to the string. So a
+// builder that escapes and a parser that decodes disagree about what a backtick
+// is, and the parser is the one that runs the query. `schema.property.upsert`
+// accepts any non-empty string up to 200 characters, so a key carrying the six
+// ASCII characters `\u0060` is a LEGAL property name that reconciliation can
+// write through the parameterized property map and a later prune reads back.
+//
+// The fix is not a better escape. It is that a property name never becomes
+// query text: removal is a `null` in the parameter map, and the Cypher is a
+// constant. These tests assert that property against the generated Cypher —
+// there is no Neo4j in this package's test rig, so the parser step is modelled
+// rather than executed.
 
 /** The one parser step string-level escaping cannot see. */
 function asNeo4jWouldParse(cypher: string): string {
@@ -316,23 +323,91 @@ function asNeo4jWouldParse(cypher: string): string {
   );
 }
 
-/**
- * Everything the clause contains that is NOT `REMOVE`, a `r.\`name\`` token or
- * punctuation between them. A clause whose key stayed inside its quotes leaves
- * nothing behind; a clause whose key escaped leaves the injected Cypher.
- */
-function clauseResidue(clause: string): string {
-  return clause
-    .replace(/r\.`(?:[^`]|``)*`/g, "")
-    .replace(/\bREMOVE\b/g, "")
-    .replace(/[\s,]/g, "");
-}
-
 describe("relationship prune write-back — a property key is never query text", () => {
   const HOSTILE = "a\\u0060 WITH r MATCH (v) DETACH DELETE v //";
 
-  it("leaves no executable residue once the parser decodes the key", () => {
-    const { removeClause } = buildRelationshipWriteBack([HOSTILE]);
-    expect(clauseResidue(asNeo4jWouldParse(removeClause))).toBe("");
+  it("keeps the hostile key out of the query entirely", () => {
+    const props = buildRelationshipWriteBackProps({ confidence: 0.9 }, [
+      HOSTILE,
+    ]);
+    // The query is fixed text. Nothing about the key reaches it, so there is
+    // no encoding of a delimiter left for a parser to decode.
+    expect(RELATIONSHIP_WRITE_BACK_CYPHER).not.toContain("DETACH DELETE");
+    expect(RELATIONSHIP_WRITE_BACK_CYPHER).not.toMatch(/\\u[0-9a-fA-F]{4}/);
+    expect(RELATIONSHIP_WRITE_BACK_CYPHER).not.toContain("REMOVE");
+    expect(RELATIONSHIP_WRITE_BACK_CYPHER).not.toContain("`");
+    // …and the key is still NAMED, so the removal is stated, not implied.
+    expect(props[HOSTILE]).toBeNull();
+  });
+
+  it("leaves no executable residue once the parser decodes the query", () => {
+    // The assertion that was red before the fix: with the key interpolated
+    // into `REMOVE r.\`key\``, decoding `\u0060` terminated the identifier and
+    // left ` WITH r MATCH (v) DETACH DELETE v //` as Cypher.
+    buildRelationshipWriteBackProps({}, [HOSTILE]);
+    const parsed = asNeo4jWouldParse(RELATIONSHIP_WRITE_BACK_CYPHER);
+    expect(parsed).toBe(RELATIONSHIP_WRITE_BACK_CYPHER);
+    expect(parsed).not.toMatch(/\bDETACH\s+DELETE\b/);
+  });
+
+  it("the write itself cannot land on a platform-owned edge", () => {
+    // Defence in depth for the prune exclusion: even if the batch read were
+    // ever loosened, the destructive write is still filtered.
+    expect(RELATIONSHIP_WRITE_BACK_CYPHER).toContain(
+      NON_SYSTEM_RELATIONSHIP_FILTER,
+    );
+  });
+});
+
+// ── Platform-owned edges are not user data ───────────────────────────────────
+describe("schema reconciliation excludes platform-owned relationships", () => {
+  it("filters the edge and both of its endpoints", () => {
+    // The edge flag is the direct marker; the endpoint flags are the backstop
+    // for a writer that forgets it. Absent is not false — hence coalesce.
+    expect(NON_SYSTEM_RELATIONSHIP_FILTER).toContain(
+      "coalesce(r.is_system, false) = false",
+    );
+    expect(NON_SYSTEM_RELATIONSHIP_FILTER).toContain(
+      "coalesce(a.is_system, false) = false",
+    );
+    expect(NON_SYSTEM_RELATIONSHIP_FILTER).toContain(
+      "coalesce(b.is_system, false) = false",
+    );
+  });
+
+  it("an ALIAS_OF edge named by a pinned schema keeps its dedup metadata", () => {
+    // The defect this closes: a pinned schema naming the platform type
+    // ALIAS_OF with only `confidence` declared. Reconciliation used to reach
+    // the edge (EntityNode carries the :GraphNode anchor label) and the newly
+    // effective removal would have deleted `matchReason` and `tentative` —
+    // neither of which any reserved-key list contained, because the set of
+    // platform-owned relationship properties is open.
+    const aliasEdge: Record<string, unknown> = {
+      confidence: 0.94,
+      matchReason: "embedding:0.94",
+      tentative: false,
+      is_system: true,
+      createdAt: "2026-01-01T00:00:00Z",
+      validFrom: "2026-01-01T00:00:00Z",
+      validTo: null,
+      recordedAt: "2026-01-01T00:00:00Z",
+      invalidatedAt: null,
+    };
+
+    // What the prune WOULD do if the edge reached it.
+    const { removedKeys } = buildPrunedProperties(
+      aliasEdge,
+      ["confidence"],
+      RESERVED_RELATIONSHIP_PROPERTY_KEYS,
+    );
+    expect(removedKeys).toEqual(["matchReason", "tentative"]);
+
+    // Which is exactly why it must not reach it. `is_system` is set on every
+    // ALIAS_OF this repo writes — upsert-entity.ts on creation, and
+    // ingestion.delete.ts when alias promotion reroutes one.
+    expect(aliasEdge.is_system).toBe(true);
+    expect(NON_SYSTEM_RELATIONSHIP_FILTER).toContain(
+      "coalesce(r.is_system, false) = false",
+    );
   });
 });
