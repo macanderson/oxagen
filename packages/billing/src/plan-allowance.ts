@@ -10,8 +10,8 @@
  * be two round trips per action for two columns of the same join.
  */
 
-import { and, eq, inArray } from "drizzle-orm";
-import { withSystemDb, schema } from "@oxagen/database";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { withSystemDb, schema, type Tx } from "@oxagen/database";
 import type { PlanTier } from "@oxagen/oxagen/types";
 import { ENTITLED_SUBSCRIPTION_STATUSES } from "./tier";
 import { TIER_ACTION_ALLOWANCES } from "./action-metering";
@@ -20,6 +20,83 @@ const VALID_TIERS = new Set<PlanTier>(["free", "build", "scale", "enterprise"]);
 
 function isTier(value: unknown): value is PlanTier {
   return typeof value === "string" && VALID_TIERS.has(value as PlanTier);
+}
+
+/**
+ * What the last probe said about `org.organizations.negotiated_actions_annual`,
+ * and when it said it.
+ *
+ * Deployment and migration are separate manual steps in this repo
+ * (`pipeline.yml`: `deploy-node` no longer waits for `db-migrate.yml`), so
+ * production can run this code before migration `20260916120000` is applied.
+ * An unconditional reference to the column then raises 42703 on EVERY
+ * `resolveOrgActionEntitlement` call — and because the kernel catches the
+ * recorder's error, successful governed actions go uncounted and unbilled for
+ * the whole window, silently.
+ *
+ * ## Why this asks first rather than trying and recovering
+ *
+ * The obvious shape — issue the query, catch 42703, retry without the column —
+ * cannot work, and its unit test cannot see that. 42703 ABORTS the enclosing
+ * transaction, and `withSystemDb` is one. Catching the exception does not
+ * restore the transaction, so the retry raises 25P02
+ * (`current transaction is aborted`) and the first call in every process still
+ * fails. A mock that merely rejects one query and answers the next models the
+ * error but not what PostgreSQL does to the transaction around it, so such a
+ * test passes while the code does not work.
+ *
+ * Probing has no error path to get wrong: `information_schema` always answers.
+ */
+let negotiatedColumn: { present: boolean; probedAtMs: number } | undefined;
+
+/**
+ * How long a NEGATIVE probe is trusted before asking again.
+ *
+ * A positive answer is kept for the life of the process, because a column that
+ * exists does not stop existing. A negative one must expire: production
+ * migrations are applied by hand, so an instance that started before the
+ * migration has to notice it afterwards. Caching the miss forever meant that
+ * instance ignored every negotiated allowance until it was recycled, charging
+ * enterprise overage against the fallback in the meantime.
+ *
+ * A minute is short enough that a hand-applied migration takes effect while the
+ * operator is still watching, and long enough that the probe is not a per-call
+ * round trip on the accrual path.
+ */
+const NEGATIVE_PROBE_TTL_MS = 60_000;
+
+/** Test seam. Resets the per-process answer above. */
+export function resetNegotiatedColumnProbeForTests(): void {
+  negotiatedColumn = undefined;
+}
+
+/**
+ * Whether this database has the negotiated-allowance column, asked at most
+ * once per process while the answer is yes, and at most once a minute while it
+ * is no.
+ */
+async function hasNegotiatedColumn(
+  tx: Pick<Tx, "execute">,
+  nowMs: number,
+): Promise<boolean> {
+  if (negotiatedColumn?.present === true) return true;
+  if (
+    negotiatedColumn !== undefined &&
+    nowMs - negotiatedColumn.probedAtMs < NEGATIVE_PROBE_TTL_MS
+  ) {
+    return false;
+  }
+  const rows = await tx.execute(sql`
+    select 1
+      from information_schema.columns
+     where table_schema = 'org'
+       and table_name = 'organizations'
+       and column_name = 'negotiated_actions_annual'
+     limit 1
+  `);
+  const present = Array.from(rows as Iterable<unknown>).length > 0;
+  negotiatedColumn = { present, probedAtMs: nowMs };
+  return present;
 }
 
 export interface OrgActionEntitlement {
@@ -77,17 +154,25 @@ export async function resolveOrgActionEntitlement(
         ),
       )
       .limit(1);
-    const o = await tx
-      .select({
-        planType: schema.organizations.planType,
-        // Selected from a row this query already reads, so the legacy leg costs
-        // no extra round trip on the accrual path.
-        negotiatedActionsAnnual: schema.organizations.negotiatedActionsAnnual,
-      })
-      .from(schema.organizations)
-      .where(eq(schema.organizations.id, orgId))
-      .limit(1);
-    return { sub: s, org: o };
+    // Selected from a row this query already reads, so the legacy leg costs no
+    // extra round trip on the accrual path — when the column is there.
+    const withNegotiated = {
+      planType: schema.organizations.planType,
+      negotiatedActionsAnnual: schema.organizations.negotiatedActionsAnnual,
+    };
+    const tierOnly = { planType: schema.organizations.planType };
+    const readOrg = async (columns: Record<string, unknown>) =>
+      tx
+        .select(columns as typeof withNegotiated)
+        .from(schema.organizations)
+        .where(eq(schema.organizations.id, orgId))
+        .limit(1);
+
+    // Asked before the query that would otherwise abort this transaction. When
+    // the column is absent the answer is the tier alone, which is all an
+    // unmigrated database could have recorded anyway.
+    const present = await hasNegotiatedColumn(tx, Date.now());
+    return { sub: s, org: await readOrg(present ? withNegotiated : tierOnly) };
   });
 
   const row = sub[0];

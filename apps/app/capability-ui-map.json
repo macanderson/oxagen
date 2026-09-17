@@ -562,6 +562,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "update_profile": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Account in the user menu on every organization page — the shell's Account dialog, which invokes update_profile (features/shell/account-dialog.tsx, features/shell/account-actions.ts)",
+      "testid": "open-account",
+      "proof": "apps/app/src/features/shell/account-dialog.test.tsx",
+      "verifiedAt": "2026-09-17",
+      "verifiedBy": "session-7172f7a7-account-dialog"
+    },
     "update_workspace_settings": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",

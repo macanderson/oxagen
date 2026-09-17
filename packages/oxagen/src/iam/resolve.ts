@@ -73,6 +73,42 @@ export type {
  */
 export const ORG_OWNER_ROLE_NAME = "Owner";
 
+/**
+ * Rule 7.5's own test, as a function: does this principal hold the
+ * system-default ORG-scoped Owner role?
+ *
+ * Exported because a second caller needs to ask the same question, and asking
+ * it a second way is how organisations get locked out.
+ * `tools/scripts/provision-enterprise-org.ts` refuses to switch an
+ * organisation to enterprise unless some human will still be a super-user
+ * afterwards, and enterprise is the only tier that runs this resolver. That
+ * preflight is a PREDICTION of rule 7.5, and three separate review findings
+ * (#3178) were the same prediction being wrong in a new way: the assignment's
+ * scope, then the role's scope, then the principal's link to a real user.
+ * After each one the predicate looked complete.
+ *
+ * A predicate is only ever as good as the resolver it predicts, and a comment
+ * saying "mirrors the resolver" cannot fail when it stops being true. So the
+ * one thing both sides genuinely share — what makes a role an owner role — is
+ * this function rather than two copies of the same three clauses.
+ *
+ * It does NOT answer "can this person act": rules 1, 2, 6 and 7 run first and
+ * an owner can still deny themselves through config. It answers exactly what
+ * rule 7.5 answers, which is the question a lockout preflight is asking.
+ */
+export function grantsOrgOwnerSuperUser(
+  roles: readonly Role[],
+  principalId: string,
+): boolean {
+  return roles.some(
+    (r) =>
+      r.principalIds.includes(principalId) &&
+      r.scopeKind === "org" &&
+      r.name === ORG_OWNER_ROLE_NAME &&
+      r.isSystemDefault === true,
+  );
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type ScopeKind = "org" | "workspace";
@@ -632,12 +668,11 @@ export function resolve(input: ResolveInput): ResolveResult {
   // so an owner CAN restrict themselves "through config". Only system-default
   // org Owner roles qualify (isSystemDefault) — a user-created role merely named
   // "Owner" does not inherit super-user rights.
-  const isOrgOwner = principalRoles.some(
-    (r) =>
-      r.scopeKind === "org" &&
-      r.name === ORG_OWNER_ROLE_NAME &&
-      r.isSystemDefault === true,
-  );
+  // The shared predicate, not a fourth copy of these clauses — see
+  // grantsOrgOwnerSuperUser. `principalRoles` is already filtered to this
+  // principal; passing the unfiltered list keeps the one caller and the one
+  // helper asking literally the same thing.
+  const isOrgOwner = grantsOrgOwnerSuperUser(roles, principal.id);
   if (isOrgOwner) {
     const step: TraceStep = {
       rule: "7.5:org_owner_superuser",

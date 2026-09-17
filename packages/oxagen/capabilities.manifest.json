@@ -5309,6 +5309,22 @@
       }
     },
     {
+      "name": "update_profile",
+      "file": "user.profile.update.ts",
+      "domain": "user",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_workspace_user_preferences",
       "file": "user.workspace_preferences.read.ts",
       "domain": "user",

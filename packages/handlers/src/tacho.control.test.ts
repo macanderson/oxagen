@@ -176,6 +176,10 @@ function wire(db: Fake, apiKey: Record<string, unknown> = HOST_KEY): void {
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
+        // The gateway-column probe asks `information_schema` before a read
+        // that names a column migration 20260917140000 adds. "Applied" is the
+        // state these cases are about.
+        execute: async () => [{ "?column?": 1 }],
         query: {
           apiKeys: { findFirst: async () => apiKey },
           tachoHosts: {
@@ -253,8 +257,14 @@ function wire(db: Fake, apiKey: Record<string, unknown> = HOST_KEY): void {
               const result = Promise.resolve([
                 { id: "x" },
               ]) as Promise<unknown> & { returning: () => Promise<unknown> };
+              // `api_keys` answers with the rows the scope sweep reached: both
+              // credentials the enrollment minted (ADR-078). A host enrolled
+              // before the scope marker existed returns nothing instead, and
+              // that fallback is covered in tacho.enrollment.revoke.test.ts.
               result.returning = async () =>
-                tableName(table) === "control_commands" ? [{ id: "x" }] : [];
+                tableName(table) === "api_keys"
+                  ? [{ id: "aky_host" }, { id: "aky_gateway" }]
+                  : [{ id: "x" }];
               return result;
             },
           }),
@@ -622,6 +632,8 @@ describe("revoke_tacho_enrollment", () => {
       OPERATOR,
     );
     expect(first.status).toBe("revoked");
+    // One statement retires both the control-plane key and the gateway key,
+    // selected by the enrollment marker they share.
     expect(db.updates.map((u) => u.table)).toEqual(["hosts", "api_keys"]);
     expect(db.inserts[0]?.values).toMatchObject({
       command: "revoke",
@@ -651,7 +663,12 @@ describe("revoke_tacho_enrollment", () => {
       OPERATOR,
     );
     expect(second.revokedAt).toBe("2026-09-01T00:00:00.000Z");
-    expect(already.updates).toEqual([]);
+    // The host row and the queued command are not repeated. The key sweep does
+    // run, and is a no-op here because the first revocation already took them
+    // (`deleted_at IS NULL` matches nothing); see tacho.enrollment.revoke.test.ts
+    // for the case where an earlier revocation left the gateway key live.
+    expect(already.updates.filter((u) => u.table === "hosts")).toEqual([]);
+    expect(already.inserts).toEqual([]);
   });
 
   it("revokes with the operator's `oxagen login` key and refuses the host's own key", async () => {

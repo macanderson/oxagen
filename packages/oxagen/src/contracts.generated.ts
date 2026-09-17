@@ -316,6 +316,7 @@ import "./contracts/tools.load";
 import "./contracts/tools.search";
 import "./contracts/user.preferences.read";
 import "./contracts/user.preferences.set";
+import "./contracts/user.profile.update";
 import "./contracts/user.workspace_preferences.read";
 import "./contracts/user.workspace_preferences.write";
 import "./contracts/workspace.archive";

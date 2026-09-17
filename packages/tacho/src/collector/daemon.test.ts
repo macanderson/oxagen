@@ -59,10 +59,7 @@ const DAEMON_CONNECT_MS = 5_000;
  * left behind. Carrying stderr into the assertion message costs nothing and
  * makes the next occurrence self-describing.
  */
-function expectReachedDaemon(result: {
-  path: string;
-  stderr: string;
-}): void {
+function expectReachedDaemon(result: { path: string; stderr: string }): void {
   expect(
     result.path,
     `hook fell back to the local path instead of reaching the daemon: ${result.stderr.trim() || "(no stderr)"}`,
