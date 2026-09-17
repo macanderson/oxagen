@@ -298,7 +298,7 @@ describe("a served gateway call is recorded where the tier can read it", () => {
   });
 
   it("writes nothing when the migration has not been applied", async () => {
-    // The column arrives with migration 20260917120000, which production
+    // The column arrives with migration 20260917140000, which production
     // applies by hand after the deploy (#1275). Naming it before then raises
     // 42703, which aborts the transaction and turns a note into a DENIED
     // gateway call.

@@ -1,6 +1,6 @@
 /**
  * tacho-gateway-columns.ts — reading and writing the two columns migration
- * `20260917120000` adds, on a database that may not have them yet.
+ * `20260917140000` adds, on a database that may not have them yet.
  *
  * `tacho.hosts.gateway_last_seen_at` and `tacho.sessions.gateway_observed_at`
  * are what the server-observed enforcement tier stands on. Production applies

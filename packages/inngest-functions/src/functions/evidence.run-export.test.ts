@@ -49,12 +49,18 @@ const captured = vi.hoisted(
 const updates: { table: unknown; values: Record<string, unknown> }[] = [];
 const wheres: unknown[] = [];
 
-vi.mock("@oxagen/database", () => ({
-  withTenantDb: mocks.withTenantDb,
-  schema: {
-    runExports: { id: "run_exports.id", orgId: "run_exports.org_id" },
-  },
-}));
+vi.mock("@oxagen/database", () => {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    withTenantDb: mocks.withTenantDb,
+    schema: {
+      runExports: { id: "run_exports.id", orgId: "run_exports.org_id" },
+    },
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: mocks.runInTenantScope,

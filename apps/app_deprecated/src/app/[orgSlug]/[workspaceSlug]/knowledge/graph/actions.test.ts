@@ -41,10 +41,16 @@ vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/handlers/logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }));
-vi.mock("@oxagen/database", () => ({
-  withTenantDb: mockWithTenantDb,
-  schema: { workspaceUsers: { role: {}, workspaceId: {}, userId: {} } },
-}));
+vi.mock("@oxagen/database", () => {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    withTenantDb: mockWithTenantDb,
+    schema: { workspaceUsers: { role: {}, workspaceId: {}, userId: {} } },
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 
 import {
   listNodesAction,

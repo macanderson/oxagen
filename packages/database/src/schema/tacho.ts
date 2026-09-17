@@ -839,7 +839,7 @@ export const tachoEnrollmentTokens = tachoSchema.table(
 );
 
 /**
- * The two columns migration `20260917120000` adds, named the way
+ * The two columns migration `20260917140000` adds, named the way
  * `information_schema` names them.
  *
  * Defined here, beside the Drizzle declarations they mirror, because three
