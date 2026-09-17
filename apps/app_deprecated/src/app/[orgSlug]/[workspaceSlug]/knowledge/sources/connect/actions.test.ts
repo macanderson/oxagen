@@ -44,25 +44,31 @@ vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: (_scope: unknown, fn: () => unknown) => fn(),
 }));
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
-vi.mock("@oxagen/database", () => ({
-  withTenantDb: async (fn: (tx: unknown) => unknown) =>
-    fn({
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: async () => workspaceRoleRows.rows,
+vi.mock("@oxagen/database", () => {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    withTenantDb: async (fn: (tx: unknown) => unknown) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => workspaceRoleRows.rows,
+            }),
           }),
         }),
       }),
-    }),
-  schema: {
-    workspaceUsers: {
-      workspaceId: "workspaceId",
-      userId: "userId",
-      role: "role",
+    schema: {
+      workspaceUsers: {
+        workspaceId: "workspaceId",
+        userId: "userId",
+        role: "role",
+      },
     },
-  },
-}));
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 vi.mock("@oxagen/handlers/logger", () => ({
   logger: { error: mockLoggerError, warn: vi.fn(), info: vi.fn() },
 }));

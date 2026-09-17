@@ -25,18 +25,24 @@ vi.mock("@oxagen/agent/handlers/_agent-definition", () => ({
 // building, and computeConfigChecksum stays real so the checksum the handler
 // computes matches the one this test computes from the same blob.
 
-vi.mock("@oxagen/database", () => ({
-  schema: {
-    agents: { id: "agents.id", workspaceId: "agents.workspaceId" },
-    agentVersions: {
-      config: "agentVersions.config",
-      agentId: "agentVersions.agentId",
-      version: "agentVersions.version",
+vi.mock("@oxagen/database", () => {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    schema: {
+      agents: { id: "agents.id", workspaceId: "agents.workspaceId" },
+      agentVersions: {
+        config: "agentVersions.config",
+        agentId: "agentVersions.agentId",
+        version: "agentVersions.version",
+      },
     },
-  },
-  withTenantDb: (fn: (tx: unknown) => Promise<unknown>) =>
-    mocks.withTenantDb(fn),
-}));
+    withTenantDb: (fn: (tx: unknown) => Promise<unknown>) =>
+      mocks.withTenantDb(fn),
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 
 vi.mock("drizzle-orm", async (importOriginal) => {
   // Partial: the handler now imports CREDIT_REASONS from @oxagen/billing, whose

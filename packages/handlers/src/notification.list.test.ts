@@ -17,7 +17,10 @@ const mockRows = [
 
 vi.mock("@oxagen/database", () => {
   let call = 0;
-  return {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
     schema: {
       notifications: {
         userId: "userId_col",
@@ -58,6 +61,7 @@ vi.mock("@oxagen/database", () => {
       });
     }),
   };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 // Stub drizzle helpers used in the handler

@@ -27,11 +27,15 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   // The governance handlers run inside the tenant scope (withTenantDb); install
   // also touches withSystemDb. Mock both so the fake tx is used either way.
-  return {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
     ...real,
     withSystemDb: mocks.withSystemDb,
     withTenantDb: mocks.withTenantDb,
   };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 vi.mock("@oxagen/database/security", () => ({
