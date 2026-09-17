@@ -192,6 +192,24 @@ export function createFixedWindowCounter(windowMs: number): FixedWindowCounter {
         // is nothing left to enforce for it and nothing it may spend. Report it
         // alone and leave both live windows untouched — the one thing it must
         // not do is borrow from a window it was never in.
+        //
+        // `count: 1` is an honest "no record", and it is also fail-OPEN, which
+        // matters because the counter says it independently to every caller in
+        // the same position: an arbitrarily large cohort captured in one window
+        // behind one slow store call would each read 1 and each pass a ceiling
+        // of `max`. That cohort cannot form here any more, and the fix is at
+        // the call site rather than in this branch, because the alternative —
+        // retaining a window until its outstanding calls drain — makes per-key
+        // state a history a pre-authentication caller can grow, which is the
+        // thing the one-previous-window rule above exists to bound.
+        // `distributedRateLimiter` therefore takes its shadow hit at admission,
+        // before awaiting the store, so for a given key its hits arrive in
+        // clock order and never name a window this counter has dropped.
+        //
+        // This branch stays because the counter is exported and `rateLimiter`
+        // uses it too, and because a `hit` fed a clock that stepped backwards
+        // still lands here. A future caller that counts AFTER an await brings
+        // the cohort back, and this is the line that would let it through.
         return { count: 1, resetAt: windowStart + windowMs };
       }
 

@@ -110,6 +110,28 @@ able to reason about at 3am.
   already passed, which is not a cached denial at all: the next request drops it
   and goes back to the store. `hit()` now takes the captured timestamp, and
   `cacheLocalDeny` refuses a reset time in the past.
+- **The shadow hit is taken at admission, not after the store call returns.**
+  `createFixedWindowCounter` retains exactly one previous window, deliberately,
+  so per-key state is a constant rather than a history a pre-authentication
+  caller can grow. A shadow hit taken after the await inherits the store's
+  latency, and a store call outliving two window rolls comes back asking about a
+  window the counter has dropped. The counter answers the only honest thing it
+  can — that it has no record, reported as `count: 1` — and it answers that
+  INDEPENDENTLY to every caller in the same position, so a cohort of any size
+  parked behind one slow call all read 1 and all pass a ceiling of `max`. Both
+  halves of "slow enough" are facts of this tree rather than a hypothesis: the
+  limiters use 60-second windows, and the pool in
+  `packages/database/src/client.ts` is built with `max` and `prepare: false` and
+  nothing else, so no statement timeout bounds a call at 120 seconds. Counting
+  at admission bounds the cohort whether or not the store call ever returns.
+  The alternative — retaining a window until its outstanding calls drain — is
+  correct and reintroduces precisely the unbounded per-key state the
+  one-previous-window rule exists to prevent, on the mounts where the caller is
+  not yet authenticated. Counting at admission also makes out-of-order arrival a
+  non-question for this call site rather than a handled case: `now` is captured
+  and the hit taken in the same synchronous run, so for a given key the hits
+  arrive in clock order however the store behaves. The counter's out-of-order
+  paths stay, because it is exported and `rateLimiter` uses it too.
 - **The rate-limit headers report the stricter of the two counts.** When the
   store recovers inside a window the shadow already owns, the shadow is the
   operative ceiling and the Postgres count is the smaller, irrelevant number. An

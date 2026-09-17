@@ -766,6 +766,98 @@ describe("distributedRateLimiter", () => {
     }
   });
 
+  // The case above straddles ONE boundary, which the counter's retained
+  // previous window absorbs. This one straddles two, which it cannot: the
+  // counter keeps exactly one previous window, deliberately, so per-key state
+  // stays a constant rather than a history a pre-authentication caller can
+  // grow. A hit older than both retained windows has no window left to land in,
+  // and the counter answers the only honest thing it can — that it has no
+  // record, reported as `count: 1`.
+  //
+  // It says that INDEPENDENTLY to every member of a cohort in the same
+  // position, and that is the defect: the cohort is bounded by how many
+  // requests a caller can park behind one slow store call, not by `max`. Both
+  // halves of "slow enough" are facts of this tree rather than a hypothesis —
+  // these limiters use 60-second windows, and the pool in
+  // packages/database/src/client.ts sets `max` and `prepare: false` and nothing
+  // else, so no statement timeout bounds a call at 120 seconds.
+  //
+  // The fix is that the shadow hit is taken at admission rather than after the
+  // await, so the cohort is counted while its window is still live. Note the
+  // completion order below: A, B and C are released LAST-first. Timestamp order
+  // is what the pre-existing boundary test happened to supply, and it is why
+  // that test stayed green against unfixed code once already.
+  it("bounds a cohort whose store calls outlive two window rolls", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-17T12:00:30.000Z"));
+
+      const gates: Array<() => void> = [];
+      mocks.withSystemDb.mockImplementation(
+        async (fn: (tx: unknown) => Promise<unknown>) => {
+          await new Promise<void>((resolve) => gates.push(resolve));
+          // Postgres counts each window from 1, so only the shadow can deny.
+          // Without that, this would pass on the global counter and prove
+          // nothing about the degraded ceiling.
+          return fn({ execute: vi.fn().mockResolvedValue([{ count: 1 }]) });
+        },
+      );
+      const waitForGates = async (count: number): Promise<void> => {
+        for (let tick = 0; tick < 50 && gates.length < count; tick += 1) {
+          await Promise.resolve();
+        }
+        expect(gates.length).toBe(count);
+      };
+
+      const mw = distributedRateLimiter({
+        keyPrefix: "preauth",
+        max: 2,
+        bucketKey: trustedClientIpBucketKey,
+        storeErrorPolicy: "degrade-to-local",
+      });
+      const next = vi.fn().mockResolvedValue(undefined);
+      const headers = { "x-oxagen-client-ip": "198.51.100.62" };
+
+      // Four requests, all captured inside the window ending 12:01:00, all
+      // parked on the store. max = 2, so two of them must be refused.
+      const pending: Array<Promise<unknown>> = [];
+      const contexts = [] as ReturnType<typeof fakeContext>[];
+      for (let i = 0; i < 4; i += 1) {
+        const ctx = fakeContext({ headers });
+        contexts.push(ctx);
+        pending.push(mw(ctx, next));
+        await waitForGates(i + 1);
+      }
+
+      // Two full windows roll while every one of them is still in flight. The
+      // counter's retained pair is now {12:02:00, 12:01:00}; the cohort's
+      // window, 12:00:00, is off the end of it.
+      vi.setSystemTime(new Date("2026-09-17T12:02:30.000Z"));
+
+      // Released newest-first. Against the unfixed code each completion asks
+      // the counter about a dropped window, each is told `count: 1`, and all
+      // four are served.
+      for (let i = gates.length - 1; i >= 0; i -= 1) gates[i]!();
+      const results = (await Promise.all(pending)) as Array<
+        { status: number } | undefined
+      >;
+
+      const denied = results.filter((r) => r?.status === 429).length;
+      expect(denied).toBe(2);
+      expect(next).toHaveBeenCalledTimes(2);
+
+      // And the denials are the 3rd and 4th admitted, not an arbitrary two:
+      // the ceiling is spent in admission order, which is the order the caller
+      // actually made the requests in.
+      expect(results[0]).toBeUndefined();
+      expect(results[1]).toBeUndefined();
+      expect(results[2]?.status).toBe(429);
+      expect(results[3]?.status).toBe(429);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // The headers a client paces against. When the store comes back inside a
   // window the shadow already owns, the shadow is the operative ceiling and the
   // Postgres count is the smaller, irrelevant one. Reporting the smaller number
@@ -1296,7 +1388,20 @@ describe("unattributable bucket", () => {
     expect(c.json).not.toHaveBeenCalled();
     // The operator can see the deployment is not enforcing it.
     expect(warn).toHaveBeenCalledOnce();
-    expect(warn.mock.calls[0]?.[1]).toContain("TRUSTED_PROXY_CIDRS");
+    const message = warn.mock.calls[0]?.[1] as string;
+    // BOTH topologies, because the remedy differs between them and a message
+    // naming one is wrong for the other half of the fleet. After the ADR-083
+    // edge rewrite, x-forwarded-for reaches the app as a single entry which is
+    // Caddy itself, so `extractTrustedClientIp`'s identity walk finds every
+    // entry trusted and therefore none of them a client, and returns null.
+    // `TRUSTED_PROXY_CIDRS` attributes nothing there: the operator who sets it
+    // sees no change, no explanation, and keeps believing the ceiling is on.
+    expect(message).toContain("TRUST_EDGE_CLIENT_IP_HEADER=true");
+    expect(message).toContain("TRUSTED_PROXY_CIDRS");
+    // The edge flag is never recommended bare. Enabling it before the rewrite
+    // is live believes a header the old config forwards caller-supplied, which
+    // is the worse of the two errors, so "verified live" precedes the name.
+    expect(message).toMatch(/verified live[\s\S]*TRUST_EDGE_CLIENT_IP_HEADER/);
   });
 
   // The other half of the same contract: a resolver that DOES name a caller

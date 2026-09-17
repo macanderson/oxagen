@@ -344,6 +344,19 @@ function sweepStaleWindows(olderThan: Date): void {
  * A ceiling that cannot name who it is limiting is not being enforced, and that
  * is a deployment fact an operator should be able to see rather than infer from
  * a counter that never moves. Throttled per prefix like the store-error warn.
+ *
+ * The remedy depends on which topology is live, and naming only one of them
+ * sends half the fleet's operators somewhere that cannot work. Once the Caddy
+ * config of ADR-083 is reloaded, the edge rewrites `x-forwarded-for` to a
+ * single entry which is Caddy itself; `extractTrustedClientIp` walks that chain
+ * by proxy IDENTITY, finds every entry trusted and therefore none of them a
+ * client, and returns `null`. Setting `TRUSTED_PROXY_CIDRS` after the rewrite
+ * attributes nothing at all — the operator who follows that advice gets no
+ * change and no explanation, and goes on believing the pre-authentication
+ * ceilings are enforced. `TRUST_EDGE_CLIENT_IP_HEADER` is what attributes the
+ * caller there, and it is named with "verify it is live" attached rather than
+ * bare, because enabling it BEFORE the rewrite believes a header the old config
+ * forwards caller-supplied (ADR-083) — which is the worse of the two errors.
  */
 const lastUnattributableWarnAtByPrefix = new Map<string, number>();
 function warnUnattributable(keyPrefix: string, windowMs: number): void {
@@ -354,8 +367,11 @@ function warnUnattributable(keyPrefix: string, windowMs: number): void {
   logger.warn(
     { keyPrefix },
     "distributed rate limiter has no attributable bucket for this request — " +
-      "skipping (set TRUSTED_PROXY_CIDRS to the proxies in front of this " +
-      "deployment)",
+      "skipping (after the ADR-083 edge rewrite is verified live, set " +
+      "TRUST_EDGE_CLIENT_IP_HEADER=true: the rewrite leaves x-forwarded-for " +
+      "one entry and no proxy hop for TRUSTED_PROXY_CIDRS to vouch with; " +
+      "before the rewrite, set TRUSTED_PROXY_CIDRS to the proxies in front of " +
+      "this deployment)",
   );
 }
 
@@ -479,6 +495,46 @@ export function distributedRateLimiter(
     }
     if (locallyDeniedUntil) localDenyUntilByKey.delete(key);
 
+    // The shadow hit is taken HERE, at admission, and not after the store call
+    // returns. The counter is told the same captured `now` either way, so the
+    // window it lands in is unchanged; what changes is WHEN it lands, and that
+    // is the whole of it.
+    //
+    // Counting afterwards made the hit's arrival depend on the store. A call
+    // still in flight after two window rolls comes back asking the counter
+    // about a window it no longer retains — `createFixedWindowCounter` keeps
+    // exactly one previous window, deliberately, so that per-key state stays a
+    // constant rather than a history a pre-authentication caller can grow — and
+    // the counter answers the only honest thing it can, that it has no record.
+    // It says so as `count: 1`, and it says it INDEPENDENTLY to every member of
+    // the cohort. So a cohort of any size, captured in one window behind one
+    // slow store call, all read 1 and all pass a ceiling of `max`.
+    //
+    // That is reachable rather than theoretical, and both halves were checked
+    // in this tree: these limiters use 60-second windows (`DEFAULT_WINDOW_MS`,
+    // and `/v1/telemetry/usage` passes 60_000 explicitly), and the pool in
+    // `packages/database/src/client.ts` is built with `max` and
+    // `prepare: false` and nothing else — no `statement_timeout`, no
+    // `connect_timeout` — so nothing bounds a store call at 120 seconds.
+    //
+    // Counting at admission bounds the cohort whether or not the store call
+    // ever returns, and it does so without retaining a window until its
+    // outstanding calls drain, which would put back exactly the unbounded
+    // per-key state the one-previous-window rule exists to prevent. It also
+    // removes out-of-order arrival as a concern for this call site rather than
+    // handling it: `now` is captured and the hit taken in the same synchronous
+    // run, so for a given key these arrive in clock order however the store
+    // behaves. The counter's own out-of-order paths stay — it is exported and
+    // `rateLimiter` uses it too — but nothing here reaches them any more.
+    //
+    // Only a `degrade-to-local` mount counts, as before: a fail-open mount has
+    // no fallback to seed, and the map entry per bucket key per window is a
+    // cost a pre-authentication caller chooses.
+    const shadow =
+      storeErrorPolicy === "degrade-to-local"
+        ? localCounter.hit(key, now)
+        : null;
+
     let count: number;
     try {
       count = await withSystemDb(async (tx) => {
@@ -511,10 +567,12 @@ export function distributedRateLimiter(
       warnStoreError(opts.keyPrefix, windowMs, err, storeErrorPolicy);
       if (storeErrorPolicy !== "degrade-to-local") return next();
 
-      // `now`, not the counter's own clock: the upsert that just failed may
-      // have taken this request across a window boundary, and the degraded
-      // count has to land in the window the rest of this request is about.
-      const local = localCounter.hit(key, now);
+      // The hit taken at admission, not a second one. `storeErrorPolicy` is
+      // `degrade-to-local` on this line — the check above returned otherwise —
+      // which is the same condition that took `shadow`, so it is non-null here.
+      // Re-counting would charge a failed request twice, and taking the hit
+      // here at all would put it back behind the await this moved it out of.
+      const local = shadow ?? localCounter.hit(key, now);
       c.header("X-RateLimit-Limit", String(max));
       c.header("X-RateLimit-Remaining", String(Math.max(0, max - local.count)));
       c.header("X-RateLimit-Reset", String(Math.ceil(local.resetAt / 1000)));
@@ -565,21 +623,19 @@ export function distributedRateLimiter(
     // the shadow is per-instance, so the shadow can never exceed it while the
     // store is up and `count > max` always fires first.
     //
-    // `now` is passed in for the same reason as on the catch path: the upsert
-    // may have taken this request across a window boundary, and a shadow hit
-    // that re-read the clock would land in the NEXT window — counting one
-    // request twice and, worse, caching a denial against a reset time that had
-    // already passed.
+    // The hit itself was taken at admission, against the captured `now`, for
+    // the reason written where it is taken: a shadow hit that waits for the
+    // store inherits the store's latency, and past two window rolls the counter
+    // no longer has the window to put it in. Reading the clock again here would
+    // have been worse still — it would land the hit in the NEXT window,
+    // counting one request twice and caching a denial against a reset time that
+    // had already passed.
     //
     // `effectiveCount` is the stricter of the two, and it is what the headers
     // report. Reporting the Postgres count while the shadow is the operative
     // ceiling tells a client it has room and then rejects its next request; a
     // header a client paces against and cannot trust is worse than no header.
-    let effectiveCount = count;
-    if (storeErrorPolicy === "degrade-to-local") {
-      const shadow = localCounter.hit(key, now);
-      effectiveCount = Math.max(count, shadow.count);
-    }
+    const effectiveCount = shadow ? Math.max(count, shadow.count) : count;
 
     c.header(
       "X-RateLimit-Remaining",
