@@ -101,6 +101,33 @@ export function deriveBucketKey(c: Context<AppEnv>, keyPrefix: string): string {
 }
 
 /**
+ * One enrolled machine, one bucket.
+ *
+ * The post-auth ceilings on the Tacho and Stella machine routes are documented
+ * and sized per host, but they were using the default `deriveBucketKey`, which
+ * picks `workspaceId`. Every enrolled machine carries a distinct API key and
+ * shares its workspace, so a handful of daemons would exhaust one counter
+ * between them and all receive 429 — and the first minutes after this limiter
+ * starts counting for the first time are exactly when every host drains its
+ * backlog at once. Key on the enrolled credential instead.
+ *
+ * Falls back to the workspace when no API key is on the context, which on these
+ * routers means something other than an enrolled machine reached them; that is
+ * the behaviour these mounts had before, so the fallback is never worse.
+ *
+ * Exported for the same reason as `deriveBucketKey`: so the derivation can be
+ * unit-tested without a live DB.
+ */
+export function enrolledMachineBucketKey(c: Context<AppEnv>): string {
+  const apiKeyId = c.get("apiKeyId");
+  if (apiKeyId) return `machine:${apiKeyId}`;
+  const workspaceId = c.get("workspaceId");
+  if (workspaceId) return `ws:${workspaceId}`;
+  const orgId = c.get("orgId");
+  return orgId ? `org:${orgId}` : `ip:${clientIp(c)}`;
+}
+
+/**
  * Vercel replaces `x-vercel-forwarded-for` from its trusted network boundary,
  * unlike caller-controlled `x-forwarded-for`. Outside Vercel, collapse all
  * traffic into one conservative bucket rather than trusting a spoofable IP.

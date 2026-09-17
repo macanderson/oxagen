@@ -31,6 +31,7 @@ import type { SQL } from "drizzle-orm";
 import { logger } from "./logger";
 import {
   authorizationFingerprintBucketKey,
+  enrolledMachineBucketKey,
   distributedRateLimiter,
   deriveBucketKey,
   rateLimitBudgets,
@@ -39,7 +40,7 @@ import {
 
 type FakeContextOpts = {
   method?: string;
-  vars?: Partial<{ workspaceId: string; orgId: string }>;
+  vars?: Partial<{ workspaceId: string; orgId: string; apiKeyId: string }>;
   headers?: Record<string, string>;
 };
 
@@ -472,5 +473,42 @@ describe("store-error logging", () => {
     const logged = (warn.mock.calls[0]?.[0] as { err: string }).err;
     expect(logged).toContain("Failed query");
     expect(logged).toContain('The "string" argument must be of type string');
+  });
+});
+
+describe("enrolled-machine bucket key", () => {
+  // The post-auth Tacho and Stella ceilings are sized per host, but they used
+  // the default derivation, which keys on workspaceId — so every host enrolled
+  // into one workspace shared a single 30/min counter and they would all have
+  // hit 429 together the moment these counters started working.
+  it("gives each enrolled credential its own bucket within one workspace", () => {
+    const hostA = enrolledMachineBucketKey(
+      fakeContext({ vars: { apiKeyId: "key-a", workspaceId: "ws-1" } }),
+    );
+    const hostB = enrolledMachineBucketKey(
+      fakeContext({ vars: { apiKeyId: "key-b", workspaceId: "ws-1" } }),
+    );
+
+    expect(hostA).toBe("machine:key-a");
+    expect(hostB).toBe("machine:key-b");
+    expect(hostA).not.toBe(hostB);
+  });
+
+  it("prefers the credential over the workspace it is scoped to", () => {
+    expect(
+      enrolledMachineBucketKey(
+        fakeContext({ vars: { apiKeyId: "key-a", workspaceId: "ws-1" } }),
+      ),
+    ).not.toContain("ws-1");
+  });
+
+  it("falls back to the previous workspace derivation without an API key", () => {
+    expect(
+      enrolledMachineBucketKey(fakeContext({ vars: { workspaceId: "ws-1" } })),
+    ).toBe("ws:ws-1");
+    expect(
+      enrolledMachineBucketKey(fakeContext({ vars: { orgId: "org-1" } })),
+    ).toBe("org:org-1");
+    expect(enrolledMachineBucketKey(fakeContext())).toBe("ip:unknown");
   });
 });

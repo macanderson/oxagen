@@ -9,6 +9,7 @@ import { workspaceMiddleware } from "./middleware/workspace";
 import {
   authorizationFingerprintBucketKey,
   distributedRateLimiter,
+  enrolledMachineBucketKey,
   rateLimitBudgets,
   trustedVercelIpBucketKey,
 } from "./middleware/distributed-rate-limit";
@@ -355,6 +356,9 @@ stellaTelemetryScoped.use(
   distributedRateLimiter({
     keyPrefix: "stella-telemetry",
     max: STELLA_TELEMETRY_PER_MIN,
+    // Deliberately workspace-wide, unlike the per-host Tacho ceiling below:
+    // this bounds a workspace's total evidence ingress rather than any one
+    // instance's share of it, and telemetry.stella.ingest.test.ts pins that.
   }),
 );
 stellaTelemetryScoped.route("/", telemetryStellaIngestRoute);
@@ -374,6 +378,10 @@ tachoScoped.use(
   distributedRateLimiter({
     keyPrefix: "tacho-host",
     max: TACHO_HOST_PER_MIN,
+    // Per HOST, which is what "per enrolled Tacho host" above means. The
+    // default derivation keys on workspaceId, so every host enrolled into one
+    // workspace would share a single 30/min counter.
+    bucketKey: enrolledMachineBucketKey,
   }),
 );
 tachoScoped.route("/", tachoEventsIngestRoute);
