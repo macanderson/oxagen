@@ -94,11 +94,16 @@ const LEDGER_TABLE = "_migrations";
  * has already applied every file up to and including this one — repeatedly,
  * on every deploy, under the old replay-everything semantics — so the
  * bootstrap in `migrate()` below marks exactly this file and everything
- * before it as already applied, WITHOUT re-executing them, the first time it
- * finds an empty ledger in a database that already has other tables. That
- * one skip is what stops the deploy shipping this fix from
- * performing 0021's `DROP TABLE` one more time — the last occurrence of the
- * exact data loss this ledger exists to end.
+ * before it as already applied, WITHOUT re-executing them, on the run that
+ * `decideLedgerAction` classifies as `bootstrap`. That one skip is what stops
+ * the deploy shipping this fix from performing 0021's `DROP TABLE` one more
+ * time — the last occurrence of the exact data loss this ledger exists to end.
+ *
+ * What makes a run a `bootstrap` is the ledger's recorded origin, not the
+ * shape of the database at the time. An earlier version keyed it on "an empty
+ * ledger in a database that already has other tables", a state two different
+ * histories produce and which wants opposite treatment in each — see
+ * LEDGER_ORIGIN_PRE_LEDGER.
  *
  * Do NOT bump this constant when adding a new migration file. It is a
  * one-time cutover marker for the pre-ledger backlog, not a "latest
