@@ -90,9 +90,10 @@ point in between and after:
 1. Upload and reload the Caddy config that SETS `X-Oxagen-Client-Ip`.
 2. Set `TRUST_EDGE_CLIENT_IP_HEADER=true`.
 
-Between the two, and before either, the hop-count walk decides, which is where
-the deployment already was. If the flag is never set, nothing breaks: Caddy
-rewrites `X-Forwarded-For` to a single trusted entry and the walk clamps to it.
+Between the two, and before either, attribution falls to the identity walk over
+`TRUSTED_PROXY_CIDRS`, and then to the hop count, which is where the deployment
+already was. If the flag is never set, nothing breaks: Caddy rewrites
+`X-Forwarded-For` to a single trusted entry, and a hop count of 1 reads it.
 
 ## Alternatives
 
@@ -126,12 +127,18 @@ logs keep the full chain for anything that later does.
   there is one obvious function to reach for instead.
 - `x-real-ip` is gone as an input. Nothing in either deployment shape set it, so
   nothing legitimate is lost.
-- `TRUSTED_PROXY_HOP_COUNT` defaults to 2, not 1: the deployed shape has two
-  appending proxies, the ALB and Caddy. At 1 the walk returns Caddy's peer — a
-  load balancer's private address — and an allowlist of real client CIDRs
-  matches nothing, so every IP-scoped mandate silently denies. With the Caddy
-  rewrite deployed the count stops deciding anything; it decides everything in
-  the deploy-skew window.
+- `TRUSTED_PROXY_HOP_COUNT` defaults to **1**. An earlier revision of this ADR
+  said 2, on the reasoning that the ALB and Caddy both append. That was measured
+  false against `caddy:2`, which REPLACES the chain with its own peer rather than
+  appending, and this deployment's Caddyfile sets a single entry — so the chain
+  reaching the app is one deep either way. A short chain is now refused outright
+  rather than clamped to its leftmost entry, so a count of 2 against a one-entry
+  chain yields no address at all and every IP-scoped mandate denies. Setting 2
+  on the strength of the old text is the failure this paragraph exists to
+  prevent.
+- The hop count is the legacy form and governs only the IAM `ip_ranges`
+  allowlist. It does not enable the pre-authentication IP ceilings; naming your
+  proxies in `TRUSTED_PROXY_CIDRS` does.
 - An IP-scoped mandate now denies when the caller cannot be identified. That is
   a behaviour change and the intended one.
 - `TRUST_EDGE_CLIENT_IP_HEADER` is a flag the operator must set, and until it is
