@@ -46,16 +46,10 @@
 // landed, one of them proposed in review as the fix for exactly the 5000ms
 // timeout rule 1 governs. If you are reading this because rule 1 just failed
 // you, the answer is the named budget, not a quieter scope.
+import path from "node:path";
 import ts from "typescript";
-import { describe, expect, it } from "vitest";
-import {
-  lineOf,
-  listFiles,
-  parse,
-  readSource,
-  type SourceText,
-  WHOLE_TREE_TIMEOUT_MS,
-} from "./parse";
+import { beforeAll, describe, expect, it } from "vitest";
+import { APP_DIR, lineOf, listFiles, WHOLE_TREE_TIMEOUT_MS } from "./parse";
 
 const RULE = "timeout-budget";
 const ARCH_DIR = "src/test/arch";
@@ -96,20 +90,150 @@ const TYPE_CHECKED_BUDGET = "TYPE_CHECKED_TREE_TIMEOUT_MS";
 
 type CallTest = (call: ts.CallExpression) => boolean;
 
-/** The whole production tree, enumerated: `productionFiles()` and `listFiles("src")`. */
-const enumeratesTree: CallTest = (call) => {
-  if (!ts.isIdentifier(call.expression)) return false;
-  if (call.expression.text === "productionFiles") return true;
-  if (call.expression.text !== "listFiles") return false;
-  const [argument] = call.arguments;
-  return (
-    argument !== undefined &&
-    ts.isStringLiteral(argument) &&
-    argument.text === "src"
-  );
+/**
+ * The analysis context: one program over the arch suite and its probes, with
+ * the host confined to `src/` exactly as route-guard.test.ts does it, so
+ * platform packages resolve to nothing and the program stays small (41 files,
+ * no lib, no node_modules; 67ms to build, 291ms including every callee
+ * resolved). The checker is here because WHICH DECLARATION A CALLEE RESOLVES TO
+ * is a binding question, and a binding question is what a symbol table answers
+ * exactly. The predicate used to compare the callee's spelling, so
+ * `import { productionFiles as files }` and `arch.productionFiles()` were the
+ * same walk under another name and it saw neither.
+ */
+type Context = {
+  readonly program: ts.Program;
+  readonly checker: ts.TypeChecker;
+  /** `productionFiles` as declared in parse.ts, whatever a caller spells it. */
+  readonly productionFiles: ts.Symbol;
+  readonly listFiles: ts.Symbol;
 };
 
-/** `createProgram(…)` or `ts.createProgram(…)`: the type-checked program the larger budget is for. */
+const toAbs = (file: string): string => path.join(APP_DIR, file);
+const toRel = (abs: string): string =>
+  path.relative(APP_DIR, abs).split(path.sep).join("/");
+
+function createProgram(roots: readonly string[]): ts.Program {
+  const options: ts.CompilerOptions = {
+    noEmit: true,
+    noLib: true,
+    types: [],
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    target: ts.ScriptTarget.ES2024,
+    jsx: ts.JsxEmit.Preserve,
+    strict: true,
+    baseUrl: APP_DIR,
+    paths: { "@/*": ["src/*"] },
+  };
+  const base = ts.createCompilerHost(options, true);
+  const inside = (abs: string): boolean => toRel(abs).startsWith("src/");
+  const host: ts.CompilerHost = {
+    ...base,
+    fileExists: (abs) => inside(abs) && base.fileExists(abs),
+    readFile: (abs) => (inside(abs) ? base.readFile(abs) : undefined),
+    directoryExists: (abs) => {
+      const rel = toRel(abs);
+      return (
+        (rel === "" || rel === "src" || rel.startsWith("src/")) &&
+        (base.directoryExists?.(abs) ?? false)
+      );
+    },
+  };
+  return ts.createProgram(roots.map(toAbs), options, host);
+}
+
+/**
+ * The two enumerators, as declared. A checker whose subject has vanished must
+ * fail loudly rather than quietly find nothing: silence would be indistinguish-
+ * able from a clean suite, which is the failure this file exists to prevent.
+ */
+function contextOver(roots: readonly string[]): Context {
+  const program = createProgram(roots);
+  const checker = program.getTypeChecker();
+  const parseFile = program.getSourceFile(toAbs(`${ARCH_DIR}/parse.ts`));
+  if (parseFile === undefined)
+    throw new Error("parse.ts is not in the program");
+  const moduleSymbol = checker.getSymbolAtLocation(parseFile);
+  if (moduleSymbol === undefined) throw new Error("parse.ts exports nothing");
+  const exported = checker.getExportsOfModule(moduleSymbol);
+  const find = (name: string): ts.Symbol => {
+    const symbol = exported.find((candidate) => candidate.name === name);
+    if (symbol === undefined) {
+      throw new Error(`parse.ts no longer exports ${name}`);
+    }
+    return symbol;
+  };
+  return {
+    program,
+    checker,
+    productionFiles: find("productionFiles"),
+    listFiles: find("listFiles"),
+  };
+}
+
+/** The declaration `node` names, following import aliases to the real one. */
+function declarationOf(context: Context, node: ts.Node): ts.Symbol | undefined {
+  const unalias = (symbol: ts.Symbol | undefined): ts.Symbol | undefined =>
+    symbol !== undefined && (symbol.flags & ts.SymbolFlags.Alias) !== 0
+      ? context.checker.getAliasedSymbol(symbol)
+      : symbol;
+  // `{ scan }` binds a property whose name happens to match; the value it
+  // carries is the mention, and only a dedicated lookup returns it.
+  if (ts.isShorthandPropertyAssignment(node.parent)) {
+    const value = context.checker.getShorthandAssignmentValueSymbol(
+      node.parent,
+    );
+    const resolved = unalias(value);
+    if (resolved !== undefined) return resolved;
+  }
+  const direct = unalias(context.checker.getSymbolAtLocation(node));
+  if (direct !== undefined) return direct;
+  // A value assigned from the enumerator — `const files = productionFiles` —
+  // binds to the variable, not the import, so ask what it is instead.
+  return unalias(context.checker.getTypeAtLocation(node).getSymbol());
+}
+
+function isDeclaration(
+  context: Context,
+  node: ts.Node,
+  target: ts.Symbol,
+): boolean {
+  if (declarationOf(context, node) === target) return true;
+  const type = context.checker.getTypeAtLocation(node).getSymbol();
+  const unaliased =
+    type !== undefined && (type.flags & ts.SymbolFlags.Alias) !== 0
+      ? context.checker.getAliasedSymbol(type)
+      : type;
+  return unaliased === target;
+}
+
+/**
+ * The whole production tree, enumerated. Resolved rather than matched, so a
+ * renamed import, a namespace access and a re-export are the same walk.
+ */
+function enumeratesTreeIn(context: Context): CallTest {
+  return (call) => {
+    const callee = call.expression;
+    if (isDeclaration(context, callee, context.productionFiles)) return true;
+    if (!isDeclaration(context, callee, context.listFiles)) return false;
+    const [argument] = call.arguments;
+    return (
+      argument !== undefined &&
+      ts.isStringLiteral(argument) &&
+      argument.text === "src"
+    );
+  };
+}
+
+/**
+ * `createProgram(…)` or `ts.createProgram(…)`: the type-checked program the
+ * larger budget is for. Matched by name rather than resolved, deliberately.
+ * `ts` is outside this program by design, and the asymmetry is fail-safe:
+ * failing to recognise a program build withholds the LARGER budget, so the
+ * mistake makes the rule stricter. Failing to recognise an enumeration makes it
+ * laxer, which is why that one is resolved and this one is not.
+ */
 const buildsProgram: CallTest = (call) => {
   const callee = call.expression;
   if (ts.isIdentifier(callee)) return callee.text === "createProgram";
@@ -159,18 +283,20 @@ function isValueReference(id: ts.Identifier): boolean {
   );
 }
 
-/** Every name `node` mentions, itself included when it is a bare reference. */
-function referencesIn(node: ts.Node): string[] {
-  const names: string[] = [];
+/** Every declaration `node` mentions, itself included when it is a bare reference. */
+function referencesIn(context: Context, node: ts.Node): ts.Symbol[] {
+  const symbols: ts.Symbol[] = [];
+  const take = (id: ts.Identifier): void => {
+    const symbol = declarationOf(context, id);
+    if (symbol !== undefined) symbols.push(symbol);
+  };
   const visit = (current: ts.Node): void => {
-    if (ts.isIdentifier(current) && isValueReference(current)) {
-      names.push(current.text);
-    }
+    if (ts.isIdentifier(current) && isValueReference(current)) take(current);
     ts.forEachChild(current, visit);
   };
   visit(node);
-  if (ts.isIdentifier(node) && isValueReference(node)) names.push(node.text);
-  return names;
+  if (ts.isIdentifier(node) && isValueReference(node)) take(node);
+  return symbols;
 }
 
 function makesCall(node: ts.Node, wanted: CallTest): boolean {
@@ -189,35 +315,47 @@ function makesCall(node: ts.Node, wanted: CallTest): boolean {
 
 type LocalFunction = {
   readonly node: ts.Node;
+  readonly symbol: ts.Symbol | undefined;
   /** Its name leaves the file, so this file cannot see who calls it. */
   readonly exported: boolean;
   readonly line: number;
 };
 
 /** Every function this file names: `function f() {}` and `const f = () => …`. */
-function localFunctions(sf: ts.SourceFile): ReadonlyMap<string, LocalFunction> {
-  const functions = new Map<string, LocalFunction>();
+function localFunctions(
+  context: Context,
+  sf: ts.SourceFile,
+): readonly LocalFunction[] {
+  const functions: LocalFunction[] = [];
   const exportedNames = new Set<string>();
+  const byName = new Map<string, number>();
   const add = (
     name: string,
     node: ts.Node,
     declaration: ts.Declaration,
+    id: ts.Identifier,
   ): void => {
     const exported =
       (ts.getCombinedModifierFlags(declaration) & ts.ModifierFlags.Export) !==
       0;
-    functions.set(name, { node, exported, line: lineOf(sf, declaration) });
+    byName.set(name, functions.length);
+    functions.push({
+      node,
+      symbol: context.checker.getSymbolAtLocation(id),
+      exported,
+      line: lineOf(sf, declaration),
+    });
   };
   const visit = (node: ts.Node): void => {
     if (ts.isFunctionDeclaration(node) && node.name) {
-      add(node.name.text, node, node);
+      add(node.name.text, node, node, node.name);
     } else if (
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&
       node.initializer &&
       isFunctionLike(node.initializer)
     ) {
-      add(node.name.text, node.initializer, node);
+      add(node.name.text, node.initializer, node, node.name);
     } else if (
       ts.isExportDeclaration(node) &&
       node.exportClause &&
@@ -231,34 +369,38 @@ function localFunctions(sf: ts.SourceFile): ReadonlyMap<string, LocalFunction> {
   };
   visit(sf);
   for (const name of exportedNames) {
-    const existing = functions.get(name);
-    if (existing !== undefined) {
-      functions.set(name, { ...existing, exported: true });
+    const at = byName.get(name);
+    if (at !== undefined) {
+      const existing = functions[at];
+      if (existing !== undefined)
+        functions[at] = { ...existing, exported: true };
     }
   }
   return functions;
 }
 
 /**
- * The names whose bodies can reach `wanted`: directly, or by mentioning another
- * such name. A fixpoint rather than a recursive lookup, so a mutual pair or a
- * chain of any depth is carried rather than depending on which end is asked.
+ * The declarations whose bodies can reach `wanted`: directly, or by mentioning
+ * another such declaration. A fixpoint rather than a recursive lookup, so a
+ * mutual pair or a chain of any depth is carried rather than depending on which
+ * end is asked.
  */
 function carriers(
-  functions: ReadonlyMap<string, LocalFunction>,
+  context: Context,
+  functions: readonly LocalFunction[],
   wanted: CallTest,
-): ReadonlySet<string> {
-  const found = new Set<string>();
+): ReadonlySet<ts.Symbol> {
+  const found = new Set<ts.Symbol>();
   let changed = true;
   while (changed) {
     changed = false;
-    for (const [name, local] of functions) {
-      if (found.has(name)) continue;
+    for (const local of functions) {
+      if (local.symbol === undefined || found.has(local.symbol)) continue;
       if (
         makesCall(local.node, wanted) ||
-        referencesIn(local.node).some((reference) => found.has(reference))
+        referencesIn(context, local.node).some((symbol) => found.has(symbol))
       ) {
-        found.add(name);
+        found.add(local.symbol);
         changed = true;
       }
     }
@@ -268,13 +410,14 @@ function carriers(
 
 /** Whether evaluating `node` can run a `wanted` call: it makes one, or it names something that does. */
 function reaches(
+  context: Context,
   node: ts.Node,
   wanted: CallTest,
-  carrierNames: ReadonlySet<string>,
+  carrierSymbols: ReadonlySet<ts.Symbol>,
 ): boolean {
   return (
     makesCall(node, wanted) ||
-    referencesIn(node).some((reference) => carrierNames.has(reference))
+    referencesIn(context, node).some((symbol) => carrierSymbols.has(symbol))
   );
 }
 
@@ -317,34 +460,44 @@ type Registration = {
   readonly line: number;
 };
 
-function judge(sf: ts.SourceFile): {
-  readonly found: Registration[];
-  readonly violations: string[];
-} {
-  const functions = localFunctions(sf);
-  const walkers = carriers(functions, enumeratesTree);
-  const programs = carriers(functions, buildsProgram);
+function judge(
+  context: Context,
+  file: string,
+): { readonly found: Registration[]; readonly violations: string[] } {
+  const sf = context.program.getSourceFile(toAbs(file));
+  if (sf === undefined) throw new Error(`${file} is not in the program`);
+  const enumeratesTree = enumeratesTreeIn(context);
+  const functions = localFunctions(context, sf);
+  const walkers = carriers(context, functions, enumeratesTree);
+  const programs = carriers(context, functions, buildsProgram);
   const found: Registration[] = [];
   const violations: string[] = [];
-  const file = sf.fileName;
   const at = (node: ts.Node): string =>
     `${RULE} ${file}:${String(lineOf(sf, node))}`;
 
   // Rule 3: a walker whose name leaves the file has callers this file cannot
   // see, so "charged at its mentions" stops being a claim anyone can check.
-  for (const [name, local] of functions) {
-    if (walkers.has(name) && local.exported) {
-      violations.push(`${RULE} ${file}:${String(local.line)} exported ${name}`);
+  for (const local of functions) {
+    if (
+      local.symbol !== undefined &&
+      walkers.has(local.symbol) &&
+      local.exported
+    ) {
+      violations.push(
+        `${RULE} ${file}:${String(local.line)} exported ${local.symbol.name}`,
+      );
     }
   }
 
   const visit = (node: ts.Node): void => {
     // Rule 2: every site that can run a walk sits under a budget.
+    const referenced =
+      ts.isIdentifier(node) && isValueReference(node)
+        ? declarationOf(context, node)
+        : undefined;
     const isSite =
       (ts.isCallExpression(node) && enumeratesTree(node)) ||
-      (ts.isIdentifier(node) &&
-        walkers.has(node.text) &&
-        isValueReference(node));
+      (referenced !== undefined && walkers.has(referenced));
     if (isSite && !isBudgeted(node)) {
       violations.push(`${at(node)} collection-scope`);
     }
@@ -357,7 +510,7 @@ function judge(sf: ts.SourceFile): {
       if (
         index !== undefined &&
         callback !== undefined &&
-        reaches(callback, enumeratesTree, walkers)
+        reaches(context, callback, enumeratesTree, walkers)
       ) {
         found.push({ registrar, line: lineOf(sf, node) });
         const timeout = node.arguments[index + 1];
@@ -370,7 +523,7 @@ function judge(sf: ts.SourceFile): {
           );
         } else if (
           timeout.text === TYPE_CHECKED_BUDGET &&
-          !reaches(callback, buildsProgram, programs)
+          !reaches(context, callback, buildsProgram, programs)
         ) {
           violations.push(`${where} ${TYPE_CHECKED_BUDGET} without-program`);
         } else if (
@@ -387,10 +540,6 @@ function judge(sf: ts.SourceFile): {
   return { found, violations: violations.sort() };
 }
 
-function budgetViolations(source: SourceText): string[] {
-  return judge(parse(source)).violations;
-}
-
 /** The arch suite's own test files: `src/test/arch/*.test.ts`, probes excluded. */
 function archTestFiles(): string[] {
   return listFiles(ARCH_DIR).filter(
@@ -400,22 +549,30 @@ function archTestFiles(): string[] {
   );
 }
 
-const probe = (name: string): string[] =>
-  budgetViolations(readSource(`${PROBES}/${name}`));
+function probeFiles(): string[] {
+  return listFiles(PROBES).filter((file) => /\.tsx?$/.test(file));
+}
+
+let context: Context;
+
+beforeAll(() => {
+  context = contextOver([...archTestFiles(), ...probeFiles()]);
+}, WHOLE_TREE_TIMEOUT_MS);
+
+const judged = (file: string): string[] => judge(context, file).violations;
+const probe = (name: string): string[] => judged(`${PROBES}/${name}`);
 
 describe("whole-tree timeout budget", () => {
   it("every whole-tree test in the arch suite declares a named budget", () => {
     const files = archTestFiles();
     expect(files.length).toBeGreaterThan(0);
-    expect(files.flatMap((file) => budgetViolations(readSource(file)))).toEqual(
-      [],
-    );
+    expect(files.flatMap(judged)).toEqual([]);
   });
 
   it("finds whole-tree registrations to judge, in more than one file", () => {
     const perFile = archTestFiles().map((file) => ({
       file,
-      found: judge(parse(readSource(file))).found,
+      found: judge(context, file).found,
     }));
     const carrying = perFile.filter((entry) => entry.found.length > 0);
     // A checker that matches nothing passes every file; these two floors fail
@@ -450,6 +607,51 @@ describe("whole-tree timeout budget", () => {
     expect(probe("named-callback.test.ts")).toEqual([
       `${RULE} ${PROBES}/named-callback.test.ts:10 it none`,
     ]);
+  });
+
+  it("a renamed import is the same walk", () => {
+    expect(probe("renamed.test.ts")).toEqual([
+      `${RULE} ${PROBES}/renamed.test.ts:5 it none`,
+    ]);
+  });
+
+  it("a namespace access is the same walk", () => {
+    expect(probe("namespace.test.ts")).toEqual([
+      `${RULE} ${PROBES}/namespace.test.ts:5 it none`,
+    ]);
+  });
+
+  it("a value alias of the enumerator is the same walk", () => {
+    expect(probe("value-alias.test.ts")).toEqual([
+      `${RULE} ${PROBES}/value-alias.test.ts:8 it none`,
+    ]);
+  });
+
+  it("a re-export is the same walk", () => {
+    expect(probe("re-export.test.ts")).toEqual([
+      `${RULE} ${PROBES}/re-export.test.ts:5 it none`,
+    ]);
+  });
+
+  it("an object shorthand carries the walker, and is a mention", () => {
+    expect(probe("shorthand.test.ts")).toEqual([
+      `${RULE} ${PROBES}/shorthand.test.ts:10 collection-scope`,
+    ]);
+  });
+
+  // The two rows that keep the change honest. Recognising a walk under another
+  // name has to make the predicate more ACCURATE, not merely louder, so this
+  // pair is the converse of the four above: the same declaration under a
+  // different spelling must flag, and a different declaration under the same
+  // spelling must not. Matching the callee's text got both wrong, in opposite
+  // directions -- it missed every alias, and it flagged `homonym.test.ts`,
+  // which enumerates nothing at all. One lookup answers both.
+  it("a local function spelled like the enumerator is not the enumerator", () => {
+    expect(probe("homonym.test.ts")).toEqual([]);
+  });
+
+  it("a renamed import under a named budget is recognised and acquitted", () => {
+    expect(probe("renamed-ok.test.ts")).toEqual([]);
   });
 
   it("a walker mentioned at collection scope fails however it is spelled", () => {
@@ -503,14 +705,22 @@ describe("whole-tree timeout budget", () => {
       "exported.test.ts",
       "helper-at-collection.test.ts",
       "helper.test.ts",
+      "homonym.test.ts",
       "hook.test.ts",
       "list-src.test.ts",
       "magic-number.test.ts",
       "missing.test.ts",
       "named-callback.test.ts",
+      "namespace.test.ts",
       "ok.test.ts",
       "program.test.ts",
+      "re-export.test.ts",
+      "re-exported-source.ts",
+      "renamed-ok.test.ts",
+      "renamed.test.ts",
+      "shorthand.test.ts",
       "subtree.test.ts",
+      "value-alias.test.ts",
       "wrong-budget.test.ts",
     ]);
   });
