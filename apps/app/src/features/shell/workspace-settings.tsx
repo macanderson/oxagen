@@ -157,17 +157,30 @@ function MainRepositoryPanel({
 
   useEffect(() => {
     if (!open) return;
-    let live = true;
-    setSettings({ kind: "loading" });
-    setListing(null);
+    // The guard is read through a call, and both halves of that matter.
+    // A cell, because the cleanup has to be able to write it. A call, because
+    // TypeScript narrows `live.current` to true at the first guard and holds
+    // that for the rest of the function — so the second guard lints as dead
+    // code (`no-unnecessary-condition`) when it is the one that matters most:
+    // the await before it is exactly when a person can close the dialog. A
+    // call expression carries no narrowing, so the type checker stops claiming
+    // to know an answer it cannot have.
+    const live = { current: true };
+    const cancelled = () => !live.current;
+    // The resets open `load`, not the effect body: a setState called
+    // synchronously in an effect cascades a render (react-hooks/set-state-in-effect).
+    // `void load()` still runs them in this tick, up to the first await, so the
+    // panel shows its pending state on the same frame it opens.
     const load = async () => {
+      setSettings({ kind: "loading" });
+      setListing(null);
       let record;
       try {
         record = await readWorkspaceRepository(org, ws);
       } catch {
         record = UNANSWERED;
       }
-      if (!live) return;
+      if (cancelled()) return;
       if (!record.ok) {
         setSettings({ kind: "failed", failure: record });
         return;
@@ -184,7 +197,7 @@ function MainRepositoryPanel({
       } catch {
         repositories = UNANSWERED;
       }
-      if (!live) return;
+      if (cancelled()) return;
       setListing(
         repositories.ok
           ? { kind: "ready", value: repositories.value }
@@ -193,7 +206,7 @@ function MainRepositoryPanel({
     };
     void load();
     return () => {
-      live = false;
+      live.current = false;
     };
   }, [open, org, ws, reloads]);
 

@@ -229,7 +229,7 @@ describe("the control that opens it", () => {
 
 describe("no GitHub App installation", () => {
   it("shows a pending state while the record is read, never a blank panel", async () => {
-    let answer = (_: unknown) => undefined as void;
+    let answer!: (value: unknown) => void;
     readWorkspaceRepository.mockReturnValue(
       new Promise((resolve) => {
         answer = resolve;
@@ -307,7 +307,7 @@ describe("picking the main repository", () => {
   });
 
   it("shows a pending state while the live GitHub list is fetched", async () => {
-    let answer = (_: unknown) => undefined as void;
+    let answer!: (value: unknown) => void;
     listInstallationRepositories.mockReturnValue(
       new Promise((resolve) => {
         answer = resolve;
@@ -464,7 +464,7 @@ describe("picking the main repository", () => {
   });
 
   it("binds once however many times the button is pressed", async () => {
-    let answer = (_: unknown) => undefined as void;
+    let answer!: (value: unknown) => void;
     bindWorkspaceRepository.mockReturnValue(
       new Promise((resolve) => {
         answer = resolve;
@@ -490,7 +490,7 @@ describe("picking the main repository", () => {
 
   // The person closed the dialog, or left the page, before GitHub answered.
   it("drops a list that arrives after the dialog is gone (negative)", async () => {
-    let answer = (_: unknown) => undefined as void;
+    let answer!: (value: unknown) => void;
     listInstallationRepositories.mockReturnValue(
       new Promise((resolve) => {
         answer = resolve;
@@ -561,7 +561,7 @@ describe("a bound main repository", () => {
   });
 
   it("drops a record that arrives after the dialog is gone (negative)", async () => {
-    let answer = (_: unknown) => undefined as void;
+    let answer!: (value: unknown) => void;
     readWorkspaceRepository.mockReturnValue(
       new Promise((resolve) => {
         answer = resolve;
