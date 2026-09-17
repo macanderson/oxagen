@@ -17,6 +17,14 @@
  * migrates or fails, and nothing tells anyone which way it went. The ordinal is
  * the only place the intended order is written down, so it has to be unique.
  *
+ * Postgres has the same guard next door — db-lint-migrations.ts rejects two
+ * Atlas migrations sharing a version prefix, because atlas keys revisions by
+ * that prefix and silently skips the loser. #2202 asked for this one to live
+ * there too; it lives here instead, beside check-main-concurrency.mjs, because
+ * this is a lint over a directory rather than a check of Atlas's own state, and
+ * `check:contracts` and `db:lint-migrations` run on the same CI line so the
+ * gate is identical either way.
+ *
  * The four files already on disk under a duplicated ordinal are grandfathered
  * by exact name, with the reason on each. They are NOT renamed, because
  * renaming a shipped migration is the more dangerous operation of the two —
