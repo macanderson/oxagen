@@ -1032,6 +1032,64 @@ describe("tachod", () => {
     expect(walBodyTexts(paths.wal)).toEqual([]);
   });
 
+  it("writes no body once a signed mandate has lapsed, refreshing before it drains", async () => {
+    // The regression this guards: a correctly signed bundle kept granting
+    // `content_exact` after its window closed, and the tick drained before
+    // it refreshed, so a body could leave the machine under a mandate the
+    // control plane had not confirmed. The tick now refreshes first, and a
+    // lapsed mandate authorises nothing further to be written.
+    //
+    // What this does not cover, because main's design has no place to put
+    // it: a body already in the WAL when the mandate lapses still ships on
+    // the next drain. Bodies live beside their events there and leave with
+    // the session file at compaction, so purging them mid-session would be
+    // a new `Wal` affordance rather than a smaller one.
+    //
+    // The fixture's signed window runs 2026-09-10 to 2027-09-10. The clock
+    // starts on real time because the tick's hourly compaction reads file
+    // mtimes, and a fake clock months ahead would sweep the session first.
+    const plane = fakeControlPlane("etag-3");
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    const bundle = signer.sign(
+      unsignedBundle({
+        retention: { mode: "content_exact", classes: ["model_call"] },
+      }),
+    );
+    writeHostFile(paths.hostFile, testHostFile(signer, bundle));
+    plane.setDown(true);
+    let clock = Date.now();
+    const { handle } = await boot(plane, paths, { now: () => clock });
+    const prompt = (sessionId: string) =>
+      runTachoHook({
+        paths,
+        env: {},
+        stdin: JSON.stringify({
+          session_id: sessionId,
+          hook_event_name: "UserPromptSubmit",
+          cwd: "/home/dev/proj",
+          transcript_path: "/t.jsonl",
+          prompt: "deploy the fix",
+        }),
+        connectTimeoutMs: DAEMON_CONNECT_MS,
+      });
+
+    expect(
+      (await prompt("11111111-1111-4111-8111-11111111cccc")).exitCode,
+    ).toBe(0);
+    await handle.tick();
+    expect(walBodyTexts(paths.wal)).toEqual(["deploy the fix"]);
+
+    // Past the signed window, with no confirmation from the control plane
+    // in between: the mandate has lapsed and authorises nothing.
+    clock = Date.parse("2027-10-01T00:00:00.000Z");
+    await prompt("11111111-1111-4111-8111-11111111dddd");
+    await handle.tick();
+    expect(walBodyTexts(paths.wal)).toEqual(["deploy the fix"]);
+
+    await handle.stop();
+  });
+
   it("backs off the command poll instead of retrying it every tick", async () => {
     // The regression this guards: `sendAcks` had no gate of its own. Its only
     // skip condition is "a recent ingest already carried a control envelope",

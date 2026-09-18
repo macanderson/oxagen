@@ -50,8 +50,14 @@ import type { ObservedChange } from "@oxagen/tacho";
  * `rev-parse --show-toplevel` rather than inferring a root.
  */
 export function worktreeRootOf(
-  contexts: readonly ({ worktree_path?: string } | undefined)[],
+  contexts: readonly (
+    | { worktree_path?: string; project_dir?: string }
+    | undefined
+  )[],
 ): string | undefined {
+  // `project_dir` is in the parameter type and is deliberately never read.
+  // Naming it keeps the choice visible at the signature: a reader asking
+  // whether the field was overlooked finds the answer here.
   for (const context of contexts) {
     const root = context?.worktree_path;
     if (root !== undefined && root.length > 0) return normalizeRoot(root);

@@ -315,13 +315,13 @@ export async function startDaemon(
    * Whether the cached mandate has outlived its own signed window since the
    * control plane last confirmed it. The same rule `isStale` applies to tool
    * decisions: a grant is authority for as long as the mandate is current,
-   * and no longer.
+   * and no longer. A window that cannot be read grants nothing.
    */
   function mandateLapsed(): boolean {
     const issued = Date.parse(host.bundle.issued_at);
     const expires = Date.parse(host.bundle.expires_at);
-    if (!Number.isFinite(issued) || !Number.isFinite(expires)) return false;
-    if (expires <= issued) return false;
+    if (!Number.isFinite(issued) || !Number.isFinite(expires)) return true;
+    if (expires <= issued) return true;
     return now() - mandateConfirmedAt > expires - issued;
   }
   let lastControlAt: number | undefined;
@@ -1474,12 +1474,15 @@ export async function startDaemon(
     // Outside the serial block above on purpose: this is where the git
     // process spawns happen, and a hook must never queue behind them.
     await drainGitReads();
-    await shipper.drain();
+    // Refresh before draining, so a batch carrying bodies leaves under the
+    // mandate the control plane holds now rather than the one cached before
+    // an outage.
     if (now() - lastRefresh >= timers.bundleRefreshMs) {
       lastRefresh = now();
       await refreshBundle();
       await refreshUpstreams();
     }
+    await shipper.drain();
     await sendAcks();
     if (now() - lastCompact >= 60 * 60_000) {
       lastCompact = now();

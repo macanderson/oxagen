@@ -294,6 +294,8 @@ interface FakeDb {
   sessions: Map<string, Record<string, unknown>>;
   models: Array<Record<string, unknown>>;
   files: Array<Record<string, unknown>>;
+  /** The `SET` clause of each `session_files` upsert, in order. */
+  fileSets: Array<Record<string, unknown>>;
   commands: Array<Record<string, unknown>>;
   controlCommands: Array<Record<string, unknown>>;
   updates: Array<{ table: string; values: Record<string, unknown> }>;
@@ -372,6 +374,7 @@ function fakeDb(): FakeDb {
     sessions: new Map(),
     models: [],
     files: [],
+    fileSets: [],
     commands: [],
     controlCommands: [
       {
@@ -647,7 +650,10 @@ function wire(db: FakeDb): void {
                 }
               }
               if (name === "session_models") db.models.push(values);
-              if (name === "session_files") db.files.push(values);
+              if (name === "session_files") {
+                db.files.push(values);
+                if (args?.set !== undefined) db.fileSets.push(args.set);
+              }
             };
             const chain = {
               // Chainable AND awaitable, like drizzle's builder: some call
@@ -925,6 +931,181 @@ describe("ingest_tacho_events", () => {
     });
     const outside = db.files.find((file) => file["path"] === "/etc/hosts");
     expect(outside).toMatchObject({ repoRelativePath: undefined });
+  });
+
+  /**
+   * A session whose worktree was reconciled `times` over, every frame
+   * reporting the same three paths. The counts are cumulative against HEAD,
+   * so the same numbers repeated are the same state observed again, not more
+   * work done.
+   */
+  function reconciledSession(times: number): TachoEvent[] {
+    const context = {
+      cwd: "/home/dev/proj",
+      worktree_path: "/home/dev/proj",
+      model: "claude-haiku-4-5-20251001",
+      permission_mode: "default",
+    };
+    const observed = [
+      {
+        path: "/home/dev/proj/src/edited.ts",
+        repo_relative_path: "src/edited.ts",
+        status: "modified",
+        lines_added: 12,
+        lines_removed: 3,
+      },
+      {
+        // Untracked, so git reports it in `status` and in no diff at all.
+        path: "/home/dev/proj/src/created.ts",
+        repo_relative_path: "src/created.ts",
+        status: "added",
+        lines_added: 0,
+        lines_removed: 0,
+      },
+      {
+        path: "/home/dev/proj/src/gone.ts",
+        repo_relative_path: "src/gone.ts",
+        status: "deleted",
+        lines_added: 0,
+        lines_removed: 9,
+      },
+    ];
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events: TachoEvent[] = [];
+    const drafts = [
+      unsealed(
+        "agent_start",
+        { session_start_source: "startup", tools_available: ["Write"] },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+      ...Array.from({ length: times }, () =>
+        unsealed(
+          "oxagen:worktree_reconciled",
+          {
+            observed_changes: observed,
+            observed_changes_total: observed.length,
+            observed_changes_truncated: false,
+          },
+          "collector",
+          CLAUDE_CODE,
+          { context },
+        ),
+      ),
+    ];
+    for (const draft of drafts) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      events.push(sealed.event);
+    }
+    return events;
+  }
+
+  it("fills the line counts from what git observed, not from a tool", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = reconciledSession(1);
+    const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
+    expect(output.accepted).toBe(events.length);
+
+    // A path no tool announced still has a row: this is the write the
+    // attested record never sees.
+    const edited = db.files.find(
+      (file) => file["path"] === "/home/dev/proj/src/edited.ts",
+    );
+    expect(edited).toMatchObject({
+      repoRelativePath: "src/edited.ts",
+      language: "typescript",
+      linesAdded: 12,
+      linesRemoved: 3,
+      observedStatus: "modified",
+      // Nothing announced it, so no tool-call counter moved.
+      writes: 0,
+      edits: 0,
+      deletes: 0,
+    });
+    const created = db.files.find(
+      (file) => file["path"] === "/home/dev/proj/src/created.ts",
+    );
+    // An untracked file is in no diff, so git offers no line count for it and
+    // none is invented.
+    expect(created).toMatchObject({ observedStatus: "added", linesAdded: 0 });
+    const gone = db.files.find(
+      (file) => file["path"] === "/home/dev/proj/src/gone.ts",
+    );
+    expect(gone).toMatchObject({ observedStatus: "deleted", linesRemoved: 9 });
+    // The three statuses are told apart, which the counters alone cannot do.
+    expect([
+      edited?.["observedStatus"],
+      created?.["observedStatus"],
+      gone?.["observedStatus"],
+    ]).toEqual(["modified", "added", "deleted"]);
+    // digest_before and digest_after stay empty: git hands out blob hashes,
+    // and the column expects the sha256 the rest of the record uses.
+    expect(edited).not.toHaveProperty("digestBefore");
+    expect(edited).not.toHaveProperty("digestAfter");
+  });
+
+  it("assigns the observed line counts rather than accumulating them", async () => {
+    const db = fakeDb();
+    wire(db);
+    // Two frames in one batch, then the whole thing again in a second batch:
+    // four reports of the same twelve lines.
+    await tachoEventsIngestHandler(batch(reconciledSession(2)), CONTEXT);
+    await tachoEventsIngestHandler(batch(reconciledSession(2)), CONTEXT);
+
+    const dialect = new PgDialect();
+    const sets = db.fileSets.filter(
+      (set) => set["observedStatus"] !== undefined,
+    );
+    expect(sets.length).toBeGreaterThan(0);
+    for (const set of sets) {
+      for (const column of ["linesAdded", "linesRemoved"]) {
+        const query = dialect.sqlToQuery(set[column] as SQL);
+        // GREATEST, never `+`: a second batch reporting the same numbers
+        // must not double them.
+        expect(query.sql, column).toContain("GREATEST");
+        expect(query.sql, column).not.toContain(" + ");
+      }
+      // The counters on the same row DO accumulate, which is the contrast
+      // this assertion exists to hold.
+      expect(dialect.sqlToQuery(set["writes"] as SQL).sql).toContain(" + ");
+      expect(["modified", "added", "deleted"]).toContain(
+        set["observedStatus"],
+      );
+    }
+  });
+
+  it("leaves an observed count alone when a later batch carries no observation", async () => {
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(batch(reconciledSession(1)), CONTEXT);
+    db.fileSets.length = 0;
+    // A plain tool frame on the same path, with nothing observed.
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events: TachoEvent[] = [];
+    for (const draft of [
+      unsealed("agent_start", { session_start_source: "startup" }),
+      unsealed("file_io", {
+        tool_name: "Write",
+        tool_use_id: "toolu_9",
+        effect_kind: "file_write",
+        tool_target: "/home/dev/proj/src/edited.ts",
+        effect_id: "eff_9",
+        tool_input_bytes: 10,
+      }),
+    ]) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      events.push(sealed.event);
+    }
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    for (const set of db.fileSets) {
+      expect(set).not.toHaveProperty("linesAdded");
+      expect(set).not.toHaveProperty("linesRemoved");
+      expect(set).not.toHaveProperty("observedStatus");
+    }
   });
 
   it("files a Codex session under runtime codex, not custom", async () => {
