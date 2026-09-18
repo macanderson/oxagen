@@ -896,7 +896,14 @@ function RepositoryPicker({
   async function bind(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
-    const chosen = repositories.find((repository) => repository.id === picked);
+    // Resolved from `shown`, not `repositories`: a selection the filter has
+    // since hidden is not a choice this form is offering. Searching the
+    // unfiltered list would bind a repository that is not on screen — and
+    // because a bound main repo cannot be changed from here (spec §10.1 makes
+    // that an org-owner decision), a stray keystroke in the filter box would
+    // bind the wrong repository permanently. `picked` is deliberately left
+    // alone so the selection survives clearing the filter again.
+    const chosen = shown.find((repository) => repository.id === picked);
     if (chosen === undefined) {
       setFailure(t("picker.none"));
       return;

@@ -714,6 +714,48 @@ describe("picking the main repository", () => {
     ).toHaveTextContent("Choose a repository first.");
   });
 
+  it("refuses to bind a pick the filter has hidden, rather than binding what is off screen (negative)", async () => {
+    // The bind resolved its choice from the full list while the form rendered
+    // a filtered one, so picking a repository and then narrowing the filter
+    // past it bound a repository that was not on screen. A bound main repo
+    // cannot be changed from this panel, so that mis-bind is permanent.
+    const { user } = await openSettings();
+    await screen.findByTestId("workspace-repository-picker");
+    await user.click(screen.getByRole("radio", { name: /acme\/platform/ }));
+
+    await user.type(screen.getByTestId("workspace-repository-filter"), "docs");
+    expect(screen.queryByRole("radio", { name: /acme\/platform/ })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Bind as main repo" }));
+
+    expect(bindWorkspaceRepository).not.toHaveBeenCalled();
+    expect(
+      await screen.findByTestId("workspace-repository-bind-failure"),
+    ).toHaveTextContent("Choose a repository first.");
+  });
+
+  it("keeps the selection when the filter is cleared again", async () => {
+    // The fix resolves from what is shown; it deliberately does not clear
+    // `picked`, so a filter typed and then undone does not silently discard
+    // the choice a person already made.
+    const { user } = await openSettings();
+    await screen.findByTestId("workspace-repository-picker");
+    await user.click(screen.getByRole("radio", { name: /acme\/platform/ }));
+
+    const filter = screen.getByTestId("workspace-repository-filter");
+    await user.type(filter, "docs");
+    await user.clear(filter);
+
+    readWorkspaceRepository.mockResolvedValue({ ok: true, value: bound });
+    await user.click(screen.getByRole("button", { name: "Bind as main repo" }));
+
+    expect(bindWorkspaceRepository).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      { owner: "acme", name: "platform" },
+    );
+  });
+
   it("filters by name, and says so when nothing matches (negative)", async () => {
     const { user } = await openSettings();
     await screen.findByTestId("workspace-repository-picker");
