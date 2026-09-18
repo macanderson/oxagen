@@ -1,10 +1,13 @@
 // The transcript's grouping, digests and transport arithmetic, without a render.
 import { describe, expect, it } from "vitest";
-import { mockupTranscript, transcriptEntry } from "./run.builders";
+import {
+  mockupTranscript,
+  transcriptBody,
+  transcriptEntry,
+} from "./run.builders";
 import {
   buildTranscript,
-  costAt,
-  elapsedAt,
+  frameBody,
   idsAt,
   openAtZoom,
   playDelay,
@@ -108,16 +111,19 @@ describe("stepDigest", () => {
 });
 
 describe("the transport", () => {
-  it("sums cost up to a position and never invents one before the first cost", () => {
-    expect(costAt(entries, 3)).toBeNull();
-    expect(costAt(entries, 4)?.micros).toBe("380000");
-    expect(costAt(entries, 12)?.micros).toBe("900000");
+  // The prefix sum and the clock are the read's, not the page's:
+  // `get_run_transcript` measures both from the run's start, so a transcript
+  // that was cut short still reports what the run had spent by a frame. These
+  // replace the page-local `costAt` and `elapsedAt` the view used to compute.
+  it("carries the run's cumulative cost, and none before the first cost record", () => {
+    expect(entries[3]?.cumulativeCost).toBeNull();
+    expect(entries[4]?.cumulativeCost?.micros).toBe("380000");
+    expect(entries[12]?.cumulativeCost?.micros).toBe("900000");
   });
 
-  it("measures elapsed time from the first frame", () => {
-    expect(elapsedAt(entries, 0)).toBe(0);
-    expect(elapsedAt(entries, 12)).toBe(24_000);
-    expect(elapsedAt([], 3)).toBe(0);
+  it("carries elapsed time measured from the run's start", () => {
+    expect(entries[0]?.elapsedMs).toBe(0);
+    expect(entries[12]?.elapsedMs).toBe(24_000);
   });
 
   it("paces playback on the recorded gap, held between 120 ms and 2 s and divided by the speed", () => {
@@ -140,5 +146,20 @@ describe("the transport", () => {
   it("finds the turn and step holding a position", () => {
     expect(idsAt(turns, 6)).toEqual(["t2", "s5"]);
     expect(idsAt(turns, 99)).toEqual([]);
+  });
+});
+
+describe("frameBody", () => {
+  it("reads the half a frame carried: what came back, or what went out", () => {
+    // A tool request records only the half that went out.
+    expect(frameBody(transcriptEntry({ response: null }))).toBeNull();
+    const request = transcriptEntry({
+      request: transcriptBody({ seq: "5" }),
+      response: null,
+    });
+    expect(frameBody(request)?.seq).toBe("5");
+    expect(frameBody(transcriptEntry())?.text).toBe(
+      "Cutting release/3.2 from main.",
+    );
   });
 });

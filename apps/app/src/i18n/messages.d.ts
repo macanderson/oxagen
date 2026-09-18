@@ -1674,6 +1674,9 @@ type Messages = {
       empty: string;
       complete: string;
       cut: string;
+      request: string;
+      response: string;
+      decision: string;
       runStart: string;
       turn: string;
       turnDone: string;

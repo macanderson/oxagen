@@ -7,11 +7,13 @@
 // what went out and what came back — then have their bodies read from the
 // evidence store, decoded as UTF-8 and cut at the contract's text cap.
 //
-// Two things are computed over the whole run and not over the page: the
-// cumulative cost, which is a prefix sum from the run's first frame (§8.4), and
-// the elapsed time, which is measured from the run's recorded start. A page
-// that computed either from its own first entry would restate the run's cost
-// and clock as the page's, which is wrong on every page but the first.
+// Three things are computed over the whole run and not over the page: the
+// cumulative cost, which is a prefix sum from the run's first frame (§8.4),
+// the elapsed time, which is measured from the run's recorded start, and the
+// turn each entry falls in, which is counted over the unfiltered frames so a
+// chip never renumbers the turns. A page that computed any of them from its
+// own first entry would restate the run's cost, clock and turns as the page's,
+// which is wrong on every page but the first.
 //
 // Bodies are read a few at a time; a body that is not text, or that no longer
 // hashes to its recorded digest, leaves its half with `text: null` rather than
