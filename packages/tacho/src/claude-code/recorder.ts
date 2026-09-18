@@ -275,6 +275,11 @@ export class SessionRecorder {
       source?: TachoEvent["source"];
       hook_event_name?: string;
       attrs?: Record<string, string>;
+      /**
+       * `proxy` for a frame the loopback model proxy observed on the wire.
+       * Everything else the collector seals is `sdk`, the default.
+       */
+      fidelity?: TachoEvent["fidelity"];
     } = {},
   ): TachoEvent {
     if (kind === "agent_start") this.started = true;
@@ -289,6 +294,7 @@ export class SessionRecorder {
         ? { hook_event_name: fields.hook_event_name }
         : {}),
       attrs: fields.attrs ?? {},
+      ...(fields.fidelity !== undefined ? { fidelity: fields.fidelity } : {}),
       turn: {},
     });
   }
@@ -388,6 +394,7 @@ export class SessionRecorder {
       otel_event_name?: string;
       harness_event_sequence?: number;
       attrs?: Record<string, string>;
+      fidelity?: TachoEvent["fidelity"];
       span?: TachoEvent["span"];
       content_digest?: `sha256:${string}`;
       raw_source_digest?: `sha256:${string}`;
@@ -403,7 +410,7 @@ export class SessionRecorder {
       root_session_uuid: this.rootSessionUuid,
       parent_session_uuid: parent?.sessionUuid,
       ts: fields.ts,
-      fidelity: "sdk",
+      fidelity: fields.fidelity ?? "sdk",
       source: fields.source,
       hook_event_name: fields.hook_event_name,
       hook_source_kind: fields.hook_source_kind,

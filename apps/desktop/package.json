@@ -2,7 +2,7 @@
   "name": "@oxagen/desktop",
   "version": "2.1.1",
   "private": true,
-  "description": "The Oxagen desktop app: installs the CLI and the Tacho wrapper for Claude Code and Codex, signs a machine in to an org, and lets the operator pick or change the workspace the host reports to. Spec: docs/specs/oxagen-desktop/spec.html.",
+  "description": "The Oxagen desktop app: installs the CLI and the Tacho wrapper for Claude Code and Codex, signs a machine in to an org, and lets the operator pick or change the workspace the host reports to. Spec: docs/specs/oxagen-desktop/spec.md.",
   "type": "module",
   "scripts": {
     "dev": "tauri dev",
@@ -17,6 +17,9 @@
     "lint": "eslint src --max-warnings 0",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:rust": "node scripts/rig-stubs.mjs && cargo test --manifest-path src-tauri/Cargo.toml --lib",
+    "lint:rust": "node scripts/rig-stubs.mjs && cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
+    "test:rig": "pnpm --filter @oxagen/tacho exec vitest run src/cli/install-rig.test.ts src/host/install-hardening.test.ts && pnpm run test:rust",
     "tauri": "tauri",
     "publish:downloads": "node scripts/publish-downloads.mjs",
     "smoke:e2e": "node scripts/e2e-smoke.mjs"

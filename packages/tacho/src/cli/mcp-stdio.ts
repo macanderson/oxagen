@@ -40,6 +40,9 @@ export interface McpStdioDeps {
   fetch: typeof globalThis.fetch;
 }
 
+/** Longer than any tool call should take, shorter than forever. */
+const GATEWAY_TIMEOUT_MS = 5 * 60_000;
+
 /** A JSON-RPC error the shim itself answers, when it cannot reach the gateway. */
 export function shimError(
   id: unknown,
@@ -108,8 +111,14 @@ export async function runMcpStdio(
       );
       continue;
     }
+    // JSON-RPC: a message with no id is a notification and is never answered,
+    // with a result or with an error.
+    const expectsReply = id !== undefined;
+    const reply = (document: Record<string, unknown>) => {
+      if (expectsReply) deps.stdout.write(`${JSON.stringify(document)}\n`);
+    };
     if (!target.ok) {
-      deps.stdout.write(`${JSON.stringify(shimError(id, target.message))}\n`);
+      reply(shimError(id, target.message));
       continue;
     }
     try {
@@ -126,21 +135,43 @@ export async function runMcpStdio(
           ...(sessionId === undefined ? {} : { "Mcp-Session-Id": sessionId }),
         },
         body: text,
+        // The loop is sequential, so a call that never returns would stop
+        // every later one. A tool call can be slow; five minutes is not slow.
+        signal: AbortSignal.timeout(GATEWAY_TIMEOUT_MS),
       });
       const assigned = response.headers.get("mcp-session-id");
       if (assigned !== null && assigned.length > 0) sessionId = assigned;
-      const body = await response.text();
-      deps.stdout.write(`${body.trim()}\n`);
+      const body = (await response.text()).trim();
+      // Only a line the client can parse goes to stdout. A proxy's
+      // "Unauthorized", or the empty body of a 202, written raw, is a line
+      // the client fails to parse and drops the server over.
+      let parsed: unknown;
+      try {
+        parsed = body.length > 0 ? JSON.parse(body) : undefined;
+      } catch {
+        parsed = undefined;
+      }
+      if (typeof parsed === "object" && parsed !== null) {
+        if (expectsReply || response.ok) deps.stdout.write(`${body}\n`);
+      } else if (!response.ok || (expectsReply && body.length > 0)) {
+        deps.stderr.write(
+          `tacho mcp-stdio: the gateway answered ${response.status}: ${body.slice(0, 200)}\n`,
+        );
+        reply(
+          shimError(
+            id,
+            `the Oxagen collector on this machine answered ${response.status}. Open the Oxagen app to check this app is connected.`,
+          ),
+        );
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       deps.stderr.write(`tacho mcp-stdio: ${message}\n`);
-      deps.stdout.write(
-        `${JSON.stringify(
-          shimError(
-            id,
-            `the Oxagen collector on this machine is not answering (${message}). Open the Oxagen app to check it is running.`,
-          ),
-        )}\n`,
+      reply(
+        shimError(
+          id,
+          `the Oxagen collector on this machine is not answering (${message}). Open the Oxagen app to check it is running.`,
+        ),
       );
     }
   }

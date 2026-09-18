@@ -194,3 +194,20 @@ describe("installUpdate", () => {
     expect(relaunch).not.toHaveBeenCalled();
   });
 });
+
+describe("a relaunch that fails after the install landed", () => {
+  it("is not an update failure: the new build is installed, so it says to reopen", async () => {
+    relaunch.mockClear();
+    relaunch.mockRejectedValueOnce(new Error("relaunch not permitted"));
+    const lines: string[] = [];
+    const update = {
+      version: "2.2.0",
+      currentVersion: "2.1.1",
+      downloadAndInstall: vi.fn(async () => {}),
+    };
+    await expect(
+      installUpdate(asUpdate(update), (line) => lines.push(line)),
+    ).resolves.toEqual({ relaunched: false });
+    expect(lines.at(-1)).toContain("Quit Oxagen and open it again");
+  });
+});

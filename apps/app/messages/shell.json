@@ -21,7 +21,8 @@
       "billing": "Billing",
       "audit": "Audit",
       "roles": "Roles",
-      "apiKeys": "API keys"
+      "apiKeys": "API keys",
+      "modelFunding": "Model funding"
     },
     "switcher": {
       "org": "Switch organization",

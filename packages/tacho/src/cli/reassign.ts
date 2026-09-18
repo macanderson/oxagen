@@ -7,9 +7,14 @@
  * hook entries only change their enrollment id.
  */
 import { readHostFile } from "../host/host-file";
+import { acquireInstallLock } from "../host/install-lock";
 import type { TachoHarness } from "../wire";
-import type { CliDeps, CredentialOptions } from "./deps";
-import { enroll } from "./enroll";
+import {
+  type CliDeps,
+  type CredentialOptions,
+  resolveCredentials,
+} from "./deps";
+import { enrollLocked, harnessFileProblems } from "./enroll";
 import { revokeAndMark, stripEnrollmentHooks } from "./unenroll";
 
 export interface ReassignOptions extends CredentialOptions {
@@ -25,7 +30,29 @@ export interface ReassignResult {
   warnings: string[];
 }
 
+/**
+ * `reassign` under the install lock (`host/install-lock.ts`): a second
+ * installer running at the same time is refused, not interleaved.
+ */
 export async function reassign(
+  options: ReassignOptions,
+  deps: CliDeps,
+): Promise<ReassignResult> {
+  const lock = acquireInstallLock(deps.paths.root, deps.now);
+  if ("heldBy" in lock) {
+    deps.err(
+      `Another tacho enroll, unenroll or reassign is running on this machine (pid ${lock.heldBy}); wait for it to finish and run this again.`,
+    );
+    return { ok: false, warnings: [] };
+  }
+  try {
+    return await reassignLocked(options, deps);
+  } finally {
+    lock.release();
+  }
+}
+
+async function reassignLocked(
   options: ReassignOptions,
   deps: CliDeps,
 ): Promise<ReassignResult> {
@@ -85,6 +112,41 @@ export async function reassign(
     enrollmentId: host.host_enrollment_id,
   };
 
+  // Everything `enroll` refuses without a network call is checked here,
+  // before step 1. Revoking and stripping first and only then learning that
+  // there is no token, that the binary runs from a disk image, or that a
+  // settings file cannot be written, left the machine with no hooks, a
+  // retired host.json and a daemon still running on the revoked key — a
+  // working host turned into a broken one by a command that then said
+  // "failed".
+  const harnesses = options.harnesses ?? (host.harnesses as TachoHarness[]);
+  const refusals: string[] = [];
+  const credentials = resolveCredentials(
+    {
+      ...(options.token !== undefined ? { token: options.token } : {}),
+      org,
+      workspace,
+      apiUrl: options.apiUrl ?? host.api_url,
+    },
+    deps.env,
+    deps.home,
+  );
+  if ("missing" in credentials)
+    refusals.push(
+      `not logged in: provide ${credentials.missing.join(", ")} or run \`oxagen login\` first`,
+    );
+  if (deps.runtime.transient !== undefined)
+    refusals.push(
+      `tacho is running from ${deps.runtime.transient} (${deps.runtime.binDir}), which is gone once it is closed`,
+    );
+  refusals.push(...harnessFileProblems(harnesses, deps));
+  if (refusals.length > 0) {
+    deps.err(
+      `Cannot reassign, so nothing was changed; this host still reports to ${from.org}/${from.workspace}:\n${refusals.map((refusal) => `  ${refusal}`).join("\n")}`,
+    );
+    return { ok: false, from, warnings };
+  }
+
   // The control plane is always asked, a marked host.json included: the
   // mark means the last revoke did not go through, and the handler answers
   // idempotently when it did. The revoke targets the host's own org and
@@ -110,10 +172,11 @@ export async function reassign(
   );
 
   deps.out("[2/3] Removing the old enrollment's hooks");
-  stripEnrollmentHooks(host, deps);
+  for (const failure of stripEnrollmentHooks(host, deps).failed)
+    warnings.push(`could not clean ${failure}`);
 
   deps.out(`[3/3] Enrolling in ${org}/${workspace}`);
-  const result = await enroll(
+  const result = await enrollLocked(
     {
       ...(options.token !== undefined ? { token: options.token } : {}),
       org,
@@ -121,14 +184,33 @@ export async function reassign(
       // Stay on the API the host already talks to unless told otherwise.
       apiUrl: options.apiUrl ?? host.api_url,
       port: host.port,
-      harnesses: options.harnesses ?? (host.harnesses as TachoHarness[]),
+      harnesses,
       managed: host.managed,
       force: true,
     },
     deps,
   );
   warnings.push(...result.warnings);
-  if (!result.ok || result.host === undefined) {
+  if (result.host !== undefined && !result.ok) {
+    // Enrolled in the new workspace, but a harness could not be hooked;
+    // `enroll` has already said which and why.
+    return {
+      ok: false,
+      from,
+      to: { org, workspace, enrollmentId: result.host.host_enrollment_id },
+      warnings,
+    };
+  }
+  if (result.host === undefined) {
+    // No enrollment means nothing for the daemon to run as: left loaded it
+    // keeps shipping on a revoked key and restarting under KeepAlive.
+    try {
+      deps.serviceManager.uninstall();
+    } catch (error) {
+      warnings.push(
+        `service removal failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
     // host.json now carries the old enrollment marked retired: `tacho
     // status` says so, and `enroll` takes the fresh path rather than
     // re-applying the revoked enrollment's hooks. `--force` is named so the
