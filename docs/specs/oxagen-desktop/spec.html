@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
 <style>
 /* Oxagen document shell. One stylesheet for every spec and plan.
-   Tokens are the house system (oxagen-house-brand/tokens/house-tokens.css),
+   Tokens are the house system (oxagenai/oxagen-brand, tokens/house-tokens.css),
    the treatment is docs.oxagen.sh: corners on the 8 / 12 / 16 px scale, one
    gold, no gradient except the sheen on a title's accent word. Light by
    default, dark by system setting or data-theme. */
@@ -120,10 +120,10 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
   <a class="wordmark" href="https://oxagen.sh">o<span class="x">x</span>agen</a>
   <p class="eyebrow">Oxagen · Specification</p>
   <h1>Oxagen Desktop: product specification, rev 1</h1>
-  <dl class="facts"><dt>Status</dt><dd>Rev 1, built and verified on macOS; Linux and Windows bundles not yet run</dd><dt>Date</dt><dd>2026-09-13</dd><dt>Owner</dt><dd>Mac Anderson</dd><dt>Source</dt><dd><code>docs/specs/oxagen-desktop</code> on branch <code>worktree-oxagen-installer</code>; Tacho 2.1.1</dd><dt>Ships as</dt><dd>macOS <strong>.dmg</strong>; Linux <strong>.deb / .rpm / .AppImage</strong>; Windows <strong>.msi / .exe</strong></dd><dt>Summary</dt><dd>The Oxagen app puts a machine under Oxagen control: on first launch it links the <code>oxagen</code> CLI and the Tacho wrapper onto the operator's PATH, then signs the machine in to an organization, enrolls it against a workspace, and gives the operator one window to see the connection, move the host to another workspace or org, add or drop a wrapper for Claude Code, Codex, or Stella, sign out, and unenroll. A custom agent wraps too, by calling <code>tacho hook --agent &lt;name&gt;</code> around its own steps; the app shows it once it does.</dd></dl>
+  <dl class="facts"><dt>Status</dt><dd>Rev 2, built and verified on macOS; Linux and Windows bundles not yet run</dd><dt>Date</dt><dd>2026-09-16 (rev 2: the connected tier); 2026-09-13 (rev 1)</dd><dt>Owner</dt><dd>Mac Anderson</dd><dt>Source</dt><dd><code>docs/specs/oxagen-desktop</code> on branch <code>worktree-oxagen-installer</code>; Tacho 2.1.1</dd><dt>Ships as</dt><dd>macOS <strong>.dmg</strong>; Linux <strong>.deb / .rpm / .AppImage</strong>; Windows <strong>.msi / .exe</strong></dd><dt>Rev 2</dt><dd>The app stops being a wrapper installer for coding agents and becomes the control plane for the AI apps on a machine, developer or not. ADR-078 settles the two enforcement tiers it now spans: <strong>wrapped</strong> apps run an Oxagen hook and <strong>connected</strong> apps are served their toolbelt through a local MCP gateway, and neither dominates the other (§13). Claude Desktop is the first connected app. PATH linking stops being on by default on a machine with no coding agent on it.</dd><dt>Summary</dt><dd>The Oxagen app puts a machine under Oxagen control: on first launch it links the <code>oxagen</code> CLI and the Tacho wrapper onto the operator's PATH, then signs the machine in to an organization, enrolls it against a workspace, and gives the operator one window to see the connection, move the host to another workspace or org, add or drop a wrapper for Claude Code, Codex, or Stella, sign out, and unenroll. A custom agent wraps too, by calling <code>tacho hook --agent &lt;name&gt;</code> around its own steps; the app shows it once it does.</dd><dt>Amended 2026-09-18</dt><dd>§14: the installer's new job, which is the target of Phase 4 (in build on branches <code>gateway-model-proxy</code> and <code>desktop-install-hardening</code>, oxagen issues #3299 and #3301, ADR-094 and ADR-095), beside what the app installs today, said plainly. §6 states both senses of failure: the hook process fails closed against its cached bundle, and the tier is fail-open against the person at the keyboard.</dd><dt>Canonical copy</dt><dd>This file is the canonical copy of the desktop spec. <code>docs/desktop-spec.md</code> in https://github.com/macanderson/roadmap is an older copy that stops before §13. §14 says the same thing in both.</dd></dl>
 </header>
 <div class="grid">
-<nav class="toc" aria-label="Contents"><p>Contents</p><ol><li><a href="#1-what-rev-1-ships">1. What rev 1 ships</a></li><li><a href="#2-the-rule-the-app-is-built-on">2. The rule the app is built on</a></li><li><a href="#3-the-panels">3. The panels</a></li><li><a href="#4-moving-a-host-between-workspaces">4. Moving a host between workspaces</a></li><li><a href="#5-sign-in-org-and-the-cli-default">5. Sign in, org, and the CLI default</a></li><li><a href="#6-wrappers-claude-code-codex-and-stella-custom-agents-over-the-same-hook">6. Wrappers: Claude Code, Codex, and Stella; custom agents over the same hook</a></li><li><a href="#7-windows">7. Windows</a></li><li><a href="#8-the-binaries">8. The binaries</a></li><li><a href="#9-building-and-releasing">9. Building and releasing</a></li><li><a href="#10-what-was-verified">10. What was verified</a></li><li><a href="#11-not-in-rev-1">11. Not in rev 1</a></li><li><a href="#12-where-it-lives">12. Where it lives</a></li></ol></nav>
+<nav class="toc" aria-label="Contents"><p>Contents</p><ol><li><a href="#1-what-rev-1-ships">1. What rev 1 ships</a></li><li><a href="#2-the-rule-the-app-is-built-on">2. The rule the app is built on</a></li><li><a href="#3-the-panels">3. The panels</a></li><li><a href="#4-moving-a-host-between-workspaces">4. Moving a host between workspaces</a></li><li><a href="#5-sign-in-org-and-the-cli-default">5. Sign in, org, and the CLI default</a></li><li><a href="#6-wrappers-claude-code-codex-and-stella-custom-agents-over-the-same-hook">6. Wrappers: Claude Code, Codex, and Stella; custom agents over the same hook</a></li><li><a href="#7-windows">7. Windows</a></li><li><a href="#8-the-binaries">8. The binaries</a></li><li><a href="#9-building-and-releasing">9. Building and releasing</a></li><li><a href="#10-what-was-verified">10. What was verified</a></li><li><a href="#11-not-in-rev-1">11. Not in rev 1</a></li><li><a href="#12-where-it-lives">12. Where it lives</a></li><li><a href="#13-rev-2-the-connected-tier">13. Rev 2: the connected tier</a></li><li><a href="#14-after-rev-2-tachod-grows-into-the-gateway-2026-09-18">14. After rev 2: <code>tachod</code> grows into the gateway (2026-09-18)</a></li></ol></nav>
 <main>
 <h2 id="1-what-rev-1-ships">1. What rev 1 ships</h2>
 <ul>
@@ -318,7 +318,7 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
 <thead><tr><th></th><th>Claude Code</th><th>Codex CLI</th><th>Stella</th></tr></thead>
 <tbody>
 <tr><td>Hook file</td><td><code>~/.claude/settings.json</code> (<code>CLAUDE_CONFIG_DIR</code>)</td><td><code>~/.codex/hooks.json</code> (<code>CODEX_HOME</code>); same <code>{hooks: {Event: [{matcher, hooks: [{type, command, timeout}]}]}}</code> shape</td><td><code>~/.stella/stella.toml</code>, or <code>~/.stella/settings.json</code> when only that exists (<code>STELLA_HOME</code>); a marker-delimited block, <code># &gt;&gt;&gt; tacho enrollment tch_… &gt;&gt;&gt;</code> to <code># &lt;&lt;&lt; … &lt;&lt;&lt;</code>, so the writer edits only what it owns and the operator's own comments and settings survive around it</td></tr>
-<tr><td>Enforcement events</td><td colspan="2">SessionStart · UserPromptSubmit · PreToolUse · PermissionRequest · Stop: command hooks, fail closed, same stdin fields (<code>session_id</code>, <code>hook_event_name</code>, <code>tool_name</code>, <code>tool_input</code>, <code>cwd</code>, <code>transcript_path</code>)</td><td>SessionStart · UserPromptSubmit · PreToolUse · Stop: same stdin fields, same decision shape; no PermissionRequest event</td></tr>
+<tr><td>Enforcement events</td><td colspan="2">SessionStart · UserPromptSubmit · PreToolUse · PermissionRequest · Stop: command hooks. Four of the five can refuse, and <code>Stop</code> is the fifth. The hook process fails closed against its cached bundle: in enforce mode a stale or unverified bundle denies non-read-only tools at <code>PreToolUse</code>. With the daemon down the other command hooks answer <code>{}</code>, which the harness reads as allow. The tier is client-attested, and it is the tier that is fail-open against the person at the keyboard, who can remove the hook entry or disable hooks (§14, ADR-095). Earlier text said only "fail closed", and a first correction on 2026-09-18 said only "fail-open". Both senses are now stated, same stdin fields (<code>session_id</code>, <code>hook_event_name</code>, <code>tool_name</code>, <code>tool_input</code>, <code>cwd</code>, <code>transcript_path</code>)</td><td>SessionStart · UserPromptSubmit · PreToolUse · Stop: same stdin fields, same decision shape; no PermissionRequest event</td></tr>
 <tr><td>Telemetry events</td><td>28 events as <code>http</code> hooks straight to the daemon; OpenTelemetry export through the env block</td><td>PostToolUse · SubagentStart · SubagentStop · PreCompact · PostCompact · SessionEnd · Interrupt as command hooks (Codex has only <code>command</code>); no env block, no OTel</td><td>PostToolUse · PreCompact · SubagentStart · SubagentStop as command hooks; no PostCompact, SessionEnd, or Interrupt event, and no OTel</td></tr>
 <tr><td>Decision</td><td colspan="3"><code>hookSpecificOutput.permissionDecision</code> allow / deny with a reason; exit 0 always</td></tr>
 <tr><td>Hook command</td><td><code>&lt;bin&gt;/tacho hook --enrollment tch_…</code></td><td><code>&lt;bin&gt;/tacho hook --enrollment tch_… --harness codex</code></td><td><code>&lt;bin&gt;/tacho hook --enrollment tch_… --harness stella</code></td></tr>
@@ -474,8 +474,200 @@ pnpm --filter @oxagen/desktop dev          # tauri dev over Vite on :1420
 </tr>
 </tbody>
 </table></div>
+<h2 id="13-rev-2-the-connected-tier">13. Rev 2: the connected tier</h2>
+<p>Rev 1 wrapped coding agents. Every harness it supported had a hook surface, so
+Tacho installed a <code>PreToolUse</code> command hook and from then on saw every action
+the agent took. The AI applications a non-developer actually runs have no hook
+surface at all. They have an MCP client config.</p>
+<p>ADR-078 settles what Oxagen does about that, and the part of it this spec is
+bound by is that <strong>the two tiers do not rank against each other</strong>:</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Product word</th>
+<th><code>enforcement_tier</code></th>
+<th>Apps</th>
+<th>Mechanism</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Wrapped</strong></td>
+<td><code>harness</code></td>
+<td>Claude Code, Codex, Stella, any agent calling <code>tacho hook --agent</code></td>
+<td>a <code>PreToolUse</code> command hook</td>
+</tr>
+<tr>
+<td><strong>Connected</strong></td>
+<td><code>gateway</code></td>
+<td>Claude Desktop</td>
+<td>an Oxagen MCP server in the app's client config</td>
+</tr>
+</tbody>
+</table></div>
+<p>Wrapped is <strong>broader and weaker</strong>: it sees every action, including the
+harness's own Bash and Edit, but the hook runs in a process Oxagen does not
+own, so the record is <code>client_attested</code>. Connected is <strong>narrower and
+stronger</strong>: Oxagen sees only what routes through its gateway, but the kernel
+evaluates and refuses those calls on the server. A surface that puts them on
+one axis — a coverage meter, &quot;fully&quot; versus &quot;partially&quot; governed — is wrong in
+both directions, and is banned in the panel, in <code>apps/app</code>, in the CLI and in
+the docs.</p>
+<h3 id="13-1-the-local-mcp-gateway">13.1 The local MCP gateway</h3>
+<p>The collector daemon's loopback listener gains <code>POST /mcp</code>. Any MCP client on
+the machine connects to <code>http://127.0.0.1:&lt;port&gt;/mcp</code> and gets the workspace's
+toolbelt without ever holding an Oxagen credential — the gateway holds it, and
+the app is the credential. A non-developer will not paste a token into a JSON
+file, and asking them to would put it on the least protected surface on the
+machine.</p>
+<p>The gateway is a <strong>proxy, not a second materialiser</strong>. <code>@oxagen/tacho</code> is a
+leaf package with no <code>@oxagen/*</code> runtime dependency, so it forwards the
+JSON-RPC envelope to the workspace MCP endpoint with the host's own API key —
+already an Oxagen API key bound to the enrolling org and workspace. One tool
+materialiser, one RBAC evaluation, one entitlement gate, one meter, all of them
+the ones that already exist on the control plane. ADR-043 holds with no
+exception: the gateway serves tools and records evidence, and never runs a
+turn, calls a model or spawns a worker.</p>
+<p>On top of the forward it adds three things: attribution, which is refused
+rather than defaulted when the machine has no usable enrollment; the mandate's
+tool ceiling, where an overflowing <code>tools/list</code> fails with a message naming the
+model, the limit and the count; and evidence, sealed on the daemon's own chain
+with <code>enforcement_tier: &quot;gateway&quot;</code>. Calls land on the daemon chain rather than
+a session chain because a connected app has no agent session — no prompt, no
+model, no turn — and inventing one would put a step in the ledger that nobody
+took.</p>
+<p><strong>Security.</strong> The listener was previously reached only by things Oxagen
+installed; it is now reachable by any MCP client, which makes DNS rebinding
+worth doing. So <code>Host</code> must name a loopback address and <code>Origin</code>, when present,
+must be a loopback origin — checked before the bearer and on <strong>every</strong> route,
+including <code>/health</code>, <code>/status</code> and <code>/sessions</code>, which were exposed the same way
+in rev 1. The Unix socket is exempt: no browser can address one.</p>
+<h3 id="13-2-claude-desktop-and-what-has-no-config-surface">13.2 Claude Desktop, and what has no config surface</h3>
+<p>Verified 2026-09-16 against the MCP quickstart and Anthropic's own docs:</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th></th>
+<th>Claude Desktop</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Config</td>
+<td><code>~/Library/Application Support/Claude/claude_desktop_config.json</code> (macOS); <code>%APPDATA%\Claude\claude_desktop_config.json</code> (Windows)</td>
+</tr>
+<tr>
+<td>Linux</td>
+<td><strong>no path</strong> — Anthropic ships no Linux build. The writer returns undefined and enroll says the app is unavailable on this platform rather than writing a file nothing reads</td>
+</tr>
+<tr>
+<td>Transport</td>
+<td><strong>stdio only.</strong> No <code>type</code>/<code>transport</code>/<code>url</code> member is documented for this file; remote servers are added through Settings → Connectors in the app, which no third party can write to. So <code>tacho mcp-stdio</code> ships — a thin stdin/stdout pump to the loopback gateway that duplicates no decision</td>
+</tr>
+<tr>
+<td>Restart</td>
+<td>required, and documented as such. The app says so in plain words rather than writing the file and leaving the user to wonder</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Cowork and ChatGPT desktop have no writer, because neither has a config
+surface to write.</strong> Anthropic's Cowork is a feature inside Claude rather than a
+separate app, and as of 2026-09-16 is being merged into the Claude chat
+interface; it inherits Claude Desktop's config. ChatGPT's MCP is
+remote-HTTPS-only through Developer Mode in the UI, with no local file a third
+party can write. (<code>~/.codex/config.toml</code> belongs to Codex, a different product,
+which this app already wraps through hooks.) Stubbing either would have
+enrolled a harness that could never report.</p>
+<h3 id="13-3-what-the-connected-tier-cannot-do">13.3 What the connected tier cannot do</h3>
+<p>A connected app's config is a file the user owns. Nothing stops them adding a
+second MCP server beside ours, and a tool served by that server never touches
+Oxagen. Every connected surface therefore reports the count and the names of
+the other MCP servers in that app — in <code>tacho enroll</code>, in <code>tacho status</code>, and
+in the panel — because the size of the gap is a fact the operator is entitled
+to.</p>
+<p><strong>Closing it is not a code change in this repository, and as of 2026-09-16 it
+is not fully closable at all.</strong> Anthropic's enterprise controls
+(<code>com.anthropic.claudefordesktop</code> on macOS, <code>HKLM:\SOFTWARE\Policies\Claude</code>
+on Windows) carry <code>isLocalDevMcpEnabled</code> and its siblings, which are <strong>on/off
+switches for local MCP as a whole, not a named-server allowlist</strong>. The one real
+allowlist Anthropic ships governs the Desktop Extension (<code>.mcpb</code>) registry, not
+hand-written entries in <code>claude_desktop_config.json</code>. So an administrator can
+turn local MCP off entirely or leave it on; they cannot say &quot;only Oxagen's&quot;.
+The product says that rather than implying a control it does not have.</p>
+<h3 id="13-4-first-run-for-someone-who-does-not-use-a-terminal">13.4 First run for someone who does not use a terminal</h3>
+<p>PATH linking, the shell-profile block and the CLI sidecars are no longer on by
+default. The launch-time link now follows the machine: on where a coding agent
+is already installed (<code>claude</code>, <code>codex</code> or <code>stella</code> in a well-known install
+directory), off otherwise. It remains a <em>default</em> — an explicit <code>autoLinkCli</code>
+in <code>desktop.json</code> wins in both directions, so &quot;Remove links&quot; stays removed on a
+developer's machine and &quot;Link into PATH&quot; stays linked on anyone else's. The
+<code>autoLinkCli</code> mechanism and <code>desktop.json</code> are otherwise untouched.</p>
+<p><code>tacho detect</code> reports connected apps alongside wrapped ones, found on disk
+rather than on PATH (a GUI bundle answers no <code>--version</code> and is on nobody's
+PATH), each with its tier and a line on what that tier records.</p>
+<h3 id="13-5-the-panel-and-the-fleet">13.5 The panel and the fleet</h3>
+<p>The Wrapped agents panel becomes <strong>AI apps on this machine</strong>. Every row carries
+its tier and two lines — what it records and what it does not — and a connected
+row can never render as a wrapped one: it has no hooks, no version, no
+sessions, and its refused calls are reported as the mandate being enforced
+rather than as ill health. A collector that is down makes a connected row
+<em>down</em>, harder than for a wrapped agent, because the gateway lives inside the
+collector while a wrapped agent's hook still decides from the cached bundle.</p>
+<p><code>apps/app</code> gains <strong>Fleet</strong> at <code>/{orgSlug}/{workspaceSlug}/fleet</code>, the app
+surface for <code>list_tacho_hosts</code>, which now returns a <code>tiers</code> map alongside
+<code>harnesses</code> and reaches the API, MCP, CLI (<code>oxagen tacho hosts</code>) and the app.</p>
+<h2 id="14-after-rev-2-tachod-grows-into-the-gateway-2026-09-18">14. After rev 2: <code>tachod</code> grows into the gateway (2026-09-18)</h2>
+<blockquote>
+<p><strong>Status of this section (2026-09-18).</strong> Target, in build, and not on <code>main</code>. Approved by the maintainer on 2026-09-18 with the steering, graph and gateway review, and decided by ADR-094 &quot;tachod grows into the gateway: a loopback model proxy and an MCP aggregator&quot;. It is Phase 4 of the refactor path (the Mission Control spec §17.2, the implementation plan §8.5). It is tracked as oxagen issues #3299 and #3301, and built on branches <code>gateway-model-proxy</code> and <code>desktop-install-hardening</code>. The contained tier below is Phase 5 (ADR-096, issue #3300). Everything above this section describes what the app installs today.</p>
+</blockquote>
+<p><strong>What the app installs today, said plainly.</strong> Enrollment is file edits plus a daemon. It writes hook entries into each harness's settings file, installs <code>tachod</code>, registers it to start at login, and enrolls the host with a device key. No Oxagen command launches the agent. <code>tachod</code> is a recorder plus a kill switch that tells the agent what the workspace requires: the signed bundle it receives carries the workspace's active <code>must</code> and <code>should</code> records as <code>context.system</code> (PR #3289, ADR-091), with empty permissions and <code>budget.mode = &quot;observed&quot;</code>, so no rule can fire beyond host status and a paused run. No model proxy exists. No sandbox exists. Install and uninstall are known to be buggy (maintainer, 2026-09-18), and issue #3301 is the fix.</p>
+<p><strong>Two senses of failure, and which is which.</strong> The hook process fails closed against its cached bundle: in enforce mode a stale or unverified bundle denies non-read-only tools at <code>PreToolUse</code>, with the daemon up or down. With the daemon down the other command hooks answer <code>{}</code>, which the harness reads as allow (<code>packages/tacho/src/claude-code/hook-client.ts</code>). The tier is a different matter. It is client-attested, and it is fail-open against the person at the keyboard: remove the hook entry, disable hooks or run another build of the harness, and the action proceeds (ADR-095). &quot;Fail-open&quot; in this spec describes the tier, never the hook process.</p>
+<p><strong>The installer's new job.</strong> This is the target of Phase 4:</p>
+<ol>
+<li><strong>It installs <code>tachod</code> as the gateway.</strong> The same daemon, on the same loopback listener, with the four parts in the table below.</li>
+<li><strong>Enrollment writes the model base URLs into each harness</strong>, Claude Code (<code>ANTHROPIC_BASE_URL</code>) and Codex (<code>OPENAI_BASE_URL</code>), with displace-and-restore: the value that was there is kept, and unenroll puts it back. Enrollment writes them only after the daemon is confirmed listening on loopback, so a harness is never pointed at a port nothing answers. The host-level base URL is shared by every session on the host. How the proxy binds one request to one run, by the connecting process for every wrapped session and by a run-scoped base URL only where a launcher set it before the process started, is the Mission Control spec §7.1.</li>
+<li><strong>Unenroll and uninstall restore every file they touched before they stop the daemon.</strong> The order matters. A stale hook entry is noise, and a harness left pointing at a dead base URL is broken (ADR-094).</li>
+<li><strong>Uninstall is proven to leave the home directory byte-identical to its state before install, except for a documented allowlist.</strong> The proof is a temp-HOME snapshot rig: snapshot a scratch home, install, enroll, unenroll, uninstall, snapshot again, and compare byte for byte. The allowlist is written down beside the rig, and a difference that is not on it is a defect. A partial install, killed midway, uninstalls as cleanly.</li>
+<li><strong>The app shows the tier word:</strong> <code>observe</code>, <code>harness</code> or <code>gateway</code>. <code>contained</code> is not available yet, and the app shows it as a tier not yet available. The word is computed from what a run actually routed (ADR-095), so the app does not show <code>gateway</code> because the gateway is installed, and it never shows a stronger word than the run earned.</li>
+<li><strong><code>apps/desktop</code> gets a line-by-line bug review in the same effort.</strong> Every finding is fixed on the branch or listed with the reason it could not be.</li>
+</ol>
+<p>The proxy covers hosts on a subscription login as well as hosts on an API key. Both OpenAI and Anthropic work through a base URL proxy, subscription logins included, and neither vendor's terms explicitly forbid it: validated by the maintainer on 2026-09-18.</p>
+<p><strong>What <code>tachod</code> becomes.</strong> The same daemon, on the same loopback listener, with four parts:</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Part</th>
+<th>What the installer and enrollment do for it</th>
+<th>Status on <code>main</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Hook adapter</td>
+<td>Writes the hook entries (§6)</td>
+<td>Built</td>
+</tr>
+<tr>
+<td>Control channel</td>
+<td>Enrolls the host and keeps the signed bundle current (§2)</td>
+<td>Built</td>
+</tr>
+<tr>
+<td>MCP aggregator</td>
+<td>Re-serves the harness's existing MCP servers through loopback, so their tool calls pass Oxagen. Enrollment displaces the harness's MCP entries and unenroll restores them, extending the merge and strip logic in <code>packages/tacho/src/host/mcp-config-writer.ts</code>. Where a vendor offers managed settings, the managed variant pins them</td>
+<td>Phase 4. Today the gateway is registered only into Claude Desktop (rev 2, the connected tier)</td>
+</tr>
+<tr>
+<td>Loopback model proxy</td>
+<td>Passes Anthropic Messages and OpenAI Responses requests through to the vendor with streaming. The proxy forwards each prompt body to the vendor, as the harness does today. No prompt body is sent to Oxagen's servers: only digests and usage go up. The vendor credential stays on the machine and Oxagen never holds it</td>
+<td>Phase 4, in build on <code>gateway-model-proxy</code></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>What changes in the panels.</strong> This machine shows the tier as one word of the ladder, computed from what was actually routed. Spend shows its basis, <code>observed</code> or <code>self-reported</code>. Until Phase 4 lands every number for a wrapped agent is self-reported, and Codex and Stella show as absent, never as zero (oxagen issue #3304). A connected host (rev 2, ADR-078) reads on the ladder as ADR-095 sets out: it is on <code>gateway</code> for the Oxagen MCP calls that routed, it has no <code>harness</code> rung under it, and it is invisible otherwise. ADR-078 §2 is kept, so no panel renders a tier word as a score, a percentage or &quot;fully governed&quot;, and every panel still says what the tier records and what it does not.</p>
+<p><strong>The contained tier is not this app's job on a laptop.</strong> <code>oxagen run -- &lt;agent&gt;</code> (Phase 5) launches an agent under an OS sandbox whose only egress is the gateway. It is aimed at CI, headless runs, cloud runners and managed devices first, and it is never mandatory on a developer's own laptop. The app may show that a run was contained. It does not force containment.</p>
 
-<footer class="colophon"><span>Oxagen · Specification</span><span>Source: <code>spec.md</code> · rendered 2026-09-15</span></footer>
+<footer class="colophon"><span>Oxagen · Specification</span><span>Source: <code>spec.md</code> · rendered 2026-09-18</span></footer>
 </main>
 </div>
 </div>

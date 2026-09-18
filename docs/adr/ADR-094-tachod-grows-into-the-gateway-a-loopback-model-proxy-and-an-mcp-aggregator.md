@@ -68,7 +68,8 @@ It is closed, and it does not gate Phase 4.
    loopback, displace-and-restore;
 4. the **control channel** (exists).
 
-Prompt bodies never leave the machine. Only digests and usage go up. Model-call
+The proxy forwards each prompt body to the vendor, as the harness does today. No
+prompt body is sent to Oxagen's servers: only digests and usage go up. Model-call
 frames from the gateway carry digests and usage only, never bodies. What
 hook-tier frames carry today is unchanged: hook payloads are digest-first, and
 raw retention stays a per-workspace policy that is off by default (spec §13.6).
@@ -81,8 +82,9 @@ volatile injection re-lands at the proxy, `interrupt` becomes real.
 - **No extra hop.** The daemon is already on the machine and already on the
   path of every hook. There is no new availability dependency on Oxagen's
   cloud: if the control plane is unreachable, model traffic still flows.
-- **Prompt bodies stay on the machine.** Oxagen does not take custody of every
-  customer's source code in transit.
+- **No prompt body is sent to Oxagen's servers.** The body goes to the vendor and
+  nowhere else. Oxagen does not take custody of every customer's source code in
+  transit.
 - **The vendor credential stays on the machine.** The proxy forwards the
   harness's own authorization header. Oxagen never holds it.
 - **Observed metering for every harness.** Usage is read from the vendor's

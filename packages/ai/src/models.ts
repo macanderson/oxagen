@@ -4,6 +4,7 @@ import { wrapLanguageModel } from "ai";
 import type { LanguageModel } from "ai";
 import type { EmbeddingModelV4, LanguageModelV4 } from "@ai-sdk/provider";
 import { requireEnv } from "@oxagen/config/env";
+import { fetchWithoutRedirects } from "@oxagen/config/public-url";
 import type { ModelCredentialProvider } from "@oxagen/oxagen/contracts/org.model_credential.shared";
 import type { ResolvedTierCatalog } from "./catalog";
 
@@ -498,7 +499,16 @@ function customerClient(credential: ModelCredential): LanguageProviderClient {
           "an openai_compatible credential has no baseUrl; the row is invalid",
         );
       }
-      return compatibleClient("byok", credential.baseUrl, credential.apiKey);
+      return compatibleClient("byok", credential.baseUrl, credential.apiKey, {
+        // The customer's URL was checked when the row was written; a redirect
+        // target is a URL nobody checked. The probe refuses redirects for the
+        // same reason, and a policy enforced in one of them is bypassed by
+        // the other, so the runtime client sends every request through the
+        // same fetch.
+        fetch: fetchWithoutRedirects({
+          refusing: "Refusing to call the model endpoint",
+        }),
+      });
     }
   }
 }
@@ -508,12 +518,14 @@ function compatibleClient(
   name: string,
   baseURL: string,
   apiKey: string,
+  options: { fetch?: typeof fetch } = {},
 ): LanguageProviderClient {
   return createOpenAICompatible({
     name,
     baseURL,
     apiKey,
     supportsStructuredOutputs: true,
+    ...options,
   });
 }
 

@@ -170,28 +170,65 @@ hooks for MDM-managed machines; the record is still labelled `client_attested`.
 
 ## What the daemon is today, and what it grows into
 
-Today `tachod` is a recorder plus a kill switch. The policy bundle it verifies
-carries empty permissions, `budget.mode = "observed"` and, until ADR-091 lands
-(PR #3289), `context.system = null`. No model proxy exists: there is no
-`ANTHROPIC_BASE_URL` or `OPENAI_BASE_URL` handling anywhere in this package.
-Token and cost numbers for Claude Code are the harness's own OpenTelemetry
-export, which is self-reported. Codex and Stella export none, so their spend is
-absent from the record. The MCP gateway (`src/collector/mcp-gateway.ts`) is real
-and server-enforced, and it is registered only into Claude Desktop.
-
-The target is ADR-094: `tachod` grows into the gateway, with a loopback model
-proxy (Anthropic Messages and OpenAI Responses passthrough with streaming;
-enrollment writes the base URL) and an MCP aggregator that re-serves the
-harness's existing MCP servers through loopback, displace-and-restore. Prompt
-bodies never leave the machine; only digests and usage go up. The vendor
-credential stays on the machine. Metering becomes observed for every harness,
-`session_limit_usd` is enforced, and `interrupt` becomes real. That is Phase 4,
-in build now. The leaf constraint stays: the proxy imports no `@oxagen/*`
+What the signed bundle carries today is one thing: the workspace's steering. The
+server compiles its active `must` and `should` context records into
+`context.system` (`packages/handlers/src/lib/tacho-steering.ts`, ADR-091), which
+`SessionStart` delivers. Permissions are empty and `budget.mode = "observed"`
+(`packages/handlers/src/lib/tacho-host.ts`, `unsignedBundle`), so `PreToolUse` can
+deny only on host status or a paused session, and nothing reads
+`session_limit_usd`. Operator steer commands are the only
+live text channel from the server to a running agent. Token and cost numbers for
+Claude Code are the harness's own telemetry, self-reported. Codex and Stella export
+none. There is no model proxy and no sandbox. The MCP gateway (`src/collector/mcp-gateway.ts`) is real
+and server-enforced, and it is registered only into Claude Desktop. The leaf
+constraint stays through every phase below: the proxy imports no `@oxagen/*`
 runtime package.
 
+## Where this package is going
+
+Approved on 2026-09-18 (`docs/audits/2026-09-18-steering-graph-gateway-review.md`;
+the design is in `docs/specs/mission-control/spec.md` §7 and §10.5, the phases in
+`docs/specs/mission-control/plan.md` §8):
+
+- **Phase 0**, merged as PR #3289 on 2026-09-18 (ADR-091, issue #2592). The
+  server compiles active `must` and `should` records into the bundle's
+  `context.system`, which `SessionStart` delivers. #2592 closes when a merged
+  record is seen in a real run.
+- **Phase 1** (issue #3296, ADR-093 and ADR-097). `UserPromptSubmit` calls `assembleSteering` with the prompt as the
+  query, under a tight timeout, and fails open. Every assembly seals a
+  `steering.manifest` frame.
+- **Phase 4**, in build now on branches `gateway-model-proxy` and
+  `desktop-install-hardening` (issues #3299 and #3301, ADR-094). `tachod` grows
+  into the gateway: a loopback model proxy (Anthropic
+  Messages and OpenAI Responses passthrough with streaming, enrollment writes the
+  base URL) and an MCP aggregator that re-serves the harness's existing MCP servers
+  with the displace-and-restore logic in `src/host/mcp-config-writer.ts`. The
+  proxy forwards prompt bodies to the vendor only. No prompt body is sent to
+  Oxagen's servers, and the vendor credential stays on the machine. Metering
+  becomes observed, `session_limit_usd` is enforced, and `interrupt` becomes real.
+  Enrollment writes a base URL only after the daemon is confirmed listening, and
+  unenroll restores every file it touched before it stops the daemon. Both OpenAI
+  and Anthropic work through a base URL proxy, subscription logins included, and
+  neither vendor's terms explicitly forbid it: validated by the maintainer on
+  2026-09-18.
+- **Phase 5** (issue #3300, ADR-096). `oxagen run -- <agent>` launches an agent under an OS sandbox whose
+  only egress is the gateway. `contained` becomes the top word of the tier ladder:
+  observe, harness, gateway, contained (ADR-095).
+
+The order of build is Phase 0 merged, Phase 4 in build, then Phases 1, 2, 3 and
+5. The epic is issue #3295. Only Phase 0 is on `main`; the rest lands when its
+branch merges.
+
+The words for the `harness` tier are "delivered", "recorded", "client-attested"
+and "fail-open". Never "enforced". "Fail-open" describes the tier: the person at
+the keyboard can remove the hook entry or disable hooks, and the action proceeds.
+It does not describe the hook process, which fails closed against its cached
+bundle: in enforce mode a stale or unverified bundle denies non-read-only tools.
+Five events run as command hooks (`COMMAND_HOOK_EVENTS`), and four of them can
+refuse. `Stop` is the fifth.
+
 The tier words are fixed by ADR-095: `observe`, `harness`, `gateway`,
-`contained`, computed from what was actually routed. Nothing at the `harness`
-tier is ever called "enforced".
+`contained`, computed from what was actually routed.
 
 ## Modules
 
