@@ -169,17 +169,19 @@ exists (ADR-093).
 
 ### The six phases
 
+Epic: #3295.
+
 Each phase ships alone. The names and numbers are fixed. The order of build is
 Phase 0 in review, Phase 4 in build, then Phases 1, 2, 3, 5.
 
 | Phase | What it delivers | ADR | Status |
 |---|---|---|---|
-| 0. Make one record steer one agent | Active `must` and `should` records compile into `context.system` in `unsignedBundle`. New governance ceremony is frozen until this lands | ADR-091 | In review, PR #3289 |
-| 1. One type, one assembler | `SteeringItem`, `assembleSteering`, the source adapters, `packages/context-provider` as the home, `packages/engram` deleted or folded in, `UserPromptSubmit` calls the assembler (tight timeout, fail open), precedence fixed, the two publish paths collapse, the in-app agent uses the same assembler | ADR-097, ADR-093 | Not started |
-| 2. One screen | Steering is the hub: Records, Skills, Memory, Ontology, Policy, Proposals, Preview | ADR-097 | Not started |
-| 3. The graph becomes the index | `:Record` nodes with `ABOUT` edges, registry to graph, verified by hash, Postgres kept as the fallback behind the same port | ADR-093 | Not started; waits for the knowledge graph on by default |
-| 4. The gateway | Loopback model proxy in `tachod`, enrollment writes the base URL, observed metering, enforced `session_limit_usd`, real `interrupt`, MCP aggregator, bundle permissions from the second compilation | ADR-094, ADR-095 | In build now |
-| 5. The contained tier | `oxagen run -- <agent>` under an OS sandbox with egress limited to the gateway; the witness runner on the same launcher | ADR-096 | Not started |
+| 0. Make one record steer one agent | Active `must` and `should` records compile into `context.system` in `unsignedBundle`. New governance ceremony is frozen until this lands | ADR-091 | In review, PR #3289 (#2592) |
+| 1. One type, one assembler | `SteeringItem`, `assembleSteering`, the source adapters, `packages/context-provider` as the home, `packages/engram` deleted or folded in, `UserPromptSubmit` calls the assembler (tight timeout, fail open), precedence fixed, the two publish paths collapse, the in-app agent uses the same assembler | ADR-097, ADR-093 | Not started (#3296) |
+| 2. One screen | Steering is the hub: Records, Skills, Memory, Ontology, Policy, Proposals, Preview | ADR-097 | Not started (#3297) |
+| 3. The graph becomes the index | `:Record` nodes with `ABOUT` edges, registry to graph, verified by hash, Postgres kept as the fallback behind the same port | ADR-093 | Not started; waits for the knowledge graph on by default (#3298) |
+| 4. The gateway | Loopback model proxy in `tachod`, enrollment writes the base URL, observed metering, enforced `session_limit_usd`, real `interrupt`, MCP aggregator, bundle permissions from the second compilation | ADR-094, ADR-095 | In build now (#3299, #3301) |
+| 5. The contained tier | `oxagen run -- <agent>` under an OS sandbox with egress limited to the gateway; the witness runner on the same launcher | ADR-096 | Not started (#3300) |
 
 ### The words a surface may use
 
