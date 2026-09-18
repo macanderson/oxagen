@@ -7,7 +7,7 @@
 | **Owner** | Mac Anderson |
 | **Supersedes** | The `oxagen-platform` and `oxagen` codebases as products. Carries forward the designs named in §16. |
 | **Builds on** | Context Graph Protocol `contextgraph/1.0` and the `contextgraph/lifecycle/1.0-draft` profile (repo at `origin/main`, ADRs 0001 to 0018). Stella's context-record and Context PR corpus. Oxagen ADR-024, 025, 042, 043, 051, 052, 053 and the current wrapper spec (in the repo today under `docs/specs/tacho/`, renamed here). |
-| **Amended** | 2026-09-13, by Oxagen ADR-055 (`docs/adr/ADR-055-gau-buckets-and-contracted-rates.md`) and `apps/app/ARCHITECTURE.md` §3.9: the billing model. Blocks marked **Amendment 2026-09-13 (ADR-055)** supersede the text they follow in §0 row 13, §12.1, A.8, A.10 and Appendix E. |
+| **Amended** | 2026-09-13, by Oxagen ADR-055 (`docs/adr/ADR-055-gau-buckets-and-contracted-rates.md`) and `apps/app/ARCHITECTURE.md` §3.9: the billing model. Blocks marked **Amendment 2026-09-13 (ADR-055)** supersede the text they follow in §0 row 13, §12.1, A.8, A.11 and Appendix E. (A.11 was A.10 before ADR-090 inserted the `skills` schema.) |
 
 ---
 
@@ -721,6 +721,9 @@ A frame is the `oxagen.frame/1.0` envelope, kept as is. Its fields are `event_id
 | `skills.searched` | gateway | query digest, resolved config version, returned ids, withheld count by reason class (never the withheld names), load cost, replay grade |
 | `skills.resolved` | gateway | the config version a run pinned at start, sources on, belt mode, cut-off, load budget |
 | `skills.loaded` | gateway | `id@version`, digest, token cost, the decision that admitted it |
+| `repo.unknown` | gateway | the workspace has no bound repository to resolve a config against; carries the policy in force (`ask`) and what it falls back to at timeout (`deny`) |
+| `repo.bound` | control plane | the binding that answered a `repo.unknown`, and the commit its config was read at |
+| `workspace.created` | control plane | a workspace created while a run was in flight; records that it came up with `skills.enabled` false, per ADR-090 |
 | `control.interject` | control channel | the question put to a person, why the loop stopped (e.g. `unbound_repo`), the timeout and what it falls back to (`deny`) |
 | `control.answer` | control channel | the answer, who gave it, and the frame it unblocked |
 | `reflection.captured` | out of band, after the seal | rubric axes, self-grade against the record, contradictions citing frames. **Outside the sealed chain and never replayed on a fork** (§quarantine, ADR-090) |
@@ -1411,7 +1414,7 @@ Each scenario is one moment an investor or a customer should remember. The mocku
 
 ## Appendix A. Postgres tables (target)
 
-Thirty-five tables in nine schemas in the wedge, thirty-seven for the full product (`cost.fx_rates` and `control.event_subscriptions` arrive in Series A), down from about 110 tables in 20 schemas today. This is the definitive list. A table not here does not exist.
+Thirty-eight tables in ten schemas in the wedge, forty for the full product (`cost.fx_rates` and `control.event_subscriptions` arrive in Series A; the `skills` schema arrives with ADR-090), down from about 110 tables in 20 schemas today. This is the definitive list. A table not here does not exist.
 
 ### A.0 Conventions that apply to every table
 
@@ -1986,7 +1989,57 @@ Money is `bigint` micro-USD unless a `currency` column says otherwise. Secrets a
 | `placed_by`, `placed_at` | uuid, timestamptz | |
 | `released_by`, `released_at` | uuid, timestamptz | |
 
-### A.10 Where today's tables went
+### A.10 `skills` (3 tables, ADR-090)
+
+Skill **resolution** is the governed act; the config itself is a file in the customer's repository, not a row, and its
+version history is git history. These tables record what Oxagen decided against a given version of that file.
+
+**`skills.config_versions`** (class `workspace`; append-only; one row per merged change to `.oxagen/skills.toml`)
+
+| Column | Type | Notes |
+|---|---|---|
+| `version_label` | text | the label the product shows (`skl_v7`); unique per workspace |
+| `repository_binding_id` | uuid → `wrk.repository_bindings` | the binding the file was read through (#3241) |
+| `commit_sha` | text | the production-branch commit this version was read at; the provenance, in place of a column |
+| `pull_request_number` | int | the change that published it; nullable only for the initial import |
+| `enabled` | boolean | `.oxagen/skills.toml` absent or `enabled = false` means off; a workspace is created false |
+| `config_digest` | text | digest of the file as read back at the merged commit |
+| `sources`, `search`, `unbound_repo`, `reflection` | jsonb | the parsed sections, stored as read |
+| `published_at` | timestamptz | the merge, not the authoring |
+
+**`skills.resolutions`** (class `workspace`; append-only; one row per resolution a run performed)
+
+| Column | Type | Notes |
+|---|---|---|
+| `config_version_id` | uuid → `skills.config_versions` | pinned at run start; a replay resolves this version, never today's |
+| `run_id`, `attempt_id` | text | graph ids |
+| `skill_id`, `skill_version` | text | the `id@version` that was considered |
+| `skill_digest` | text | the digest at resolution time |
+| `source` | text | which configured source held it |
+| `decision` | text | `allowed`, `needs_approval`, `denied` |
+| `withheld_reason` | text | nullable; `out_of_scope`, `unapproved_digest`. Withholding happens **before ranking** |
+| `loaded` | boolean | whether the agent actually loaded it, as against being allowed to |
+| `token_cost` | int | the load cost charged to the search budget |
+| `resolved_at` | timestamptz | |
+
+**`skills.reflections`** (class `workspace`; **quarantined**; retention-bounded; read only under an org `research.read` grant)
+
+The quarantine is these columns plus the §5.2 policy over them, not a convention: a reflection never enters a context
+frame, is never promoted to steering, does not price the work, is not evidence about a person, and expires.
+
+| Column | Type | Notes |
+|---|---|---|
+| `run_id`, `attempt_id` | text | the sealed run it is about; captured **after** the seal and outside the sealed chain |
+| `frame_seq` | int | the `reflection.captured` frame; dashed in the player, never replayed on a fork |
+| `rubric` | jsonb | axes, the agent's self-grade, and the record's value for each |
+| `contradictions` | jsonb | each citing the frame that disagrees with the self-grade |
+| `use` | text | `research` is the only accepted value; any other value is refused at write |
+| `consent_scope` | text | `organization` |
+| `billed_as` | text | `overhead`; never productive spend |
+| `retain_until` | timestamptz | set at capture; the row is deleted, not archived |
+| `captured_at` | timestamptz | |
+
+### A.11 Where today's tables went
 
 | Today | In the rebuild |
 |---|---|

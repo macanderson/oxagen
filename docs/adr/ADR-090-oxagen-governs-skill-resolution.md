@@ -86,8 +86,12 @@ Oxagen holds no credential and runs no tool, and still decides every call.
    grant, and expires. It never enters a context frame, is never promoted to steering,
    and is not evidence about a person.
 
-8. **New stores** (App. A gains them): `skills.config_versions`, `skills.resolutions`,
-   and `reflections` behind the quarantine. Config history is git history, not a table.
+8. **New stores**, defined in Appendix A (§A.10 `skills`), because that appendix is the
+   definitive table list and says a table not listed does not exist: `skills.config_versions`,
+   `skills.resolutions`, and `skills.reflections` behind the quarantine — whose fence is the
+   `use` / `consent_scope` / `billed_as` / `retain_until` columns and the §5.2 policy over
+   them, not a convention. Config history is git history, not a table; a config version
+   carries the `commit_sha` it was read at as its provenance.
 
 9. **New frame kinds** (added to the gateway-kind table in §7.5, beside `control.command`
    and `control.steer`; Appendix C is a single envelope example and enumerates nothing):
@@ -103,8 +107,9 @@ Oxagen holds no credential and runs no tool, and still decides every call.
 ## Consequences
 
 - Spec §2 gains the run-versus-resolve sentence and keeps "no skills engine". §14's
-  page count and screen table, §7.5's gateway-kind table, App. E's `dispatch_command`
-  entry and §19's page-coverage table all gain Skills and W13. Appendix F's route map is
+  page count and screen table, §7.5's gateway-kind table (all nine kinds, not
+  only the six skills ones), Appendix A's new §A.10 `skills` schema and its table count,
+  App. E's `dispatch_command` entry and §19's page-coverage table all gain Skills and W13. Appendix F's route map is
   left alone: `ARCHITECTURE.md` records it as already drifted on other grounds (Ontology
   cut, Audit rescoped) and wins over it, so reconciling it is not this ADR's job.
 - `apps/app/ARCHITECTURE.md` loses the narrowing in all five places and gains this

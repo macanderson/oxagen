@@ -120,7 +120,7 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
   <a class="wordmark" href="https://oxagen.sh">o<span class="x">x</span>agen</a>
   <p class="eyebrow">Oxagen · Specification</p>
   <h1>Oxagen Mission Control: Product and Technical Specification</h1>
-  <dl class="facts"><dt>Status</dt><dd>Draft for review</dd><dt>Date</dt><dd>2026-09-11</dd><dt>Owner</dt><dd>Mac Anderson</dd><dt>Supersedes</dt><dd>The <code>oxagen-platform</code> and <code>oxagen</code> codebases as products. Carries forward the designs named in §16.</dd><dt>Builds on</dt><dd>Context Graph Protocol <code>contextgraph/1.0</code> and the <code>contextgraph/lifecycle/1.0-draft</code> profile (repo at <code>origin/main</code>, ADRs 0001 to 0018). Stella's context-record and Context PR corpus. Oxagen ADR-024, 025, 042, 043, 051, 052, 053 and the current wrapper spec (in the repo today under <code>docs/specs/tacho/</code>, renamed here).</dd><dt>Amended</dt><dd>2026-09-13, by Oxagen ADR-055 (<code>docs/adr/ADR-055-gau-buckets-and-contracted-rates.md</code>) and <code>apps/app/ARCHITECTURE.md</code> §3.9: the billing model. Blocks marked <strong>Amendment 2026-09-13 (ADR-055)</strong> supersede the text they follow in §0 row 13, §12.1, A.8, A.10 and Appendix E.</dd></dl>
+  <dl class="facts"><dt>Status</dt><dd>Draft for review</dd><dt>Date</dt><dd>2026-09-11</dd><dt>Owner</dt><dd>Mac Anderson</dd><dt>Supersedes</dt><dd>The <code>oxagen-platform</code> and <code>oxagen</code> codebases as products. Carries forward the designs named in §16.</dd><dt>Builds on</dt><dd>Context Graph Protocol <code>contextgraph/1.0</code> and the <code>contextgraph/lifecycle/1.0-draft</code> profile (repo at <code>origin/main</code>, ADRs 0001 to 0018). Stella's context-record and Context PR corpus. Oxagen ADR-024, 025, 042, 043, 051, 052, 053 and the current wrapper spec (in the repo today under <code>docs/specs/tacho/</code>, renamed here).</dd><dt>Amended</dt><dd>2026-09-13, by Oxagen ADR-055 (<code>docs/adr/ADR-055-gau-buckets-and-contracted-rates.md</code>) and <code>apps/app/ARCHITECTURE.md</code> §3.9: the billing model. Blocks marked <strong>Amendment 2026-09-13 (ADR-055)</strong> supersede the text they follow in §0 row 13, §12.1, A.8, A.11 and Appendix E. (A.11 was A.10 before ADR-090 inserted the <code>skills</code> schema.)</dd></dl>
 </header>
 <div class="grid">
 <nav class="toc" aria-label="Contents"><p>Contents</p><ol><li><a href="#0-the-call-sheet">0. The call sheet</a></li><li><a href="#1-why-this-product-in-one-page">1. Why this product, in one page</a></li><li><a href="#2-scope">2. Scope</a></li><li><a href="#3-vocabulary">3. Vocabulary</a></li><li><a href="#4-architecture">4. Architecture</a></li><li><a href="#5-tenancy-and-isolation">5. Tenancy and isolation</a></li><li><a href="#6-identity-access-and-the-toolbelt">6. Identity, access, and the toolbelt</a></li><li><a href="#7-the-gateway-and-intervention">7. The gateway and intervention</a></li><li><a href="#8-runs-and-frames">8. Runs and frames</a></li><li><a href="#9-context-records-how-agents-learn">9. Context records: how agents learn</a></li><li><a href="#10-the-repository-steering-and-context-prs">10. The repository, steering, and Context PRs</a></li><li><a href="#11-the-knowledge-graph-and-dynamic-ontologies">11. The knowledge graph and dynamic ontologies</a></li><li><a href="#12-cost-accounted-to-the-token-attributed-to-the-operator-reconciled-to-the-cent">12. Cost: accounted to the token, attributed to the operator, reconciled to the cent</a></li><li><a href="#13-audit-retention-and-the-fidelity-call">13. Audit, retention, and the fidelity call</a></li><li><a href="#14-mission-control">14. Mission Control</a></li><li><a href="#15-non-functional-requirements">15. Non-functional requirements</a></li><li><a href="#16-carry-over-leave-behind">16. Carry over, leave behind</a></li><li><a href="#17-delivery-plan">17. Delivery plan</a></li><li><a href="#18-risks-and-open-decisions">18. Risks and open decisions</a></li><li><a href="#19-demo-wow-scenarios">19. Demo Wow! Scenarios</a></li><li><a href="#appendix-a-postgres-tables-target">Appendix A. Postgres tables (target)</a></li><li><a href="#appendix-b-neo4j-model-per-organization-database">Appendix B. Neo4j model (per organization database)</a></li><li><a href="#appendix-c-frame-envelope-gateway-kind-example">Appendix C. Frame envelope (gateway kind example)</a></li><li><a href="#appendix-d-tool-grant-example">Appendix D. Tool grant example</a></li><li><a href="#appendix-e-the-agent-tools-that-survive">Appendix E. The agent tools that survive</a></li><li><a href="#appendix-f-the-pages-that-survive">Appendix F. The pages that survive</a></li></ol></nav>
@@ -1304,6 +1304,21 @@ sandbox = &quot;read-only&quot;
 <td><code>skills.loaded</code></td>
 <td>gateway</td>
 <td><code>id@version</code>, digest, token cost, the decision that admitted it</td>
+</tr>
+<tr>
+<td><code>repo.unknown</code></td>
+<td>gateway</td>
+<td>the workspace has no bound repository to resolve a config against; carries the policy in force (<code>ask</code>) and what it falls back to at timeout (<code>deny</code>)</td>
+</tr>
+<tr>
+<td><code>repo.bound</code></td>
+<td>control plane</td>
+<td>the binding that answered a <code>repo.unknown</code>, and the commit its config was read at</td>
+</tr>
+<tr>
+<td><code>workspace.created</code></td>
+<td>control plane</td>
+<td>a workspace created while a run was in flight; records that it came up with <code>skills.enabled</code> false, per ADR-090</td>
 </tr>
 <tr>
 <td><code>control.interject</code></td>
@@ -2747,7 +2762,7 @@ sandbox = &quot;read-only&quot;
 </table></div>
 <hr />
 <h2 id="appendix-a-postgres-tables-target">Appendix A. Postgres tables (target)</h2>
-<p>Thirty-five tables in nine schemas in the wedge, thirty-seven for the full product (<code>cost.fx_rates</code> and <code>control.event_subscriptions</code> arrive in Series A), down from about 110 tables in 20 schemas today. This is the definitive list. A table not here does not exist.</p>
+<p>Thirty-eight tables in ten schemas in the wedge, forty for the full product (<code>cost.fx_rates</code> and <code>control.event_subscriptions</code> arrive in Series A; the <code>skills</code> schema arrives with ADR-090), down from about 110 tables in 20 schemas today. This is the definitive list. A table not here does not exist.</p>
 <h3 id="a-0-conventions-that-apply-to-every-table">A.0 Conventions that apply to every table</h3>
 <div class="tw"><table>
 <thead>
@@ -5019,7 +5034,183 @@ sandbox = &quot;read-only&quot;
 </tr>
 </tbody>
 </table></div>
-<h3 id="a-10-where-today-s-tables-went">A.10 Where today's tables went</h3>
+<h3 id="a-10-skills-3-tables-adr-090">A.10 <code>skills</code> (3 tables, ADR-090)</h3>
+<p>Skill <strong>resolution</strong> is the governed act; the config itself is a file in the customer's repository, not a row, and its
+version history is git history. These tables record what Oxagen decided against a given version of that file.</p>
+<p><strong><code>skills.config_versions</code></strong> (class <code>workspace</code>; append-only; one row per merged change to <code>.oxagen/skills.toml</code>)</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>version_label</code></td>
+<td>text</td>
+<td>the label the product shows (<code>skl_v7</code>); unique per workspace</td>
+</tr>
+<tr>
+<td><code>repository_binding_id</code></td>
+<td>uuid → <code>wrk.repository_bindings</code></td>
+<td>the binding the file was read through (#3241)</td>
+</tr>
+<tr>
+<td><code>commit_sha</code></td>
+<td>text</td>
+<td>the production-branch commit this version was read at; the provenance, in place of a column</td>
+</tr>
+<tr>
+<td><code>pull_request_number</code></td>
+<td>int</td>
+<td>the change that published it; nullable only for the initial import</td>
+</tr>
+<tr>
+<td><code>enabled</code></td>
+<td>boolean</td>
+<td><code>.oxagen/skills.toml</code> absent or <code>enabled = false</code> means off; a workspace is created false</td>
+</tr>
+<tr>
+<td><code>config_digest</code></td>
+<td>text</td>
+<td>digest of the file as read back at the merged commit</td>
+</tr>
+<tr>
+<td><code>sources</code>, <code>search</code>, <code>unbound_repo</code>, <code>reflection</code></td>
+<td>jsonb</td>
+<td>the parsed sections, stored as read</td>
+</tr>
+<tr>
+<td><code>published_at</code></td>
+<td>timestamptz</td>
+<td>the merge, not the authoring</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong><code>skills.resolutions</code></strong> (class <code>workspace</code>; append-only; one row per resolution a run performed)</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>config_version_id</code></td>
+<td>uuid → <code>skills.config_versions</code></td>
+<td>pinned at run start; a replay resolves this version, never today's</td>
+</tr>
+<tr>
+<td><code>run_id</code>, <code>attempt_id</code></td>
+<td>text</td>
+<td>graph ids</td>
+</tr>
+<tr>
+<td><code>skill_id</code>, <code>skill_version</code></td>
+<td>text</td>
+<td>the <code>id@version</code> that was considered</td>
+</tr>
+<tr>
+<td><code>skill_digest</code></td>
+<td>text</td>
+<td>the digest at resolution time</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>text</td>
+<td>which configured source held it</td>
+</tr>
+<tr>
+<td><code>decision</code></td>
+<td>text</td>
+<td><code>allowed</code>, <code>needs_approval</code>, <code>denied</code></td>
+</tr>
+<tr>
+<td><code>withheld_reason</code></td>
+<td>text</td>
+<td>nullable; <code>out_of_scope</code>, <code>unapproved_digest</code>. Withholding happens <strong>before ranking</strong></td>
+</tr>
+<tr>
+<td><code>loaded</code></td>
+<td>boolean</td>
+<td>whether the agent actually loaded it, as against being allowed to</td>
+</tr>
+<tr>
+<td><code>token_cost</code></td>
+<td>int</td>
+<td>the load cost charged to the search budget</td>
+</tr>
+<tr>
+<td><code>resolved_at</code></td>
+<td>timestamptz</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong><code>skills.reflections</code></strong> (class <code>workspace</code>; <strong>quarantined</strong>; retention-bounded; read only under an org <code>research.read</code> grant)</p>
+<p>The quarantine is these columns plus the §5.2 policy over them, not a convention: a reflection never enters a context
+frame, is never promoted to steering, does not price the work, is not evidence about a person, and expires.</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>run_id</code>, <code>attempt_id</code></td>
+<td>text</td>
+<td>the sealed run it is about; captured <strong>after</strong> the seal and outside the sealed chain</td>
+</tr>
+<tr>
+<td><code>frame_seq</code></td>
+<td>int</td>
+<td>the <code>reflection.captured</code> frame; dashed in the player, never replayed on a fork</td>
+</tr>
+<tr>
+<td><code>rubric</code></td>
+<td>jsonb</td>
+<td>axes, the agent's self-grade, and the record's value for each</td>
+</tr>
+<tr>
+<td><code>contradictions</code></td>
+<td>jsonb</td>
+<td>each citing the frame that disagrees with the self-grade</td>
+</tr>
+<tr>
+<td><code>use</code></td>
+<td>text</td>
+<td><code>research</code> is the only accepted value; any other value is refused at write</td>
+</tr>
+<tr>
+<td><code>consent_scope</code></td>
+<td>text</td>
+<td><code>organization</code></td>
+</tr>
+<tr>
+<td><code>billed_as</code></td>
+<td>text</td>
+<td><code>overhead</code>; never productive spend</td>
+</tr>
+<tr>
+<td><code>retain_until</code></td>
+<td>timestamptz</td>
+<td>set at capture; the row is deleted, not archived</td>
+</tr>
+<tr>
+<td><code>captured_at</code></td>
+<td>timestamptz</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="a-11-where-today-s-tables-went">A.11 Where today's tables went</h3>
 <div class="tw"><table>
 <thead>
 <tr>
