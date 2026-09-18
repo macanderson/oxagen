@@ -1,4 +1,4 @@
-import { syncPriceBookFromSources } from "@oxagen/billing";
+import { nextPriceBookBoundary, syncPriceBookFromSources } from "@oxagen/billing";
 import { createFunction } from "../create-function";
 import { logger } from "../logger";
 
@@ -48,8 +48,11 @@ export const [costPriceBookSync] = createFunction(
   { cron: "0 * * * *" },
   async ({ step }) => {
     const report = await step.run("sync", async () => {
+      // The next hour boundary, not `new Date()`: that instant is read before
+      // the catalogs and the transaction, so frames rolled up in between were
+      // priced against a row this sync then closed behind them.
       const result = await syncPriceBookFromSources({
-        effectiveFrom: new Date(),
+        effectiveFrom: nextPriceBookBoundary(new Date()),
       });
       return {
         written: result.written,

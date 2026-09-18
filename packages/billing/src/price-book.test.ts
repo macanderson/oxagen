@@ -28,6 +28,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 import {
   closeNegotiatedPriceEntry,
   COLD_BOOK_EFFECTIVE_FROM,
+  nextPriceBookBoundary,
   priceEntriesFromRateCards,
   resolvePriceEntry,
   setNegotiatedPriceEntry,
@@ -1026,6 +1027,55 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     expect(ops.indexOf("lock")).toBeLessThan(ops.indexOf("select"));
   });
 
+  // A key whose only row is CLOSED was priced and then retired; it is not a
+  // key the book has never seen. Backdating its return to the floor collided
+  // with the original floor-dated row, and the upsert reset that row's
+  // `effective_to` to null — erasing the retirement window and repricing
+  // every frame inside it.
+  it("does not reopen a retired row when its model returns while the book is still cold", async () => {
+    const RETIRED_AT = new Date("2026-09-05T00:00:00.000Z");
+    fake.rows.push(
+      priceRow({
+        provider: "anthropic",
+        microsPerMillion: 3_000_000n,
+        effectiveFrom: COLD_BOOK_EFFECTIVE_FROM,
+        effectiveTo: RETIRED_AT,
+      }),
+    );
+    const result = await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [
+        {
+          provider: "anthropic",
+          model: "claude-sonnet-5",
+          modelAliases: [],
+          region: null,
+          tokenClass: "input_uncached",
+          unit: "token",
+          currency: "USD",
+          microsPerMillion: 3_000_000n,
+          effectiveFrom: T1,
+          effectiveTo: null,
+        },
+      ],
+    });
+    expect(result.coldStart).toBe(true);
+    // The retired row keeps its window...
+    const retired = fake.rows.find(
+      (r) => (r.effectiveFrom as Date).getTime() === COLD_BOOK_EFFECTIVE_FROM.getTime(),
+    );
+    expect(retired?.effectiveTo).toEqual(RETIRED_AT);
+    // ...and the return is a successor at the requested instant.
+    expect(fake.rows).toHaveLength(2);
+    expect(
+      fake.rows.some(
+        (r) =>
+          (r.effectiveFrom as Date).getTime() === T1.getTime() &&
+          r.effectiveTo === null,
+      ),
+    ).toBe(true);
+  });
+
   // On a fresh installation the hourly job is the first writer, and a run
   // accepted before its first tick has frames earlier than that tick. Rows
   // effective from the tick could never price them, even on a retry.
@@ -1436,5 +1486,38 @@ describe("the negotiated write path refuses in a shape every surface can classif
       code: "conflict",
       reason: "price_entry_already_ended",
     });
+  });
+});
+
+describe("nextPriceBookBoundary", () => {
+  // `now` is read before the catalogs and the transaction, so a sync that
+  // took effect from `now` closed the old row behind frames already priced
+  // against it. A future boundary cannot be observed early.
+  it("is the next top of the hour, strictly after now", () => {
+    const now = new Date("2026-09-18T15:07:42.123Z");
+    expect(nextPriceBookBoundary(now)).toEqual(
+      new Date("2026-09-18T16:00:00.000Z"),
+    );
+  });
+
+  it("moves a full hour when now is exactly on a boundary", () => {
+    const now = new Date("2026-09-18T15:00:00.000Z");
+    expect(nextPriceBookBoundary(now)).toEqual(
+      new Date("2026-09-18T16:00:00.000Z"),
+    );
+  });
+
+  // Stable within the hour, so a retry of the same tick writes the same
+  // instant and the row-key upsert stays idempotent.
+  it("answers the same instant for every moment in one hour", () => {
+    expect(nextPriceBookBoundary(new Date("2026-09-18T15:00:01Z"))).toEqual(
+      nextPriceBookBoundary(new Date("2026-09-18T15:59:59Z")),
+    );
+  });
+
+  it("crosses midnight into the next UTC day", () => {
+    expect(nextPriceBookBoundary(new Date("2026-09-18T23:30:00Z"))).toEqual(
+      new Date("2026-09-19T00:00:00.000Z"),
+    );
   });
 });

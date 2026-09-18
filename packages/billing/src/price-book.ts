@@ -52,6 +52,30 @@ const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 export const COLD_BOOK_EFFECTIVE_FROM = new Date("2020-01-01T00:00:00.000Z");
 
 /**
+ * The instant a scheduled sync's prices take effect: the next top of the hour
+ * after `now`, never `now` itself.
+ *
+ * `now` is read before the catalogs are fetched and before the transaction
+ * commits. Any frame rolled up in that window is priced against the OLD row,
+ * and when the sync then closes that row at `now` and opens its successor from
+ * `now`, the frame's stored cost cites an entry whose window no longer covers
+ * it — and a retry of the rollup quietly reprices it at the new rate. A future
+ * boundary cannot be observed early: every rollup before it reads the old row,
+ * whose window still covers it after the commit, and every rollup after it
+ * reads the successor.
+ *
+ * A whole hour is far longer than a sync takes and matches the job's cadence,
+ * and it is stable within the hour, so a retry of the same tick writes the
+ * same instant and the row-key upsert stays idempotent.
+ */
+export function nextPriceBookBoundary(now: Date): Date {
+  const next = new Date(now.getTime());
+  next.setUTCMinutes(0, 0, 0);
+  next.setUTCHours(next.getUTCHours() + 1);
+  return next;
+}
+
+/**
  * How far before the write instant a negotiated rate may start and still be
  * "now": the instant a caller took before its request, less request latency
  * and clock skew. Anything older is a backdating and is refused, because a
@@ -437,13 +461,24 @@ export async function syncPriceBook(args: {
     const open = new Map<string, Row>();
     for (const row of existing)
       if (row.effectiveTo === null) open.set(key(row), row);
+    // Every key the book has EVER priced, open or closed.
+    //
+    // The floor is for a key the book has never seen — frames of a model it
+    // had no rate for at all. A key whose only row is closed is not that: it
+    // was priced, then retired by a complete snapshot. Treating it as unseen
+    // (which testing `open` alone did) backdated its return to the floor, the
+    // insert collided with the original floor-dated row, and the upsert reset
+    // that row's `effective_to` to null — erasing the retirement window and
+    // silently repricing every frame inside it. A returning key is a successor
+    // at the requested instant, like any other change.
+    const seen = new Set<string>(existing.map((r) => key(r)));
     const coldStart = !existing.some(
       (r) => r.effectiveFrom.getTime() > COLD_BOOK_EFFECTIVE_FROM.getTime(),
     );
     const effectiveFrom = args.effectiveFrom;
     const seeds = coldStart
       ? requested.map((s) =>
-          open.has(key(s))
+          seen.has(key(s))
             ? s
             : { ...s, effectiveFrom: COLD_BOOK_EFFECTIVE_FROM },
         )
