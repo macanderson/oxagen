@@ -14,7 +14,10 @@
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
-import { assertProductionBase } from "./context.steering.github";
+import {
+  assertProductionBase,
+  type SteeringRepository,
+} from "./context.steering.github";
 import {
   GOVERNANCE_PATH,
   mergeRefusal,
@@ -135,6 +138,14 @@ export function createMergeContextPrHandler(
     // below can run after a later PR has published. Stamped with `now()`,
     // the earlier merge sorted newest, and a checkout at that earlier
     // commit read as current while it lacked the later record.
+    //
+    // The branch that performs the merge needs the same instant for the same
+    // reason. Two Context PRs merging at once are two calls to GitHub, and
+    // GitHub can land A before B while A's response comes back after B's; a
+    // local clock then stamps A newer than the commit that descends from it,
+    // and `latestPublication` names an ancestor as the tip a checkout must
+    // reach. So the pull request is read again after the merge and stamped
+    // with the instant GitHub recorded.
     let mergedAt: Date;
     if (pr.merged) {
       // GitHub merged it on an earlier call whose publication did not land.
@@ -155,7 +166,8 @@ export function createMergeContextPrHandler(
           sha: row.headSha,
         })
       ).sha;
-      mergedAt = deps.now();
+      mergedAt =
+        (await mergedAtOnGitHub(deps, repo, row.prNumber)) ?? deps.now();
     }
     await deps.github.deleteBranch(repo, row.branch);
     const result = await deps.store.publishMerge({
@@ -214,6 +226,32 @@ export function createMergeContextPrHandler(
       },
     };
   };
+}
+
+/**
+ * The instant GitHub says the pull request merged. Null when GitHub reports
+ * none, and null when the re-read itself fails.
+ *
+ * The merge already happened by the time this runs, so a failure here must
+ * not throw: the publication is what makes the merge visible to every
+ * checkout, and losing it over a second API call would leave a record merged
+ * on the production branch and absent from the registry until somebody
+ * retried. The caller falls back to its own clock, which is where it started.
+ */
+async function mergedAtOnGitHub(
+  deps: SteeringDeps,
+  repo: SteeringRepository,
+  prNumber: number,
+): Promise<Date | null> {
+  try {
+    return (await deps.github.getPullRequest(repo, prNumber)).mergedAt;
+  } catch (error) {
+    logger.warn(
+      { err: error, pr: prNumber },
+      "context.pr.merge: could not re-read the merged pull request; stamping the publication with this call's clock",
+    );
+    return null;
+  }
 }
 
 export const mergeContextPrHandler = createMergeContextPrHandler(

@@ -910,6 +910,54 @@ describe("merge_context_pr", () => {
     expect(h.now().getTime()).toBeGreaterThan(mergedAt.getTime() + 1000);
   });
 
+  // Two Context PRs merging at once are two calls to GitHub, and GitHub can
+  // land A before B while A's response comes back after B's. The branch that
+  // performs the merge stamped the publication with its own clock, so A could
+  // sort newest over the commit that descends from it, and a checkout at A
+  // read as current while it lacked B's record.
+  it("stamps a merge it performs with GitHub's merge time, not this call's clock", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const out = await createMergeContextPrHandler(h)(
+      { proposalId: id },
+      ctx({ userId: REVIEWER }),
+    );
+    expect(out.status).toBe("merged");
+    const mergedAt = h.github.pulls[0]!.mergedAt!;
+    expect(h.store.records[0]!.publishedAt).toEqual(mergedAt);
+    // Every clock reading after the merge is later, so the stamp can only be
+    // GitHub's.
+    expect(h.now().getTime()).toBeGreaterThan(mergedAt.getTime());
+  });
+
+  // The merge has already landed by the time the re-read runs, so a failure
+  // there must not lose the publication. The handler falls back to its own
+  // clock, which is where it started.
+  it("publishes on its own clock when the merged pull request cannot be re-read", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const github = h.github;
+    const read = github.getPullRequest.bind(github);
+    // The first read is the head check before the merge; the second is the
+    // re-read this fix added.
+    let calls = 0;
+    github.getPullRequest = async (repo, number) => {
+      calls += 1;
+      if (calls > 1) throw new Error("GitHub API error 502");
+      return read(repo, number);
+    };
+    const out = await createMergeContextPrHandler(h)(
+      { proposalId: id },
+      ctx({ userId: REVIEWER }),
+    );
+    expect(out.status).toBe("merged");
+    expect(h.store.records).toHaveLength(1);
+    const mergedAt = h.github.pulls[0]!.mergedAt!;
+    expect(h.store.records[0]!.publishedAt!.getTime()).toBeGreaterThan(
+      mergedAt.getTime(),
+    );
+  });
+
   // `latestPublication` orders by `publishedAt` to name the commit a checkout
   // must reach. A retried publication stamped with the retry's time, after a
   // later merge had already published, named the earlier commit as newest.

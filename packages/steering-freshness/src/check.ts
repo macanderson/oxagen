@@ -71,7 +71,7 @@ import {
 } from "./cache";
 import { PROJECT_DIR_NAME } from "./settings";
 import type { SteeringPolicy } from "./policy";
-import { access } from "node:fs/promises";
+import { lstat } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 
 /**
@@ -691,6 +691,15 @@ export async function checkSteeringFreshness(
  * `root`. Existence is the question, not readability: a file that is there
  * but unreadable is a permissions problem for the agent, not a missing
  * record for the sync to write over.
+ *
+ * `lstat`, not `access`, because the probe must not follow a symbolic link.
+ * A governed record materialised as a link whose target has since gone
+ * answered ENOENT under `access`, so the path was classified absent, never
+ * reached the content comparison, and was never marked dirty. The verdict
+ * then read as safe to sync and `restore --ignore-skip-worktree-bits`
+ * replaced the link with `force` false. The directory entry is what decides:
+ * a link that is there is a materialised path, and what it points at is the
+ * content comparison's question.
  */
 async function absentFromDisk(
   root: string,
@@ -699,7 +708,7 @@ async function absentFromDisk(
   const flags = await Promise.all(
     paths.map(async (path) => {
       try {
-        await access(join(root, path));
+        await lstat(join(root, path));
         return false;
       } catch {
         return true;

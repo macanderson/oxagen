@@ -33,4 +33,13 @@ describe("get_steering_freshness grants", () => {
   it("names no org role outside SystemOrgRole", () => {
     expect(Object.keys(roles.org)).not.toContain("Member");
   });
+
+  // The grants above do not decide the enterprise path. There the resolver
+  // reads `iam.principal_role_assignments`, workspace membership is written
+  // to `workspace_users`, and no human path creates the assignment that joins
+  // them, so a deny default refused every plain workspace member and the CLI
+  // turned that 403 into a machine with no gates.
+  it("defaults to allow, so a workspace member with no IAM assignment is answered", () => {
+    expect(contextSteeringFreshness.defaultEffect).toBe("allow");
+  });
 });

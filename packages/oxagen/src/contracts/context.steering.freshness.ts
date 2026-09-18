@@ -81,17 +81,29 @@ export const contextSteeringFreshness = registerCapability({
   agent: { requiresApproval: false, riskLevel: "low", category: "context" },
   sensitivity: "low",
   mutates: false,
-  defaultEffect: "deny",
+  // `allow`, for the reason `list_members` and `workspace.list` are allow:
+  // on an enterprise org the resolver decides by IAM role grant, and an IAM
+  // role reaches a principal only through an explicit
+  // `principal_role_assignments` row (packages/iam/src/fetch-authz.ts).
+  // Workspace membership is written to `workspace_users`, and no human path
+  // creates the matching assignment, so a deny default refused every
+  // developer who is only a workspace Owner, Member or Viewer. The CLI
+  // converts that 403 to "no answer", which silently removed both workspace
+  // gates from their machine and ran their agent ungated: a denial here is
+  // not a failed panel, it is governance switching itself off.
+  //
+  // The tenant scope the surface established is what bounds the read. The
+  // handler reads only the workspace the request is already scoped to, so
+  // allow grants nothing a caller could not read out of the repository they
+  // have checked out.
+  defaultEffect: "allow",
   // Every role that exists, at both scopes. The workspace list is the one
   // `workspace_users_role_check` enforces (owner, admin, member, billing,
   // compliance, viewer), not the narrower SystemWorkspaceRole type.
   //
-  // A denial here is not merely a failed panel. The CLI swallows every
-  // platform error so a prompt is never blocked by the platform being
-  // unreachable, so a denied caller's machine silently lost the workspace's
-  // `autoSync` and `blockStaleRuns` and their agent ran ungated. A read-only
-  // answer about what is published cannot be the thing that turns governance
-  // off, so everyone who can see the workspace can ask it.
+  // These are the grants a workspace's own IAM configuration starts from.
+  // They do not decide the enterprise path by themselves, which is what
+  // `defaultEffect` above is for.
   defaultRoles: {
     org: {
       Owner: "allow",

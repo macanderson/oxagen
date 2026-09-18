@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -982,6 +982,29 @@ describe("checkSteeringFreshness, a materialised skip-worktree record", () => {
       { cwd: root },
     );
     expect(v.dirty).toEqual([A]);
+  });
+
+  // A record materialised as a symbolic link whose target has since gone is
+  // still a directory entry, and `access` followed the link and reported
+  // ENOENT. The path was then classified absent, never reached the content
+  // comparison, and was never dirt, so an automatic sync read the checkout
+  // as safe and `restore --ignore-skip-worktree-bits` replaced the link with
+  // `force` false. The probe does not follow the link any more.
+  it("is dirt when a dangling symbolic link holds neither the index's nor production's bytes", async () => {
+    const root = await mkdtemp(join(tmpdir(), "steering-check-"));
+    await mkdir(join(root, ".oxagen/rules"), { recursive: true });
+    await symlink(join(root, "gone.toml"), join(root, A));
+    const v = await check(
+      {
+        ...remoteDiff(table(), `M\0${A}\0`),
+        "rev-parse --show-toplevel": root,
+        [LS]: `S ${A}\0`,
+        [`hash-object -- ${A}`]: "link-target-bytes\n",
+      },
+      { cwd: root },
+    );
+    expect(v.dirty).toEqual([A]);
+    expect(isSyncSafe(v)).toBe(false);
   });
 
   it("is unknown when the file cannot be hashed", async () => {

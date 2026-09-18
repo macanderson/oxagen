@@ -624,10 +624,29 @@ export async function resolveContext(
       branch: authority.branch,
       run: execGit,
     });
+  // And WHERE the gates are then enforced is not the working copy's to say
+  // either.
+  //
+  // Locating the committed file through the authority fixed only half of it.
+  // The fold still started from every layer, so the `remote` and `branch` an
+  // uncommitted `.oxagen/settings.json` set survived into the policy the
+  // check runs under. With no platform answer the committed layer carries
+  // only the two booleans, so a checkout could keep a committed
+  // `blockStaleRuns: true` and compare it against an older cached
+  // remote-tracking ref the working copy named: the gate reported `current`
+  // and allowed a checkout that was behind the real production branch.
+  //
+  // So when a committed gate is in force, the comparison runs against the ref
+  // the gates were read from. Nothing else is coherent: gates read from one
+  // branch and enforced against another answer a question nobody asked.
   const fold = (layer: PolicyLayer | null): SteeringPolicy =>
     layer === null
       ? located
-      : resolveSteeringPolicy([...layers, layer], emergency);
+      : {
+          ...resolveSteeringPolicy([...layers, layer], emergency),
+          remote: authority.remote,
+          branch: authority.branch,
+        };
   const committed = await readCommitted();
   if (committed.warning) warnings.push(committed.warning);
   const policy = fold(committed.layer);

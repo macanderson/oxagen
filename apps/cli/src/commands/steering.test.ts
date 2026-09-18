@@ -720,6 +720,63 @@ describe("resolveContext", () => {
     expect(ctx.policy.sources.blockStaleRuns).toBe("project");
   });
 
+  // Reading the committed gates from the authority fixed where they are read.
+  // The comparison still ran against the working copy's `remote` and
+  // `branch`, so a checkout kept the committed `blockStaleRuns: true` and
+  // measured it against an older cached ref: `current`, and a prompt allowed
+  // on a checkout behind the real production branch.
+  it("compares against the authority's ref, not the ref the working copy named", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    await writeFile(
+      join(tmp, ".oxagen", "settings.json"),
+      JSON.stringify({
+        steering: { blockStaleRuns: false, remote: "fork", branch: "stale" },
+      }),
+      "utf8",
+    );
+    gitStub({
+      remotes: { origin: "git@github.com:acme/app.git" },
+      blobs: {
+        "refs/remotes/origin/HEAD:.oxagen/settings.json": JSON.stringify({
+          steering: { blockStaleRuns: true },
+        }),
+      },
+    });
+    const ctx = await resolveContext(tmp);
+    expect(ctx.policy.blockStaleRuns).toBe(true);
+    // The gate is enforced against the ref its own gates came off.
+    expect(ctx.policy.remote).toBe("origin");
+    expect(ctx.policy.branch).toBeNull();
+  });
+
+  // The same pin, reloaded. `evaluateGate` folds again after its fetch, and
+  // that fold reads the same policy the first one did.
+  it("keeps the authority's ref when the policy is reloaded", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    await writeFile(
+      join(tmp, ".oxagen", "settings.json"),
+      JSON.stringify({
+        steering: { blockStaleRuns: false, remote: "fork", branch: "stale" },
+      }),
+      "utf8",
+    );
+    gitStub({
+      remotes: { origin: "git@github.com:acme/app.git" },
+      blobs: {
+        "refs/remotes/origin/HEAD:.oxagen/settings.json": JSON.stringify({
+          steering: { blockStaleRuns: true },
+        }),
+      },
+    });
+    const ctx = await resolveContext(tmp);
+    const again = await ctx.reloadPolicy();
+    expect(again.blockStaleRuns).toBe(true);
+    expect(again.remote).toBe("origin");
+    expect(again.branch).toBeNull();
+  });
+
   it("reads them from the bound remote and the approved branch when the platform answered", async () => {
     const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
     await mkdir(join(tmp, ".oxagen"), { recursive: true });
