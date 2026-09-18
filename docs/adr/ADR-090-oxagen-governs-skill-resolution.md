@@ -1,0 +1,134 @@
+# ADR-090: Oxagen governs skill resolution, and the 2026-09-15 narrowing is reversed
+
+- **Status:** Accepted
+- **Date:** 2026-09-18
+- **Owners:** app, kernel, evidence
+- **Supersedes:** the 2026-09-15 narrowing recorded in `apps/app/ARCHITECTURE.md`
+  (the §0 Skills entry, the §1.2 `/{org}/{ws}/skills` row, the §8 lane note,
+  the 2026-09-15 decision-log entry, and the W13 bullet at "W13 'In the loop'
+  is out of this release")
+- **Related:** ADR-043 (Oxagen governs agents; it does not run them),
+  ADR-072 (`.oxagen/tools/` paths), #3098 (the Skills lane), #3241 (the repository
+  binding this config is read through), Mission Control spec §2, §14, §19,
+  App. C, App. E, App. F,
+  `docs/w13-in-the-loop-scenario.md` and `mockups/pages/skills.md`,
+  `skills-off.md`, `skill-source.md`, `run-interjection.md` in
+  `macanderson/tmp-oxagen-mockups`
+
+## Context
+
+On 2026-09-15 Skills was narrowed to what was already recorded: `/{org}/{ws}/skills`
+lists the skill names wrapped harness sessions reported at session start, read by
+`list_skills` over `tacho.sessions.skills_available`. Everything else the mockup
+draws — the catalog with versions and digests, the `search_skills` console, the
+interjection seat, reflection, and the config's version history — was to render
+nothing. The W13 bullet put the whole scenario out of the release, on the reasoning
+that `CLAUDE.md` states there is no skill system in this repo, spec §2 states Oxagen
+has no skills engine, and a scenario file is not the place to reverse either.
+
+That reasoning was right about the mechanism and wrong about the conclusion. It read
+"no skills engine" as "no skills surface", and those are different claims. Running a
+skill and resolving one are separate acts, and only the first is what ADR-043 cut.
+
+What the narrowing left is a page that answers one question — which skill names a
+harness happened to report — with no version, no digest, no source, no cost and no
+decision. That is an inventory, not a control. An operator cannot tell from it which
+skills an agent was allowed to find, which were held back, or why, because Oxagen
+never decided any of it.
+
+The mockup's Skills page (`pSkills()` in `mockups/src/engine.js`, specified in
+`mockups/pages/skills.md`) is the full control: five tabs (Catalog · Search ·
+In the loop · Reflection · Versions), four dialogs (`skenable`, `skcfg`, `skill`,
+`skadd`) and the creation wizard. W13 "In the loop" is the scenario it is built
+from. Maintainer decision of 2026-09-18: build that, in full.
+
+## Decision
+
+**Oxagen governs skill resolution. It still never runs a skill.** ADR-043 stands
+unchanged, and spec §2 keeps its "no skills engine" line; §2 gains one sentence
+distinguishing running from resolving. Resolution is the same shape as the toolbelt:
+Oxagen holds no credential and runs no tool, and still decides every call.
+
+1. **`.oxagen/skills.toml` is the config of record.** It lives in the workspace's
+   main repository on its production branch, is read through the repository binding
+   (#3241), and changes only by pull request. Its absence means skills are off, and
+   a workspace is created with `skills.enabled` false — the off state is the value a
+   workspace is born with, not one somebody set.
+
+2. **Resolution is the governed act.** The config decides which skills an agent may
+   find, which it may load, what that load cost, and what was withheld. A skill is
+   `id@version` with a digest.
+
+3. **Withholding happens before ranking.** A skill that is out of scope, or whose
+   digest changed since a person approved it, is dropped before ranking — it is not
+   a low-scoring result, it is not a result. The agent is told the count withheld and
+   the reason class, never the name. A withholding that names what it withholds has
+   not withheld it.
+
+4. **Turning skills on adds exactly one tool,** `search_skills`, to every belt in the
+   workspace. No tool is granted, no tier changes, no budget moves. The switch is
+   rendered as the outcome; the pull request is the control, and the person who
+   opened it is on the receipt.
+
+5. **A run pins its config version at start,** and replay resolves that pinned
+   version rather than today's config. A resolution that changed under a replay would
+   make the recorder a liar.
+
+6. **An unbound repository with skills on stops the loop before the first model
+   call.** `unbound_repo = "ask"` is the policy; it times out to `deny` at 30 minutes.
+   There is no `allow` — a config that could silently proceed without a repository to
+   resolve against would make the whole control optional.
+
+7. **Reflection is research-only and quarantined.** `use = "research"` is the only
+   accepted value. A capture is taken out of band after the seal, is excluded from the
+   sealed chain, is not replayed on a fork, is billed as overhead rather than
+   productive spend, is readable only under an organization-level `research.read`
+   grant, and expires. It never enters a context frame, is never promoted to steering,
+   and is not evidence about a person.
+
+8. **New stores** (App. A gains them): `skills.config_versions`, `skills.resolutions`,
+   and `reflections` behind the quarantine. Config history is git history, not a table.
+
+9. **New frame kinds** (App. C gains them): `skills.searched`, `skills.loaded`,
+   `skills.resolved`, `control.interject`, `control.answer`, `reflection.captured`,
+   `repo.unknown`, `repo.bound`, `workspace.created`.
+
+10. **`list_skills` keeps its job and its name.** The observed-inventory read is not
+    replaced by resolution; it answers a different question — what the harness
+    actually had — and the page keeps that section beside the resolved catalog. Its
+    contract comment stops citing §2 as authority for "does not resolve".
+
+## Consequences
+
+- Spec §2 gains the run-versus-resolve sentence and keeps "no skills engine". §14's
+  page count and screen table, App. E's `dispatch_command` entry and capability rows,
+  App. F's route map and §19's page-coverage table all gain Skills and W13.
+- `apps/app/ARCHITECTURE.md` loses the narrowing in all five places and gains this
+  decision in its log.
+- #3098 grows from one section to the mockup's five tabs and its backend, and gains a
+  dependency on #3241: the config is read through the repository binding, so the
+  binding lands first.
+- Build order is load-bearing: the resolution store and config versioning first, then
+  the off state, then the page. Shipping the off state before the page is what makes
+  the default path right from the first commit rather than retrofitted onto a surface
+  that assumed the opposite.
+- The e2e rule is untouched. The page is proven by component and action tests;
+  `apps/app/e2e` stays `login`, `pay` and `page-load`.
+
+## What this does not decide
+
+It does not put a skills engine in this repo. Oxagen runs no skill, holds no sandbox
+and executes no harness. It does not reopen ADR-043. It does not make reflection
+evidence: the quarantine is a fence, not a staging area, and any later proposal to
+read a reflection into the record is a new ADR, not an extension of this one.
+
+## Alternatives rejected
+
+- **Keep the narrowing and ship the inventory.** Rejected: it presents as a control
+  something that decides nothing, which is the failure this product exists to remove.
+- **Adopt resolution but skip the interjection seat.** Rejected: the seat is what makes
+  resolution answerable to a person when the config cannot resolve. Without it, an
+  unbound repository either proceeds blind or fails silently.
+- **Put the config in Postgres with a UI editor.** Rejected: a definition of record
+  that a person can change without a reviewable commit is not a record. Git history is
+  the version history, and the pull request is the control.
