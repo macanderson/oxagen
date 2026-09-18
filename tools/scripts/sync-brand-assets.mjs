@@ -311,6 +311,12 @@ function staticSurface(root, brand) {
     `spinners/${brand}-spinner.svg`,
     `${root}/assets/brand/${brand}-spinner.svg`,
   );
+  // The static site serves its faces from /fonts/: the kit's three, beside
+  // whatever else the site ships there.
+  for (const f of readdirSync(join(BRAND, "fonts"))) {
+    if (f.endsWith(".woff2") || f.startsWith("LICENSE"))
+      copy(`fonts/${f}`, `${root}/fonts/${f}`);
+  }
 }
 
 /**
@@ -333,13 +339,24 @@ function skill() {
   walk("skills/oxagen-branding");
 }
 
-/** The face. One copy, in @oxagen/ui, imported by every app. */
+/**
+ * The three faces: Space Grotesk (display), Geist (text), Monaspace Neon (code).
+ * One copy, in @oxagen/ui, imported by every app. `house-fonts.css` is the
+ * kit's @font-face file with its paths moved from ../fonts/ to ./fonts/.
+ */
 function fonts() {
   const dir = "packages/ui/src/styles/fonts";
   for (const f of readdirSync(join(BRAND, "fonts"))) {
-    if (f.endsWith(".woff2")) copy(`fonts/${f}`, `${dir}/${f}`);
+    if (f.endsWith(".woff2") || f.startsWith("LICENSE"))
+      copy(`fonts/${f}`, `${dir}/${f}`);
   }
-  copy("fonts/LICENSE-OFL.txt", `${dir}/LICENSE-OFL.txt`);
+  emit(
+    "packages/ui/src/styles/house-fonts.css",
+    readFileSync(join(BRAND, "tokens/house-fonts.css"), "utf8").replaceAll(
+      "url(../fonts/",
+      "url(./fonts/",
+    ),
+  );
 }
 
 /** The palette, verbatim from the kit, for anything that reads it as data. */
@@ -379,12 +396,30 @@ function marks() {
     };
   };
 
+  // An icon is one or more parts. Stella's is one gold glyph. Oxagen's hive is
+  // four cells outlined in the surface's ink and two filled with the metal,
+  // one at half strength. Each part keeps the role the kit gave it: `ink`
+  // takes currentColor, `accent` takes the gold.
   const icon = (brand) => {
     const src = read(`${brand}-icon-adaptive.svg`);
+    const parts = [...src.matchAll(/<path\b([^>]*)\/>/g)].map(([, attrs]) => {
+      const attr = (name) =>
+        attrs.match(new RegExp(`\\b${name}="([^"]+)"`))?.[1];
+      const stroked = attr("stroke") === "currentColor";
+      const part = {
+        d: attr("d"),
+        role: stroked || attr("fill") === "currentColor" ? "ink" : "accent",
+      };
+      if (stroked) part.strokeWidth = Number(attr("stroke-width") ?? 1);
+      if (attr("opacity")) part.opacity = Number(attr("opacity"));
+      return part;
+    });
+    if (!parts.length)
+      throw new Error(`no paths in ${brand}-icon-adaptive.svg`);
     return {
       viewBox: viewBox(src),
       transform: src.match(/<g transform="([^"]+)"/)[1],
-      path: pathData(src, "mark"),
+      parts,
     };
   };
 
@@ -413,9 +448,9 @@ function marks() {
  * in BOTH themes, which is what the kit's own light and dark files do — the
  * "gold becomes its deep shade on paper" rule governs WORDS, not the mark.
  *
- * The icons are one path and one colour by design. A two-colour mark has to be
- * redrawn for every ground it lands on; a one-colour mark is placed and
- * forgotten, and an operating system can tint it however it likes.
+ * An icon is a list of parts. Stella's is the gold asterisk alone. Oxagen's is
+ * the hive: cell outlines in currentColor (\`ink\`) and two cells in the gold
+ * (\`accent\`), one at half strength. A mono tone paints every part one colour.
  */
 
 /** The kit's gold, pinned. Identity only — never a surface, never a state. */
@@ -434,12 +469,20 @@ export interface WordmarkGeometry {
   readonly accent: string;
 }
 
+export interface IconPart {
+  readonly d: string;
+  /** \`ink\` takes currentColor; \`accent\` takes the gold. */
+  readonly role: "ink" | "accent";
+  /** Set on an outlined part: it is stroked, not filled. */
+  readonly strokeWidth?: number;
+  readonly opacity?: number;
+}
+
 export interface IconGeometry {
   readonly viewBox: string;
-  /** Places the glyph in the 96-unit box the kit fitted it to. */
+  /** Places the mark in the 96-unit box the kit fitted it to. */
   readonly transform: string;
-  /** The whole mark, one path, one colour. */
-  readonly path: string;
+  readonly parts: readonly IconPart[];
 }
 
 export interface BrandGeometry {

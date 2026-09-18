@@ -150,10 +150,47 @@ Held with the dod lines, for bounded tasks only:
 - **Another person can recompute the verdict.** `oxagen dod verify` runs with no account and no network. It shows whether the recorded verdict matches, not that every requirement was captured.
 - **The meter follows the proof.** Charge for proven runs. Report runs and governed actions as secondary meters.
 
+## The buyer we are built for
+
+The operator is the user. The buyer is the technology executive who answers for the agent workforce and its spend, usually a CIO or a CTO, or the platform leader who answers for both. Operators adopt Mission Control because it is where their job happens. The buyer signs because they have to answer for what the workforce did.
+
+### The statement
+
+Oxagen sells to the technology executive who is asked to ship autonomous agents across the company and to account for what those agents do, at the same time, with a modernization program already underway. They can see the total. They cannot yet say which agent spent it, on whose behalf, under which rule, or why a task took the path it took. Leadership above them is asking for more output from a smaller team, and the answers available today are estimates. What they buy from Oxagen is the ability to answer: an identity per agent, a mandate a named team wrote, and a record of governed activity that another person can read.
+
+### What qualifies them
+
+- Agents run in more than one team, built by more than one group, and no single page lists them.
+- A named person is accountable for agent spend and reports a number upward that they cannot attribute below the account.
+- A migration or modernization program is in flight, so new agent work lands beside systems that already have owners, change windows, and auditors.
+- Security, finance, and engineering each own part of what an agent may do, and each of them writes their part somewhere different today.
+- Someone above them has asked, in the last quarter, for output the current reporting cannot substantiate.
+
+### What sets them aside, for now
+
+- One team, one agent, one person who holds the whole picture.
+- Agents that only read. The mandate earns its keep when an agent requests actions in systems other people own.
+- No one accountable for agent spend, which means no one to read the Spend page.
+- A mandate to stop agent adoption rather than to operate it. Mission Control is for running the workforce.
+
+### How to open with them
+
+Ask. Do not assert. `rule-outreach` governs first contact and it applies here: do not tell this buyer what their agents hold, what their reporting hides, or how their teams work. Open with one of these:
+
+- When a team adds an agent, where does its authority get set, and who sets it?
+- Can you attribute last month's agent spend to the agent, the run, and the person who started the run?
+- When an agent requests an action in a system another team owns, which rule answers it, and where is that answer recorded?
+- Who signs when the answer is a person?
+
+### The pain stays internal
+
+What this buyer says in a room is qualification material, not copy. A large invoice for a small change, a review that cannot name the agent or explain why it took the path it took, and pressure from above for output the reporting cannot substantiate: all three sharpen discovery and none of them belongs in a headline, an ad, a subject line, or a slide. Published copy states the mechanism and lets the reader draw the comparison. The registry carries this as `rule-icp` and `rule-buyer-pain-internal`, and finding 06 is why the bill headline was retired.
+
 ## The buyer and the sentence they repeat
 
 Hypothetical. These are the sentences the copy should make true. They are not testimonials, and they never appear in customer-facing copy as quotes. A real quote needs the customer's attribution permission.
 
+- The technology executive, asked in a board meeting: "I can say which agents did the work, what each one was allowed to do, and what it cost."
 - The operator, after a week: "I can see what each agent is waiting on, and answer it from one place."
 - The security lead, after a month: "For the connections Oxagen mediates, the agents ask, and I can read every answer."
 - The finance lead, reading the Spend page without translation: "I can say which agent spent what, on whose behalf, under which rule."
