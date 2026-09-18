@@ -1,6 +1,18 @@
-import { nextPriceBookBoundary, syncPriceBookFromSources } from "@oxagen/billing";
+import {
+  listRunsWithIncompleteCost,
+  nextPriceBookBoundary,
+  rebuildDailyTotals,
+  rebuildRunTotals,
+  syncPriceBookFromSources,
+  utcDay,
+} from "@oxagen/billing";
 import { createFunction } from "../create-function";
 import { logger } from "../logger";
+
+/** Runs re-rolled per backdated sync; the rest wait for the next one. */
+const REPRICE_BATCH = 500;
+
+type WorkspaceDay = { orgId: string; workspaceId: string; day: string };
 
 /**
  * `cost.price-book-sync` — keep `cost.price_entries` filled, hourly, without
@@ -38,6 +50,14 @@ import { logger } from "../logger";
  * The concurrency limit is 1 across the whole function: two syncs in flight
  * would race the same rows with two different `effectiveFrom` instants, and
  * the loser would leave two rows open for one key.
+ *
+ * A sync that backdated rows also re-rolls the runs those rows can now
+ * price. On a fresh installation runs seal before the first sync, and a sync
+ * that ran with a catalog down leaves that catalog's models unpriced until
+ * it recovers; `cost.run-rollup` has already written a completed
+ * `run_totals` row with a blank or `estimated` cost, and the nightly sweep
+ * skips it because its `rolled_up_at` is after its seal. Those costs stayed
+ * wrong for ever. Both rebuilds are idempotent and replace what they find.
  */
 export const [costPriceBookSync] = createFunction(
   {
@@ -68,6 +88,53 @@ export const [costPriceBookSync] = createFunction(
         held: result.held,
       };
     });
+
+    // Only after a backdated write: a row effective from the next boundary
+    // prices nothing that has already run, so there is nothing to re-roll.
+    let repriced = 0;
+    if (report.coldStart && report.written > 0) {
+      const pending = await step.run("list-incomplete-runs", () =>
+        listRunsWithIncompleteCost({ limit: REPRICE_BATCH }),
+      );
+      const days = new Map<string, WorkspaceDay>();
+      for (const runId of pending) {
+        const day = await step.run(
+          `run-${runId}`,
+          async (): Promise<WorkspaceDay | null> => {
+            try {
+              const record = await rebuildRunTotals(runId);
+              if (!record) return null;
+              return {
+                orgId: record.orgId,
+                workspaceId: record.workspaceId,
+                day: utcDay(record.startedAt),
+              };
+            } catch (err) {
+              // One run's degraded frame read must not stop the pass; the
+              // run stays incomplete and the next backdated sync retries it.
+              logger.warn(
+                { runId, err },
+                "cost.price-book-sync: run rollup failed",
+              );
+              return null;
+            }
+          },
+        );
+        if (day) {
+          repriced += 1;
+          days.set(`${day.workspaceId}:${day.day}`, day);
+        }
+      }
+      for (const target of days.values()) {
+        await step.run(`daily-${target.workspaceId}-${target.day}`, () =>
+          rebuildDailyTotals(target),
+        );
+      }
+      logger.info(
+        { pending: pending.length, repriced, workspaceDays: days.size },
+        "cost.price-book-sync: re-rolled runs the backdated prices can price",
+      );
+    }
 
     if (report.failures.length > 0)
       logger.warn(
@@ -102,6 +169,6 @@ export const [costPriceBookSync] = createFunction(
         "cost.price-book-sync complete",
       );
 
-    return report;
+    return { ...report, repriced };
   },
 );

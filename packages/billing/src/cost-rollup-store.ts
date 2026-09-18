@@ -655,6 +655,34 @@ export async function listRunsAwaitingRollup(args: {
 }
 
 /** The workspaces that have run rows starting on `day`. */
+/**
+ * Rolled-up runs whose cost is incomplete: `cost_basis` null (no frame
+ * priced at all) or `estimated` (some class had no price). Oldest first.
+ *
+ * These are the runs a newly written price can still change. The nightly
+ * sweep does not reach them: it lists runs whose totals are missing or older
+ * than their seal, and one of these has a `rolled_up_at` after its seal
+ * already. On a fresh installation runs seal before the first price-book
+ * sync, and a sync that ran with a catalog down leaves that catalog's models
+ * unpriced until it recovers, so without this their cost stayed blank for
+ * ever.
+ */
+export async function listRunsWithIncompleteCost(args: {
+  limit: number;
+}): Promise<string[]> {
+  return withSystemDb(async (tx) => {
+    const rows = await tx
+      .select({ runId: totals.runId })
+      .from(totals)
+      .where(
+        or(isNull(totals.costBasis), eq(totals.costBasis, "estimated")),
+      )
+      .orderBy(asc(totals.startedAt))
+      .limit(args.limit);
+    return rows.map((r) => r.runId);
+  });
+}
+
 export async function listWorkspacesWithRuns(args: {
   day: string;
 }): Promise<{ orgId: string; workspaceId: string }[]> {
