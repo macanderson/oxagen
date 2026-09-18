@@ -236,8 +236,11 @@ strategic drift, not to nag maintenance.
    exists? (drifts)
 5. Is it front-line investment in a market we explicitly declined to fight
    (connector breadth, standalone evals, framework mindshare)? (drifts)
-6. Does it make Oxagen run agents rather than govern them — an engine, sandbox,
-   fan-out, or executor as a product surface? (drifts)
+6. Does it make Oxagen run agents rather than govern them — an engine, fan-out,
+   or executor as a product surface, or a sandbox that runs the agent's turns?
+   (drifts) A launcher that only confines a process, so its one egress is the
+   gateway, and that runs no turn of its own (the contained tier, ADR-096), is
+   governance, not a runtime. (advances)
 7. Does it strengthen or weaken the enforced contract — the binding of identity,
    knowledge scope, permitted action, commercial terms, outcome, and audit record
    into one object? (advances / drifts)
