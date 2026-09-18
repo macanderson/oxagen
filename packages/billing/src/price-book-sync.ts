@@ -103,7 +103,7 @@ export interface SyncPriceBookFromSourcesArgs {
     effectiveFrom: Date;
     seeds: readonly PriceEntrySeed[];
     retireAbsent: boolean;
-    retireOverrides: boolean;
+    completedCatalogs: readonly PriceSourceId[];
   }) => Promise<{
     written: number;
     unchanged: number;
@@ -170,26 +170,35 @@ export async function syncPriceBookFromSources(
       tokens: {},
       images: IMAGE_RATE_CARD,
       videos: VIDEO_RATE_CARD,
-    }),
+    }).map((s) => ({ ...s, catalog: "in_code_card" as const })),
   ];
 
   const failures = catalogs
     .filter((c): c is PriceSourceResult & { error: string } => c.error !== null)
     .map((c) => ({ source: c.source, error: c.error }));
 
-  // The seeds are the whole book only when every source answered. A catalog
-  // that failed contributed nothing, so a row it priced last time is absent
-  // from the seeds because of the outage, not because the price ended; an
-  // offline run never asked. Retiring on those runs would close every row the
-  // failed catalog owned and leave its models unpriced until it came back.
-  // On a complete snapshot, though, a row nothing emits IS a price that
-  // ended, and keeping it open prices a withdrawn model at a rate nobody
-  // publishes any more.
+  // Retirement is decided per catalog. A row absent from the seeds is a
+  // price that ended only if the catalog that published it answered
+  // completely this run; a row from a catalog that failed, or was held
+  // behind a failed one, is absent because nobody asked, and closing it
+  // would leave its models unpriced until the catalog came back. Deciding
+  // this book-wide (retire only when EVERY catalog answered) let a model
+  // OpenRouter withdrew stay priced for as long as models.dev was down.
+  //
+  // `retireAbsent` is the book-wide statement, kept for rows written before
+  // the catalog column existed: those retire only when every source
+  // answered, as before. An offline run asked no catalog at all.
   const retireAbsent = args.offline !== true && failures.length === 0;
-  // The overrides are this installation's own environment, read completely
-  // on every run, so a withdrawn one retires whatever the catalogs did. An
-  // offline run still reads them.
-  const retireOverrides = true;
+  // The overrides and the in-code card are read from this process and never
+  // fail, so they always complete, even offline. A published catalog
+  // completes when it answered and was not held behind a failed one.
+  const completedCatalogs: PriceSourceId[] = [
+    "operator_override",
+    "in_code_card",
+    ...catalogs
+      .filter((c) => c.error === null && !held.includes(c.source))
+      .map((c) => c.source),
+  ];
 
   if (args.dryRun === true)
     return {
@@ -213,19 +222,19 @@ export async function syncPriceBookFromSources(
       effectiveFrom: Date;
       seeds: readonly PriceEntrySeed[];
       retireAbsent: boolean;
-      retireOverrides: boolean;
+      completedCatalogs: readonly PriceSourceId[];
     }) =>
       syncPriceBook({
         effectiveFrom: a.effectiveFrom,
         seeds: a.seeds,
         retireAbsent: a.retireAbsent,
-        retireOverrides: a.retireOverrides,
+        completedCatalogs: a.completedCatalogs,
       }));
   const result = await write({
     effectiveFrom: args.effectiveFrom,
     seeds,
     retireAbsent,
-    retireOverrides,
+    completedCatalogs,
   });
 
   return {

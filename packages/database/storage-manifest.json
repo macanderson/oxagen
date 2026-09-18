@@ -3424,7 +3424,7 @@
       "writes": []
     }
   ],
-  "contentHash": "13e0bec29c36f4d787ac7df56a33988889ee23dc62abf084ed5f54fc8ca63c5a",
+  "contentHash": "36ca1257d20835ac5483ae4436caeb0ac710373139da0f802b0c1f46603c5509",
   "domains": [
     {
       "name": "agent",
@@ -11708,6 +11708,12 @@
         {
           "name": "source",
           "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "catalog",
+          "nullable": true,
           "primaryKey": false,
           "type": "text"
         }

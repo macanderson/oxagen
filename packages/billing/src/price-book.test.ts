@@ -614,7 +614,9 @@ describe("the negotiated write path", () => {
     expect(ops.indexOf("lock")).toBeLessThan(ops.indexOf("select"));
     // The SAME locks the write takes, in the same order: the class first,
     // then the key. Not a second set the write never waits on.
-    const closeLocks = fake.log.filter((l) => l.op === "lock").map((l) => l.sql);
+    const closeLocks = fake.log
+      .filter((l) => l.op === "lock")
+      .map((l) => l.sql);
     expect(closeLocks).toEqual(setLocks);
     expect(closeLocks[0]).toContain("price_entry_class:");
   });
@@ -1199,12 +1201,11 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
         provider: "openrouter",
         microsPerMillion: 3_000_000n,
         effectiveFrom: COLD_BOOK_EFFECTIVE_FROM,
-        createdAt: new Date("2026-09-17T00:00:00.000Z"),
+        createdAt: new Date("2026-09-08T00:00:00.000Z"),
       }),
     );
     const result = await syncPriceBook({
       effectiveFrom: T1,
-      now: new Date("2026-09-18T00:00:00.000Z"),
       seeds: [
         {
           provider: "anthropic",
@@ -1301,7 +1302,9 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     expect(result.coldStart).toBe(true);
     // The retired row keeps its window...
     const retired = fake.rows.find(
-      (r) => (r.effectiveFrom as Date).getTime() === COLD_BOOK_EFFECTIVE_FROM.getTime(),
+      (r) =>
+        (r.effectiveFrom as Date).getTime() ===
+        COLD_BOOK_EFFECTIVE_FROM.getTime(),
     );
     expect(retired?.effectiveTo).toEqual(RETIRED_AT);
     // ...and the return is a successor at the requested instant.
@@ -1352,8 +1355,9 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
       })?.microsPerMillion,
     ).toBe(3_000_000n);
 
-    // A complete snapshot takes the requested instant for a key already
-    // priced, and that real-instant row is what ends cold start.
+    // A repricing of a key already priced takes the requested instant. The
+    // floor row has priced every frame since the first sync, so it closes
+    // there and a successor carries the new rate; it is never rewritten.
     const again = await syncPriceBook({
       effectiveFrom: T2,
       retireAbsent: true,
@@ -1372,23 +1376,55 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
         },
       ],
     });
-    // The book was still cold when that sync began (every row sat at the
-    // floor); the run vouched for a complete snapshot, so the correction
-    // takes the requested instant, and that row is what ends cold start.
     expect(again.coldStart).toBe(true);
-    expect(
-      fake.rows.find((r) => r.effectiveTo === null)!.effectiveFrom,
-    ).toEqual(T2);
-    const warm = await syncPriceBook({ effectiveFrom: T2, seeds: [] });
-    expect(warm.coldStart).toBe(false);
+    const floorRow = fake.rows.find(
+      (r) =>
+        (r.effectiveFrom as Date).getTime() ===
+        COLD_BOOK_EFFECTIVE_FROM.getTime(),
+    )!;
+    expect(floorRow.microsPerMillion).toBe(3_000_000n);
+    expect(floorRow.effectiveTo).toEqual(T2);
+    const successor = fake.rows.find((r) => r.effectiveTo === null)!;
+    expect(successor.effectiveFrom).toEqual(T2);
+    expect(successor.microsPerMillion).toBe(2_000_000n);
+    // That successor is not proof that initialization completed. Only the
+    // window is, so a key the book has never priced is still backdated.
+    const T3 = new Date(T2.getTime() + 3_600_000);
+    const still = await syncPriceBook({
+      effectiveFrom: T3,
+      seeds: [
+        {
+          provider: "openai",
+          model: "gpt-9",
+          modelAliases: [],
+          region: null,
+          tokenClass: "input_uncached",
+          unit: "token",
+          currency: "USD",
+          microsPerMillion: 1_000_000n,
+          effectiveFrom: T3,
+          effectiveTo: null,
+        },
+      ],
+    });
+    expect(still.coldStart).toBe(true);
+    expect(fake.rows.find((r) => r.model === "gpt-9")!.effectiveFrom).toEqual(
+      COLD_BOOK_EFFECTIVE_FROM,
+    );
   });
 
-  // models.dev down, and an OpenRouter rate moves. That repricing used to
-  // write a real-instant row and end cold start, so the models recovered from
-  // models.dev on a later run started at that later boundary, and calls made
-  // before the recovery stayed unpriced for good.
+  // models.dev down, and an OpenRouter rate moves. That repricing once ended
+  // cold start, so the models recovered from models.dev on a later run
+  // started at that later boundary, and calls made before the recovery
+  // stayed unpriced for good. The repair of that, correcting the floor row in
+  // place, changed settled costs under the same entry id. Now the floor row
+  // closes and a successor carries the rate, and the book stays cold.
   it("stays cold through a repricing on a partial run, so a later recovery still backdates", async () => {
-    const seedFor = (model: string, micros: bigint, at: Date): PriceEntrySeed => ({
+    const seedFor = (
+      model: string,
+      micros: bigint,
+      at: Date,
+    ): PriceEntrySeed => ({
       provider: "anthropic",
       model,
       modelAliases: [],
@@ -1413,15 +1449,13 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
       retireAbsent: false,
     });
     expect(repriced.coldStart).toBe(true);
-    // The rate updated in place, and nothing sits at a real instant yet.
-    expect(
-      fake.rows.every(
-        (r) =>
-          (r.effectiveFrom as Date).getTime() ===
-          COLD_BOOK_EFFECTIVE_FROM.getTime(),
-      ),
-    ).toBe(true);
-    expect(fake.rows[0]!.microsPerMillion).toBe(2_500_000n);
+    // The floor row, which every frame so far was priced with, is untouched
+    // except for its close; the new rate is a successor at T2.
+    expect(fake.rows[0]!.microsPerMillion).toBe(3_000_000n);
+    expect(fake.rows[0]!.effectiveTo).toEqual(T2);
+    const successor = fake.rows.find((r) => r.effectiveTo === null)!;
+    expect(successor.effectiveFrom).toEqual(T2);
+    expect(successor.microsPerMillion).toBe(2_500_000n);
     // Third sync, the other catalog recovers: its model is backdated too.
     const T3 = new Date(T2.getTime() + 3_600_000);
     const recovered = await syncPriceBook({
@@ -1433,9 +1467,9 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
       retireAbsent: true,
     });
     expect(recovered.coldStart).toBe(true);
-    expect(
-      fake.rows.find((r) => r.model === "gpt-9")!.effectiveFrom,
-    ).toEqual(COLD_BOOK_EFFECTIVE_FROM);
+    expect(fake.rows.find((r) => r.model === "gpt-9")!.effectiveFrom).toEqual(
+      COLD_BOOK_EFFECTIVE_FROM,
+    );
   });
 
   // A first sync that ran with a catalog down seeds only the card's models.
@@ -1666,7 +1700,7 @@ describe("syncPriceBook retires what a complete refresh no longer emits", () => 
     const result = await syncPriceBook({
       effectiveFrom: BOUNDARY,
       now: new Date("2026-09-18T15:30:00.000Z"),
-      seeds: [seed()],
+      seeds: [seed({ effectiveFrom: BOUNDARY })],
       retireAbsent: true,
     });
     expect(result.retired).toBeGreaterThanOrEqual(1);
@@ -1682,6 +1716,56 @@ describe("syncPriceBook retires what a complete refresh no longer emits", () => 
     expect(
       fake.rows.find((r) => r.model === "claude-sonnet-4")!.effectiveTo,
     ).toBeNull();
+  });
+
+  // A partial first sync left the book cold; a later refresh waited on the
+  // lock until its boundary passed. Exempting the whole cold transaction let
+  // that refresh close a repriced key's floor row in the past, and frames
+  // rolled up during the wait cited a window that no longer covered them.
+  it("holds the boundary on a cold book for every write that lands at a real instant", async () => {
+    const late = new Date(T1.getTime() + 60_000);
+    fake.rows.push(
+      priceRow({
+        model: "claude-sonnet-5",
+        effectiveFrom: COLD_BOOK_EFFECTIVE_FROM,
+        createdAt: TEST_NOW,
+        catalog: "models_dev",
+      }),
+    );
+    // A key already priced, at a changed rate: its successor would land at
+    // T1, which has passed. Refused, and the floor row is left as it was.
+    await expect(
+      syncPriceBook({
+        effectiveFrom: T1,
+        seeds: [seed({ microsPerMillion: 2_000_000n })],
+        now: late,
+      }),
+    ).rejects.toMatchObject({ reason: "price_book_boundary_passed" });
+    expect(fake.rows).toHaveLength(1);
+    expect(fake.rows[0]!.effectiveTo).toBeNull();
+    // A retirement closes at the boundary too.
+    await expect(
+      syncPriceBook({
+        effectiveFrom: T1,
+        seeds: [],
+        retireAbsent: true,
+        completedCatalogs: ["models_dev"],
+        now: late,
+      }),
+    ).rejects.toMatchObject({ reason: "price_book_boundary_passed" });
+    expect(fake.rows[0]!.effectiveTo).toBeNull();
+    // A key the book has never priced lands at the floor, below every
+    // frame, and is the one write the passed boundary does not touch.
+    const result = await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [seed(), seed({ model: "gpt-9", microsPerMillion: 1_000_000n })],
+      now: late,
+    });
+    expect(result.coldStart).toBe(true);
+    expect(result.written).toBe(1);
+    expect(fake.rows.find((r) => r.model === "gpt-9")!.effectiveFrom).toEqual(
+      COLD_BOOK_EFFECTIVE_FROM,
+    );
   });
 
   // The lock wait is unbounded. A clock read before it passed the boundary
@@ -1722,15 +1806,23 @@ describe("syncPriceBook retires what a complete refresh no longer emits", () => 
   // billing on terms the operator withdrew, for as long as an outage lasted.
   it("retires a withdrawn override on a run where a catalog was down", async () => {
     fake.rows.push(
-      priceRow({ model: "claude-sonnet-4", source: "override" }),
-      // A catalog row is still protected on an incomplete run.
-      priceRow({ model: "claude-haiku-4", source: "list" }),
+      priceRow({
+        model: "claude-sonnet-4",
+        source: "override",
+        catalog: "operator_override",
+      }),
+      // A row from the catalog that failed is still protected.
+      priceRow({
+        model: "claude-haiku-4",
+        source: "list",
+        catalog: "models_dev",
+      }),
     );
     const result = await syncPriceBook({
       effectiveFrom: T1,
       seeds: [seed()],
       retireAbsent: false,
-      retireOverrides: true,
+      completedCatalogs: ["operator_override", "in_code_card", "openrouter"],
     });
     expect(result.retired).toBe(1);
     const byModel = (m: string) => fake.rows.find((r) => r.model === m)!;
@@ -1754,14 +1846,46 @@ describe("syncPriceBook retires what a complete refresh no longer emits", () => 
     expect(fake.rows[0]!.effectiveTo).toBeNull();
   });
 
+  // models.dev down, OpenRouter answered and withdrew a model. Deciding
+  // retirement book-wide kept the OpenRouter row open for as long as the
+  // unrelated catalog stayed down, and runs used a withdrawn rate.
+  it("retires a row its own catalog withdrew while another catalog is down", async () => {
+    fake.rows.push(
+      priceRow({ model: "withdrawn-by-openrouter", catalog: "openrouter" }),
+      priceRow({ model: "owned-by-models-dev", catalog: "models_dev" }),
+      // Written before the column existed: retired only on a complete run.
+      priceRow({ model: "legacy-unstamped", catalog: null }),
+    );
+    const result = await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [seed()],
+      retireAbsent: false,
+      completedCatalogs: ["operator_override", "in_code_card", "openrouter"],
+    });
+    expect(result.retired).toBe(1);
+    const byModel = (m: string) => fake.rows.find((r) => r.model === m)!;
+    expect(byModel("withdrawn-by-openrouter").effectiveTo).toEqual(T1);
+    expect(byModel("owned-by-models-dev").effectiveTo).toBeNull();
+    expect(byModel("legacy-unstamped").effectiveTo).toBeNull();
+  });
+
+  it("stamps the catalog on every row it writes, and re-stamps one that matched", async () => {
+    fake.rows.push(priceRow({ catalog: null }));
+    await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [seed({ catalog: "openrouter" })],
+    });
+    expect(fake.rows[0]!.catalog).toBe("openrouter");
+  });
+
   it("records which rows came from an override, so they can be told apart later", async () => {
     await syncPriceBook({
       effectiveFrom: T1,
       seeds: [seed({ model: "negotiated-model", source: "override" }), seed()],
     });
-    expect(
-      fake.rows.find((r) => r.model === "negotiated-model")?.source,
-    ).toBe("override");
+    expect(fake.rows.find((r) => r.model === "negotiated-model")?.source).toBe(
+      "override",
+    );
     expect(fake.rows.find((r) => r.model === "claude-sonnet-5")?.source).toBe(
       "list",
     );

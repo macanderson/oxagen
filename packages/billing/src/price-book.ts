@@ -134,6 +134,8 @@ export interface PriceEntry {
  */
 export type PriceEntrySeed = Omit<PriceEntry, "id" | "orgId" | "source"> & {
   source?: "list" | "override";
+  /** The catalog that published this seed; see the column's docblock. */
+  catalog?: string;
 };
 
 /** Every price the seed writes for one token-card row. */
@@ -413,9 +415,10 @@ interface PriceBookSyncResult {
    */
   retired: number;
   /**
-   * True when the book held no list row before this sync, so every seed was
-   * written effective from {@link COLD_BOOK_EFFECTIVE_FROM} rather than the
-   * requested instant, covering the frames that ran before the first sync.
+   * True when the book was still inside its cold-start window, so a seed for
+   * a key it had never priced was written effective from
+   * {@link COLD_BOOK_EFFECTIVE_FROM} rather than the requested instant,
+   * covering the frames that ran before the first sync.
    */
   coldStart: boolean;
 }
@@ -445,11 +448,12 @@ export async function syncPriceBook(args: {
   seeds?: readonly PriceEntrySeed[];
   retireAbsent?: boolean;
   /**
-   * The operator overrides were read this run, so an override row the seeds
-   * no longer carry is one the operator removed. Independent of
-   * `retireAbsent`, which is about the catalogs; implied by it.
+   * The catalogs that answered completely this run, by id. A row one of them
+   * published and no longer names is retired; a row from any other catalog
+   * is preserved. `retireAbsent` remains the book-wide statement, used for
+   * rows with no catalog recorded.
    */
-  retireOverrides?: boolean;
+  completedCatalogs?: readonly string[];
   /** The write instant; a row effective at or before it is not corrected in place. */
   now?: Date;
 }): Promise<PriceBookSyncResult> {
@@ -495,11 +499,10 @@ export async function syncPriceBook(args: {
     // only the card's models; if that alone ended cold start, the catalog's
     // models would arrive at recovery time when it came back, and calls made
     // before recovery would stay unpriced for ever. So the book stays cold
-    // until it holds a row effective from a real instant — the first
-    // repricing, which happens once the sources are all answering and a rate
-    // moves. Until then a newly discovered key is backdated to the floor,
-    // which prices only frames of a model the book had never seen; a key the
-    // book already prices is handled at the requested instant as always.
+    // for a fixed window after its first row (below). Until then a newly
+    // discovered key is backdated to the floor, which prices only frames of
+    // a model the book had never seen; a key the book already prices is
+    // handled at the requested instant as always.
     const key = (e: {
       provider: string;
       model: string;
@@ -528,22 +531,28 @@ export async function syncPriceBook(args: {
     // with `price_book_provider_changed_at_same_instant`. That rolled back the
     // whole refresh, every hour, for as long as the book stayed cold.
     const seen = new Set<string>(
-      existing.map((r) =>
-        `${r.model}|${r.tokenClass}|${r.region ?? ""}`,
-      ),
+      existing.map((r) => `${r.model}|${r.tokenClass}|${r.region ?? ""}`),
     );
-    // Cold start is also bounded in time, by the book's own creation.
+    // Cold start is bounded in time, by the book's own creation, and by
+    // nothing else. The first row's `created_at` is the one durable record
+    // of initialization. Once COLD_START_WINDOW_MS has passed since it, the
+    // book is established and a new key starts at the requested instant
+    // like any other change. The window stays long enough for a catalog
+    // that was down at first sync to come back and have its models
+    // backdated, which is what cold start is for.
     //
-    // Waiting for the first real-instant row alone never ended it for a book
-    // whose rates stayed stable: every row sat at the floor forever, so a
-    // model a catalog added months later was backdated to the floor too, and
-    // a rollup retry priced frames from before that model had any known rate.
-    // The first row's `created_at` is durable initialization state. Once
-    // COLD_START_WINDOW_MS has passed since it, the book is established and a
-    // new key starts at the requested instant like any other change. The
-    // window stays long enough for a catalog that was down at first sync to
-    // come back and have its models backdated, which is what cold start is
-    // for.
+    // Two earlier rules ended it sooner, and both were unsound. "The first
+    // row at a real instant ends it" never fired for a book whose rates
+    // stayed stable, so a model a catalog added months later was backdated
+    // to the floor too, and a rollup retry priced frames from before that
+    // model had any known rate. Its repair, "only a complete snapshot may
+    // write at a real instant while cold, so a partial run corrects a floor
+    // row in place", rewrote a row that every run since the first sync had
+    // cited: an OpenRouter rate moving while models.dev was down changed
+    // settled costs on rollup retry under the same entry id. A shipped row
+    // is never rewritten, at the floor or anywhere else. A repricing while
+    // cold is a successor at the requested instant, and that successor is
+    // not proof that initialization completed: the window is.
     const bookCreatedAt = existing.reduce<number | null>(
       (earliest, r) =>
         earliest === null || r.createdAt.getTime() < earliest
@@ -554,21 +563,7 @@ export async function syncPriceBook(args: {
     const withinColdWindow =
       bookCreatedAt === null ||
       now.getTime() - bookCreatedAt < COLD_START_WINDOW_MS;
-    // Cold start ends with the first row at a real instant, or when the
-    // window runs out. What makes that inference sound is the rule below: a
-    // PARTIAL run while the book is cold writes nothing at a real instant.
-    // Without that rule any repricing of a key already seen ended cold start,
-    // even with a catalog down (models.dev unreachable while an OpenRouter
-    // rate moved was enough), and models recovered from that catalog on a
-    // later run started at that later boundary, so calls made before the
-    // recovery stayed unpriced for good. Only a complete snapshot, which the
-    // caller vouches for with `retireAbsent`, may write the row that ends it.
-    const coldStart =
-      withinColdWindow &&
-      !existing.some(
-        (r) => r.effectiveFrom.getTime() > COLD_BOOK_EFFECTIVE_FROM.getTime(),
-      );
-    const completeSnapshot = args.retireAbsent === true;
+    const coldStart = withinColdWindow;
     const effectiveFrom = args.effectiveFrom;
 
     // The boundary is checked HERE, under the lock, against the write
@@ -578,37 +573,37 @@ export async function syncPriceBook(args: {
     // the commit would then close old rows retroactively, and frames rolled
     // up in between would cite a window that no longer covers them, with a
     // retry repricing them. Refused, and the transaction rolls back, so the
-    // caller re-runs with a later instant. A cold book is exempt: its writes
-    // land at the floor by design, below every frame.
-    if (!coldStart && effectiveFrom.getTime() <= now.getTime()) {
+    // caller re-runs with a later instant.
+    //
+    // The exemption is per write, not per book. Only a write that lands AT
+    // the floor is below every frame; a cold book still writes at the
+    // requested instant for a key it has already priced, and closes rows
+    // there when it retires or supersedes them, and those writes are as
+    // retroactive as any. Exempting the whole cold transaction (which this
+    // once did) let a complete refresh that waited on the lock past its
+    // boundary close a repriced key's old row in the past. On an established
+    // book every write is at the boundary, so it is refused up front,
+    // whatever the seeds turn out to need.
+    const assertBoundaryAhead = (instant: Date): void => {
+      if (instant.getTime() === COLD_BOOK_EFFECTIVE_FROM.getTime()) return;
+      if (instant.getTime() > now.getTime()) return;
       throw new HandlerError({
         code: "conflict",
         reason: "price_book_boundary_passed",
-        message: `the effective instant ${effectiveFrom.toISOString()} is not after the write instant ${now.toISOString()}: the refresh took long enough that its boundary has passed, and writing at it would reprice frames already settled; re-run with a later effectiveFrom`,
+        message: `the effective instant ${instant.toISOString()} is not after the write instant ${now.toISOString()}: the refresh took long enough that its boundary has passed, and writing at it would reprice frames already settled; re-run with a later effectiveFrom`,
       });
-    }
+    };
+    if (!coldStart) assertBoundaryAhead(effectiveFrom);
+    // While cold, a key the book has never priced is backdated to the floor.
+    // A key it has priced, under any provider and whether or not its row is
+    // still open, takes the requested instant: a floor row it corrects is
+    // closed there and succeeded, never rewritten.
     const seeds = coldStart
-      ? requested.map((s) => {
-          const seenKey = `${s.model}|${s.tokenClass}|${s.region ?? ""}`;
-          if (!seen.has(seenKey))
-            return { ...s, effectiveFrom: COLD_BOOK_EFFECTIVE_FROM };
-          // A key already priced. Its correction takes the requested instant,
-          // except for one case: a partial run repricing a row that is
-          // itself still at the floor. That row was corrected in place all
-          // along (the floor is below every frame, so nothing settled under
-          // it), and writing it at a real instant is what ended cold start
-          // early. Held at the floor until a complete snapshot writes it. A
-          // provider rename or a retired key's return has no floor-dated open
-          // row for that key, so both still take the requested instant.
-          const current = open.get(key(s));
-          if (
-            !completeSnapshot &&
-            current &&
-            current.effectiveFrom.getTime() === COLD_BOOK_EFFECTIVE_FROM.getTime()
-          )
-            return { ...s, effectiveFrom: COLD_BOOK_EFFECTIVE_FROM };
-          return s;
-        })
+      ? requested.map((s) =>
+          seen.has(`${s.model}|${s.tokenClass}|${s.region ?? ""}`)
+            ? s
+            : { ...s, effectiveFrom: COLD_BOOK_EFFECTIVE_FROM },
+        )
       : requested;
 
     let written = 0;
@@ -634,10 +629,11 @@ export async function syncPriceBook(args: {
         // Provenance is not a price, so it is stamped in place, not given a
         // new window.
         const source = seed.source ?? "list";
-        if (current.source !== source) {
+        const catalog = seed.catalog ?? null;
+        if (current.source !== source || current.catalog !== catalog) {
           await tx
             .update(schema.priceEntries)
-            .set({ source, updatedAt: new Date() })
+            .set({ source, catalog, updatedAt: new Date() })
             .where(eq(schema.priceEntries.id, current.id));
         }
         unchanged += 1;
@@ -656,6 +652,7 @@ export async function syncPriceBook(args: {
       // rate, which is all this once did, sent an alias-only change down the
       // `unchanged` path and left the row's names stale for ever.)
       if (pricedTheSame) renamed += 1;
+      assertBoundaryAhead(seed.effectiveFrom);
       // The upsert below corrects a row at the SAME instant in place. That is
       // right while the instant is still ahead — nothing has been priced
       // against the row — and wrong once it has passed: a same-hour re-run of
@@ -663,15 +660,13 @@ export async function syncPriceBook(args: {
       // frames earlier in the hour were priced with, so a rollup retry would
       // apply different terms under the same entry id. A change to a shipped
       // row needs a later window, which is what a later --effective-from is.
+      // The floor is no exception: a floor row has priced every frame since
+      // the first sync, and a cold book never targets it for a key it has
+      // seen, so a conflict there is a defect, not a correction.
       if (
         current &&
         current.effectiveFrom.getTime() === seed.effectiveFrom.getTime() &&
-        seed.effectiveFrom.getTime() <= now.getTime() &&
-        // The floor is the one instant a row may be corrected in place after
-        // it has passed: it sits below every frame Oxagen could have recorded,
-        // so a frame priced against it was priced at "the first known rate",
-        // and while the book is cold that rate is still being discovered.
-        seed.effectiveFrom.getTime() !== COLD_BOOK_EFFECTIVE_FROM.getTime()
+        seed.effectiveFrom.getTime() <= now.getTime()
       )
         throw new HandlerError({
           code: "conflict",
@@ -718,13 +713,14 @@ export async function syncPriceBook(args: {
       await tx.execute(sql`
         INSERT INTO ${schema.priceEntries}
           (org_id, provider, model, model_aliases, region, token_class, unit,
-           currency, micros_per_million, effective_from, effective_to, source)
+           currency, micros_per_million, effective_from, effective_to, source,
+           catalog)
         VALUES
           (NULL, ${seed.provider}, ${seed.model}, array[${aliases}]::text[],
            ${seed.region}, ${seed.tokenClass}, ${seed.unit}, ${seed.currency},
            ${seed.microsPerMillion.toString()}::bigint,
            ${seed.effectiveFrom.toISOString()}::timestamptz, NULL,
-           ${seed.source ?? "list"})
+           ${seed.source ?? "list"}, ${seed.catalog ?? null})
         ON CONFLICT (coalesce(org_id, '${sql.raw(NIL_UUID)}'::uuid),
                      provider, model, token_class, coalesce(region, ''), effective_from)
         DO UPDATE SET
@@ -733,6 +729,7 @@ export async function syncPriceBook(args: {
           unit = EXCLUDED.unit,
           model_aliases = EXCLUDED.model_aliases,
           source = EXCLUDED.source,
+          catalog = EXCLUDED.catalog,
           effective_to = NULL,
           updated_at = now()
       `);
@@ -777,6 +774,7 @@ export async function syncPriceBook(args: {
           message: `${supersededKey(row)} is already priced from ${seed.effectiveFrom.toISOString()} under provider ${row.provider}; re-pricing it under ${seed.provider} at the same instant would leave two open rows, so use a later effectiveFrom`,
         });
       if (row.effectiveFrom.getTime() > seed.effectiveFrom.getTime()) continue;
+      assertBoundaryAhead(seed.effectiveFrom);
       await tx
         .update(schema.priceEntries)
         .set({ effectiveTo: seed.effectiveFrom, updatedAt: new Date() })
@@ -793,63 +791,60 @@ export async function syncPriceBook(args: {
     // snapshot — a row absent because its catalog was down is preserved, and
     // the caller is the one that knows which happened.
     let retired = 0;
-    // An operator override is the one source that never fails: it is read
-    // from this installation's own environment, completely, on every run.
-    // So a row written from an override that the overrides no longer name
-    // is a rate the operator REMOVED, whatever the catalogs did this run, and
-    // holding it open until every catalog answered (which a persistent
-    // outage makes never) kept billing on terms the operator withdrew.
-    // Override rows therefore retire whenever the overrides were read at
-    // all; catalog rows only on a complete snapshot.
+    // Retire per catalog. A row absent from the seeds is a price that ended
+    // ONLY if the catalog that published it answered completely this run;
+    // a row from a catalog that failed or was held is absent because nobody
+    // asked, and closing it would leave its models unpriced until the
+    // catalog came back. Deciding this book-wide (retire only when EVERY
+    // catalog answered) let a model one catalog withdrew stay priced for as
+    // long as any other catalog was down. The operator overrides are a
+    // catalog like the rest, one that never fails, so a withdrawn override
+    // retires on every run.
+    //
+    // A row with no catalog recorded (written before the column existed) is
+    // treated as belonging to no completed catalog and is retired only on a
+    // complete snapshot, as before; the next upsert stamps it.
     const seeded = new Set(seeds.map(key));
-    if (args.retireAbsent !== true && args.retireOverrides === true) {
-      for (const row of existing) {
-        if (row.source !== "override") continue;
-        if (row.effectiveTo !== null || closedIds.has(row.id)) continue;
-        if (seeded.has(key(row))) continue;
-        if (row.effectiveFrom.getTime() >= effectiveFrom.getTime()) continue;
+    const completed = new Set(args.completedCatalogs ?? []);
+    const complete = args.retireAbsent === true;
+    for (const row of existing) {
+      if (row.effectiveTo !== null || closedIds.has(row.id)) continue;
+      if (seeded.has(key(row))) continue;
+      const owned =
+        row.catalog !== null && row.catalog !== undefined
+          ? completed.has(row.catalog)
+          : complete;
+      if (!owned) continue;
+      // A row that starts exactly at this sync's instant, while that
+      // instant is still ahead, was scheduled by an earlier run of the same
+      // boundary and has priced nothing. The complete snapshot omits it, so
+      // it must not take effect: skipping it (as this once did) left it
+      // open, and at the boundary it began pricing a model the catalog had
+      // withdrawn. It cannot be closed at its own start
+      // (`effective_to > effective_from`), so it is deleted, which is safe
+      // for exactly that reason: no frame can cite it yet.
+      if (
+        row.effectiveFrom.getTime() === effectiveFrom.getTime() &&
+        effectiveFrom.getTime() > now.getTime()
+      ) {
         await tx
-          .update(schema.priceEntries)
-          .set({ effectiveTo: effectiveFrom, updatedAt: new Date() })
+          .delete(schema.priceEntries)
           .where(eq(schema.priceEntries.id, row.id));
         closedIds.add(row.id);
         retired += 1;
+        continue;
       }
-    }
-    if (args.retireAbsent === true) {
-      for (const row of existing) {
-        if (row.effectiveTo !== null || closedIds.has(row.id)) continue;
-        if (seeded.has(key(row))) continue;
-        // A row that starts exactly at this sync's instant, while that
-        // instant is still ahead, was scheduled by an earlier run of the same
-        // boundary and has priced nothing. The complete snapshot omits it, so
-        // it must not take effect: skipping it (as this once did) left it
-        // open, and at the boundary it began pricing a model the catalog had
-        // withdrawn. It cannot be closed at its own start
-        // (`effective_to > effective_from`), so it is deleted, which is safe
-        // for exactly that reason: no frame can cite it yet.
-        if (
-          row.effectiveFrom.getTime() === effectiveFrom.getTime() &&
-          effectiveFrom.getTime() > now.getTime()
-        ) {
-          await tx
-            .delete(schema.priceEntries)
-            .where(eq(schema.priceEntries.id, row.id));
-          closedIds.add(row.id);
-          retired += 1;
-          continue;
-        }
-        // A row that starts after this sync cannot close at this instant; it
-        // is a later correction this run must not touch. One that starts at
-        // an instant already in force is closed normally below.
-        if (row.effectiveFrom.getTime() >= effectiveFrom.getTime()) continue;
-        await tx
-          .update(schema.priceEntries)
-          .set({ effectiveTo: effectiveFrom, updatedAt: new Date() })
-          .where(eq(schema.priceEntries.id, row.id));
-        closedIds.add(row.id);
-        retired += 1;
-      }
+      // A row that starts after this sync cannot close at this instant; it
+      // is a later correction this run must not touch. One that starts at
+      // an instant already in force is closed normally.
+      if (row.effectiveFrom.getTime() >= effectiveFrom.getTime()) continue;
+      assertBoundaryAhead(effectiveFrom);
+      await tx
+        .update(schema.priceEntries)
+        .set({ effectiveTo: effectiveFrom, updatedAt: new Date() })
+        .where(eq(schema.priceEntries.id, row.id));
+      closedIds.add(row.id);
+      retired += 1;
     }
 
     return {
@@ -1015,7 +1010,10 @@ async function readKeyRows(
  * resolves which names it will carry. See the caller for the deadlock it
  * prevents. Transaction-scoped, like the per-name locks.
  */
-async function lockNegotiatedClass(tx: Tx, key: NegotiatedPriceKey): Promise<void> {
+async function lockNegotiatedClass(
+  tx: Tx,
+  key: NegotiatedPriceKey,
+): Promise<void> {
   const region = key.region ?? null;
   await tx.execute(
     sql`SELECT pg_advisory_xact_lock(hashtextextended(${`price_entry_class:${key.orgId}:${key.tokenClass}|${region ?? ""}`}::text, 0))`,

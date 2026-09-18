@@ -127,6 +127,16 @@ export const priceEntries = costSchema.table(
       mode: "date",
     }),
     source: text("source").notNull(),
+    /**
+     * Which published catalog a list row came from (`openrouter`,
+     * `models_dev`, `in_code_card`, `operator_override`), or null for a
+     * negotiated row. Retirement is per catalog: a row absent from a catalog
+     * that answered completely is a price that ended, while a row from a
+     * catalog that failed this run is preserved. Without this the sync could
+     * only retire on a run where EVERY catalog answered, and a model one
+     * catalog withdrew stayed priced for as long as any other was down.
+     */
+    catalog: text("catalog"),
   },
   (t) => ({
     // One row per (catalog or org, provider, model, class, region, start).
