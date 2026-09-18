@@ -1,165 +1,57 @@
 // The Transcript tab (mockup `pRun`'s transcript; spec §14): the run read at
-// one of three zoom levels, derived on the server from the frames and the
-// bodies the recorder kept.
+// one of three zoom levels, through the chips it was filtered by, under a
+// transport.
 //
-// Nothing here is stored, and nothing is inferred. An entry whose body was not
-// retained says `digest_only` rather than showing an empty bubble, an entry cut
-// at the contract's ceiling says it was cut and links to the frame's whole
-// body on the Frames tab (`get_run_frame_body`), and a transcript that could
-// not carry the whole run says how far it reached. The zoom is a query value,
-// so a level is a link and the page keeps one route.
-import { useFormatter, useLocale, useTranslations } from "next-intl";
-import type {
-  RunTranscript,
-  TranscriptBody,
-  TranscriptEntry,
-} from "@/data/contracts/run";
-import { TRANSCRIPT_ZOOMS } from "@/data/contracts/run";
+// Nothing here is stored and nothing is inferred. The zoom and the chips are
+// query values, so a level and a filter are links and the run keeps one route;
+// the entries, the player and the pagination are the client's, because a
+// playhead and an appended page are state a navigation would throw away.
+//
+// The chips are the contract's own `TranscriptKind` list, not the mockup's.
+// The mockup drew a `thinking` chip and a `proof` chip; the contract publishes
+// neither, so neither is drawn. A chip that filtered on nothing would promise
+// a slice of the record that does not exist.
+import { useLocale, useTranslations } from "next-intl";
+import type { RunTranscript, TranscriptKind } from "@/data/contracts/run";
+import { TRANSCRIPT_KINDS, TRANSCRIPT_ZOOMS } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
-import { linkText, mono } from "@/ui/control-styles";
-import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
+import type { Place } from "./entry";
 import { Panel } from "./parts";
+import { RunPlayer } from "./player";
 
-type Place = { org: string; ws: string; runId: string };
-
-/**
- * One half of the exchange: what went out, or what came back. A half whose
- * body was not retained says so rather than showing an empty bubble, and one
- * cut at the contract's ceiling links to the frame's whole body on the Frames
- * tab (`get_run_frame_body`).
- */
-function Half({
-  half,
-  label,
-  org,
-  ws,
-  runId,
-}: { half: TranscriptBody; label: string } & Place) {
-  const t = useTranslations("run.transcript");
-  return (
-    <div data-testid="transcript-half" data-half={label} className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      {half.text === null ? (
-        <p className="text-xs text-muted-foreground">
-          {t(half.fidelity === "digest_only" ? "digestOnly" : "noBody")}
-        </p>
-      ) : (
-        <pre
-          className={`${mono} max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs`}
-        >
-          {half.text}
-        </pre>
-      )}
-      {half.truncated ? (
-        <p
-          data-testid="entry-truncated"
-          className="text-xs text-muted-foreground"
-        >
-          {t("truncated")}{" "}
-          <SafeLink
-            to={routes.run(org, ws, runId, { tab: "frames", body: half.seq })}
-            className={linkText}
-          >
-            {t("openFrame", { seq: half.seq })}
-          </SafeLink>
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function Entry({ entry, org, ws, runId }: { entry: TranscriptEntry } & Place) {
-  const t = useTranslations("run.transcript");
-  const format = useFormatter();
-  const locale = useLocale();
-  const span =
-    entry.seq === entry.endSeq
-      ? t("frame", { seq: entry.seq })
-      : t("frames", { from: entry.seq, to: entry.endSeq });
-  return (
-    <li
-      data-testid="transcript-entry"
-      data-kind={entry.kind}
-      className="flex flex-col gap-1.5 border-b border-border py-3 last:border-b-0"
-    >
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">
-          {t(`kind.${entry.kind}`)}
-        </span>
-        <span className={mono}>{entry.label}</span>
-        <span className={mono}>{span}</span>
-        <time dateTime={entry.at}>
-          {format.dateTime(new Date(entry.at), { timeStyle: "medium" })}
-        </time>
-        {entry.cost === null ? null : (
-          <span>
-            <Money value={entry.cost} precision="exact" />
-          </span>
-        )}
-        {entry.cumulativeCost === null ? null : (
-          <span data-testid="entry-cumulative">
-            {t.rich("cumulative", {
-              cost: () => (
-                <Money value={entry.cumulativeCost!} precision="exact" />
-              ),
-            })}
-          </span>
-        )}
-        <span>{t("folded", { count: formatCount(entry.frames, locale) })}</span>
-      </div>
-      {entry.decision === null ? null : (
-        <p data-testid="entry-decision" className="text-xs text-muted-foreground">
-          {t("decision", {
-            decision: entry.decision.decision,
-            seq: entry.decision.seq,
-          })}
-        </p>
-      )}
-      {entry.request === null && entry.response === null ? (
-        <p className="text-xs text-muted-foreground">{t("noBody")}</p>
-      ) : (
-        <>
-          {entry.request === null ? null : (
-            <Half
-              half={entry.request}
-              label={t("request")}
-              org={org}
-              ws={ws}
-              runId={runId}
-            />
-          )}
-          {entry.response === null ? null : (
-            <Half
-              half={entry.response}
-              label={t("response")}
-              org={org}
-              ws={ws}
-              runId={runId}
-            />
-          )}
-        </>
-      )}
-    </li>
-  );
+/** The chips as a URL value: `tools,errors`. Order follows the contract's list, so one filter has one URL. */
+export function kindsParam(
+  kinds: readonly TranscriptKind[],
+): string | undefined {
+  const picked = TRANSCRIPT_KINDS.filter((kind) => kinds.includes(kind));
+  return picked.length === 0 ? undefined : picked.join(",");
 }
 
 function ZoomTabs({
   zoom,
+  kinds,
   org,
   ws,
   runId,
-}: { zoom: RunTranscript["zoom"] } & Place) {
+}: {
+  zoom: RunTranscript["zoom"];
+  kinds: readonly TranscriptKind[];
+} & Place) {
   const t = useTranslations("run.transcript");
   return (
     <nav aria-label={t("zoomLabel")} className="flex flex-wrap gap-1">
       {TRANSCRIPT_ZOOMS.map((level) => (
         <SafeLink
           key={level}
-          to={routes.run(org, ws, runId, { tab: "transcript", zoom: level })}
+          to={routes.run(org, ws, runId, {
+            tab: "transcript",
+            zoom: level,
+            kinds: kindsParam(kinds),
+          })}
           aria-current={level === zoom ? "true" : undefined}
           className="inline-flex min-h-8 items-center rounded-md border border-border px-3 text-xs font-medium text-muted-foreground hover:text-foreground aria-[current=true]:border-foreground aria-[current=true]:text-foreground"
         >
@@ -170,9 +62,72 @@ function ZoomTabs({
   );
 }
 
+/**
+ * The filter chips. Each is a link that adds or removes its own kind, so a
+ * chip can be opened in a new tab and the filter is in the URL a person
+ * copies. No chip pressed keeps every entry, which is what the contract does
+ * with an empty list.
+ */
+function KindChips({
+  zoom,
+  kinds,
+  org,
+  ws,
+  runId,
+}: {
+  zoom: RunTranscript["zoom"];
+  kinds: readonly TranscriptKind[];
+} & Place) {
+  const t = useTranslations("run.transcript");
+  return (
+    <nav
+      aria-label={t("chipsLabel")}
+      data-testid="transcript-chips"
+      className="flex flex-wrap items-center gap-1"
+    >
+      {TRANSCRIPT_KINDS.map((kind) => {
+        const on = kinds.includes(kind);
+        const next = on
+          ? kinds.filter((held) => held !== kind)
+          : [...kinds, kind];
+        return (
+          <SafeLink
+            key={kind}
+            to={routes.run(org, ws, runId, {
+              tab: "transcript",
+              zoom,
+              kinds: kindsParam(next),
+            })}
+            data-testid={`chip-${kind}`}
+            data-on={on ? "true" : "false"}
+            // A chip is a link, so its state is `aria-current`, the attribute
+            // a link may carry, and not `aria-pressed`, which belongs to a
+            // button. The zoom levels above it say the same thing the same way.
+            aria-current={on ? "true" : undefined}
+            className="inline-flex min-h-8 items-center rounded-full border border-border px-3 text-xs text-muted-foreground hover:text-foreground aria-[current=true]:border-foreground aria-[current=true]:text-foreground"
+          >
+            {t(`chip.${kind}`)}
+          </SafeLink>
+        );
+      })}
+      {kinds.length === 0 ? null : (
+        <SafeLink
+          to={routes.run(org, ws, runId, { tab: "transcript", zoom })}
+          data-testid="chip-clear"
+          className="inline-flex min-h-8 items-center px-2 text-xs underline underline-offset-4"
+        >
+          {t("chipsClear")}
+        </SafeLink>
+      )}
+    </nav>
+  );
+}
+
 export function TranscriptSection({
   read,
   zoom,
+  kinds,
+  live,
   org,
   ws,
   runId,
@@ -180,42 +135,47 @@ export function TranscriptSection({
   read: Read<RunTranscript>;
   /** The level the URL asked for; the read answers with the level it used. */
   zoom: RunTranscript["zoom"];
+  /** The chips the URL pressed; empty keeps every entry. */
+  kinds: readonly TranscriptKind[];
+  /** True while the run is still recording. */
+  live: boolean;
 } & Place) {
   const t = useTranslations("run.transcript");
   const locale = useLocale();
+  const place = { org, ws, runId };
   return (
     <Panel
       title={t("title")}
-      aside={<ZoomTabs zoom={zoom} org={org} ws={ws} runId={runId} />}
+      aside={<ZoomTabs zoom={zoom} kinds={kinds} {...place} />}
     >
-      {!read.ok ? (
-        <ReadFailure read={read} section={t("title")} />
-      ) : read.value.entries.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("empty")}</p>
-      ) : (
-        <>
-          <ul className="flex flex-col">
-            {read.value.entries.map((entry) => (
-              <Entry
-                key={`${entry.seq}-${entry.endSeq}`}
-                entry={entry}
-                org={org}
-                ws={ws}
-                runId={runId}
-              />
-            ))}
-          </ul>
-          <p className="pt-3 text-xs text-muted-foreground">
-            {read.value.complete
-              ? t("complete", {
-                  count: formatCount(read.value.entries.length, locale),
-                })
-              : t("cut", {
-                  count: formatCount(read.value.entries.length, locale),
+      <div className="flex flex-col gap-3">
+        <KindChips zoom={zoom} kinds={kinds} {...place} />
+        {!read.ok ? (
+          <ReadFailure read={read} section={t("title")} />
+        ) : read.value.entries.length === 0 ? (
+          <p
+            data-testid="transcript-empty"
+            className="max-w-prose text-sm text-muted-foreground"
+          >
+            {kinds.length === 0
+              ? t("empty")
+              : t("emptyFiltered", {
+                  count: formatCount(kinds.length, locale),
                 })}
           </p>
-        </>
-      )}
+        ) : (
+          <RunPlayer
+            // The player holds the entries it has appended, so a new zoom or a
+            // new filter must build a new one rather than append to the old.
+            key={`${read.value.zoom}:${kindsParam(kinds) ?? ""}`}
+            first={read.value}
+            zoom={read.value.zoom}
+            kinds={kinds}
+            live={live}
+            {...place}
+          />
+        )}
+      </div>
     </Panel>
   );
 }

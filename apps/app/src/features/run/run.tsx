@@ -6,45 +6,39 @@
 // when that tab is open, so opening the page costs one invoke and no tab
 // nobody looked at is paid for (§3.5's poll budget).
 //
-// Three sections have a store behind them: Transcript (`get_run_transcript` at
-// one of three zoom levels), Frames (`get_run`'s own page, plus one frame's
-// bytes from `get_run_frame_body` when `?body=` names it) and Cost
-// (`get_run_cost`).
+// Five sections have a store behind them: Transcript (`get_run_transcript` at
+// one of three zoom levels, through the chips the URL pressed), Frames
+// (`get_run`'s own page, plus one frame's bytes from `get_run_frame_body` when
+// `?body=` names it), Cost (`get_run_cost`, with the waterfall read from the
+// run's own per-turn ledger), Chain and seal (`get_run_chain`) and Approvals
+// (`list_approvals` narrowed to this run).
 //
-// Four of the mockup's tabs are not drawn here (§3.6: a slice with no backing
-// has no read at all):
-//   - Policy would be `list_approvals` narrowed to the run, but no approval
-//     row records a run (`agent.approval_requests` carries `message_id`,
-//     `execution_step_id` and `tool_call_id`, none naming `agent_runs` or
-//     `tacho_sessions`; the contract header says so), so the handler answers
-//     every run filter with an empty page. A tab that can only ever say "no
-//     parked calls" is a lie about the record, so it is not drawn until the
-//     linkage exists.
+// Two of the mockup's tabs are still not drawn here (§3.6: a slice with no
+// backing has no read at all):
 //   - Proof, and the four-tab set a witness run renders, need `get_run_proof`
 //     and the witness vocabulary; #2955 owns them. The header states that a run
 //     witnessed another, and links no further.
-//   - Chain and seal would need a read that answers the Merkle root, the
-//     attestation and the segment reference. No contract reads them: the only
-//     capability that produces them is `export_run`, which queues a bundle
-//     rather than answering one, so the header carries the seal instant and
-//     the replay grade and the Export action queues the rest.
 //   - Context was cut (#2954 closed).
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { TranscriptZoom } from "@/data/contracts/run";
+import type { TranscriptKind } from "@/data/contracts/run";
+import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
 import type { DataSource } from "@/data/ports";
+import { ApprovalsPanel } from "@/features/fleet";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { panel } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
+import { ChainSection } from "./chain";
 import { CostSection } from "./cost";
 import { FramesSection } from "./frames";
 import { RunHeader } from "./header";
-import { TranscriptSection } from "./transcript";
+import { kindsParam, TranscriptSection } from "./transcript";
 
-const TABS = ["transcript", "frames", "cost"] as const;
+const TABS = ["transcript", "frames", "cost", "chain", "approvals"] as const;
 type Tab = (typeof TABS)[number];
 
 /** A frame's position as the contract spells it (`frameSeqSchema`): decimal, at most 19 digits. */
@@ -52,7 +46,25 @@ const FRAME_SEQ = /^\d{1,19}$/;
 
 type Place = { org: string; ws: string; runId: string };
 
-function Tabs({ selected, org, ws, runId }: { selected: Tab } & Place) {
+/** `?kinds=tools,errors` as the contract's own list; an unknown word is dropped, not refused. */
+export function parseKinds(raw: string | null): TranscriptKind[] {
+  if (raw === null) return [];
+  const asked = new Set(raw.split(","));
+  return TRANSCRIPT_KINDS.filter((kind) => asked.has(kind));
+}
+
+function Tabs({
+  selected,
+  zoom,
+  kinds,
+  org,
+  ws,
+  runId,
+}: {
+  selected: Tab;
+  zoom: TranscriptZoom;
+  kinds: readonly TranscriptKind[];
+} & Place) {
   const t = useTranslations("run.tabs");
   return (
     <nav aria-label={t("label")} className="border-b border-border">
@@ -60,7 +72,17 @@ function Tabs({ selected, org, ws, runId }: { selected: Tab } & Place) {
         {TABS.map((tab) => (
           <li key={tab}>
             <SafeLink
-              to={routes.run(org, ws, runId, { tab })}
+              // The Transcript tab keeps the zoom and the chips a person chose,
+              // so leaving it for the chain and coming back does not reset the
+              // view they built.
+              to={routes.run(
+                org,
+                ws,
+                runId,
+                tab === "transcript"
+                  ? { tab, zoom, kinds: kindsParam(kinds) }
+                  : { tab },
+              )}
               aria-current={tab === selected ? "page" : undefined}
               className="inline-flex min-h-10 items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground"
             >
@@ -79,8 +101,10 @@ export async function Run({
   runId,
   tab,
   zoom,
+  kinds,
   frames,
   body,
+  now = Date.now(),
 }: {
   ctx: WsCtx;
   source: DataSource;
@@ -90,14 +114,19 @@ export async function Run({
   tab: string | null;
   /** `?zoom=`; anything but a level reads the transcript by steps. */
   zoom: string | null;
+  /** `?kinds=`, the chips pressed, comma-separated; an unknown word is dropped. */
+  kinds: string | null;
   /** `?frames=`, the opaque cursor a later frames page was read from. */
   frames: string | null;
   /** `?body=`, the seq of the frame whose body is open; anything but a seq opens none. */
   body: string | null;
+  /** The instant the approvals strip counts down from; injected so a test can fix it. */
+  now?: number;
 }) {
   const selected = TABS.find((name) => name === tab) ?? "transcript";
   const level = TranscriptZoom.safeParse(zoom);
   const zoomed = level.success ? level.data : "steps";
+  const chips = parseKinds(kinds);
   const read = await source.runs.get(ctx, runId, { framesAfter: frames });
   if (!read.ok) {
     if (read.reason === "error" && read.status === 404) notFound();
@@ -114,8 +143,16 @@ export async function Run({
     case "transcript":
       section = (
         <TranscriptSection
-          read={await source.runs.transcript(ctx, detail.run.id, zoomed)}
+          read={
+            await source.runs.transcript(ctx, detail.run.id, {
+              zoom: zoomed,
+              kinds: chips,
+              after: null,
+            })
+          }
           zoom={zoomed}
+          kinds={chips}
+          live={detail.run.status === "live"}
           {...place}
         />
       );
@@ -139,9 +176,49 @@ export async function Run({
       );
       break;
     }
-    case "cost":
+    case "cost": {
+      // The waterfall is the run's own per-turn ledger: the turns carry the
+      // bars and their running totals, the steps carry what sits inside each
+      // one. Both are the transcript, so the figures on this tab and the
+      // figures on the Transcript tab come from one derivation.
+      const [cost, turns, steps] = await Promise.all([
+        source.runs.cost(ctx, detail.run.id),
+        source.runs.transcript(ctx, detail.run.id, {
+          zoom: "turns",
+          kinds: [],
+          after: null,
+        }),
+        source.runs.transcript(ctx, detail.run.id, {
+          zoom: "steps",
+          kinds: [],
+          after: null,
+        }),
+      ]);
+      section = <CostSection read={cost} turns={turns} steps={steps} />;
+      break;
+    }
+    case "chain":
       section = (
-        <CostSection read={await source.runs.cost(ctx, detail.run.id)} />
+        <ChainSection read={await source.runs.chain(ctx, detail.run.id)} />
+      );
+      break;
+    case "approvals":
+      section = (
+        <ApprovalsPanel
+          approvals={
+            await source.approvals.pending(ctx, {
+              runId: detail.run.id,
+            })
+          }
+          // A mandate bar needs `list_mandates`, which the Fleet page reads for
+          // its own cards. The Run page does not read it, so a card names the
+          // mandate it drew on rather than drawing a bar from nothing.
+          mandates={new Map()}
+          now={now}
+          on="run"
+          org={place.org}
+          ws={place.ws}
+        />
       );
       break;
   }
@@ -155,7 +232,7 @@ export async function Run({
         org={place.org}
         ws={place.ws}
       />
-      <Tabs selected={selected} {...place} />
+      <Tabs selected={selected} zoom={zoomed} kinds={chips} {...place} />
       {section}
     </div>
   );

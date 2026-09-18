@@ -173,19 +173,26 @@ export const routes = {
   ): SafePath => withQuery(pathOf(org, "audit", "export"), q),
   /**
    * A run opened from a list (a run id is a public id, never a raw row id).
-   * `tab` picks the section, `zoom` the transcript's level and `frames` a
-   * later page of the frames; all three are query values, so the run keeps one
-   * route (§1.2).
+   * `tab` picks the section, `zoom` the transcript's level, `kinds` the chips
+   * it is filtered by (comma-separated) and `frames` a later page of the
+   * frames; each is a query value, so the run keeps one route (§1.2).
    */
   run: (
     org: string,
     ws: string,
     run: string,
-    q?: { tab?: string; zoom?: string; frames?: string; body?: string },
+    q?: {
+      tab?: string;
+      zoom?: string;
+      kinds?: string;
+      frames?: string;
+      body?: string;
+    },
   ): SafePath =>
     withQuery(pathOf(org, ws, "runs", run), {
       tab: q?.tab,
       zoom: q?.zoom,
+      kinds: q?.kinds,
       frames: q?.frames,
       body: q?.body,
     }),

@@ -420,7 +420,11 @@ describe("runs.transcript", () => {
         complete: false,
       }),
     );
-    const read = await runs.transcript(ctx, "tse_4f0a", "turns");
+    const read = await runs.transcript(ctx, "tse_4f0a", {
+      zoom: "turns",
+      kinds: [],
+      after: null,
+    });
     expect(read.ok && read.value.complete).toBe(false);
     expect(read.ok && read.value.entries[0]?.response?.fidelity).toBe(
       "digest_only",

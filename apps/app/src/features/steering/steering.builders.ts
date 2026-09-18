@@ -184,6 +184,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       frameBody: refuse,
       cost: refuse,
       transcript: refuse,
+      chain: refuse,
     },
     approvals: { pending: refuse },
     agents: {

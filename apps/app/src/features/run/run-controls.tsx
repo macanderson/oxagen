@@ -11,7 +11,10 @@
 // A sealed or halted run has nothing to reach, so it draws no controls. A
 // ledger run draws them disabled: its evidence arrives from an external engine
 // that Oxagen holds no revocable run token for, so a queued command would have
-// no connection point to travel down (WL-61). A viewer `dispatch_command`
+// no connection point to travel down (WL-61). An `observe`-tier run draws them
+// disabled for the same reason from the other direction: the session only
+// records what an agent did, and Oxagen was never in the path, so there is
+// nothing at the other end of a command. A viewer `dispatch_command`
 // would refuse — neither an org Owner or Admin nor a workspace Owner or
 // Member — sees them disabled with that reason, not a button that ends in
 // `org_role_required`.
@@ -217,6 +220,7 @@ export function RunControls({
   runId,
   status,
   source,
+  enforcementTier,
   orgRole,
   wsRole,
 }: {
@@ -225,11 +229,21 @@ export function RunControls({
   runId: string;
   status: RunRow["status"];
   source: RunRow["source"];
+  /** Where the run was observed from; an `observe` tier has no connection point. */
+  enforcementTier: RunRow["enforcementTier"];
   orgRole: OrgRole;
   wsRole: WsRole;
 }) {
   const t = useTranslations("run.commands");
   if (status !== "live") return null;
+  if (enforcementTier === "observe") {
+    return (
+      <DisabledControls
+        reason={t("observeReason")}
+        testId="observe-no-control"
+      />
+    );
+  }
   if (source === "ledger") {
     return (
       <DisabledControls reason={t("ledgerReason")} testId="ledger-no-control" />

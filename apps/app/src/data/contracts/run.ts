@@ -169,7 +169,7 @@ const TranscriptEntryKind = z.enum([
 type TranscriptEntryKind = z.infer<typeof TranscriptEntryKind>;
 
 /** The chips the Transcript tab filters on, as `get_run_transcript` publishes them. */
-export const TranscriptKind = z.enum([
+export const TRANSCRIPT_KINDS = [
   "prompt",
   "responses",
   "tools",
@@ -177,7 +177,8 @@ export const TranscriptKind = z.enum([
   "recall",
   "usage",
   "errors",
-]);
+] as const;
+export const TranscriptKind = z.enum(TRANSCRIPT_KINDS);
 export type TranscriptKind = z.infer<typeof TranscriptKind>;
 
 /**

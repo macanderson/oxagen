@@ -14,8 +14,17 @@ import {
   STEER_TEXT_MAX,
   tachoCommandDispatch,
 } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
+import { runBisect } from "@oxagen/oxagen/contracts/run.bisect";
 import { runExport } from "@oxagen/oxagen/contracts/run.export";
+import { runFork } from "@oxagen/oxagen/contracts/run.fork";
 import { runSummarize } from "@oxagen/oxagen/contracts/run.summarize";
+import type {
+  RunTranscript,
+  TranscriptKind,
+  TranscriptZoom,
+} from "@/data/contracts/run";
+import type { Read } from "@/data/read";
+import { dataSource } from "@/data/source";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
@@ -100,5 +109,93 @@ export async function exportRun(
   const result = await kernelWrite(ctx, runExport, { runId });
   return result.ok
     ? { ok: true, value: { exportId: result.value.exportId } }
+    : result;
+}
+
+/**
+ * One later page of the transcript, for the player's own pagination
+ * (`get_run_transcript`). A read, not a write: it exists as a server action so
+ * the player can append a page without a navigation, which is what keeps the
+ * scroll position and the playhead where the person left them.
+ *
+ * The cursor is the one the previous page answered with. A cursor this
+ * capability did not write is refused as invalid input, and the player says
+ * that rather than starting the transcript again.
+ */
+export async function readTranscriptPage(
+  org: string,
+  ws: string,
+  runId: string,
+  zoom: TranscriptZoom,
+  kinds: readonly TranscriptKind[],
+  after: string,
+): Promise<Read<RunTranscript>> {
+  const ctx = await requireViewer(org, ws);
+  return dataSource().runs.transcript(ctx, runId, { zoom, kinds, after });
+}
+
+/**
+ * Fork this run from a frame (`fork_run`): frames 0 to N replay from the
+ * recording, the next model call runs live, and a tool result after N is
+ * served from the cassette when its input digest matches. Oxagen mints the
+ * attempt; the harness that admitted the run is what resumes it (ADR-043), so
+ * this answers the attempt, not a running agent.
+ */
+export async function forkRun(
+  org: string,
+  ws: string,
+  runId: string,
+  fromSeq: string,
+): Promise<ActionResult<{ attemptId: string; attemptNumber: number }>> {
+  const ctx = await requireViewer(org, ws);
+  if (!/^\d{1,19}$/.test(fromSeq) || fromSeq === "0") {
+    return { ok: false, reason: "invalid", code: "from_seq", field: "fromSeq" };
+  }
+  const result = await kernelWrite(ctx, runFork, { runId, fromSeq });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          attemptId: result.value.attemptId,
+          attemptNumber: result.value.attemptNumber,
+        },
+      }
+    : result;
+}
+
+/**
+ * The first frame at which this run and another diverge (`bisect_runs`). Both
+ * recordings are aligned frame by frame on each frame's kind and call
+ * identity; bodies are not read, so this works at grade `inspect` and above.
+ */
+export async function bisectRuns(
+  org: string,
+  ws: string,
+  runA: string,
+  runB: string,
+): Promise<
+  ActionResult<{
+    divergentSeq: string | null;
+    keyA: string | null;
+    keyB: string | null;
+    aligned: number;
+  }>
+> {
+  const ctx = await requireViewer(org, ws);
+  const other = runB.trim();
+  if (other === "" || other === runA) {
+    return { ok: false, reason: "invalid", code: "run_b", field: "runB" };
+  }
+  const result = await kernelWrite(ctx, runBisect, { runA, runB: other });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          divergentSeq: result.value.divergentSeq,
+          keyA: result.value.keyA,
+          keyB: result.value.keyB,
+          aligned: result.value.aligned,
+        },
+      }
     : result;
 }

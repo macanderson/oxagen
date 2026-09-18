@@ -3,6 +3,7 @@
 // that answers the Run page's reads with what a test hands it. Importable from
 // tests only (`testOnlyTarget` in src/test/arch/layers.ts).
 import type {
+  RunChain,
   RunCost,
   RunDetail,
   RunFrame,
@@ -10,7 +11,9 @@ import type {
   RunTranscript,
   TranscriptBody,
   TranscriptEntry,
+  TranscriptZoom,
 } from "@/data/contracts/run";
+import type { ApprovalItem } from "@/data/contracts/approvals";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
@@ -40,8 +43,60 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
       model: "z-ai/glm-flash-latest",
     },
     replayGrade: "fork",
+    enforcementTier: "harness",
+    completenessGaps: [],
+    canSummarize: true,
     startedAt: at(-3600),
     sealedAt: at(-300),
+    ...overrides,
+  };
+}
+
+export function runChain(overrides: Partial<RunChain> = {}): RunChain {
+  return {
+    hashRule: "tacho.sha256_prev_hash_v1",
+    frameCount: 431,
+    firstSeq: "1",
+    lastSeq: "431",
+    merkleRoot: `sha256:${"c".repeat(64)}`,
+    checkpoints: [
+      {
+        seq: "200",
+        chainHead: `sha256:${"d".repeat(64)}`,
+        eventCount: 200,
+        signedAt: at(-1800),
+        deviceKeyFingerprint: "ed25519:2f:91:aa",
+        platformKeyId: "pk_01k4qj9e",
+        countersignedAt: at(-1790),
+        anchorRoot: null,
+        anchoredAt: null,
+      },
+    ],
+    gaps: {
+      missingSequences: [],
+      missingFrameCount: 0,
+      missingBodies: 0,
+      recorded: [],
+    },
+    seal: {
+      sealedAt: at(-300),
+      terminalStatus: "completed",
+      eventCount: 431,
+      finalRunSeq: "431",
+      finalEventDigest: `sha256:${"e".repeat(64)}`,
+      eventStreamDigest: `sha256:${"f".repeat(64)}`,
+      merkleRoot: `sha256:${"c".repeat(64)}`,
+      archiveSegmentRef: null,
+    },
+    enforcementTier: "harness",
+    recordedGrade: "fork",
+    ladder: [
+      { grade: "inspect", met: true, reason: "frames_recorded" },
+      { grade: "view", met: true, reason: "bodies_retained" },
+      { grade: "fork", met: true, reason: "tool_cassette_complete" },
+      { grade: "retry", met: false, reason: "harness_not_reproducible" },
+    ],
+    complete: true,
     ...overrides,
   };
 }
@@ -198,8 +253,19 @@ type RunReads = {
   cost?: Read<RunCost>;
   /** Only read when the Frames tab has a frame body open; refused when absent. */
   frameBody?: Read<RunFrameBody>;
-  /** Only read when the Transcript tab is open; refused when absent. */
-  transcript?: Read<RunTranscript>;
+  /**
+   * Only read when the Transcript tab is open, or when the Cost tab reads the
+   * run's per-turn ledger for the waterfall. A function answers per zoom level,
+   * which is how a Cost-tab test hands one transcript for `turns` and another
+   * for `steps`.
+   */
+  transcript?:
+    | Read<RunTranscript>
+    | ((zoom: TranscriptZoom) => Read<RunTranscript>);
+  /** Only read when the Chain and seal tab is open; refused when absent. */
+  chain?: Read<RunChain>;
+  /** Only read when the Approvals tab is open; refused when absent. */
+  approvals?: Read<ApprovalItem[]>;
 };
 
 /** A DataSource answering the Run page's reads; `calls` records their arguments. */
@@ -209,14 +275,15 @@ export function runSource(reads: RunReads) {
     frameBody: unknown[][];
     cost: unknown[][];
     transcript: unknown[][];
-    /** The Run page reads no approvals: the store records no run on one. */
     approvals: unknown[][];
+    chain: unknown[][];
   } = {
     get: [],
     frameBody: [],
     cost: [],
     transcript: [],
     approvals: [],
+    chain: [],
   };
   const refuse = () => Promise.reject(new Error("not a Run read"));
   const answer = <T>(
@@ -238,9 +305,20 @@ export function runSource(reads: RunReads) {
       get: answer("get", reads.detail),
       frameBody: answer("frameBody", reads.frameBody),
       cost: answer("cost", reads.cost),
-      transcript: answer("transcript", reads.transcript),
+      transcript: (...args: unknown[]) => {
+        calls.transcript.push(args);
+        const asked = reads.transcript;
+        if (asked === undefined) {
+          return Promise.reject(new Error("transcript was not expected"));
+        }
+        const q = args[2] as { zoom: TranscriptZoom };
+        return Promise.resolve(
+          typeof asked === "function" ? asked(q.zoom) : asked,
+        );
+      },
+      chain: answer("chain", reads.chain),
     },
-    approvals: { pending: answer("approvals", undefined) },
+    approvals: { pending: answer("approvals", reads.approvals) },
     agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
     billing: {
       plan: refuse,

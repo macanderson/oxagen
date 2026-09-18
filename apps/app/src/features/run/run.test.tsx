@@ -13,6 +13,7 @@ import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
+  NOW,
   runCost,
   runDetail,
   runFrame,
@@ -104,6 +105,7 @@ async function renderRun(
   view: {
     tab?: string;
     zoom?: string;
+    kinds?: string;
     frames?: string;
     body?: string;
     viewer?: typeof ctx;
@@ -116,8 +118,10 @@ async function renderRun(
     runId: "tse_7k2m9q",
     tab: view.tab ?? null,
     zoom: view.zoom ?? null,
+    kinds: view.kinds ?? null,
     frames: view.frames ?? null,
     body: view.body ?? null,
+    now: NOW,
   });
   const { container } = render(<IntlProvider>{element}</IntlProvider>);
   return { container, calls };
@@ -294,7 +298,11 @@ describe("tabs", () => {
       { detail: ok(runDetail()), transcript: ok(runTranscript()) },
       { zoom: "everything-else" },
     );
-    expect(calls.transcript[0]).toEqual([ctx, "tse_7k2m9q", "steps"]);
+    expect(calls.transcript[0]).toEqual([
+      ctx,
+      "tse_7k2m9q",
+      { zoom: "steps", kinds: [], after: null },
+    ]);
   });
 
   it("reads the level the URL asked for", async () => {
@@ -305,7 +313,11 @@ describe("tabs", () => {
       },
       { zoom: "turns" },
     );
-    expect(calls.transcript[0]).toEqual([ctx, "tse_7k2m9q", "turns"]);
+    expect(calls.transcript[0]).toEqual([
+      ctx,
+      "tse_7k2m9q",
+      { zoom: "turns", kinds: [], after: null },
+    ]);
   });
 
   it("opens Transcript for a tab that is not a section, Policy included (negative)", async () => {
@@ -318,7 +330,8 @@ describe("tabs", () => {
       expect(screen.getByRole("region", { name: "Transcript" })).toBeTruthy();
       expect(calls.approvals).toHaveLength(0);
     }
-    expect(screen.queryByRole("link", { name: "Policy" })).toBeNull();
+    const tabs = screen.getByRole("navigation", { name: "Run sections" });
+    expect(within(tabs).queryByRole("link", { name: "Policy" })).toBeNull();
   });
 });
 
@@ -395,7 +408,9 @@ describe("transcript", () => {
       },
       { tab: "transcript" },
     );
-    expect(screen.getByText(/stops short of the end/)).toBeTruthy();
+    expect(screen.getByTestId("transcript-count")).toHaveTextContent(
+      "more behind this page",
+    );
   });
 
   it("names its own failure when the transcript read is refused (negative)", async () => {
