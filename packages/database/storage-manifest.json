@@ -3425,7 +3425,7 @@
       "writes": []
     }
   ],
-  "contentHash": "f8142685b36b092ff529a2085c3260b3810992ab5a8a473a3dea69ddd712ef87",
+  "contentHash": "992faa856d30d13f2f800e4ba1a048c57b25044343e119ded7db1230243e7db0",
   "domains": [
     {
       "name": "agent",
@@ -15833,6 +15833,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "timestamp with time zone"
+        },
+        {
+          "name": "graph_database",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "org",
@@ -16016,6 +16022,18 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "base_url",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "model_map",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
         },
         {
           "name": "status",

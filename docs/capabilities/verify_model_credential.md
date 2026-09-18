@@ -38,8 +38,10 @@ the output the operator needs to fix it.
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| provider | `"openrouter" \| "gateway"`? | Which vendor issued the candidate key |
+| provider | the five providers of `set_model_credential`? | Which vendor issued the candidate key |
 | apiKey | string (8–512 chars)? | The candidate key; never stored by this call |
+| baseUrl | https URL? | The candidate endpoint, `openai_compatible` only — range-checked before any request is made |
+| toolProbeModel | string? | The model to ask the tool-calling question of: the one the org will map to `balanced` |
 
 One cross-field rule, enforced by the contract on every surface: `provider`
 and `apiKey` travel **together**. A key with no provider cannot be checked
@@ -47,17 +49,29 @@ against anything, and a provider with no key would verify the stored key under
 a possibly different provider and report the wrong thing. Give both, or give
 neither.
 
-Providers today are `openrouter` and `gateway` (Vercel AI Gateway); direct
-Anthropic and OpenAI keys are a later addition.
+An `openai_compatible` candidate also needs its `baseUrl`, and that URL gets
+the same public-endpoint check `set_model_credential` gives it **before** the
+probe runs — the probe connects to it with the key attached, so checking
+afterwards would be too late.
 
 ## Output
 
 | Field | Type | Notes |
 | --- | --- | --- |
 | ok | boolean | Whether the vendor accepted the key |
-| provider | `"openrouter" \| "gateway"` | Which vendor was asked |
+| provider | one of the five providers | Which vendor was asked |
 | latencyMs | integer ≥ 0 | Round trip to the vendor |
-| error | string \| null | The vendor's own message when `ok` is `false`; `null` when it passed |
+| error | string \| null | The vendor's own message when `ok` is `false`, or its reason for refusing tools; `null` when both passed |
+| toolCalling | boolean \| null | Whether the endpoint can call tools — see below |
+
+**Two questions, not one.** A key the vendor accepts is not yet a working
+assistant: every turn is the engine asking the model for tool calls and acting
+on them, so an endpoint that cannot call tools answers nothing about the
+workspace. `toolCalling` is `true` for the four named providers without
+asking (all four do it, and asking would spend the customer's money), `null`
+when the key was refused or no `toolProbeModel` was given, and for
+`openai_compatible` the observed answer to one forced-tool completion of at
+most 16 tokens — the only call in this capability that costs anything.
 
 `error` is the vendor's text **about** the key, never the key. The response
 never carries the key in either direction.
@@ -66,7 +80,10 @@ never carries the key in either direction.
 
 - **Candidate key:** none. Nothing is stored, no row changes, and no security
   event is emitted, because no key was written.
-- **Stored key:** on `ok: true`, `last_verified_at` is stamped on the live
+- **Stored key:** on `ok: true` **and** `toolCalling` not `false`,
+  `last_verified_at` is stamped. A key that works on an endpoint that cannot
+  call tools is not stamped, because that column is what the settings page
+  shows as healthy. It is otherwise stamped on the live
   `org.model_credentials` row, which is what `get_model_credential` reports
   as `lastVerifiedAt`. On `ok: false` the row is left as it was. This is the
   only write, and it is why the MCP tool is annotated read-only: a timestamp
@@ -94,5 +111,5 @@ like every other secret access (ADR-050).
 
 A scheduled health sweep that calls this on every stored key. The stored-key
 form exists so one can be built; nothing runs it on a timer today. Verifying a
-key's **balance** or **model access** — the check confirms the key is accepted
-by the vendor, not that it can afford a turn or reach a given model.
+key's **balance** — the check confirms the key is accepted and, for a custom
+endpoint, that the named model can call tools; not that it can afford a turn.

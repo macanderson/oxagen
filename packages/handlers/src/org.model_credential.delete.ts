@@ -1,3 +1,4 @@
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgModelCredentialDelete } from "@oxagen/oxagen/contracts/org.model_credential.delete";
 import { and, eq, isNull } from "drizzle-orm";
@@ -27,6 +28,15 @@ import { logger } from "./logger";
 export const orgModelCredentialDeleteHandler: CapabilityHandler<
   typeof orgModelCredentialDelete
 > = async (_input, ctx) => {
+  // The org-role check lives HERE, not only in the contract's `defaultRoles`.
+  // The kernel's IAM check is an unconditional allow for every human caller
+  // in a non-enterprise org (packages/iam/src/check-iam.ts), so without this
+  // any member could remove the org's key and move its usage onto the billed platform key. `defaultRoles` documents the intent; this
+  // enforces it (INV-29). Pinned by role-check.test.ts.
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: ["Owner", "Admin"] },
+  );
   const now = new Date();
   const removed = await withTenantDb(async (tx) => {
     const existing = await tx.query.modelCredentials.findFirst({

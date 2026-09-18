@@ -93,8 +93,18 @@ ${env}
 `;
 }
 
+/**
+ * A systemd unit value. Besides the quoting, `%` starts a specifier (`%h`,
+ * `%u`) and `$` starts an environment expansion in `ExecStart`, so a home
+ * directory or a PATH entry holding either was rewritten by systemd. Both are
+ * doubled, which is systemd's own escape for a literal one.
+ */
 function systemdQuote(value: string): string {
-  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  return `"${value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/%/g, "%%")
+    .replace(/\$/g, "$$$$")}"`;
 }
 
 export function renderSystemdUnit(spec: ServiceSpec): string {
@@ -126,6 +136,8 @@ export interface ServiceManagerOptions {
   exec: Exec;
   /** The user's uid, for `launchctl bootstrap gui/<uid>`. */
   uid?: number;
+  /** Block for `ms`. Injected so a test does not wait out the retries. */
+  sleep?: (ms: number) => void;
   /** Where the Windows launcher `.cmd` is written (`TachoPaths.daemonLauncher`). */
   launcherPath?: string;
   /**
@@ -136,7 +148,16 @@ export interface ServiceManagerOptions {
   pidPath?: string;
 }
 
+function blockingSleep(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/** launchd needs a moment to let go of a label it has just booted out. */
+const BOOTSTRAP_ATTEMPTS = 5;
+const BOOTSTRAP_RETRY_MS = 400;
+
 function launchdManager(options: ServiceManagerOptions): ServiceManager {
+  const sleep = options.sleep ?? blockingSleep;
   const dir = join(options.home, "Library", "LaunchAgents");
   const unitPath = join(dir, `${SERVICE_LABEL}.plist`);
   const domain = `gui/${options.uid ?? process.getuid?.() ?? 501}`;
@@ -147,7 +168,21 @@ function launchdManager(options: ServiceManagerOptions): ServiceManager {
       ensureDir(dir, 0o755);
       writeSensitiveFileAtomic(unitPath, renderLaunchdPlist(spec), 0o644);
       options.exec("launchctl", ["bootout", `${domain}/${SERVICE_LABEL}`]);
-      const result = options.exec("launchctl", ["bootstrap", domain, unitPath]);
+      // `bootout` returns before the old instance has gone, and a
+      // `bootstrap` that lands in that window fails with "Bootstrap failed:
+      // 5: Input/output error". Every re-enroll and reassign does exactly
+      // this pair, so it is retried instead of reported as "service install
+      // failed; run `tacho daemon` yourself" on a machine where nothing is
+      // wrong.
+      let result = options.exec("launchctl", ["bootstrap", domain, unitPath]);
+      for (
+        let attempt = 1;
+        result.status !== 0 && attempt < BOOTSTRAP_ATTEMPTS;
+        attempt += 1
+      ) {
+        sleep(BOOTSTRAP_RETRY_MS);
+        result = options.exec("launchctl", ["bootstrap", domain, unitPath]);
+      }
       if (result.status !== 0) {
         throw new Error(
           `launchctl bootstrap failed (${result.status ?? "signal"}): ${result.stderr.trim() || result.stdout.trim()}`,
@@ -156,6 +191,28 @@ function launchdManager(options: ServiceManagerOptions): ServiceManager {
     },
     uninstall: () => {
       options.exec("launchctl", ["bootout", `${domain}/${SERVICE_LABEL}`]);
+      // `bootout` answers non-zero both for "was not loaded" and for "could
+      // not unload", so its status says nothing. `print` does: while it
+      // answers 0 the daemon is still running, and deleting the plist then
+      // leaves a collector nothing on disk accounts for until the next
+      // logout. The plist stays so the retry has something to boot out.
+      let loaded =
+        options.exec("launchctl", ["print", `${domain}/${SERVICE_LABEL}`])
+          .status === 0;
+      for (
+        let attempt = 1;
+        loaded && attempt < BOOTSTRAP_ATTEMPTS;
+        attempt += 1
+      ) {
+        sleep(BOOTSTRAP_RETRY_MS);
+        loaded =
+          options.exec("launchctl", ["print", `${domain}/${SERVICE_LABEL}`])
+            .status === 0;
+      }
+      if (loaded)
+        throw new Error(
+          `${SERVICE_LABEL} is still loaded after launchctl bootout. Run \`launchctl bootout ${domain}/${SERVICE_LABEL}\`, then unenroll again`,
+        );
       if (existsSync(unitPath)) unlinkSync(unitPath);
     },
     status: () => {

@@ -146,6 +146,10 @@ function isTachoEntry(entry: HookEntry, enrollmentId?: string): boolean {
 
 export function isTachoGroup(group: HookGroup, enrollmentId?: string): boolean {
   return (
+    // A user's file can hold anything where a group should be (`null`, a
+    // string); whatever it is, it is not ours, and it must not throw.
+    typeof group === "object" &&
+    group !== null &&
     Array.isArray(group.hooks) &&
     group.hooks.length > 0 &&
     group.hooks.every((entry) => isTachoEntry(entry, enrollmentId))
@@ -213,6 +217,49 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Why a parsed settings document cannot be merged into, or undefined when it
+ * can. Valid JSON is not the same as a settings document: a top-level array
+ * took `.hooks` as a property `JSON.stringify` then dropped (enroll said
+ * "already present" with nothing written), and a `hooks` or `env` that is a
+ * string was spread into index keys and lost. `members` names the top-level
+ * keys that must be objects when present; an event whose value is not an
+ * array is refused too, since merging would replace it.
+ */
+export function documentShapeProblem(
+  document: unknown,
+  members: readonly string[],
+  arrayValuedMember?: string,
+): string | undefined {
+  if (document === undefined || document === null) return undefined;
+  if (!isPlainObject(document))
+    return `the top level is ${Array.isArray(document) ? "an array" : `a ${typeof document}`}, not an object`;
+  for (const member of members) {
+    const value = document[member];
+    if (value !== undefined && !isPlainObject(value))
+      return `\`${member}\` is ${Array.isArray(value) ? "an array" : `a ${typeof value}`}, not an object`;
+  }
+  if (arrayValuedMember !== undefined) {
+    const events = document[arrayValuedMember];
+    if (isPlainObject(events)) {
+      for (const [event, groups] of Object.entries(events)) {
+        if (!Array.isArray(groups))
+          return `\`${arrayValuedMember}.${event}\` is not a list`;
+      }
+    }
+  }
+  return undefined;
+}
+
+/** `documentShapeProblem` for Claude Code's `settings.json`. */
+export function settingsShapeProblem(document: unknown): string | undefined {
+  return documentShapeProblem(document, ["hooks", "env"], "hooks");
+}
+
 /**
  * Merge Tacho's entries into a settings document. Idempotent: a second call
  * with the same config changes nothing. Foreign groups on the same events
@@ -237,17 +284,28 @@ export function mergeTachoSettings(
   settings.hooks = hooks;
   const env = { ...(settings.env ?? {}) };
   const displaced: Record<string, string> = {};
+  // No TACHO_ENROLLMENT yet means Tacho has never merged into this env block,
+  // so every value in it is the user's own — including one that happens to
+  // equal ours (`CLAUDE_CODE_ENABLE_TELEMETRY: "1"`) and a `TACHO_HOME` they
+  // set themselves. Those used to go unrecorded, and strip then deleted them
+  // as "a value Tacho wrote".
+  const firstMerge = env[TACHO_ENROLLMENT_ENV] === undefined;
   for (const [key, value] of Object.entries(tachoEnv(config))) {
     const previous = env[key];
     if (
-      previous !== undefined &&
-      previous !== value &&
-      !isTachoEnvValue(key, previous)
+      typeof previous === "string" &&
+      (firstMerge || (previous !== value && !isTachoEnvValue(key, previous)))
     ) {
       displaced[key] = previous;
     }
     env[key] = value;
   }
+  // A TACHO_HOME of the user's own, on an install that sets none: it stays
+  // where it is, and is recorded so strip puts it back instead of deleting
+  // it as one of Tacho's keys.
+  const ownHome = env["TACHO_HOME"];
+  if (firstMerge && config.tachoHome === undefined && ownHome !== undefined)
+    displaced["TACHO_HOME"] = ownHome;
   settings.env = env;
   return { settings, changed: JSON.stringify(settings) !== before, displaced };
 }
@@ -291,6 +349,10 @@ export function stripTachoSettings(
   enrollmentId?: string,
   restore: Record<string, string> = {},
 ): StripResult {
+  // A document that is not a settings object holds nothing of ours to take
+  // out, and is handed back untouched rather than "repaired".
+  if (settingsShapeProblem(existing) !== undefined)
+    return { settings: existing as SettingsDocument, changed: false };
   const settings: SettingsDocument =
     existing !== null && typeof existing === "object"
       ? clone(existing as SettingsDocument)
@@ -305,20 +367,17 @@ export function stripTachoSettings(
     if (Object.keys(hooks).length > 0) settings.hooks = hooks;
     else delete settings.hooks;
   }
-  if (settings.env !== undefined) {
-    const env = { ...settings.env };
-    for (const key of TACHO_ENV_KEYS) {
-      const value = env[key];
-      if (value === undefined) continue;
-      if (key in restore) {
-        env[key] = restore[key] as string;
-      } else if (isTachoEnvValue(key, value)) {
-        delete env[key];
-      }
-    }
-    if (Object.keys(env).length > 0) settings.env = env;
-    else delete settings.env;
+  const env = { ...(settings.env ?? {}) };
+  for (const key of TACHO_ENV_KEYS) {
+    const value = env[key];
+    // Only a value Tacho wrote is Tacho's to replace: one the user changed
+    // while enrolled is theirs now and stays.
+    if (value !== undefined && !isTachoEnvValue(key, value)) continue;
+    if (key in restore) env[key] = restore[key] as string;
+    else delete env[key];
   }
+  if (Object.keys(env).length > 0) settings.env = env;
+  else delete settings.env;
   return { settings, changed: JSON.stringify(settings) !== before };
 }
 

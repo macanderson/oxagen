@@ -104,6 +104,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
+      # A `desktop-v2.2.0` tag on a tree whose package.json says 2.1.1 shipped
+      # 2.1.1 bundles under the 2.2.0 release, and the updater then offered
+      # 2.1.1 to itself.
+      - name: The tag names the version being built
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        shell: bash
+        run: |
+          want="${GITHUB_REF_NAME#desktop-v}"
+          have="$(node -p "require('./apps/desktop/package.json').version")"
+          if [ "$want" != "$have" ]; then
+            echo "::error::tag $GITHUB_REF_NAME names $want but apps/desktop/package.json is $have"
+            exit 1
+          fi
+
       # The two sidecars: node single-executables named with the Rust triple.
       - name: Build sidecars
         run: pnpm --filter @oxagen/desktop sidecars -- --triple ${{ matrix.triple }}
@@ -258,6 +272,19 @@ jobs:
               --title "Oxagen desktop update feed" \
               --notes "latest.json for the in-app updater; the app itself is on the desktop-v* releases. Rewritten by desktop.yml when one is published." \
               --latest=false
+          fi
+          # Never move the feed backwards. Publishing an older draft after a
+          # newer release used to clobber the feed with the older latest.json,
+          # and every installed app then saw "up to date" on an old version.
+          next="$(jq -r .version "$tmp/latest.json")"
+          mkdir "$tmp/current"
+          if gh release download desktop-latest --repo "$GITHUB_REPOSITORY" --pattern latest.json --dir "$tmp/current" 2>/dev/null; then
+            current="$(jq -r .version "$tmp/current/latest.json")"
+            newest="$(printf '%s\n%s\n' "$current" "$next" | sort -V | tail -n 1)"
+            if [ "$current" = "$next" ] || [ "$newest" != "$next" ]; then
+              echo "::notice::the feed already serves $current, which is not older than $TAG ($next); left as it is."
+              exit 0
+            fi
           fi
           gh release upload desktop-latest "$tmp/latest.json" --repo "$GITHUB_REPOSITORY" --clobber
           echo "::notice::desktop-latest now serves $TAG's latest.json."
