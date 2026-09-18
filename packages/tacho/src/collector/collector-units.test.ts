@@ -819,6 +819,88 @@ describe("shipper", () => {
     expect(logs.some((l) => l.includes("quarantined"))).toBe(true);
   });
 
+  it("drops the body of an event it quarantines, on every path that gives up", async () => {
+    // A quarantined event is gone from the WAL, so its body can never be
+    // retried. Holding it keeps the operator's prompt text on the machine for
+    // the whole compaction window in exchange for nothing that can ever ship.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events);
+    const store = new BodyStore(paths.bodies);
+    // One body on the event the control plane will refuse, and one on an
+    // event that ships normally, so the test tells dropping from wiping.
+    const refused = events[2] as { event_id_idem: string; seq: number };
+    const fine = events[0] as { event_id_idem: string };
+    for (const [event, text] of [
+      [refused, "the refused prompt"],
+      [fine, "the shipped prompt"],
+    ] as const) {
+      store.put(
+        event.event_id_idem,
+        "turn_start",
+        "text/plain; charset=utf-8",
+        new TextEncoder().encode(text),
+      );
+    }
+    expect(store.stats().bodies).toBe(2);
+
+    const shipped: string[] = [];
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch, _daemon, bodies) => {
+          if (batch.some((e) => e.seq === refused.seq))
+            throw new ControlError(400, "seq 2 is malformed");
+          for (const body of bodies ?? []) shipped.push(body.event_id_idem);
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+      undefined,
+      store,
+    );
+    const result = await s.drain();
+
+    expect(result.quarantined).toBe(1);
+    // The healthy body still shipped: quarantine drops one event's body, not
+    // the batch's.
+    expect(shipped).toContain(fine.event_id_idem);
+    // Nothing is left holding prompt text for an event that will never ship.
+    expect(store.stats()).toEqual({ bodies: 0, bytes: 0 });
+  });
+
+  it("drops the body of an event stamped with a previous enrollment", async () => {
+    // The foreign-enrollment path sets events aside before any body is taken,
+    // so it is the quarantine route most likely to leak.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events);
+    const store = new BodyStore(paths.bodies);
+    const first = events[0] as { event_id_idem: string };
+    store.put(
+      first.event_id_idem,
+      "turn_start",
+      "text/plain; charset=utf-8",
+      new TextEncoder().encode("recorded under the old enrollment"),
+    );
+
+    const { s } = shipper(
+      wal,
+      { ingest: async (batch) => okResponse(batch) },
+      paths.quarantine,
+      () => 0,
+      // A host id none of the spooled events carries, so every one is foreign.
+      "tch_someotherenrollmentxx",
+      store,
+    );
+    await s.drain();
+
+    expect(store.stats()).toEqual({ bodies: 0, bytes: 0 });
+  });
+
   // ── Orphaned events after a re-enrollment ──────────────────────────────────
   //
   // Re-enrolling mints a new host_enrollment_id and leaves whatever is still
