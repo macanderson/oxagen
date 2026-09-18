@@ -320,6 +320,59 @@ describe("the negotiated write path", () => {
     expect(again.closed).toBeNull();
   });
 
+  // Both the app and the CLI omit the alias list when the operator types no
+  // aliases. Coercing that omission to `[]` made every price correction erase
+  // the stored names, after which frames arriving under them stopped being
+  // priced at all.
+  it("leaves the stored aliases alone when a correction names none", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      modelAliases: ["anthropic/claude-sonnet-5"],
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_000_000n,
+      effectiveFrom: T1,
+    });
+    expect(fake.rows).toHaveLength(1);
+    expect(fake.rows[0]!.modelAliases).toEqual(["anthropic/claude-sonnet-5"]);
+    expect(fake.rows[0]!.microsPerMillion).toBe(2_000_000n);
+  });
+
+  it("replaces the stored aliases when a correction names an empty list", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      modelAliases: ["anthropic/claude-sonnet-5"],
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    await setNegotiatedPriceEntry({
+      ...SET,
+      modelAliases: [],
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    expect(fake.rows[0]!.modelAliases).toEqual([]);
+  });
+
+  // Without the lock two writes for one key read the same open row before
+  // either commits, each closes it and inserts its own open row, and a later
+  // removal closes only the newest — leaving the older negotiated rate in
+  // force instead of falling back to the list price.
+  it("takes a per-key lock before it reads, so two corrections cannot interleave", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    const ops = fake.log.map((l) => l.op);
+    expect(ops[0]).toBe("lock");
+    expect(ops.indexOf("lock")).toBeLessThan(ops.indexOf("select"));
+    expect(fake.log[0]?.sql).toContain("pg_advisory_xact_lock");
+  });
+
   it("closes the prior row at the new instant instead of mutating its price", async () => {
     const first = await setNegotiatedPriceEntry({
       ...SET,
@@ -448,6 +501,80 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
   });
 
   const openRows = () => fake.rows.filter((r) => r.effectiveTo === null);
+
+  // A catalog that republishes a model under new names without moving its
+  // rate used to take the `unchanged` path, because only price, currency and
+  // unit were compared. The row then kept its first-inserted aliases forever:
+  // a newly published identifier arrived unpriced, and a withdrawn one went on
+  // matching. A rename is also NOT a repricing, so it must not open a new
+  // effective-dated window.
+  it("updates aliases in place when only the names moved", async () => {
+    fake.rows.push(
+      priceRow({
+        provider: "anthropic",
+        microsPerMillion: 2_000_000n,
+        modelAliases: ["anthropic/claude-sonnet-5"],
+        effectiveFrom: FROM,
+      }),
+    );
+    const result = await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [
+        {
+          provider: "anthropic",
+          model: "claude-sonnet-5",
+          modelAliases: ["anthropic/claude-sonnet-5", "claude-sonnet-5-latest"],
+          region: null,
+          tokenClass: "input_uncached",
+          unit: "token",
+          currency: "USD",
+          microsPerMillion: 2_000_000n,
+          effectiveFrom: T1,
+          effectiveTo: null,
+        },
+      ],
+    });
+
+    expect(fake.rows).toHaveLength(1);
+    expect(result).toMatchObject({ renamed: 1, written: 0, unchanged: 0 });
+    expect(fake.rows[0]!.modelAliases).toEqual([
+      "anthropic/claude-sonnet-5",
+      "claude-sonnet-5-latest",
+    ]);
+    // Same window, same price: nothing was repriced.
+    expect(fake.rows[0]!.effectiveFrom).toEqual(FROM);
+    expect(fake.rows[0]!.effectiveTo).toBeNull();
+    expect(fake.rows[0]!.microsPerMillion).toBe(2_000_000n);
+  });
+
+  it("reports a row whose price and names both match as unchanged", async () => {
+    fake.rows.push(
+      priceRow({
+        provider: "anthropic",
+        microsPerMillion: 2_000_000n,
+        modelAliases: ["b", "a"],
+      }),
+    );
+    const result = await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [
+        {
+          provider: "anthropic",
+          model: "claude-sonnet-5",
+          // Order is how a catalog happened to serialise them, not a change.
+          modelAliases: ["a", "b"],
+          region: null,
+          tokenClass: "input_uncached",
+          unit: "token",
+          currency: "USD",
+          microsPerMillion: 2_000_000n,
+          effectiveFrom: T1,
+          effectiveTo: null,
+        },
+      ],
+    });
+    expect(result).toMatchObject({ unchanged: 1, renamed: 0, written: 0 });
+  });
 
   it("leaves exactly one open row per model and class when the vendor string changes", async () => {
     // The book already prices this model under one vendor name.

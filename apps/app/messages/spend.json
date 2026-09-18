@@ -256,8 +256,6 @@
         "body": "Fill in the classes your contract names. Each one is written as its own effective-dated row, in the order below, under the one date you give. A rate you set beats the provider list price for that model and class from that date on; the row it supersedes is closed, never overwritten, so a run priced earlier keeps the rate it was priced with.",
         "provider": "Vendor",
         "model": "Model",
-        "region": "Region",
-        "regionHint": "Leave this empty unless your contract prices a region separately.",
         "aliases": "Other names for this model",
         "aliasesHint": "Separate them with commas. Leave it empty to keep the names already stored — an empty list would replace them.",
         "effectiveFrom": "In effect from",

@@ -1825,8 +1825,6 @@ type Messages = {
         body: string;
         provider: string;
         model: string;
-        region: string;
-        regionHint: string;
         aliases: string;
         aliasesHint: string;
         effectiveFrom: string;

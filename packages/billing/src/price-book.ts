@@ -309,8 +309,14 @@ export async function listPriceEntries(args: {
 interface PriceBookSyncResult {
   /** Rows written (inserted or updated in place, before they have shipped). */
   written: number;
-  /** Rows whose price was unchanged. */
+  /** Rows whose price and names were both unchanged. */
   unchanged: number;
+  /**
+   * Open rows whose aliases the catalog moved while leaving the rate alone.
+   * Updated in place: a name is not a price, so a rename opens no new
+   * effective-dated window and reprices nothing.
+   */
+  renamed: number;
   /**
    * Open rows closed because this sync re-priced the same model and class
    * under a different provider name. Left open they would be a second row
@@ -353,17 +359,47 @@ export async function syncPriceBook(args: {
     for (const row of existing)
       if (row.effectiveTo === null) open.set(key(row), row);
 
+    // Aliases are identity, not price. Two lists are the same list when they
+    // name the same things; order is how a catalog happened to serialise them.
+    const sameAliases = (a: readonly string[], b: readonly string[]) =>
+      a.length === b.length &&
+      [...a].sort().every((name, i) => name === [...b].sort()[i]);
+
     let written = 0;
     let unchanged = 0;
+    let renamed = 0;
     for (const seed of seeds) {
       const current = open.get(key(seed));
-      if (
+      const pricedTheSame =
         current &&
         current.microsPerMillion === seed.microsPerMillion &&
         current.currency === seed.currency &&
-        current.unit === seed.unit
-      ) {
+        current.unit === seed.unit;
+      if (pricedTheSame && sameAliases(current.modelAliases, seed.modelAliases)) {
         unchanged += 1;
+        continue;
+      }
+      if (pricedTheSame) {
+        // The catalog republished this model under different names without
+        // moving its rate — a new gateway alias, or one the vendor retired.
+        // That is a rename, and a rename must NOT open a new price window:
+        // closing the current row and inserting a successor would restate the
+        // same price from a new instant for no reason, and every run already
+        // priced against the open row would stop naming the entry it used.
+        //
+        // Comparing only price, currency and unit (which is all this did) sent
+        // an alias-only change down the `unchanged` path instead, so the row
+        // kept its stale names forever: a newly published identifier arrived
+        // unpriced, and a withdrawn one went on matching. The names are updated
+        // in place, where they belong.
+        await tx
+          .update(schema.priceEntries)
+          .set({
+            modelAliases: [...seed.modelAliases],
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.priceEntries.id, current.id));
+        renamed += 1;
         continue;
       }
       if (
@@ -388,6 +424,11 @@ export async function syncPriceBook(args: {
       // list, so the text[] is spelled as an array constructor
       // (`array[]::text[]` when empty), and the bigint and the instant travel
       // as strings under an explicit cast.
+      //
+      // `model_aliases` is in the DO UPDATE SET below because the catalog is
+      // the authority on a list row's names as well as its rate; omitting it
+      // left a re-synced row carrying whichever aliases it was first inserted
+      // with.
       const aliases = sql.join(
         seed.modelAliases.map((a) => sql`${a}`),
         sql`, `,
@@ -407,6 +448,7 @@ export async function syncPriceBook(args: {
           micros_per_million = EXCLUDED.micros_per_million,
           currency = EXCLUDED.currency,
           unit = EXCLUDED.unit,
+          model_aliases = EXCLUDED.model_aliases,
           effective_to = NULL,
           updated_at = now()
       `);
@@ -443,7 +485,7 @@ export async function syncPriceBook(args: {
       superseded += 1;
     }
 
-    return { written, unchanged, superseded };
+    return { written, unchanged, renamed, superseded };
   });
 }
 
@@ -576,11 +618,29 @@ export async function setNegotiatedPriceEntry(
   const region = args.region ?? null;
   const unit = args.unit ?? PRICE_UNIT_BY_TOKEN_CLASS[args.tokenClass];
   const currency = args.currency ?? "USD";
-  const modelAliases = args.modelAliases ?? [];
+  // `undefined` and `[]` are different instructions and stay different all the
+  // way to the SQL. Omission preserves whatever aliases the row already
+  // carries — every caller that corrects a price without retyping the alias
+  // list depends on that — while an explicit empty array clears them.
+  const modelAliases = args.modelAliases;
   const from = args.effectiveFrom;
   const key = entryKey({ ...args, region });
 
   return withTenantDb(async (tx) => {
+    // Two writes for one key must not interleave. Without this, both read the
+    // same open row before either commits, each closes it and inserts its own
+    // open row, and the key ends with two open windows — after which a removal
+    // closes only the newest and the older negotiated rate quietly stays in
+    // force instead of falling back to list pricing. The read-then-write below
+    // is not atomic on its own and no constraint forbids a second open window,
+    // so the lock is what serialises them. Transaction-scoped: it is released
+    // by the commit or the rollback, never left held.
+    //
+    // Keyed on the org as well as the price key, so two organisations
+    // correcting the same model never wait on each other.
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`price_entry:${args.orgId}:${key}`}::text, 0))`,
+    );
     const rows = await readKeyRows(tx, args, { includeList: false });
 
     // A correction is always a later row. A row already effective from an
@@ -632,9 +692,16 @@ export async function setNegotiatedPriceEntry(
     // `price_entries_key_idx`'s own expressions, or Postgres finds no index
     // to arbitrate on.
     const aliases = sql.join(
-      modelAliases.map((a) => sql`${a}`),
+      (modelAliases ?? []).map((a) => sql`${a}`),
       sql`, `,
     );
+    // On a fresh insert an omitted list is simply empty — there is nothing to
+    // preserve. On conflict it must leave `model_aliases` alone, which is why
+    // the assignment is written rather than always taking EXCLUDED.
+    const aliasAssignment =
+      modelAliases === undefined
+        ? sql`model_aliases = ${schema.priceEntries}.model_aliases`
+        : sql`model_aliases = EXCLUDED.model_aliases`;
     await tx.execute(sql`
       INSERT INTO ${schema.priceEntries}
         (org_id, provider, model, model_aliases, region, token_class, unit,
@@ -650,7 +717,7 @@ export async function setNegotiatedPriceEntry(
         micros_per_million = EXCLUDED.micros_per_million,
         currency = EXCLUDED.currency,
         unit = EXCLUDED.unit,
-        model_aliases = EXCLUDED.model_aliases,
+        ${aliasAssignment},
         effective_to = NULL,
         updated_at = now()
     `);

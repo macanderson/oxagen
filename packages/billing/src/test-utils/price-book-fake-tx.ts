@@ -78,7 +78,10 @@ const keyByName = new Map<string, string>(
 export interface FakePriceStore {
   rows: PriceRow[];
   /** Every statement the executor ran, in order. */
-  log: { op: "select" | "update" | "insert" | "upsert"; sql?: string }[];
+  log: {
+    op: "select" | "update" | "insert" | "upsert" | "lock";
+    sql?: string;
+  }[];
 }
 
 export function makeFakePriceStore(): FakePriceStore {
@@ -311,6 +314,17 @@ function applyConflictSet(
       existing[key] = new Date();
       continue;
     }
+    // `col = cost.price_entries.col` — the row's own current value, which is
+    // how the writer says "leave this alone on conflict". Postgres reads the
+    // pre-update row here, so the existing value stands.
+    const selfRef = /^cost\.price_entries\.(\w+)$/i.exec(rawVal);
+    if (selfRef) {
+      const sourceKey = keyByName.get(selfRef[1]!.toLowerCase());
+      if (sourceKey === undefined)
+        throw new Error(`fake price tx: unknown column ${selfRef[1]}`);
+      existing[key] = existing[sourceKey];
+      continue;
+    }
     throw new Error(`fake price tx: unmodelled SET expression: ${assignment}`);
   }
 }
@@ -380,6 +394,14 @@ export function fakePriceExecutor(store: FakePriceStore) {
 
     execute: (stmt: unknown) => {
       const { text, params } = flatten(stmt);
+      // The per-key advisory lock the negotiated write takes so two
+      // corrections to one key cannot interleave. Nothing to simulate: this
+      // executor is single-threaded, and the statement is logged so a test can
+      // assert the write asks for the lock before it reads.
+      if (/pg_advisory_xact_lock/i.test(text)) {
+        store.log.push({ op: "lock", sql: text });
+        return Promise.resolve([]);
+      }
       if (!/^INSERT INTO cost\.price_entries/i.test(text))
         throw new Error(`fake price tx: unmodelled execute(): ${text}`);
       assertArbiter(text);

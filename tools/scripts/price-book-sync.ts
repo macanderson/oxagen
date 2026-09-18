@@ -124,7 +124,7 @@ async function main(): Promise<void> {
 
   console.log(
     kleur.bold().cyan("\n══ Done ══\n") +
-      `  ${report.written} rows written, ${report.unchanged} unchanged.\n`,
+      `  ${report.written} rows written, ${report.renamed} renamed, ${report.unchanged} unchanged.\n`,
   );
 }
 

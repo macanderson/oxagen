@@ -41,8 +41,13 @@ import { IMAGE_RATE_CARD, VIDEO_RATE_CARD } from "./pricing";
 export interface PriceBookSyncReport {
   /** Rows inserted or corrected in place. */
   written: number;
-  /** Rows whose price was already what the sources say. */
+  /** Rows whose price and names were already what the sources say. */
   unchanged: number;
+  /**
+   * Open rows whose aliases a catalog moved while leaving the rate alone.
+   * Updated in place — a rename is not a repricing (see {@link syncPriceBook}).
+   */
+  renamed: number;
   /**
    * Open rows closed because this sync re-priced the same model and class
    * under a different provider name (see {@link syncPriceBook}).
@@ -80,7 +85,12 @@ export interface SyncPriceBookFromSourcesArgs {
   write?: (args: {
     effectiveFrom: Date;
     seeds: readonly PriceEntrySeed[];
-  }) => Promise<{ written: number; unchanged: number; superseded?: number }>;
+  }) => Promise<{
+    written: number;
+    unchanged: number;
+    renamed?: number;
+    superseded?: number;
+  }>;
 }
 
 /**
@@ -127,6 +137,7 @@ export async function syncPriceBookFromSources(
     return {
       written: 0,
       unchanged: 0,
+      renamed: 0,
       superseded: 0,
       models: merged.prices.length,
       counts: merged.counts,
@@ -143,6 +154,7 @@ export async function syncPriceBookFromSources(
   return {
     written: result.written,
     unchanged: result.unchanged,
+    renamed: result.renamed ?? 0,
     superseded: result.superseded ?? 0,
     models: merged.prices.length,
     counts: merged.counts,

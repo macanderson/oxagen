@@ -140,21 +140,34 @@ describe("setPriceEntryAction", () => {
     );
   });
 
-  it("carries the region, the aliases and the day the rate starts", async () => {
+  it("carries the aliases and the day the rate starts", async () => {
     invoke.mockResolvedValue({ entry, closed: null });
     await setPriceEntryAction(at, {
       ...form,
-      region: "eu-west-1",
       modelAliases: "claude-sonnet-5-20260401, anthropic/claude-sonnet-5",
       effectiveFrom: "2026-10-01",
     });
     expect(invoke).toHaveBeenCalledWith(
       costPriceEntrySet.name,
       expect.objectContaining({
-        region: "eu-west-1",
         modelAliases: ["claude-sonnet-5-20260401", "anthropic/claude-sonnet-5"],
         effectiveFrom: "2026-10-01T00:00:00.000Z",
       }),
+      expect.anything(),
+    );
+  });
+
+  // The dialog stopped collecting a region: nothing on the pricing path reads
+  // `PriceEntry.region`, so a regional row would be a candidate everywhere and
+  // `set_price_entry` refuses one. The form shape keeps the optional field for
+  // when resolution can honour it, and omitting it must still mean "any".
+  it("states the region-agnostic row when the form names no region", async () => {
+    invoke.mockResolvedValue({ entry, closed: null });
+    const { region: _region, ...withoutRegion } = form;
+    await setPriceEntryAction(at, withoutRegion);
+    expect(invoke).toHaveBeenCalledWith(
+      costPriceEntrySet.name,
+      expect.objectContaining({ region: null }),
       expect.anything(),
     );
   });

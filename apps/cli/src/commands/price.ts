@@ -5,7 +5,7 @@
  * the provider list price for the same model and token class.
  *
  *   oxagen price set --provider <p> --model <m> --token-class <c>
- *                    --usd-per-million <usd> [--region <r>] [--alias <a>...]
+ *                    --usd-per-million <usd> [--alias <a>...]
  *                    [--effective-from <rfc3339>]
  *   oxagen price remove --provider <p> --model <m> --token-class <c>
  *                       [--region <r>] [--at <rfc3339>]
@@ -140,7 +140,6 @@ export interface PriceSetCliOptions {
   model?: string;
   tokenClass?: string;
   usdPerMillion?: string;
-  region?: string;
   alias?: string[];
   effectiveFrom?: string;
   json?: boolean;
@@ -197,7 +196,10 @@ export async function priceSet(
       provider: opts.provider,
       model: opts.model,
       tokenClass: opts.tokenClass,
-      region: opts.region ?? null,
+      // Always the region-agnostic row. A regional rate would win outside its
+      // region because nothing on the pricing path reads `region`, so
+      // `set_price_entry` refuses one and the flag is not offered.
+      region: null,
       modelAliases: opts.alias?.length ? opts.alias : undefined,
       usdPerMillion,
       effectiveFrom,

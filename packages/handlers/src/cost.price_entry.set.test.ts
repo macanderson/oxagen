@@ -12,6 +12,12 @@ const gate = vi.hoisted(() => ({
   actors: [] as (string | null)[],
 }));
 const audit = vi.hoisted(() => ({ emitSecurityEvent: vi.fn() }));
+const plane = vi.hoisted(() => ({ resolveDataPlane: vi.fn() }));
+
+vi.mock("@oxagen/tenancy", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/tenancy")>();
+  return { ...real, resolveDataPlane: plane.resolveDataPlane };
+});
 
 vi.mock("@oxagen/iam/org-role", () => ({
   resolveActingUserId: async (c: {
@@ -82,6 +88,12 @@ const input = (over: Record<string, unknown> = {}) =>
   });
 
 beforeEach(() => {
+  // Every organisation is shared today (ADR-042 §1); `status` matters because
+  // assertDataPlaneUsable refuses any binding that is not active.
+  plane.resolveDataPlane.mockResolvedValue({
+    mode: "shared",
+    status: "active",
+  });
   gate.refuse = false;
   gate.keyCreator = "u_key_creator";
   gate.actors = [];
@@ -122,7 +134,11 @@ describe("set_price_entry", () => {
       model: "claude-sonnet-5",
       tokenClass: "input_uncached",
       region: null,
-      modelAliases: [],
+      // `undefined`, NOT `[]`. Both the app and the CLI omit this field when
+      // the operator types no aliases, and coercing it to an empty array made
+      // every price correction silently erase the stored alias list, after
+      // which frames arriving under those names stopped being priced at all.
+      modelAliases: undefined,
       // $2.40 per 1M, never a float: the customer types 2.40, the store keeps
       // integer micro-USD.
       microsPerMillion: 2_400_000n,
@@ -133,11 +149,10 @@ describe("set_price_entry", () => {
     expect(() => costPriceEntrySet.output.parse(out)).not.toThrow();
   });
 
-  it("passes the instant, region and aliases the caller named", async () => {
+  it("passes the instant and the aliases the caller named", async () => {
     const h = harness();
     await h.handler(
       input({
-        region: "eu-west-1",
         modelAliases: ["anthropic/claude-sonnet-5"],
         effectiveFrom: "2026-10-01T00:00:00.000Z",
       }),
@@ -145,11 +160,49 @@ describe("set_price_entry", () => {
     );
     expect(h.setNegotiatedPriceEntry).toHaveBeenCalledWith(
       expect.objectContaining({
-        region: "eu-west-1",
         modelAliases: ["anthropic/claude-sonnet-5"],
         effectiveFrom: new Date("2026-10-01T00:00:00.000Z"),
       }),
     );
+  });
+
+  // An explicit empty list is a real instruction — "this model has no aliases"
+  // — and must not be confused with omission.
+  it("keeps an explicit empty alias list distinct from omission", async () => {
+    const h = harness();
+    await h.handler(input({ modelAliases: [] }), ctx());
+    expect(h.setNegotiatedPriceEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ modelAliases: [] }),
+    );
+  });
+
+  // `resolvePriceEntry` never reads `PriceEntry.region` and a frame does not
+  // record the region it was served from, so a regional row would simply be a
+  // candidate everywhere.
+  it("refuses a region-specific rate while nothing resolves by region", async () => {
+    const h = harness();
+    await expect(
+      h.handler(input({ region: "eu-west-1" }), ctx()),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "price_entry_region_unsupported",
+    });
+    expect(h.setNegotiatedPriceEntry).not.toHaveBeenCalled();
+  });
+
+  // The write is `withTenantDb` (the org's plane) and `loadPriceBook` is
+  // `withSystemDb` (always shared). On a dedicated plane those are different
+  // databases, so the rate would be stored where the rollup never looks.
+  it("refuses to write a rate the price book could never read", async () => {
+    const h = harness();
+    plane.resolveDataPlane.mockResolvedValue({
+      mode: "dedicated",
+      status: "active",
+    });
+    await expect(h.handler(input(), ctx())).rejects.toThrow(
+      /dedicated\s+Postgres plane/,
+    );
+    expect(h.setNegotiatedPriceEntry).not.toHaveBeenCalled();
   });
 
   it("answers the row it superseded, and audits the change", async () => {

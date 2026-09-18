@@ -62,10 +62,16 @@ const COMMON_CLASSES: readonly PriceTokenClass[] = [
   "output",
 ];
 
+// No `region`. `cost.price_entries` keys on it and the column stays, but
+// nothing on the pricing path resolves by region — a frame does not record the
+// region it was served from and `resolvePriceEntry` never reads
+// `PriceEntry.region` — so a regional row would simply be a candidate
+// everywhere, competing with the region-agnostic row on effective date alone.
+// `set_price_entry` refuses one for that reason, and a field whose only
+// outcome is a refusal is a dead affordance. It returns with the resolution.
 type Shared = {
   provider: string;
   model: string;
-  region: string;
   modelAliases: string;
   effectiveFrom: string;
 };
@@ -146,7 +152,6 @@ export function PriceDialog({
   const [shared, setShared] = useState<Shared>({
     provider: prefill?.provider ?? "",
     model: prefill?.model ?? "",
-    region: "",
     modelAliases: "",
     effectiveFrom: "",
   });
@@ -318,17 +323,6 @@ export function PriceDialog({
             error={message("model")}
             onChange={(event) => {
               setShared((prev) => ({ ...prev, model: event.target.value }));
-            }}
-          />
-          <Field
-            id="price-region"
-            name="region"
-            label={t("dialog.region")}
-            hint={t("dialog.regionHint")}
-            value={shared.region}
-            error={message("region")}
-            onChange={(event) => {
-              setShared((prev) => ({ ...prev, region: event.target.value }));
             }}
           />
           <Field

@@ -98,8 +98,15 @@ export function isFindingId(value: string): boolean {
 export type PriceEntryFormValues = {
   provider: string;
   model: string;
-  /** Empty is the region-agnostic row, which is what `region: null` means. */
-  region: string;
+  /**
+   * Optional, and the dialog no longer collects it. Nothing on the pricing
+   * path resolves by region — a frame does not record the region it was served
+   * from and `resolvePriceEntry` never reads `PriceEntry.region` — so a
+   * regional row would be a candidate everywhere rather than in its region,
+   * and `set_price_entry` refuses one. Kept in the shape, unset, so the field
+   * returns here when resolution can honour it.
+   */
+  region?: string;
   /** Comma- or newline-separated; empty leaves the stored alias list alone. */
   modelAliases: string;
   /** A UTC day (YYYY-MM-DD); empty is the write instant. */
@@ -183,7 +190,7 @@ export const PriceEntryForm = z
   .object({
     provider: z.string(),
     model: z.string(),
-    region: z.string(),
+    region: z.string().optional(),
     modelAliases: z.string(),
     effectiveFrom: z.string(),
     tokenClass: z.string(),
@@ -196,7 +203,7 @@ export const PriceEntryForm = z
     const model = form.model.trim();
     if (model.length === 0 || model.length > MODEL_MAX)
       return issue(ctx, "model", "modelInvalid");
-    const region = form.region.trim();
+    const region = (form.region ?? "").trim();
     if (region.length > REGION_MAX)
       return issue(ctx, "region", "regionInvalid");
     const aliases = aliasesOf(form.modelAliases);

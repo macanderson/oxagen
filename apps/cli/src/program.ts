@@ -198,7 +198,9 @@ export function buildProgram(): Command {
       "--usd-per-million <usd>",
       "Contracted price in USD per 1,000,000 units (2.40, not 2400000)",
     )
-    .option("--region <region>", "Region the rate applies to; omit for any")
+    // No `--region`: nothing on the pricing path resolves by region, so a
+    // regional rate would apply everywhere and `set_price_entry` refuses one.
+    // `price remove` keeps the flag, because it addresses a row that exists.
     .option(
       "--alias <model>",
       "Extra model id the rate also prices; repeatable",
