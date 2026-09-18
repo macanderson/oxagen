@@ -106,12 +106,22 @@ const REPO: GitHubRepoInfo = {
   defaultBranch: "trunk",
 };
 
-/** A drizzle terminal that can be awaited, limited, or returned from. */
+/**
+ * A drizzle terminal that can be awaited, limited, ordered or returned from.
+ * `orderBy` answers itself, so `writeRepositoryHead`'s
+ * `.orderBy(desc(version)).limit(1)` reads the same queued rows.
+ */
 function rows(result: unknown[]) {
-  return Object.assign(Promise.resolve(result), {
+  const terminal: Promise<unknown[]> & {
+    limit: () => Promise<unknown[]>;
+    returning: () => Promise<unknown[]>;
+    orderBy: () => typeof terminal;
+  } = Object.assign(Promise.resolve(result), {
     limit: async () => result,
     returning: async () => result,
+    orderBy: () => terminal,
   });
+  return terminal;
 }
 
 interface Writes {
@@ -416,6 +426,7 @@ describe("bind_main_repository", () => {
         [
           {
             id: "head-uuid",
+            role: "main",
             connectionId: "conn-uuid",
             providerRepositoryId: "4242",
             currentBindingId: "other-uuid",
@@ -438,6 +449,7 @@ describe("bind_main_repository", () => {
         [
           {
             id: "head-uuid",
+            role: "main",
             // The head already names the connection the bind resolved, so
             // nothing has moved and nothing is written.
             connectionId: "conn-uuid",
@@ -490,6 +502,7 @@ describe("bind_main_repository", () => {
   describe("re-binding the same repository through a replacement connection", () => {
     const RETIRED_HEAD = {
       id: "head-uuid",
+      role: "main",
       // The connection this workspace acted through before the delete.
       connectionId: "retired-conn-uuid",
       providerRepositoryId: "9001",
@@ -620,6 +633,7 @@ describe("bind_main_repository", () => {
   describe("re-binding the same repository after its recorded facts moved", () => {
     const HEAD = {
       id: "head-uuid",
+      role: "main",
       connectionId: "conn-uuid",
       providerRepositoryId: "9001",
       currentBindingId: "binding-1",
@@ -736,6 +750,106 @@ describe("bind_main_repository", () => {
       );
     const out = await handler().run(INPUT, makeCTX());
     expect(out).toMatchObject({ provisionalClosed: false });
+  });
+
+  // ── A head this workspace already holds as LINKED ──────────────────────────
+  // `link_repository` refuses a link while the workspace has no main
+  // repository, but the exclusivity migration's own demotion leaves exactly
+  // that state: a head it turned from main into linked, in a workspace with no
+  // main head left. Binding a repository from there has to promote the head it
+  // finds. A second head for one (connection, repository) is refused by
+  // `repository_binding_heads_repository_uq` and a second version-1 binding by
+  // `repository_bindings_repository_version_uq`; neither is a cross-workspace
+  // claim, so `rethrowHeadConflict` passes them through and the operator used
+  // to get a 500 on the one move that would give the workspace a main
+  // repository back.
+  describe("binding a repository this workspace holds as a linked head", () => {
+    const LINKED_HEAD = {
+      id: "head-uuid",
+      role: "linked",
+      connectionId: "conn-uuid",
+      providerRepositoryId: "9001",
+      currentBindingId: "binding-1",
+    };
+    /** Its binding, recording exactly what GitHub still reports. */
+    const UNCHANGED_BINDING = {
+      id: "binding-1",
+      publicId: "rpb_first",
+      createdAt: new Date("2026-09-16T08:00:00.000Z"),
+      version: 1,
+      connectionId: "conn-uuid",
+      providerOwner: REPO.owner,
+      providerName: REPO.name,
+      providerFullName: REPO.fullName,
+      configuredDefaultRef: REPO.defaultBranch,
+    };
+
+    it("promotes the head in place instead of writing a second head or a second version-1 binding", async () => {
+      const writes = wire({
+        connections: [CONNECTED_CONNECTION],
+        selects: [[LINKED_HEAD], [UNCHANGED_BINDING]],
+      });
+      const out = await handler().run(INPUT, makeCTX());
+
+      expect(writes.inserts).toHaveLength(0);
+      const headUpdate = writes.updates.find(
+        (w) => w.table === schema.repositoryBindingHeads,
+      );
+      expect(headUpdate?.values).toMatchObject({ role: "main" });
+      // The binding records nothing new, so the retained version answers.
+      expect(out.bindingId).toBe("rpb_first");
+      // `boundAt` is the promotion, not the original link: now is when this
+      // repository became the one steering the workspace.
+      expect(Date.parse(out.boundAt)).toBeGreaterThan(
+        UNCHANGED_BINDING.createdAt.getTime(),
+      );
+    });
+
+    it("still refuses a different repository while a main head sits beside the linked one", async () => {
+      const writes = wire({
+        connections: [CONNECTED_CONNECTION],
+        selects: [
+          [
+            {
+              id: "other-head",
+              role: "main",
+              connectionId: "conn-uuid",
+              providerRepositoryId: "4242",
+              currentBindingId: "other-binding",
+            },
+            { ...LINKED_HEAD, providerRepositoryId: "7777" },
+          ],
+        ],
+      });
+      await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
+        code: "conflict",
+        reason: "main_repo_bound",
+      });
+      expect(writes.inserts).toHaveLength(0);
+      expect(writes.updates).toHaveLength(0);
+    });
+
+    it("reuses a binding version retained from an unlinked head rather than writing version 1 again", async () => {
+      // The head was removed by `unlink_repository`; its binding versions stay,
+      // because admitted runs cite them.
+      const writes = wire({
+        connections: [CONNECTED_CONNECTION],
+        selects: [[], [UNCHANGED_BINDING]],
+      });
+      const out = await handler().run(INPUT, makeCTX());
+
+      expect(
+        writes.inserts.filter((w) => w.table === schema.repositoryBindings),
+      ).toHaveLength(0);
+      const head = writes.inserts.find(
+        (w) => w.table === schema.repositoryBindingHeads,
+      );
+      expect(head?.values).toMatchObject({
+        role: "main",
+        currentBindingId: "binding-1",
+      });
+      expect(out.bindingId).toBe("rpb_first");
+    });
   });
 
   // ── One repository steers exactly one workspace, anywhere ──────────────────

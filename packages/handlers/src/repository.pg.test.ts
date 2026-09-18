@@ -620,4 +620,67 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
       { role: "main", providerRepositoryId: repoId("acme", "orphan") },
     ]);
   });
+
+  it("a workspace left with no main head binds its way out: a linked head is promoted in place, and a version retained from an unlinked head is reused", async () => {
+    // The state the exclusivity migration's demotion leaves, and the only way
+    // to reach it now that a link needs a main head first: the main head is
+    // gone and a linked one is all the workspace has. Both writes below used to
+    // insert a second version-1 binding for a pair that already had one, which
+    // `repository_bindings_repository_version_uq` refuses — and that refusal
+    // names no cross-workspace claim, so it reached the operator as a 500 on
+    // the one move that would give the workspace a main repository back.
+    const dropMainHead = () =>
+      withSystemDb((tx) =>
+        tx
+          .delete(schema.repositoryBindingHeads)
+          .where(
+            and(
+              eq(schema.repositoryBindingHeads.workspaceId, coreWorkspaceId),
+              eq(schema.repositoryBindingHeads.role, "main"),
+            ),
+          ),
+      );
+
+    // ── a linked head, then no main head, then the bind ───────────────────
+    const linked = await link(coreWorkspaceId, "promoted");
+    expect(linked.role).toBe("linked");
+    await dropMainHead();
+
+    const promoted = await bind(coreWorkspaceId, "promoted");
+    // The same binding version the link wrote: nothing it records has moved,
+    // so only the role did.
+    expect(promoted.bindingId).toBe(linked.bindingId);
+    expect(await bindingsOf(coreWorkspaceId, "promoted")).toEqual([
+      { publicId: linked.bindingId, version: 1 },
+    ]);
+    expect(
+      (await headsOf(coreWorkspaceId)).filter(
+        (h) => h.providerRepositoryId === repoId("acme", "promoted"),
+      ),
+    ).toEqual([
+      { role: "main", providerRepositoryId: repoId("acme", "promoted") },
+    ]);
+
+    // ── a version retained from an unlinked head ──────────────────────────
+    const retained = await link(coreWorkspaceId, "retained");
+    await unlink(coreWorkspaceId, retained.bindingId);
+    // The head is gone; the version stays, because admitted runs cite it.
+    expect(await bindingsOf(coreWorkspaceId, "retained")).toEqual([
+      { publicId: retained.bindingId, version: 1 },
+    ]);
+    await dropMainHead();
+
+    const rebound = await bind(coreWorkspaceId, "retained");
+    expect(rebound.bindingId).toBe(retained.bindingId);
+    expect(await bindingsOf(coreWorkspaceId, "retained")).toEqual([
+      { publicId: retained.bindingId, version: 1 },
+    ]);
+    expect(
+      (await headsOf(coreWorkspaceId)).filter(
+        (h) => h.providerRepositoryId === repoId("acme", "retained"),
+      ),
+    ).toEqual([
+      { role: "main", providerRepositoryId: repoId("acme", "retained") },
+    ]);
+  });
 });

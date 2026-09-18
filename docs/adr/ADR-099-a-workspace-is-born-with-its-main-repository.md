@@ -197,6 +197,23 @@ attached to that first workspace before its main head exists, so
 second, and a linked head with no main beside it would be a workspace whose
 only repository is one it is not steered by.
 
+That refusal narrows how a workspace reaches "linked heads and no main head",
+but the migration's own demotion (decision 3) creates it directly, so
+`bind_main_repository` has to be able to bind its way out. It reads this
+workspace's heads of EITHER role: a MAIN head on a different repository is
+still `conflict: main_repo_bound`, and a LINKED head on the repository being
+bound is promoted in place, carrying any binding version the same call
+supersedes. Promotion is the only correct move as well as the kind one: one
+head per (connection, repository) is `repository_binding_heads_repository_uq`
+and a second version 1 for that pair is
+`repository_bindings_repository_version_uq`, so a writer that ignored the
+linked head would lose to a constraint that names no cross-workspace claim and
+surface as a 500. For the same reason the write goes through
+`writeRepositoryHead`, which reuses a version retained from an unlinked head
+rather than colliding with it. The UPDATE that promotes fires the store's
+trigger (it covers `UPDATE OF role`), so a repository another workspace holds
+is refused there with the same sentence as any other claim.
+
 ### 7. Reads and surfaces
 
 `list_repositories` answers one row per head with the binding version it
