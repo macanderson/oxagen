@@ -31,6 +31,7 @@ import {
   unsignedBundle,
 } from "./tacho-host";
 import { hostGatewayColumnReady } from "./tacho-gateway-columns";
+import { readWorkspaceSteering } from "./tacho-steering";
 import { logger } from "../logger";
 
 const TACHO_ENROLLMENT_SIGNING_SECRET_ENV = "TACHO_ENROLLMENT_SIGNING_SECRET";
@@ -150,6 +151,8 @@ interface MintedHostEnrollment {
   expiresAt: Date;
   denyGeneration: DenyGeneration;
   retention: Awaited<ReturnType<typeof readWorkspaceRetention>>;
+  /** The workspace's compiled steering, for the initial bundle (ADR-091). */
+  steering: string | null;
 }
 
 /**
@@ -308,9 +311,10 @@ export async function mintHostEnrollment(
   if (!inserted) {
     throw new Error("Internal error: failed to create the Tacho host");
   }
-  const [denyGeneration, retention] = await Promise.all([
+  const [denyGeneration, retention, steering] = await Promise.all([
     readDenyGeneration(tx as never, args.orgId, args.workspaceId),
     readWorkspaceRetention(tx as never, args.orgId, args.workspaceId),
+    readWorkspaceSteering(tx as never, args.orgId, args.workspaceId),
   ]);
   return {
     host: inserted as TachoHostRow,
@@ -322,6 +326,7 @@ export async function mintHostEnrollment(
     expiresAt,
     denyGeneration,
     retention,
+    steering,
   };
 }
 
@@ -337,6 +342,7 @@ export function enrollmentDocument(
       minted.host,
       minted.denyGeneration,
       minted.retention,
+      minted.steering,
       issuedAt,
     ),
   );

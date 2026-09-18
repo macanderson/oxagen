@@ -430,6 +430,13 @@ describe("paging a roster larger than a page", () => {
     ).toBeNull();
   });
 
+  // 20 seconds, not the 5-second default. This is the only test in the file
+  // that runs axe over a FULL page — twenty rows, each with its own Rotate and
+  // Revoke, plus the pager — and axe's cost grows with the node count, so it
+  // routinely ran past 5s on a loaded CI runner and failed as a timeout on
+  // pull requests that had not touched this feature at all. The accessibility
+  // assertion is the one worth keeping here (a full page with a pager is
+  // exactly where a11y breaks), so the budget moves rather than the check.
   it("cuts the roster at API_KEYS_PAGE rows and offers the next page", async () => {
     const keys = manyKeys(API_KEYS_PAGE + 5);
     const view = await renderApiKeys(readOk(keys));
@@ -444,7 +451,7 @@ describe("paging a roster larger than a page", () => {
       within(pagerNav()).queryByRole("link", { name: "Previous" }),
     ).toBeNull();
     await expectNoAxe(view.container);
-  });
+  }, 20_000);
 
   it("shows the last page's rows and the way back, with no Next beyond the end", async () => {
     const keys = manyKeys(API_KEYS_PAGE + 5);

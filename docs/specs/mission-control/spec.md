@@ -898,8 +898,8 @@ Oxagen honors enforcement grants only when they appear in the promotion ledger, 
 
 Published records reach agents three ways, all recorded:
 
-- **Bundle context.** Compiled steering text in the signed policy bundle. `must`/`should` records sit in the stable prefix. `may`/`info` records are selected by relevance.
-- **Turn injection.** The model proxy's volatile steering message (ADR-051).
+- **Bundle context.** Compiled steering text in the signed policy bundle's `context.system` (ADR-091, `packages/handlers/src/lib/tacho-steering.ts`). `must`/`should` records sit in the stable prefix. `may`/`info` records are selected by relevance.
+- **Turn injection.** The model proxy's volatile steering message (ADR-051, superseded for delivery by ADR-091: Oxagen assembles no turn).
 - **Context frames.** Oxagen's provider serves them as `fact` and `memory` context frames. Each carries provenance to the record and the commit. Valid-from is set to the merge time, so `as_of` queries are exact.
 
 Oxagen measures the effect of each published record: the runs that rendered it, cited it, or violated it, and the proof rate before and after publication. Records with no effect after a window are surfaced for retirement.

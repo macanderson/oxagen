@@ -24,6 +24,11 @@
 > does. Re-landing this behaviour belongs on the governed tool gateway seam,
 > and **issue #2592 should be reopened against it** rather than left closed by
 > a mechanism this repo no longer contains.
+>
+> **Delivery re-landed on 2026-09-18 by ADR-091.** Active `must` and `should`
+> records now compile into the signed policy bundle's `context.system`, which
+> the collector hands the agent at session start. The scope and enforcement
+> decisions below carry over unchanged; #2592 is reopened against that seam.
 
 ## Context
 
