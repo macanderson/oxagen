@@ -151,10 +151,14 @@ export const priceEntries = costSchema.table(
       "price_entries_source_check",
       sql`${t.source} IN (${inList(PRICE_SOURCES)})`,
     ),
-    // A negotiated or override row belongs to an organization; a list row to none.
+    // A negotiated row belongs to an organization. A list row (a published
+    // catalog or the in-code card) and an override row (this installation's
+    // operator-set rate) belong to none: both are the platform's, and the
+    // source is what tells them apart so a withdrawn override can retire on a
+    // run where a catalog is down.
     orgSourceCheck: check(
       "price_entries_org_source_check",
-      sql`(${t.source} = 'list') = (${t.orgId} IS NULL)`,
+      sql`(${t.source} IN ('list', 'override')) = (${t.orgId} IS NULL)`,
     ),
     priceCheck: check(
       "price_entries_price_check",

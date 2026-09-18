@@ -485,6 +485,9 @@ export function seedsFromPublishedPrices(
         microsPerMillion: usdPerMillionToMicros(usd),
         effectiveFrom,
         effectiveTo: null,
+        // Recorded, so a withdrawn override can retire on a run where a
+        // catalog is down: the row says who wrote it.
+        source: price.source === "operator_override" ? "override" : "list",
       });
     }
   }

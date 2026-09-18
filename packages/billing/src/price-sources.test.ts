@@ -584,3 +584,27 @@ describe("seedsFromPublishedPrices", () => {
     expect(seedsFromPublishedPrices([], FROM)).toEqual([]);
   });
 });
+
+describe("seedsFromPublishedPrices, provenance", () => {
+  it("stamps an operator override as such, and everything else as list", () => {
+    const at = new Date("2026-09-18T16:00:00.000Z");
+    const price = (source: PriceSourceId): PublishedModelPrice => ({
+      model: "m",
+      aliases: [],
+      provider: "p",
+      inputPer1M: 1,
+      outputPer1M: 2,
+      cachedInputPer1M: null,
+      cacheWrite5mPer1M: null,
+      cacheWrite1hPer1M: null,
+      reasoningPer1M: null,
+      source,
+    });
+    const sources = seedsFromPublishedPrices(
+      [price("operator_override"), price("openrouter")],
+      at,
+    ).map((s) => s.source);
+    expect(sources.filter((s) => s === "override")).toHaveLength(2);
+    expect(sources.filter((s) => s === "list")).toHaveLength(2);
+  });
+});

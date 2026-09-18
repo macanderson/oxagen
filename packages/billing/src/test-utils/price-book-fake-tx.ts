@@ -17,7 +17,7 @@
  *
  * So this executor mirrors, and refuses on:
  *
- *   - `price_entries_org_source_check` — `(source = 'list') = (org_id IS NULL)`.
+ *   - `price_entries_org_source_check` — `(source IN ('list','override')) = (org_id IS NULL)`.
  *     A negotiated row with a null org is the single constraint that makes the
  *     write path's `org_id` argument load-bearing.
  *   - `price_entries_price_check` — `micros_per_million >= 0`.
@@ -135,7 +135,7 @@ function assertChecks(row: PriceRow): void {
   const orgId = row.orgId as string | null;
   if (!SOURCES.has(source))
     throw new Error(`fake price tx: violates price_entries_source_check`);
-  if ((source === "list") !== (orgId === null))
+  if ((source === "list" || source === "override") !== (orgId === null))
     throw new Error(`fake price tx: violates price_entries_org_source_check`);
   if ((row.microsPerMillion as bigint) < 0n)
     throw new Error(`fake price tx: violates price_entries_price_check`);

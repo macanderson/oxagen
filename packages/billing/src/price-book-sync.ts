@@ -103,6 +103,7 @@ export interface SyncPriceBookFromSourcesArgs {
     effectiveFrom: Date;
     seeds: readonly PriceEntrySeed[];
     retireAbsent: boolean;
+    retireOverrides: boolean;
   }) => Promise<{
     written: number;
     unchanged: number;
@@ -185,6 +186,10 @@ export async function syncPriceBookFromSources(
   // ended, and keeping it open prices a withdrawn model at a rate nobody
   // publishes any more.
   const retireAbsent = args.offline !== true && failures.length === 0;
+  // The overrides are this installation's own environment, read completely
+  // on every run, so a withdrawn one retires whatever the catalogs did. An
+  // offline run still reads them.
+  const retireOverrides = true;
 
   if (args.dryRun === true)
     return {
@@ -208,16 +213,19 @@ export async function syncPriceBookFromSources(
       effectiveFrom: Date;
       seeds: readonly PriceEntrySeed[];
       retireAbsent: boolean;
+      retireOverrides: boolean;
     }) =>
       syncPriceBook({
         effectiveFrom: a.effectiveFrom,
         seeds: a.seeds,
         retireAbsent: a.retireAbsent,
+        retireOverrides: a.retireOverrides,
       }));
   const result = await write({
     effectiveFrom: args.effectiveFrom,
     seeds,
     retireAbsent,
+    retireOverrides,
   });
 
   return {
