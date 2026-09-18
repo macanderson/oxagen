@@ -240,10 +240,27 @@ export async function migrateOrgGraphDatabases(): Promise<string[]> {
   return names;
 }
 
+/**
+ * Migrate the pooled database and then every provisioned organisation
+ * database. This is THE deploy-time entry, and there is one on purpose: the
+ * aggregate migrator (`tools/scripts/db-migrate.ts`, behind `pnpm db:migrate`,
+ * `store-migrate.yml` and every pipeline migrate step) imports this module
+ * rather than running it, so a per-organisation pass that lived only in the
+ * direct-run branch below never ran on a deploy, and a `schema.cypher` change
+ * would have advanced the pooled database while every `org-<namespace>`
+ * database stayed behind. Both paths now call this one function.
+ */
+export async function migrateEveryGraphDatabase(): Promise<{
+  orgDatabases: string[];
+}> {
+  await migrate();
+  const orgDatabases = await migrateOrgGraphDatabases();
+  return { orgDatabases };
+}
+
 // Bundle-safe direct-run guard — see @oxagen/telemetry is-direct-run.ts.
 if (isDirectRunEntry(import.meta.url, process.argv[1], "migrate")) {
-  migrate()
-    .then(() => migrateOrgGraphDatabases())
+  migrateEveryGraphDatabase()
     .then(() => closeDriver())
     .then(() => {
       process.stdout.write(
