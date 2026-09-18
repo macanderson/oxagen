@@ -51,6 +51,7 @@ export {
 export {
   hasColumn,
   ambientPlaneKey,
+  runOnPlane,
   resetColumnProbesForTests,
   NEGATIVE_PROBE_TTL_MS,
   type ColumnRef,

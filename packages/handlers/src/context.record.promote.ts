@@ -78,19 +78,25 @@ export const contextRecordPromoteHandler: CapabilityHandler<
     // record row keeps the classification it has -- the behaviour before
     // #3312, and the only one available on a database whose versions cannot
     // carry a classification.
-    const versionClassificationReady = await withTenantDb(async (tx) =>
-      hasColumn(
-        tx,
-        CONTEXT_VERSION_CLASSIFICATION_COLUMN,
-        await ambientPlaneKey(),
-      ),
-    );
+    //
+    // The probe and the select it guards run in ONE `withTenantDb`, so both
+    // speak to the database that one scope resolved. Two calls resolve the
+    // plane twice: a `set_data_plane` landing between them could carry a yes
+    // from the old plane into a select on a new one that lacks the columns,
+    // and a migration landing between them would project NULL over a
+    // classification that is now there, leaving the promoted row stale.
+    //
     // A literal NULL in place of each column while the migration is pending
     // keeps one row shape, so the classified-or-not branch below is the same
     // code that already handles a legacy version.
     const absent = sql<string | null>`null`;
-    const [version] = (await withTenantDb((tx) =>
-      tx
+    const [version] = (await withTenantDb(async (tx) => {
+      const versionClassificationReady = await hasColumn(
+        tx,
+        CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+        await ambientPlaneKey(),
+      );
+      return tx
         .select({
           id: schema.contextRecordVersions.id,
           kind: versionClassificationReady
@@ -113,8 +119,8 @@ export const contextRecordPromoteHandler: CapabilityHandler<
             eq(schema.contextRecordVersions.recordId, record.id),
           ),
         )
-        .limit(1),
-    )) as Array<{
+        .limit(1);
+    })) as Array<{
       id: string;
       kind: string | null;
       force: string | null;

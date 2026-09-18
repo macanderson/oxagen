@@ -281,12 +281,11 @@ const effectiveForceWhen = (ready: boolean) =>
  * borrowed across the two would name a column on a database that still lacks
  * it.
  */
-async function versionClassificationReady(tx: SteeringTx): Promise<boolean> {
-  return hasColumn(
-    tx,
-    CONTEXT_VERSION_CLASSIFICATION_COLUMN,
-    await ambientPlaneKey(),
-  );
+async function versionClassificationReady(
+  tx: SteeringTx,
+  planeKey: string,
+): Promise<boolean> {
+  return hasColumn(tx, CONTEXT_VERSION_CLASSIFICATION_COLUMN, planeKey);
 }
 
 /**
@@ -375,8 +374,16 @@ export async function readWorkspaceSteering(
   orgId: string,
   workspaceId: string,
 ): Promise<string | null> {
-  const workspaceKey = `${orgId}:${workspaceId}`;
-  const ready = await versionClassificationReady(tx);
+  // The plane is part of the cache namespace, not just of the probe. A
+  // workspace's identity does not name the database it lives on, and
+  // `set_data_plane` moves an organisation between planes: two planes whose
+  // migration state, ledger length and steering-record count all agree produce
+  // the same key, so without this the first read on the new plane would answer
+  // from text compiled against the old one and keep answering until a
+  // promotion moved the count.
+  const planeKey = await ambientPlaneKey();
+  const workspaceKey = `${planeKey}\u0000${orgId}:${workspaceId}`;
+  const ready = await versionClassificationReady(tx, planeKey);
   // The probe's answer is part of the key: the migration landing does not move
   // the ledger or the record count, so without it the text compiled from the
   // record row alone would be served on past the window.

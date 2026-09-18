@@ -5,7 +5,7 @@
  * characters, so it has to stay under that.
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { resetColumnProbesForTests } from "@oxagen/database";
+import { resetColumnProbesForTests, runOnPlane } from "@oxagen/database";
 import { policyBundleSchema } from "@oxagen/oxagen/tacho/schemas";
 import {
   CONTEXT_SYSTEM_MAX_CHARS,
@@ -355,6 +355,42 @@ describe("readWorkspaceSteering", () => {
     clearSteeringCacheForTests();
     await readWorkspaceSteering(tx, "org", "ws");
     expect(calls).toEqual({ version: 2, records: 2 });
+  });
+
+  // `set_data_plane` moves an organisation between physical databases. A
+  // workspace's identity does not name the one it is on, so two planes that
+  // agree on migration state, ledger length and steering-record count produce
+  // the same key -- and the first read after the move would answer from text
+  // compiled against the database the organisation just left.
+  it("does not serve one plane's text on another", async () => {
+    const before = fakeTx({
+      ledger: 1,
+      rows: [row({ versionStatement: "What the old plane says." })],
+    });
+    const after = fakeTx({
+      ledger: 1,
+      rows: [row({ versionStatement: "What the new plane says." })],
+    });
+
+    expect(
+      await runOnPlane("plane-a", () =>
+        readWorkspaceSteering(before.tx, "org", "ws"),
+      ),
+    ).toContain("What the old plane says.");
+    expect(
+      await runOnPlane("plane-b", () =>
+        readWorkspaceSteering(after.tx, "org", "ws"),
+      ),
+    ).toContain("What the new plane says.");
+    // The second plane read its own rows rather than taking the first's entry.
+    expect(after.calls).toEqual({ version: 1, records: 1 });
+  });
+
+  it("keeps caching within one plane", async () => {
+    const { tx, calls } = fakeTx({ ledger: 1, rows: [row({})] });
+    await runOnPlane("plane-a", () => readWorkspaceSteering(tx, "org", "ws"));
+    await runOnPlane("plane-a", () => readWorkspaceSteering(tx, "org", "ws"));
+    expect(calls).toEqual({ version: 2, records: 1 });
   });
 
   // Production applies migrations by hand while `deploy-node` ships on merge,
