@@ -60,7 +60,9 @@ describe("resolveModelFundingSource", () => {
     if (source.fundedBy !== "org") throw new Error("expected org funding");
     expect(Object.keys(source.credential).sort()).toEqual([
       "apiKey",
+      "baseUrl",
       "digest",
+      "modelMap",
       "provider",
     ]);
   });
