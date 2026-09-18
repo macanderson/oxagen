@@ -13,14 +13,16 @@
     "./tenant": "./src/tenant.ts",
     "./graph-scope": "./src/graph-scope.ts",
     "./temporal": "./src/temporal.ts",
-    "./ann": "./src/ann.ts"
+    "./ann": "./src/ann.ts",
+    "./provision": "./src/provision.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
     "migrate": "tsx src/migrate.ts",
     "test:unit": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",

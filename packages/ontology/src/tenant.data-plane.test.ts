@@ -19,8 +19,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./client", () => ({
-  session: () => {
-    mocks.sharedSession();
+  session: (database?: string | null) => {
+    mocks.sharedSession(database);
     return { run: mocks.run, close: mocks.close };
   },
 }));
@@ -109,6 +109,50 @@ describe("scopedSession — shared plane (default)", () => {
     await runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
       await expect(scopedSession().run("MATCH (n) RETURN n")).rejects.toThrow(
         /must bind the tenant/,
+      );
+    });
+    expect(mocks.sharedSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("scopedSession — the organisation's own database (ADR-098)", () => {
+  it("opens the pooled database when the shared binding names none", async () => {
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
+      await scopedSession().run(CYPHER);
+    });
+    expect(mocks.sharedSession).toHaveBeenCalledWith(undefined);
+  });
+
+  it("opens the provisioned database on the shared cluster", async () => {
+    setDataPlaneResolver(async (orgId, kind) => ({
+      orgId,
+      kind,
+      mode: "shared",
+      status: "active",
+      database: "org-acme",
+    }));
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
+      await scopedSession().run(CYPHER);
+    });
+    expect(mocks.sharedSession).toHaveBeenCalledWith("org-acme");
+    expect(mocks.dedicatedSession).not.toHaveBeenCalled();
+    expect(mocks.run).toHaveBeenCalledWith(CYPHER, {
+      orgId: ORG,
+      workspaceId: WS,
+    });
+  });
+
+  it("refuses a disabled per-org database rather than using the pool", async () => {
+    setDataPlaneResolver(async (orgId, kind) => ({
+      orgId,
+      kind,
+      mode: "shared",
+      status: "disabled",
+      database: "org-acme",
+    }));
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
+      await expect(scopedSession().run(CYPHER)).rejects.toThrow(
+        DataPlaneUnavailableError,
       );
     });
     expect(mocks.sharedSession).not.toHaveBeenCalled();

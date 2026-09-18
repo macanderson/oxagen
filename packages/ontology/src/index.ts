@@ -18,3 +18,28 @@ export {
   DEFAULT_OVERSAMPLE_CAP,
   SCOPE_OVERSAMPLE_FACTOR,
 } from "./ann";
+// Organisation graph provisioning (spec §5.3, ADR-098).
+export {
+  createAuraProvisioner,
+  createCypherProvisioner,
+  createPooledProvisioner,
+  CREATE_ORG_DATABASE_CYPHER,
+  OrgGraphProvisionError,
+  OrgGraphProvisionerNotConfigured,
+  provisionOrgGraph,
+  selectOrgGraphProvisioner,
+} from "./provision";
+export type {
+  CypherProvisionerDeps,
+  OrgGraphPlacement,
+  OrgGraphProvisioner,
+  OrgGraphProvisionerKind,
+  OrgGraphSubject,
+} from "./provision";
+export {
+  isOrgGraphDatabaseName,
+  listOrgGraphDatabases,
+  ORG_GRAPH_DATABASE_PREFIX,
+  OrgGraphNameError,
+  orgGraphDatabaseName,
+} from "./org-graph";
