@@ -65,10 +65,11 @@ One Postgres transaction: `workspace.workspaces`, `workspace.workspace_users` (t
 | `not_found` | `installation_unreachable` | the GitHub App is not installed on the repository's owner, or the organization's authorization cannot reach that installation |
 | `not_found` | `repository_not_installed` | the installation cannot see the repository |
 | `conflict` | `main_repo_claimed` | another workspace already steers by that repository |
+| `conflict` | `repository_linked_elsewhere` | another workspace has linked that repository; a repository that receives one workspace's Context PRs cannot hold another's `.oxagen/` governance tree |
 | `conflict` | `main_repo_plane_unsupported` | a dedicated Postgres plane is in use, so the cross-workspace claim cannot be checked (ADR-042) |
 | `invalid_input` | | the slug or the repository name fails the contract's validator (kernel) |
 
-The GitHub reads run before the transaction opens, so every refusal above writes nothing. `main_repo_claimed` is checked twice: once by a cross-tenant read for the sentence, and once by the global unique index `repository_binding_heads_main_repository_uq` on (provider, repository) where `role = 'main'`, which turns a lost race into the same refusal. The refusal names neither the organization nor the workspace holding the claim.
+The GitHub reads run before the transaction opens, so every refusal above writes nothing. `main_repo_claimed` and `repository_linked_elsewhere` are checked twice: once by a cross-tenant read for the sentence, and once by the store. The global unique index `repository_binding_heads_main_repository_uq` on (provider, repository) where `role = 'main'` holds main against main, and the trigger `repository_binding_heads_exclusive_main` serialises every head write for one repository on a repository-keyed advisory lock and refuses a main head where another workspace holds any head for the repository. Both turn a lost race into the same refusal. Neither refusal names the organization or the workspace holding the repository.
 
 ## The one workspace written without a main repository
 

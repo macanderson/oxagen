@@ -135,9 +135,10 @@ vi.mock("@oxagen/tenancy", async (importOriginal) => {
   };
 });
 
-/** A drizzle terminal that can be awaited or `.returning()`-ed. */
+/** A drizzle terminal that can be awaited, `.limit()`-ed or `.returning()`-ed. */
 function rows(result: unknown[]) {
   return Object.assign(Promise.resolve(result), {
+    limit: async () => result,
     returning: async () => result,
   });
 }
@@ -158,16 +159,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       transaction: mocks.txFn,
     }),
     // The two cross-tenant reads before the transaction: is any organisation
-    // on a dedicated plane, and does another workspace already hold this
-    // repository as its main. Answered by table.
+    // on a dedicated plane, and does another workspace already hold a head,
+    // main or linked, for this repository. Answered by table.
     withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => {
       mocks.withSystemDbCalls += 1;
       return fn({
         select: () => ({
           from: (table: unknown) => ({
-            where: () => ({
-              limit: async () => mocks.sharedRows.get(table) ?? [],
-            }),
+            where: () => rows(mocks.sharedRows.get(table) ?? []),
           }),
         }),
       });
@@ -583,7 +582,7 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
 
     it("main_repo_claimed when another workspace already steers by the repository, naming neither holder", async () => {
       mocks.sharedRows.set(schema.repositoryBindingHeads, [
-        { id: "head-elsewhere" },
+        { role: "main", workspaceId: "head-elsewhere" },
       ]);
       const err = await workspaceCreateHandler(draft("Test", "test"), CTX).then(
         () => null,
@@ -597,6 +596,37 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
       expect((err as Error).message).not.toContain("head-elsewhere");
       expect(mocks.inserts).toHaveLength(0);
       expect(mocks.txScopeMoves).toEqual([]);
+    });
+
+    // A repository another workspace has LINKED cannot become this one's
+    // main either: a main repository holds the `.oxagen/` governance tree,
+    // and a linked one receives another workspace's Context PRs.
+    it("repository_linked_elsewhere when another workspace has linked the repository, naming neither holder", async () => {
+      mocks.sharedRows.set(schema.repositoryBindingHeads, [
+        { role: "linked", workspaceId: "head-elsewhere" },
+      ]);
+      const err = await workspaceCreateHandler(draft("Test", "test"), CTX).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(err).toMatchObject({
+        code: "conflict",
+        reason: "repository_linked_elsewhere",
+      });
+      expect((err as Error).message).toContain("Acme/Widgets");
+      expect((err as Error).message).not.toContain("head-elsewhere");
+      expect(mocks.inserts).toHaveLength(0);
+    });
+
+    it("a main head elsewhere wins the sentence over a linked one, as the trigger orders them", async () => {
+      mocks.sharedRows.set(schema.repositoryBindingHeads, [
+        { role: "linked", workspaceId: "ws-linked" },
+        { role: "main", workspaceId: "ws-main" },
+      ]);
+      await expect(refusal(draft("Test", "test"))).resolves.toEqual({
+        code: "conflict",
+        reason: "main_repo_claimed",
+      });
     });
 
     it("main_repo_plane_unsupported while any organisation is on a dedicated Postgres plane", async () => {
@@ -623,6 +653,21 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
       // workspace row and the head that lost were written on the ONE
       // transaction that then threw — the real one discards them together
       // (repository.pg.test.ts proves it against Postgres).
+      expect(new Set(mocks.inserts.map((w) => w.txIndex)).size).toBe(1);
+      expect(mocks.inserts.map((w) => w.table)).toContain(schema.workspaces);
+    });
+
+    it("repository_linked_elsewhere when the trigger refuses the main head because a link landed elsewhere mid-transaction, with the workspace rolled back", async () => {
+      mocks.headInsertError = Object.assign(new Error("insert failed"), {
+        cause: Object.assign(new Error("trigger refused"), {
+          code: "23505",
+          constraint_name: "repository_binding_heads_main_is_linked_elsewhere",
+        }),
+      });
+      await expect(refusal(draft("Test", "test"))).resolves.toEqual({
+        code: "conflict",
+        reason: "repository_linked_elsewhere",
+      });
       expect(new Set(mocks.inserts.map((w) => w.txIndex)).size).toBe(1);
       expect(mocks.inserts.map((w) => w.table)).toContain(schema.workspaces);
     });

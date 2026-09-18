@@ -48,11 +48,14 @@ A repository this connection bound before, linked, unlinked and now linked again
 | `conflict` | `github_not_connected` | the workspace has no GitHub connection carrying an installation |
 | `not_found` | `repository_not_installed` | the installation cannot see the repository |
 | `conflict` | `main_repo_claimed` | the repository is another workspace's main repository |
+| `conflict` | `main_repo_unbound` | this workspace has no main repository yet; bind it first, a linked repository is its second |
 | `conflict` | `main_repo` | the repository is this workspace's main repository, already bound |
 | `conflict` | `repository_already_linked` | this workspace already links it |
 | `conflict` | `main_repo_plane_unsupported` | a dedicated Postgres plane is in use, so the cross-workspace claim cannot be checked (ADR-042) |
 
-`main_repo_claimed` is deliberate. §10.1 opens repository-scoped Context PRs on the linked repository itself, and another workspace's main repository holds that workspace's `.oxagen/` governance tree. Linking it here would hand this workspace a door into that tree. A repository that is nobody's main may be linked by any number of workspaces, in the same organization or not. The refusal names neither the organization nor the workspace holding the claim, because the read that finds it crosses tenants.
+`main_repo_claimed` is deliberate. §10.1 opens repository-scoped Context PRs on the linked repository itself, and another workspace's main repository holds that workspace's `.oxagen/` governance tree. Linking it here would hand this workspace a door into that tree. A repository that is nobody's main may be linked by any number of workspaces, in the same organization or not. The refusal names neither the organization nor the workspace holding the claim, because the read that finds it crosses tenants. It is checked twice: once by the cross-tenant read for the sentence, and once by the store's trigger `repository_binding_heads_exclusive_main`, which serialises every head write for one repository on a repository-keyed advisory lock and refuses a linked head where a main head exists elsewhere, so a main claim that lands between the read and the write is answered with the same refusal.
+
+`main_repo_unbound` closes the one gap in "a workspace is born with its main repository": the organization's first workspace is written without one (ADR-099 §6), and GitHub can be attached to it before `bind_main_repository` runs. Linking then would leave a linked head with no main beside it. Bind the main repository first.
 
 ## What this write does not do
 

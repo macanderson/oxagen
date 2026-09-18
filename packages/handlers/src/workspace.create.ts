@@ -16,12 +16,15 @@
 //      `attach_github_installation` applies, never an id from the caller.
 //   4. The repository, read through that installation's token.
 //   5. The global main-repository claim: refused when another workspace
-//      already steers by it, before anything is written.
+//      already steers by it (`main_repo_claimed`) or has linked it
+//      (`repository_linked_elsewhere`), before anything is written.
 //   6. ONE transaction: the workspace bootstrap, its GitHub connection (the
 //      installation attached, `connected`), the version-1 binding and its
 //      `role = 'main'` head. Any failure — including losing the race for the
-//      claim to `repository_binding_heads_main_repository_uq` — rolls back the
-//      workspace with it. A workspace without a main repo is never written.
+//      claim to the store's rule, the index
+//      `repository_binding_heads_main_repository_uq` or the trigger
+//      `repository_binding_heads_exclusive_main` — rolls back the workspace
+//      with it. A workspace without a main repo is never written.
 //
 // Steps 3–5 call GitHub, so they run before the transaction and fail closed:
 // a refusal there writes nothing.
@@ -30,12 +33,7 @@ import {
   workspaceCreate,
   type WorkspaceCreateOutput,
 } from "@oxagen/oxagen/contracts/workspace.create";
-import {
-  schema,
-  withSystemDb,
-  withTenantDb,
-  isUniqueViolation,
-} from "@oxagen/database";
+import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq } from "drizzle-orm";
@@ -51,10 +49,12 @@ import {
 } from "./repository.github-user-installations";
 import {
   assertGlobalClaimIsKnowable,
+  assertNotHeldElsewhere,
   assertPlaneStillShared,
   githubMainRepositoryDeps,
-  isMainRepositoryConflict,
-  repositoryClaimedElsewhere,
+  headsHeldElsewhere,
+  repositoryHeadConflict,
+  rethrowHeadConflict,
   type MainRepositoryDeps,
 } from "./repository.main.bind";
 import { bootstrapWorkspace } from "./workspace-bootstrap";
@@ -151,29 +151,20 @@ export function createWorkspaceCreateHandler(
       });
     }
 
-    // ── Is this repository already another workspace's main repository? ────
-    // For the sentence; the unique index is the guarantee, and the catch below
-    // turns a lost race into the same sentence.
+    // ── Does another workspace already hold this repository? ──────────────
+    // Main or linked: a repository another workspace links cannot become
+    // this one's main any more than another workspace's main can. For the
+    // sentence; the store's index and trigger are the guarantee, and the
+    // catch below turns a lost race into the same sentence. No workspace to
+    // exclude: this one does not exist yet.
     await assertGlobalClaimIsKnowable(ctx.orgId);
-    const claimed = await withSystemDb((tx) =>
-      tx
-        .select({ id: schema.repositoryBindingHeads.id })
-        .from(schema.repositoryBindingHeads)
-        .where(
-          and(
-            eq(schema.repositoryBindingHeads.provider, GITHUB_PROVIDER),
-            eq(schema.repositoryBindingHeads.providerRepositoryId, repo.id),
-            eq(schema.repositoryBindingHeads.role, "main"),
-          ),
-        )
-        .limit(1),
-    );
-    if (claimed.length > 0) {
+    const held = await headsHeldElsewhere(repo.id, null);
+    if (held.length > 0) {
       logger.warn(
         { orgId: ctx.orgId, repository: repo.fullName },
-        "workspace.create: refused — repository is already a main repository elsewhere",
+        "workspace.create: refused — another workspace already holds this repository",
       );
-      throw repositoryClaimedElsewhere(repo.fullName);
+      assertNotHeldElsewhere(repo.fullName, held);
     }
 
     const now = new Date();
@@ -242,12 +233,12 @@ export function createWorkspaceCreateHandler(
         };
       });
     } catch (err) {
-      if (isMainRepositoryConflict(err)) {
+      if (repositoryHeadConflict(err) !== null) {
         logger.warn(
           { orgId: ctx.orgId, repository: repo.fullName },
           "workspace.create: lost the race for a main repository claim",
         );
-        throw repositoryClaimedElsewhere(repo.fullName);
+        rethrowHeadConflict(err, repo.fullName);
       }
       if (isUniqueViolation(err)) {
         logger.warn(

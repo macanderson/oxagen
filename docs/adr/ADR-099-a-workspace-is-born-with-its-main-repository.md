@@ -14,8 +14,9 @@
 - **Numbering:** 099. ADR-098 is taken by #3310 and ADR-091 by "one record
   steers one agent"; neither is reused
 - **Delivered by:** `create_workspace` with a required `mainRepo`,
-  `link_repository`, `unlink_repository`, `list_repositories`, the migration
-  `20260918040000_repository_main_binding_is_exclusive.sql`, the Create
+  `link_repository`, `unlink_repository`, `list_repositories`, the migrations
+  `20260918040000_repository_main_binding_is_exclusive.sql` and
+  `20260918200000_repository_binding_heads_exclusive_across_roles.sql`, the Create
   workspace and Workspace settings dialogs in `apps/app`, and `oxagen repo`
   in `apps/cli`
 
@@ -113,6 +114,32 @@ found it crossed tenants. The migration demotes any pre-existing duplicate
 main heads to `linked`, keeping the oldest by `(created_at, id)`, before it
 builds the index.
 
+The index is half of the backstop. It sees main against main and nothing
+else, so on its own a repository linked in one workspace could still be
+claimed as main by another, and a link and a main claim on one repository
+could commit side by side because the handlers' advisory lock is keyed on
+the workspace. The other half is the trigger
+`repository_binding_heads_exclusive_main`
+(`20260918200000_repository_binding_heads_exclusive_across_roles.sql`),
+`BEFORE INSERT OR UPDATE OF role, workspace_id, provider,
+provider_repository_id` on the heads table. It takes a transaction-scoped
+advisory lock keyed on the repository, so every writer of a head for one
+repository serialises across workspaces and organizations, reads the other
+workspaces' heads through the `app.rls_bypass` GUC the policy already
+honours, and refuses with a 23505 carrying a constraint name: a main head
+where a main head exists elsewhere raises
+`repository_binding_heads_main_repository_uq`, the index's own name, so the
+handlers' mapping to `conflict: main_repo_claimed` is unchanged; a main head
+where a linked head exists elsewhere raises
+`repository_binding_heads_main_is_linked_elsewhere`, which the handlers
+answer as `conflict: repository_linked_elsewhere`; a linked head where a
+main head exists elsewhere raises
+`repository_binding_heads_linked_is_main_elsewhere`, answered as
+`conflict: main_repo_claimed`. The handlers' pre-checks read both roles for
+the sentence; the trigger is what makes a lost race refuse. Lock order is
+workspace then repository in every transaction, and a transaction writes one
+head, so there is no cycle.
+
 The index is global only within one Postgres. ADR-042 lets an organization
 carry a dedicated plane, and ingestion is tenant data such a plane would
 hold, so `assertGlobalClaimIsKnowable` refuses the claim
@@ -145,7 +172,13 @@ the latest version when nothing it records has moved and writes version + 1
 when something has. A main head refuses with
 `conflict: main_repo_unlink_refused`: a workspace without a main repository
 cannot exist. Changing which repository is main is an org-owner action
-recorded as a security event (§10.1), and it has no capability yet.
+recorded as a security event (§10.1), and it has no capability yet. The
+delete needs a privilege the evidence migration had taken away:
+`20260813100000` revoked `DELETE` on the heads table from `oxagen_app` along
+with the tables it made append-only, and
+`20260918200000_repository_binding_heads_exclusive_across_roles.sql` grants
+it back for the heads alone. `ingestion.repository_bindings` keeps its
+revoke.
 
 ### 6. The organization's first workspace is the one exception
 
@@ -157,7 +190,12 @@ that skips that step is provisional for 14 days. Runs record and spend
 counts, and steering, records and agent definitions stay off until
 `bind_main_repository` closes the window. `workspace-bootstrap.ts` names its
 two callers as standing on opposite sides of the rule, and a third caller
-has to answer for the main repository one way or the other.
+has to answer for the main repository one way or the other. GitHub can be
+attached to that first workspace before its main head exists, so
+`link_repository` refuses a workspace with no main head
+(`conflict: main_repo_unbound`): a linked repository is the workspace's
+second, and a linked head with no main beside it would be a workspace whose
+only repository is one it is not steered by.
 
 ### 7. Reads and surfaces
 

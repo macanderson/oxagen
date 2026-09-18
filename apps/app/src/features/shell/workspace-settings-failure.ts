@@ -41,6 +41,10 @@ export function useWorkspaceSettingsFailure(): (
             return t("repositoryAlreadyLinked");
           case "main_repo_claimed":
             return t("mainRepoClaimed");
+          case "main_repo_unbound":
+            return t("mainRepoUnbound");
+          case "repository_linked_elsewhere":
+            return t("repositoryLinkedElsewhere");
           case "main_repo_unlink_refused":
             return t("mainRepoUnlinkRefused");
           case "repository_not_linked":

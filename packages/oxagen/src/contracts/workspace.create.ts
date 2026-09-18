@@ -22,7 +22,12 @@ import { repositoryMainBind } from "./repository.main.bind";
  * is not installed on that owner, or the authorization cannot reach it),
  * `not_found: repository_not_installed` (the installation cannot see the
  * repository), `conflict: main_repo_claimed` (another workspace already
- * steers by it), `conflict: slug_taken`.
+ * steers by it), `conflict: repository_linked_elsewhere` (another workspace
+ * has linked it, and a repository that receives one workspace's Context PRs
+ * cannot hold another's `.oxagen/` governance tree), `conflict: slug_taken`.
+ * The two repository refusals are held by the store as well as by the
+ * handler's pre-check: the trigger `repository_binding_heads_exclusive_main`
+ * refuses a lost race with the same reasons.
  *
  * The production branch is GitHub's default branch, recorded as the binding's
  * configured default ref exactly as `bind_main_repository` records it; a

@@ -530,6 +530,7 @@ describe("linkWorkspaceRepository", () => {
     ["conflict", "main_repo"],
     ["conflict", "repository_already_linked"],
     ["conflict", "main_repo_claimed"],
+    ["conflict", "main_repo_unbound"],
     ["not_found", "repository_not_installed"],
   ] as const)(
     "carries a %s: %s from the handler to the caller (negative)",

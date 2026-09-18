@@ -1356,6 +1356,7 @@ type Messages = {
         installationUnreachable: string;
         repositoryNotInstalled: string;
         mainRepoClaimed: string;
+        repositoryLinkedElsewhere: string;
         repositoryUnparsable: string;
       };
     };
@@ -2835,6 +2836,8 @@ type Messages = {
       mainRepo: string;
       repositoryAlreadyLinked: string;
       mainRepoClaimed: string;
+      mainRepoUnbound: string;
+      repositoryLinkedElsewhere: string;
       mainRepoUnlinkRefused: string;
       repositoryNotLinked: string;
     };

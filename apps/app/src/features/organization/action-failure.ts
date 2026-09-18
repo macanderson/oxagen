@@ -38,10 +38,10 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("alreadyArchived");
           case "workspace_has_agents":
             return t("workspaceHasAgents");
-          // The four ways `create_workspace` can refuse the main repository
+          // The five ways `create_workspace` can refuse the main repository
           // (MC spec §10.1): the org never connected GitHub, the App is not on
-          // that owner, the installation cannot see the repository, or another
-          // workspace already steers by it.
+          // that owner, the installation cannot see the repository, another
+          // workspace already steers by it, or another workspace has linked it.
           case "github_not_authorized":
             return t("githubNotAuthorized");
           case "installation_unreachable":
@@ -50,6 +50,8 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("repositoryNotInstalled");
           case "main_repo_claimed":
             return t("mainRepoClaimed");
+          case "repository_linked_elsewhere":
+            return t("repositoryLinkedElsewhere");
           default:
             return t("refused", { code: failure.code });
         }

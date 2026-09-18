@@ -113,6 +113,7 @@
         "installationUnreachable": "The Oxagen GitHub App is not installed on that owner, or the connected GitHub account cannot reach it. Install the App on the owner, then try again.",
         "repositoryNotInstalled": "The App’s installation on that owner cannot see that repository. Grant it access on GitHub, then try again.",
         "mainRepoClaimed": "Another workspace already steers by that repository. A repository is the main repository of one workspace.",
+        "repositoryLinkedElsewhere": "Another workspace has linked that repository, so it cannot be a main repository. A main repository holds the .oxagen/ tree, and a linked one receives another workspace’s Context PRs.",
         "repositoryUnparsable": "That is not a repository name GitHub accepts. Write it as owner/name."
       }
     },

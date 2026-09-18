@@ -102,6 +102,8 @@
       "mainRepo": "That is this workspace’s main repository. It is bound above, and a main repository is never also linked.",
       "repositoryAlreadyLinked": "That repository is already linked to this workspace.",
       "mainRepoClaimed": "Another workspace steers by that repository. A workspace’s main repository cannot be linked by another workspace, because Context PRs would open on its .oxagen/ tree.",
+      "mainRepoUnbound": "Bind this workspace’s main repository first. A linked repository is its second.",
+      "repositoryLinkedElsewhere": "Another workspace has linked that repository, so it cannot be this workspace’s main. A main repository holds the .oxagen/ tree, and a linked one receives another workspace’s Context PRs.",
       "mainRepoUnlinkRefused": "The main repository cannot be unlinked. A workspace without one cannot exist.",
       "repositoryNotLinked": "That repository is no longer linked to this workspace. Reopen this panel to read the current list."
     }

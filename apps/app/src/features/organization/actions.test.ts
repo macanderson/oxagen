@@ -309,13 +309,14 @@ describe("createWorkspace", () => {
     ).toEqual({ ok: false, reason: "conflict", code: "slug_taken" });
   });
 
-  // The four repository refusals `create_workspace` documents, each carried
+  // The five repository refusals `create_workspace` documents, each carried
   // with its reason intact so the dialog can print its own sentence.
   it.each([
     ["conflict", "github_not_authorized"],
     ["not_found", "installation_unreachable"],
     ["not_found", "repository_not_installed"],
     ["conflict", "main_repo_claimed"],
+    ["conflict", "repository_linked_elsewhere"],
   ] as const)(
     "carries a %s: %s from the handler to the caller (negative)",
     async (code, reason) => {

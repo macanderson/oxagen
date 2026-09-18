@@ -73,7 +73,11 @@ vi.mock("@oxagen/iam/org-role", () => ({
 }));
 
 import { schema } from "@oxagen/database";
-import { createMainRepositoryBindHandler } from "./repository.main.bind";
+import {
+  createMainRepositoryBindHandler,
+  isMainRepositoryConflict,
+  repositoryHeadConflict,
+} from "./repository.main.bind";
 
 const CONNECTED_CONNECTION = {
   id: "conn-uuid",
@@ -215,20 +219,19 @@ let sharedRows = new Map<unknown, unknown[]>();
  * Arm the two reads the handler makes on the shared plane. They must be told
  * apart by the table they select from: one asks whether ANY organisation is on
  * a dedicated Postgres plane (if so the global claim is unknowable and the
- * bind is refused), the other asks whether another workspace already steers by
- * this repository. A mock that answered both with one value made a claim row
- * look like a dedicated plane and produced the wrong refusal.
+ * bind is refused), the other asks whether another workspace already holds a
+ * head, main or linked, for this repository. A mock that answered both with
+ * one value made a claim row look like a dedicated plane and produced the
+ * wrong refusal.
  */
-function sharedPlaneReads(rows: Map<unknown, unknown[]>): void {
-  sharedRows = rows;
+function sharedPlaneReads(byTable: Map<unknown, unknown[]>): void {
+  sharedRows = byTable;
   mocks.withSystemDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         select: () => ({
           from: (table: unknown) => ({
-            where: () => ({
-              limit: async () => sharedRows.get(table) ?? [],
-            }),
+            where: () => rows(sharedRows.get(table) ?? []),
           }),
         }),
       }),
@@ -236,9 +239,9 @@ function sharedPlaneReads(rows: Map<unknown, unknown[]>): void {
 }
 
 /**
- * What the cross-tenant exclusivity read finds. `[]` is "nobody else steers by
- * this repository"; a row is another workspace's claim on it. No organisation
- * is on a dedicated plane unless a test says so.
+ * What the cross-tenant exclusivity read finds. `[]` is "nobody else holds
+ * this repository"; a row is another workspace's head on it, with its role.
+ * No organisation is on a dedicated plane unless a test says so.
  */
 function claimedElsewhere(result: unknown[]): void {
   sharedPlaneReads(
@@ -258,6 +261,63 @@ function dedicatedPlaneExists(): void {
     ]),
   );
 }
+
+describe("repositoryHeadConflict", () => {
+  const pg = (constraint_name: string, code = "23505") =>
+    Object.assign(new Error("insert failed"), {
+      cause: Object.assign(new Error("refused"), { code, constraint_name }),
+    });
+
+  it("maps the index and the trigger's three constraint names by what they mean", () => {
+    expect(
+      repositoryHeadConflict(pg("repository_binding_heads_main_repository_uq")),
+    ).toBe("main_elsewhere");
+    expect(
+      repositoryHeadConflict(
+        pg("repository_binding_heads_linked_is_main_elsewhere"),
+      ),
+    ).toBe("main_elsewhere");
+    expect(
+      repositoryHeadConflict(
+        pg("repository_binding_heads_main_is_linked_elsewhere"),
+      ),
+    ).toBe("linked_elsewhere");
+  });
+
+  it("answers null for another constraint, another code, a plain error and nothing", () => {
+    expect(
+      repositoryHeadConflict(pg("repository_binding_heads_repository_uq")),
+    ).toBeNull();
+    expect(
+      repositoryHeadConflict(
+        pg("repository_binding_heads_main_repository_uq", "23503"),
+      ),
+    ).toBeNull();
+    expect(repositoryHeadConflict(new Error("boom"))).toBeNull();
+    expect(repositoryHeadConflict(null)).toBeNull();
+  });
+
+  it("finds the constraint nested under `cause` and stops after five hops", () => {
+    let deep: unknown = Object.assign(new Error("leaf"), {
+      code: "23505",
+      constraint_name: "repository_binding_heads_main_repository_uq",
+    });
+    for (let i = 0; i < 6; i++)
+      deep = Object.assign(new Error(`wrap ${i}`), { cause: deep });
+    expect(repositoryHeadConflict(deep)).toBeNull();
+    expect(isMainRepositoryConflict(deep)).toBe(false);
+    expect(
+      isMainRepositoryConflict(
+        pg("repository_binding_heads_main_repository_uq"),
+      ),
+    ).toBe(true);
+    expect(
+      isMainRepositoryConflict(
+        pg("repository_binding_heads_main_is_linked_elsewhere"),
+      ),
+    ).toBe(false);
+  });
+});
 
 describe("bind_main_repository", () => {
   it("refuses a caller who is not an org Owner or Admin, before reading anything", async () => {
@@ -699,7 +759,9 @@ describe("bind_main_repository", () => {
   // claim it collided with.
   describe("a repository already steering another workspace", () => {
     it("is refused, and the refusal names neither the org nor the workspace holding it", async () => {
-      claimedElsewhere([{ workspaceId: "someone-elses-workspace" }]);
+      claimedElsewhere([
+        { role: "main", workspaceId: "someone-elses-workspace" },
+      ]);
       const writes = wire({ connections: [CONNECTED_CONNECTION] });
 
       const err = await handler()
@@ -723,6 +785,71 @@ describe("bind_main_repository", () => {
       // lock is never even taken.
       expect(writes.inserts).toHaveLength(0);
       expect(writes.locks).toBe(0);
+    });
+
+    // A repository another workspace has LINKED cannot become this one's main
+    // either: a main repository holds the `.oxagen/` governance tree, and a
+    // linked one receives another workspace's Context PRs.
+    it("is refused as repository_linked_elsewhere when another workspace has linked it, naming neither holder", async () => {
+      claimedElsewhere([
+        { role: "linked", workspaceId: "someone-elses-workspace" },
+      ]);
+      const writes = wire({ connections: [CONNECTED_CONNECTION] });
+      const err = await handler()
+        .run(INPUT, makeCTX())
+        .then(
+          () => null,
+          (e: unknown) => e,
+        );
+      expect(err).toMatchObject({
+        code: "conflict",
+        reason: "repository_linked_elsewhere",
+      });
+      const message = (err as Error).message;
+      expect(message).toContain("Acme/Widgets");
+      expect(message).not.toContain("someone-elses-workspace");
+      expect(writes.inserts).toHaveLength(0);
+      expect(writes.locks).toBe(0);
+    });
+
+    it("a main head elsewhere wins the sentence over a linked one, as the trigger orders them", async () => {
+      claimedElsewhere([
+        { role: "linked", workspaceId: "ws-linked" },
+        { role: "main", workspaceId: "ws-main" },
+      ]);
+      wire({ connections: [CONNECTED_CONNECTION] });
+      await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
+        reason: "main_repo_claimed",
+      });
+    });
+
+    it("refuses as repository_linked_elsewhere when the trigger refuses the main head because a link landed elsewhere mid-flight", async () => {
+      claimedElsewhere([]);
+      wire({ connections: [CONNECTED_CONNECTION] });
+      const violation = Object.assign(new Error("insert failed"), {
+        cause: Object.assign(new Error("trigger refused"), {
+          code: "23505",
+          constraint_name: "repository_binding_heads_main_is_linked_elsewhere",
+        }),
+      });
+      mocks.withTenantDb.mockReset();
+      mocks.withTenantDb
+        .mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
+          fn({
+            select: () => ({
+              from: () => ({
+                where: () => ({ orderBy: async () => [CONNECTED_CONNECTION] }),
+              }),
+            }),
+          }),
+        )
+        .mockImplementationOnce(async () => {
+          throw violation;
+        });
+      await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
+        code: "conflict",
+        reason: "repository_linked_elsewhere",
+      });
     });
 
     it("refuses with the same conflict when the claim lands mid-flight, rather than surfacing a raw constraint violation", async () => {

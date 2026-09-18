@@ -15,10 +15,17 @@
 //      the main-repository claim — it is refused rather than guessed when a
 //      dedicated data plane makes the answer unknowable.
 //   5. One transaction under the workspace's repository lock: this
-//      workspace's heads decide `main_repo` (it is the main repository here)
-//      and `repository_already_linked`; else a binding (reused or superseded
+//      workspace's heads decide `main_repo_unbound` (no main head yet: the
+//      organisation's first workspace is written without one, and GitHub can
+//      be attached to it before `bind_main_repository` runs, so a link here
+//      would be a linked repository with no main to be second to),
+//      `main_repo` (it is the main repository here) and
+//      `repository_already_linked`; else a binding (reused or superseded
 //      when this connection bound the repository before) and a
-//      `role = 'linked'` head.
+//      `role = 'linked'` head. The store's trigger
+//      `repository_binding_heads_exclusive_main` serialises this write
+//      against a concurrent main claim elsewhere on a repository-keyed lock,
+//      and a lost race is mapped back to `main_repo_claimed`.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
 import {
@@ -27,7 +34,7 @@ import {
 } from "@oxagen/oxagen/contracts/repository.link";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, or } from "drizzle-orm";
 import { logger } from "./logger";
 import { writeRepositoryHead } from "./repository.binding-write";
 import {
@@ -37,9 +44,23 @@ import {
 import {
   assertGlobalClaimIsKnowable,
   githubMainRepositoryDeps,
+  repositoryHeadConflict,
   workspaceRepositoriesLock,
   type MainRepositoryDeps,
 } from "./repository.main.bind";
+
+/**
+ * The refusal for another workspace's main repository. Names neither the
+ * organisation nor the workspace holding the claim: the read that finds it
+ * crosses tenants (see `repositoryClaimedElsewhere`).
+ */
+function mainRepoClaimed(fullName: string): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "main_repo_claimed",
+    message: `${fullName} is the main repository of another workspace. Its .oxagen/ tree governs that workspace, so it cannot be linked here.`,
+  });
+}
 
 export function createRepositoryLinkHandler(
   deps: MainRepositoryDeps,
@@ -96,55 +117,84 @@ export function createRepositoryLinkHandler(
         { ...scope, repository: repo.fullName },
         "repository.link: refused — repository is another workspace's main repository",
       );
-      // Names neither the organisation nor the workspace holding the claim:
-      // the read crosses tenants (see `repositoryClaimedElsewhere`).
-      throw new HandlerError({
-        code: "conflict",
-        reason: "main_repo_claimed",
-        message: `${repo.fullName} is the main repository of another workspace. Its .oxagen/ tree governs that workspace, so it cannot be linked here.`,
-      });
+      throw mainRepoClaimed(repo.fullName);
     }
 
     const now = new Date();
-    const written = await withTenantDb(async (tx) => {
-      await tx.execute(workspaceRepositoriesLock(scope.workspaceId));
-      const heads = await tx
-        .select({
-          role: schema.repositoryBindingHeads.role,
-          connectionId: schema.repositoryBindingHeads.connectionId,
-        })
-        .from(schema.repositoryBindingHeads)
-        .where(
-          and(
-            eq(schema.repositoryBindingHeads.orgId, scope.orgId),
-            eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
-            eq(schema.repositoryBindingHeads.provider, GITHUB_PROVIDER),
-            eq(schema.repositoryBindingHeads.providerRepositoryId, repo.id),
-          ),
-        );
-      if (heads.some((h) => h.role === "main")) {
-        throw new HandlerError({
-          code: "conflict",
-          reason: "main_repo",
-          message: `${repo.fullName} is this workspace's main repository; it is already bound`,
+    let written: Awaited<ReturnType<typeof writeRepositoryHead>>;
+    try {
+      written = await withTenantDb(async (tx) => {
+        await tx.execute(workspaceRepositoriesLock(scope.workspaceId));
+        // This workspace's main head, whichever repository it names, and its
+        // heads for THIS repository, in one read.
+        const heads = await tx
+          .select({
+            role: schema.repositoryBindingHeads.role,
+            providerRepositoryId:
+              schema.repositoryBindingHeads.providerRepositoryId,
+          })
+          .from(schema.repositoryBindingHeads)
+          .where(
+            and(
+              eq(schema.repositoryBindingHeads.orgId, scope.orgId),
+              eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
+              eq(schema.repositoryBindingHeads.provider, GITHUB_PROVIDER),
+              or(
+                eq(schema.repositoryBindingHeads.providerRepositoryId, repo.id),
+                eq(schema.repositoryBindingHeads.role, "main"),
+              ),
+            ),
+          );
+        // A linked repository is the workspace's second. The organisation's
+        // first workspace is written without a main repository (ADR-099 §6)
+        // and GitHub can be attached to it before the main head exists, and
+        // a link then would leave a linked head with no main beside it.
+        if (!heads.some((h) => h.role === "main")) {
+          throw new HandlerError({
+            code: "conflict",
+            reason: "main_repo_unbound",
+            message:
+              "Bind this workspace's main repository first; a linked repository is its second.",
+          });
+        }
+        const same = heads.filter((h) => h.providerRepositoryId === repo.id);
+        if (same.some((h) => h.role === "main")) {
+          throw new HandlerError({
+            code: "conflict",
+            reason: "main_repo",
+            message: `${repo.fullName} is this workspace's main repository; it is already bound`,
+          });
+        }
+        if (same.length > 0) {
+          throw new HandlerError({
+            code: "conflict",
+            reason: "repository_already_linked",
+            message: `${repo.fullName} is already linked to this workspace`,
+          });
+        }
+        return writeRepositoryHead(tx, {
+          scope,
+          connectionId: connection.id,
+          repo,
+          role: "linked",
+          userId,
+          now,
         });
-      }
-      if (heads.length > 0) {
-        throw new HandlerError({
-          code: "conflict",
-          reason: "repository_already_linked",
-          message: `${repo.fullName} is already linked to this workspace`,
-        });
-      }
-      return writeRepositoryHead(tx, {
-        scope,
-        connectionId: connection.id,
-        repo,
-        role: "linked",
-        userId,
-        now,
       });
-    });
+    } catch (err) {
+      // The window the pre-check above cannot close: a main claim on this
+      // repository that committed elsewhere after the read. The trigger's
+      // repository-keyed lock serialised the two writes and refused this one
+      // with a constraint name; the sentence is the pre-check's.
+      if (repositoryHeadConflict(err) === "main_elsewhere") {
+        logger.warn(
+          { ...scope, repository: repo.fullName },
+          "repository.link: lost the race to a main repository claim elsewhere",
+        );
+        throw mainRepoClaimed(repo.fullName);
+      }
+      throw err;
+    }
 
     logger.info(
       {

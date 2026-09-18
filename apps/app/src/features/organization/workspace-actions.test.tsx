@@ -139,6 +139,11 @@ describe("CreateWorkspace", () => {
       { ok: false, reason: "conflict", code: "main_repo_claimed" },
       "Another workspace already steers by that repository.",
     ],
+    [
+      "repository_linked_elsewhere",
+      { ok: false, reason: "conflict", code: "repository_linked_elsewhere" },
+      "Another workspace has linked that repository",
+    ],
   ])(
     "names a main repository refused as %s and creates nothing (negative)",
     async (_reason, refusal, sentence) => {

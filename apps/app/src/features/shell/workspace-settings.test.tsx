@@ -1939,6 +1939,11 @@ describe("the Repositories section (§10.1, §17 M0)", () => {
         "Another workspace steers by that repository.",
       ],
       [
+        "main_repo_unbound",
+        { ok: false, reason: "conflict", code: "main_repo_unbound" },
+        "Bind this workspace’s main repository first.",
+      ],
+      [
         "repository_not_installed",
         { ok: false, reason: "not_found", code: "repository_not_installed" },
         "The installation cannot read that repository.",

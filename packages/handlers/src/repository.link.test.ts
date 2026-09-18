@@ -1,7 +1,9 @@
 // `link_repository` (Mission Control spec §10.1; ADR-099): a second repository
 // on the workspace, as a `role = 'linked'` head. Every refusal in order — the
 // role gate, no installation, an unseen repository, another workspace's main
-// repository, this workspace's own main, an existing link — then the one write.
+// repository, a workspace with no main repository yet, this workspace's own
+// main, an existing link, a main claim that lands elsewhere mid-flight — then
+// the one write.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GitHubRepoInfo } from "@oxagen/github";
 import { makeCTX } from "./test-utils/fixtures";
@@ -90,6 +92,9 @@ const REPO: GitHubRepoInfo = {
 
 const INPUT = { provider: "github" as const, owner: "acme", name: "docs" };
 
+/** This workspace's main head, on a different repository than `REPO`. */
+const MAIN_HEAD = { role: "main", providerRepositoryId: "1" };
+
 interface Tx {
   locks: number;
   /** The transaction object handed to the write, for identity checks. */
@@ -106,8 +111,8 @@ function rows(result: unknown[]) {
 /**
  * The handler reads through `withTenantDb` twice: first
  * `resolveWorkspaceGithubInstallation` (select → from → where → orderBy), then
- * the link transaction, whose one select is this workspace's heads for the
- * repository.
+ * the link transaction, whose one select is this workspace's main head plus
+ * its heads for the repository. `heads` answers that select as one list.
  */
 function wire(opts: { connections?: unknown[]; heads?: unknown[] }): Tx {
   const state: Tx = { locks: 0, tx: null };
@@ -254,10 +259,44 @@ describe("link_repository", () => {
     expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
   });
 
+  // The organisation's first workspace is written without a main repository
+  // (ADR-099 §6), and GitHub can be attached to it before `bind_main_repository`
+  // runs. A link then would be a linked head with no main beside it.
+  it("refuses a workspace with no main repository yet with main_repo_unbound, inside the lock", async () => {
+    const state = wire({ connections: [CONNECTION], heads: [] });
+    const err = await handler()
+      .run(INPUT, makeCTX())
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    expect(err).toMatchObject({
+      code: "conflict",
+      reason: "main_repo_unbound",
+    });
+    expect((err as Error).message).toBe(
+      "Bind this workspace's main repository first; a linked repository is its second.",
+    );
+    expect(state.locks).toBe(1);
+    expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
+  });
+
+  it("main_repo_unbound wins over an existing link of the same repository: a head the demotion left behind does not stand in for a main", async () => {
+    wire({
+      connections: [CONNECTION],
+      heads: [{ role: "linked", providerRepositoryId: "9002" }],
+    });
+    await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
+      code: "conflict",
+      reason: "main_repo_unbound",
+    });
+    expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
+  });
+
   it("refuses this workspace's own main repository with main_repo, inside the lock", async () => {
     const state = wire({
       connections: [CONNECTION],
-      heads: [{ role: "main", connectionId: "conn-uuid" }],
+      heads: [{ role: "main", providerRepositoryId: "9002" }],
     });
     await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
       code: "conflict",
@@ -270,7 +309,7 @@ describe("link_repository", () => {
   it("refuses a repository already linked to this workspace", async () => {
     const state = wire({
       connections: [CONNECTION],
-      heads: [{ role: "linked", connectionId: "conn-uuid" }],
+      heads: [MAIN_HEAD, { role: "linked", providerRepositoryId: "9002" }],
     });
     await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
       code: "conflict",
@@ -280,8 +319,52 @@ describe("link_repository", () => {
     expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
   });
 
+  // The window the pre-check cannot close: a main claim on this repository
+  // committed elsewhere after the read. The trigger's repository-keyed lock
+  // serialised the two writes and refused this one by constraint name.
+  it("refuses with main_repo_claimed when the trigger refuses the linked head because a main head landed elsewhere mid-flight", async () => {
+    wire({ connections: [CONNECTION], heads: [MAIN_HEAD] });
+    mocks.writeRepositoryHead.mockRejectedValueOnce(
+      Object.assign(new Error("insert failed"), {
+        cause: Object.assign(new Error("trigger refused"), {
+          code: "23505",
+          constraint_name: "repository_binding_heads_linked_is_main_elsewhere",
+        }),
+      }),
+    );
+    const err = await handler()
+      .run(INPUT, makeCTX())
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    expect(err).toMatchObject({
+      code: "conflict",
+      reason: "main_repo_claimed",
+    });
+    expect((err as Error).message).toContain("Acme/Docs");
+  });
+
+  it("lets an unrelated unique violation through as itself", async () => {
+    wire({ connections: [CONNECTION], heads: [MAIN_HEAD] });
+    const unrelated = Object.assign(new Error("insert failed"), {
+      cause: Object.assign(new Error("duplicate key value"), {
+        code: "23505",
+        constraint_name: "repository_binding_heads_repository_uq",
+      }),
+    });
+    mocks.writeRepositoryHead.mockRejectedValueOnce(unrelated);
+    const err = await handler()
+      .run(INPUT, makeCTX())
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    expect(err).toBe(unrelated);
+  });
+
   it("writes a linked head through writeRepositoryHead, on the locked transaction, and answers the contract's shape", async () => {
-    const state = wire({ connections: [CONNECTION], heads: [] });
+    const state = wire({ connections: [CONNECTION], heads: [MAIN_HEAD] });
     const before = Date.now();
     const out = await handler().run(INPUT, makeCTX());
 
@@ -314,7 +397,7 @@ describe("link_repository", () => {
 
   it("checks the role against the acting user the context resolves (INV-29)", async () => {
     mocks.resolveActingUserId.mockResolvedValueOnce("u_acting");
-    wire({ connections: [CONNECTION], heads: [] });
+    wire({ connections: [CONNECTION], heads: [MAIN_HEAD] });
     await handler().run(INPUT, makeCTX({ userId: "u_session" }));
     expect(mocks.assertOrgRole).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "u_acting" }),
