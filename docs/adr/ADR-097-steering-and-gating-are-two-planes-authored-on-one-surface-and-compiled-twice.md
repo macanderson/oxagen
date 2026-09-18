@@ -10,7 +10,7 @@
   contained tier), ADR-051 and ADR-061 (context records and their governance),
   ADR-059 and ADR-070 (mandates and auto-approval rules), ADR-090 (skill
   resolution), ADR-003 and ADR-087 (Neo4j), the Mission Control spec sections
-  "Stores and writers" (§4.2), "The three seams" (§7) and "Steering" (§10)
+  "The stores and what belongs where" (§4.2), "The three seams" (§7) and "Steering" (§10)
 - **Numbering:** this is the first of five ADRs from one decision and reads
   before ADR-093 to ADR-096. It is 097 because ADR-092 was taken by #3292 (an
   unrelated decision) while the set was being written

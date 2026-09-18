@@ -68,8 +68,11 @@ It is closed, and it does not gate Phase 4.
    loopback, displace-and-restore;
 4. the **control channel** (exists).
 
-Prompt bodies never leave the machine; only digests and usage go up. The vendor
-credential stays on the machine. Metering becomes **observed** instead of
+Prompt bodies never leave the machine. Only digests and usage go up. Model-call
+frames from the gateway carry digests and usage only, never bodies. What
+hook-tier frames carry today is unchanged: hook payloads are digest-first, and
+raw retention stays a per-workspace policy that is off by default (spec §13.6).
+The vendor credential stays on the machine. Metering becomes **observed** instead of
 self-reported, for every harness. `session_limit_usd` is enforced, per-turn
 volatile injection re-lands at the proxy, `interrupt` becomes real.
 

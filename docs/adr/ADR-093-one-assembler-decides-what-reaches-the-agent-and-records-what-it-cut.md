@@ -36,7 +36,7 @@ Checked at `main` `02278c913`.
 - Memory reaches only the in-app agent, capped at 6
   (`packages/agent/src/runtime/assistant-recall.ts`, `RECALL_LIMIT`).
 - Two paths write `agent.context_records`: `merge_context_pr`
-  (`packages/handlers/src/context.steering.store.ts`) and
+  (`packages/handlers/src/context.pr.merge.ts`) and
   `publish_context_record` (`packages/handlers/src/context.record.publish.ts`).
   The schema comment says the second leaves `kind`, `force`,
   `constraint_effect` and `statement` NULL, so ordering by force is undefined
@@ -154,6 +154,11 @@ with NULL `force` cannot be ordered and cannot be delivered.
   a read, not a guess.
 - The Preview tab (ADR-097 §5) is the assembler run without delivery. It needs
   no second implementation.
+- Where the volatile ranking runs is a build choice of Phase 1, inside one
+  rule from ADR-094: a prompt body never leaves the machine. If ranking needs
+  the prompt, it runs in `tachod` against the item index the signed bundle
+  carries. The server ranks only on what it already holds, such as the files
+  and entities a run touches (spec §10.5).
 - A slow or failing assembler never blocks a prompt at the hook tier. The cost
   of failing open is a turn with the prefix and no volatile selection, and the
   manifest records that.
