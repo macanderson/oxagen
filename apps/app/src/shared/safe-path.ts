@@ -144,11 +144,13 @@ export const routes = {
    * a Stripe Checkout returns. The two meters return to different values —
    * `success` for a governed-action-unit purchase, `credits` for a usage
    * credit top-up — so the page can name the meter the payment landed on;
-   * `cancel` is shared, because nothing was charged on either.
+   * `plan` for a plan change; `cancel` is shared, because nothing was charged.
    */
   billing: (
     org: string,
-    q?: { cursor: string } | { checkout: "success" | "cancel" | "credits" },
+    q?:
+      | { cursor: string }
+      | { checkout: "success" | "cancel" | "credits" | "plan" },
   ): SafePath =>
     withQuery(pathOf(org, "billing"), {
       cursor: q !== undefined && "cursor" in q ? q.cursor : undefined,

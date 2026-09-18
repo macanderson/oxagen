@@ -4,22 +4,91 @@
       "gau": "{count} GAU"
     },
     "range": "{start} – {end}",
+    "notRecorded": "not recorded",
+    "header": {
+      "eyebrow": "Organization",
+      "description": "What {org} pays Oxagen. Your agents' own model and tool spend is on the Spend page; the two are kept apart on purpose."
+    },
     "checkout": {
       "success": "Checkout finished. The governed action units you bought are added to the bucket once Stripe confirms the payment.",
       "cancel": "Checkout was cancelled. Nothing was charged.",
-      "credits": "Checkout finished. The usage credits you bought are added to the balance once Stripe confirms the payment."
+      "credits": "Checkout finished. The usage credits you bought are added to the balance once Stripe confirms the payment.",
+      "plan": "Checkout finished. The new plan applies once Stripe confirms the subscription."
     },
-    "plan": {
-      "title": "Plan",
-      "none": "No subscription",
+    "tiers": {
+      "free": "Free",
+      "build": "Build",
+      "scale": "Scale",
+      "enterprise": "Enterprise"
+    },
+    "intervals": {
+      "month": "monthly",
+      "year": "yearly"
+    },
+    "tiles": {
+      "label": "This month at a glance",
       "plan": "Plan",
-      "status": "Status",
-      "interval": "Billed",
-      "intervals": {
-        "month": "monthly",
-        "year": "yearly"
+      "planMonth": "monthly, cancel any time",
+      "planYear": "yearly, cancel any time",
+      "planNone": "no subscription",
+      "gau": "GAU this month",
+      "gauNote": "{used} used of {included} included + {purchased} purchased + {carried} carried",
+      "overdrawn": "overdrawn by {count}",
+      "rate": "Contracted rate",
+      "perThousand": "per 1,000 GAU",
+      "due": "Due",
+      "dueNote": "{count, plural, one {# open invoice} other {# open invoices}} · {currency}",
+      "nothingDue": "Nothing due",
+      "nextInvoice": "next invoice {date}",
+      "mixedCurrency": "open invoices in more than one currency"
+    },
+    "thisMonth": {
+      "title": "This month",
+      "columns": {
+        "line": "Line",
+        "basis": "Basis",
+        "amount": "Amount"
       },
-      "period": "Current period"
+      "lines": {
+        "plan": "Plan",
+        "blocks": "Blocks bought through Checkout",
+        "topups": "Auto top-ups",
+        "overage": "Invoiced overage",
+        "tax": "Tax",
+        "total": "Total"
+      },
+      "basis": {
+        "plan": "{plan}, billed {interval}",
+        "planNone": "no subscription",
+        "invoices": "{count, plural, =0 {no invoices} one {# invoice} other {# invoices}}",
+        "tax": "added by Stripe on each invoice, not itemised here",
+        "total": "the lines above, as Stripe invoiced them"
+      },
+      "none": "none",
+      "empty": "Nothing billed yet this month. The free tier is every feature and {count} GAU a month.",
+      "partial": "This month continues on the next page of invoices, so the total covers this page only.",
+      "mixedCurrency": "invoices in more than one currency"
+    },
+    "meters": {
+      "title": "Meters",
+      "columns": {
+        "meter": "Meter",
+        "thisMonth": "This month",
+        "note": "Note"
+      },
+      "gau": "Governed action units",
+      "gauValue": "{used} of {total} GAU",
+      "gauNote": "{period} · {remaining} · resolve_approval is the only billable governed action, one GAU each",
+      "remaining": "{count} left",
+      "overdrawn": "overdrawn by {count}",
+      "other": "Other governed actions",
+      "otherNote": "reported, never priced",
+      "held": "Held runs",
+      "heldNote": "reported, never priced (dod.held)",
+      "credits": "Usage credits",
+      "creditsValue": "{count} credits",
+      "creditsNote": "balance for in-app AI usage; 1 credit = $0.01",
+      "exhaustedNoCard": "<link>Add a payment method</link> to keep governing this month, or your allowance renews on {date}"
     },
     "mode": {
       "title": "Billing mode",
@@ -30,16 +99,60 @@
       "invoiced": "Invoiced this period",
       "pastDue": "Payment past due: an interim or period-close invoice is open. Governing continues; pay it from Invoices."
     },
-    "bucket": {
-      "title": "Governed action bucket",
-      "period": "Period",
-      "included": "Included",
-      "purchased": "Purchased",
-      "carried": "Carried forward",
-      "used": "Used",
-      "remaining": "Remaining",
-      "overdrawn": "overdrawn by {count} GAU",
-      "exhaustedNoCard": "<link>Add a payment method</link> to keep governing this month, or your allowance renews on {date}"
+    "invoices": {
+      "title": "Invoices",
+      "empty": "No invoices yet.",
+      "columns": {
+        "invoice": "Invoice",
+        "period": "Period",
+        "kind": "Charged for",
+        "amount": "Amount",
+        "status": "Status",
+        "paid": "Paid",
+        "link": "Stripe"
+      },
+      "unnumbered": "not assigned",
+      "view": "Open in Stripe",
+      "unpublished": "not published",
+      "kinds": {
+        "subscription": "Subscription",
+        "gau_purchase": "Block purchase",
+        "gau_auto_topup": "Auto top-up",
+        "gau_interim": "Interim",
+        "gau_period_close": "Period close"
+      },
+      "statuses": {
+        "open": "open",
+        "paid": "paid",
+        "uncollectible": "uncollectible",
+        "void": "void"
+      },
+      "pager": "Invoice pages",
+      "older": "Older invoices",
+      "newest": "Newest invoices"
+    },
+    "priceList": {
+      "title": "The price list",
+      "governed": "Governed actions",
+      "inApp": "In-app AI usage",
+      "free": "Free",
+      "freeTerms": "{count} GAU a month",
+      "perMonth": "a month with {count} GAU",
+      "enterprise": "Enterprise",
+      "enterpriseTerms": "negotiated per contract",
+      "list": "List rate",
+      "perThousand": "per 1,000 GAU",
+      "blocks": "Blocks",
+      "blockTerms": "{count} GAU for",
+      "bands": "Volume bands, per 1,000 GAU by annual volume",
+      "credit": "Usage credit",
+      "creditTerms": "one credit is",
+      "calls": "Each in-app model call",
+      "callsTerms": "provider cost times the meter markup",
+      "grant": "Signup grant",
+      "packs": "Credit packs",
+      "packsTerms": "from",
+      "everyFeature": "Every feature is on for every tier."
     },
     "autoTopup": {
       "title": "Auto top-up",
@@ -62,26 +175,6 @@
         "failed": "Last top-up {date}: failed"
       }
     },
-    "rate": {
-      "title": "Your contracted rate",
-      "perGau": "Per governed action unit",
-      "perBlock": "Per block",
-      "blockSize": "Block size",
-      "currency": "Currency",
-      "included": "Included GAUs per month",
-      "effective": "Effective",
-      "openEnded": "from {start}",
-      "source": "Source",
-      "published": "Published {tier} rate",
-      "negotiated": "Negotiated agreement {ref}",
-      "negotiatedNoRef": "Negotiated agreement",
-      "tiers": {
-        "free": "Free",
-        "build": "Build",
-        "scale": "Scale",
-        "enterprise": "Enterprise"
-      }
-    },
     "purchase": {
       "title": "Buy governed action units",
       "quantity": "Governed action units",
@@ -100,40 +193,8 @@
         "unavailable": "Checkout could not be opened. Nothing was charged."
       }
     },
-    "invoices": {
-      "title": "Invoices",
-      "empty": "No invoices yet.",
-      "columns": {
-        "number": "Number",
-        "kind": "Kind",
-        "status": "Status",
-        "period": "Period",
-        "amountDue": "Amount due",
-        "amountPaid": "Amount paid",
-        "invoice": "Invoice"
-      },
-      "unnumbered": "not assigned",
-      "view": "View on Stripe",
-      "unpublished": "not published",
-      "kinds": {
-        "subscription": "Subscription",
-        "gau_purchase": "Block purchase",
-        "gau_auto_topup": "Auto top-up",
-        "gau_interim": "Interim",
-        "gau_period_close": "Period close"
-      },
-      "statuses": {
-        "open": "open",
-        "paid": "paid",
-        "uncollectible": "uncollectible",
-        "void": "void"
-      },
-      "pager": "Invoice pages",
-      "older": "Older invoices",
-      "newest": "Newest invoices"
-    },
     "usageCredits": {
-      "title": "In-app AI usage",
+      "title": "Usage credits",
       "balance": "Balance",
       "faceValue": "Face value",
       "credits": "{count} credits",
@@ -151,6 +212,43 @@
         "denied": "Your role cannot top up usage credits. An owner or a billing member can.",
         "unavailable": "Checkout could not be opened. Nothing was charged."
       }
+    },
+    "whatCounts": {
+      "title": "What counts",
+      "gau": "Billed in GAU",
+      "gauBody": "resolve_approval, one GAU each.",
+      "credits": "Billed in usage credits",
+      "creditsBody": "each model call the in-app agent makes, at provider cost times the meter markup.",
+      "free": "Free",
+      "freeBody": "membership writes and every other governed action, dod.held included.",
+      "reported": "Reported",
+      "reportedBody": "held runs and proven spend."
+    },
+    "changePlan": {
+      "open": "Change plan",
+      "title": "Change plan",
+      "lede": "Build and Scale are billed through Stripe Checkout, which shows the amount due before anything is charged.",
+      "plan": "Plan",
+      "interval": "Billed",
+      "perMonth": "a month",
+      "perYear": "a year",
+      "includes": "{count} GAU a month",
+      "enterprise": "Enterprise is negotiated per contract; its terms are set on your agreement, not here.",
+      "submit": "Continue to Checkout",
+      "submitting": "Opening Checkout…",
+      "denied": "An owner or a billing member can change the plan.",
+      "subscribed": "This organization already has a {plan} subscription. Changing an existing subscription is not in the app yet: it would swap the plan in Stripe from the next renewal.",
+      "errors": {
+        "invalid": "Choose a plan and how it is billed.",
+        "denied": "Your role cannot change the plan. An owner or a billing member can.",
+        "conflict": "This organization already has an active subscription, so Checkout cannot start a second one.",
+        "unavailable": "Checkout could not be opened. Nothing was charged."
+      }
+    },
+    "rate": {
+      "published": "Published {tier} rate",
+      "negotiated": "Negotiated agreement {ref}",
+      "negotiatedNoRef": "Negotiated agreement"
     },
     "failure": {
       "denied": "You cannot see {section} for this organization. Your role does not include {permission}; an organization owner can grant it.",
