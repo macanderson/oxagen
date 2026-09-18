@@ -155,7 +155,7 @@ with NULL `force` cannot be ordered and cannot be delivered.
 - The Preview tab (ADR-097 §5) is the assembler run without delivery. It needs
   no second implementation.
 - Where the volatile ranking runs is a build choice of Phase 1, inside one
-  rule from ADR-094: a prompt body never leaves the machine. If ranking needs
+  rule from ADR-094: no prompt body is sent to Oxagen's servers. If ranking needs
   the prompt, it runs in `tachod` against the item index the signed bundle
   carries. The server ranks only on what it already holds, such as the files
   and entities a run touches (spec §10.5).
