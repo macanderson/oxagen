@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import type { GitHubRepoInfo } from "@oxagen/github";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
@@ -12,6 +13,23 @@ const mocks = vi.hoisted(() => ({
   txFn: vi.fn(),
   /** The insert count at each mid-transaction scope move the bootstrap makes (#3029). */
   txScopeMoves: [] as number[],
+  /**
+   * Every `tx.insert(table).values(v)` the creating transaction issues, in
+   * order, so a test can say which rows were written — or that none were.
+   */
+  inserts: [] as Array<{
+    table: unknown;
+    values: Record<string, unknown>;
+    /** Which `withTenantDb` call (0-based) the insert ran inside. */
+    txIndex: number;
+  }>,
+  /** The transaction object each `withTenantDb` call handed its callback. */
+  txs: [] as unknown[],
+  /** A failure the heads insert raises, for the lost-race path. */
+  headInsertError: null as unknown,
+  /** Rows the shared-plane reads answer, keyed by table. */
+  sharedRows: new Map<unknown, unknown[]>(),
+  withSystemDbCalls: 0,
   /** The actor's principal, org role and workspace role, as assertOrgRole reads them. */
   tenant: {
     principalId: "prn_1" as string | null,
@@ -20,6 +38,34 @@ const mocks = vi.hoisted(() => ({
     /** The creator an API key resolves to, or none. */
     keyCreator: "u_1" as string | null,
   },
+  resolveDataPlane: vi.fn(
+    async (): Promise<{
+      orgId: string;
+      kind: "postgres";
+      mode: "shared" | "dedicated";
+      status: "active";
+    }> => ({
+      orgId: "org_1",
+      kind: "postgres",
+      mode: "shared",
+      status: "active",
+    }),
+  ),
+  assertDataPlaneUsable: vi.fn(),
+  loadDataPlaneBinding: vi.fn(
+    async (): Promise<{
+      orgId: string;
+      kind: "postgres";
+      mode: "shared" | "dedicated";
+      status: "active";
+    }> => ({
+      orgId: "org_1",
+      kind: "postgres",
+      mode: "shared",
+      status: "active",
+    }),
+  ),
+  emitSecurityEventAsync: vi.fn(async () => undefined),
 }));
 
 // Defaults: org found, no conflicting slug
@@ -72,6 +118,30 @@ vi.mock("./workspace-environment-seed", () => ({
   seedWorkspaceDefaultEnvironment: vi.fn(async () => "env_stub_id"),
 }));
 
+vi.mock("@oxagen/database/security", () => ({
+  emitSecurityEventAsync: mocks.emitSecurityEventAsync,
+}));
+
+vi.mock("@oxagen/database/data-plane", () => ({
+  loadDataPlaneBinding: mocks.loadDataPlaneBinding,
+}));
+
+vi.mock("@oxagen/tenancy", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/tenancy")>();
+  return {
+    ...real,
+    resolveDataPlane: mocks.resolveDataPlane,
+    assertDataPlaneUsable: mocks.assertDataPlaneUsable,
+  };
+});
+
+/** A drizzle terminal that can be awaited or `.returning()`-ed. */
+function rows(result: unknown[]) {
+  return Object.assign(Promise.resolve(result), {
+    returning: async () => result,
+  });
+}
+
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   const dialect = new PgDialect();
@@ -87,10 +157,26 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       },
       transaction: mocks.txFn,
     }),
+    // The two cross-tenant reads before the transaction: is any organisation
+    // on a dedicated plane, and does another workspace already hold this
+    // repository as its main. Answered by table.
+    withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => {
+      mocks.withSystemDbCalls += 1;
+      return fn({
+        select: () => ({
+          from: (table: unknown) => ({
+            where: () => ({
+              limit: async () => mocks.sharedRows.get(table) ?? [],
+            }),
+          }),
+        }),
+      });
+    },
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
       // Each withTenantDb call gets its own insert counter so the org-query,
       // ws-query, and transaction calls each see a fresh counter.
       const insertCountRef = { n: 0 };
+      const txIndex = mocks.txs.length;
       const tx = {
         // The bootstrap re-points app.current_workspace_id on this transaction
         // once the workspace row exists (#3029) — every row after it lands in a
@@ -108,11 +194,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         // assignment has `workspace_id is null`, a workspace assignment
         // carries the id); namespace derivation reads the org's existing
         // workspace namespaces before inserting — empty means the
-        // slug-derived namespace is used as-is.
+        // slug-derived namespace is used as-is. Inside the transaction the
+        // org's GitHub OAuth account and the connection's latest binding
+        // version for the repository are read the same way, and both are
+        // empty: no account to link, so the head's binding is version 1.
         select: () => ({
           from: (table: unknown) => {
             let lastWhere: SQL | null = null;
-            const rows = (): unknown[] => {
+            const answer = (): unknown[] => {
               if (table === real.schema.apiKeys)
                 return mocks.tenant.keyCreator
                   ? [{ createdById: mocks.tenant.keyCreator }]
@@ -136,40 +225,139 @@ vi.mock("@oxagen/database", async (importOriginal) => {
               innerJoin: () => chain,
               where: (cond: SQL) => {
                 lastWhere = cond;
-                return Object.assign(Promise.resolve(rows()), chain);
+                return Object.assign(Promise.resolve(answer()), chain);
               },
-              limit: () => Promise.resolve(rows()),
+              orderBy: () => Object.assign(Promise.resolve(answer()), chain),
+              limit: () => Promise.resolve(answer()),
             };
             return chain;
           },
         }),
         insert: (table: unknown): unknown => {
           insertCountRef.n++;
-          if (insertCountRef.n === 1) return mocks.txInsertWs(table) as unknown;
-          return mocks.txInsertWsUsers(table) as unknown;
+          const record = (values: Record<string, unknown>) =>
+            mocks.inserts.push({ table, values, txIndex });
+          // The workspace row keeps the legacy stub so the existing
+          // "returned no row" test still drives it.
+          if (table === real.schema.workspaces) {
+            const stub = mocks.txInsertWs(table) as {
+              values: (v: Record<string, unknown>) => unknown;
+            };
+            return {
+              values: (v: Record<string, unknown>) => {
+                record(v);
+                return stub.values(v);
+              },
+            };
+          }
+          if (table === real.schema.sourceConnections)
+            return {
+              values: (v: Record<string, unknown>) => {
+                record(v);
+                return rows([{ id: "conn-uuid", publicId: "con_new" }]);
+              },
+            };
+          if (table === real.schema.repositoryBindings)
+            return {
+              values: (v: Record<string, unknown>) => {
+                record(v);
+                return rows([{ id: "binding-uuid", publicId: "rpb_0123abcd" }]);
+              },
+            };
+          if (table === real.schema.repositoryBindingHeads)
+            return {
+              values: async (v: Record<string, unknown>) => {
+                record(v);
+                if (mocks.headInsertError) throw mocks.headInsertError;
+                return undefined;
+              },
+            };
+          const stub = mocks.txInsertWsUsers(table) as {
+            values: (v: Record<string, unknown>) => unknown;
+          };
+          return {
+            values: (v: Record<string, unknown>) => {
+              record(v);
+              return stub.values(v);
+            },
+          };
         },
       };
+      mocks.txs.push(tx);
       return fn(tx);
     },
   };
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
-import { workspaceCreateHandler } from "./workspace.create";
+import { schema } from "@oxagen/database";
+import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
+import { createWorkspaceCreateHandler } from "./workspace.create";
 import { isHandlerError, type CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
+const REPO: GitHubRepoInfo = {
+  id: "9001",
+  owner: "Acme",
+  name: "Widgets",
+  fullName: "Acme/Widgets",
+  htmlUrl: "https://github.com/Acme/Widgets",
+  defaultBranch: "trunk",
+};
+
+const INSTALLATION = {
+  installationId: "555",
+  accountLogin: "Acme",
+  accountType: "Organization",
+  avatarUrl: null,
+  repositorySelection: "all",
+};
+
+/**
+ * The two GitHub reads the handler makes before its transaction, as fixtures:
+ * the org's reachable installations, and the repository through one of them.
+ * Each test may override either.
+ */
+const github = {
+  candidates: vi.fn(
+    async (): Promise<(typeof INSTALLATION)[] | null> => [INSTALLATION],
+  ),
+  repository: vi.fn(async (): Promise<GitHubRepoInfo | null> => REPO),
+};
+
+const workspaceCreateHandler = createWorkspaceCreateHandler(github);
+
+/** A draft with its main repository — the only shape the contract admits. */
+const draft = (name: string, slug: string) => ({
+  name,
+  slug,
+  mainRepo: { provider: "github" as const, owner: "acme", name: "widgets" },
+});
+
 describe("workspaceCreateHandler (@oxagen/handlers)", () => {
   beforeEach(() => {
     mocks.txScopeMoves.length = 0;
+    mocks.inserts.length = 0;
+    mocks.txs.length = 0;
+    mocks.headInsertError = null;
+    mocks.withSystemDbCalls = 0;
+    mocks.sharedRows = new Map<unknown, unknown[]>([
+      [schema.dataPlanes, []],
+      [schema.repositoryBindingHeads, []],
+    ]);
     mocks.orgFindFirst.mockClear();
     mocks.wsFindFirst.mockClear();
     mocks.txFn.mockClear();
     mocks.txInsertWs.mockClear();
     mocks.txInsertWsReturning.mockClear();
+    mocks.emitSecurityEventAsync.mockClear();
+    github.candidates.mockReset();
+    github.repository.mockReset();
+    github.candidates.mockResolvedValue([INSTALLATION]);
+    github.repository.mockResolvedValue(REPO);
     // Restore defaults
     mocks.tenant.principalId = "prn_1";
     mocks.tenant.roleName = "Owner";
@@ -191,7 +379,7 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
   // ── role gate (INV-29) ────────────────────────────────────────────────────
 
   async function refusal(
-    input: { name: string; slug: string },
+    input: ReturnType<typeof draft>,
     ctx: CapabilityContext = CTX,
   ) {
     const err = await workspaceCreateHandler(input, ctx).catch((e) => e);
@@ -199,6 +387,24 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
       throw new Error(`expected a HandlerError, got ${err}`);
     return { code: err.code, reason: err.reason };
   }
+
+  // ── the contract: no workspace without a main repo (§17 M0) ──────────────
+
+  it("the contract refuses a draft with no mainRepo, so the handler can never be reached without one", () => {
+    const parsed = workspaceCreate.input.safeParse({
+      name: "Test",
+      slug: "test",
+    });
+    expect(parsed.success).toBe(false);
+    // And admits one that carries it, defaulting the provider.
+    const ok = workspaceCreate.input.safeParse({
+      name: "Test",
+      slug: "test",
+      mainRepo: { owner: "acme", name: "widgets" },
+    });
+    expect(ok.success).toBe(true);
+    expect(ok.success && ok.data.mainRepo.provider).toBe("github");
+  });
 
   // #3029 / ADR-068: the app's /{org} create-workspace form and the API's
   // org-only mount both invoke this with ORG_ONLY_WORKSPACE_ID as the scope's
@@ -211,22 +417,22 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
   // the transaction's workspace scope onto the new row the moment it exists,
   // between the workspaces INSERT and everything after it.
   it("moves the transaction's workspace scope onto the new workspace before any workspace-scoped row", async () => {
-    await workspaceCreateHandler({ name: "Test", slug: "test" }, CTX);
+    await workspaceCreateHandler(draft("Test", "test"), CTX);
     // Exactly one move, and it lands after insert #1 (workspaces) — so insert
-    // #2 (workspace_users) and the seeds all run under the new workspace.
+    // #2 (workspace_users), the seeds, the connection and the binding all run
+    // under the new workspace.
     expect(mocks.txScopeMoves).toEqual([1]);
     expect(mocks.txInsertWsUsers).toHaveBeenCalled();
   });
 
   it("refuses a context with no user before any query (negative)", async () => {
     const anonCtx: CapabilityContext = { ...CTX, userId: null };
-    await expect(
-      refusal({ name: "Test", slug: "test" }, anonCtx),
-    ).resolves.toEqual({
+    await expect(refusal(draft("Test", "test"), anonCtx)).resolves.toEqual({
       code: "forbidden",
       reason: "no_principal",
     });
     expect(mocks.orgFindFirst).not.toHaveBeenCalled();
+    expect(github.candidates).not.toHaveBeenCalled();
   });
 
   describe("an MCP call: an API key and no signed-in user", () => {
@@ -239,23 +445,30 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
 
     it("creates the workspace as the key's creator when the creator is an org Owner", async () => {
       await expect(
-        workspaceCreateHandler({ name: "Test", slug: "test" }, keyCtx),
+        workspaceCreateHandler(draft("Test", "test"), keyCtx),
       ).resolves.toMatchObject({ publicId: "ws_pub_1", orgSlug: "acme" });
+      // The binding is attributed to the creator, not to nobody.
+      const binding = mocks.inserts.find(
+        (w) => w.table === schema.repositoryBindings,
+      );
+      expect(binding?.values).toMatchObject({ createdById: "u_1" });
     });
 
     it("refuses a key whose creator is an org Member (negative)", async () => {
       mocks.tenant.roleName = "Member";
-      await expect(
-        refusal({ name: "Test", slug: "test" }, keyCtx),
-      ).resolves.toEqual({ code: "forbidden", reason: "org_role_required" });
-      expect(mocks.txInsertWs).not.toHaveBeenCalled();
+      await expect(refusal(draft("Test", "test"), keyCtx)).resolves.toEqual({
+        code: "forbidden",
+        reason: "org_role_required",
+      });
+      expect(mocks.inserts).toHaveLength(0);
     });
 
     it("refuses a key that resolves to no creator (negative)", async () => {
       mocks.tenant.keyCreator = null;
-      await expect(
-        refusal({ name: "Test", slug: "test" }, keyCtx),
-      ).resolves.toEqual({ code: "forbidden", reason: "no_principal" });
+      await expect(refusal(draft("Test", "test"), keyCtx)).resolves.toEqual({
+        code: "forbidden",
+        reason: "no_principal",
+      });
       expect(mocks.orgFindFirst).not.toHaveBeenCalled();
     });
   });
@@ -264,11 +477,12 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
     "refuses an org %s with forbidden / org_role_required and writes nothing (negative)",
     async (roleName) => {
       mocks.tenant.roleName = roleName;
-      await expect(refusal({ name: "Test", slug: "test" })).resolves.toEqual({
+      await expect(refusal(draft("Test", "test"))).resolves.toEqual({
         code: "forbidden",
         reason: "org_role_required",
       });
-      expect(mocks.txInsertWs).not.toHaveBeenCalled();
+      expect(mocks.inserts).toHaveLength(0);
+      expect(github.candidates).not.toHaveBeenCalled();
     },
   );
 
@@ -276,7 +490,7 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
     mocks.tenant.roleName = "Member";
     mocks.tenant.workspaceRoleName = "Owner";
     await expect(
-      workspaceCreateHandler({ name: "Owned", slug: "owned" }, CTX),
+      workspaceCreateHandler(draft("Owned", "owned"), CTX),
     ).resolves.toMatchObject({ publicId: "ws_pub_1" });
     expect(mocks.txInsertWs).toHaveBeenCalledTimes(1);
   });
@@ -284,17 +498,17 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
   it("refuses a workspace Admin with no org role with forbidden / org_role_required and writes nothing (negative)", async () => {
     mocks.tenant.roleName = "Member";
     mocks.tenant.workspaceRoleName = "Admin";
-    await expect(refusal({ name: "Test", slug: "test" })).resolves.toEqual({
+    await expect(refusal(draft("Test", "test"))).resolves.toEqual({
       code: "forbidden",
       reason: "org_role_required",
     });
-    expect(mocks.txInsertWs).not.toHaveBeenCalled();
+    expect(mocks.inserts).toHaveLength(0);
   });
 
   it("lets an org Admin create a workspace", async () => {
     mocks.tenant.roleName = "Admin";
     const result = await workspaceCreateHandler(
-      { name: "Admin Ws", slug: "admin-ws" },
+      draft("Admin Ws", "admin-ws"),
       CTX,
     );
     expect(result.slug).toBe("default");
@@ -304,7 +518,7 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
 
   it("refuses with not_found when the org row is missing", async () => {
     mocks.orgFindFirst.mockResolvedValueOnce(null);
-    await expect(refusal({ name: "Dev", slug: "dev" })).resolves.toEqual({
+    await expect(refusal(draft("Dev", "dev"))).resolves.toEqual({
       code: "not_found",
       reason: "org_not_found",
     });
@@ -312,34 +526,214 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
 
   // ── slug conflict guard ──────────────────────────────────────────────────
 
-  it("refuses with conflict / slug_taken when the slug already exists in this org (negative)", async () => {
+  it("refuses with conflict / slug_taken when the slug already exists in this org, before asking GitHub (negative)", async () => {
     mocks.wsFindFirst.mockResolvedValueOnce({ id: "existing_ws" });
-    await expect(refusal({ name: "Dupe", slug: "default" })).resolves.toEqual({
+    await expect(refusal(draft("Dupe", "default"))).resolves.toEqual({
       code: "conflict",
       reason: "slug_taken",
     });
-    expect(mocks.txInsertWs).not.toHaveBeenCalled();
+    expect(mocks.inserts).toHaveLength(0);
+    expect(github.candidates).not.toHaveBeenCalled();
+  });
+
+  // ── the main repository: GitHub refusals write nothing (§17 M0) ──────────
+
+  describe("a repository that cannot be bound writes nothing", () => {
+    it("github_not_authorized when the org holds no usable GitHub authorization", async () => {
+      github.candidates.mockResolvedValueOnce(null);
+      await expect(refusal(draft("Test", "test"))).resolves.toEqual({
+        code: "conflict",
+        reason: "github_not_authorized",
+      });
+      expect(mocks.inserts).toHaveLength(0);
+      expect(github.repository).not.toHaveBeenCalled();
+    });
+
+    it("installation_unreachable when the App is not installed on the repository's owner", async () => {
+      github.candidates.mockResolvedValueOnce([
+        { ...INSTALLATION, accountLogin: "someone-else" },
+      ]);
+      await expect(refusal(draft("Test", "test"))).resolves.toEqual({
+        code: "not_found",
+        reason: "installation_unreachable",
+      });
+      expect(mocks.inserts).toHaveLength(0);
+      expect(github.repository).not.toHaveBeenCalled();
+    });
+
+    it("picks the installation by the repository's owner, case-insensitively, and reads the repository through it", async () => {
+      github.candidates.mockResolvedValueOnce([
+        { ...INSTALLATION, installationId: "1", accountLogin: "other" },
+        { ...INSTALLATION, installationId: "2", accountLogin: "ACME" },
+      ]);
+      await workspaceCreateHandler(draft("Test", "test"), CTX);
+      expect(github.repository).toHaveBeenCalledWith("2", "acme", "widgets");
+    });
+
+    it("repository_not_installed when the installation cannot see the repository", async () => {
+      github.repository.mockResolvedValueOnce(null);
+      await expect(refusal(draft("Test", "test"))).resolves.toEqual({
+        code: "not_found",
+        reason: "repository_not_installed",
+      });
+      expect(mocks.inserts).toHaveLength(0);
+      // Refused before the global claim is even asked about.
+      expect(mocks.withSystemDbCalls).toBe(0);
+    });
+
+    it("main_repo_claimed when another workspace already steers by the repository, naming neither holder", async () => {
+      mocks.sharedRows.set(schema.repositoryBindingHeads, [
+        { id: "head-elsewhere" },
+      ]);
+      const err = await workspaceCreateHandler(draft("Test", "test"), CTX).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(err).toMatchObject({
+        code: "conflict",
+        reason: "main_repo_claimed",
+      });
+      expect((err as Error).message).toContain("Acme/Widgets");
+      expect((err as Error).message).not.toContain("head-elsewhere");
+      expect(mocks.inserts).toHaveLength(0);
+      expect(mocks.txScopeMoves).toEqual([]);
+    });
+
+    it("main_repo_plane_unsupported while any organisation is on a dedicated Postgres plane", async () => {
+      mocks.sharedRows.set(schema.dataPlanes, [{ id: "dpl_other" }]);
+      await expect(refusal(draft("Test", "test"))).resolves.toEqual({
+        code: "conflict",
+        reason: "main_repo_plane_unsupported",
+      });
+      expect(mocks.inserts).toHaveLength(0);
+    });
+
+    it("main_repo_claimed when the claim is lost mid-transaction to the unique index, with the workspace rolled back", async () => {
+      mocks.headInsertError = Object.assign(new Error("insert failed"), {
+        cause: Object.assign(new Error("duplicate key value"), {
+          code: "23505",
+          constraint_name: "repository_binding_heads_main_repository_uq",
+        }),
+      });
+      await expect(refusal(draft("Test", "test"))).resolves.toEqual({
+        code: "conflict",
+        reason: "main_repo_claimed",
+      });
+      // The mock does not roll back, so the proof of atomicity is that the
+      // workspace row and the head that lost were written on the ONE
+      // transaction that then threw — the real one discards them together
+      // (repository.pg.test.ts proves it against Postgres).
+      expect(new Set(mocks.inserts.map((w) => w.txIndex)).size).toBe(1);
+      expect(mocks.inserts.map((w) => w.table)).toContain(schema.workspaces);
+    });
+
+    it("lets an unrelated unique violation surface as slug_taken (the slug race), not as a claim", async () => {
+      mocks.headInsertError = Object.assign(new Error("insert failed"), {
+        cause: Object.assign(new Error("duplicate key value"), {
+          code: "23505",
+          constraint_name: "workspaces_org_id_slug_uq",
+        }),
+      });
+      await expect(refusal(draft("Test", "test"))).resolves.toEqual({
+        code: "conflict",
+        reason: "slug_taken",
+      });
+    });
   });
 
   // ── happy path ───────────────────────────────────────────────────────────
 
-  it("returns publicId, name, slug, orgSlug, and ISO createdAt", async () => {
+  it("returns publicId, name, slug, orgSlug, ISO createdAt and the main repository it bound", async () => {
     const result = await workspaceCreateHandler(
-      { name: "Default Workspace", slug: "default" },
+      draft("Default Workspace", "default"),
       CTX,
     );
 
-    expect(result.publicId).toBe("ws_pub_1");
-    expect(result.name).toBe("Default Workspace");
-    expect(result.slug).toBe("default");
-    expect(result.orgSlug).toBe("acme");
-    expect(result.createdAt).toBe("2026-05-01T00:00:00.000Z");
+    expect(result).toEqual({
+      publicId: "ws_pub_1",
+      name: "Default Workspace",
+      slug: "default",
+      orgSlug: "acme",
+      createdAt: "2026-05-01T00:00:00.000Z",
+      mainRepo: {
+        bindingId: "rpb_0123abcd",
+        connectionId: "con_new",
+        fullName: "Acme/Widgets",
+        defaultRef: "trunk",
+      },
+    });
+    expect(workspaceCreate.output.safeParse(result).success).toBe(true);
   });
 
-  it("runs workspace and membership inserts via withTenantDb", async () => {
-    await workspaceCreateHandler({ name: "Tx Ws", slug: "tx-ws" }, CTX);
-    // withTenantDb replaces db().transaction(); verify the ws insert was called.
+  it("writes exactly one head, role 'main', with its version-1 binding and a connected GitHub connection, on the workspace's own transaction", async () => {
+    await workspaceCreateHandler(draft("Tx Ws", "tx-ws"), CTX);
+
+    const heads = mocks.inserts.filter(
+      (w) => w.table === schema.repositoryBindingHeads,
+    );
+    expect(heads).toHaveLength(1);
+    expect(heads[0]?.values).toMatchObject({
+      orgId: CTX.orgId,
+      workspaceId: "internal_ws_id",
+      connectionId: "conn-uuid",
+      provider: "github",
+      providerRepositoryId: "9001",
+      currentBindingId: "binding-uuid",
+      role: "main",
+    });
+
+    const binding = mocks.inserts.find(
+      (w) => w.table === schema.repositoryBindings,
+    );
+    expect(binding?.values).toMatchObject({
+      workspaceId: "internal_ws_id",
+      connectionId: "conn-uuid",
+      providerRepositoryId: "9001",
+      providerOwner: "Acme",
+      providerName: "Widgets",
+      providerFullName: "Acme/Widgets",
+      configuredDefaultRef: "trunk",
+      version: 1,
+      supersedesBindingId: null,
+      createdById: "u_1",
+    });
+
+    const connection = mocks.inserts.find(
+      (w) => w.table === schema.sourceConnections,
+    );
+    expect(connection?.values).toMatchObject({
+      workspaceId: "internal_ws_id",
+      connectorId: "github",
+      deliveryConfig: { installationId: "555" },
+      status: "connected",
+      createdById: "u_1",
+    });
+
+    // The workspace row came first, and every row — workspace, membership,
+    // connection, binding, head — rode ONE withTenantDb call, the last one
+    // (after the role gate, the org read and the slug read).
+    expect(mocks.inserts[0]?.table).toBe(schema.workspaces);
+    expect(new Set(mocks.inserts.map((w) => w.txIndex))).toEqual(
+      new Set([mocks.txs.length - 1]),
+    );
     expect(mocks.txInsertWs).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-asks which plane the organisation is on, uncached, inside the writing transaction", async () => {
+    mocks.loadDataPlaneBinding.mockResolvedValueOnce({
+      orgId: "org_1",
+      kind: "postgres",
+      mode: "dedicated",
+      status: "active",
+    });
+    await expect(refusal(draft("Test", "test"))).resolves.toEqual({
+      code: "conflict",
+      reason: "main_repo_plane_unsupported",
+    });
+    // Refused after the bootstrap and before any repository row.
+    expect(
+      mocks.inserts.filter((w) => w.table === schema.repositoryBindingHeads),
+    ).toHaveLength(0);
   });
 
   it("seeds the built-in agent, the default registry and the default environment on the creating transaction", async () => {
@@ -352,7 +746,7 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
       import("./workspace-registry-seed"),
       import("./workspace-environment-seed"),
     ]);
-    await workspaceCreateHandler({ name: "Env Ws", slug: "env-ws" }, CTX);
+    await workspaceCreateHandler(draft("Env Ws", "env-ws"), CTX);
     const seeded = { orgId: CTX.orgId, workspaceId: "internal_ws_id" };
     expect(bootstrapWorkspaceAgents).toHaveBeenCalledWith(
       expect.objectContaining({ ...seeded, userId: CTX.userId }),
@@ -373,24 +767,37 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
     expect(new Set(txs).size).toBe(1);
   });
 
+  it("records a workspace.created security event for the creator", async () => {
+    await workspaceCreateHandler(draft("Audited", "audited"), CTX);
+    expect(mocks.emitSecurityEventAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "workspace.created",
+        actorUserId: "u_1",
+        orgId: CTX.orgId,
+        workspaceId: "internal_ws_id",
+        outcome: "success",
+      }),
+    );
+  });
+
   it("throws when the transaction insert returns no row", async () => {
     mocks.txInsertWsReturning.mockResolvedValueOnce([]);
 
     await expect(
-      workspaceCreateHandler({ name: "Empty", slug: "empty" }, CTX),
+      workspaceCreateHandler(draft("Empty", "empty"), CTX),
     ).rejects.toThrow("workspace insert returned no row");
   });
 
   // ── scope isolation ───────────────────────────────────────────────────────
 
   it("looks up the org by the orgId from context (not from input)", async () => {
-    await workspaceCreateHandler({ name: "Scoped", slug: "scoped" }, CTX);
+    await workspaceCreateHandler(draft("Scoped", "scoped"), CTX);
     // The org query should receive the orgId from CTX, not from user input
     expect(mocks.orgFindFirst).toHaveBeenCalledTimes(1);
   });
 
   it("slug uniqueness check uses both orgId from context and the input slug", async () => {
-    await workspaceCreateHandler({ name: "Scoped2", slug: "scoped2" }, CTX);
+    await workspaceCreateHandler(draft("Scoped2", "scoped2"), CTX);
     expect(mocks.wsFindFirst).toHaveBeenCalledTimes(1);
   });
 });
