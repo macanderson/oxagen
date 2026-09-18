@@ -200,6 +200,23 @@ describe("OpenAI", () => {
     });
   });
 
+  it("knows a stream by how it starts when the vendor does not declare one", () => {
+    // The ChatGPT Codex backend streams `/responses` with no event-stream type.
+    const meter = new UsageMeter("openai.responses", undefined);
+    expect(meter.isStreaming).toBe(false);
+    feed(
+      meter,
+      sse([
+        [
+          "response.completed",
+          { type: "response.completed", response: { model: "gpt-5", usage } },
+        ],
+      ]),
+    );
+    expect(meter.isStreaming).toBe(true);
+    expect(meter.end()).toMatchObject({ inputTokens: 200, outputTokens: 50 });
+  });
+
   it("reads response.incomplete, and the unstreamed Responses document", () => {
     const meter = new UsageMeter("openai.responses", SSE);
     feed(

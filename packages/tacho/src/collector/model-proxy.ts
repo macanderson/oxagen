@@ -594,6 +594,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     let firstByteAt: number | undefined;
     let status: number | undefined;
     let requestId: string | undefined;
+    let responseType: string | undefined;
     let responseBytes = 0;
     const responseHash = createHash("sha256");
     let meter: UsageMeter | undefined;
@@ -722,6 +723,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
               "oxagen.response_bytes": String(responseBytes),
               "oxagen.stream": meter?.isStreaming === true ? "1" : "0",
               "oxagen.upstream_host": target.host,
+              ...(responseType !== undefined
+                ? { "oxagen.response_content_type": responseType }
+                : {}),
               ...(injected ? { "oxagen.request_injected": "1" } : {}),
               ...(abortReason !== undefined
                 ? { "oxagen.interrupted": "1" }
@@ -747,6 +751,12 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       requestId =
         typeof idHeader === "string" ? idHeader.slice(0, 512) : undefined;
       const contentType = upstream.headers["content-type"];
+      const contentEncodingName = upstream.headers["content-encoding"];
+      responseType = `${typeof contentType === "string" ? contentType.slice(0, 96) : "none"}${
+        typeof contentEncodingName === "string"
+          ? ` (${contentEncodingName.slice(0, 32)})`
+          : ""
+      }`;
       meter = new UsageMeter(
         metered && status < 400 ? route.api : "other",
         typeof contentType === "string" ? contentType : undefined,

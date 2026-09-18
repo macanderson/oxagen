@@ -214,7 +214,8 @@ const USAGE_MARKER = Buffer.from('"usage"');
  */
 export class UsageMeter {
   private readonly api: ModelApi;
-  private readonly streaming: boolean;
+  private streaming: boolean;
+  private sniffed: boolean;
   private readonly usage: ObservedUsage = {};
   private line: Buffer[] = [];
   private lineBytes = 0;
@@ -226,6 +227,19 @@ export class UsageMeter {
   constructor(api: ModelApi, contentType: string | undefined) {
     this.api = api;
     this.streaming = (contentType ?? "").includes("text/event-stream");
+    this.sniffed = this.streaming;
+  }
+
+  /**
+   * A stream is known by its content type, or failing that by how it starts.
+   * The ChatGPT Codex backend streams `/responses` without declaring
+   * `text/event-stream`, and a meter that trusted the header alone recorded
+   * those calls with no usage.
+   */
+  private sniff(chunk: Buffer): void {
+    this.sniffed = true;
+    const head = chunk.subarray(0, 64).toString("latin1").trimStart();
+    if (/^(event|data|id|retry)?:/.test(head)) this.streaming = true;
   }
 
   get isStreaming(): boolean {
@@ -234,6 +248,7 @@ export class UsageMeter {
 
   write(chunk: Buffer): void {
     if (this.api === "other") return;
+    if (!this.sniffed && chunk.length > 0) this.sniff(chunk);
     if (!this.streaming) {
       if (this.documentOverflow) return;
       this.documentBytes += chunk.length;
