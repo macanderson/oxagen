@@ -1429,6 +1429,28 @@ export const contextRecordVersions = agentSchema.table(
   }),
 );
 
+/**
+ * A classification column of {@link contextRecordVersions}, for the
+ * deploy-before-migrate probe.
+ *
+ * Migration `20260918160000` adds `kind`, `force`, `constraint_effect` and
+ * `statement` to the version table. Production applies migrations by hand from
+ * the app node while `deploy-node` ships on merge without waiting, so between
+ * the two there is a window in which the code that reads and writes these four
+ * is live and the columns are not. Naming one then raises 42703 and aborts the
+ * transaction, which would take out every bundle fetch, control poll, event
+ * ingest and enrollment in the workspace -- none of which are about a version's
+ * classification at all.
+ *
+ * One ref answers for all four: they are added by a single `ALTER TABLE`, so
+ * either all four are there or none is.
+ */
+export const CONTEXT_VERSION_CLASSIFICATION_COLUMN = {
+  schema: "agent",
+  table: "context_record_versions",
+  column: "kind",
+} as const;
+
 // Append-only hash-chained ledger of context-record lifecycle actions,
 // mirroring Stella's promotions.jsonl: chain_digest = sha256(prev_digest +
 // canonical row), seq monotonic per record starting at 1. INSERT-only at the

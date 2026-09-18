@@ -5,6 +5,7 @@
  * characters, so it has to stay under that.
  */
 import { beforeEach, describe, expect, it } from "vitest";
+import { resetColumnProbesForTests } from "@oxagen/database";
 import { policyBundleSchema } from "@oxagen/oxagen/tacho/schemas";
 import {
   CONTEXT_SYSTEM_MAX_CHARS,
@@ -113,32 +114,75 @@ describe("compileSteering", () => {
  * key from what the fake holds, and the join over `context_records` answers
  * the rows. Both count how often they ran.
  */
-function fakeTx(db: { ledger: number; rows: SteeringRow[] }) {
+function fakeTx(db: {
+  ledger: number;
+  rows: SteeringRow[];
+  /** Whether migration `20260918160000` has been applied on this database. */
+  columns?: boolean;
+}) {
   const calls = { version: 0, records: 0 };
+  const probes = { count: 0 };
+  const ready = db.columns !== false;
+  const steeringCount = () =>
+    db.rows.filter((r) =>
+      ["must", "should"].includes(
+        (ready ? r.versionForce : null) ?? r.recordForce ?? "",
+      ),
+    ).length;
+  // Before the migration the read may not name the version columns, so the
+  // rows it gets back carry the record copy only -- the shape Postgres would
+  // hand it.
+  const rowsAsRead = (): SteeringRow[] =>
+    ready
+      ? db.rows
+      : db.rows.map(
+          ({
+            versionKind: _k,
+            versionForce: _f,
+            versionConstraintEffect: _c,
+            versionStatement: _s,
+            ...rest
+          }) => rest,
+        );
+  const versionRow = async () => {
+    calls.version += 1;
+    // Postgres answers count(*) as a bigint, which pg hands over as a
+    // string; the read must coerce it.
+    return [{ ledger: String(db.ledger), steering: String(steeringCount()) }];
+  };
+  const recordRows = async () => {
+    calls.records += 1;
+    return rowsAsRead();
+  };
   const tx: SteeringTx = {
+    // The column probe. `hasColumn` reads presence from the row count, so an
+    // empty array is "the migration has not run".
+    execute: () => {
+      probes.count += 1;
+      return ready ? [{ "?column?": 1 }] : [];
+    },
     select: () => ({
       from: (table) => ({
         where: async () => {
-          expect(tableName(table)).toBe("context_promotions");
-          calls.version += 1;
-          const steering = db.rows.filter((r) =>
-            ["must", "should"].includes(r.versionForce ?? r.recordForce ?? ""),
-          ).length;
-          // Postgres answers count(*) as a bigint, which pg hands over as a
-          // string; the read must coerce it.
-          return [{ ledger: String(db.ledger), steering: String(steering) }];
+          // Two statements land here. The count is `from context_promotions`;
+          // the record-only read, which has no join to make, is
+          // `from context_records`.
+          if (tableName(table) === "context_promotions") return versionRow();
+          expect(tableName(table)).toBe("context_records");
+          expect(ready).toBe(false);
+          return recordRows();
         },
         leftJoin: () => ({
           where: async () => {
             expect(tableName(table)).toBe("context_records");
-            calls.records += 1;
-            return db.rows;
+            expect(ready).toBe(true);
+            return recordRows();
           },
         }),
       }),
     }),
   };
-  return { tx, calls };
+  return { tx, calls, probes };
 }
 
 function tableName(table: unknown): string {
@@ -215,6 +259,10 @@ describe("classificationOf", () => {
 describe("readWorkspaceSteering", () => {
   beforeEach(() => {
     clearSteeringCacheForTests();
+    // The column probe answers once per process per plane, so a test that
+    // runs on a database without the columns would otherwise decide it for
+    // every test after it.
+    resetColumnProbesForTests();
   });
 
   it("compiles what the pinned versions say", async () => {
@@ -307,6 +355,88 @@ describe("readWorkspaceSteering", () => {
     clearSteeringCacheForTests();
     await readWorkspaceSteering(tx, "org", "ws");
     expect(calls).toEqual({ version: 2, records: 2 });
+  });
+
+  // Production applies migrations by hand while `deploy-node` ships on merge,
+  // so this code is live on a database without the version columns for as long
+  // as that window lasts. Naming one then raises 42703 and aborts the
+  // transaction -- which is every bundle fetch, control poll, event ingest and
+  // enrollment in the workspace, none of them about a classification.
+  describe("while migration 20260918160000 is pending", () => {
+    it("compiles from the record row and never names a version column", async () => {
+      const { tx, calls } = fakeTx({
+        columns: false,
+        ledger: 1,
+        rows: [
+          row({
+            versionStatement: "What the pinned version says.",
+            recordStatement: "What the record row says.",
+          }),
+        ],
+      });
+      // fakeTx asserts the read took the un-joined path; the text proves it
+      // used the only classification such a database can hold.
+      const text = await readWorkspaceSteering(tx, "org", "ws");
+      expect(text).toContain("What the record row says.");
+      expect(text).not.toContain("What the pinned version says.");
+      expect(calls).toEqual({ version: 1, records: 1 });
+    });
+
+    it("counts a row that steers by its record force alone", async () => {
+      const { tx } = fakeTx({
+        columns: false,
+        ledger: 1,
+        rows: [row({ versionForce: "info", recordForce: "must" })],
+      });
+      expect(await readWorkspaceSteering(tx, "org", "ws")).not.toBeNull();
+    });
+
+    it("probes once per call and caches the compiled text as usual", async () => {
+      const { tx, calls, probes } = fakeTx({
+        columns: false,
+        ledger: 1,
+        rows: [row({})],
+      });
+      await readWorkspaceSteering(tx, "org", "ws");
+      await readWorkspaceSteering(tx, "org", "ws");
+      // One probe: `hasColumn` holds a negative answer for its TTL, which is
+      // far longer than this test.
+      expect(probes.count).toBe(1);
+      expect(calls).toEqual({ version: 2, records: 1 });
+    });
+
+    it("drops the text compiled without the columns once they land", async () => {
+      const pending = fakeTx({
+        columns: false,
+        ledger: 1,
+        rows: [
+          row({
+            versionStatement: "What the pinned version says.",
+            recordStatement: "What the record row says.",
+          }),
+        ],
+      });
+      expect(await readWorkspaceSteering(pending.tx, "org", "ws")).toContain(
+        "What the record row says.",
+      );
+
+      // The migration lands. Neither the ledger nor the record count moves, so
+      // only the probe's answer in the cache key can invalidate the entry.
+      resetColumnProbesForTests();
+      const migrated = fakeTx({
+        ledger: 1,
+        rows: [
+          row({
+            versionStatement: "What the pinned version says.",
+            recordStatement: "What the record row says.",
+          }),
+        ],
+      });
+      expect(await readWorkspaceSteering(migrated.tx, "org", "ws")).toContain(
+        "What the pinned version says.",
+      );
+      expect(migrated.calls).toEqual({ version: 1, records: 1 });
+    });
   });
 });
 

@@ -1,6 +1,12 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { contextRecordPromote } from "@oxagen/oxagen/contracts/context.record.promote";
-import { schema, withTenantDb } from "@oxagen/database";
+import {
+  ambientPlaneKey,
+  CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+  hasColumn,
+  schema,
+  withTenantDb,
+} from "@oxagen/database";
 import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { canonicalJson, sha256Hex } from "./registry-digest";
@@ -65,14 +71,40 @@ export const contextRecordPromoteHandler: CapabilityHandler<
     >
   > = {};
   if (input.version_id) {
-    const [version] = await withTenantDb((tx) =>
+    // Migration `20260918160000` adds the four classification columns, and
+    // production applies migrations by hand while `deploy-node` ships on merge
+    // without waiting. Naming them before they exist raises 42703 and would
+    // fail the promote, so until then the promote only moves the pin and the
+    // record row keeps the classification it has -- the behaviour before
+    // #3312, and the only one available on a database whose versions cannot
+    // carry a classification.
+    const versionClassificationReady = await withTenantDb(async (tx) =>
+      hasColumn(
+        tx,
+        CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+        await ambientPlaneKey(),
+      ),
+    );
+    // A literal NULL in place of each column while the migration is pending
+    // keeps one row shape, so the classified-or-not branch below is the same
+    // code that already handles a legacy version.
+    const absent = sql<string | null>`null`;
+    const [version] = (await withTenantDb((tx) =>
       tx
         .select({
           id: schema.contextRecordVersions.id,
-          kind: schema.contextRecordVersions.kind,
-          force: schema.contextRecordVersions.force,
-          constraintEffect: schema.contextRecordVersions.constraintEffect,
-          statement: schema.contextRecordVersions.statement,
+          kind: versionClassificationReady
+            ? schema.contextRecordVersions.kind
+            : absent,
+          force: versionClassificationReady
+            ? schema.contextRecordVersions.force
+            : absent,
+          constraintEffect: versionClassificationReady
+            ? schema.contextRecordVersions.constraintEffect
+            : absent,
+          statement: versionClassificationReady
+            ? schema.contextRecordVersions.statement
+            : absent,
         })
         .from(schema.contextRecordVersions)
         .where(
@@ -82,7 +114,13 @@ export const contextRecordPromoteHandler: CapabilityHandler<
           ),
         )
         .limit(1),
-    );
+    )) as Array<{
+      id: string;
+      kind: string | null;
+      force: string | null;
+      constraintEffect: string | null;
+      statement: string | null;
+    }>;
     if (!version) {
       throw new Error(
         `[context.record.promote] Version "${input.version_id}" does not belong to record "${input.record_id}".`,

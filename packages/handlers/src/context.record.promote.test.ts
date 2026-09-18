@@ -8,10 +8,15 @@ import { canonicalJson, sha256Hex } from "./registry-digest";
 //   2. (version_id set) version lookup → select(...).where(...).limit(1)
 //   3. chain head       → select(...).where(...).orderBy(...).limit(1)
 //   4. transaction      → insert promotion .values(); update record .set()
+//
+// A version lookup is preceded by the deploy-before-migrate probe, which runs
+// `execute` rather than `select` and so consumes none of the queued results.
 const mocks = vi.hoisted(() => ({
   selectResults: [] as Array<() => Promise<unknown>>,
   insertedValues: [] as Array<Record<string, unknown>>,
   updateSets: [] as Array<Record<string, unknown>>,
+  /** Whether migration `20260918160000` has run on this database. */
+  classificationColumns: true,
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -22,6 +27,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     return next ? next() : Promise.resolve([]);
   };
   const makeTx = () => ({
+    // The column probe. `hasColumn` reads presence from the row count, so an
+    // empty array is "the migration has not run".
+    execute: () =>
+      Promise.resolve(mocks.classificationColumns ? [{ "?column?": 1 }] : []),
     select: () => ({
       from: () => ({
         where: () => ({
@@ -56,6 +65,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
+import { resetColumnProbesForTests } from "@oxagen/database";
 import { contextRecordPromoteHandler } from "./context.record.promote";
 
 const CTX: CapabilityContext = {
@@ -102,6 +112,10 @@ beforeEach(() => {
   mocks.selectResults.length = 0;
   mocks.insertedValues.length = 0;
   mocks.updateSets.length = 0;
+  mocks.classificationColumns = true;
+  // The probe answers once per process per plane, so a test that runs without
+  // the columns would otherwise decide it for every test after it.
+  resetColumnProbesForTests();
 });
 
 describe("context.record.promote handler", () => {
@@ -190,6 +204,49 @@ describe("context.record.promote handler", () => {
       versionId: "version-1",
       seq: 3,
     });
+  });
+
+  // Production applies migrations by hand while `deploy-node` ships on merge,
+  // so the handler is live on a database without the four columns for as long
+  // as that window lasts. Naming one then raises 42703 and the promote fails
+  // outright -- the operator cannot move the pin at all.
+  it("still moves the pin while migration 20260918160000 is pending, leaving the row's classification alone", async () => {
+    mocks.classificationColumns = false;
+    // The read projects a literal NULL in place of each column, so the row
+    // comes back classified as a legacy version would be.
+    queueSelects(
+      [RECORD],
+      [
+        {
+          id: "version-1",
+          kind: null,
+          force: null,
+          constraintEffect: null,
+          statement: null,
+        },
+      ],
+      [{ seq: 2, chainDigest: "d".repeat(64) }],
+    );
+
+    const out = await contextRecordPromoteHandler(
+      {
+        record_id: "ctr_1",
+        action: "promote",
+        version_id: "crv_1",
+        policy_version: "regulated-1",
+      },
+      CTX,
+    );
+
+    expect(out).toMatchObject({ action: "promote", seq: 3, status: "active" });
+    expect(mocks.updateSets[0]).toMatchObject({
+      status: "active",
+      activeVersionId: "version-1",
+    });
+    // The row keeps what it has: on a database whose versions cannot carry a
+    // classification, the row's copy is the only one there is.
+    expect(mocks.updateSets[0]).not.toHaveProperty("kind");
+    expect(mocks.updateSets[0]).not.toHaveProperty("statement");
   });
 
   it("leaves the row's classification alone when a supersede names a classified version", async () => {

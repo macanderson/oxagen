@@ -31,11 +31,27 @@
  * number of pinned, non-deleted records that steer, read in the same query.
  * A delete lowers it, and nothing raises it without a ledger row.
  *
+ * The four version columns arrive in migration `20260918160000`, and
+ * production applies migrations by hand while `deploy-node` ships on merge
+ * without waiting. So every read here asks `information_schema` first and
+ * names the version columns only once they exist; until then it compiles from
+ * the record row alone, which is what this module did before #3312 and is the
+ * right answer for a database on which no version can yet carry a
+ * classification. The probe's answer is part of the cache key, so the text
+ * compiled during the window is dropped the moment the columns land rather
+ * than outliving it.
+ *
  * No version counter travels in the bundle. The bundle etag is a digest of
  * the bundle's content, so a merge that adds, retires or supersedes a record
  * changes the text, the etag, and the next poll fetches the new bundle.
  */
-import { schema } from "@oxagen/database";
+import {
+  ambientPlaneKey,
+  CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+  hasColumn,
+  type ProbeTx,
+  schema,
+} from "@oxagen/database";
 import { and, count, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 /**
@@ -72,10 +88,14 @@ export interface SteeringRecord {
  */
 export interface SteeringRow {
   slug: string;
-  versionKind: string | null;
-  versionForce: string | null;
-  versionConstraintEffect: string | null;
-  versionStatement: string | null;
+  // Optional, not just nullable: before migration `20260918160000` the read
+  // cannot name these columns, so the row arrives without the keys at all.
+  // `classificationOf` tests `!= null`, which is false for `undefined` too, so
+  // such a row takes the record-row fallback.
+  versionKind?: string | null;
+  versionForce?: string | null;
+  versionConstraintEffect?: string | null;
+  versionStatement?: string | null;
   recordKind: string | null;
   recordForce: string | null;
   recordConstraintEffect: string | null;
@@ -94,7 +114,7 @@ export interface SteeringVersionRow {
  * one over `context_records` joined to the pinned version that answers the
  * rows.
  */
-export interface SteeringTx {
+export interface SteeringTx extends ProbeTx {
   select: (fields: Record<string, unknown>) => {
     from: (table: unknown) => {
       where: (condition: unknown) => Promise<unknown>;
@@ -188,9 +208,9 @@ export function classificationOf(row: SteeringRow): SteeringRecord {
     ? {
         slug: row.slug,
         kind: row.versionKind,
-        force: row.versionForce,
-        constraintEffect: row.versionConstraintEffect,
-        statement: row.versionStatement,
+        force: row.versionForce ?? null,
+        constraintEffect: row.versionConstraintEffect ?? null,
+        statement: row.versionStatement ?? null,
       }
     : {
         slug: row.slug,
@@ -242,8 +262,32 @@ const pinnedVersion = eq(
   schema.contextRecords.activeVersionId,
 );
 
-/** The force a row steers with: its pinned version's, or the row's own. */
-const effectiveForce = sql`coalesce(${schema.contextRecordVersions.force}, ${schema.contextRecords.force})`;
+/**
+ * The force a row steers with: its pinned version's, or the row's own.
+ *
+ * Before migration `20260918160000` there is no version force to coalesce
+ * with, and naming the column would raise 42703.
+ */
+const effectiveForceWhen = (ready: boolean) =>
+  ready
+    ? sql`coalesce(${schema.contextRecordVersions.force}, ${schema.contextRecords.force})`
+    : sql`${schema.contextRecords.force}`;
+
+/**
+ * Whether this database has the version classification columns yet.
+ *
+ * Probed on `tx` itself and filed under the plane that scope resolves to: a
+ * dedicated plane is migrated separately from the shared one, and an answer
+ * borrowed across the two would name a column on a database that still lacks
+ * it.
+ */
+async function versionClassificationReady(tx: SteeringTx): Promise<boolean> {
+  return hasColumn(
+    tx,
+    CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+    await ambientPlaneKey(),
+  );
+}
 
 /**
  * The workspace's steering version: the promotions ledger length, and the
@@ -258,11 +302,16 @@ async function readSteeringVersion(
   tx: SteeringTx,
   orgId: string,
   workspaceId: string,
+  ready: boolean,
 ): Promise<string> {
+  const force = effectiveForceWhen(ready);
+  const join = ready
+    ? sql`left join ${schema.contextRecordVersions} on ${pinnedVersion}`
+    : sql``;
   const rows = (await tx
     .select({
       ledger: count(),
-      steering: sql`(select count(*) from ${schema.contextRecords} left join ${schema.contextRecordVersions} on ${pinnedVersion} where ${activePinnedIn(orgId, workspaceId)} and ${effectiveForce} in ('must', 'should'))`,
+      steering: sql`(select count(*) from ${schema.contextRecords} ${join} where ${activePinnedIn(orgId, workspaceId)} and ${force} in ('must', 'should'))`,
     })
     .from(schema.contextPromotions)
     .where(
@@ -280,27 +329,40 @@ async function readSteeringRows(
   tx: SteeringTx,
   orgId: string,
   workspaceId: string,
+  ready: boolean,
 ): Promise<SteeringRow[]> {
+  const recordFields = {
+    slug: schema.contextRecords.slug,
+    recordKind: schema.contextRecords.kind,
+    recordForce: schema.contextRecords.force,
+    recordConstraintEffect: schema.contextRecords.constraintEffect,
+    recordStatement: schema.contextRecords.statement,
+  };
+  const where = and(
+    activePinnedIn(orgId, workspaceId),
+    inArray(effectiveForceWhen(ready), [...STEERING_FORCES]),
+  );
+  // Before the migration the version columns cannot be named at all, so the
+  // read is the record-row one and `classificationOf` takes its fallback for
+  // every row -- the same answer, because no version can carry a
+  // classification on a database that has nowhere to put one.
+  if (!ready) {
+    return (await tx
+      .select(recordFields)
+      .from(schema.contextRecords)
+      .where(where)) as SteeringRow[];
+  }
   return (await tx
     .select({
-      slug: schema.contextRecords.slug,
+      ...recordFields,
       versionKind: schema.contextRecordVersions.kind,
       versionForce: schema.contextRecordVersions.force,
       versionConstraintEffect: schema.contextRecordVersions.constraintEffect,
       versionStatement: schema.contextRecordVersions.statement,
-      recordKind: schema.contextRecords.kind,
-      recordForce: schema.contextRecords.force,
-      recordConstraintEffect: schema.contextRecords.constraintEffect,
-      recordStatement: schema.contextRecords.statement,
     })
     .from(schema.contextRecords)
     .leftJoin(schema.contextRecordVersions, pinnedVersion)
-    .where(
-      and(
-        activePinnedIn(orgId, workspaceId),
-        inArray(effectiveForce, [...STEERING_FORCES]),
-      ),
-    )) as SteeringRow[];
+    .where(where)) as SteeringRow[];
 }
 
 /**
@@ -314,10 +376,14 @@ export async function readWorkspaceSteering(
   workspaceId: string,
 ): Promise<string | null> {
   const workspaceKey = `${orgId}:${workspaceId}`;
-  const key = await readSteeringVersion(tx, orgId, workspaceId);
+  const ready = await versionClassificationReady(tx);
+  // The probe's answer is part of the key: the migration landing does not move
+  // the ledger or the record count, so without it the text compiled from the
+  // record row alone would be served on past the window.
+  const key = `${ready ? "v" : "r"}:${await readSteeringVersion(tx, orgId, workspaceId, ready)}`;
   const hit = cache.get(workspaceKey);
   if (hit && hit.key === key) return hit.text;
-  const rows = await readSteeringRows(tx, orgId, workspaceId);
+  const rows = await readSteeringRows(tx, orgId, workspaceId, ready);
   const text = compileSteering(rows.map(classificationOf));
   remember(workspaceKey, { key, text });
   return text;

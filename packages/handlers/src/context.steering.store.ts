@@ -4,7 +4,14 @@
 // handler takes a `SteeringStore`; this file is the one that runs SQL, inside
 // the tenant scope the kernel entered. The tests run the handlers against the
 // in-memory store in context.steering.test-support.ts.
-import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
+import {
+  ambientPlaneKey,
+  CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+  hasColumn,
+  isUniqueViolation,
+  schema,
+  withTenantDb,
+} from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import type {
   CheckResult,
@@ -629,6 +636,11 @@ export const postgresSteeringStore: SteeringStore = {
   async publishMerge(input) {
     const { scope, proposal } = input;
     return withTenantDb(async (tx) => {
+      const versionClassificationReady = await hasColumn(
+        tx,
+        CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+        await ambientPlaneKey(),
+      );
       const [existing] = await tx
         .select({
           id: schema.contextRecords.id,
@@ -725,10 +737,20 @@ export const postgresSteeringStore: SteeringStore = {
           checksum: input.checksum,
           // The version carries what its body says. A later promote of this
           // version copies these four back onto the record row (#3312).
-          kind: proposal.kind,
-          force: proposal.force,
-          constraintEffect: proposal.constraintEffect,
-          statement: proposal.statement,
+          //
+          // Omitted entirely while migration `20260918160000` is pending:
+          // naming a column the database does not have raises 42703 and would
+          // fail the merge outright. The record row still gets them, so the
+          // merge is not lossy, and the version reads through
+          // `classificationOf`'s record-row fallback until the migration lands.
+          ...(versionClassificationReady
+            ? {
+                kind: proposal.kind,
+                force: proposal.force,
+                constraintEffect: proposal.constraintEffect,
+                statement: proposal.statement,
+              }
+            : {}),
           provenance: [
             {
               type: "commit",

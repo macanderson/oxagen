@@ -56,6 +56,7 @@ export {
   type ColumnRef,
   type ProbeTx,
 } from "./column-probe";
+export { CONTEXT_VERSION_CLASSIFICATION_COLUMN } from "./schema/agent";
 export {
   GATEWAY_CHAIN_COLUMN,
   HOST_GATEWAY_COLUMN,
