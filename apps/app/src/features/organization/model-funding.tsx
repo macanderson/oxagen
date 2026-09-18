@@ -29,7 +29,7 @@ export async function ModelFunding({
   return <ModelFundingSection orgSlug={ctx.orgSlug} read={read} />;
 }
 
-export function ModelFundingSection({
+function ModelFundingSection({
   orgSlug,
   read,
 }: {

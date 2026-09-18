@@ -19,8 +19,13 @@ vi.mock("./model-funding-actions", () => ({
   saveModelKey: vi.fn(),
   removeModelKey: vi.fn(),
 }));
+vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
+vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
-const { ModelFundingSection } = await import("./model-funding");
+const { OrgCtx } = await import("@/server/viewer");
+const { unsafeMint } = await import("@/server/viewer.testing");
+const { orgSource } = await import("./organization.builders");
+const { ModelFunding } = await import("./model-funding");
 const { needsBaseUrl, needsModelMap, MODEL_PROVIDERS } = await import(
   "./model-funding-rules"
 );
@@ -36,33 +41,45 @@ const STORED: ModelCredential = {
   rotatedAt: "2026-09-18T11:00:00.000Z",
 };
 
-function renderSection(read: Read<ModelCredential>) {
-  return render(
-    <IntlProvider>
-      <ModelFundingSection orgSlug="acme" read={read} />
-    </IntlProvider>,
+// The section is rendered the way the page renders it: the async server
+// component asks the data source for the one read it needs and hands the
+// answer to the section. Rendering it this way also proves the read is the
+// org-scoped `modelCredential` and nothing else.
+async function renderSection(read: Read<ModelCredential>) {
+  const ctx = unsafeMint(OrgCtx, {
+    userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    orgId: "7a000000-0000-4000-8000-0000000000a1",
+    orgSlug: "acme",
+    orgName: "Acme Robotics",
+    orgRole: "owner",
+  });
+  const { source, calls } = orgSource({ modelCredential: read });
+  const view = render(
+    <IntlProvider>{await ModelFunding({ ctx, source })}</IntlProvider>,
   );
+  expect(calls.modelCredential).toEqual([[ctx]]);
+  return view;
 }
 
 afterEach(cleanup);
 
-describe("ModelFundingSection", () => {
-  it("shows the stored key and the form to replace it", () => {
-    renderSection({ ok: true, value: STORED });
+describe("ModelFunding", () => {
+  it("shows the stored key and the form to replace it", async () => {
+    await renderSection({ ok: true, value: STORED });
     expect(screen.getByTestId("funding-current").textContent).toContain(
       "OpenRouter",
     );
     expect(screen.getByTestId("funding-form")).toBeTruthy();
   });
 
-  it("offers the Model funding tab as the current one", () => {
-    renderSection({ ok: true, value: STORED });
+  it("offers the Model funding tab as the current one", async () => {
+    await renderSection({ ok: true, value: STORED });
     const tab = screen.getByRole("link", { name: "Model funding" });
     expect(tab.getAttribute("aria-current")).toBe("page");
   });
 
-  it("says only an owner or admin can see this, rather than a form every write would refuse", () => {
-    renderSection({
+  it("says only an owner or admin can see this, rather than a form every write would refuse", async () => {
+    await renderSection({
       ok: false,
       reason: "denied",
       permission: "get_model_credential",
@@ -71,15 +88,15 @@ describe("ModelFundingSection", () => {
     expect(screen.queryByTestId("funding-form")).toBeNull();
   });
 
-  it("replaces only the section body when the read fails", () => {
-    renderSection(readError("kernel_failure", 503));
+  it("replaces only the section body when the read fails", async () => {
+    await renderSection(readError("kernel_failure", 503));
     expect(screen.queryByTestId("funding-form")).toBeNull();
     // The tabs survive a failed read.
     expect(screen.getByRole("link", { name: "Model funding" })).toBeTruthy();
   });
 
   it("has no axe violations", async () => {
-    const { container } = renderSection({ ok: true, value: STORED });
+    const { container } = await renderSection({ ok: true, value: STORED });
     await expectNoAxe(container);
   });
 });
