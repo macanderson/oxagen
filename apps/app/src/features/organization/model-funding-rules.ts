@@ -26,3 +26,11 @@ export const MODEL_PROVIDERS: readonly ModelProvider[] = [
   "anthropic",
   "openai_compatible",
 ];
+
+/** The same five, widened so a `<select>` value can be checked against them. */
+const MODEL_PROVIDER_NAMES: readonly string[] = MODEL_PROVIDERS;
+
+/** Narrows a `<select>` value to a vendor the contract names. */
+export function isModelProvider(value: string): value is ModelProvider {
+  return MODEL_PROVIDER_NAMES.includes(value);
+}

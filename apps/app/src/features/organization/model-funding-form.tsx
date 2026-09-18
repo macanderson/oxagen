@@ -30,6 +30,7 @@ import {
   testModelKey,
 } from "./model-funding-actions";
 import {
+  isModelProvider,
   MODEL_PROVIDERS,
   needsBaseUrl,
   needsModelMap,
@@ -45,6 +46,11 @@ const UNANSWERED: Failure = {
 };
 
 type Busy = "idle" | "testing" | "saving" | "removing";
+
+type ModelTier = keyof ModelCredential["modelMap"];
+
+/** Display order of the per-tier models; balanced first because it is the one that is required. */
+const MODEL_TIERS: readonly ModelTier[] = ["balanced", "fast", "precise"];
 
 /** The sentence a refused write shows, keyed on the kernel's classification. */
 function useFailureText(): (failure: Failure) => string {
@@ -88,9 +94,10 @@ function Current({ credential }: { credential: ModelCredential }) {
       </p>
     );
   }
-  const models = Object.entries(credential.modelMap).filter(
-    ([, id]) => typeof id === "string" && id !== "",
-  );
+  const models = MODEL_TIERS.flatMap((tier) => {
+    const id = credential.modelMap[tier];
+    return id ? [{ tier, id }] : [];
+  });
   return (
     <dl
       className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-sm"
@@ -108,12 +115,8 @@ function Current({ credential }: { credential: ModelCredential }) {
           <dd className={`${mono} break-all`}>{credential.baseUrl}</dd>
         </>
       ) : null}
-      {models.map(([tier, id]) => (
-        <FragmentRow
-          key={tier}
-          label={t(`tiers.${tier as "balanced" | "fast" | "precise"}`)}
-          value={id as string}
-        />
+      {models.map(({ tier, id }) => (
+        <FragmentRow key={tier} label={t(`tiers.${tier}`)} value={id} />
       ))}
       <dt className="text-muted-foreground">{t("current.status")}</dt>
       <dd>
@@ -235,12 +238,13 @@ export function ModelFundingForm({
     }
   }
 
-  const onTest = () =>
-    run("testing", () => testModelKey(org, input()), setVerdict);
+  const onTest = () => {
+    void run("testing", () => testModelKey(org, input()), setVerdict);
+  };
 
   const onSave = (event: SyntheticEvent) => {
     event.preventDefault();
-    return run(
+    void run(
       "saving",
       () => saveModelKey(org, input()),
       () => {
@@ -253,8 +257,8 @@ export function ModelFundingForm({
     );
   };
 
-  const onRemove = () =>
-    run(
+  const onRemove = () => {
+    void run(
       "removing",
       () => removeModelKey(org),
       () => {
@@ -263,6 +267,7 @@ export function ModelFundingForm({
         navigate.refresh();
       },
     );
+  };
 
   const wholeFormFailure =
     failure && !(failure.reason === "invalid" && failure.field)
@@ -295,7 +300,9 @@ export function ModelFundingForm({
               <button
                 type="button"
                 className={buttonSecondary}
-                onClick={() => setConfirmingRemove(false)}
+                onClick={() => {
+                  setConfirmingRemove(false);
+                }}
               >
                 {t("remove.cancel")}
               </button>
@@ -305,7 +312,9 @@ export function ModelFundingForm({
               <button
                 type="button"
                 className={buttonSecondary}
-                onClick={() => setConfirmingRemove(true)}
+                onClick={() => {
+                  setConfirmingRemove(true);
+                }}
                 data-testid="funding-remove"
               >
                 {t("remove.label")}
@@ -338,7 +347,8 @@ export function ModelFundingForm({
             className={inputBase}
             value={provider}
             onChange={(e) => {
-              setProvider(e.target.value as ModelProvider);
+              if (!isModelProvider(e.target.value)) return;
+              setProvider(e.target.value);
               setVerdict(null);
               setFailure(null);
             }}
@@ -361,7 +371,9 @@ export function ModelFundingForm({
           autoComplete="off"
           spellCheck={false}
           value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
+          onChange={(e) => {
+            setApiKey(e.target.value);
+          }}
           error={fieldError("apiKey")}
           showLabel={t("form.show")}
           hideLabel={t("form.hide")}
@@ -375,9 +387,11 @@ export function ModelFundingForm({
             inputMode="url"
             label={t("form.baseUrl")}
             hint={t("form.baseUrlHint")}
-            placeholder="https://api.together.xyz/v1"
+            placeholder={t("form.baseUrlPlaceholder")}
             value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value)}
+            onChange={(e) => {
+              setBaseUrl(e.target.value);
+            }}
             error={fieldError("baseUrl")}
           />
         ) : null}
@@ -394,7 +408,9 @@ export function ModelFundingForm({
               label={t("tiers.balanced")}
               hint={t("form.balancedHint")}
               value={balanced}
-              onChange={(e) => setBalanced(e.target.value)}
+              onChange={(e) => {
+                setBalanced(e.target.value);
+              }}
               error={fieldError("balanced")}
             />
             <Field
@@ -402,14 +418,18 @@ export function ModelFundingForm({
               name="fast"
               label={t("tiers.fast")}
               value={fast}
-              onChange={(e) => setFast(e.target.value)}
+              onChange={(e) => {
+                setFast(e.target.value);
+              }}
             />
             <Field
               id="funding-precise"
               name="precise"
               label={t("tiers.precise")}
               value={precise}
-              onChange={(e) => setPrecise(e.target.value)}
+              onChange={(e) => {
+                setPrecise(e.target.value);
+              }}
             />
             <p className="text-xs text-muted-foreground">
               {t("form.unmappedNote")}

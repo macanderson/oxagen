@@ -123,7 +123,9 @@ describe("ModelFundingForm: testing a key", () => {
     );
     await userEvent.type(screen.getByLabelText("Balanced model"), "llama-70b");
     await userEvent.click(screen.getByTestId("funding-test"));
-    await waitFor(() => expect(testModelKey).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(testModelKey).toHaveBeenCalledTimes(1);
+    });
     expect(testModelKey).toHaveBeenCalledWith(
       "acme",
       expect.objectContaining({
@@ -193,10 +195,12 @@ describe("ModelFundingForm: saving", () => {
   it("saves, clears the key from the field, and re-reads the page", async () => {
     saveModelKey.mockResolvedValue({ ok: true, value: STORED });
     renderForm();
-    const field = screen.getByLabelText("API key") as HTMLInputElement;
+    const field = screen.getByLabelText<HTMLInputElement>("API key");
     await userEvent.type(field, KEY);
     await userEvent.click(screen.getByRole("button", { name: "Save key" }));
-    await waitFor(() => expect(saveModelKey).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(saveModelKey).toHaveBeenCalledTimes(1);
+    });
     expect(await screen.findByTestId("funding-saved")).toBeTruthy();
     expect(field.value).toBe("");
     expect(router.refresh).toHaveBeenCalled();
@@ -236,9 +240,7 @@ describe("ModelFundingForm: the stored key", () => {
       "meta-llama/Llama-3.3-70B-Instruct-Turbo",
     );
     // The field starts empty: a stored key is never sent back to the page.
-    expect((screen.getByLabelText("API key") as HTMLInputElement).value).toBe(
-      "",
-    );
+    expect(screen.getByLabelText<HTMLInputElement>("API key").value).toBe("");
     expect(container.textContent).not.toContain(KEY);
   });
 
@@ -255,7 +257,9 @@ describe("ModelFundingForm: the stored key", () => {
     expect(screen.getByTestId("funding-remove-confirm")).toBeTruthy();
     expect(removeModelKey).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Remove" }));
-    await waitFor(() => expect(removeModelKey).toHaveBeenCalledWith("acme"));
+    await waitFor(() => {
+      expect(removeModelKey).toHaveBeenCalledWith("acme");
+    });
     expect(router.refresh).toHaveBeenCalled();
   });
 

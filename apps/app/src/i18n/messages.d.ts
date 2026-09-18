@@ -1490,6 +1490,7 @@ type Messages = {
         hide: string;
         baseUrl: string;
         baseUrlHint: string;
+        baseUrlPlaceholder: string;
         models: string;
         balancedHint: string;
         unmappedNote: string;

@@ -76,9 +76,11 @@ describe("saveModelKey", () => {
       provider: "openrouter",
     });
     expect(out.ok).toBe(true);
-    const [name, input] = invoke.mock.calls[0]!;
-    expect(name).toBe("set_model_credential");
-    expect(input).toEqual({ provider: "openrouter", apiKey: KEY });
+    expect(invoke).toHaveBeenCalledWith(
+      "set_model_credential",
+      { provider: "openrouter", apiKey: KEY },
+      expect.anything(),
+    );
   });
 
   it("sends a direct vendor's models, dropping the ones left blank", async () => {
@@ -88,11 +90,11 @@ describe("saveModelKey", () => {
       provider: "openai",
       balanced: " gpt-5.2 ",
     });
-    expect(invoke.mock.calls[0]![1]).toEqual({
-      provider: "openai",
-      apiKey: KEY,
-      modelMap: { balanced: "gpt-5.2" },
-    });
+    expect(invoke).toHaveBeenCalledWith(
+      "set_model_credential",
+      { provider: "openai", apiKey: KEY, modelMap: { balanced: "gpt-5.2" } },
+      expect.anything(),
+    );
   });
 
   it("sends the endpoint for an OpenAI-compatible server", async () => {
@@ -103,10 +105,14 @@ describe("saveModelKey", () => {
       baseUrl: "https://api.together.xyz/v1",
       balanced: "llama-70b",
     });
-    expect(invoke.mock.calls[0]![1]).toMatchObject({
-      baseUrl: "https://api.together.xyz/v1",
-      modelMap: { balanced: "llama-70b" },
-    });
+    expect(invoke).toHaveBeenCalledWith(
+      "set_model_credential",
+      expect.objectContaining({
+        baseUrl: "https://api.together.xyz/v1",
+        modelMap: { balanced: "llama-70b" },
+      }),
+      expect.anything(),
+    );
   });
 
   it("refuses a direct vendor with no balanced model before any capability runs", async () => {
@@ -181,13 +187,16 @@ describe("testModelKey", () => {
       baseUrl: "https://api.together.xyz/v1",
       balanced: "llama-70b",
     });
-    expect(invoke.mock.calls[0]![0]).toBe("verify_model_credential");
-    expect(invoke.mock.calls[0]![1]).toEqual({
-      provider: "openai_compatible",
-      apiKey: KEY,
-      baseUrl: "https://api.together.xyz/v1",
-      toolProbeModel: "llama-70b",
-    });
+    expect(invoke).toHaveBeenCalledWith(
+      "verify_model_credential",
+      {
+        provider: "openai_compatible",
+        apiKey: KEY,
+        baseUrl: "https://api.together.xyz/v1",
+        toolProbeModel: "llama-70b",
+      },
+      expect.anything(),
+    );
     expect(out).toEqual({
       ok: true,
       value: { ok: true, toolCalling: true, latencyMs: 80, error: null },
@@ -204,10 +213,11 @@ describe("testModelKey", () => {
       toolCalling: true,
     });
     await testModelKey("acme", { ...blank, provider: "openrouter" });
-    expect(invoke.mock.calls[0]![1]).toEqual({
-      provider: "openrouter",
-      apiKey: KEY,
-    });
+    expect(invoke).toHaveBeenCalledWith(
+      "verify_model_credential",
+      { provider: "openrouter", apiKey: KEY },
+      expect.anything(),
+    );
   });
 });
 
@@ -215,7 +225,11 @@ describe("removeModelKey", () => {
   it("removes the organisation's key", async () => {
     invoke.mockResolvedValue({ ...view, configured: false, provider: null });
     const out = await removeModelKey("acme");
-    expect(invoke.mock.calls[0]![0]).toBe("delete_model_credential");
+    expect(invoke).toHaveBeenCalledWith(
+      "delete_model_credential",
+      expect.anything(),
+      expect.anything(),
+    );
     expect(out.ok).toBe(true);
   });
 });

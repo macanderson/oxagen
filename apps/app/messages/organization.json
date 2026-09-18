@@ -343,6 +343,7 @@
         "hide": "Hide",
         "baseUrl": "Endpoint URL",
         "baseUrlHint": "Must start with https and be reachable on the public internet.",
+        "baseUrlPlaceholder": "https://api.together.xyz/v1",
         "models": "Models",
         "balancedHint": "Required. The assistant runs on this model.",
         "unmappedNote": "Any model you leave blank uses the balanced model.",

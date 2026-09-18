@@ -6,7 +6,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelCredential } from "@/data/contracts/org";
-import type { Read } from "@/data/read";
+import { type Read, readError } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
@@ -66,17 +66,13 @@ describe("ModelFundingSection", () => {
       ok: false,
       reason: "denied",
       permission: "get_model_credential",
-    } as Read<ModelCredential>);
+    });
     expect(screen.getByTestId("funding-denied")).toBeTruthy();
     expect(screen.queryByTestId("funding-form")).toBeNull();
   });
 
   it("replaces only the section body when the read fails", () => {
-    renderSection({
-      ok: false,
-      reason: "error",
-      code: "kernel_failure",
-    } as Read<ModelCredential>);
+    renderSection(readError("kernel_failure", 503));
     expect(screen.queryByTestId("funding-form")).toBeNull();
     // The tabs survive a failed read.
     expect(screen.getByRole("link", { name: "Model funding" })).toBeTruthy();
