@@ -458,6 +458,7 @@ describe("the Run page", () => {
       tab: "frames",
       zoom: "turns",
       frames: "ZjoyMA",
+      body: null,
     });
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
@@ -468,6 +469,7 @@ describe("the Run page", () => {
       tab: null,
       zoom: null,
       frames: null,
+      body: null,
     });
   });
 });

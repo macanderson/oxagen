@@ -96,6 +96,7 @@ export function fleetSource(reads: FleetReads) {
         return Promise.resolve(reads.runs);
       },
       get: refuse,
+      frameBody: refuse,
       cost: refuse,
       transcript: refuse,
     },
