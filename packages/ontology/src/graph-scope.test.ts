@@ -899,31 +899,39 @@ describe("a subquery is classified before a pattern property map", () => {
     });
   }
 
-  // THE MEASURED COST OF THIS FIX, stated rather than discovered later.
+  // ROUND 12 RECORDED A COST HERE. ROUND 14 REMOVED IT, AND THE REMOVAL IS THE
+  // POINT — the cost and a cross-tenant read were the same mechanism.
   //
-  // Clause keywords are recognised only at paren/bracket depth 0, so inside an
-  // inline node predicate the subquery's own `WHERE` never becomes the clause.
-  // Before the swap that did not matter, because the brace was (wrongly) a
-  // pattern map and pattern maps are kept in a row-selecting clause. After it,
-  // the brace is a subquery, nothing keeps it, and an anchor written ONLY in
-  // that inner WHERE is refused.
+  // Round 12 wrote: clause keywords are recognised only at paren/bracket depth
+  // 0, so inside an inline node predicate a subquery's own `WHERE` never becomes
+  // the clause, and an anchor written only there is refused. True, fail-closed,
+  // and it declined to fix it because recognising clauses inside a paren-nested
+  // brace "would OPEN kept regions".
   //
-  // That is the fail-closed direction and it costs 0 of the 63 production
-  // queries the corpus test collects. The same query anchored in a pattern map
-  // instead — asserted above — still passes, and so does the same shape written
-  // at top level where the depth is 0.
-  it("refuses an anchor written only inside an inline-predicate subquery's WHERE", () => {
+  // It opens exactly one: the subquery's own clause sequence, which is where a
+  // `WHERE` genuinely filters. What it CLOSES is that with recognition off, the
+  // outer `WHERE` stayed in force over the subquery's whole body — so a
+  // projection, and even a `SET`, was read as a predicate. See
+  // `describe("a subquery's clause baseline is its own")`. Recognition narrows;
+  // it does not widen. Both spellings now anchor, and agreeing is the property.
+  it("anchors in an inline-predicate subquery's WHERE, as at top level", () => {
     expect(
       keepFilteringPositions(
         "MATCH (n WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId }) RETURN n",
       ),
-    ).not.toContain("$orgId");
-    // …while the identical shape at top level is unaffected.
+    ).toContain("$orgId");
     expect(
       keepFilteringPositions(
         "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId } RETURN n",
       ),
     ).toContain("$orgId");
+    // …and the projection spelling of the same query is still refused, which is
+    // what stops this from being a widening.
+    expect(
+      keepFilteringPositions(
+        "MATCH (n WHERE EXISTS { MATCH (m) RETURN m.orgId = $orgId AS x }) RETURN n",
+      ),
+    ).not.toContain("$orgId");
   });
 });
 
@@ -967,13 +975,13 @@ describe("classifier precedence is decided, not incidental", () => {
     ],
     [
       "P5",
-      "bracket depth before clause-keyword recognition",
+      "the per-subquery clause baseline before the outer clause — round 14",
       "MATCH (n WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId }) RETURN n",
-      false,
+      true,
     ],
     [
       "P6",
-      "…and the same shape at depth 0, where the clause IS recognised",
+      "…and the same shape at depth 0, which always agreed",
       "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId } RETURN n",
       true,
     ],
@@ -1762,4 +1770,269 @@ describe("an inline pattern predicate ends the property-map position", () => {
       );
     }
   });
+});
+
+// ── A subquery's clause baseline is its own ─────────────────────────────────
+//
+// Round 14, and it is round 13's finding one scale up. Round 13: the rules asked
+// their questions of a BRACKET, as though a bracket were homogeneous. This:
+// clause recognition asked its question of the WHOLE QUERY, as though depth were
+// global — when a subquery is a clause sequence with its own baseline.
+//
+// Absolute depth 0 is correct only for the outermost sequence. Nest a subquery
+// under any paren or bracket and its own clauses stop being recognised, so the
+// OUTER clause stays in force over the subquery's entire body:
+//
+//     MATCH (n) WHERE size(COLLECT { MATCH (m) RETURN m.orgId = $orgId AS mine })
+//                > 0 RETURN n
+//
+// The projected comparison is a column and filters nothing, but the inherited
+// `WHERE` made it a predicate; `COLLECT` is non-empty whenever any node exists,
+// so every tenant's `n` came back.
+//
+// Round 12 met this mechanism from its OTHER side — an anchor written only in a
+// nested subquery's `WHERE` was refused — recorded it as a fail-closed cost, and
+// declined to fix it because recognising clauses inside a paren-nested brace
+// "would OPEN kept regions". That is backwards, and the inversion is the lesson:
+// the property that refuses something legitimate is the same property that
+// accepts something illegitimate from the other side. Recognition NARROWS. With
+// it off one inherited `WHERE` covered projections and writes alike; with it on
+// a `RETURN` is a `RETURN` and a `SET` is a `SET`.
+describe("a subquery's clause baseline is its own", () => {
+  const bypasses: Array<[name: string, cypher: string]> = [
+    [
+      "under a function call (review's case)",
+      "MATCH (n) WHERE size(COLLECT { MATCH (m) RETURN m.orgId = $orgId AS mine }) > 0 RETURN n",
+    ],
+    [
+      "under a grouping paren",
+      "MATCH (n) WHERE (COLLECT { MATCH (m) RETURN m.orgId = $orgId AS x }) <> [] RETURN n",
+    ],
+    [
+      "EXISTS under a function call",
+      "MATCH (n) WHERE toBoolean(EXISTS { MATCH (m) RETURN m.orgId = $orgId AS x }) RETURN n",
+    ],
+    [
+      "COUNT under a function call",
+      "MATCH (n) WHERE abs(COUNT { MATCH (m) RETURN m.orgId = $orgId AS x }) > 0 RETURN n",
+    ],
+    [
+      "CALL nested inside a nested subquery",
+      "MATCH (n) WHERE size(COLLECT { CALL { MATCH (m) RETURN m.orgId = $orgId AS x } RETURN 1 }) > 0 RETURN n",
+    ],
+    [
+      "under a list bracket rather than a paren",
+      "MATCH (n) WHERE size([x IN COLLECT { MATCH (m) RETURN m.orgId = $orgId AS q } | x]) > 0 RETURN n",
+    ],
+    [
+      "two brackets deep",
+      "MATCH (n) WHERE size(head([COLLECT { MATCH (m) RETURN m.orgId = $orgId AS q }])) > 0 RETURN n",
+    ],
+    [
+      "with a WITH between the MATCH and the projection",
+      "MATCH (n) WHERE size(COLLECT { MATCH (m) WITH m RETURN m.orgId = $orgId AS q }) > 0 RETURN n",
+    ],
+    [
+      "inside a CASE",
+      "MATCH (n) WHERE CASE WHEN size(COLLECT { MATCH (m) RETURN m.orgId = $orgId AS q }) > 0 THEN true END RETURN n",
+    ],
+    // The worst spelling: not a projection but a WRITE, read as a filtering
+    // position. `SET n.orgId = $orgId` reassigns every tenant's nodes to the
+    // caller, which is the exact case the SET rule exists to refuse.
+    [
+      "a SET inside the nested subquery",
+      "MATCH (n) WHERE size(COLLECT { MATCH (m) SET m.orgId = $orgId RETURN m }) > 0 RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of bypasses) {
+    it(`does not inherit the outer clause: ${name}`, () => {
+      expect(keepFilteringPositions(cypher)).not.toContain("$orgId");
+    });
+  }
+
+  it("is discriminating: the anchor's exact syntax is present in every case", () => {
+    for (const [, cypher] of bypasses) {
+      expect(/[A-Za-z]\.orgId\s*=\s*\$orgId/.test(cypher)).toBe(true);
+    }
+  });
+
+  // The scope guard had the identical hole. `keepPredicatePositions` keeps a
+  // WHERE clause, and the inherited WHERE was one, so a projected membership
+  // test satisfied the agent allow-list too.
+  const markerBypasses: Array<[name: string, cypher: string]> = [
+    [
+      "a projected membership test under a function call",
+      `MATCH (n) WHERE size(COLLECT { MATCH (m) RETURN m.label IN $${SCOPE_LABELS_PARAM} AS ok }) > 0 RETURN n`,
+    ],
+    [
+      "the same under a grouping paren",
+      `MATCH (n) WHERE (COLLECT { MATCH (m) RETURN m.label IN $${SCOPE_LABELS_PARAM} AS ok }) <> [] RETURN n`,
+    ],
+  ];
+
+  for (const [name, cypher] of markerBypasses) {
+    it(`does not satisfy the allow-list: ${name}`, () => {
+      expect(keepPredicatePositions(cypher)).not.toContain(
+        `$${SCOPE_LABELS_PARAM}`,
+      );
+      expect(() => assertScopeMarkers(cypher, { labels: ["Doc"] })).toThrow(
+        GraphScopeError,
+      );
+    });
+  }
+
+  // The other direction, and this is where round 14 REMOVES two refusals rather
+  // than adding them. Both were round 12's recorded cost; both are the same
+  // mechanism seen from its fail-closed side.
+  const nowAnchors: Array<[name: string, cypher: string]> = [
+    [
+      "an anchor in a nested subquery's own WHERE",
+      "MATCH (n) WHERE size(COLLECT { MATCH (m) WHERE m.orgId = $orgId RETURN m }) > 0 RETURN n",
+    ],
+    [
+      "an anchor in an inline-predicate subquery's WHERE",
+      "MATCH (n WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId }) RETURN n",
+    ],
+    [
+      "a pattern map in a nested subquery",
+      "MATCH (n) WHERE size(COLLECT { MATCH (m {orgId: $orgId}) RETURN m }) > 0 RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of nowAnchors) {
+    it(`now anchors: ${name}`, () => {
+      expect(keepFilteringPositions(cypher)).toContain("$orgId");
+    });
+  }
+
+  it("the same three agree with their top-level spellings", () => {
+    // Which is the property that makes the change a correction rather than a
+    // loosening: the nested form and the depth-0 form now give one answer.
+    for (const cypher of [
+      "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId } RETURN n",
+      "MATCH (n) WHERE EXISTS { MATCH (m {orgId: $orgId}) } RETURN n",
+      "CALL { MATCH (n) WHERE n.orgId = $orgId RETURN n } RETURN n",
+    ]) {
+      expect(keepFilteringPositions(cypher)).toContain("$orgId");
+    }
+  });
+
+  // A subquery starts with NO clause in force, so a body that opens with
+  // something other than a clause keyword — Cypher 5's bare-pattern `EXISTS { … }`
+  // — keeps nothing. Fail-closed, and it was already refused before round 14
+  // for a different reason (the enclosing clause made the brace a map); pinned
+  // so the reason is now the right one.
+  it("a bare-pattern subquery keeps nothing on its own", () => {
+    expect(
+      keepFilteringPositions(
+        "MATCH (n) WHERE EXISTS { (n)-[:R]->(m {orgId: $orgId}) } RETURN n",
+      ),
+    ).not.toContain("$orgId");
+    // …and the query is accepted when the tenant is anchored outside it.
+    expect(
+      keepFilteringPositions(
+        "MATCH (n) WHERE EXISTS { (n)-[:R]->(m) } AND n.orgId = $orgId RETURN n",
+      ),
+    ).toContain("$orgId");
+  });
+
+  // THE BASELINE HAS TO BE RESTORED WHEN THE SUBQUERY CLOSES, and leaving it
+  // raised is its own bypass — found by mutation, not by review. The subquery
+  // above opened at paren 1, so without the restore the baseline STAYS at 1 and
+  // every clause keyword after the closing brace, back at depth 0, goes
+  // unrecognised. The saved `clause` (`WHERE`) is then still in force over the
+  // rest of the query, and the trailing projection — or a trailing SET — is read
+  // as a predicate. Same defect as the one above, on the way out instead of the
+  // way in.
+  const afterTheSubqueryCloses: Array<[name: string, cypher: string]> = [
+    [
+      "a trailing RETURN projection",
+      "MATCH (n) WHERE size(COLLECT { MATCH (m) RETURN m }) > 0 RETURN n, n.orgId = $orgId AS x",
+    ],
+    [
+      "a trailing SET, which is a write",
+      "MATCH (n) WHERE size(COLLECT { MATCH (m) RETURN m }) > 0 SET n.orgId = $orgId",
+    ],
+    [
+      "after two nested subqueries in the same predicate",
+      "MATCH (n) WHERE size(COLLECT { MATCH (m) RETURN m }) > 0 AND size(COLLECT { MATCH (p) RETURN p }) > 0 RETURN n, n.orgId = $orgId AS x",
+    ],
+  ];
+
+  for (const [name, cypher] of afterTheSubqueryCloses) {
+    it(`restores the baseline on close: ${name}`, () => {
+      expect(keepFilteringPositions(cypher)).not.toContain("$orgId");
+    });
+  }
+
+  // A SUBQUERY STARTS WITH NO CLAUSE IN FORCE, and that too is load-bearing
+  // rather than tidiness. Cypher 5 lets a subquery expression hold a bare
+  // PATTERN with no `MATCH` keyword, so without the reset there is no keyword to
+  // displace the outer clause and the enclosing `WHERE` governs the body — the
+  // same leak as above, reached without any nesting at all. With the reset the
+  // body keeps nothing until it names its own clause.
+  //
+  // The cost is that a bare-pattern subquery's INLINE predicate is refused,
+  // which is round 13's recorded cost (an inline predicate is never a predicate
+  // position) rather than a new one, and is fail-closed.
+  it("a bare-pattern subquery does not inherit the enclosing WHERE", () => {
+    expect(
+      keepFilteringPositions(
+        "MATCH (n) WHERE EXISTS { (m WHERE m.orgId = $orgId) } RETURN n",
+      ),
+    ).not.toContain("$orgId");
+    // The MATCH-keyword spelling of the same intent does anchor, because the
+    // subquery then names its own clause.
+    expect(
+      keepFilteringPositions(
+        "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId } RETURN n",
+      ),
+    ).toContain("$orgId");
+  });
+
+  // Unrelated shapes that ride the same clause state, re-pinned because the
+  // baseline is now a variable rather than the constant 0.
+  const unchanged: Array<[name: string, cypher: string, anchors: boolean]> = [
+    ["a plain WHERE", "MATCH (n) WHERE n.orgId = $orgId RETURN n", true],
+    ["a plain pattern map", "MATCH (n {orgId: $orgId}) RETURN n", true],
+    [
+      "a top-level RETURN projection",
+      "MATCH (n) RETURN n, n.orgId = $orgId AS mine",
+      false,
+    ],
+    [
+      "a top-level SET target",
+      "MATCH (n) SET n.orgId = $orgId RETURN n",
+      false,
+    ],
+    [
+      "a top-level subquery's RETURN projection",
+      "MATCH (n) WHERE EXISTS { MATCH (m) RETURN m.orgId = $orgId AS x } RETURN n",
+      false,
+    ],
+    [
+      "an inline-predicate map literal (round 13)",
+      "MATCH (n WHERE {orgId: $orgId} IS NOT NULL) RETURN n",
+      false,
+    ],
+    [
+      "a clause restored after the subquery closes",
+      "MATCH (n) WHERE EXISTS { MATCH (m) RETURN m } AND n.orgId = $orgId RETURN n",
+      true,
+    ],
+    [
+      "a SET after a subquery is still a SET",
+      "MATCH (n) WHERE EXISTS { MATCH (m) RETURN m } SET n.orgId = $orgId",
+      false,
+    ],
+  ];
+
+  for (const [name, cypher, anchors] of unchanged) {
+    it(`unchanged (${anchors ? "anchors" : "refused"}): ${name}`, () => {
+      const kept = keepFilteringPositions(cypher);
+      if (anchors) expect(kept).toContain("$orgId");
+      else expect(kept).not.toContain("$orgId");
+    });
+  }
 });

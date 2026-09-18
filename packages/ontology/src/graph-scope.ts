@@ -728,9 +728,46 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
     clause: string;
     mergeMapFilters: boolean;
     inlinePredicateFrames: number;
+    clauseParenBase: number;
+    clauseBracketBase: number;
   }> = [];
   let mapDepth = 0;
   let clause = "";
+  // The bracket depth at which a clause keyword BEGINS A CLAUSE. Zero at the
+  // top level; reset to the depth of the enclosing brackets when a subquery
+  // brace opens, and restored when it closes.
+  //
+  // This is round fourteen, and it is round thirteen's finding one scale up.
+  // Round thirteen: the rules asked their questions of a bracket, as though a
+  // bracket were homogeneous. This: clause recognition asked its question of the
+  // WHOLE QUERY, as though depth were global — when a subquery is a clause
+  // sequence with its OWN baseline.
+  //
+  // Absolute depth 0 is correct only for the outermost sequence. Nest a subquery
+  // under any paren or bracket and its clauses stop being recognised:
+  //
+  //     MATCH (n) WHERE size(COLLECT { MATCH (m) RETURN m.orgId = $orgId AS mine })
+  //                > 0 RETURN n
+  //
+  // `paren` is 1 inside the braces, so the subquery's `MATCH` and `RETURN` are
+  // not seen and the OUTER `WHERE` stays in force over the whole subquery. The
+  // projected comparison — a column, which filters nothing — was therefore read
+  // as a predicate, and `COLLECT` is non-empty whenever any node exists, so every
+  // tenant's `n` came back. `$__scopeLabels` in the same position bypassed the
+  // agent allow-list the same way, and a `SET` written there was read as a
+  // filtering position, which is a WRITE reassigning every tenant's nodes.
+  //
+  // Round twelve met the same mechanism from its fail-closed side — an anchor
+  // written only in a nested subquery's `WHERE` was refused — and declined to
+  // fix it on the grounds that recognising clauses inside a paren-nested brace
+  // would OPEN kept regions. That judgement was backwards, and this is the
+  // correction: recognition NARROWS what is kept. With it off, one inherited
+  // `WHERE` covered the subquery's entire body, projections and writes included.
+  // With it on, the subquery's `RETURN` is a `RETURN` and its `SET` is a `SET`.
+  // The rule that refused something legitimate was the same rule that accepted
+  // something illegitimate from the other side.
+  let clauseParenBase = 0;
+  let clauseBracketBase = 0;
   // True once a clause has introduced a graph variable, and the condition under
   // which a MERGE map counts as filtering (see below).
   let boundAGraphVariable = false;
@@ -802,8 +839,8 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
       const j = i + idMatch[0].length;
       const word = idMatch[0].toUpperCase();
       if (
-        paren === 0 &&
-        bracket === 0 &&
+        paren === clauseParenBase &&
+        bracket === clauseBracketBase &&
         CLAUSE_KEYWORDS.has(word) &&
         startsAClause(src, i, j)
       ) {
@@ -920,11 +957,25 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
           : "map";
       braceKinds.push(kind);
       if (kind === "map") mapDepth += 1;
-      braceClause.push({ clause, mergeMapFilters, inlinePredicateFrames });
+      braceClause.push({
+        clause,
+        mergeMapFilters,
+        inlinePredicateFrames,
+        clauseParenBase,
+        clauseBracketBase,
+      });
       // A subquery is a clause sequence of its own, so the enclosing pattern's
-      // inline predicate does not reach into it. Only a subquery brace does
-      // this: a map literal is an expression that stays inside the region.
-      if (kind === "subquery") inlinePredicateFrames = 0;
+      // inline predicate does not reach into it, its clause baseline is the
+      // depth of the brackets it is nested under rather than zero, and it
+      // starts with NO clause in force — the outer one does not carry in. Only
+      // a subquery brace does any of this: a map literal is an expression, and
+      // an expression stays inside whatever encloses it.
+      if (kind === "subquery") {
+        inlinePredicateFrames = 0;
+        clauseParenBase = paren;
+        clauseBracketBase = bracket;
+        clause = "";
+      }
     } else if (ch === "}") {
       if (braceKinds.pop() === "map") mapDepth = Math.max(0, mapDepth - 1);
       // Restore BEFORE the keeping() test below, so the `}` itself is judged by
@@ -934,6 +985,8 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
         clause = saved.clause;
         mergeMapFilters = saved.mergeMapFilters;
         inlinePredicateFrames = saved.inlinePredicateFrames;
+        clauseParenBase = saved.clauseParenBase;
+        clauseBracketBase = saved.clauseBracketBase;
       }
       // `boundAGraphVariable` deliberately does NOT restore. It only ever makes
       // a later MERGE map stop counting, so letting an inner `MATCH` set it is

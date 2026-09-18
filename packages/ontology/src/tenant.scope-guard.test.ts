@@ -489,10 +489,21 @@ describe("tenancy guard — a subquery inside an inline node predicate", () => {
   // inside an inline node predicate never becomes the clause; an anchor written
   // ONLY there is now refused. Fail-closed, 0 of the 63 corpus queries, and the
   // pattern-map spelling of the same query (asserted above) still passes.
-  it("refuses an anchor written only inside an inline-predicate subquery's WHERE", async () => {
+  it("accepts an anchor in an inline-predicate subquery's WHERE, as at top level", async () => {
+    // Round 12 recorded the refusal here as a fail-closed cost of the swap.
+    // Round 14 removed it: the cost and a cross-tenant read were one mechanism
+    // (absolute-depth clause recognition), and recognising the subquery's own
+    // clause sequence NARROWS what is kept rather than widening it. See
+    // `describe("tenancy guard — a subquery's clause baseline is its own")`.
     await expect(
       guardAccepts(
         "MATCH (n WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId }) RETURN n",
+      ),
+    ).resolves.toBe(true);
+    // The projection spelling of the same query is still refused.
+    await expect(
+      guardAccepts(
+        "MATCH (n WHERE EXISTS { MATCH (m) RETURN m.orgId = $orgId AS x }) RETURN n",
       ),
     ).resolves.toBe(false);
   });
@@ -1044,6 +1055,116 @@ describe("tenancy guard — an inline pattern predicate is not a property map", 
     ).resolves.toBe(false);
     await expect(
       guardAccepts("MATCH (where {orgId: $orgId}) RETURN where"),
+    ).resolves.toBe(false);
+  });
+});
+
+// ── A subquery's clause baseline is its own, end to end ────────────────────
+//
+// Clause keywords were recognised only at ABSOLUTE paren/bracket depth 0, so a
+// subquery nested under any paren or bracket had its own clauses go unseen and
+// the OUTER clause stayed in force over its whole body. A projection — and even
+// a SET — was then read as a predicate. The projection-level enumeration is in
+// `graph-scope.test.ts`; these drive the same shapes through the real seam.
+describe("tenancy guard — a subquery's clause baseline is its own", () => {
+  const bypasses: Array<[name: string, cypher: string]> = [
+    [
+      "under a function call (review's case)",
+      "MATCH (n) WHERE size(COLLECT { MATCH (m) RETURN m.orgId = $orgId AS mine }) > 0 RETURN n",
+    ],
+    [
+      "under a grouping paren",
+      "MATCH (n) WHERE (COLLECT { MATCH (m) RETURN m.orgId = $orgId AS x }) <> [] RETURN n",
+    ],
+    [
+      "EXISTS under a function call",
+      "MATCH (n) WHERE toBoolean(EXISTS { MATCH (m) RETURN m.orgId = $orgId AS x }) RETURN n",
+    ],
+    [
+      "COUNT under a function call",
+      "MATCH (n) WHERE abs(COUNT { MATCH (m) RETURN m.orgId = $orgId AS x }) > 0 RETURN n",
+    ],
+    [
+      "CALL nested inside a nested subquery",
+      "MATCH (n) WHERE size(COLLECT { CALL { MATCH (m) RETURN m.orgId = $orgId AS x } RETURN 1 }) > 0 RETURN n",
+    ],
+    [
+      "under a list bracket rather than a paren",
+      "MATCH (n) WHERE size([x IN COLLECT { MATCH (m) RETURN m.orgId = $orgId AS q } | x]) > 0 RETURN n",
+    ],
+    [
+      "two brackets deep",
+      "MATCH (n) WHERE size(head([COLLECT { MATCH (m) RETURN m.orgId = $orgId AS q }])) > 0 RETURN n",
+    ],
+    [
+      "with a WITH between the MATCH and the projection",
+      "MATCH (n) WHERE size(COLLECT { MATCH (m) WITH m RETURN m.orgId = $orgId AS q }) > 0 RETURN n",
+    ],
+    [
+      "inside a CASE",
+      "MATCH (n) WHERE CASE WHEN size(COLLECT { MATCH (m) RETURN m.orgId = $orgId AS q }) > 0 THEN true END RETURN n",
+    ],
+    [
+      "a SET inside the nested subquery",
+      "MATCH (n) WHERE size(COLLECT { MATCH (m) SET m.orgId = $orgId RETURN m }) > 0 RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of bypasses) {
+    it(`rejects: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(false);
+    });
+  }
+
+  it("is discriminating: the OLD guard accepted every one of them", () => {
+    for (const [, cypher] of bypasses) {
+      expect(OLD_GUARD.test(cypher)).toBe(true);
+      expect(keepFilteringPositions(cypher)).not.toContain("$orgId");
+    }
+  });
+
+  // Round 14 REMOVES two refusals as well. Both were round 12's recorded cost,
+  // and both are this same mechanism seen from its fail-closed side.
+  const nowAccepted: Array<[name: string, cypher: string]> = [
+    [
+      "an anchor in a nested subquery's own WHERE",
+      "MATCH (n) WHERE size(COLLECT { MATCH (m) WHERE m.orgId = $orgId RETURN m }) > 0 RETURN n",
+    ],
+    [
+      "an anchor in an inline-predicate subquery's WHERE",
+      "MATCH (n WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId }) RETURN n",
+    ],
+    [
+      "a pattern map in a nested subquery",
+      "MATCH (n) WHERE size(COLLECT { MATCH (m {orgId: $orgId}) RETURN m }) > 0 RETURN n",
+    ],
+    [
+      "the top-level spelling of the first, which always passed",
+      "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId } RETURN n",
+    ],
+    [
+      "a top-level CALL subquery",
+      "CALL { MATCH (n) WHERE n.orgId = $orgId RETURN n } RETURN n",
+    ],
+    [
+      "a clause correctly restored after the subquery closes",
+      "MATCH (n) WHERE EXISTS { MATCH (m) RETURN m } AND n.orgId = $orgId RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of nowAccepted) {
+    it(`accepts: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(true);
+    });
+  }
+
+  it("a SET after a subquery is still refused", async () => {
+    // The restore has to put the OUTER clause back, not leave the subquery's
+    // last one in force — otherwise a trailing SET inherits a kept region.
+    await expect(
+      guardAccepts(
+        "MATCH (n) WHERE EXISTS { MATCH (m) RETURN m } SET n.orgId = $orgId",
+      ),
     ).resolves.toBe(false);
   });
 });

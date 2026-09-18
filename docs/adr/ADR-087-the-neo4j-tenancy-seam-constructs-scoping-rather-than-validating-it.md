@@ -505,6 +505,103 @@ It is also the first round where the previous round's fix is **not** wrong and i
 still not enough. That distinction matters for what it implies: correcting the
 reported spelling is not converging, because the spellings are not the thing.
 
+### Round 14: the same scale error, one level up, and a cost that was a bypass
+
+Round 13 said: the rules asked their questions of a BRACKET, as though a bracket
+were homogeneous. Round 14 is that sentence with a different noun. **Clause
+recognition asked its question of the WHOLE QUERY, as though depth were global**
+— when a subquery is a clause sequence with a baseline of its own.
+
+```cypher
+MATCH (n) WHERE size(COLLECT { MATCH (m) RETURN m.orgId = $orgId AS mine }) > 0
+RETURN n
+```
+
+Clause keywords were recognised only at absolute paren/bracket depth 0. `paren`
+is 1 inside those braces, so the subquery's `MATCH` and `RETURN` were never seen
+and the OUTER `WHERE` stayed in force over its entire body. The projected
+comparison is a column and filters nothing; the inherited `WHERE` made it a
+predicate, and `COLLECT` is non-empty whenever any node exists, so every tenant's
+`n` came back. `$__scopeLabels` in the same position bypassed the agent
+allow-list identically, and — worst of the ten — **a `SET` written there was read
+as a filtering position**, which is the write that reassigns every tenant's nodes
+to the caller, refused everywhere else by an explicit rule.
+
+#### The part that is about the previous round's reasoning, not its code
+
+Round 13 recorded, as a fail-closed cost:
+
+> the region was never the `WHERE` clause, since clause keywords are recognised
+> only at paren/bracket depth 0 and the pattern's bracket is open
+
+That is true, and safe, and it is the SAME MECHANISM as the bypass above seen
+from its other side. Round 12 had recorded the same property as a cost too, and
+went further — it declined to fix it, on the grounds that recognising clauses
+inside a paren-nested brace "would OPEN kept regions, which is the dangerous
+direction". Both rounds examined only the direction in which the mechanism
+REFUSES.
+
+**When a cost is recorded, the question is whether the mechanism behind it can
+also fail the other way.** A property that makes the guard refuse something
+legitimate is, very often, the same property that makes it accept something
+illegitimate from the opposite side — because both are the guard failing to
+distinguish two things. Rounds 12 and 13 each enumerated their own finding
+exhaustively and neither enumerated the cost they wrote down.
+
+Round 12's judgement was also simply backwards, and the correction is worth
+stating plainly: **recognition NARROWS what is kept.** With it off, one inherited
+`WHERE` covered the subquery's whole body, projections and writes alike. With it
+on, the subquery's `RETURN` is a `RETURN` and its `SET` is a `SET`. The only
+region it opens is a subquery's own clause sequence, which is exactly where a
+`WHERE` genuinely filters.
+
+#### The enumeration
+
+Ten queries reached it on the tenancy guard and two on the scope guard; review
+reported one. Under a function call, under a grouping paren, under a list
+bracket, two brackets deep, with `EXISTS` / `COUNT` / `COLLECT` / a nested
+`CALL`, with a `WITH` between the `MATCH` and the projection, inside a `CASE`,
+and the `SET` spelling. **Ten-for-one.**
+
+Two mechanisms beyond the baseline itself were found by MUTATION rather than by
+enumeration, and both are bypasses in their own right:
+
+- **The baseline must be restored when the subquery closes.** Left raised, every
+  clause keyword after the closing brace — back at depth 0 — goes unrecognised,
+  the saved `WHERE` stays in force, and a trailing projection or a trailing `SET`
+  is read as a predicate. The same defect on the way out instead of the way in.
+- **A subquery starts with NO clause in force.** Cypher 5 lets a subquery
+  expression hold a bare pattern with no `MATCH` keyword, so without the reset
+  there is no keyword to displace the outer clause and the enclosing `WHERE`
+  governs the body — the same leak, reached with no nesting at all.
+
+Neither was in the reviewer's finding or in the enumeration derived from it. They
+were found by reverting each line of the fix and asking which test noticed;
+when none did, the answer was a missing test rather than a redundant line.
+
+#### What it costs, and what it gives back
+
+This round REMOVES two refusals rather than adding them, and both were round 12's
+recorded cost: an anchor in a nested subquery's own `WHERE`, and one in an
+inline-predicate subquery's `WHERE`, now both anchor — agreeing with their
+top-level spellings, which have anchored since round 10. Agreement is the
+property that makes it a correction rather than a loosening; the PROJECTION
+spelling of the same queries is still refused.
+
+The one new cost is fail-closed and inherited: a bare-pattern subquery's INLINE
+predicate (`EXISTS { (m WHERE m.orgId = $orgId) }`) is refused, which is round
+13's cost — an inline predicate is never a predicate position — not a new one.
+0 of the 63 corpus queries.
+
+#### What this says about the method, a fourth time
+
+Rounds 10–14 have gone eleven-for-one, thirteen-for-two, seven-for-one,
+fifteen-for-one and ten-for-one. Round 13 observed that it was the first round in
+which the previous round's fix was not wrong and was still not enough. Round 14
+is sharper than that: the previous round's fix was correct, its enumeration was
+exhaustive *for the thing it enumerated*, and the defect was sitting inside the
+sentence where it wrote down what the fix cost.
+
 ### What follows
 
 This does **not** change the decision below — it strengthens the case for it and
