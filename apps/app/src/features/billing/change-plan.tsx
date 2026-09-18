@@ -61,7 +61,7 @@ function PlanForm({
     startPlanChange.bind(null, org),
     null,
   );
-  const [interval, setBilledEvery] = useState<"month" | "year">("month");
+  const [billed, setBilled] = useState<"month" | "year">("month");
   const failure = failureKey(state);
   return (
     <SafeForm
@@ -100,9 +100,9 @@ function PlanForm({
               </span>
             </span>
             <span className="text-right text-sm tabular-nums">
-              <Money value={interval === "year" ? plan.annual : plan.monthly} />{" "}
+              <Money value={billed === "year" ? plan.annual : plan.monthly} />{" "}
               <span className="text-xs text-muted-foreground">
-                {interval === "year"
+                {billed === "year"
                   ? t("changePlan.perYear")
                   : t("changePlan.perMonth")}
               </span>
@@ -120,9 +120,9 @@ function PlanForm({
               type="radio"
               name="interval"
               value={value}
-              checked={interval === value}
+              checked={billed === value}
               onChange={() => {
-                setBilledEvery(value);
+                setBilled(value);
               }}
             />
             {t(`intervals.${value}`)}

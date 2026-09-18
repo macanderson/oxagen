@@ -50,7 +50,7 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
 const { OrgCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { Billing } = await import("./billing");
+const { Billing, BillingActions } = await import("./billing");
 
 const viewer = (orgRole: OrgRole) =>
   unsafeMint(OrgCtx, {
@@ -69,7 +69,9 @@ const DENIED = {
 const DOWN = readError("stripe_unreachable", 502);
 
 async function renderBilling(
-  reads: Partial<BillingReads> & { newestInvoices?: BillingReads["invoices"] } = {},
+  reads: Partial<BillingReads> & {
+    newestInvoices?: BillingReads["invoices"];
+  } = {},
   options: {
     role?: OrgRole;
     checkout?: string | null;
@@ -78,23 +80,32 @@ async function renderBilling(
 ) {
   const ctx = viewer(options.role ?? "owner");
   const { source, calls } = billingSource(reads);
-  const element = await Billing({
-    ctx,
-    source,
-    title: "Billing",
-    checkout: options.checkout ?? null,
-    cursor: options.cursor ?? null,
-  });
-  render(<IntlProvider>{element}</IntlProvider>);
+  // page.tsx renders the header and hands BillingActions to its actions
+  // slot; the test composes the two the way the route does, minus the h1.
+  const [actions, body] = await Promise.all([
+    BillingActions({ ctx, source }),
+    Billing({
+      ctx,
+      source,
+      checkout: options.checkout ?? null,
+      cursor: options.cursor ?? null,
+    }),
+  ]);
+  render(
+    <IntlProvider>
+      {actions}
+      {body}
+    </IntlProvider>,
+  );
   return { ctx, calls };
 }
 
 const section = (name: string) => screen.getByRole("region", { name });
 /** A summary tile by its stable `data-tile` name (Tile, summary.tsx). */
 const tile = (name: string): HTMLElement => {
-  const found = document.querySelector(`[data-tile="${name}"]`);
+  const found = document.querySelector<HTMLElement>(`[data-tile="${name}"]`);
   if (found === null) throw new Error(`no ${name} tile`);
-  return found as HTMLElement;
+  return found;
 };
 
 afterEach(async () => {
@@ -107,10 +118,10 @@ afterEach(async () => {
 });
 
 describe("reads", () => {
-  it("reads the plan, the bucket, the rate, the credit balance and the newest invoices page, once each, with no second invoices read", async () => {
+  it("reads the plan (once for the body, once for Change plan), the bucket, the rate, the credit balance and the newest invoices page, with no second invoices read", async () => {
     const { ctx, calls } = await renderBilling({}, { cursor: null });
     expect(calls).toEqual({
-      plan: [[ctx]],
+      plan: [[ctx], [ctx]],
       bucket: [[ctx]],
       rate: [[ctx]],
       invoices: [[ctx, { cursor: null }]],
@@ -150,11 +161,8 @@ function money(dollars: string): { micros: string; currency: string } {
 }
 
 describe("section order", () => {
-  it("draws the header, the tiles, then This month, Meters and Invoices, then the price list, Auto top-up, Buy governed action units, Usage credits and What counts", async () => {
+  it("draws the tiles, then This month, Meters and Invoices, then the price list, Auto top-up, Buy governed action units, Usage credits and What counts", async () => {
     await renderBilling();
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Billing" }),
-    ).toBeInTheDocument();
     expect(
       screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent),
     ).toEqual([
@@ -171,22 +179,12 @@ describe("section order", () => {
 });
 
 describe("header", () => {
-  it("renders the eyebrow, the title and the description", async () => {
-    await renderBilling();
-    expect(screen.getByText("Organization")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "What Acme Robotics pays Oxagen. Your agents' own model and tool spend is on the Spend page; the two are kept apart on purpose.",
-      ),
-    ).toBeInTheDocument();
-  });
-
   it("opens the plan dialog to the subscribed sentence for an owner whose organization already has a plan", async () => {
     await renderBilling();
     await userEvent.click(screen.getByRole("button", { name: "Change plan" }));
-    expect(screen.getByRole("dialog", { name: "Change plan" })).toHaveTextContent(
-      "This organization already has a build subscription.",
-    );
+    expect(
+      screen.getByRole("dialog", { name: "Change plan" }),
+    ).toHaveTextContent("This organization already has a build subscription.");
   });
 
   it("opens the plan dialog to the role-denied sentence for a member (negative)", async () => {
@@ -276,9 +274,9 @@ describe("Plan tile", () => {
 
   it("shows the read's denial in place of the figure (negative)", async () => {
     await renderBilling({ plan: DENIED });
-    expect(tile("plan").querySelector("[data-reason=denied]")).toHaveTextContent(
-      "You cannot see Plan for this organization.",
-    );
+    expect(
+      tile("plan").querySelector("[data-reason=denied]"),
+    ).toHaveTextContent("You cannot see Plan for this organization.");
   });
 });
 
@@ -407,7 +405,9 @@ describe("Due tile", () => {
 
   it("shows the read's denial in place of the figure (negative)", async () => {
     await renderBilling({ invoices: DENIED });
-    expect(tile("due").querySelector("[data-reason=denied]")).toBeInTheDocument();
+    expect(
+      tile("due").querySelector("[data-reason=denied]"),
+    ).toBeInTheDocument();
   });
 });
 
@@ -505,9 +505,7 @@ describe("This month", () => {
         invoiceRow({ kind: "gau_purchase", amountDue: money("10") }),
       ]),
     });
-    expect(section("This month")).not.toHaveTextContent(
-      "This month continues",
-    );
+    expect(section("This month")).not.toHaveTextContent("This month continues");
   });
 
   it("shows the read's error in place of the table when the bucket could not be read (negative)", async () => {
@@ -554,7 +552,9 @@ describe("Meters", () => {
     const other = within(meters).getByRole("row", {
       name: /Other governed actions/,
     });
-    expect(other).toHaveTextContent("Other governed actionsnot recordedreported, never priced");
+    expect(other).toHaveTextContent(
+      "Other governed actionsnot recordedreported, never priced",
+    );
     const held = within(meters).getByRole("row", { name: /Held runs/ });
     expect(held).toHaveTextContent(
       "Held runsnot recordedreported, never priced (dod.held)",
@@ -658,25 +658,19 @@ describe("Meters", () => {
       await renderBilling({
         bucket: readOk(freeNoCardBucket({ usedGau: 4000, remainingGau: 1000 })),
       });
-      expect(
-        section("Meters").querySelector("[data-exhausted]"),
-      ).toBeNull();
+      expect(section("Meters").querySelector("[data-exhausted]")).toBeNull();
     });
 
     it("is absent once a card is saved, even at zero (negative)", async () => {
       await renderBilling({
         bucket: readOk(prepaidBucket({ usedGau: 56200, remainingGau: 0 })),
       });
-      expect(
-        section("Meters").querySelector("[data-exhausted]"),
-      ).toBeNull();
+      expect(section("Meters").querySelector("[data-exhausted]")).toBeNull();
     });
 
     it("is absent in invoice mode (negative)", async () => {
       await renderBilling({ bucket: readOk(invoiceBucket()) });
-      expect(
-        section("Meters").querySelector("[data-exhausted]"),
-      ).toBeNull();
+      expect(section("Meters").querySelector("[data-exhausted]")).toBeNull();
     });
   });
 });
@@ -860,9 +854,7 @@ describe("Usage credits", () => {
 
   it("shows the read's error in place of the balance (negative)", async () => {
     await renderBilling({ usageCredits: DOWN });
-    expect(
-      credits().querySelector("[data-reason=error]"),
-    ).toBeInTheDocument();
+    expect(credits().querySelector("[data-reason=error]")).toBeInTheDocument();
   });
 });
 
@@ -941,9 +933,7 @@ describe("Auto top-up", () => {
 
   it("leaves the per-top-up count out when the rate could not be read (negative)", async () => {
     await renderBilling({ rate: DOWN });
-    expect(
-      section("Auto top-up").querySelector("[data-per-topup]"),
-    ).toBeNull();
+    expect(section("Auto top-up").querySelector("[data-per-topup]")).toBeNull();
   });
 
   it("is not drawn when the bucket could not be read (negative)", async () => {

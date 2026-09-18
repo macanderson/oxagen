@@ -60,9 +60,9 @@ async function openDialog(blocked: PlanChangeBlock | null = null) {
 }
 
 const planLabel = (tier: "build" | "scale") => {
-  const found = document.querySelector(`[data-plan="${tier}"]`);
+  const found = document.querySelector<HTMLElement>(`[data-plan="${tier}"]`);
   if (found === null) throw new Error(`no ${tier} label`);
-  return found as HTMLElement;
+  return found;
 };
 
 beforeEach(() => {

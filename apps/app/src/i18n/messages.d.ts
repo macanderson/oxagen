@@ -834,7 +834,6 @@ type Messages = {
       exhaustedNoCard: string;
     };
     mode: {
-      title: string;
       prepaid: string;
       prepaidNoCard: string;
       invoice: string;

@@ -23,15 +23,15 @@ import { Section } from "./section";
 
 type Failed = Exclude<Read<unknown>, { ok: true }>;
 
-const LINES = [
+const LINES: readonly {
+  line: "plan" | "blocks" | "topups" | "overage";
+  kinds: readonly InvoiceRow["kind"][];
+}[] = [
   { line: "plan", kinds: ["subscription"] },
   { line: "blocks", kinds: ["gau_purchase"] },
   { line: "topups", kinds: ["gau_auto_topup"] },
   { line: "overage", kinds: ["gau_interim", "gau_period_close"] },
-] as const satisfies readonly {
-  line: string;
-  kinds: readonly InvoiceRow["kind"][];
-}[];
+];
 
 /** The invoices whose period touches the bucket month, a void one excluded. */
 export function invoicesInMonth(
@@ -119,9 +119,7 @@ export function ThisMonth({
         ]}
       >
         {LINES.map(({ line, kinds }) => {
-          const rows = month.filter((row) =>
-            (kinds as readonly string[]).includes(row.kind),
-          );
+          const rows = month.filter((row) => kinds.includes(row.kind));
           return (
             <tr key={line} data-line={line}>
               <td className={cell}>{t(`thisMonth.lines.${line}`)}</td>

@@ -91,7 +91,6 @@
       "exhaustedNoCard": "<link>Add a payment method</link> to keep governing this month, or your allowance renews on {date}"
     },
     "mode": {
-      "title": "Billing mode",
       "prepaid": "Prepaid — governed actions stop when the bucket is empty unless auto top-up refills it",
       "prepaidNoCard": "Prepaid — governed actions stop when the bucket is empty unless auto top-up refills it — add a payment method to keep governing past the allowance, or wait for the next month",
       "invoice": "Invoice billing — usage is never capped; overage is invoiced at period end, or once {max} governed action units accrue",

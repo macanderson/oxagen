@@ -109,11 +109,15 @@ export function Meters({
           : t("meters.remaining", { count: count(v.remainingGau) }),
     });
   }
-  const exhaustedNoCard =
+  // A prepaid organization at or below zero with no saved card: the Free-tier
+  // rule of 2026-09-14 (spec §4.2, ADR-055 §6).
+  const exhausted =
     b !== null &&
     b.autoTopup !== null &&
     b.autoTopup.paymentMethod === null &&
-    b.remainingGau <= 0;
+    b.remainingGau <= 0
+      ? b
+      : null;
   return (
     <Section id="billing-meters" title={title}>
       <Table
@@ -158,10 +162,10 @@ export function Meters({
         />
       </Table>
       {b === null ? null : <Mode bucket={b} />}
-      {exhaustedNoCard && b !== null ? (
+      {exhausted === null ? null : (
         <p data-exhausted="" className="text-sm font-medium text-foreground">
           {t.rich("meters.exhaustedNoCard", {
-            date: date(b.period.end),
+            date: date(exhausted.period.end),
             link: (chunks) => (
               <a href="#buy-governed-action-units" className={linkText}>
                 {chunks}
@@ -169,7 +173,7 @@ export function Meters({
             ),
           })}
         </p>
-      ) : null}
+      )}
     </Section>
   );
 }

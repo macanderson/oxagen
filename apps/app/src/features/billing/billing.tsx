@@ -1,6 +1,6 @@
-// Billing (pages/billing.md; ARCHITECTURE.md §1.4, §3.9): the page in the
-// mockup's shape. The header carries the one gold action, Change plan. Four
-// tiles summarise the plan, this month's governed action units, the contracted
+// Billing (pages/billing.md; ARCHITECTURE.md §1.4, §3.9): the page body in the
+// mockup's shape, under the header page.tsx renders with the one gold action,
+// Change plan (`BillingActions`, below). Four tiles summarise the plan, this month's governed action units, the contracted
 // rate and what is due. Below, two columns: This month, Meters and Invoices on
 // the left; the price list, Auto top-up, buying governed action units, usage
 // credits and What counts on the right, stacking into one column on a phone.
@@ -14,12 +14,9 @@ import {
 } from "@oxagen/oxagen/contracts/billing.credits.purchase";
 import { PURCHASE_GAU_MAX } from "@oxagen/oxagen/contracts/billing.gau_bucket.purchase";
 import { UPGRADE_PLANS } from "@oxagen/oxagen/contracts/billing.subscription_upgrade.start";
-import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
 import { type Money as MoneyValue, mulMicros } from "@/data/contracts/money";
 import type { DataSource } from "@/data/ports";
 import type { OrgCtx } from "@/server/viewer";
-import { PageHeader } from "@/ui/page-header";
 import { AutoTopup } from "./auto-topup";
 import {
   ChangePlan,
@@ -47,37 +44,44 @@ const PLAN_OPTIONS: readonly PlanOption[] = UPGRADE_PLANS.map((plan) => ({
   includedGauPerMonth: plan.includedGauPerMonth,
 }));
 
-function BillingHeader({
-  title,
-  org,
-  actions,
+/** Who may start a plan change: the same roles `start_subscription_upgrade` gates. */
+const changesPlan = (ctx: OrgCtx) =>
+  ctx.orgRole === "owner" || ctx.orgRole === "billing";
+
+/**
+ * The header's actions: Change plan, the page's one gold action. Rendered by
+ * page.tsx beside the h1, so it reads the plan on its own; the body's reads
+ * are its own and the two do not wait on each other.
+ * `start_subscription_upgrade` needs Owner or Billing and refuses a second
+ * subscription; the dialog says which stopped it. An unread plan proves
+ * nothing, so the form is offered and the handler decides.
+ */
+export async function BillingActions({
+  ctx,
+  source,
 }: {
-  title: string;
-  org: string;
-  actions: ReactNode;
+  ctx: OrgCtx;
+  source: DataSource;
 }) {
-  const t = useTranslations("billing.header");
+  const plan = await source.billing.plan(ctx);
+  const subscription = plan.ok ? plan.value.subscription : null;
+  let blocked: PlanChangeBlock | null = null;
+  if (!changesPlan(ctx)) blocked = { kind: "role" };
+  else if (subscription !== null)
+    blocked = { kind: "subscribed", plan: subscription.plan };
   return (
-    <PageHeader
-      title={title}
-      eyebrow={t("eyebrow")}
-      description={t("description", { org })}
-      actions={actions}
-    />
+    <ChangePlan org={ctx.orgSlug} plans={PLAN_OPTIONS} blocked={blocked} />
   );
 }
 
 export async function Billing({
   ctx,
   source,
-  title,
   checkout,
   cursor,
 }: {
   ctx: OrgCtx;
   source: DataSource;
-  /** The translated `pages.billing`, the same string generateMetadata returns. */
-  title: string;
   /** `?checkout=` as the URL carried it, after a Stripe Checkout round trip. */
   checkout: string | null;
   /** The invoices page the URL asked for; null is the newest. */
@@ -92,7 +96,7 @@ export async function Billing({
     cursor === null ? null : source.billing.invoices(ctx, { cursor: null }),
   ]);
   const newestInvoices = newest ?? invoices;
-  const buys = ctx.orgRole === "owner" || ctx.orgRole === "billing";
+  const buys = changesPlan(ctx);
   // Two things decide whether the top-up is offered, and the section says
   // which one refused. `purchase_credits` needs the role, and its checkout
   // refuses a Free organization outright (canTierBuyCredits), so offering an
@@ -105,67 +109,46 @@ export async function Billing({
     : rate.ok && !canTierBuyCredits(rate.value.tier)
       ? "plan"
       : "ok";
-  // `start_subscription_upgrade` needs Owner or Billing and refuses a second
-  // subscription; the dialog says which stopped it. An unread plan proves
-  // nothing, so the form is offered and the handler decides.
-  const subscription = plan.ok ? plan.value.subscription : null;
-  let planChange: PlanChangeBlock | null = null;
-  if (!buys) planChange = { kind: "role" };
-  else if (subscription !== null)
-    planChange = { kind: "subscribed", plan: subscription.plan };
   return (
-    <>
-      <BillingHeader
-        title={title}
-        org={ctx.orgName}
-        actions={
-          <ChangePlan
-            org={ctx.orgSlug}
-            plans={PLAN_OPTIONS}
-            blocked={planChange}
-          />
-        }
+    <div className="flex flex-col gap-4">
+      <CheckoutBanner outcome={checkoutOutcome(checkout)} />
+      <SummaryTiles
+        plan={plan}
+        bucket={bucket}
+        rate={rate}
+        invoices={newestInvoices}
       />
-      <div className="flex flex-col gap-4">
-        <CheckoutBanner outcome={checkoutOutcome(checkout)} />
-        <SummaryTiles
-          plan={plan}
-          bucket={bucket}
-          rate={rate}
-          invoices={newestInvoices}
-        />
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
-          <div className="flex min-w-0 flex-col gap-4">
-            <ThisMonth plan={plan} bucket={bucket} invoices={newestInvoices} />
-            <Meters bucket={bucket} credits={credits} />
-            <Invoices invoices={invoices} cursor={cursor} org={ctx.orgSlug} />
-          </div>
-          <div className="flex min-w-0 flex-col gap-4">
-            <PriceList />
-            <AutoTopup
-              bucket={bucket}
-              blockSizeGau={rate.ok ? rate.value.blockSizeGau : null}
-              editable={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
-              org={ctx.orgSlug}
-            />
-            <PurchaseForm
-              org={ctx.orgSlug}
-              bucket={bucket}
-              rate={rate}
-              maxGau={PURCHASE_GAU_MAX}
-              allowed={buys}
-            />
-            <UsageCreditsSection
-              org={ctx.orgSlug}
-              credits={credits}
-              topUp={topUp}
-              presetsUsd={CREDIT_TOPUP_PRESETS_USD}
-              minUsd={MIN_CREDIT_TOPUP_USD}
-            />
-            <WhatCounts />
-          </div>
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <ThisMonth plan={plan} bucket={bucket} invoices={newestInvoices} />
+          <Meters bucket={bucket} credits={credits} />
+          <Invoices invoices={invoices} cursor={cursor} org={ctx.orgSlug} />
+        </div>
+        <div className="flex min-w-0 flex-col gap-4">
+          <PriceList />
+          <AutoTopup
+            bucket={bucket}
+            blockSizeGau={rate.ok ? rate.value.blockSizeGau : null}
+            editable={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
+            org={ctx.orgSlug}
+          />
+          <PurchaseForm
+            org={ctx.orgSlug}
+            bucket={bucket}
+            rate={rate}
+            maxGau={PURCHASE_GAU_MAX}
+            allowed={buys}
+          />
+          <UsageCreditsSection
+            org={ctx.orgSlug}
+            credits={credits}
+            topUp={topUp}
+            presetsUsd={CREDIT_TOPUP_PRESETS_USD}
+            minUsd={MIN_CREDIT_TOPUP_USD}
+          />
+          <WhatCounts />
         </div>
       </div>
-    </>
+    </div>
   );
 }
