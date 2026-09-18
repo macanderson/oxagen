@@ -243,6 +243,7 @@ import "./contracts/router.policy.get";
 import "./contracts/router.policy.set";
 import "./contracts/router.stats.list";
 import "./contracts/run.bisect";
+import "./contracts/run.chain.get";
 import "./contracts/run.cost";
 import "./contracts/run.export";
 import "./contracts/run.fork";

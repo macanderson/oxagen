@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runItemSchema, runList } from "./run.list";
+import { canSummarizeRun, runItemSchema, runList } from "./run.list";
 
 const item = {
   id: "tse_4q8r1t6v3x5z0b2d7h2k9m",
@@ -16,6 +16,9 @@ const item = {
   sealedAt: "2026-09-08T10:06:30.000Z",
   replayGrade: null,
   verdict: null,
+  enforcementTier: "observe",
+  completenessGaps: [],
+  canSummarize: true,
   name: null,
   summary: null,
 };
@@ -115,5 +118,58 @@ describe("list_runs verdict (ADR-064)", () => {
     ).toBe(false);
     const { verdict: _dropped, ...withoutVerdict } = item;
     expect(runItemSchema.safeParse(withoutVerdict).success).toBe(false);
+  });
+});
+
+describe("the row a caller decides from (#3285)", () => {
+  it("names the tier the run was observed at, from a closed set (negative)", () => {
+    for (const enforcementTier of ["gateway", "harness", "observe"]) {
+      expect(runItemSchema.safeParse({ ...item, enforcementTier }).success).toBe(
+        true,
+      );
+    }
+    expect(
+      runItemSchema.safeParse({ ...item, enforcementTier: "proxy" }).success,
+    ).toBe(false);
+    // The tier is how a caller knows whether a control has a connection point
+    // to reach, so it is never absent.
+    const { enforcementTier: _omit, ...without } = item;
+    expect(runItemSchema.safeParse(without).success).toBe(false);
+  });
+
+  it("publishes gaps from the closed vocabulary only (negative)", () => {
+    expect(
+      runItemSchema.safeParse({
+        ...item,
+        completenessGaps: ["digest_only", "tool_bodies"],
+      }).success,
+    ).toBe(true);
+    expect(
+      runItemSchema.safeParse({ ...item, completenessGaps: ["something_new"] })
+        .success,
+    ).toBe(false);
+  });
+});
+
+describe("canSummarizeRun", () => {
+  it("refuses a live run: the record is not yet complete", () => {
+    expect(canSummarizeRun({ status: "live", completenessGaps: [] })).toBe(
+      false,
+    );
+  });
+
+  it("refuses a digest_only recording: there are no bodies for a model to read", () => {
+    expect(
+      canSummarizeRun({ status: "sealed", completenessGaps: ["digest_only"] }),
+    ).toBe(false);
+  });
+
+  it("allows a sealed recording that kept bodies, halted or not", () => {
+    expect(canSummarizeRun({ status: "sealed", completenessGaps: [] })).toBe(
+      true,
+    );
+    expect(
+      canSummarizeRun({ status: "halted", completenessGaps: ["tool_bodies"] }),
+    ).toBe(true);
   });
 });

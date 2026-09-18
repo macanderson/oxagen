@@ -1,0 +1,367 @@
+{
+  "name": "get_run_chain",
+  "domain": "run",
+  "description": "Read what makes one run's record tamper-evident: the hash rule, the Merkle root, the signed checkpoints, the sequence and body gaps the recording shows, the seal, and the replay-grade ladder with the reason each rung is or is not reached.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "runId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      },
+      "hashRule": {
+        "type": "string",
+        "enum": [
+          "tacho.sha256_prev_hash_v1",
+          "ledger.event_stream_digest_v1"
+        ]
+      },
+      "frameCount": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "firstSeq": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "lastSeq": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "merkleRoot": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "checkpoints": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "seq": {
+              "type": "string"
+            },
+            "chainHead": {
+              "type": "string"
+            },
+            "eventCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "signedAt": {
+              "type": "string"
+            },
+            "deviceKeyFingerprint": {
+              "type": "string"
+            },
+            "platformKeyId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "countersignedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "anchorRoot": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "anchoredAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "seq",
+            "chainHead",
+            "eventCount",
+            "signedAt",
+            "deviceKeyFingerprint",
+            "platformKeyId",
+            "countersignedAt",
+            "anchorRoot",
+            "anchoredAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "gaps": {
+        "type": "object",
+        "properties": {
+          "missingSequences": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "from",
+                "to"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "missingFrameCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "missingBodies": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "recorded": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "digest_only",
+                "body_missing",
+                "tool_bodies",
+                "model_calls",
+                "hooks_partial",
+                "unobserved_tail",
+                "chain_break",
+                "telemetry_gap"
+              ]
+            }
+          }
+        },
+        "required": [
+          "missingSequences",
+          "missingFrameCount",
+          "missingBodies",
+          "recorded"
+        ],
+        "additionalProperties": false
+      },
+      "seal": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "sealedAt": {
+                "type": "string"
+              },
+              "terminalStatus": {
+                "type": "string"
+              },
+              "eventCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "finalRunSeq": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "finalEventDigest": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "eventStreamDigest": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "merkleRoot": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "archiveSegmentRef": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "sealedAt",
+              "terminalStatus",
+              "eventCount",
+              "finalRunSeq",
+              "finalEventDigest",
+              "eventStreamDigest",
+              "merkleRoot",
+              "archiveSegmentRef"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "enforcementTier": {
+        "type": "string",
+        "enum": [
+          "gateway",
+          "harness",
+          "observe"
+        ]
+      },
+      "recordedGrade": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "inspect",
+              "view",
+              "fork",
+              "retry"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "ladder": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "grade": {
+              "type": "string",
+              "enum": [
+                "inspect",
+                "view",
+                "fork",
+                "retry"
+              ]
+            },
+            "met": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "grade",
+            "met",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "complete": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "runId",
+      "hashRule",
+      "frameCount",
+      "firstSeq",
+      "lastSeq",
+      "merkleRoot",
+      "checkpoints",
+      "gaps",
+      "seal",
+      "enforcementTier",
+      "recordedGrade",
+      "ladder",
+      "complete"
+    ],
+    "additionalProperties": false
+  }
+}

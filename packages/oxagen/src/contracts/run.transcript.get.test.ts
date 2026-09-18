@@ -3,24 +3,42 @@ import {
   runTranscriptGet,
   TRANSCRIPT_ENTRY_MAX,
   TRANSCRIPT_TEXT_MAX,
+  transcriptBodySchema,
   transcriptEntrySchema,
 } from "./run.transcript.get";
 
 const RUN = "tse_0a1b2c3d4e";
 
+const half = {
+  seq: "3",
+  type: "tool_requested",
+  digest: `sha256:${"a".repeat(64)}`,
+  bytesRef: "evb:v1:k:abc",
+  redactions: [],
+  fidelity: "full",
+  text: '{"path":"README.md"}',
+  truncated: false,
+};
+
 const entry = {
   seq: "3",
   endSeq: "5",
   at: "2026-09-11T10:00:03.000Z",
+  elapsedMs: 3000,
   kind: "tool_call",
-  type: "tool_call",
+  type: "tool_requested",
   label: "Read ok",
-  text: '{"path":"README.md"}',
-  truncated: false,
-  fidelity: "full",
+  kinds: ["tools"],
+  request: half,
+  response: { ...half, seq: "5", type: "tool_call", text: "# Oxagen" },
+  decision: null,
   frames: 3,
   cost: null,
+  cumulativeCost: null,
 };
+
+const input = (over: Record<string, unknown> = {}) =>
+  runTranscriptGet.input.safeParse({ runId: RUN, zoom: "steps", ...over });
 
 describe("get_run_transcript contract", () => {
   it("is a console read: mutates false, noBillingGate true", () => {
@@ -32,54 +50,88 @@ describe("get_run_transcript contract", () => {
 
   it("requires one of the three zoom levels (negative)", () => {
     for (const zoom of ["turns", "steps", "everything"]) {
-      expect(
-        runTranscriptGet.input.safeParse({ runId: RUN, zoom }).success,
-      ).toBe(true);
+      expect(input({ zoom }).success).toBe(true);
     }
-    expect(
-      runTranscriptGet.input.safeParse({ runId: RUN, zoom: "frames" }).success,
-    ).toBe(false);
-    expect(runTranscriptGet.input.safeParse({ runId: RUN }).success).toBe(
-      false,
-    );
+    expect(input({ zoom: "frames" }).success).toBe(false);
+    expect(runTranscriptGet.input.safeParse({ runId: RUN }).success).toBe(false);
   });
 
-  it("carries the fidelity word on every entry and bounds the text", () => {
+  it("defaults to every chip and one page, and refuses a chip outside the set (negative)", () => {
+    const parsed = input();
+    expect(parsed.success && parsed.data.kinds).toEqual([]);
+    expect(parsed.success && parsed.data.limit).toBe(200);
+    expect(input({ kinds: ["tools", "errors"] }).success).toBe(true);
+    // The mockup draws a `thinking` chip; no producer records one, so the
+    // contract does not publish it rather than offering a filter that can only
+    // ever answer "none".
+    expect(input({ kinds: ["thinking"] }).success).toBe(false);
+    expect(input({ limit: 0 }).success).toBe(false);
+    expect(input({ limit: 501 }).success).toBe(false);
+  });
+
+  it("carries both halves of one step, each with its own digest and fidelity", () => {
     expect(transcriptEntrySchema.safeParse(entry).success).toBe(true);
+    // A producer that appends a single terminal receipt has no request half.
     expect(
-      transcriptEntrySchema.safeParse({
-        ...entry,
-        text: null,
-        fidelity: "digest_only",
-      }).success,
+      transcriptEntrySchema.safeParse({ ...entry, request: null }).success,
     ).toBe(true);
     expect(
-      transcriptEntrySchema.safeParse({ ...entry, fidelity: "partial" })
-        .success,
-    ).toBe(false);
-    expect(
       transcriptEntrySchema.safeParse({
         ...entry,
+        response: { ...half, text: null, bytesRef: null, fidelity: "digest_only" },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("bounds each half's text and refuses a fidelity word outside the set (negative)", () => {
+    expect(
+      transcriptBodySchema.safeParse({ ...half, fidelity: "partial" }).success,
+    ).toBe(false);
+    expect(
+      transcriptBodySchema.safeParse({
+        ...half,
         text: "x".repeat(TRANSCRIPT_TEXT_MAX + 1),
       }).success,
     ).toBe(false);
     expect(
       transcriptEntrySchema.safeParse({ ...entry, frames: 0 }).success,
     ).toBe(false);
+    // Elapsed is measured from the run's start and is never negative.
+    expect(
+      transcriptEntrySchema.safeParse({ ...entry, elapsedMs: -1 }).success,
+    ).toBe(false);
   });
 
-  it("bounds the transcript and says when it was cut", () => {
+  it("carries a decision inline when one was folded into the step", () => {
+    expect(
+      transcriptEntrySchema.safeParse({
+        ...entry,
+        decision: {
+          seq: "4",
+          decision: "route",
+          type: "policy_decision",
+          at: "2026-09-11T10:00:04.000Z",
+        },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("bounds one page and says when the transcript was cut", () => {
     expect(
       runTranscriptGet.output.safeParse({
         zoom: "everything",
+        kinds: [],
         entries: [entry],
+        cursor: null,
         complete: true,
       }).success,
     ).toBe(true);
     expect(
       runTranscriptGet.output.safeParse({
         zoom: "everything",
+        kinds: [],
         entries: Array.from({ length: TRANSCRIPT_ENTRY_MAX + 1 }, () => entry),
+        cursor: null,
         complete: false,
       }).success,
     ).toBe(false);
