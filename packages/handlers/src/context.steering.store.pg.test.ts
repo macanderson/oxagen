@@ -20,7 +20,13 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
   const orgId = crypto.randomUUID();
   const workspaceId = crypto.randomUUID();
   const otherWorkspace = crypto.randomUUID();
+  // The concurrency test merges twice, and the promotions ledger is counted
+  // per workspace: run it in a workspace of its own so its two rows do not
+  // move the ledger the publish test asserts from zero. Cleaned up with the
+  // rest below.
+  const concurrentWorkspace = crypto.randomUUID();
   const scope = { orgId, workspaceId };
+  const concurrentScope = { orgId, workspaceId: concurrentWorkspace };
   const userId = crypto.randomUUID();
   const tag = workspaceId.slice(0, 8);
   const lineage = `ctx.g2961.${tag}`;
@@ -35,6 +41,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
           inArray(schema.contextRecords.workspaceId, [
             workspaceId,
             otherWorkspace,
+            concurrentWorkspace,
           ]),
         );
       const ids = records.map((r) => r.id);
@@ -59,6 +66,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
           inArray(schema.contextAppends.workspaceId, [
             workspaceId,
             otherWorkspace,
+            concurrentWorkspace,
           ]),
         );
       await tx
@@ -67,17 +75,21 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
           inArray(schema.contextProposals.workspaceId, [
             workspaceId,
             otherWorkspace,
+            concurrentWorkspace,
           ]),
         );
     });
     await closeDatabase();
   });
 
-  const propose = (over: Partial<ProposalRow> = {}) =>
-    inScope(() =>
+  const proposeIn = (
+    where: { orgId: string; workspaceId: string },
+    over: Partial<ProposalRow> = {},
+  ) =>
+    runInTenantScope(where, () =>
       store.insertProposal({
-        orgId,
-        workspaceId,
+        orgId: where.orgId,
+        workspaceId: where.workspaceId,
         lineageId: lineage,
         kind: "rule",
         force: "should",
@@ -95,6 +107,8 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
       }),
     );
 
+  const propose = (over: Partial<ProposalRow> = {}) => proposeIn(scope, over);
+
   // `publishMerge` takes ROW EXCLUSIVE on the version table before probing for
   // the classification columns, so the migration's ACCESS EXCLUSIVE cannot
   // commit between the probe and the insert. ROW EXCLUSIVE does not conflict
@@ -104,9 +118,13 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
   // A self-conflicting lock mode would deadlock or block here, not just slow
   // down, because each holds its lock to commit.
   it("does not serialize concurrent merges on different lineages", async () => {
+    const inConcurrentScope = <T>(fn: () => Promise<T>) =>
+      runInTenantScope(concurrentScope, fn);
     const merge = async (suffix: string) => {
-      const proposal = await propose({ lineageId: `${lineage}.${suffix}` });
-      const opened = await inScope(() =>
+      const proposal = await proposeIn(concurrentScope, {
+        lineageId: `${lineage}.${suffix}`,
+      });
+      const opened = await inConcurrentScope(() =>
         store.updateProposal(
           proposal.id,
           {
@@ -124,9 +142,9 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
           ["proposed"],
         ),
       );
-      return inScope(() =>
+      return inConcurrentScope(() =>
         store.publishMerge({
-          scope,
+          scope: concurrentScope,
           proposal: opened,
           body: 'schema = "context-record/v0.1"\n',
           checksum: suffix.repeat(64).slice(0, 64),
@@ -145,6 +163,9 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
     // Both wrote their own record and their own ledger row.
     expect(a.recordId).not.toBe(b.recordId);
     expect(new Set([a.promotion.seq, b.promotion.seq])).toEqual(new Set([1]));
+    expect(
+      await inConcurrentScope(() => store.ledgerLength(concurrentScope)),
+    ).toBe(2);
   });
 
   it("publishes a merge in one transaction: record, version, promotion event, proposal merged; a repeat rolls back; a second merge is version 2 and chain seq 2", async () => {
