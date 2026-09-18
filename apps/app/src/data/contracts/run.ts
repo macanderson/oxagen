@@ -208,13 +208,12 @@ export const TranscriptBody = z.object({
 export type TranscriptBody = z.infer<typeof TranscriptBody>;
 
 /** A decision a rule or a person made about the call the entry records. */
-export const TranscriptDecision = z.object({
+const TranscriptDecision = z.object({
   seq: z.string().regex(/^\d+$/),
   decision: z.string(),
   type: z.string(),
   at: z.iso.datetime({ offset: true }),
 });
-export type TranscriptDecision = z.infer<typeof TranscriptDecision>;
 
 export const TranscriptEntry = z.object({
   /** The frame that opens the entry. */
@@ -236,6 +235,8 @@ export const TranscriptEntry = z.object({
   decision: TranscriptDecision.nullable(),
   /** Frames folded into the entry, the opening frame included. */
   frames: z.number().int().positive(),
+  /** The turn the opening frame falls in, 1-based; null before the run's first turn. */
+  turn: z.number().int().positive().nullable(),
   cost: Cost.nullable(),
   /** Every cost record of the run up to and including this entry. */
   cumulativeCost: Cost.nullable(),

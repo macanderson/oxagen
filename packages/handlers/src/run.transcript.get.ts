@@ -32,11 +32,17 @@ import {
   type RunFrame,
   type TranscriptFold,
   type TranscriptKind,
+  turnOrdinals,
 } from "@oxagen/run-ledger";
 import type { EvidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { digestBytes } from "@oxagen/tacho";
-import { invalidCursor, microsString, runScope, type RunScope } from "./run.list";
+import {
+  invalidCursor,
+  microsString,
+  runScope,
+  type RunScope,
+} from "./run.list";
 import {
   defaultRunReadDeps,
   readAllFrames,
@@ -176,6 +182,12 @@ export function createRunTranscriptGetHandler(
     const read = await readAllFrames(deps, run, TRANSCRIPT_FRAME_CAP);
     const frames = filterFramesByKind(read.frames, input.kinds);
     const folds = foldTranscript(frames, input.zoom);
+    // Turns are counted over every frame of the run, so a chip filter never
+    // renumbers them: turn 2 is turn 2 whichever kinds the page shows.
+    const ordinals = turnOrdinals(read.frames);
+    const turnOf = new Map(
+      read.frames.map((frame, i) => [frame.seq, ordinals[i] ?? null]),
+    );
 
     // The prefix sum runs over every fold of the run, so an entry's cumulative
     // cost is what the run had spent by then and not what this page has.
@@ -205,10 +217,14 @@ export function createRunTranscriptGetHandler(
 
     // A folded zoom carries an excerpt; `everything` carries the whole body.
     const textMax = transcriptTextMax(input.zoom as TranscriptZoom);
-    const halves = await mapConcurrent(page, BODY_CONCURRENCY, async (fold) => ({
-      request: await half(deps.bodies, scope, fold.request, textMax),
-      response: await half(deps.bodies, scope, fold.response, textMax),
-    }));
+    const halves = await mapConcurrent(
+      page,
+      BODY_CONCURRENCY,
+      async (fold) => ({
+        request: await half(deps.bodies, scope, fold.request, textMax),
+        response: await half(deps.bodies, scope, fold.response, textMax),
+      }),
+    );
 
     const entries: TranscriptEntry[] = page.map((fold, i) => {
       const { opening } = fold;
@@ -237,6 +253,7 @@ export function createRunTranscriptGetHandler(
                 at: fold.decision.at.toISOString(),
               },
         frames: fold.frames,
+        turn: turnOf.get(opening.seq) ?? null,
         cost: cost(fold.costMicros),
         cumulativeCost: cost(cumulative[start + i] ?? null),
       };

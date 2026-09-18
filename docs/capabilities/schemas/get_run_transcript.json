@@ -362,6 +362,17 @@
               "type": "integer",
               "minimum": 0
             },
+            "turn": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "cost": {
               "anyOf": [
                 {
@@ -442,6 +453,7 @@
             "response",
             "decision",
             "frames",
+            "turn",
             "cost",
             "cumulativeCost"
           ],

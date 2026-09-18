@@ -411,6 +411,7 @@ describe("runs.transcript", () => {
             },
             decision: null,
             frames: 4,
+            turn: 2,
             cost: null,
             cumulativeCost: null,
           },
@@ -425,6 +426,7 @@ describe("runs.transcript", () => {
     expect(read.ok && read.value.entries[0]?.response?.fidelity).toBe(
       "digest_only",
     );
+    expect(read.ok && read.value.entries[0]?.turn).toBe(2);
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runTranscriptGet,
       input: { runId: "tse_4f0a", zoom: "turns", kinds: [], limit: 200 },

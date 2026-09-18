@@ -122,6 +122,7 @@ describe("get_run_transcript", () => {
     ]);
     // A single terminal receipt has no request half to show.
     expect(out.entries.every((e) => e.request === null)).toBe(true);
+    expect(out.entries.map((e) => e.turn)).toEqual([null, 1, 1, 1, 2, 2, 2]);
     expect(out.entries[2]?.cost).toEqual({
       micros: "40",
       currency: "USD",
@@ -208,12 +209,14 @@ describe("get_run_transcript", () => {
   it("steps: model and tool calls, folding the frames between and summing their cost", async () => {
     const { transcript } = harness(rows);
     const out = await transcript(input({ zoom: "steps" }), ctx());
-    expect(out.entries.map((e) => [e.seq, e.endSeq, e.kind, e.frames])).toEqual([
-      ["0", "1", "frame", 2],
-      ["2", "2", "model_call", 1],
-      ["3", "4", "tool_call", 2],
-      ["5", "6", "model_call", 2],
-    ]);
+    expect(out.entries.map((e) => [e.seq, e.endSeq, e.kind, e.frames])).toEqual(
+      [
+        ["0", "1", "frame", 2],
+        ["2", "2", "model_call", 1],
+        ["3", "4", "tool_call", 2],
+        ["5", "6", "model_call", 2],
+      ],
+    );
   });
 
   it("turns: one entry per turn with the turn's cost", async () => {
@@ -231,6 +234,7 @@ describe("get_run_transcript", () => {
       ["1", "3", 3, "40"],
       ["4", "6", 3, "60"],
     ]);
+    expect(out.entries.map((e) => e.turn)).toEqual([null, 1, 2]);
   });
 
   it("folds a policy decision into the step it was made about, and names it", async () => {
@@ -305,9 +309,9 @@ describe("get_run_transcript", () => {
     );
     const out = await transcript(input({ zoom: "everything" }), ctx());
     expect(out.entries.every((e) => e.response?.text === null)).toBe(true);
-    expect(out.entries.every((e) => e.response?.fidelity === "digest_only")).toBe(
-      true,
-    );
+    expect(
+      out.entries.every((e) => e.response?.fidelity === "digest_only"),
+    ).toBe(true);
     expect(getBody).not.toHaveBeenCalled();
   });
 
