@@ -1645,6 +1645,17 @@ type Messages = {
       started: string;
       sealed: string;
     };
+    facts: {
+      operator: string;
+      model: string;
+      machine: string;
+      noMachineOnLedger: string;
+      operatorKind: {
+        human: string;
+        agent: string;
+        service: string;
+      };
+    };
     tabs: {
       label: string;
       transcript: string;
