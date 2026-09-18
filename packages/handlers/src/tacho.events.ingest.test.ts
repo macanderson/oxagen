@@ -827,6 +827,11 @@ describe("ingest_tacho_events", () => {
       path: "/home/dev/proj/a.txt",
       writes: 1,
       bytesWritten: 12,
+      // The extension names the language on its own. The place does not:
+      // this session reports a `cwd` and no worktree, and a path made
+      // relative to a working directory is not repo-relative.
+      language: undefined,
+      repoRelativePath: undefined,
     });
     expect(db.commands[0]).toMatchObject({
       commandHead: "echo hi",
@@ -841,6 +846,85 @@ describe("ingest_tacho_events", () => {
       hooksOk: true,
       spoolDepth: 3,
     });
+  });
+
+  it("places a touched file in its repository and names its language", async () => {
+    const db = fakeDb();
+    wire(db);
+    // The same session, reported from a worktree rather than a bare cwd.
+    const context = {
+      cwd: "/home/dev/proj/packages/tacho",
+      worktree_path: "/home/dev/proj",
+      model: "claude-haiku-4-5-20251001",
+      permission_mode: "default",
+    };
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events: TachoEvent[] = [];
+    for (const draft of [
+      unsealed(
+        "agent_start",
+        { session_start_source: "startup", tools_available: ["Write"] },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+      unsealed(
+        "file_io",
+        {
+          tool_name: "Write",
+          tool_use_id: "toolu_1",
+          effect_kind: "file_write",
+          tool_target: "/home/dev/proj/packages/tacho/src/envelope.ts",
+          effect_id: "eff_1",
+          tool_input_bytes: 40,
+        },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+      unsealed(
+        "file_io",
+        {
+          tool_name: "Write",
+          tool_use_id: "toolu_2",
+          effect_kind: "file_write",
+          // Outside the worktree, so it keeps its absolute path and gets no
+          // repo-relative form. It is still a file the run touched.
+          tool_target: "/etc/hosts",
+          effect_id: "eff_2",
+          tool_input_bytes: 8,
+        },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+    ]) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      events.push(sealed.event);
+    }
+
+    const output = await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events,
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+    expect(output.accepted).toBe(events.length);
+
+    const inside = db.files.find(
+      (file) =>
+        file["path"] === "/home/dev/proj/packages/tacho/src/envelope.ts",
+    );
+    expect(inside).toMatchObject({
+      repoRelativePath: "packages/tacho/src/envelope.ts",
+      language: "typescript",
+    });
+    const outside = db.files.find((file) => file["path"] === "/etc/hosts");
+    expect(outside).toMatchObject({ repoRelativePath: undefined });
   });
 
   it("files a Codex session under runtime codex, not custom", async () => {
@@ -1181,6 +1265,9 @@ describe("ingest_tacho_events", () => {
       filesDeleted: 0,
       commandsRun: 0,
       networkCalls: 0,
+      commits: 0,
+      pushes: 0,
+      pullRequests: 0,
     };
     let cursor: ChainCursor = GENESIS_CURSOR;
     const seal = (draft: UnsealedTachoEvent) => {
@@ -1206,6 +1293,15 @@ describe("ingest_tacho_events", () => {
       ),
       seal(unsealed("policy_decision", { policy_decision: "deny" })),
       seal(unsealed("network", { effect_kind: "network" })),
+      // A repository effect is counted off its `effect_kind`, not off the
+      // frame kind: a pull request opened from the shell is a `command`
+      // frame and one opened over MCP is a `network` frame, and both are
+      // the same act.
+      seal(unsealed("command", { effect_kind: "git_commit" })),
+      seal(unsealed("command", { effect_kind: "git_push" })),
+      seal(unsealed("command", { effect_kind: "pr_open" })),
+      seal(unsealed("network", { effect_kind: "pr_open" })),
+      seal(unsealed("command", { effect_kind: "command" })),
       seal(unsealed("subagent_start", {})),
       seal(unsealed("oxagen:notification", {})),
       seal(unsealed("oxagen:elicitation", {})),
@@ -1232,7 +1328,11 @@ describe("ingest_tacho_events", () => {
       filesRead: 1,
       policyDecisions: 1,
       policyDenies: 1,
-      networkCalls: 1,
+      networkCalls: 2,
+      commandsRun: 4,
+      commits: 1,
+      pushes: 1,
+      pullRequests: 2,
       numSubagents: 1,
       numNotifications: 1,
       numElicitations: 1,

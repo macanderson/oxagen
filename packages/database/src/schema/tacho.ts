@@ -435,6 +435,7 @@ export const tachoSessions = tachoSchema.table(
     commandsRun: integer("commands_run").notNull().default(0),
     networkCalls: integer("network_calls").notNull().default(0),
     commits: integer("commits").notNull().default(0),
+    pushes: integer("pushes").notNull().default(0),
     pullRequests: integer("pull_requests").notNull().default(0),
     subagentStats: jsonb("subagent_stats"),
     permissionDenials: jsonb("permission_denials"),

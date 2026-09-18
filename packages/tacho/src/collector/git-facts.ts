@@ -37,6 +37,7 @@
  * repository apart without saying which repository it is.
  */
 import { digestBytes, type Sha256Digest } from "../digest";
+import { MAX_OBSERVED_CHANGES } from "../envelope";
 import type { Exec } from "../host/service";
 
 /** Repository facts for one working directory, all optional. */
@@ -272,4 +273,36 @@ export function readWorkingTreeChanges(
       lines_removed: count?.removed ?? 0,
     };
   });
+}
+
+/**
+ * The body of one `oxagen:worktree_reconciled` frame.
+ *
+ * The list is sorted by repo-relative path and then cut to
+ * `MAX_OBSERVED_CHANGES`, so the cut is the same every time rather than
+ * whatever order git happened to list the tree in, and a consumer comparing
+ * two frames is comparing like with like. What was cut is stated:
+ * `observed_changes_total` is how many paths were seen and
+ * `observed_changes_truncated` says the list below it is not all of them. A
+ * truncated record that did not say so would read as a complete one.
+ *
+ * `observed_changes_total` is itself a floor when the reader's own
+ * `MAX_CHANGED_PATHS` bound was reached, because git's output was cut before
+ * this function ever saw it.
+ */
+export function worktreeReconciledBody(
+  changes: readonly GitWorkingTreeChange[],
+): Record<string, unknown> {
+  const sorted = [...changes].sort((a, b) =>
+    a.repo_relative_path < b.repo_relative_path
+      ? -1
+      : a.repo_relative_path > b.repo_relative_path
+        ? 1
+        : 0,
+  );
+  return {
+    observed_changes: sorted.slice(0, MAX_OBSERVED_CHANGES),
+    observed_changes_total: sorted.length,
+    observed_changes_truncated: sorted.length > MAX_OBSERVED_CHANGES,
+  };
 }
