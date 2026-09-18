@@ -105,10 +105,9 @@ export function createPriceEntrySetHandler(
       });
     }
 
+    const now = deps.now();
     const effectiveFrom =
-      input.effectiveFrom === undefined
-        ? deps.now()
-        : new Date(input.effectiveFrom);
+      input.effectiveFrom === undefined ? now : new Date(input.effectiveFrom);
 
     // The customer states the contracted price the way the contract reads it
     // — USD per one million units — and the store records integer micro-USD.
@@ -129,6 +128,9 @@ export function createPriceEntrySetHandler(
       modelAliases: input.modelAliases,
       microsPerMillion: usdPerMillionToMicros(input.usdPerMillion),
       effectiveFrom,
+      // The write instant, so the store can refuse an in-place correction to
+      // a row whose window has already begun and priced runs.
+      now,
     });
 
     // ── Audit (SOC 2 CC6.3) ───────────────────────────────────────────────

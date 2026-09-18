@@ -36,9 +36,7 @@ const MAIN_REPOSITORY_ROLES = ["Owner", "Admin"] as const;
 
 export interface InstallationRepositoriesDeps {
   /** What the installation can reach, and whether the walk was bounded short. */
-  repositories(
-    installationId: string,
-  ): Promise<GitHubInstallationRepositories>;
+  repositories(installationId: string): Promise<GitHubInstallationRepositories>;
 }
 
 const githubInstallationRepositoriesDeps: InstallationRepositoriesDeps = {

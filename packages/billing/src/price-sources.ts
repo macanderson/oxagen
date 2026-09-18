@@ -407,6 +407,18 @@ export function mergePublishedPrices(
   // list price and the negotiated rate would apply to nothing. One name per
   // model, and the row that wins carries the aliases that serve the other form.
   const claimed = new Set<string>();
+  // The names higher-precedence groups have claimed, as prefixes. The
+  // resolver does not match a name exactly: it takes the LONGEST name that
+  // prefixes the frame's model id. So an operator override for
+  // `claude-sonnet` and the card's `claude-sonnet-5` would both survive an
+  // exact-name merge, and a frame for `claude-sonnet-5-20260901` would then
+  // pick the longer list row and bypass the installation-wide negotiated rate
+  // — silently, since both rows are "there". A lower group's price is
+  // therefore dropped when any of its names falls inside a name a higher
+  // group claimed: a higher source that names a family owns the family.
+  // Within one group both survive, since the same source published both and
+  // the longer match is the more specific price it meant.
+  const claimedAbove: string[] = [];
   const counts: Record<PriceSourceId, number> = {
     operator_override: 0,
     in_code_card: 0,
@@ -414,14 +426,21 @@ export function mergePublishedPrices(
     models_dev: 0,
   };
   for (const group of groups) {
+    const claimedHere: string[] = [];
     for (const price of group) {
       const names = [price.model, ...price.aliases];
       if (names.some((n) => claimed.has(n))) continue;
-      for (const name of names) claimed.add(name);
+      if (names.some((n) => claimedAbove.some((above) => n.startsWith(above))))
+        continue;
+      for (const name of names) {
+        claimed.add(name);
+        claimedHere.push(name);
+      }
       byModel.set(price.model, price);
       provenance.set(price.model, price.source);
       counts[price.source] += 1;
     }
+    claimedAbove.push(...claimedHere);
   }
   return { prices: [...byModel.values()], provenance, counts };
 }

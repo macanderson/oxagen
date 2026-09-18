@@ -123,10 +123,15 @@ export async function readUnpricedModels(args: {
 }): Promise<UnpricedModel[]> {
   const [book, observed] = await Promise.all([
     loadPriceBook({ orgId: args.orgId }),
+    // Bounded above by `at` as well as below by `since`: the book is judged
+    // as of `at`, so a model first run after `at` — and every later call and
+    // token — would otherwise be reported against a snapshot from before it
+    // ran, and read as unpriced when the book of its own time prices it.
     readObservedModels({
       orgId: args.orgId,
       workspaceId: args.workspaceId,
       since: args.since,
+      until: args.at,
     }),
   ]);
   return findUnpricedModels({

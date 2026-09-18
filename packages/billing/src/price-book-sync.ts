@@ -60,6 +60,8 @@ export interface PriceBookSyncReport {
    * from an outage retires nothing (see {@link syncPriceBook}).
    */
   retired: number;
+  /** The book held no list row before this run; see `syncPriceBook`. */
+  coldStart: boolean;
   /** Distinct models the book now prices. */
   models: number;
   /** How many models each source ended up being the authority for. */
@@ -105,6 +107,7 @@ export interface SyncPriceBookFromSourcesArgs {
     renamed?: number;
     superseded?: number;
     retired?: number;
+    coldStart?: boolean;
   }>;
 }
 
@@ -187,6 +190,7 @@ export async function syncPriceBookFromSources(
       renamed: 0,
       superseded: 0,
       retired: 0,
+      coldStart: false,
       models: merged.prices.length,
       counts: merged.counts,
       failures,
@@ -218,6 +222,7 @@ export async function syncPriceBookFromSources(
     renamed: result.renamed ?? 0,
     superseded: result.superseded ?? 0,
     retired: result.retired ?? 0,
+    coldStart: result.coldStart ?? false,
     models: merged.prices.length,
     counts: merged.counts,
     failures,

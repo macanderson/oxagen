@@ -50,8 +50,12 @@ The `unit` is derived from the token class (`token`, `request`, `image` or `seco
 | API key whose creator is deleted, of another org, or unrecorded | `forbidden` / `no_principal` |
 | `effectiveFrom` earlier than a row already effective for the key | `conflict` / `price_entry_superseded` — a correction must not start earlier |
 | `effectiveFrom` names a row this organization has already ended | `conflict` / `price_entry_already_ended` — re-establish it as a new row with a later `effectiveFrom`, rather than silently un-ending a window that has already been billed |
+| `effectiveFrom` names a row whose window has already begun, with different terms | `conflict` / `price_entry_already_effective` — the row has priced runs whose cost records name it; state the correction as a later row. The same terms again is a no-op |
+| The model or an alias shares a name with a live negotiated row under a different `model` | `conflict` / `price_entry_alias_conflict` — the resolver treats a model and its aliases as one identity; end the other rate first |
 | The model and class are already negotiated under a **different** `provider` string | `conflict` / `price_entry_provider_conflict` — the resolver never reads a frame's provider, so two providers' rows for one model would both match every call and the newer would win globally; end the other rate first |
 | `region` given | `conflict` / `price_entry_region_unsupported` — frames do not carry the region they were served from, so a regional row would apply everywhere |
+
+**Retries.** The write is idempotent on its row key, and the key includes `effectiveFrom`. A call that omits `effectiveFrom` takes the write instant, so a retry after a lost response opens another window rather than repeating the first call. A caller that wants a safe retry states `effectiveFrom` once and reuses it; the MCP tool is annotated non-idempotent for this reason.
 
 One provider per negotiated model and class is a rule of the store, not of the table: the unique index keys on `provider`, but `resolvePriceEntry` matches on `model` and `model_aliases` alone. Every negotiated write and removal for one organization's (model, class, region) takes the same transaction-scoped advisory lock, so two writes, or a write and a removal, cannot interleave and leave the key with two open windows.
 

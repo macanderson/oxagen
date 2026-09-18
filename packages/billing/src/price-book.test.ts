@@ -27,6 +27,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 import {
   closeNegotiatedPriceEntry,
+  COLD_BOOK_EFFECTIVE_FROM,
   priceEntriesFromRateCards,
   resolvePriceEntry,
   setNegotiatedPriceEntry,
@@ -297,16 +298,22 @@ describe("the negotiated write path", () => {
     ).toBe(3_000_000n);
   });
 
-  it("is idempotent on the row key, and a re-set at the same instant corrects in place", async () => {
+  // The write instant for the in-place cases: before T1, so the row being
+  // corrected has not begun and no run has been priced against it.
+  const BEFORE = new Date("2026-09-05T00:00:00.000Z");
+
+  it("is idempotent on the row key, and a re-set at the same instant corrects in place before it ships", async () => {
     await setNegotiatedPriceEntry({
       ...SET,
       microsPerMillion: 2_400_000n,
       effectiveFrom: T1,
+      now: BEFORE,
     });
     await setNegotiatedPriceEntry({
       ...SET,
       microsPerMillion: 2_400_000n,
       effectiveFrom: T1,
+      now: BEFORE,
     });
     expect(fake.rows).toHaveLength(1);
 
@@ -315,6 +322,7 @@ describe("the negotiated write path", () => {
       ...SET,
       microsPerMillion: 2_000_000n,
       effectiveFrom: T1,
+      now: BEFORE,
     });
     expect(fake.rows).toHaveLength(1);
     expect(again.entry.microsPerMillion).toBe(2_000_000n);
@@ -331,11 +339,13 @@ describe("the negotiated write path", () => {
       modelAliases: ["anthropic/claude-sonnet-5"],
       microsPerMillion: 2_400_000n,
       effectiveFrom: T1,
+      now: BEFORE,
     });
     await setNegotiatedPriceEntry({
       ...SET,
       microsPerMillion: 2_000_000n,
       effectiveFrom: T1,
+      now: BEFORE,
     });
     expect(fake.rows).toHaveLength(1);
     expect(fake.rows[0]!.modelAliases).toEqual(["anthropic/claude-sonnet-5"]);
@@ -348,12 +358,14 @@ describe("the negotiated write path", () => {
       modelAliases: ["anthropic/claude-sonnet-5"],
       microsPerMillion: 2_400_000n,
       effectiveFrom: T1,
+      now: BEFORE,
     });
     await setNegotiatedPriceEntry({
       ...SET,
       modelAliases: [],
       microsPerMillion: 2_400_000n,
       effectiveFrom: T1,
+      now: BEFORE,
     });
     expect(fake.rows[0]!.modelAliases).toEqual([]);
   });
@@ -631,6 +643,121 @@ describe("the negotiated write path", () => {
     );
   });
 
+  // A row whose window has begun has priced frames whose cost records name
+  // it in priceEntryIds. Correcting it in place would change what a settled
+  // run cost the next time its rollup is recomputed, under the same entry id.
+  it("refuses to correct a row in place once its window has begun (negative)", async () => {
+    const now = new Date("2026-09-15T00:00:00.000Z");
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+      now,
+    });
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        microsPerMillion: 2_000_000n,
+        effectiveFrom: T1,
+        now,
+      }),
+    ).rejects.toMatchObject({
+      name: "HandlerError",
+      code: "conflict",
+      reason: "price_entry_already_effective",
+    });
+    expect(fake.rows[0]!.microsPerMillion).toBe(2_400_000n);
+
+    // The same terms again is a retry, and stays a no-op.
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        microsPerMillion: 2_400_000n,
+        effectiveFrom: T1,
+        now,
+      }),
+    ).resolves.toMatchObject({ closed: null });
+    expect(fake.rows).toHaveLength(1);
+
+    // A row that has NOT begun is still corrected in place: nothing has been
+    // priced against it.
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 1_000_000n,
+      effectiveFrom: T2,
+      now,
+    });
+    const corrected = await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 1_500_000n,
+      effectiveFrom: T2,
+      now,
+    });
+    expect(corrected.entry.microsPerMillion).toBe(1_500_000n);
+    expect(fake.rows).toHaveLength(2);
+  });
+
+  // The resolver treats a model and its aliases as one identity, so `foo`
+  // with alias `vendor/foo` and a later `vendor/foo` would be one thing priced
+  // twice, and a frame would take whichever spelling it reported.
+  it("refuses a model whose names overlap a live negotiated row under another model (negative)", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      model: "foo",
+      modelAliases: ["vendor/foo"],
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        model: "vendor/foo",
+        microsPerMillion: 2_000_000n,
+        effectiveFrom: T2,
+      }),
+    ).rejects.toMatchObject({
+      name: "HandlerError",
+      code: "conflict",
+      reason: "price_entry_alias_conflict",
+    });
+    // The reverse direction too: a new alias that names a live model.
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        model: "bar",
+        modelAliases: ["foo"],
+        microsPerMillion: 2_000_000n,
+        effectiveFrom: T2,
+      }),
+    ).rejects.toMatchObject({ reason: "price_entry_alias_conflict" });
+    expect(fake.rows).toHaveLength(1);
+
+    // Writes serialise on every name they answer to, sorted, so the write for
+    // `vendor/foo` waits on the lock the `foo` write took for its alias.
+    fake.log.length = 0;
+    await setNegotiatedPriceEntry({
+      ...SET,
+      model: "vendor/foo",
+      tokenClass: "output",
+      microsPerMillion: 12_000_000n,
+      effectiveFrom: T1,
+    });
+    const locks = fake.log.filter((l) => l.op === "lock").map((l) => l.sql);
+    expect(locks).toHaveLength(1);
+    expect(locks[0]).toContain("vendor/foo|output|");
+
+    // Once the first rate is ended, the overlapping name is free.
+    await closeNegotiatedPriceEntry({ ...SET, model: "foo", at: T2 });
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        model: "vendor/foo",
+        microsPerMillion: 2_000_000n,
+        effectiveFrom: T2,
+      }),
+    ).resolves.toMatchObject({ closed: null });
+  });
+
   it("leaves a different token class under another provider alone", async () => {
     await setNegotiatedPriceEntry({
       ...SET,
@@ -678,7 +805,12 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
   // a newly published identifier arrived unpriced, and a withdrawn one went on
   // matching. A rename is also NOT a repricing, so it must not open a new
   // effective-dated window.
-  it("updates aliases in place when only the names moved", async () => {
+  // Aliases decide which frames a row prices, and the rollup resolves a frame
+  // with the row's names as stored at the frame's instant. Updated in place
+  // on a months-old row, an added alias would retroactively price old frames
+  // and a withdrawn one would leave priceable frames unpriced on the next
+  // recomputation. So a rename is a successor window, like a repricing.
+  it("writes a successor row when only the names moved, and closes the old one at the sync instant", async () => {
     fake.rows.push(
       priceRow({
         provider: "anthropic",
@@ -705,16 +837,93 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
       ],
     });
 
-    expect(fake.rows).toHaveLength(1);
     expect(result).toMatchObject({ renamed: 1, written: 0, unchanged: 0 });
-    expect(fake.rows[0]!.modelAliases).toEqual([
+    expect(fake.rows).toHaveLength(2);
+    const [old, successor] = fake.rows;
+    // The old row keeps the names it priced frames under, closed at T1.
+    expect(old!.modelAliases).toEqual(["anthropic/claude-sonnet-5"]);
+    expect(old!.effectiveTo).toEqual(T1);
+    expect(successor!.modelAliases).toEqual([
       "anthropic/claude-sonnet-5",
       "claude-sonnet-5-latest",
     ]);
-    // Same window, same price: nothing was repriced.
-    expect(fake.rows[0]!.effectiveFrom).toEqual(FROM);
-    expect(fake.rows[0]!.effectiveTo).toBeNull();
-    expect(fake.rows[0]!.microsPerMillion).toBe(2_000_000n);
+    expect(successor!.effectiveFrom).toEqual(T1);
+    expect(successor!.effectiveTo).toBeNull();
+    expect(successor!.microsPerMillion).toBe(2_000_000n);
+  });
+
+  // The hourly job serialises its own executions, but the CLI's --apply runs
+  // the same read-modify-write outside that guard; two syncs with different
+  // instants would each close the same open rows and insert their own
+  // successor, since the key includes effective_from.
+  it("takes the list-book lock before it reads, so a CLI sync cannot interleave with the scheduled one", async () => {
+    fake.rows.push(priceRow());
+    await syncPriceBook({ effectiveFrom: T1, seeds: [] });
+    const ops = fake.log.map((l) => l.op);
+    expect(ops[0]).toBe("lock");
+    expect(fake.log[0]?.sql).toContain("price_book:list");
+    expect(ops.indexOf("lock")).toBeLessThan(ops.indexOf("select"));
+  });
+
+  // On a fresh installation the hourly job is the first writer, and a run
+  // accepted before its first tick has frames earlier than that tick. Rows
+  // effective from the tick could never price them, even on a retry.
+  it("writes a cold book effective from before any frame, so runs before the first sync still price", async () => {
+    const result = await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [
+        {
+          provider: "anthropic",
+          model: "claude-sonnet-5",
+          modelAliases: [],
+          region: null,
+          tokenClass: "input_uncached",
+          unit: "token",
+          currency: "USD",
+          microsPerMillion: 3_000_000n,
+          effectiveFrom: T1,
+          effectiveTo: null,
+        },
+      ],
+    });
+    expect(result.coldStart).toBe(true);
+    expect(fake.rows).toHaveLength(1);
+    expect(fake.rows[0]!.effectiveFrom).toEqual(COLD_BOOK_EFFECTIVE_FROM);
+    // A frame from a week before the first sync resolves.
+    const book: PriceEntry[] = fake.rows.map((r) => ({
+      ...(r as unknown as PriceEntry),
+    }));
+    expect(
+      resolvePriceEntry(book, {
+        orgId: ORG,
+        modelId: "claude-sonnet-5",
+        tokenClass: "input_uncached",
+        at: new Date("2026-09-03T00:00:00.000Z"),
+      })?.microsPerMillion,
+    ).toBe(3_000_000n);
+
+    // A warm book takes the requested instant.
+    const again = await syncPriceBook({
+      effectiveFrom: T2,
+      seeds: [
+        {
+          provider: "anthropic",
+          model: "claude-sonnet-5",
+          modelAliases: [],
+          region: null,
+          tokenClass: "input_uncached",
+          unit: "token",
+          currency: "USD",
+          microsPerMillion: 2_000_000n,
+          effectiveFrom: T2,
+          effectiveTo: null,
+        },
+      ],
+    });
+    expect(again.coldStart).toBe(false);
+    expect(
+      fake.rows.find((r) => r.effectiveTo === null)!.effectiveFrom,
+    ).toEqual(T2);
   });
 
   it("reports a row whose price and names both match as unchanged", async () => {

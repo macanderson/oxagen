@@ -19,7 +19,7 @@ export const schema = {
     "The contracted price in USD per one million units, as the contract reads it (2.40, not 2400000)",
   ),
   effectiveFrom: costPriceEntrySet.input.shape.effectiveFrom.describe(
-    "RFC 3339 instant the rate starts applying; omit for now. Never earlier than the rate it replaces",
+    "RFC 3339 instant the rate starts applying; omit for now. Never earlier than the rate it replaces. State it explicitly and reuse it to make a retry safe: each call that omits it starts a new window",
   ),
 };
 
@@ -28,10 +28,15 @@ export const metadata: ToolMetadata = {
   description: costPriceEntrySet.description,
   annotations: {
     readOnlyHint: false,
-    // The superseded row is closed, not overwritten, and the write is
-    // idempotent on its row key.
+    // The superseded row is closed, not overwritten.
     destructiveHint: false,
-    idempotentHint: true,
+    // NOT idempotent as advertised to a caller: the write is idempotent on its
+    // row key, but the key includes `effectiveFrom`, and a call that omits it
+    // takes the write instant. A retry after a lost response therefore opens
+    // ANOTHER window — closes the row the first call wrote and inserts a new
+    // one — rather than repeating the same operation. A caller that wants a
+    // safe retry states `effectiveFrom` itself, once, and reuses it.
+    idempotentHint: false,
   },
 };
 

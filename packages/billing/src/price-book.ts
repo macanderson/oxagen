@@ -38,6 +38,13 @@ export type { PriceTokenClass, PriceUnit } from "@oxagen/database/schema";
 
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
+/**
+ * The instant a cold book's first snapshot is effective from: before any
+ * frame Oxagen could have recorded, so a run accepted before the first sync
+ * still resolves a price on its next rollup. See {@link syncPriceBook}.
+ */
+export const COLD_BOOK_EFFECTIVE_FROM = new Date("2020-01-01T00:00:00.000Z");
+
 /** One resolved price: what the rollup multiplies a frame's units by. */
 export interface PriceEntry {
   id: string;
@@ -330,6 +337,12 @@ interface PriceBookSyncResult {
    * when the caller vouched for the seeds as complete (`retireAbsent`).
    */
   retired: number;
+  /**
+   * True when the book held no list row before this sync, so every seed was
+   * written effective from {@link COLD_BOOK_EFFECTIVE_FROM} rather than the
+   * requested instant, covering the frames that ran before the first sync.
+   */
+  coldStart: boolean;
 }
 
 /**
@@ -354,8 +367,18 @@ export async function syncPriceBook(args: {
   seeds?: readonly PriceEntrySeed[];
   retireAbsent?: boolean;
 }): Promise<PriceBookSyncResult> {
-  const seeds = args.seeds ?? priceEntriesFromRateCards(args.effectiveFrom);
+  const requested = args.seeds ?? priceEntriesFromRateCards(args.effectiveFrom);
   return withSystemDb(async (tx) => {
+    // One list-book writer at a time, whoever the caller is. The hourly job
+    // serialises its own executions, but `pnpm billing:price-book-sync
+    // --apply` runs this same read-modify-write outside that guard, and two
+    // syncs with different instants would each read the same open rows, close
+    // them and insert their own successor — the unique key includes
+    // `effective_from`, so both inserts land and the key ends with two open
+    // prices. Transaction-scoped, released on commit or rollback.
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${"price_book:list"}::text, 0))`,
+    );
     const existing = await tx
       .select()
       .from(schema.priceEntries)
@@ -365,6 +388,23 @@ export async function syncPriceBook(args: {
           eq(schema.priceEntries.source, "list"),
         ),
       );
+
+    // A cold book starts before every frame, not at this instant. On a fresh
+    // installation the hourly job is the first writer, and any run accepted
+    // before its first tick has frames earlier than the instant those rows
+    // would otherwise start at — a price effective from the tick could never
+    // resolve them, even on a retry, and their cost would stay unrecorded for
+    // ever. When the book holds no list row at all, the first snapshot is
+    // written effective from {@link COLD_BOOK_EFFECTIVE_FROM}, an instant
+    // before any frame Oxagen could have recorded, so every earlier frame
+    // prices at the first known rate rather than at nothing.
+    const coldStart = existing.length === 0;
+    const effectiveFrom = coldStart
+      ? COLD_BOOK_EFFECTIVE_FROM
+      : args.effectiveFrom;
+    const seeds = coldStart
+      ? requested.map((s) => ({ ...s, effectiveFrom }))
+      : requested;
     const key = (e: {
       provider: string;
       model: string;
@@ -374,12 +414,6 @@ export async function syncPriceBook(args: {
     const open = new Map<string, Row>();
     for (const row of existing)
       if (row.effectiveTo === null) open.set(key(row), row);
-
-    // Aliases are identity, not price. Two lists are the same list when they
-    // name the same things; order is how a catalog happened to serialise them.
-    const sameAliases = (a: readonly string[], b: readonly string[]) =>
-      a.length === b.length &&
-      [...a].sort().every((name, i) => name === [...b].sort()[i]);
 
     let written = 0;
     let unchanged = 0;
@@ -393,34 +427,24 @@ export async function syncPriceBook(args: {
         current.unit === seed.unit;
       if (
         pricedTheSame &&
-        sameAliases(current.modelAliases, seed.modelAliases)
+        sameNameList(current.modelAliases, seed.modelAliases)
       ) {
         unchanged += 1;
         continue;
       }
-      if (pricedTheSame) {
-        // The catalog republished this model under different names without
-        // moving its rate — a new gateway alias, or one the vendor retired.
-        // That is a rename, and a rename must NOT open a new price window:
-        // closing the current row and inserting a successor would restate the
-        // same price from a new instant for no reason, and every run already
-        // priced against the open row would stop naming the entry it used.
-        //
-        // Comparing only price, currency and unit (which is all this did) sent
-        // an alias-only change down the `unchanged` path instead, so the row
-        // kept its stale names forever: a newly published identifier arrived
-        // unpriced, and a withdrawn one went on matching. The names are updated
-        // in place, where they belong.
-        await tx
-          .update(schema.priceEntries)
-          .set({
-            modelAliases: [...seed.modelAliases],
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.priceEntries.id, current.id));
-        renamed += 1;
-        continue;
-      }
+      // A rename — the catalog republished this model under different names
+      // without moving its rate — takes the same path as a repricing: the
+      // current row closes at this instant and a successor carries the new
+      // names. Aliases decide which frames a row prices, and the rollup
+      // resolves each frame with the row's names as stored at the frame's
+      // instant, so an alias updated in place on a months-old row would
+      // retroactively price old frames under a name they never carried, and
+      // an alias withdrawn in place would leave frames that were priceable
+      // unpriced on the next recomputation. A successor window keeps every
+      // settled frame on the names it was priced with. (Comparing only the
+      // rate, which is all this once did, sent an alias-only change down the
+      // `unchanged` path and left the row's names stale for ever.)
+      if (pricedTheSame) renamed += 1;
       if (
         current &&
         current.effectiveFrom.getTime() > seed.effectiveFrom.getTime()
@@ -471,7 +495,7 @@ export async function syncPriceBook(args: {
           effective_to = NULL,
           updated_at = now()
       `);
-      written += 1;
+      if (!pricedTheSame) written += 1;
     }
 
     // Close any open row this sync has superseded under a DIFFERENT provider
@@ -522,18 +546,17 @@ export async function syncPriceBook(args: {
         // A row that starts at or after this sync cannot close at this
         // instant (`effective_to > effective_from`); it is a later correction
         // this run must not touch.
-        if (row.effectiveFrom.getTime() >= args.effectiveFrom.getTime())
-          continue;
+        if (row.effectiveFrom.getTime() >= effectiveFrom.getTime()) continue;
         await tx
           .update(schema.priceEntries)
-          .set({ effectiveTo: args.effectiveFrom, updatedAt: new Date() })
+          .set({ effectiveTo: effectiveFrom, updatedAt: new Date() })
           .where(eq(schema.priceEntries.id, row.id));
         closedIds.add(row.id);
         retired += 1;
       }
     }
 
-    return { written, unchanged, renamed, superseded, retired };
+    return { written, unchanged, renamed, superseded, retired, coldStart };
   });
 }
 
@@ -555,6 +578,13 @@ export const PRICE_UNIT_BY_TOKEN_CLASS: Record<PriceTokenClass, PriceUnit> = {
   image: "image",
   video_second: "second",
 };
+
+/** Two name lists are the same list when they name the same things, in any order. */
+function sameNameList(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sortedB = [...b].sort();
+  return [...a].sort().every((name, i) => name === sortedB[i]);
+}
 
 /** The row key the unique index arbitrates on, for a message a person can act on. */
 function entryKey(e: {
@@ -587,6 +617,11 @@ export interface SetNegotiatedPriceEntryArgs extends NegotiatedPriceKey {
   unit?: PriceUnit;
   /** The instant the rate starts applying. */
   effectiveFrom: Date;
+  /**
+   * The write instant. A row whose `effectiveFrom` is at or before it has
+   * shipped and is refused a non-identical in-place correction.
+   */
+  now?: Date;
 }
 
 /** What one negotiated write changed. */
@@ -612,7 +647,7 @@ export interface NegotiatedPriceWrite {
 async function readKeyRows(
   tx: Tx,
   key: NegotiatedPriceKey,
-  options: { includeList: boolean; anyProvider?: boolean },
+  options: { includeList: boolean; anyProvider?: boolean; anyModel?: boolean },
 ): Promise<Row[]> {
   const region = key.region ?? null;
   const rows = await tx
@@ -629,7 +664,9 @@ async function readKeyRows(
         ...(options.anyProvider === true
           ? []
           : [eq(schema.priceEntries.provider, key.provider)]),
-        eq(schema.priceEntries.model, key.model),
+        ...(options.anyModel === true
+          ? []
+          : [eq(schema.priceEntries.model, key.model)]),
         eq(schema.priceEntries.tokenClass, key.tokenClass),
         region === null
           ? isNull(schema.priceEntries.region)
@@ -661,15 +698,25 @@ async function readKeyRows(
  * two providers' rows for one model are two candidates for the same frame and
  * must not be written concurrently either. Keyed WITH the org, so two
  * organisations correcting the same model never wait on each other.
+ *
+ * One lock per NAME the row answers to — its model and every alias — taken
+ * in sorted order so two writers never wait on each other's second lock. The
+ * resolver treats a model and its aliases as one identity, so a write for
+ * `vendor/foo` and a write for `foo` with alias `vendor/foo` are writes to the
+ * same thing and must serialise; keyed on the model string alone they would
+ * not.
  */
 async function lockNegotiatedKey(
   tx: Tx,
   key: NegotiatedPriceKey,
+  names: readonly string[] = [key.model],
 ): Promise<void> {
   const region = key.region ?? null;
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtextextended(${`price_entry:${key.orgId}:${key.model}|${key.tokenClass}|${region ?? ""}`}::text, 0))`,
-  );
+  for (const name of [...new Set(names)].sort()) {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`price_entry:${key.orgId}:${name}|${key.tokenClass}|${region ?? ""}`}::text, 0))`,
+    );
+  }
 }
 
 /**
@@ -677,14 +724,26 @@ async function lockNegotiatedKey(
  * class, region), effective from `effectiveFrom`.
  *
  * The row key is the unique index's: a re-run with the same `effectiveFrom`
- * updates that row's price, currency, unit and aliases in place, so the call
- * is idempotent. A run with a LATER `effectiveFrom` never touches the shipped
- * row — it closes it at the new instant and inserts a new one, so a run priced
- * before the change keeps the entry it was priced with and a recomputed cost
- * record still resolves that id. A backdated write under an open row is
- * refused for the same reason {@link syncPriceBook} refuses one: it would
- * leave two rows open for one key, and it would reprice runs that already
- * settled.
+ * and the same terms is a no-op, and a re-run with the same `effectiveFrom`
+ * and different terms corrects the row in place ONLY while that instant is
+ * still in the future — a row whose window has begun has priced frames, and
+ * `priceEntryIds` on those cost records name it, so changing its terms would
+ * change what a settled run cost the next time its rollup is recomputed. A
+ * correction to a shipped row is refused; the caller states a later
+ * `effectiveFrom` instead. A run with a LATER `effectiveFrom` never touches
+ * the shipped row — it closes it at the new instant and inserts a new one, so
+ * a run priced before the change keeps the entry it was priced with and a
+ * recomputed cost record still resolves that id. A backdated write under an
+ * open row is refused for the same reason {@link syncPriceBook} refuses one:
+ * it would leave two rows open for one key, and it would reprice runs that
+ * already settled.
+ *
+ * Identity is the model AND its aliases, because that is how the resolver
+ * reads a row: an organization that has negotiated `foo` with alias
+ * `vendor/foo` and then negotiates `vendor/foo` as a model would hold two
+ * live rows for one thing, and a frame would be priced by whichever spelling
+ * it happened to report. A write whose names overlap a live row under a
+ * different model is refused until that rate is ended.
  *
  * `source` is always `negotiated` and `org_id` is always the organization's:
  * `price_entries_org_source_check` is `(source = 'list') = (org_id IS NULL)`,
@@ -709,14 +768,37 @@ export async function setNegotiatedPriceEntry(
   // list depends on that — while an explicit empty array clears them.
   const modelAliases = args.modelAliases;
   const from = args.effectiveFrom;
+  const now = args.now ?? new Date();
   const key = entryKey({ ...args, region });
+  const names = new Set([args.model, ...(modelAliases ?? [])]);
 
   return withTenantDb(async (tx) => {
-    await lockNegotiatedKey(tx, args);
-    const everyProvider = await readKeyRows(tx, args, {
+    await lockNegotiatedKey(tx, args, [...names]);
+    const everyModel = await readKeyRows(tx, args, {
       includeList: false,
       anyProvider: true,
+      anyModel: true,
     });
+    const live = (r: Row) =>
+      r.effectiveTo === null || r.effectiveTo.getTime() > from.getTime();
+
+    // One identity per negotiated class. The resolver matches a frame against
+    // a row's model AND its aliases, so a live row under a different model
+    // string that shares a name with this write is the same thing priced
+    // twice — and a frame would take whichever spelling it reported.
+    const overlapping = everyModel.find(
+      (r) =>
+        r.model !== args.model &&
+        live(r) &&
+        [r.model, ...r.modelAliases].some((name) => names.has(name)),
+    );
+    if (overlapping)
+      throw new HandlerError({
+        code: "conflict",
+        reason: "price_entry_alias_conflict",
+        message: `${args.model} ${args.tokenClass} shares a name with the negotiated row for ${overlapping.model} (aliases ${JSON.stringify(overlapping.modelAliases)}, effective from ${overlapping.effectiveFrom.toISOString()}); the resolver treats a model and its aliases as one identity, so end that rate before setting this one`,
+      });
+    const everyProvider = everyModel.filter((r) => r.model === args.model);
 
     // One provider per negotiated model and class. The row key carries the
     // provider string, so nothing in the table stops an organization holding
@@ -770,6 +852,25 @@ export async function setNegotiatedPriceEntry(
         code: "conflict",
         reason: "price_entry_already_ended",
         message: `the negotiated price for ${key} effective from ${from.toISOString()} was ended at ${atInstant.effectiveTo.toISOString()}; re-establish it as a new row with a later effectiveFrom`,
+      });
+
+    // A row whose window has begun has priced frames, and their cost records
+    // name it in `priceEntryIds`. Correcting it in place would change what a
+    // settled run cost the next time its rollup is recomputed, and the record
+    // would still cite the same entry id as proof. The same terms again is a
+    // harmless no-op (a retry); different terms need a later window.
+    const identical =
+      atInstant !== undefined &&
+      atInstant.microsPerMillion === args.microsPerMillion &&
+      atInstant.currency === currency &&
+      atInstant.unit === unit &&
+      (modelAliases === undefined ||
+        sameNameList(atInstant.modelAliases, modelAliases));
+    if (atInstant && !identical && from.getTime() <= now.getTime())
+      throw new HandlerError({
+        code: "conflict",
+        reason: "price_entry_already_effective",
+        message: `the negotiated price for ${key} effective from ${from.toISOString()} is already in force and has priced runs; state the correction as a new row with a later effectiveFrom`,
       });
 
     const open = rows.find((r) => r.effectiveTo === null) ?? null;

@@ -355,6 +355,31 @@ describe("readObservedModels", () => {
     expect(query_params).not.toHaveProperty("workspaceId");
   });
 
+  // `list_unpriced_models` judges the book as of `at`; a model first run after
+  // `at` would otherwise be reported against a snapshot from before it ran.
+  it("bounds both stores above by `until` when one is given, and leaves them open-ended otherwise", async () => {
+    answer([]);
+    const UNTIL = new Date("2026-09-10T00:00:00.000Z");
+    await readObservedModels({ orgId: ORG, since: SINCE, until: UNTIL });
+    const bounded = lastQuery();
+    expect(bounded.query).toContain("created_at <= {until:DateTime64(3)}");
+    expect(
+      bounded.query.match(/ts <= \{until:DateTime64\(3\)\}/g),
+    ).toHaveLength(
+      // The tacho branch, and the per-session source pick under the same filter.
+      2,
+    );
+    expect(bounded.query_params).toMatchObject({
+      until: "2026-09-10 00:00:00.000",
+    });
+
+    answer([]);
+    await readObservedModels({ orgId: ORG, since: SINCE });
+    const open = lastQuery();
+    expect(open.query).not.toContain("{until");
+    expect(open.query_params).not.toHaveProperty("until");
+  });
+
   it("fences both stores on the workspace when one is named", async () => {
     answer([]);
     await readObservedModels({ orgId: ORG, workspaceId: WS, since: SINCE });

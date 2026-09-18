@@ -20,7 +20,7 @@ Two answers close a gap. An operator of the installation states the rate in the 
 
 | Field | Type | Required | Constraint |
 |---|---|---|---|
-| `since` | string | no | RFC 3339; the start of the window model calls are counted over. The last 30 days when omitted |
+| `since` | string | no | RFC 3339; the start of the window model calls are counted over. The last 30 days when omitted. The window ends at `at`: a model first run after `at` is not reported against a book snapshot from before it ran |
 | `at` | string | no | RFC 3339; the instant the price book must be effective at. The read instant when omitted, and the instant the default window is counted back from |
 
 ## Output

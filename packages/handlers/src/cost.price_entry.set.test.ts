@@ -143,6 +143,7 @@ describe("set_price_entry", () => {
       // integer micro-USD.
       microsPerMillion: 2_400_000n,
       effectiveFrom: NOW,
+      now: NOW,
     });
     expect(out.entry.microsPerMillion).toBe("2400000");
     expect(out.closed).toBeNull();

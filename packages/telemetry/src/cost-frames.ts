@@ -383,14 +383,19 @@ export async function readObservedModels(args: {
   orgId: string;
   workspaceId?: string;
   since: Date;
+  /** Frames at or before this instant only; open-ended when omitted. */
+  until?: Date;
 }): Promise<ObservedModelRow[]> {
   const ch = clickhouse();
   const workspace =
     args.workspaceId === undefined
       ? ""
       : "AND workspace_id = {workspaceId:UUID}";
+  const until =
+    args.until === undefined ? "" : "AND {col} <= {until:DateTime64(3)}";
   const tachoWhere = `org_id = {orgId:UUID}
           AND ts >= {since:DateTime64(3)}
+          ${until.replace("{col}", "ts")}
           AND kind = 'llm_call'
           AND source IN {sources:Array(String)}
           AND model != ''
@@ -419,6 +424,7 @@ export async function readObservedModels(args: {
         FROM token_usage
         WHERE org_id = {orgId:UUID}
           AND created_at >= {since:DateTime64(3)}
+          ${until.replace("{col}", "created_at")}
           AND model != ''
           ${workspace}
         GROUP BY toString(model), toString(provider)
@@ -450,6 +456,7 @@ export async function readObservedModels(args: {
           ? {}
           : { workspaceId: args.workspaceId }),
         since: chDateTime(args.since),
+        ...(args.until === undefined ? {} : { until: chDateTime(args.until) }),
         sources: TACHO_TOKEN_SOURCES,
         limit: OBSERVED_MODEL_LIMIT,
       },

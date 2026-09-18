@@ -415,7 +415,9 @@ export function fakePriceExecutor(store: FakePriceStore) {
       // executor is single-threaded, and the statement is logged so a test can
       // assert the write asks for the lock before it reads.
       if (/pg_advisory_xact_lock/i.test(text)) {
-        store.log.push({ op: "lock", sql: text });
+        // The key travels as a bound value; rendered into the log so a test can
+        // assert WHICH lock was taken, not only that one was.
+        store.log.push({ op: "lock", sql: `${text} ${String(params[0])}` });
         return Promise.resolve([]);
       }
       if (!/^INSERT INTO cost\.price_entries/i.test(text))

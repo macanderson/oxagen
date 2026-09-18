@@ -12,7 +12,11 @@ import {
   type FetchLike,
   type PublishedModelPrice,
 } from "./price-sources";
-import { usdPerMillionToMicros } from "./price-book";
+import {
+  resolvePriceEntry,
+  usdPerMillionToMicros,
+  type PriceEntry,
+} from "./price-book";
 import { PROVIDER_RATE_CARD, type RateCard } from "./pricing";
 
 const FROM = new Date("2026-09-01T00:00:00.000Z");
@@ -291,6 +295,64 @@ describe("mergePublishedPrices", () => {
     // Not a field-by-field merge: the later source contributes nothing at all,
     // so a total is never half an invoice and half a scrape.
     expect(merged.prices[0]!.cachedInputPer1M).toBe(null);
+  });
+
+  // The resolver takes the LONGEST name that prefixes a frame's model id, so
+  // an exact-name merge that kept both an override for `claude-sonnet` and
+  // the card's `claude-sonnet-5` would let every `claude-sonnet-5-…` frame
+  // pick the longer list row and bypass the negotiated rate, silently.
+  it("drops a lower source's model whose name falls inside a name a higher source claimed", () => {
+    const family = published({
+      model: "claude-sonnet",
+      inputPer1M: 1,
+      outputPer1M: 2,
+      source: "operator_override",
+    });
+    const card = published({
+      model: "claude-sonnet-5",
+      inputPer1M: 3,
+      outputPer1M: 15,
+      source: "in_code_card",
+    });
+    const other = published({
+      model: "claude-fable-5",
+      inputPer1M: 15,
+      outputPer1M: 75,
+      source: "in_code_card",
+    });
+    const merged = mergePublishedPrices([[family], [card, other]]);
+    expect(merged.prices.map((p) => p.model)).toEqual([
+      "claude-sonnet",
+      "claude-fable-5",
+    ]);
+    expect(merged.counts).toMatchObject({
+      operator_override: 1,
+      in_code_card: 1,
+    });
+
+    // And the family row is what a specific frame then resolves to.
+    const book: PriceEntry[] = seedsFromPublishedPrices(
+      merged.prices,
+      new Date("2026-09-01T00:00:00.000Z"),
+    ).map((s, i) => ({ ...s, id: `e-${i}`, orgId: null, source: "list" }));
+    expect(
+      resolvePriceEntry(book, {
+        orgId: "00000000-0000-4000-8000-000000000001",
+        modelId: "claude-sonnet-5-20260901",
+        tokenClass: "input_uncached",
+        at: new Date("2026-09-02T00:00:00.000Z"),
+      })?.microsPerMillion,
+    ).toBe(usdPerMillionToMicros(1));
+  });
+
+  it("keeps a family and a specific model when the SAME source published both", () => {
+    const merged = mergePublishedPrices([
+      [
+        published({ model: "claude-sonnet", source: "in_code_card" }),
+        published({ model: "claude-sonnet-5", source: "in_code_card" }),
+      ],
+    ]);
+    expect(merged.prices).toHaveLength(2);
   });
 
   it("attributes each model to the source that actually won it", () => {
