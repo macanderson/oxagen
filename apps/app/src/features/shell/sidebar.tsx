@@ -47,7 +47,7 @@ export function SidebarNav({
   onNavigate?: () => void;
 }) {
   const t = useTranslations("shell");
-  const { sections, pathname } = useSidebarSections(data);
+  const { sections, pathname, ws } = useSidebarSections(data);
   const labelId = useId();
   return (
     <nav aria-label={t("sidebar.navLabel")} className="flex-1 px-2.5 py-3">
@@ -85,6 +85,11 @@ export function SidebarNav({
                 </li>
               );
             })}
+            {section.key === "workspace" ? (
+              <li>
+                <WorkspaceSettingsButton ws={ws} onNavigate={onNavigate} />
+              </li>
+            ) : null}
           </ul>
         </div>
       ))}
@@ -93,12 +98,11 @@ export function SidebarNav({
 }
 
 /**
- * Workspace settings, beside the workspace tile it settles. The dialog it
- * opens carries the workspace's main repository — the repository `.oxagen/`
- * is read from — and until that is bound the workspace is provisional, so the
- * control sits with the workspace switcher rather than in a menu. It is hidden
- * without a workspace, exactly as the switcher is, because there would be
- * nothing to settle.
+ * Workspace settings, the last item of the Workspace section. It opens a
+ * dialog rather than a page, so it is a button styled as a nav link. The
+ * dialog carries the workspace's main repository, the one `.oxagen/` is read
+ * from. It is hidden without a workspace, as the section is, because there
+ * would be nothing to settle.
  */
 function WorkspaceSettingsButton({
   ws,
@@ -117,7 +121,7 @@ function WorkspaceSettingsButton({
       data-touch-target=""
       aria-haspopup="dialog"
       onClick={() => {
-        // On a phone this header is inside the nav drawer, which is a modal of
+        // On a phone this nav is inside the nav drawer, which is a modal of
         // its own. Opening the settings dialog without closing it stacks two
         // modal roots and two scrims, and the drawer is still there when the
         // dialog closes — so the person lands back in the navigation they left
@@ -126,22 +130,15 @@ function WorkspaceSettingsButton({
         onNavigate?.();
         setWorkspaceSettingsOpen(true);
       }}
-      className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] font-medium text-sidebar-nav-link-fg hover:bg-sidebar-nav-link-hover-bg hover:text-sidebar-nav-link-hover-fg focus-visible:outline-2 focus-visible:outline-ring"
+      className="mb-px flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm font-medium text-sidebar-nav-link-fg transition-colors hover:bg-sidebar-nav-link-hover-bg hover:text-sidebar-nav-link-hover-fg focus-visible:outline-2 focus-visible:outline-ring"
     >
       <Settings aria-hidden="true" className="size-4 flex-none opacity-85" />
-      <span className="flex-1 truncate">{t("open")}</span>
+      <span className="flex-1">{t("open")}</span>
     </button>
   );
 }
 
-export function SidebarHeader({
-  data,
-  onNavigate,
-}: {
-  data: ShellData;
-  /** Called before the settings dialog opens, so the phone drawer can close itself first. */
-  onNavigate?: () => void;
-}) {
+export function SidebarHeader({ data }: { data: ShellData }) {
   const { ws } = useSidebarSections(data);
   const tApp = useTranslations("app");
   return (
@@ -155,7 +152,6 @@ export function SidebarHeader({
       </SafeLink>
       <OrgSwitcher data={data} />
       <WorkspaceSwitcher data={data} ws={ws} />
-      <WorkspaceSettingsButton ws={ws} onNavigate={onNavigate} />
     </div>
   );
 }
