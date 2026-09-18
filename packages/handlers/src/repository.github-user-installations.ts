@@ -72,6 +72,38 @@ export interface GithubUserInstallationsDeps {
   ): Promise<UserGithubInstallation[] | null>;
 }
 
+/**
+ * The env `resolveWorkspaceGithubUserToken` needs to open a stored token, in
+ * whichever service invokes it.
+ *
+ * Both providers, not one. The read path picks its adapter from the envelope's
+ * own `keyId` (`resolveIngestionCryptoAdapterForKeyId`), never from
+ * `INGESTION_CRYPTO_PROVIDER` — that var selects the WRITE provider — so a
+ * runtime that opens tokens has to be able to open either envelope, and
+ * `buildEnvAdapter` / `buildKmsAdapter` throw by name when their var is unset.
+ * A token wrapped under KMS and read by a runtime holding only the env key is
+ * `{ ok: false, reason: "unreadable" }`, which the dialog renders as a
+ * connection that cannot be used and nobody can repair from the UI.
+ *
+ * `INGESTION_CRYPTO_PROVIDER` is in the list although the read path does not
+ * consult it: a service that opens these tokens is a service that stores them
+ * back on re-authorization, and a runtime holding the key material but not the
+ * provider selection would write under the wrong one.
+ *
+ * Named here so `repository.github-env.test.ts` can hold every one of them to
+ * the environment contract of every service that invokes these capabilities
+ * (ADR-088). A provider added to @oxagen/crypto without its var added here is
+ * the recurrence that test exists to catch.
+ */
+export const GITHUB_TOKEN_DECRYPT_ENV = [
+  // buildEnvAdapter: the base64 AES-256-GCM master key.
+  "INGESTION_ENCRYPTION_KEY",
+  // buildKmsAdapter: the wrapping key's ARN.
+  "AWS_KMS_INGESTION_KEY_ARN",
+  // Selects the provider on the write path.
+  "INGESTION_CRYPTO_PROVIDER",
+] as const;
+
 /** The encrypted-token envelope `ingestion.oauth_accounts` stores. */
 interface EncryptedToken {
   keyId: string;

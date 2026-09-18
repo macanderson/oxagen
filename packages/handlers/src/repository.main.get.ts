@@ -86,8 +86,13 @@ export interface GithubAppUrls {
  * because both mint a token with `GITHUB_APP_ID` + `GITHUB_APP_PRIVATE_KEY`
  * and refuse without them. That strands the operator PAST the point of no
  * return, which is worse than refusing at the door.
+ *
+ * Exported so `repository.github-env.test.ts` can hold every name in it to the
+ * environment contract of every service that invokes this capability. The app
+ * runs these handlers in-process (ADR-088), and a var registered for `api`
+ * alone reaches no other service's build environment.
  */
-const REQUIRED_GITHUB_APP_ENV = [
+export const REQUIRED_GITHUB_APP_ENV = [
   // Mints the identity (connect) URL below.
   "GITHUB_APP_CLIENT_ID",
   // Mints the install and manage URLs below.
