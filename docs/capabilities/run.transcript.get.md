@@ -42,6 +42,7 @@ One run read as a transcript at one of three zoom levels (Mission Control spec ย
 | `entries[].truncated` | boolean | true when `text` was cut |
 | `entries[].fidelity` | `full` \| `digest_only` | the opening frame's body fidelity, so a `digest_only` recording says so on every entry |
 | `entries[].frames` | integer | frames folded, the opening frame included |
+| `entries[].turn` | integer or null | the turn the opening frame belongs to, 1-based, the same at every zoom. A recording with `turn_start` frames counts them, and a frame before the first one is in no turn (null). A recording without them starts a new turn wherever the turn index changes, and every frame is in one. A client groups `everything` entries into turns by this value |
 | `entries[].cost` | `{ micros, currency, basis }` or null | the folded frames' cost records summed (spec ยง8.4: cumulative cost is a prefix sum computed on read); null when none carried one. Ledger frames carry no cost record; spend is metered per run |
 | `complete` | boolean | false when the run has more than 10 000 frames or more entries than the transcript can carry |
 
