@@ -7,6 +7,8 @@
 | **Owner** | Mac Anderson |
 | **Builds** | a new `apps/app` (`@oxagen/app`) in `~/Projects/oxagen`; today's app moves to `apps/app_deprecated` (`@oxagen/app-deprecated`) |
 | **Source** | `2026-09-11-oxagen-mission-control-spec.md` (§3, §4, §14, §15, §19, App. A, B, F) · mockups `~/Documents/Oxagen/Mockups` (`mc.html` @ tag `mc-baseline-w3`, W1–W12) · `docs/feedback-mockups.md` · the repo at `origin/main` |
+| **Amended 2026-09-18** | By the steering, graph and gateway review, approved in full by the maintainer on 2026-09-18 (`docs/audits/2026-09-18-steering-graph-gateway-review.md`). §0.2 records the decisions. §8 is the six-phase refactor path (Phase 0 to Phase 5), with the freeze on new governance ceremony in Phase 0 and the one spike that gates Phase 4. §8.8 says where each phase sits against the batches, lanes and milestones, and which lanes it moves or retires. |
+| **Canonical copy** | The canonical copy of this plan is `docs/implementation-plan.md` in https://github.com/macanderson/roadmap. This file is the copy carried in the oxagen monorepo. No build step joins the two, so a change is made in both by hand. §0.2 and §8 are identical in both copies. The rest of this copy predates the scope review of 2026-09-14 and the decisions of 2026-09-15 that the canonical copy carries. |
 | **Optimised for** | parallel agents: every lane owns a disjoint set of paths, and every batch lists what it waits on |
 | **Deletes** | nothing outside the new `apps/app`'s own scaffolding. Every feature spec §2.2 and App. E take off the surfaces is **de-registered, not deleted**: `DEREGISTERED.md` at the repo root records each one with its file paths, and `pnpm check:deregistered` fails the build if one of them disappears |
 
@@ -24,6 +26,26 @@
 | 6 | Pages are Server Components. Client islands only for the transport (player), approval countdown, dialogs, the command menu, the assistant flyout and list controls. Live data arrives over one SSE route with a `run_seq` cursor. | The run ledger already exposes `readAttemptEventsSince(runId, afterRunSeq, limit)`, a resumable cursor that maps directly onto `Last-Event-ID`. |
 | 7 | All interface prose lives in `messages/en.json` (ICU) via `next-intl`, without locale routing. | Spec §15 "Language": no hard-coded prose, ICU MessageFormat, English source, RTL-ready. Today's app has no catalog, so doing it from line one is cheaper than retrofitting. |
 | 8 | Money on the wire is `{ micros: string, currency, basis }`. Formatting happens only in `<Money>`. | Spec App. A: money is bigint micro-USD. The mockup stores `"2,450.00"`-style strings, which silently zero under `parseFloat`. |
+
+### 0.2 Maintainer decisions of 2026-09-18
+
+Approved in full by the maintainer on 2026-09-18, from the steering, graph and gateway review. None of these is open. The one open item is a spike (§8.7). (§0.1, the decisions of 2026-09-15, is in the roadmap copy of this plan.)
+
+| # | Decision | Phase (§8) |
+|---|---|---|
+| 1 | One assembler, `assembleSteering(run, budget)`, returning a stable prefix, a volatile selection and a manifest recorded as a `steering.manifest` frame | 0, 1 |
+| 2 | Storage stays plural, with one writer per fact: git for what is published, Postgres for what must be transactional or money-grade, the graph for lineage, evidence and entity links. Only the assembler and its index are single | all |
+| 3 | Steering and gating are two planes that never merge. One authoring surface, two compilations. Every gate emits a gate notice into steering | 1, 4 |
+| 4 | One item type, `SteeringItem` | 1 |
+| 5 | Precedence fixed in one place: a gate beats everything, a published `must` beats recalled memory, repository scope may narrow workspace scope and never widen it | 1 |
+| 6 | Oxagen does not own the context window. Its injection points are exactly five | 0, 1, 4 |
+| 7 | The index sits behind a port: Postgres first, the graph in Phase 3 with Postgres as the fallback | 1, 3 |
+| 8 | Skills are steering, and they are files: governed through a pull request, delivered by sync, living under Steering | 2 |
+| 9 | One screen: Steering is the hub, with tabs Records, Skills, Memory, Ontology, Policy, Proposals, Preview | 2 |
+| 10 | The gateway: `tachod` grows into a hook adapter, a loopback model proxy, an MCP aggregator and a control channel | 4 |
+| 11 | The tier ladder is four words, computed from what was actually routed: observe, harness, gateway, contained | 4, 5 |
+| 12 | The sandbox is the top tier, not the only tier, and hooks stay. `oxagen run -- <agent>`. ADR-043 is revised by one sentence | 5 |
+| 13 | The refactor path is six phases, and new governance ceremony is frozen until Phase 0 lands | §8 |
 
 ---
 
@@ -1128,6 +1150,8 @@ Each wired action updates `apps/app/capability-ui-map.json` with its binding, wh
 | Q5 | Record kinds: the spec says twelve; the mockup and Stella have six. | L1 enum | Six, and correct the spec. |
 | Q6 | Bump `packages/ui` to Base UI 1.8.0 and motion 13 with the app, or keep the app on the kit's versions? | L2 | Keep the kit's versions in B1; bump the kit in its own PR. |
 
+> **2026-09-18.** Nothing the maintainer approved on 2026-09-18 is open (§0.2). The one open item from that review is a spike, not a decision, and it gates Phase 4 only (§8.7).
+
 ---
 
 ## 7. Lane prompt template
@@ -1159,3 +1183,95 @@ Enums and money follow src/data/contracts (spec vocabulary), never the mockup's 
 Done when: pnpm --filter @oxagen/app lint typecheck test:unit test:e2e -- <page> pass; axe clean;
 stories for new components; PR body lists each §3 row you touched with its status.
 ```
+
+---
+
+## 8. The steering and gateway refactor path (2026-09-18)
+
+The adversarial review of 2026-09-18 (steering, the graph, and the gateway) read oxagen `main` and found that the spec's design was right and the code had diverged from it: almost nothing reaches a wrapped agent. The maintainer approved the review in full on 2026-09-18. This section is its refactor path: six phases, Phase 0 to Phase 5, each of which ships alone and is useful alone. The spec carries the design (§4.2, §7, §10.4 to §10.7, §17.2, §21). File paths below were checked against oxagen `main` at `02278c913`.
+
+**What is true on `main` today.** Records, the bundle's `context.system` (hardcoded `null`), bundle permissions and budget (always empty, `budget.mode = "observed"`) and skills (inventory only) do not steer any Claude Code or Codex run. Operator steer commands are the only live text channel from the server to a running wrapped agent. The wrapped tier is a recorder plus a kill switch. No model proxy exists and no sandbox exists. The MCP gateway is real and server-enforced, and it is registered only into Claude Desktop. Spend for Claude Code is self-reported, and Codex and Stella report none. Memory reaches only the in-app agent, capped at 6. `packages/engram` and `packages/context-provider` have no production importer. The graph holds no steering.
+
+### 8.1 Phase 0. Make one record steer one agent
+
+| | |
+|---|---|
+| **Scope** | Compile the workspace's active records with `force` of `must` or `should` into `context.system` in `unsignedBundle`. Nothing else. Reopen issue #2592 against this seam, as ADR-051's supersession note asks. |
+| **Seam** | `packages/handlers/src/lib/tacho-host.ts:255` (`unsignedBundle`; `context: { system: null }` is line 276). The records come from `agent.context_records` (`packages/database/src/schema/agent.ts:1303`) through `packages/handlers/src/context.steering.store.ts`. The wire already allows it (`packages/tacho/src/wire.ts:375`, 16 KiB), and the daemon already delivers it (`packages/tacho/src/collector/hook-handler.ts:322`). The bundle etag already covers content, and the steering version is already the promotion ledger length (`context.steering.store.ts:190`), so a merge bumps the bundle with no new plumbing. |
+| **Done when** | A record merged through a Context PR changes what a wrapped Claude Code run is told at `SessionStart`. The run's `oxagen.context_digest` attribute shows the new digest. A workspace with no `must` or `should` records still sends `null`. A text over 16 KiB is cut from the end (`should` before `must`) and the cut is logged. |
+| **Unblocks** | Everything. It is the first time the governance flow has an effect on an agent. |
+| **Depends on** | Nothing. Days, not weeks. |
+| **The freeze** | **New governance ceremony is frozen until Phase 0 lands.** No new check type, governance mode, review role, ledger field, promotion threshold or proposal workflow is started. The ceremony was built before the delivery, and this phase is the delivery. Work in flight on existing flows finishes. Bug fixes are not ceremony. |
+
+### 8.2 Phase 1. One type, one assembler
+
+| | |
+|---|---|
+| **Scope** | `SteeringItem` and `assembleSteering(run, budget)` returning the stable prefix, the volatile selection and the manifest (spec §10.5 is the contract). Source adapters: the record registry, `:AgentMemory`, gate notices from rules and mandates, skill descriptions, and `promptConfig.additionalInstructions`. The index port with its Postgres implementation. `UserPromptSubmit` calls the assembler with the prompt as the query, under a tight timeout, and fails open. Precedence fixed in one place. The two publish paths collapse so every row carries `kind` and `force`. The in-app agent uses the same assembler. The `steering.manifest` frame. |
+| **Seam** | `packages/context-provider` becomes the assembler's home and reuses `packWithinBudget` (`packages/context-provider/src/budget.ts:37`). `packages/engram` is deleted or folded in. Deleting it needs an ADR that names the files (the de-registered rule in `CLAUDE.md`), so folding is the default. `packages/tacho/src/collector/hook-handler.ts:383` (`UserPromptSubmit`). `packages/handlers/src/context.record.publish.ts` and `packages/handlers/src/context.pr.merge.ts` (the two publish paths). `packages/agent/src/runtime/assistant-turn.ts` and `assistant-recall.ts:23` (`RECALL_LIMIT = 6`), and `packages/ai/src/prompts/registry.ts:82` (the unconditional append of additional instructions). Phase 0's compile step moves behind the assembler's prefix. |
+| **Done when** | Every run that reached an injection point carries a `steering.manifest` frame listing what was rendered and what was cut, with a reason each. One function produces what the wrapped agent and the in-app agent are told. A slow or failing assembler never holds a prompt: the hook answers `{}` and the manifest says `fail_open`. A recalled memory is never rendered as a rule. No `agent.context_records` row has a null `kind` or `force`. |
+| **Unblocks** | Phase 2's Preview, which is this function with no run. Effect measurement, retirement and promotion, which need the manifest. Phase 4's gate compilation. |
+| **Depends on** | Phase 0. |
+
+### 8.3 Phase 2. One screen
+
+| | |
+|---|---|
+| **Scope** | Steering becomes the hub. Tabs, in this order: Records, Skills, Memory, Ontology, Policy, Proposals, Preview. Preview: pick an agent and a prompt, and see exactly what would be injected, what was cut, and why. Skills move under Steering and become governed files delivered by sync, authored through the same pull request flow. Ontology gets a small home there for ontology notes that steer. Skills and Ontology lose their top-level navigation entries. |
+| **Seam** | `apps/app/src/app/[org]/[ws]/steering/` (already an optional catch-all for tabs, §4.10) and `apps/app/src/app/[org]/[ws]/skills/`, which becomes a redirect to `steering/skills` in `apps/app/src/proxy.ts` (§4.11). `apps/app/src/features/skills/`. `apps/app/src/data/contracts/steering.ts` and `apps/app/src/data/live/steering.ts` gain the Preview read over `assembleSteering`. Skill sync materializes files in the checkout and rides enrollment's writers under `packages/tacho/src/host/`. |
+| **Done when** | The seven tabs route at `/{org}/{ws}/steering/{tab}`. Preview's output for an agent and a prompt is byte-identical to what the assembler delivers for the same inputs. A skill published through a pull request appears in a wrapped harness's skills directory after sync, and an unpublished one is removed. |
+| **Unblocks** | An operator can see the competition for context, which is what makes the budget tunable. |
+| **Depends on** | Phase 1. While a steering checkout is behind the production branch, files in the checkout are stale, so sync reports the commit it materialized. |
+
+### 8.4 Phase 3. The graph becomes the index
+
+| | |
+|---|---|
+| **Scope** | Project every item as a `:Record` node with `ABOUT` edges to files, repositories and entities (spec §9). One direction only, registry to graph, verified by hash. Switch the assembler's relevance stage to the graph. Keep the Postgres path as the fallback behind the same port. |
+| **Seam** | A projector beside `packages/ontology` and `packages/ingestion`, neither of which writes a `:Record` node today. The `SteeringIndex` port from Phase 1 gains a graph implementation. Tenancy goes through the Neo4j seam of ADR-087. |
+| **Done when** | With the knowledge graph on, the volatile selection prefers items about the files and entities the run touches. With `NEO4J_URI` unset, or on a hash mismatch, the assembler reads Postgres and the manifest says which index answered. Turning Neo4j off changes ranking only, never delivery, and never a gate. |
+| **Unblocks** | Relevance by what a run touches, which a flat list cannot do. |
+| **Depends on** | Phase 1, and the knowledge graph being on by default. **Do not start before that.** Delivery never waits for the graph. |
+
+### 8.5 Phase 4. The gateway
+
+| | |
+|---|---|
+| **Scope** | `tachod` grows into the gateway. Add the loopback model proxy: Anthropic Messages and OpenAI Responses passthrough with streaming, and enrollment writes the base URL. Move metering to observed. Enforce `session_limit_usd`. Re-land ADR-051's per-turn volatile injection at the proxy. Implement a real `interrupt`. Turn the MCP gateway into an aggregator for wrapped harnesses: enrollment re-serves the harness's existing MCP servers through loopback with displace-and-restore, and pins managed settings where a vendor offers them. Fill bundle permissions from the second compilation of Phase 1. Prompt bodies never leave the machine: only digests and usage go up. The vendor credential stays on the machine. |
+| **Seam** | `packages/tacho/src/collector/` (`daemon.ts`, `server.ts`, `loopback-guard.ts`, `mcp-gateway.ts`). `packages/tacho/src/cli/enroll.ts` and `unenroll.ts`. `packages/tacho/src/host/settings-writer.ts`, `codex-writer.ts`, `stella-writer.ts` and `mcp-config-writer.ts` (`mergeOxagenMcpServer` and `stripOxagenMcpServer` are the displace-and-restore it extends). `packages/tacho/src/wire.ts:370` (`session_limit_usd`, which nothing reads today). `packages/handlers/src/lib/tacho-host.ts:269` (the empty permissions and the `observed` budget). Oxagen Desktop installs it (the desktop spec). |
+| **Done when** | A wrapped run whose model and MCP traffic went through `tachod` reads `gateway`, and a run that did not still reads `harness`. Spend is observed for Claude Code, Codex and Stella alike, and every number carries its basis. A breached `session_limit_usd` refuses the next model call. `interrupt` stops an in-flight response and the partial output is recorded and billed. Unenroll restores every file enrollment displaced. No prompt body appears in anything sent to Oxagen's servers. |
+| **Unblocks** | The words "observed" and "enforced" for routed traffic. Spend for every harness. Phase 5. |
+| **Depends on** | Phase 1 for the gate compilation and the volatile selection. **The spike of §8.7 gates this phase and no other.** |
+| **To settle in the gateway ADR** | Where the volatile ranking runs so that the prompt stays on the machine. How the spec's audit rule of full frame bodies (§13) reads for wrapped agents once prompt bodies do not go up: the two statements are in tension, and this plan does not resolve it. |
+
+### 8.6 Phase 5. The contained tier
+
+| | |
+|---|---|
+| **Scope** | `oxagen run -- <agent>`: a supervisor that launches the agent under an OS sandbox with egress limited to the gateway. CI, headless runs, cloud runners and managed devices first. Never mandatory on a developer's own laptop. `contained` becomes the top word of the ladder. The witness runner of ADR-064 is built on the same launcher. ADR-043 is revised by one sentence: "Oxagen does not run turns, but it may contain the process that does. A launcher that confines a process is not an agent runtime." |
+| **Seam** | A new verb in `apps/cli/src/program.ts`, beside `oxagen tacho` (line 669) and `oxagen agent` (line 881). The tier enum `TACHO_ENFORCEMENT_TIERS` (`packages/database/src/schema/tacho.ts:74`) and `TACHO_HARNESS_TIERS` (`packages/tacho/src/wire.ts:175`) gain `contained`, as ADR "The tier ladder is four words, computed from what was routed" sets out. |
+| **Done when** | A run under the launcher cannot reach a model or a tool server except through the gateway, a probe that tries is refused and recorded, and the run's tier reads `contained`. A run outside the launcher never reads `contained`. |
+| **Unblocks** | The word "enforced" against the machine's operator. The witness runner, and with it milestone M6. |
+| **Depends on** | Phase 4. |
+
+### 8.7 The one open risk: a spike that gates Phase 4 only
+
+Whether Claude Code and Codex subscription logins, as opposed to API keys, pass cleanly through a base URL rewrite, and whether the vendors' terms allow it. Nobody has tested it. It is a spike, not a decision, and it decides how much of the laptop population the proxy can cover. Run it before Phase 4 is scheduled. Phases 0 to 3 do not wait for it. If subscription logins cannot be proxied, those hosts stay at the `harness` tier and the record says so.
+
+### 8.8 Where each phase sits against the batches, the lanes and the milestones
+
+Batches B0 to B5 built the new `apps/app`, and the cutover has shipped (`app.oxagen.sh` serves the rebuild). The phases are backend work with one page change, so they do not reopen the batches. They do move or retire these items:
+
+| Item | What changes | Why |
+|---|---|---|
+| Milestone **M1** (model proxy, run tokens) and **M2** (budgets) | Their gateway half is delivered by Phase 4 | The spec described the proxy, base URL enrollment, run tokens and proxy budgets as present. None exists |
+| Milestone **M3** (steering delivery) | Phase 0 and Phase 1 deliver it. The rest of M3 (records endpoint, reflector, promoter, Context PRs) is unchanged | M3's acceptance test ends "merging it changes the next run's context". That half was never true |
+| Milestone **M4** | Phase 3 is its steering half and waits for the knowledge graph to be on by default | Delivery never waits for the graph |
+| Milestone **M6** (witness runner) | Follows Phase 5 | The witness runner is built on the Phase 5 launcher |
+| Lanes **P5** and **A5** (Steering page and adapter: records, proposals, Context PRs) | They stand as built. Phase 2 extends the same route to seven tabs | One screen |
+| The **Skills** page lane (ADR-090, `apps/app/ARCHITECTURE.md` §8) | Moves under Phase 2 as the Skills tab of Steering. Its top-level navigation entry retires | Skills are steering |
+| Gap **G10** (`USED_CONTEXT` edges from context assembly) | Superseded. The `steering.manifest` frame of Phase 1 is the record of what a run was told. Edges in the graph arrive with Phase 3 | The manifest needs no graph |
+| Gap **G17** (a revocable run token on the ledger ingest contract, decided 2026-09-15) | Stands, and is not on `main` yet. It is separate from the gateway's run tokens, which are Phase 4 | Two different tokens |
+| Gaps **G3**, **G4** and lanes **P6**, **A6** (Spend) | They stand. Every spend number shows its basis, and until Phase 4 the basis for a wrapped agent is `self-reported`, with Codex and Stella absent | No proxy, no observed metering |
+| Any lane or gap that adds steering ceremony (a new check, governance mode, review role, ledger field or promotion threshold) | Frozen until Phase 0 lands | §8.1 |
+| Any lane that assumes the model proxy, run tokens, enforced budgets or a sandbox exist | Waits for Phase 4 or Phase 5, and renders `NotBacked` until then (decision 3) | The tier ladder cannot be over-stated |
