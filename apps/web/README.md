@@ -105,7 +105,7 @@ it never means writing a colour into a rule or a page.
 
 The same table is what the home and product figures are drawn in, which is the
 point: the product illustrations and the page around them are one surface. Gold (`--gold`,
-`#D6962C`) is identity and at most one action per screen, never a state and
+`#D4AF37`) is identity and at most one action per screen, never a state and
 never a surface; `--pass` and `--fail` carry state.
 
 Four rules hold the look together. Breaking one is a review question, not a

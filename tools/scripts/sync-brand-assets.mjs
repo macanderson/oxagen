@@ -311,6 +311,12 @@ function staticSurface(root, brand) {
     `spinners/${brand}-spinner.svg`,
     `${root}/assets/brand/${brand}-spinner.svg`,
   );
+  // The static site serves its faces from /fonts/: the kit's three, beside
+  // whatever else the site ships there.
+  for (const f of readdirSync(join(BRAND, "fonts"))) {
+    if (f.endsWith(".woff2") || f.startsWith("LICENSE"))
+      copy(`fonts/${f}`, `${root}/fonts/${f}`);
+  }
 }
 
 /**

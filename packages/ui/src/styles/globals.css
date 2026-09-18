@@ -209,7 +209,7 @@
     --foreground: var(--_ink);
     --card: var(--ox-surface); /* #FFFFFF — paper-panel, raised above the ground */
     --card-foreground: var(--_ink);
-    --popover: var(--_stone-50); /* #FBFAF6 — the top of the white ladder */
+    --popover: var(--_stone-50); /* #FFFFFF — the popover on white */
     --popover-foreground: var(--_ink);
     --primary: var(--_ink); /* #09090B — obsidian. Gold is kept for --brand, the ring and links */
     --primary-foreground: var(--_paper);
@@ -229,7 +229,7 @@
        4.5:1. Dark mode keeps the metal itself at 9.5:1. */
     --ring: var(--ox-ember-deep);
     --link: var(--ox-ember-deep); /* #977017 — gold as ink on paper (4.5:1); the metal itself is 2.1:1 */
-    --link-hover: var(--_amber-700); /* #644516 */
+    --link-hover: var(--_amber-700); /* a darker gold, on white */
 
     /* Status — semantic names (error == destructive). */
     --success: var(--_moss);
