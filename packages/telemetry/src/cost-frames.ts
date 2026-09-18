@@ -71,23 +71,48 @@ const breaker = () => getBreaker("clickhouse", breakerEnvConfig());
 const TACHO_TOKEN_SOURCES = ["otel_log", "collector", "hook"];
 
 /**
+ * The group a row's authority is decided within: its turn, or, for a row the
+ * harness reported without one, the minute it happened in.
+ *
+ * `turn_seq` is never negative, so a null turn's key is the negated unix
+ * minute, which cannot collide with a real turn number or with another
+ * minute. NULL never equals NULL in an `IN`, so the key has to carry a value
+ * on both sides whatever it is.
+ *
+ * Grouping every null-turn row of a session together (which `-1` did) was
+ * wrong in both directions. A session whose OTel stream stopped while the
+ * collector went on recording had one winner for the whole session, so every
+ * later collector-only call was dropped and the run was billed short. And a
+ * call one source reported under a turn number while another reported it
+ * without one fell into two groups, so it was counted twice.
+ *
+ * A minute is the bucket because a turn is seconds to minutes of wall time:
+ * two sources recording the same call land in it together and one wins, and
+ * a source that takes over later wins the minutes it alone covers. The
+ * remaining edge is a single call whose copies straddle a minute boundary,
+ * which is counted twice; that is bounded to one call, where the old rule
+ * could drop the rest of a session. Correlating the copies of a null-turn
+ * call exactly needs an id the harness does not yet emit (#3281).
+ */
+const TURN_GROUP =
+  "if(turn_seq IS NULL, -toInt64(toUnixTimestamp(toStartOfMinute(ts))), toInt64(turn_seq))";
+
+/**
  * The predicate that admits one token-bearing source per (session, turn).
- * The inner query finds, per turn, the highest-authority source that
+ * The inner query finds, per group, the highest-authority source that
  * recorded any model call under the same filter as the outer read
  * (`{where}`), and the outer read keeps only rows in that source. `indexOf`
  * over the sources array is the authority rank, so the order of
- * `TACHO_TOKEN_SOURCES` is the rule, not a second copy of it. A row with no
- * turn (`turn_seq` NULL) is grouped as turn -1: NULL never equals NULL in an
- * `IN`, so the tuple carries a value on both sides.
+ * `TACHO_TOKEN_SOURCES` is the rule, not a second copy of it.
  */
 function ONE_TOKEN_SOURCE_PER_TURN(where: string): string {
-  return `(session_uuid, ifNull(toInt64(turn_seq), -1), source) IN (
+  return `(session_uuid, ${TURN_GROUP}, source) IN (
           SELECT session_uuid,
-                 ifNull(toInt64(turn_seq), -1),
+                 ${TURN_GROUP},
                  argMin(source, indexOf({sources:Array(String)}, source))
           FROM tacho_events FINAL
           WHERE ${where}
-          GROUP BY session_uuid, ifNull(toInt64(turn_seq), -1)
+          GROUP BY session_uuid, ${TURN_GROUP}
         )`;
 }
 

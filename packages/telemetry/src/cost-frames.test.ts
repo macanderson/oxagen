@@ -3,6 +3,10 @@
 // and the shape the rows come back in (docs/specs/tacho/data-model.md §2.7).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+/** The group key the predicate uses; a null turn falls into its minute. */
+const TURN_GROUP =
+  "if(turn_seq IS NULL, -toInt64(toUnixTimestamp(toStartOfMinute(ts))), toInt64(turn_seq))";
+
 interface QueryCall {
   query: string;
   query_params: Record<string, unknown>;
@@ -102,8 +106,15 @@ describe("readModelCallFrames", () => {
       "argMin(source, indexOf({sources:Array(String)}, source))",
     );
     expect(query).toContain(
-      "GROUP BY session_uuid, ifNull(toInt64(turn_seq), -1)",
+      `GROUP BY session_uuid, ${TURN_GROUP}`,
     );
+    // A row the harness reported with no turn falls into the minute it
+    // happened in, not into one bucket for the whole session: an OTel stream
+    // that stops mid-session must not take the collector's later calls with
+    // it, and a call one source numbered while another did not must not be
+    // counted twice under two group keys.
+    expect(query).not.toContain("ifNull(toInt64(turn_seq), -1)");
+    expect(query).toContain("toStartOfMinute(ts)");
 
     expect(frames).toEqual([
       {
@@ -311,7 +322,7 @@ describe("readObservedModels", () => {
     // count over the admitted sources would bill the call twice and rank the
     // model above ones that need pricing more.
     expect(query).toContain(
-      "(session_uuid, ifNull(toInt64(turn_seq), -1), source) IN (",
+      `(session_uuid, ${TURN_GROUP}, source) IN (`,
     );
     expect(query).toContain(
       "argMin(source, indexOf({sources:Array(String)}, source))",
@@ -319,7 +330,7 @@ describe("readObservedModels", () => {
     // Per turn, not per session: a stream that drops mid-session must not
     // discard the calls a lower source alone recorded afterwards.
     expect(query).toContain(
-      "GROUP BY session_uuid, ifNull(toInt64(turn_seq), -1)",
+      `GROUP BY session_uuid, ${TURN_GROUP}`,
     );
     expect(query).toContain("GROUP BY model");
     expect(query).toContain("ORDER BY tokens DESC, model");
