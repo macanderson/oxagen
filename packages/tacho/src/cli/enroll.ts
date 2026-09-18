@@ -242,6 +242,34 @@ function requestedMcpEndpoint(
 }
 
 /**
+ * `host` with its three command fields moved to the binary running now, or
+ * undefined when they already name it. All three move together: the hook,
+ * the daemon and the MCP shim are computed from one bin dir, and a host.json
+ * naming two layouts would run a hook from one install and a daemon from
+ * another.
+ */
+export function repointCommands(
+  host: HostFile,
+  runtime: CliDeps["runtime"],
+): HostFile | undefined {
+  const same =
+    host.hook_command === runtime.hookCommand &&
+    sameArgv(host.daemon_command, runtime.daemonCommand) &&
+    sameArgv(host.mcp_stdio_command ?? [], runtime.mcpStdioCommand);
+  if (same) return undefined;
+  return {
+    ...host,
+    hook_command: runtime.hookCommand,
+    daemon_command: runtime.daemonCommand,
+    mcp_stdio_command: runtime.mcpStdioCommand,
+  };
+}
+
+function sameArgv(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((part, i) => part === b[i]);
+}
+
+/**
  * Everything that would stop a harness file being written, found before
  * anything is minted: a file that is not valid JSON, valid JSON of the wrong
  * shape, a file or directory the user has made read-only. Each of these used
@@ -376,6 +404,30 @@ export async function enrollLocked(
       host = { ...existing, mcp_endpoint_override: pinned };
       writeHostFile(deps.paths.hostFile, host);
       deps.out(`      MCP endpoint pinned to ${pinned} (TACHO_MCP_ENDPOINT)`);
+    }
+    // The commands the service and the hooks run are read from host.json
+    // below, and host.json records the binary that enrolled. So a re-enroll
+    // from a newer install re-applied the OLD binary: on 2026-09-18 it wrote
+    // the launchd unit and every hook back to the wedged desktop-app tacho
+    // (v1 commands wire, strict ingest schema) that the re-enroll was run to
+    // replace, and reported "already present; nothing to change" because the
+    // settings did match the stale command. The docs say to run enroll again
+    // to upgrade; that only works if the running binary wins. The transient
+    // guard the fresh-enrollment path applies below holds here too: a bin
+    // dir that is gone once this process exits must not be recorded.
+    const repointed = repointCommands(host, deps.runtime);
+    if (repointed !== undefined) {
+      if (deps.runtime.transient !== undefined) {
+        warnings.push(
+          `tacho is running from ${deps.runtime.transient} (${deps.runtime.binDir}), which is gone once it is closed, so the service and hooks stay on ${host.hook_command}; run enroll again from a permanent install to move them`,
+        );
+      } else {
+        host = repointed;
+        writeHostFile(deps.paths.hostFile, host);
+        deps.out(
+          `      service and hooks now run from ${deps.runtime.binDir} (was ${existing.hook_command})`,
+        );
+      }
     }
   } else {
     // The hook command and the service unit carry this binary's directory

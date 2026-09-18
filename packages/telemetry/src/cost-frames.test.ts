@@ -3,10 +3,6 @@
 // and the shape the rows come back in (docs/specs/tacho/data-model.md §2.7).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-/** The group key the predicate uses; a null turn falls into its minute. */
-const TURN_GROUP =
-  "if(turn_seq IS NULL, -toInt64(toUnixTimestamp(toStartOfMinute(ts))), toInt64(turn_seq))";
-
 interface QueryCall {
   query: string;
   query_params: Record<string, unknown>;
@@ -22,7 +18,6 @@ vi.mock("./clickhouse", async (importOriginal) => {
 
 import {
   readModelCallFrames,
-  readObservedModels,
   readTachoToolCallFrames,
   readTachoToolCallObservations,
 } from "./cost-frames";
@@ -98,23 +93,12 @@ describe("readModelCallFrames", () => {
     expect(query_params).toEqual({
       orgId: ORG,
       rootSessionUuid: RUN,
-      sources: ["otel_log", "collector", "hook"],
+      sources: ["otel_log", "collector", "hook", "transcript"],
+      duplicateAttr: "oxagen.llm_call_duplicate_of",
     });
-    // One token-bearing source per session, or a call the harness reports
-    // through the OTel log and a collector or hook event is priced twice.
-    expect(query).toContain(
-      "argMin(source, indexOf({sources:Array(String)}, source))",
-    );
-    expect(query).toContain(
-      `GROUP BY session_uuid, ${TURN_GROUP}`,
-    );
-    // A row the harness reported with no turn falls into the minute it
-    // happened in, not into one bucket for the whole session: an OTel stream
-    // that stops mid-session must not take the collector's later calls with
-    // it, and a call one source numbered while another did not must not be
-    // counted twice under two group keys.
-    expect(query).not.toContain("ifNull(toInt64(turn_seq), -1)");
-    expect(query).toContain("toStartOfMinute(ts)");
+    // A call seen twice (OTel and transcript) is priced once: the host
+    // stamps the later sighting and the rollup skips stamped rows.
+    expect(query).toContain("attrs[{duplicateAttr:String}] = ''");
 
     expect(frames).toEqual([
       {
@@ -281,140 +265,6 @@ describe("readTachoToolCallObservations", () => {
         to: new Date(1),
         limit: 1,
       }),
-    ).rejects.toThrow();
-  });
-});
-
-describe("readObservedModels", () => {
-  const WS = "00000000-0000-4000-8000-000000000002";
-  const SINCE = new Date("2026-08-15T00:00:00.000Z");
-
-  it("folds both frame stores by model id, heaviest first, and caps the list", async () => {
-    answer([
-      {
-        model: "vendor/brand-new",
-        provider: "vendor",
-        calls: "12",
-        tokens: "480000",
-        first_seen: "2026-09-02T09:00:00.000Z",
-        last_seen: "2026-09-13T21:30:00.000Z",
-      },
-      {
-        model: "claude-sonnet-5",
-        provider: "",
-        calls: "3",
-        tokens: "1500",
-        first_seen: "2026-09-10T00:00:00.000Z",
-        last_seen: "2026-09-11T00:00:00.000Z",
-      },
-    ]);
-    const rows = await readObservedModels({ orgId: ORG, since: SINCE });
-
-    const { query, query_params } = lastQuery();
-    expect(query).toContain("FROM token_usage");
-    expect(query).toContain("FROM tacho_events FINAL");
-    expect(query).toContain("UNION ALL");
-    expect(query).toContain("kind = 'llm_call'");
-    expect(query).toContain("source IN {sources:Array(String)}");
-    // One token-bearing source per session: a session that reports a call
-    // through the OTel log AND a collector or hook event holds two rows for
-    // it under different `seq`s, which FINAL does not collapse, so a plain
-    // count over the admitted sources would bill the call twice and rank the
-    // model above ones that need pricing more.
-    expect(query).toContain(
-      `(session_uuid, ${TURN_GROUP}, source) IN (`,
-    );
-    expect(query).toContain(
-      "argMin(source, indexOf({sources:Array(String)}, source))",
-    );
-    // Per turn, not per session: a stream that drops mid-session must not
-    // discard the calls a lower source alone recorded afterwards.
-    expect(query).toContain(
-      `GROUP BY session_uuid, ${TURN_GROUP}`,
-    );
-    expect(query).toContain("GROUP BY model");
-    expect(query).toContain("ORDER BY tokens DESC, model");
-    expect(query).toContain("LIMIT {limit:UInt32}");
-    // A gateway row's input_tokens is the inclusive input total, so adding it
-    // to cache reads and writes again would double-count them.
-    expect(query).toContain(
-      "greatest(0, toInt64(input_tokens) - toInt64(cached_tokens) - toInt64(cache_write_tokens))",
-    );
-    expect(query_params).toEqual({
-      orgId: ORG,
-      since: "2026-08-15 00:00:00.000",
-      sources: ["otel_log", "collector", "hook"],
-      limit: 500,
-    });
-
-    expect(rows).toEqual([
-      {
-        model: "vendor/brand-new",
-        provider: "vendor",
-        calls: 12,
-        tokens: 480_000,
-        firstSeen: "2026-09-02T09:00:00.000Z",
-        lastSeen: "2026-09-13T21:30:00.000Z",
-      },
-      {
-        model: "claude-sonnet-5",
-        provider: null,
-        calls: 3,
-        tokens: 1_500,
-        firstSeen: "2026-09-10T00:00:00.000Z",
-        lastSeen: "2026-09-11T00:00:00.000Z",
-      },
-    ]);
-  });
-
-  it("reads the whole organization when no workspace is named", async () => {
-    answer([]);
-    await readObservedModels({ orgId: ORG, since: SINCE });
-    const { query, query_params } = lastQuery();
-    expect(query).not.toContain("workspace_id");
-    expect(query_params).not.toHaveProperty("workspaceId");
-  });
-
-  // `list_unpriced_models` judges the book as of `at`; a model first run after
-  // `at` would otherwise be reported against a snapshot from before it ran.
-  it("bounds both stores above by `until` when one is given, and leaves them open-ended otherwise", async () => {
-    answer([]);
-    const UNTIL = new Date("2026-09-10T00:00:00.000Z");
-    await readObservedModels({ orgId: ORG, since: SINCE, until: UNTIL });
-    const bounded = lastQuery();
-    expect(bounded.query).toContain("created_at <= {until:DateTime64(3)}");
-    expect(
-      bounded.query.match(/ts <= \{until:DateTime64\(3\)\}/g),
-    ).toHaveLength(
-      // The tacho branch, and the per-session source pick under the same filter.
-      2,
-    );
-    expect(bounded.query_params).toMatchObject({
-      until: "2026-09-10 00:00:00.000",
-    });
-
-    answer([]);
-    await readObservedModels({ orgId: ORG, since: SINCE });
-    const open = lastQuery();
-    expect(open.query).not.toContain("{until");
-    expect(open.query_params).not.toHaveProperty("until");
-  });
-
-  it("fences both stores on the workspace when one is named", async () => {
-    answer([]);
-    await readObservedModels({ orgId: ORG, workspaceId: WS, since: SINCE });
-    const { query, query_params } = lastQuery();
-    // Once per store, plus once in the tacho branch's per-session source
-    // pick: a fence on only one of them would leak the other, and a pick made
-    // over every workspace could name a source the fenced rows never used.
-    expect(query.match(/workspace_id = \{workspaceId:UUID\}/g)).toHaveLength(3);
-    expect(query_params).toMatchObject({ workspaceId: WS });
-  });
-
-  it("lets a degraded store throw", async () => {
-    queryMock.mockRejectedValueOnce(new Error("clickhouse down"));
-    await expect(
-      readObservedModels({ orgId: ORG, since: SINCE }),
     ).rejects.toThrow();
   });
 });

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { digestBytes, jcs } from "../digest";
 import { normalizeHook } from "./hooks";
+
+const dec = new TextDecoder();
 
 const SESSION = "00000000-0000-4000-8000-000000000001";
 const ENV = {
@@ -305,6 +308,84 @@ describe("hook normalization", () => {
       body: { notification_type: "SomethingNew" },
       attrs: { "hook.payload": "1" },
     });
+  });
+
+  it("hands the recorder the bytes each digest names", () => {
+    // The prompt, as UTF-8: its digest is the `content_digest` the draft
+    // already carried, so the chain does not move for a prompt with no secret.
+    const [prompt] = hook("UserPromptSubmit", { prompt: "Read README.md" });
+    expect(prompt?.content?.content_type).toBe("text/plain; charset=utf-8");
+    expect(dec.decode(prompt?.content?.bytes)).toBe("Read README.md");
+    expect(digestBytes(prompt?.content?.bytes as Uint8Array)).toBe(
+      prompt?.content_digest,
+    );
+    const [expansion] = hook("UserPromptExpansion", { user_input: "go" });
+    expect(expansion?.kind).toBe("oxagen:message");
+    expect(dec.decode(expansion?.content?.bytes)).toBe("go");
+
+    // A tool request carries the JCS text `tool_input_digest` already names.
+    const toolInput = { command: "ls", z: 1, a: [true, null] };
+    const [requested] = hook("PreToolUse", {
+      tool_name: "Bash",
+      tool_input: toolInput,
+      tool_use_id: "toolu_c1",
+    });
+    expect(requested?.content?.content_type).toBe("application/json");
+    expect(dec.decode(requested?.content?.bytes)).toBe(jcs(toolInput));
+    expect(digestBytes(requested?.content?.bytes as Uint8Array)).toBe(
+      requested?.body["tool_input_digest"],
+    );
+    const [approval] = hook("PermissionRequest", {
+      tool_name: "Bash",
+      tool_input: toolInput,
+      tool_use_id: "toolu_c2",
+    });
+    expect(dec.decode(approval?.content?.bytes)).toBe(jcs(toolInput));
+
+    // A tool call holds input and output together; a failure with no
+    // response ships the input alone.
+    const [call] = hook("PostToolUse", {
+      tool_name: "Bash",
+      tool_input: toolInput,
+      tool_use_id: "toolu_c1",
+      tool_response: { stdout: "README.md\n" },
+    });
+    expect(dec.decode(call?.content?.bytes)).toBe(
+      jcs({ input: toolInput, output: { stdout: "README.md\n" } }),
+    );
+    const [failed] = hook("PostToolUseFailure", {
+      tool_name: "Bash",
+      tool_input: toolInput,
+      tool_use_id: "toolu_c3",
+      error: "boom",
+    });
+    expect(dec.decode(failed?.content?.bytes)).toBe(jcs({ input: toolInput }));
+    expect(
+      hook("PostToolUse", { tool_name: "Bash", tool_use_id: "toolu_c4" })[0]
+        ?.content,
+    ).toBeUndefined();
+
+    // The assistant's last message closes the turn, and a subagent's result
+    // closes its chain.
+    const [stop] = hook("Stop", { last_assistant_message: "Done." });
+    expect(dec.decode(stop?.content?.bytes)).toBe("Done.");
+    expect(digestBytes(stop?.content?.bytes as Uint8Array)).toBe(
+      stop?.content_digest,
+    );
+    const [sub] = hook("SubagentStop", {
+      agent_id: "agent-1",
+      last_assistant_message: "Found it.",
+    });
+    expect(sub?.kind).toBe("subagent_stop");
+    expect(dec.decode(sub?.content?.bytes)).toBe("Found it.");
+    const [display] = hook("MessageDisplay", { delta: "streamed", index: 0 });
+    expect(dec.decode(display?.content?.bytes)).toBe("streamed");
+
+    // Frames with nothing to ship carry no content.
+    expect(
+      hook("SessionStart", { source: "startup" })[0]?.content,
+    ).toBeUndefined();
+    expect(hook("Stop", {})[0]?.content).toBeUndefined();
   });
 
   it("refuses a payload without a session id", () => {

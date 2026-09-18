@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**304 capabilities across 47 domains.**
+**305 capabilities across 47 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -131,12 +131,9 @@ Capabilities granted to an agent as a set have a page of their own:
 - [budget.policy.read](budget.policy.read.md) — Read the calling user's saved per-turn dollar budget (enabled, limit, enforcement mode, grace cushion)
 - [budget.policy.write](budget.policy.write.md) — Update the calling user's saved per-turn dollar budget (partial update): on/off, USD limit, mode (grace/prompt/enforce), grace cushion
 
-## Cost (4)
+## Cost (1)
 
 - [cost.price_entry.list](cost.price_entry.list.md) — List the price book this organization is priced against: every provider list price effective at an instant and the organization's negotiated rows, in integer micros per million units with the window each is effective over
-- [cost.price_entry.remove](cost.price_entry.remove.md) — End this organization's negotiated rate for one model and token class at an instant, so every frame from then on is priced at the provider list price again; the row is closed, not deleted
-- [cost.price_entry.set](cost.price_entry.set.md) — Set this organization's negotiated rate for one model and token class, in USD per one million units, effective from an instant; the row it supersedes is closed, never overwritten
-- [cost.unpriced_model.list](cost.unpriced_model.list.md) — List the models this organization has run that the price book cannot price: the model, its vendor, how many calls and tokens it has run in the window, and which token classes are missing a price — the reason a run's cost comes back blank
 
 ## Capability (2)
 
@@ -330,13 +327,16 @@ Capabilities granted to an agent as a set have a page of their own:
 - [repo.resume](repo.resume.md) — Resume automatic syncing for a paused repository connection
 - [repo.sync](repo.sync.md) — Trigger incremental or full re-index of a repository connection (async)
 
-## Repository (5)
+## Repository (8)
 
 - [repository.installation.attach](repository.installation.attach.md) — Make one of the workspace's reachable GitHub App installations the installation it acts through
 - [repository.installation.candidates](repository.installation.candidates.md) — The GitHub App installations the workspace's stored GitHub authorization can reach, the set attach_github_installation will accept
 - [repository.installation.list](repository.installation.list.md) — The repositories the workspace's GitHub App installation can reach, the set bind_main_repository will accept
+- [repository.link](repository.link.md) — Link a GitHub repository the workspace's GitHub App installation reaches as a linked (not main) repository; another workspace's main repository is refused
+- [repository.list](repository.list.md) — The workspace's repositories, its one main repository and every linked one, with each one's role, approved default ref and whether its connection is live
 - [repository.main.bind](repository.main.bind.md) — Bind a GitHub repository the workspace's GitHub App installation reaches as its main repo, and close the onboarding gate's provisional window
 - [repository.main.get](repository.main.get.md) — The workspace's main repository, whether a GitHub App installation is attached, and the signed URLs to install or to change which repositories it reaches
+- [repository.unlink](repository.unlink.md) — Unlink a linked repository from the workspace by its binding id; the main repository is refused and binding history is kept
 
 ## Router (4)
 
@@ -462,7 +462,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [workspace.budget_policy.read](workspace.budget_policy.read.md) — Read the workspace's governed per-turn dollar budget and enforcement mode
 - [workspace.budget_policy.write](workspace.budget_policy.write.md) — Set the workspace's governed per-turn dollar budget (partial update); Owner/Admin only
 - [workspace.archive](workspace.archive.md) — `archive_workspace`: freeze a workspace; it leaves the lists, its slug stays taken, its records stay readable
-- [workspace.create](workspace.create.md) — Create a workspace inside the caller's active tenant; org Owner or Admin, refused for a taken slug
+- [workspace.create](workspace.create.md) — Create a workspace in the caller's organization together with its required main repository; refused for a taken slug, a repository the org's GitHub authorization cannot reach, or one another workspace already steers by
 - [workspace.invite.send](workspace.invite.send.md) — Send a workspace invitation to an email address with 7-day expiry
 - [workspace.list](workspace.list.md) — List the workspaces inside an organization the caller belongs to; backs the CLI workspace picker in oxagen init
 - [workspace.member.list](workspace.member.list.md) — `list_members`: the org's members and pending invitations, or a workspace's members

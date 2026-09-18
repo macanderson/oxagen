@@ -50,7 +50,11 @@ function post(app: Hono<AppEnv>) {
     new Request("http://localhost/workspaces", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: "First", slug: "first" }),
+      body: JSON.stringify({
+        name: "First",
+        slug: "first",
+        mainRepo: { owner: "acme", name: "widgets" },
+      }),
     }),
   );
 }
