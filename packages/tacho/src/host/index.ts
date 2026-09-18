@@ -5,6 +5,7 @@ export * from "./device-key";
 export * from "./fs";
 export * from "./host-file";
 export * from "./key-id";
+export * from "./model-base-url";
 export * from "./paths";
 export * from "./process-scan";
 export * from "./service";

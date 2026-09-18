@@ -203,8 +203,9 @@ function deliversMessages(
  * Inject the queued prompt content at this boundary and chain one
  * `oxagen:command_applied` per item: the `control.steer` frame of the
  * Mission Control spec (§8.2) in the wrapper vocabulary, carrying the
- * requested and the achieved mode, the degradation, and `interrupted`, which
- * the hook adapter can never set. The event's own seq is the frame the
+ * requested and the achieved mode, the degradation, and `interrupted`. The
+ * hook adapter alone can never set it. The model proxy does, when it cut an
+ * in-flight call so this steer would land sooner. The event's own seq is the frame the
  * control plane records as `applied_at_seq`.
  *
  * An item whose deadline passed while it waited (a session paused past a
@@ -243,7 +244,7 @@ function drainMessages(
         attrs: {
           "command.id": message.id,
           "command.name": message.command,
-          "command.interrupted": "0",
+          "command.interrupted": message.interrupted === true ? "1" : "0",
           ...(message.requestedMode !== null
             ? { "command.requested_mode": message.requestedMode }
             : {}),

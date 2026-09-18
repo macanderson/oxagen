@@ -147,3 +147,101 @@ describe("connected-app presence", () => {
     expect(status?.claudeDesktop?.otherServerNames).toEqual(["ok"]);
   });
 });
+
+/**
+ * The gateway block, the model base URL state and the tier ladder (ADR-094,
+ * ADR-095). The desktop app used to have no way to show any of this: the
+ * CLI's `tacho status --json` carried it, but nothing here parsed it, so the
+ * masthead could never say more than "wrapped" for a host actually routed
+ * through the proxy.
+ */
+describe("the gateway, model base URLs and tiers", () => {
+  it("parses a well-formed gateway block", () => {
+    const status = parseTachoStatus(
+      JSON.stringify({
+        enrolled: true,
+        gateway: {
+          listening: true,
+          port: 47124,
+          routes: [],
+          calls_observed: 0,
+        },
+      }),
+    );
+    expect(status?.gateway).toEqual({ listening: true, port: 47124 });
+  });
+
+  it("is absent for a daemon that is down or predates the proxy", () => {
+    expect(
+      parseTachoStatus(JSON.stringify({ enrolled: true }))?.gateway,
+    ).toBeUndefined();
+    expect(
+      parseTachoStatus(
+        JSON.stringify({ enrolled: true, gateway: { listening: "true" } }),
+      )?.gateway,
+    ).toBeUndefined();
+  });
+
+  it("parses model base URL state per harness, including a shadowed one", () => {
+    const status = parseTachoStatus(
+      JSON.stringify({
+        enrolled: true,
+        modelBaseUrls: [
+          { harness: "claude-code", ours: true },
+          {
+            harness: "codex",
+            ours: true,
+            shadowedBy: {
+              file: "/managed-settings.json",
+              key: "openai_base_url",
+            },
+          },
+          { harness: "stella", ours: false },
+          { notAHarness: true },
+        ],
+      }),
+    );
+    expect(status?.modelBaseUrls).toEqual([
+      { harness: "claude-code", ours: true, shadowed: false },
+      { harness: "codex", ours: true, shadowed: true },
+      { harness: "stella", ours: false, shadowed: false },
+    ]);
+  });
+
+  it("parses only the recognised tier words, keyed by harness", () => {
+    const status = parseTachoStatus(
+      JSON.stringify({
+        enrolled: true,
+        tiers: {
+          "claude-code": "gateway",
+          codex: "observe",
+          junk: "contained",
+        },
+      }),
+    );
+    expect(status?.tiers).toEqual({
+      "claude-code": "gateway",
+      codex: "observe",
+    });
+  });
+
+  it("drops junk rather than inventing a shape", () => {
+    for (const junk of [undefined, null, 7, "x", []]) {
+      expect(
+        parseTachoStatus(JSON.stringify({ enrolled: true, gateway: junk }))
+          ?.gateway,
+      ).toBeUndefined();
+      expect(
+        parseTachoStatus(JSON.stringify({ enrolled: true, tiers: junk }))
+          ?.tiers,
+      ).toBeUndefined();
+    }
+    for (const junk of [undefined, null, 7, "x", {}]) {
+      expect(
+        parseTachoStatus(
+          JSON.stringify({ enrolled: true, modelBaseUrls: junk }),
+        )?.modelBaseUrls,
+      ).toBeUndefined();
+    }
+  });
+});

@@ -20,6 +20,8 @@
 // A delivery mode is resolved per recipient at dispatch, at or below the
 // requested one: the hook adapter cannot stop an in-flight call, so
 // `interrupt` degrades to `next_step` with `degraded_reason = harness_tier`.
+// A run on the `gateway` tier has its model traffic routed through the host's
+// loopback proxy, which can, so there `interrupt` is delivered as `interrupt`.
 // Both modes are recorded, and the report shows the achieved one.
 //
 // A new command supersedes an earlier `queued` command of the same kind on the
@@ -53,15 +55,24 @@ type ResolvedMode = {
 };
 
 /**
- * The strongest mode the hook adapter can carry at or below the request. It
- * injects at the next prompt boundary and cannot stop a call in flight, so
- * `interrupt` lands as `next_step` and says so; `turn_boundary` is the next
- * turn's prompt, which the adapter reaches.
+ * The strongest mode the recipient's connection point can carry at or below
+ * the request.
+ *
+ * The hook adapter injects at the next prompt boundary and cannot stop a call
+ * in flight, so on the `harness` tier `interrupt` lands as `next_step` and says
+ * so. `turn_boundary` is the next turn's prompt, which the adapter reaches.
+ *
+ * On the `gateway` tier the run's model traffic is routed through the host's
+ * loopback proxy (ADR-094), which can cut the call in flight, so `interrupt` is
+ * delivered as `interrupt` (ADR-095: "`interrupt` degrades at `harness` and is
+ * real at `gateway`"). The host still reports what happened: the applied frame
+ * carries `command.interrupted`, which is `1` only when a call was cut.
  */
 export function resolveDeliveryMode(
   requested: TachoDeliveryMode,
+  enforcementTier = "harness",
 ): ResolvedMode {
-  if (requested === "interrupt") {
+  if (requested === "interrupt" && enforcementTier !== "gateway") {
     return { deliveryMode: "next_step", degradedReason: "harness_tier" };
   }
   return { deliveryMode: requested, degradedReason: null };
@@ -225,7 +236,7 @@ export function createDispatchCommandHandler(
         const reason = undeliverable(session);
         const resolved =
           requestedMode !== null && reason === null
-            ? resolveDeliveryMode(requestedMode)
+            ? resolveDeliveryMode(requestedMode, session.enforcementTier)
             : null;
         const payload: Record<string, unknown> = {
           address,

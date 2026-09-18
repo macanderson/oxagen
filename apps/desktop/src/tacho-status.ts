@@ -23,6 +23,32 @@ export interface TachoMcpPresence {
   otherServerNames: string[];
 }
 
+/**
+ * The daemon's loopback model proxy (ADR-094), as `tacho status` reports it.
+ * Absent while the daemon is down or predates the proxy: that is "no
+ * gateway seam yet", never "gateway off".
+ */
+export interface TachoGateway {
+  listening: boolean;
+  port: number;
+}
+
+/** Whether one harness's model base URL points at the proxy. */
+export interface TachoModelBaseUrl {
+  harness: string;
+  /** Our base URL is the one the file names. */
+  ours: boolean;
+  /** A managed settings file overrides ours, so calls are not routed. */
+  shadowed: boolean;
+}
+
+/**
+ * The tier ladder word (ADR-095): what a harness's runs actually earned,
+ * never what is merely installed. `contained` is the fourth word and has no
+ * build yet, so it never appears here.
+ */
+export type TachoTier = "observe" | "harness" | "gateway";
+
 export interface TachoStatus {
   enrolled: boolean;
   hooks?: TachoHookPresence;
@@ -32,6 +58,12 @@ export interface TachoStatus {
   claudeDesktop?: TachoMcpPresence;
   service?: { kind: string; installed: boolean; running: boolean };
   wal?: { sessions: number; unshipped: number };
+  /** Present once the daemon reports a well-formed gateway block. */
+  gateway?: TachoGateway;
+  /** One entry per harness the model base URL contract covers. */
+  modelBaseUrls?: TachoModelBaseUrl[];
+  /** The tier each harness's sessions earned since the collector started. */
+  tiers?: Partial<Record<string, TachoTier>>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -80,6 +112,41 @@ function mcpPresence(value: unknown): TachoMcpPresence | undefined {
   };
 }
 
+function gateway(value: unknown): TachoGateway | undefined {
+  if (
+    !isRecord(value) ||
+    typeof value["listening"] !== "boolean" ||
+    typeof value["port"] !== "number"
+  )
+    return undefined;
+  return { listening: value["listening"], port: value["port"] };
+}
+
+const TIER_WORDS = new Set(["observe", "harness", "gateway"]);
+
+function modelBaseUrls(value: unknown): TachoModelBaseUrl[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: TachoModelBaseUrl[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry) || typeof entry["harness"] !== "string") continue;
+    out.push({
+      harness: entry["harness"],
+      ours: entry["ours"] === true,
+      shadowed: isRecord(entry["shadowedBy"]),
+    });
+  }
+  return out;
+}
+
+function tiers(value: unknown): Partial<Record<string, TachoTier>> | undefined {
+  if (!isRecord(value)) return undefined;
+  const out: Partial<Record<string, TachoTier>> = {};
+  for (const [harness, tier] of Object.entries(value))
+    if (typeof tier === "string" && TIER_WORDS.has(tier))
+      out[harness] = tier as TachoTier;
+  return out;
+}
+
 /**
  * The status document, or `null` when stdout is not one: empty (the sidecar
  * failed to start), not JSON (a stray warning), or JSON of another shape.
@@ -125,5 +192,11 @@ export function parseTachoStatus(stdout: string): TachoStatus | null {
   ) {
     status.wal = { sessions: wal["sessions"], unshipped: wal["unshipped"] };
   }
+  const gatewayBlock = gateway(parsed["gateway"]);
+  if (gatewayBlock !== undefined) status.gateway = gatewayBlock;
+  const baseUrls = modelBaseUrls(parsed["modelBaseUrls"]);
+  if (baseUrls !== undefined) status.modelBaseUrls = baseUrls;
+  const tierMap = tiers(parsed["tiers"]);
+  if (tierMap !== undefined) status.tiers = tierMap;
   return status;
 }

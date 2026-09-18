@@ -136,11 +136,15 @@ export async function checkForUpdate(
  * Download, verify and install, streaming progress lines to `onLine`, then
  * relaunch into the new build. On Windows the installer quits the app
  * itself; `relaunch()` covers macOS and Linux.
+ *
+ * A relaunch that fails is not an update that failed: the new build is on
+ * disk by then. It used to reject, so the app said "Update failed" and
+ * offered Install again for a version that was already installed.
  */
 export async function installUpdate(
   update: Update,
   onLine: (line: string) => void,
-): Promise<void> {
+): Promise<{ relaunched: boolean }> {
   let progress = DOWNLOAD_START;
   await update.downloadAndInstall((event) => {
     const next = applyDownloadEvent(progress, event);
@@ -148,5 +152,13 @@ export async function installUpdate(
     if (next.line !== null) onLine(next.line);
   });
   onLine(`Installed v${update.version}; relaunching…`);
-  await relaunch();
+  try {
+    await relaunch();
+    return { relaunched: true };
+  } catch (error) {
+    onLine(
+      `Installed v${update.version}. Quit Oxagen and open it again to use it (the relaunch did not happen: ${error instanceof Error ? error.message : String(error)}).`,
+    );
+    return { relaunched: false };
+  }
 }

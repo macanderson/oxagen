@@ -65,9 +65,22 @@ describe("service units", () => {
 describe("service managers", () => {
   it("installs, reports, and removes a launchd agent through launchctl", () => {
     const home = mkdtempSync(join(tmpdir(), "tacho-svc-"));
-    const { exec, calls } = fakeExec({
-      "launchctl print": { status: 0, stdout: "state = running", stderr: "" },
-    });
+    // launchd's own behaviour: `print` answers for a loaded label only, and
+    // `bootout` unloads it. `uninstall` reads `print` to learn whether the
+    // daemon is really gone, so a fake that always says "running" is a
+    // service that will not unload.
+    const calls: string[] = [];
+    let loaded = false;
+    const exec: Exec = (command, args) => {
+      calls.push([command, ...args].join(" "));
+      if (args[0] === "bootstrap") loaded = true;
+      if (args[0] === "bootout") loaded = false;
+      if (args[0] === "print")
+        return loaded
+          ? { status: 0, stdout: "state = running", stderr: "" }
+          : { status: 113, stdout: "", stderr: "Could not find service" };
+      return { status: 0, stdout: "", stderr: "" };
+    };
     const manager = serviceManagerFor({
       platform: "darwin",
       home,
@@ -102,6 +115,7 @@ describe("service managers", () => {
       home,
       exec,
       uid: 501,
+      sleep: () => undefined,
     });
     expect(() => manager.install(SPEC)).toThrow(
       /bootstrap failed \(5\): Input\/output error/,
