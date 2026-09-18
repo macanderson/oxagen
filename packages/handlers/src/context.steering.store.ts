@@ -18,6 +18,7 @@ import {
   eq,
   getTableColumns,
   inArray,
+  isNotNull,
   isNull,
   or,
   sql,
@@ -189,6 +190,16 @@ export interface SteeringStore {
   listActiveRecords(scope: SteeringScope): Promise<PublishedRecordRow[]>;
   /** The promotions ledger length for the workspace: its steering version. */
   ledgerLength(scope: SteeringScope): Promise<number>;
+  /**
+   * The newest publishing commit on the production branch, for the steering
+   * freshness check: a developer's checkout that cannot reach this commit is
+   * reading records that are no longer the ones in force. Null until a
+   * Context PR has merged (a record published through
+   * `publish_context_record` carries no commit).
+   */
+  latestPublication(
+    scope: SteeringScope,
+  ): Promise<{ commitSha: string; publishedAt: Date } | null>;
 
   /** Idempotent on (workspace, record_hash): `appended` is false on a repeat. */
   insertAppend(
@@ -546,6 +557,32 @@ export const postgresSteeringStore: SteeringStore = {
           ),
         ),
     );
+  },
+
+  async latestPublication(scope) {
+    const [row] = await withTenantDb((tx) =>
+      tx
+        .select({
+          commitSha: schema.contextRecords.commitSha,
+          publishedAt: schema.contextRecords.publishedAt,
+        })
+        .from(schema.contextRecords)
+        .where(
+          and(
+            eq(schema.contextRecords.orgId, scope.orgId),
+            eq(schema.contextRecords.workspaceId, scope.workspaceId),
+            isNotNull(schema.contextRecords.commitSha),
+            isNotNull(schema.contextRecords.publishedAt),
+            isNull(schema.contextRecords.deletedAt),
+          ),
+        )
+        // Newest publication wins. A checkout that can reach it can reach
+        // every earlier one too, because they are all on one branch.
+        .orderBy(desc(schema.contextRecords.publishedAt))
+        .limit(1),
+    );
+    if (!row?.commitSha || !row.publishedAt) return null;
+    return { commitSha: row.commitSha, publishedAt: row.publishedAt };
   },
 
   async ledgerLength(scope) {

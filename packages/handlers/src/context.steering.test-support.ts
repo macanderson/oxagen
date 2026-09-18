@@ -259,6 +259,27 @@ export class MemoryStore implements SteeringStore {
         scope.workspaceId,
     ).length;
   }
+  /** The newest record in this workspace that a Context PR actually merged. */
+  async latestPublication(scope: { workspaceId: string }) {
+    const published = this.records
+      .filter(
+        (r) =>
+          r.workspaceId === scope.workspaceId &&
+          r.deletedAt === null &&
+          r.commitSha !== null &&
+          r.publishedAt !== null,
+      )
+      .sort(
+        (a, b) =>
+          (b.publishedAt as Date).getTime() - (a.publishedAt as Date).getTime(),
+      );
+    const newest = published[0];
+    if (!newest) return null;
+    return {
+      commitSha: newest.commitSha as string,
+      publishedAt: newest.publishedAt as Date,
+    };
+  }
   async insertAppend(values: Parameters<SteeringStore["insertAppend"]>[0]) {
     const existing = this.appends.find(
       (a) =>
