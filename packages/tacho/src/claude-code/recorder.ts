@@ -39,6 +39,9 @@ type Context = NonNullable<TachoEvent["context"]>;
 type Host = NonNullable<TachoEvent["host"]>;
 type Anthropic = NonNullable<TachoEvent["anthropic"]>;
 
+/** What a frame's content bytes are, for every kind the hook path digests. */
+const CONTENT_TYPE_TEXT = "text/plain; charset=utf-8";
+
 export interface RecorderOptions {
   context: ClaudeCodeContext;
   /** The harness's own session id (Claude Code's UUID). */
@@ -64,6 +67,18 @@ export interface RecorderOptions {
   };
   /** Continue a chain the collector persisted before a restart. */
   restore?: RecorderState;
+  /**
+   * Called with the redacted bytes a frame's `content.digest` covers, once
+   * the frame is sealed and has an id to file them under. The collector wires
+   * this to the body store under `content_exact` and leaves it unset under
+   * `digest_only`, so retention is decided in one place and this class stays
+   * a sealer.
+   */
+  onContentBody?: (
+    eventIdIdem: string,
+    contentType: string,
+    bytes: Uint8Array,
+  ) => void;
 }
 
 interface SubagentLink {
@@ -178,6 +193,9 @@ export class SessionRecorder {
         context: this.options.context,
         harnessSessionId: this.harnessSessionId,
         scope: this.options.scope,
+        ...(this.options.onContentBody === undefined
+          ? {}
+          : { onContentBody: this.options.onContentBody }),
         ...(this.options.customAgent === undefined
           ? {}
           : { customAgent: this.options.customAgent }),
@@ -332,6 +350,9 @@ export class SessionRecorder {
       context: this.options.context,
       harnessSessionId: this.harnessSessionId,
       scope: this.options.scope,
+      ...(this.options.onContentBody === undefined
+        ? {}
+        : { onContentBody: this.options.onContentBody }),
       ...(this.options.customAgent === undefined
         ? {}
         : { customAgent: this.options.customAgent }),
@@ -399,6 +420,7 @@ export class SessionRecorder {
       span?: TachoEvent["span"];
       content_digest?: `sha256:${string}`;
       content_redactions?: Redaction[];
+      content_bytes?: Uint8Array;
       raw_source_digest?: `sha256:${string}`;
       turn?: { prompt_id?: string; turn_id?: string };
     },
@@ -461,6 +483,12 @@ export class SessionRecorder {
     const sealed = sealEvent(unsealed, this.cursor);
     this.cursor = sealed.next;
     this.events.push(sealed.event);
+    if (fields.content_bytes !== undefined)
+      this.options.onContentBody?.(
+        sealed.event.event_id_idem,
+        CONTENT_TYPE_TEXT,
+        fields.content_bytes,
+      );
     return sealed.event;
   }
 
@@ -615,6 +643,9 @@ export class SessionRecorder {
         : {}),
       ...(draft.content_redactions !== undefined
         ? { content_redactions: draft.content_redactions }
+        : {}),
+      ...(draft.content_bytes !== undefined
+        ? { content_bytes: draft.content_bytes }
         : {}),
       raw_source_digest: draft.raw_source_digest,
       turn: draft.turn ?? {},

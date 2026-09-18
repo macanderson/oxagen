@@ -8,6 +8,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { TachoEvent } from "../envelope";
+import type { BodyStore } from "../host/body-store";
 import {
   ControlError,
   ControlUnreachable,
@@ -43,6 +44,12 @@ export interface ShipperOptions {
    * existing caller that does not set it keeps the old behaviour.
    */
   hostEnrollmentId?: string;
+  /**
+   * The bodies this host holds, when the workspace retains them. Absent under
+   * `digest_only` and on a caller that keeps none, and then every batch ships
+   * events alone, exactly as before.
+   */
+  bodies?: BodyStore;
 }
 
 export interface ShipResult {
@@ -225,12 +232,24 @@ export class Shipper {
   }
 
   private async shipBatch(batch: TachoEvent[]): Promise<ShipResult> {
+    const ids = batch.map((event) => event.event_id_idem);
+    const bodies = this.options.bodies?.take(ids) ?? [];
     try {
       const response = await this.options.client.ingest(
         batch,
         this.options.health(),
+        bodies.length > 0 ? bodies : undefined,
       );
       this.markShipped(batch);
+      // The batch is acknowledged, so every body in it is settled: the ones
+      // the control plane stored are stored, and the ones it refused it will
+      // refuse again for the same reason. Keeping either on the laptop is
+      // holding prompt text for nothing.
+      this.options.bodies?.drop(ids);
+      for (const rejection of response.body_rejections ?? [])
+        this.options.log(
+          `body refused for ${rejection.event_id_idem}: ${rejection.reason}`,
+        );
       this.succeed();
       if (response.chain_breaks.length > 0)
         this.options.onChainBreak?.(response.chain_breaks);

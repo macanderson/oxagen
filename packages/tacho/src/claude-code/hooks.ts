@@ -56,6 +56,12 @@ export interface HookDraft {
   content_digest?: `sha256:${string}`;
   /** What redaction cut from the content the digest covers. */
   content_redactions?: Redaction[];
+  /**
+   * The redacted bytes the digest is over, for a host whose workspace retains
+   * this class. Held only as long as the draft: whether they reach disk is
+   * the collector's decision, not this module's.
+   */
+  content_bytes?: Uint8Array;
   raw_source_digest: `sha256:${string}`;
 }
 
@@ -131,10 +137,12 @@ const PROMOTED = new Set([
 function contentDraft(text: string): {
   content_digest: `sha256:${string}`;
   content_redactions?: Redaction[];
+  content_bytes: Uint8Array;
 } {
   const frame = contentFrameOf(text);
   return {
     content_digest: frame.digest,
+    content_bytes: frame.bytes,
     ...(frame.redactions.length > 0
       ? { content_redactions: frame.redactions }
       : {}),

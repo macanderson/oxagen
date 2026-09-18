@@ -28,6 +28,7 @@ import {
   type DeliveredCommand,
   TACHO_BUNDLE_FEATURES,
 } from "../wire";
+import { BodyStore } from "../host/body-store";
 import { type DaemonHandle, startDaemon } from "./daemon";
 
 /**
@@ -97,6 +98,9 @@ function fixtures(): Fixture[] {
 /** A fake control plane: accepts every batch, hands back what the test queues. */
 function fakeControlPlane(bundleEtag: string) {
   const ingested: TachoEvent[] = [];
+  /** Bodies the host shipped next to its events, across every batch. */
+  const ingestedBodies: Array<{ event_id_idem: string; bytes_base64: string }> =
+    [];
   const commandQueue: DeliveredCommand[] = [];
   const acks: unknown[] = [];
   let hostStatus: ControlEnvelope["host_status"] = "active";
@@ -126,6 +130,12 @@ function fakeControlPlane(bundleEtag: string) {
       if (body["daemon"] !== undefined) reported.push(body["daemon"]);
       const events = body["events"] as TachoEvent[];
       ingested.push(...events);
+      ingestedBodies.push(
+        ...((body["bodies"] ?? []) as Array<{
+          event_id_idem: string;
+          bytes_base64: string;
+        }>),
+      );
       return {
         ok: true,
         status: 200,
@@ -172,6 +182,7 @@ function fakeControlPlane(bundleEtag: string) {
   return {
     fetch,
     ingested,
+    ingestedBodies,
     acks,
     calls,
     reported,
@@ -799,6 +810,52 @@ describe("tachod", () => {
     plane.setDown(false);
     expect(handle.shipper.ready()).toBe(false);
   });
+
+  it.each([
+    ["content_exact", 1],
+    ["digest_only", 0],
+  ] as const)(
+    "ships a prompt body under %s retention",
+    async (mode, expected) => {
+      // The mandate decides, and it decides on the machine. Under
+      // `digest_only` the bytes never reach the disk, so an operator who
+      // looks at the directory sees what the control plane sees.
+      const plane = fakeControlPlane("etag-3");
+      const paths = scratchPaths();
+      const signer = bundleSigner();
+      const bundle = signer.sign(
+        unsignedBundle({ retention: { mode, classes: [] } }),
+      );
+      writeHostFile(paths.hostFile, testHostFile(signer, bundle));
+      const { handle } = await boot(plane, paths);
+
+      const result = await runTachoHook({
+        paths,
+        env: {},
+        stdin: JSON.stringify({
+          session_id: "11111111-1111-4111-8111-11111111aaaa",
+          hook_event_name: "UserPromptSubmit",
+          cwd: "/home/dev/proj",
+          transcript_path: "/t.jsonl",
+          prompt: "deploy the fix",
+        }),
+        connectTimeoutMs: DAEMON_CONNECT_MS,
+      });
+      expect(result.exitCode).toBe(0);
+      expect(result.path).toBe("daemon");
+      // `stop` drains, so whatever the mandate kept has been shipped by now.
+      await handle.stop();
+
+      const prompts = plane.ingestedBodies.filter(
+        (body) =>
+          Buffer.from(body.bytes_base64, "base64").toString() ===
+          "deploy the fix",
+      );
+      expect(prompts).toHaveLength(expected);
+      // Shipped or never written, nothing is left holding prompt text here.
+      expect(new BodyStore(paths.bodies).stats().bodies).toBe(0);
+    },
+  );
 
   it("backs off the command poll instead of retrying it every tick", async () => {
     // The regression this guards: `sendAcks` had no gate of its own. Its only

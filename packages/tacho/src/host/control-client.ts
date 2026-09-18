@@ -140,6 +140,8 @@ export interface ControlClient {
   ingest: (
     events: TachoBatch["events"],
     daemon?: DaemonHealth,
+    /** Redacted bodies for events in this batch, at most one per event. */
+    bodies?: TachoBatch["bodies"],
   ) => Promise<IngestResponse>;
   bundle: (etag?: string) => Promise<BundleResponse>;
   commands: (
@@ -194,12 +196,13 @@ export function createControlClient(
   }
 
   return {
-    ingest: async (events, daemon) =>
+    ingest: async (events, daemon, bodies) =>
       ingestResponseSchema.parse(
         await post(options.endpoints.ingest, {
           schema: TACHO_BATCH_SCHEMA,
           host_enrollment_id: options.hostEnrollmentId,
           events,
+          ...(bodies !== undefined && bodies.length > 0 ? { bodies } : {}),
           ...(daemon !== undefined ? { daemon } : {}),
         }),
       ),

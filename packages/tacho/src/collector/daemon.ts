@@ -37,6 +37,7 @@ import { readModelBaseUrlState } from "../host/model-base-url";
 import type { TachoPaths } from "../host/paths";
 import { isProcessAlive, listClaudeProcesses } from "../host/process-scan";
 import type { Exec } from "../host/service";
+import { BodyStore } from "../host/body-store";
 import { Wal } from "../host/wal";
 import { ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
@@ -227,10 +228,20 @@ export async function startDaemon(
     now,
   };
   const wal = new Wal(paths.wal);
+  // Frame bodies, kept only while the mandate says `content_exact`. The mode
+  // is read at the moment a frame is sealed, not captured here, so a bundle
+  // that narrows retention stops the writing on the next frame rather than on
+  // the next restart. Nothing reaches this store under `digest_only`, which is
+  // what makes the mode readable off the disk.
+  const bodyStore = new BodyStore(paths.bodies);
   const registry = new SessionRegistry({
     context,
     scope: host.host_enrollment_id,
     now,
+    onContentBody: (eventIdIdem, contentType, bytes) => {
+      if (host.bundle.retention.mode !== "content_exact") return;
+      bodyStore.put(eventIdIdem, contentType, bytes);
+    },
   });
   const persisted = parseRegistryState(readJsonFileIfExists(paths.daemonState));
   if (persisted !== undefined) registry.restore(persisted);
@@ -398,6 +409,7 @@ export async function startDaemon(
   const shipper = new Shipper({
     wal,
     client,
+    bodies: bodyStore,
     quarantineDir: paths.quarantine,
     // Re-enrolling leaves the WAL holding events stamped with the old id; the
     // control plane 403s a batch containing any of them, and a 403 is
@@ -1057,6 +1069,12 @@ export async function startDaemon(
       lastCompact = now();
       wal.compact(now(), timers.walRetainMs);
       sweepQuarantine(now(), timers.walRetainMs);
+      // A body whose event was quarantined, or whose batch never shipped, has
+      // nothing left to drop it. Prompt text is not something to keep on a
+      // machine because a batch failed a week ago.
+      const staleBodies = bodyStore.compact(now(), timers.walRetainMs);
+      if (staleBodies.length > 0)
+        log(`dropped ${staleBodies.length} unshipped body file(s) past retention`);
     }
   }
 

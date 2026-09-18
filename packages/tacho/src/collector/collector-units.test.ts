@@ -13,6 +13,7 @@ import {
   ControlUnreachable,
   type ControlClient,
 } from "../host/control-client";
+import { BodyStore } from "../host/body-store";
 import { mergeTachoSettings } from "../host/settings-writer";
 import { scratchPaths, TEST_ENROLLMENT } from "../host/test-support";
 import { Wal } from "../host/wal";
@@ -501,6 +502,7 @@ describe("shipper", () => {
     dir: string,
     now: () => number,
     hostEnrollmentId?: string,
+    bodies?: BodyStore,
   ) {
     const controls: unknown[] = [];
     const logs: string[] = [];
@@ -508,6 +510,7 @@ describe("shipper", () => {
       wal,
       client: client as ControlClient,
       quarantineDir: dir,
+      ...(bodies !== undefined ? { bodies } : {}),
       health: () => ({ version: "1" }),
       onControl: (c) => {
         controls.push(c);
@@ -521,6 +524,12 @@ describe("shipper", () => {
     return { s, controls, logs };
   }
 
+  const bodyOf = (event: { event_id_idem: string }, text: string) => ({
+    event_id_idem: event.event_id_idem,
+    content_type: "text/plain; charset=utf-8",
+    bytes_base64: Buffer.from(text).toString("base64"),
+  });
+
   const okResponse = (events: unknown[]) => ({
     accepted: events.length,
     event_ids: [],
@@ -531,6 +540,103 @@ describe("shipper", () => {
       bundle_etag: "e",
       commands: [],
     },
+  });
+
+  it("ships the bodies it holds for a batch, and keeps none once the batch is acknowledged", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events);
+    const store = new BodyStore(paths.bodies);
+    const first = events[0];
+    expect(first).toBeDefined();
+    store.put(
+      (first as { event_id_idem: string }).event_id_idem,
+      "text/plain; charset=utf-8",
+      new TextEncoder().encode("ship it"),
+    );
+
+    let sent: unknown;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch, _daemon, bodies) => {
+          sent = bodies;
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+      undefined,
+      store,
+    );
+    await s.drain();
+
+    expect(sent).toEqual([bodyOf(first as { event_id_idem: string }, "ship it")]);
+    // Acknowledged means settled. Holding the prompt text on the machine
+    // after that is holding it for nothing.
+    expect(store.stats()).toEqual({ bodies: 0, bytes: 0 });
+  });
+
+  it("drops a refused body and says which one, rather than shipping it again", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events);
+    const store = new BodyStore(paths.bodies);
+    const first = events[0] as { event_id_idem: string };
+    store.put(
+      first.event_id_idem,
+      "text/plain; charset=utf-8",
+      new TextEncoder().encode("ship it"),
+    );
+
+    const { s, logs } = shipper(
+      wal,
+      {
+        ingest: async (batch) => ({
+          ...okResponse(batch),
+          body_rejections: [
+            { event_id_idem: first.event_id_idem, reason: "digest_mismatch" },
+          ],
+        }),
+      },
+      paths.quarantine,
+      () => 0,
+      undefined,
+      store,
+    );
+    await s.drain();
+
+    expect(
+      logs.some(
+        (l) =>
+          l.includes(first.event_id_idem) && l.includes("digest_mismatch"),
+      ),
+    ).toBe(true);
+    expect(store.stats().bodies).toBe(0);
+  });
+
+  it("ships events alone when the host holds no bodies", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    wal.append(minimalSession());
+    let sent: unknown = "not called";
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch, _daemon, bodies) => {
+          sent = bodies;
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+      undefined,
+      new BodyStore(paths.bodies),
+    );
+    await s.drain();
+    expect(sent).toBeUndefined();
   });
 
   it("quarantines the single event a refused batch bisects down to", async () => {
