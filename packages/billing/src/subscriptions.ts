@@ -593,9 +593,25 @@ export async function upgradeSubscription(
    * which is safe in either direction, and it is `none` that needs binding.
    */
   expectedCurrentPriceId?: string,
+  /**
+   * The second the preview priced this change at —
+   * `BillingProrationPreview.prorationDate`, off the same observation that
+   * produced `prorationBehavior`.
+   *
+   * Sent so the invoice this raises is computed from the instant the quoted
+   * one was, rather than from whenever the provider happens to serve the
+   * write. Omit only when there is no preview to take it from.
+   */
+  prorationDate?: number,
 ): Promise<void> {
   logger.info(
-    { stripeSubId, newPriceId, prorationBehavior, expectedCurrentPriceId },
+    {
+      stripeSubId,
+      newPriceId,
+      prorationBehavior,
+      expectedCurrentPriceId,
+      prorationDate,
+    },
     "billing: upgrading subscription price",
   );
   const idempotencyKey = planChangeIdempotencyKey(
@@ -608,6 +624,7 @@ export async function upgradeSubscription(
     prorationBehavior,
     idempotencyKey,
     expectedCurrentPriceId,
+    prorationDate,
   });
   await syncSubscriptionFromStripe(stripeSubId);
 }
@@ -1368,6 +1385,10 @@ export async function changeOrgPlan(
       prorationBehavior,
       opts?.requestId,
       expectedCurrentPriceId,
+      // The anchor the behaviour and the approved figure were both computed
+      // at. Without it Stripe re-anchors at write time and the invoice is not
+      // the one the approval gate just checked (review 5243042193).
+      preview?.prorationDate,
     );
   } catch (err) {
     // The intent was written a moment ago for a swap that then did not happen.
@@ -1427,9 +1448,24 @@ export async function changeOrgPlan(
   // row. When the preview could not name it (no preview, or a product no
   // catalogue row carries), the grant is SKIPPED rather than sized from the
   // stale column: granting from a source known to be wrong sends credits out
-  // of the door, while skipping leaves a loud log and a standing intent that
-  // a retry or an operator can finish. An unknown is not a nothing, which is
-  // the rule the rest of this change is built on.
+  // of the door. An unknown is not a nothing, which is the rule the rest of
+  // this change is built on.
+  //
+  // WHAT SKIPPING LEAVES BEHIND, STATED HONESTLY. It leaves a loud log and
+  // nothing else. There is NO standing intent in this case, because
+  // `recordPlanUpgradeIntent` above sits behind the same `originPlanId` check
+  // that skips the grant here — an intent is a plan foreign key, and a product
+  // no catalogue row carries cannot produce one. Once the sync lands, the
+  // provider and the local row agree on the price and no intent stands, so a
+  // retry reads it as steady state and does nothing. These credits are not
+  // recoverable in code; they need an operator.
+  //
+  // This log used to say the intent was "left standing for repair", which sent
+  // whoever read it looking for a record that was never written. Making the
+  // case genuinely recoverable needs somewhere durable to keep a
+  // PROVIDER-ORIGIN product, or a refusal of the swap itself — and refusing
+  // would block a grandfathered subscriber from changing plan at all. Both are
+  // larger than this change; saying what is true is not (r4042794577).
   let grantSettled = false;
   if (!originPlanId) {
     logger.error(
@@ -1439,7 +1475,7 @@ export async function changeOrgPlan(
         previewedProductId,
         recordedPlanId: activeSub.planId,
       },
-      "billing: the plan this change moved from could not be established from the provider, so the prorated credit grant was not sized; the upgrade intent is left standing for repair",
+      "billing: the plan this change moved from could not be established from the provider, so the prorated credit grant was not sized and no upgrade intent could be recorded for it; the grant needs manual repair",
     );
   } else {
     try {

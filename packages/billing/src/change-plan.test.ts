@@ -1797,3 +1797,148 @@ describe("a checkout submit that became an in-place change (r4042742296)", () =>
     expect(upgradeSubscriptionMock).toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// The swap is anchored where the preview priced it
+// (#3157, PR #3171 review, review 5243042193 — a review-body finding with no
+// thread, so it is recorded here as well as in the reply).
+//
+// `approvedMaxCents` binds the charge to a figure a person agreed to, but it
+// binds it to a figure computed at ONE moment: the preview's
+// `proration_date`. `subscriptions.update` was sent no `proration_date`, so
+// Stripe re-anchored at whatever second it processed the request, and the
+// invoice it raised is not the invoice that was just checked.
+//
+// WHICH DIRECTION IT MOVES. Net proration is the rate difference multiplied by
+// the unused fraction of the period, so a later anchor SHRINKS it. For a
+// same-interval upgrade that means a smaller charge, which a ceiling accepts;
+// for a downgrade it ships `none` and collects nothing either way. The case
+// that rises is the INTERVAL CHANGE, where the charge is the new period's
+// price less the decaying credit for the old one — a later anchor means less
+// credit and a bigger bill. That is the direction the guard cannot see.
+//
+// THE SIZE IS SMALL AND THE SIZE IS NOT THE ARGUMENT. The drift is the old
+// rate times the elapsed seconds over the period: for a $10,000/month
+// subscription that is 0.386 cents per second, so a second or two of Stripe
+// round trips is under a cent and a pathological ten seconds is a few cents.
+// What makes it worth fixing at three lines is that the preview's attribution
+// guards are all defined AT that anchor — `previewWithOwnedAnchor` refuses
+// when another proration already sits there — and a mutation landing on a
+// different anchor was never subject to any of them. An approved maximum
+// checked against a number the provider then recomputes is not a bound.
+// ---------------------------------------------------------------------------
+
+describe("the swap is anchored where the preview priced it (5243042193)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    subscriptionUpdates.length = 0;
+    grantProratedPlanUpgradeCreditsMock.mockResolvedValue(undefined);
+    upgradeSubscriptionMock.mockReset();
+    upgradeSubscriptionMock.mockResolvedValue(undefined);
+    stubProviderSubscription("prod_scale");
+    stubCatalog();
+    stubInsertChain();
+  });
+
+  it("passes the preview's anchor to the mutation", async () => {
+    previewingProration(49_900);
+    stubPlanLookups(ENTERPRISE_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    await changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month");
+
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({ prorationDate: 1_700_000_000 }),
+    );
+  });
+
+  it("passes no anchor when no preview could be taken", async () => {
+    // The paired negative, and the same rule every other binding on this path
+    // follows: with no preview there is nothing to bind to, and manufacturing
+    // a timestamp here would be a fresh reading wearing the preview's name.
+    // The unpriceable change settles as `always_invoice`, which bills the true
+    // difference at whatever anchor Stripe picks — the honest outcome when
+    // nobody could price it.
+    previewPlanChangeMock.mockRejectedValue(new Error("stripe unavailable"));
+    stubPlanLookups(ENTERPRISE_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    await changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month");
+
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({ prorationDate: undefined }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// An unmappable origin leaves no intent, and the log must say so
+// (#3157, PR #3171 review, r4042794577).
+//
+// When the provider's active product maps to no catalogue plan, `originPlanId`
+// is null, `recordPlanUpgradeIntent` is skipped, and the swap proceeds anyway.
+// The post-swap branch then logs that "the upgrade intent is left standing for
+// repair" — which is false: none was ever written, because the write is behind
+// the same null check.
+//
+// The consequence is the one the reviewer names. After the sync the provider
+// and the local row agree on the price, `pendingUpgradeFromPlanId` is null, and
+// a retry takes the already-applied branch's "nothing in flight" path and
+// returns a steady-state no-op. The customer's upgrade credits are then
+// unrecoverable in code.
+//
+// WHAT IS FIXED HERE AND WHAT IS NOT. Making the record recoverable needs
+// somewhere to put a PROVIDER-ORIGIN product — `pendingUpgradeFromPlanId` is a
+// plan foreign key and cannot hold one — or a refusal of the swap itself,
+// which would block a grandfathered subscriber's legitimate plan change. Both
+// are larger than this branch. What rides here is the honesty of the log: an
+// operator told that an intent stands will look for one, and there is none.
+// It now says the grant needs manual repair, which is what is true.
+// ---------------------------------------------------------------------------
+
+describe("an origin the provider cannot name (r4042794577)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    subscriptionUpdates.length = 0;
+    grantProratedPlanUpgradeCreditsMock.mockResolvedValue(undefined);
+    upgradeSubscriptionMock.mockReset();
+    upgradeSubscriptionMock.mockResolvedValue(undefined);
+    stubInsertChain();
+  });
+
+  it("writes no intent, and does not claim one is standing", async () => {
+    // A subscription sitting on a price no catalogue row carries, whose
+    // product no catalogue row carries either — a dashboard-side move to an
+    // unregistered product. The origin cannot be established from the
+    // provider, so the grant is skipped, correctly.
+    previewingProration(49_900);
+    providerActivePriceId = "price_grandfathered";
+    providerProductFallback = "prod_unregistered";
+    stubCatalog([ENTERPRISE_PLAN, SCALE_PLAN, BUILD_PLAN]);
+    stubProviderSubscription("prod_unregistered");
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(
+      makeActiveSub({
+        stripePriceId: "price_grandfathered",
+        planId: "plan-scale-id",
+      }),
+    );
+
+    await changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month");
+
+    // The swap happened and the grant did not — both deliberate.
+    expect(upgradeSubscriptionMock).toHaveBeenCalled();
+    expect(grantProratedPlanUpgradeCreditsMock).not.toHaveBeenCalled();
+    // No intent was written, because the write is behind the same null check.
+    expect(subscriptionUpdates).not.toContainEqual(
+      expect.objectContaining({ pendingUpgradeFromPlanId: expect.any(String) }),
+    );
+    // So the log must not tell an operator to go looking for one.
+    const messages = loggerMock.error.mock.calls.map((call) => String(call[1]));
+    const line = messages.find((m) => m.includes("could not be established"));
+    expect(line).toBeDefined();
+    expect(line).not.toContain("left standing");
+    expect(line).toContain("manual repair");
+  });
+});

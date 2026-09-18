@@ -97,6 +97,25 @@ export interface BillingSubscriptionUpgradeInput {
    * exists to keep honest.
    */
   expectedCurrentPriceId?: string;
+  /**
+   * The second the proration decision was priced at —
+   * `BillingProrationPreview.prorationDate`, off the same preview that
+   * produced `prorationBehavior` and the figure the customer approved.
+   *
+   * Sent as Stripe's `proration_date` so the invoice the swap raises is
+   * computed from the same instant as the invoice that was previewed. Without
+   * it Stripe re-anchors at whatever moment it processes the update, and the
+   * unused credit for the old price has decayed in between — on an interval
+   * change that means a bigger bill than the one just checked against the
+   * approved maximum. It is also the anchor every attribution guard on the
+   * preview is defined at, so a mutation landing elsewhere was subject to none
+   * of them.
+   *
+   * Omitted when no preview was obtained. Manufacturing one here would be a
+   * fresh reading wearing the preview's name, which is the confusion this
+   * whole path exists to remove.
+   */
+  prorationDate?: number;
 }
 
 export interface BillingSubscriptionSeatUpdateInput {

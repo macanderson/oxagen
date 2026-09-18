@@ -227,9 +227,27 @@ describe("plan price order and TIER_ORDER stay separate (#3157)", () => {
     expect(subs).not.toMatch(
       /currentInterval[^\n]*=[\s\S]{0,80}?(activeSub|activeSubRow)\.billingInterval/,
     );
+    // The positive half used to pin `billingInterval: currentInterval` coming
+    // off `resolveActiveProviderState`. That code is gone, deliberately: a
+    // later round of this same branch narrowed the resolver to the price and
+    // the product, because a caller able to obtain an interval here could
+    // compare it against the preview's, and two readings of one fact is the
+    // defect this file exists to catch (r4042249142). The assertion outlived
+    // the code it described and has been failing at the branch head ever
+    // since, which is worse than having no assertion: a red guard is one
+    // nobody can read a reversion out of.
+    //
+    // So it pins the narrowing instead, which is the stronger property. A
+    // value no caller can hold is a value that cannot disagree with the
+    // preview, and the interval the decision uses now comes back on the
+    // preview that priced it.
     expect(subs).toMatch(
-      /billingInterval: currentInterval[\s\S]{0,200}?resolveActiveProviderState\(/,
+      /async function resolveActiveProviderState\([\s\S]{0,200}?Promise<\{[^}]*priceId[^}]*productId[^}]*\}>/,
     );
+    expect(subs).not.toMatch(
+      /resolveActiveProviderState[\s\S]{0,200}?billingInterval/,
+    );
+    expect(subs).toMatch(/preview\?\.billingInterval/);
   });
 
   it("no source file decides a proration behaviour from the tier ordering", () => {

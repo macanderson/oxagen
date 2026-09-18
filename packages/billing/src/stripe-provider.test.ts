@@ -313,6 +313,54 @@ describe("StripeProvider", () => {
       );
     });
 
+    it("anchors the swap at the date the preview was priced from", async () => {
+      // `subscriptions.update` with no `proration_date` lets Stripe anchor at
+      // whatever moment it processes the request. The preview that produced
+      // `prorationBehavior` — and the figure `approvedMaxCents` was just
+      // checked against — was anchored at a different second, and the unused
+      // credit of the old price decays between them. On an interval change
+      // that decay makes the invoice LARGER, so the approved maximum can be
+      // passed and the customer still billed above it.
+      //
+      // It is also the only thing that makes the preview's own attribution
+      // guards mean anything: `previewWithOwnedAnchor` refuses when another
+      // proration already sits at this anchor, and an update that lands on a
+      // different anchor was never subject to that test
+      // (#3157, PR #3171 review, review 5243042193).
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      stripeMethods.subscriptions.update.mockResolvedValue({});
+      await provider.upgradeSubscription("sub_test_001", {
+        newPriceId: "price_new_001",
+        prorationBehavior: "always_invoice",
+        idempotencyKey: "idem_001",
+        prorationDate: 1_700_000_000,
+      });
+      expect(stripeMethods.subscriptions.update).toHaveBeenCalledWith(
+        "sub_test_001",
+        expect.objectContaining({ proration_date: 1_700_000_000 }),
+        { idempotencyKey: "idem_001" },
+      );
+    });
+
+    it("sends no anchor when there was no preview to take one from", async () => {
+      // The paired negative. An unpriceable change has no anchor to reuse, and
+      // inventing `Date.now()` here would be a second reading dressed as the
+      // preview's — the exact confusion the rest of this branch removes. Stripe
+      // anchoring at its own now is then the honest behaviour, and is what
+      // happens today.
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      stripeMethods.subscriptions.update.mockResolvedValue({});
+      await provider.upgradeSubscription("sub_test_001", {
+        newPriceId: "price_new_001",
+        prorationBehavior: "always_invoice",
+      });
+      const params = stripeMethods.subscriptions.update.mock.calls[0]?.[1] as
+        | Record<string, unknown>
+        | undefined;
+      expect(params).toBeDefined();
+      expect("proration_date" in (params ?? {})).toBe(false);
+    });
+
     it("throws when subscription has no items", async () => {
       stripeMethods.subscriptions.retrieve.mockResolvedValue(
         makeStripeSub({ items: { data: [] } }),

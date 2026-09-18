@@ -932,12 +932,34 @@ export class StripeProvider implements BillingProvider {
       );
     }
     const prorationBehavior = input.prorationBehavior ?? "always_invoice";
+    // The anchor the preview priced at, when there was one.
+    //
+    // Left off, Stripe anchors the proration at the moment it processes THIS
+    // request, which is not the moment the preview was computed at — and the
+    // unused credit for the old price decays between the two. For a
+    // same-interval upgrade that shrinks the charge, which a ceiling accepts;
+    // for an interval change the charge is the new period less that decaying
+    // credit, so it GROWS, and the approved maximum checked one call earlier
+    // can be passed and exceeded anyway.
+    //
+    // Sending it also makes the anchor a parameter of the request rather than
+    // a function of when it is served, so an idempotent retry that reaches
+    // Stripe fresh reproduces the same invoice instead of re-anchoring.
+    //
+    // A `proration_date` outside the subscription's current period is refused
+    // by Stripe. That is the correct outcome and not a new failure mode: a
+    // preview whose period has since rolled over priced a change that no
+    // longer exists, and it must be taken again.
+    const params: Stripe.SubscriptionUpdateParams = {
+      items: [{ id: item.id, price: input.newPriceId }],
+      proration_behavior: prorationBehavior,
+    };
+    if (input.prorationDate !== undefined) {
+      params.proration_date = input.prorationDate;
+    }
     await stripe.subscriptions.update(
       subscriptionId,
-      {
-        items: [{ id: item.id, price: input.newPriceId }],
-        proration_behavior: prorationBehavior,
-      },
+      params,
       idempotency(input.idempotencyKey),
     );
   }
