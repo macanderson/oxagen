@@ -14,6 +14,7 @@
 import "server-only";
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
+import { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import { captureError } from "@oxagen/telemetry";
@@ -21,6 +22,7 @@ import type { z } from "zod";
 import {
   ApiKeyList,
   MemberList,
+  ModelCredential,
   RoleCatalog,
   WorkspaceList,
 } from "@/data/contracts/org";
@@ -30,6 +32,7 @@ import { kernelRead } from "@/server/kernel";
 import {
   toApiKeys,
   toMemberList,
+  toModelCredential,
   toRoleCatalog,
   toWorkspaceList,
 } from "./mappers/org";
@@ -148,5 +151,22 @@ export const org: DataSource["org"] = {
     });
     if (!read.ok) return read;
     return view(ctx.orgId, ApiKeyList, toApiKeys(read.value), "org.apiKeys");
+  },
+
+  // The organisation's own model key: org-scoped (the credential pays for
+  // every workspace's assistant turns), Owner-or-Admin in its handler.
+  async modelCredential(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: orgModelCredentialGet,
+      input: {},
+      page: "organization",
+    });
+    if (!read.ok) return read;
+    return view(
+      ctx.orgId,
+      ModelCredential,
+      toModelCredential(read.value),
+      "org.modelCredential",
+    );
   },
 };

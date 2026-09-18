@@ -255,6 +255,7 @@ export function billingSource(
       roles: refuse,
       workspaces: refuse,
       apiKeys: refuse,
+      modelCredential: refuse,
     },
     mandates: { list: refuse },
     audit: { events: refuse, exportEvents: refuse },
