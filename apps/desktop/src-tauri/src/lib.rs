@@ -154,6 +154,11 @@ struct DesktopState {
     host_path: String,
     daemon: Option<Value>,
     log_path: String,
+    /// Whether `log_path` exists yet. The collector writes it on its first
+    /// run, so a machine that has not been set up has no log to open, and
+    /// handing that path to the system opener only produces a launcher
+    /// error about a missing file.
+    log_present: bool,
     sidecar_dir: Option<String>,
     /// The sidecar directory is gone after this launch (AppImage mount,
     /// mounted .dmg, App Translocation); see `is_transient_dir`.
@@ -175,13 +180,17 @@ struct DesktopState {
     cli_install: CliInstallView,
 }
 
-#[tauri::command]
+/// `async` so Tauri runs it off the main thread: a synchronous command blocks
+/// the window's event loop, and this one waits on the daemon's loopback
+/// `/status` (up to 1.5s) every time the UI polls.
+#[tauri::command(async)]
 fn desktop_state(app: tauri::AppHandle, install_state: tauri::State<CliInstallState>) -> DesktopState {
     let (config, _) = cli_config();
     let root = tacho_root();
     let host_path = root.join("host.json");
     let host = read_json(&host_path);
     let daemon = host.as_ref().and_then(daemon_status);
+    let log_path = root.join("tachod.log");
     DesktopState {
         platform: std::env::consts::OS,
         arch: std::env::consts::ARCH,
@@ -190,7 +199,8 @@ fn desktop_state(app: tauri::AppHandle, install_state: tauri::State<CliInstallSt
         host: host.as_ref().map(host_view),
         host_path: host_path.display().to_string(),
         daemon,
-        log_path: root.join("tachod.log").display().to_string(),
+        log_path: log_path.display().to_string(),
+        log_present: log_path.is_file(),
         sidecar_dir: cli_install::sidecar_dir().map(|p| p.display().to_string()),
         sidecar_transient: cli_install::sidecar_dir_is_transient(),
         bin_dir: cli_install::bin_dir().map(|p| p.display().to_string()),
@@ -216,7 +226,10 @@ fn is_user_route(path: &str) -> bool {
 
 /// POST to a user-scoped control-plane route with the CLI's session token.
 /// Only the two picker routes in `USER_ROUTES` are reachable from the app.
-#[tauri::command]
+/// `async` for the same reason as `desktop_state`, and more so: this waits on
+/// the control plane for up to 15 seconds, which is 15 seconds of a frozen
+/// window if it runs on the main thread.
+#[tauri::command(async)]
 fn api_post(path: String, body: Value) -> Result<Value, String> {
     if !is_user_route(&path) {
         return Err(format!("{path} is not a user-scoped route"));
@@ -265,7 +278,7 @@ fn remove_local_data() -> Result<String, String> {
     Ok(dir.display().to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn log_tail(lines: usize) -> String {
     let text = fs::read_to_string(tacho_root().join("tachod.log")).unwrap_or_default();
     let all: Vec<&str> = text.lines().collect();

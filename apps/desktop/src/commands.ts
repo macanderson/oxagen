@@ -138,6 +138,35 @@ export function needsWorkspacePick(
   );
 }
 
+/** The parts of the CLI's `config.json` that say whose session is on disk. */
+export interface SessionView {
+  logged_in: boolean;
+  org_slug: string | null;
+  workspace_slug: string | null;
+}
+
+/**
+ * Whether a running `login --browser` has already done the job it was
+ * spawned for: the session it writes is on disk.
+ *
+ * The app clears its busy state when a sidecar process closes, which is the
+ * right rule for every command that has a result to report. Sign-in is the
+ * exception: the session lands in `config.json` before the process is
+ * finished with it, so a login that is slow to exit would otherwise hold the
+ * organization and workspace pickers disabled behind a sign-in that already
+ * worked. A same-organization re-login writes nothing this can see, so that
+ * one still waits for the process — there is nothing to detect and nothing
+ * to be wrong about.
+ */
+export function sessionLanded(before: SessionView, now: SessionView): boolean {
+  if (!now.logged_in) return false;
+  if (!before.logged_in) return true;
+  return (
+    now.org_slug !== before.org_slug ||
+    now.workspace_slug !== before.workspace_slug
+  );
+}
+
 /** What the Workspace and Wrappers panels would change on the host. */
 export function pendingChange(
   host: HostTarget | null,

@@ -110,6 +110,12 @@ export interface DesktopState {
   host_path: string;
   daemon: DaemonStatus | null;
   log_path: string;
+  /**
+   * Whether `log_path` exists. The collector writes it on its first run, so
+   * it is absent on a machine that has not been set up. Optional: a build of
+   * the Rust shell that predates the field reports nothing.
+   */
+  log_present?: boolean;
   sidecar_dir: string | null;
   /**
    * The sidecar directory is gone after this launch (an AppImage mount, a

@@ -58,6 +58,8 @@ import {
   pendingChange,
   reassignArgs,
   isConnected,
+  type SessionView,
+  sessionLanded,
   unenrollArgs,
   verifiable,
   wizardStep,
@@ -297,12 +299,31 @@ export function App() {
       });
   }, [firstRun, step, detected]);
 
+  /**
+   * Poll `landed` until it answers true. Used to stop waiting on a sidecar
+   * that has already written its result to disk; see `sessionLanded`.
+   */
+  async function waitForLanding(
+    landed: () => Promise<boolean>,
+  ): Promise<RunOutcome> {
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 500));
+      if (await landed().catch(() => false)) return { code: 0, stderr: "" };
+    }
+  }
+
   async function act(
     name: string,
     sidecar: "tacho" | "oxagen",
     args: string[],
     after?: (result: RunOutcome) => Promise<void> | void,
     onFail?: (result: RunOutcome) => void,
+    /**
+     * An alternative finish line: when it answers true the action is done,
+     * whether or not the process has exited. The sidecar keeps streaming into
+     * the output panel either way.
+     */
+    landed?: () => Promise<boolean>,
   ) {
     setBusy(name);
     setError(null);
@@ -310,9 +331,18 @@ export function App() {
     setConfirming(null);
     setLog([{ text: `$ ${sidecar} ${args.join(" ")}`, err: false }]);
     try {
-      const result = await runSidecar(sidecar, args, (line, stream) =>
+      const run = runSidecar(sidecar, args, (line, stream) =>
         setLog((prev) => [...prev, { text: line, err: stream === "stderr" }]),
       );
+      const result = landed
+        ? await Promise.race([run, waitForLanding(landed)])
+        : await run;
+      // The race leaves the sidecar running when `landed` wins. Its failure
+      // is still a failure of this action if it comes before the next one.
+      if (landed)
+        run.catch((e: unknown) =>
+          setError(e instanceof Error ? e.message : String(e)),
+        );
       if (result.code !== 0) {
         setError(
           `${sidecar} ${args[0]} exited ${result.code ?? "?"}; see the output below.`,
@@ -334,8 +364,13 @@ export function App() {
   // `oxagen login --browser` replaces whatever session config.json holds,
   // so a sign-in after a 401 (or a Switch organization) starts the pickers
   // over from the new session rather than keeping the dead one's verdict.
-  const signIn = (options: { signup?: boolean } = {}) =>
-    act(
+  const signIn = (options: { signup?: boolean } = {}) => {
+    const before: SessionView = {
+      logged_in: configToken,
+      org_slug: state?.config.org_slug ?? null,
+      workspace_slug: state?.config.workspace_slug ?? null,
+    };
+    return act(
       options.signup ? "signup" : "signin",
       "oxagen",
       loginArgs(options),
@@ -348,7 +383,17 @@ export function App() {
           options.signup ? "Account created and signed in." : "Signed in.",
         );
       },
+      undefined,
+      async () => {
+        const { config } = await readState();
+        return sessionLanded(before, {
+          logged_in: config.logged_in,
+          org_slug: config.org_slug,
+          workspace_slug: config.workspace_slug,
+        });
+      },
     );
+  };
   const signOut = () =>
     act("signout", "oxagen", ["logout"], () => {
       setOrgs(null);
@@ -664,7 +709,9 @@ export function App() {
         setPickedOrg(e.target.value);
         setPickedWorkspace(null);
       }}
-      disabled={busy !== null || orgs === null}
+      // Not gated on `busy`: picking is local state, and the one command
+      // that runs while this step is open is the sign-in that filled it.
+      disabled={orgs === null}
     >
       {(orgs ?? []).map((o) => (
         <option key={o.slug} value={o.slug}>
@@ -682,7 +729,7 @@ export function App() {
       id="workspace"
       value={workspaceTarget ?? ""}
       onChange={(e) => setPickedWorkspace(e.target.value)}
-      disabled={busy !== null || workspaces === null}
+      disabled={workspaces === null}
     >
       {workspaceTarget === null && <option value="">Pick a workspace…</option>}
       {(workspaces ?? []).map((w) => (
@@ -721,6 +768,16 @@ export function App() {
           <button
             type="button"
             className="quiet"
+            // The collector writes this file on its first run. Before that
+            // there is nothing to open, and handing the path to the system
+            // opener answers with a launcher error about a missing file
+            // rather than with the honest reason.
+            disabled={state?.log_present !== true}
+            title={
+              state?.log_present === true
+                ? undefined
+                : "The collector has not written a log on this machine yet."
+            }
             onClick={() => state && void openLog(state.log_path)}
           >
             Open {state?.log_path}
@@ -805,11 +862,11 @@ export function App() {
                     type="button"
                     className="primary"
                     onClick={() => setTargetChosen(true)}
+                    // Continue only moves the wizard on; nothing it does
+                    // touches the machine, so a running sidecar is not a
+                    // reason to refuse it.
                     disabled={
-                      busy !== null ||
-                      !orgForPicker ||
-                      !workspaceTarget ||
-                      workspaces === null
+                      !orgForPicker || !workspaceTarget || workspaces === null
                     }
                   >
                     Continue
