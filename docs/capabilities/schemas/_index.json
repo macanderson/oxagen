@@ -1,5 +1,5 @@
 {
-  "generatedCount": 320,
+  "generatedCount": 323,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1694,6 +1694,18 @@
       "consumes": []
     },
     {
+      "name": "link_repository",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_agent_defs",
       "domain": "agent",
       "surfaces": [
@@ -2217,6 +2229,18 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_repositories",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],
@@ -3429,6 +3453,18 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "unlink_repository",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],

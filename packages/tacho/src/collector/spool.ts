@@ -4,6 +4,12 @@
  * on transport failure and bisection on a refused batch so one bad event
  * cannot block a session's chain forever. Every accepted response's control
  * envelope goes to the daemon through `onControl`.
+ *
+ * Frame bodies ship in the same batch as their events, never a later one:
+ * the control plane refuses a body whose event it did not receive in the
+ * same request. A batch is therefore cut at the event whose body would take
+ * it past `TACHO_MAX_BATCH_BODY_BYTES`, and a bisected half carries exactly
+ * the bodies of the events in it.
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -20,6 +26,8 @@ import {
   type ControlEnvelope,
   type DaemonHealth,
   TACHO_MAX_BATCH,
+  TACHO_MAX_BATCH_BODY_BYTES,
+  type TachoBody,
 } from "../wire";
 
 export interface ShipperOptions {
@@ -30,6 +38,10 @@ export interface ShipperOptions {
   onControl: (control: ControlEnvelope) => void | Promise<void>;
   onChainBreak?: (
     breaks: Array<{ session_uuid: string; at_seq: number; reason: string }>,
+  ) => void;
+  /** Bodies the control plane refused; the events themselves were accepted. */
+  onBodyRejection?: (
+    rejections: Array<{ event_id_idem: string; reason: string }>,
   ) => void;
   log: (line: string) => void;
   now: () => number;
@@ -68,6 +80,16 @@ function serverRequestedWaitMs(error: ControlError): number | undefined {
     (hint.resetAtMs === undefined ? undefined : hint.resetAtMs - Date.now());
   if (wait === undefined || !Number.isFinite(wait)) return undefined;
   return Math.min(Math.max(wait, 1_000), MAX_SERVER_REQUESTED_WAIT_MS);
+}
+
+/**
+ * The decoded size of a base64 string, without decoding it: four characters
+ * per three bytes, less the padding. The budget names raw bytes because that
+ * is what the control plane stores.
+ */
+function base64ByteLength(encoded: string): number {
+  const padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
+  return (encoded.length / 4) * 3 - padding;
 }
 
 export class Shipper {
@@ -210,6 +232,27 @@ export class Shipper {
     return { own, quarantined: foreign.length };
   }
 
+  /**
+   * Cut the batch where its bodies would cross the byte budget. The first
+   * event always ships, whatever its body weighs: a single body is already
+   * capped at `TACHO_MAX_BODY_BYTES` by the recorder, and a batch that could
+   * never contain its head would wedge the queue.
+   */
+  private fitBodyBudget(
+    batch: TachoEvent[],
+    bodies: Map<string, TachoBody>,
+  ): TachoEvent[] {
+    let total = 0;
+    for (let index = 0; index < batch.length; index += 1) {
+      const body = bodies.get((batch[index] as TachoEvent).event_id_idem);
+      if (body === undefined) continue;
+      total += base64ByteLength(body.bytes_base64);
+      if (total > TACHO_MAX_BATCH_BODY_BYTES && index > 0)
+        return batch.slice(0, index);
+    }
+    return batch;
+  }
+
   /** Ship one batch. Returns what moved; the caller loops. */
   async shipOnce(): Promise<ShipResult> {
     if (!this.ready())
@@ -220,20 +263,42 @@ export class Shipper {
     const { own, quarantined } = this.setAsideForeignEvents(batch);
     if (own.length === 0)
       return { shipped: 0, quarantined, reachable: this.reachable };
-    const result = await this.shipBatch(own);
+    const bodies = new Map(
+      this.options.wal
+        .bodiesFor(own)
+        .map((body) => [body.event_id_idem, body] as const),
+    );
+    const result = await this.shipBatch(
+      this.fitBodyBudget(own, bodies),
+      bodies,
+    );
     return { ...result, quarantined: result.quarantined + quarantined };
   }
 
-  private async shipBatch(batch: TachoEvent[]): Promise<ShipResult> {
+  private async shipBatch(
+    batch: TachoEvent[],
+    bodies: ReadonlyMap<string, TachoBody>,
+  ): Promise<ShipResult> {
     try {
+      const shipped: TachoBody[] = [];
+      for (const event of batch) {
+        const body = bodies.get(event.event_id_idem);
+        if (body !== undefined) shipped.push(body);
+      }
       const response = await this.options.client.ingest(
         batch,
         this.options.health(),
+        shipped,
       );
       this.markShipped(batch);
       this.succeed();
       if (response.chain_breaks.length > 0)
         this.options.onChainBreak?.(response.chain_breaks);
+      if (
+        response.body_rejections !== undefined &&
+        response.body_rejections.length > 0
+      )
+        this.options.onBodyRejection?.(response.body_rejections);
       await this.options.onControl(response.control);
       return { shipped: batch.length, quarantined: 0, reachable: true };
     } catch (error) {
@@ -253,8 +318,8 @@ export class Shipper {
           return { shipped: 0, quarantined: 1, reachable: true };
         }
         const middle = Math.ceil(batch.length / 2);
-        const left = await this.shipBatch(batch.slice(0, middle));
-        const right = await this.shipBatch(batch.slice(middle));
+        const left = await this.shipBatch(batch.slice(0, middle), bodies);
+        const right = await this.shipBatch(batch.slice(middle), bodies);
         return {
           shipped: left.shipped + right.shipped,
           quarantined: left.quarantined + right.quarantined,

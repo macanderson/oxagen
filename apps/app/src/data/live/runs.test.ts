@@ -465,11 +465,6 @@ describe("runs.transcript", () => {
     expect(kernelRead.mock.calls[0]?.[1]).toMatchObject({
       input: { runId: "tse_4f0a", zoom: "steps", kinds: [], limit: 200 },
     });
-    expect(
-      Object.hasOwn(
-        (kernelRead.mock.calls[0]?.[1] as { input: object }).input,
-        "after",
-      ),
-    ).toBe(false);
+    expect(kernelRead.mock.calls[0]?.[1]).not.toHaveProperty("input.after");
   });
 });

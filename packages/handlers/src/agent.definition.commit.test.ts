@@ -275,7 +275,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         }),
       );
 
-    async function seedBinding(t: Tenant, name: string, defaultRef: string) {
+    async function seedBinding(
+      t: Tenant,
+      name: string,
+      defaultRef: string,
+      role: "main" | "linked" = "main",
+    ) {
       return withSystemDb(async (tx) => {
         const connectionId = crypto.randomUUID();
         const [binding] = await tx
@@ -307,6 +312,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           provider: "github",
           providerRepositoryId: binding!.providerRepositoryId,
           currentBindingId: binding!.id,
+          role,
         });
         return binding!;
       });
@@ -660,6 +666,22 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(after.map((r) => r.commitSha)).toEqual(
         expect.arrayContaining([a!.commitSha, b!.commitSha]),
       );
+    });
+
+    // §10.1 / ADR-099: a workspace may hold any number of `linked` heads
+    // beside its one `main`. Only the main repository carries the `.oxagen/`
+    // tree a definition is committed to, so a linked head is invisible to
+    // this resolver — a workspace whose only head is linked has no repository
+    // to commit to, exactly as one with no head at all.
+    it("does not resolve a linked repository: a workspace with only a linked head still has no_repository", async () => {
+      await seedBinding(unbound, "sidecar", "main", "linked");
+      await expect(
+        commit(unbound, {
+          agentId: "release-bot",
+          branch: "agents/x",
+          source: SOURCE("release-bot"),
+        }),
+      ).rejects.toSatisfy(conflict("no_repository"));
     });
   },
 );

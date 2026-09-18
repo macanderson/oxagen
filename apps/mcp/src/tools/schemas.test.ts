@@ -58,8 +58,19 @@ describe("workspace.create schema", () => {
 
   it("accepts a valid workspace payload", () => {
     expect(() =>
-      Schema.parse({ name: "My Workspace", slug: "my-workspace" }),
+      Schema.parse({
+        name: "My Workspace",
+        slug: "my-workspace",
+        mainRepo: { owner: "acme", name: "widgets" },
+      }),
     ).not.toThrow();
+  });
+
+  // §17 M0: a workspace cannot be created without a main repo.
+  it("rejects a payload with no main repository", () => {
+    expect(() =>
+      Schema.parse({ name: "My Workspace", slug: "my-workspace" }),
+    ).toThrow();
   });
 
   it("rejects an empty name", () => {

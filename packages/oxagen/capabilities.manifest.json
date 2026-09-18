@@ -4011,6 +4011,44 @@
       }
     },
     {
+      "name": "link_repository",
+      "file": "repository.link.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "list_repositories",
+      "file": "repository.list.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "bind_main_repository",
       "file": "repository.main.bind.ts",
       "domain": "repository",
@@ -4040,6 +4078,25 @@
         "api": true,
         "mcp": true,
         "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "unlink_repository",
+      "file": "repository.unlink.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
         "docs": true,
         "app": true
       }

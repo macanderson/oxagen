@@ -40,6 +40,8 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { PROOF_OBSERVED_KIND } from "@oxagen/run-evidence";
 import {
+  countsLlmCallSplit,
+  countsLlmCallUsage,
   TACHO_GATEWAY_TIER,
   TACHO_METERING_ATTR,
   TACHO_METERING_OBSERVED,
@@ -214,9 +216,10 @@ export function usageCountedEvents(
 }
 
 /**
- * Fold one event into the session's counters. Model usage counts the OTel log
- * view, or the proxy's observed view when the session has one: the caller
- * passes the events through `usageCountedEvents` first.
+ * Fold one event into the session's counters. Model usage counts each call
+ * once, from its first sighting (OTel log, transcript, or hook), or the
+ * proxy's observed view when the session has one: the caller passes the
+ * events through `usageCountedEvents` first.
  */
 export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
   const body = event.body as Body;
@@ -226,11 +229,12 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
       delta.numPrompts += 1;
       break;
     case "llm_call":
-      if (
-        event.source === "otel_log" ||
-        event.source === "collector" ||
-        event.source === "hook"
-      ) {
+      // One row per call carries its tokens: the first sighting from any
+      // token-bearing source, transcript included. A later sighting of the
+      // same call from another source is stamped
+      // `oxagen.llm_call_duplicate_of` by the host and adds nothing here
+      // (`countsLlmCallUsage`, shared with the host's ledger).
+      if (countsLlmCallUsage(event)) {
         delta.numModelCalls += 1;
         delta.inputTokens += num(body["input_tokens"]);
         delta.outputTokens += num(body["output_tokens"]);
@@ -240,7 +244,9 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
       }
       // The observed frame carries the classes the harness's OTel record does
       // not, and in an observed session the transcript view is not counted.
-      if (event.source === "transcript" || isObservedModelCall(event)) {
+      // A transcript continuation block had its usage stripped by the host
+      // and is excluded by `countsLlmCallSplit`.
+      if (countsLlmCallSplit(event) || isObservedModelCall(event)) {
         delta.cacheCreation5mTokens += num(body["cache_creation_5m_tokens"]);
         delta.cacheCreation1hTokens += num(body["cache_creation_1h_tokens"]);
         delta.thinkingTokens += num(body["thinking_tokens"]);
@@ -1650,11 +1656,7 @@ async function rollupModels(
       canonical: null,
       provider: null,
     };
-    if (
-      event.source === "otel_log" ||
-      event.source === "collector" ||
-      event.source === "hook"
-    ) {
+    if (countsLlmCallUsage(event)) {
       entry.requests += 1;
       entry.input += num(body["input_tokens"]);
       entry.output += num(body["output_tokens"]);
@@ -1663,7 +1665,7 @@ async function rollupModels(
       entry.cost += num(body["cost_usd_micros"]);
       entry.duration += num(body["api_duration_ms"]);
     }
-    if (event.source === "transcript" || isObservedModelCall(event))
+    if (countsLlmCallSplit(event) || isObservedModelCall(event))
       entry.thinking += num(body["thinking_tokens"]);
     entry.canonical = entry.canonical ?? str(body["canonical_model"]);
     entry.provider = entry.provider ?? str(body["provider"]);

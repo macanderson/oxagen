@@ -80,6 +80,9 @@ function Entry({ entry, org, ws, runId }: { entry: TranscriptEntry } & Place) {
     entry.seq === entry.endSeq
       ? t("frame", { seq: entry.seq })
       : t("frames", { from: entry.seq, to: entry.endSeq });
+  // Bound here rather than read inside the rich-text callback: the null guard
+  // below sits outside that callback, so the narrowing does not reach into it.
+  const cumulative = entry.cumulativeCost;
   return (
     <li
       data-testid="transcript-entry"
@@ -100,12 +103,10 @@ function Entry({ entry, org, ws, runId }: { entry: TranscriptEntry } & Place) {
             <Money value={entry.cost} precision="exact" />
           </span>
         )}
-        {entry.cumulativeCost === null ? null : (
+        {cumulative === null ? null : (
           <span data-testid="entry-cumulative">
             {t.rich("cumulative", {
-              cost: () => (
-                <Money value={entry.cumulativeCost!} precision="exact" />
-              ),
+              cost: () => <Money value={cumulative} precision="exact" />,
             })}
           </span>
         )}

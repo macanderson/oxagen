@@ -73,7 +73,10 @@ vi.mock("@oxagen/iam/org-role", () => ({
 }));
 
 import { schema } from "@oxagen/database";
-import { createMainRepositoryBindHandler } from "./repository.main.bind";
+import {
+  createMainRepositoryBindHandler,
+  repositoryHeadConflict,
+} from "./repository.main.bind";
 
 const CONNECTED_CONNECTION = {
   id: "conn-uuid",
@@ -103,12 +106,22 @@ const REPO: GitHubRepoInfo = {
   defaultBranch: "trunk",
 };
 
-/** A drizzle terminal that can be awaited, limited, or returned from. */
+/**
+ * A drizzle terminal that can be awaited, limited, ordered or returned from.
+ * `orderBy` answers itself, so `writeRepositoryHead`'s
+ * `.orderBy(desc(version)).limit(1)` reads the same queued rows.
+ */
 function rows(result: unknown[]) {
-  return Object.assign(Promise.resolve(result), {
+  const terminal: Promise<unknown[]> & {
+    limit: () => Promise<unknown[]>;
+    returning: () => Promise<unknown[]>;
+    orderBy: () => typeof terminal;
+  } = Object.assign(Promise.resolve(result), {
     limit: async () => result,
     returning: async () => result,
+    orderBy: () => terminal,
   });
+  return terminal;
 }
 
 interface Writes {
@@ -215,20 +228,19 @@ let sharedRows = new Map<unknown, unknown[]>();
  * Arm the two reads the handler makes on the shared plane. They must be told
  * apart by the table they select from: one asks whether ANY organisation is on
  * a dedicated Postgres plane (if so the global claim is unknowable and the
- * bind is refused), the other asks whether another workspace already steers by
- * this repository. A mock that answered both with one value made a claim row
- * look like a dedicated plane and produced the wrong refusal.
+ * bind is refused), the other asks whether another workspace already holds a
+ * head, main or linked, for this repository. A mock that answered both with
+ * one value made a claim row look like a dedicated plane and produced the
+ * wrong refusal.
  */
-function sharedPlaneReads(rows: Map<unknown, unknown[]>): void {
-  sharedRows = rows;
+function sharedPlaneReads(byTable: Map<unknown, unknown[]>): void {
+  sharedRows = byTable;
   mocks.withSystemDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         select: () => ({
           from: (table: unknown) => ({
-            where: () => ({
-              limit: async () => sharedRows.get(table) ?? [],
-            }),
+            where: () => rows(sharedRows.get(table) ?? []),
           }),
         }),
       }),
@@ -236,9 +248,9 @@ function sharedPlaneReads(rows: Map<unknown, unknown[]>): void {
 }
 
 /**
- * What the cross-tenant exclusivity read finds. `[]` is "nobody else steers by
- * this repository"; a row is another workspace's claim on it. No organisation
- * is on a dedicated plane unless a test says so.
+ * What the cross-tenant exclusivity read finds. `[]` is "nobody else holds
+ * this repository"; a row is another workspace's head on it, with its role.
+ * No organisation is on a dedicated plane unless a test says so.
  */
 function claimedElsewhere(result: unknown[]): void {
   sharedPlaneReads(
@@ -258,6 +270,52 @@ function dedicatedPlaneExists(): void {
     ]),
   );
 }
+
+describe("repositoryHeadConflict", () => {
+  const pg = (constraint_name: string, code = "23505") =>
+    Object.assign(new Error("insert failed"), {
+      cause: Object.assign(new Error("refused"), { code, constraint_name }),
+    });
+
+  it("maps the index and the trigger's three constraint names by what they mean", () => {
+    expect(
+      repositoryHeadConflict(pg("repository_binding_heads_main_repository_uq")),
+    ).toBe("main_elsewhere");
+    expect(
+      repositoryHeadConflict(
+        pg("repository_binding_heads_linked_is_main_elsewhere"),
+      ),
+    ).toBe("main_elsewhere");
+    expect(
+      repositoryHeadConflict(
+        pg("repository_binding_heads_main_is_linked_elsewhere"),
+      ),
+    ).toBe("linked_elsewhere");
+  });
+
+  it("answers null for another constraint, another code, a plain error and nothing", () => {
+    expect(
+      repositoryHeadConflict(pg("repository_binding_heads_repository_uq")),
+    ).toBeNull();
+    expect(
+      repositoryHeadConflict(
+        pg("repository_binding_heads_main_repository_uq", "23503"),
+      ),
+    ).toBeNull();
+    expect(repositoryHeadConflict(new Error("boom"))).toBeNull();
+    expect(repositoryHeadConflict(null)).toBeNull();
+  });
+
+  it("finds the constraint nested under `cause` and stops after five hops", () => {
+    let deep: unknown = Object.assign(new Error("leaf"), {
+      code: "23505",
+      constraint_name: "repository_binding_heads_main_repository_uq",
+    });
+    for (let i = 0; i < 6; i++)
+      deep = Object.assign(new Error(`wrap ${i}`), { cause: deep });
+    expect(repositoryHeadConflict(deep)).toBeNull();
+  });
+});
 
 describe("bind_main_repository", () => {
   it("refuses a caller who is not an org Owner or Admin, before reading anything", async () => {
@@ -368,6 +426,7 @@ describe("bind_main_repository", () => {
         [
           {
             id: "head-uuid",
+            role: "main",
             connectionId: "conn-uuid",
             providerRepositoryId: "4242",
             currentBindingId: "other-uuid",
@@ -390,6 +449,7 @@ describe("bind_main_repository", () => {
         [
           {
             id: "head-uuid",
+            role: "main",
             // The head already names the connection the bind resolved, so
             // nothing has moved and nothing is written.
             connectionId: "conn-uuid",
@@ -442,6 +502,7 @@ describe("bind_main_repository", () => {
   describe("re-binding the same repository through a replacement connection", () => {
     const RETIRED_HEAD = {
       id: "head-uuid",
+      role: "main",
       // The connection this workspace acted through before the delete.
       connectionId: "retired-conn-uuid",
       providerRepositoryId: "9001",
@@ -572,6 +633,7 @@ describe("bind_main_repository", () => {
   describe("re-binding the same repository after its recorded facts moved", () => {
     const HEAD = {
       id: "head-uuid",
+      role: "main",
       connectionId: "conn-uuid",
       providerRepositoryId: "9001",
       currentBindingId: "binding-1",
@@ -690,6 +752,106 @@ describe("bind_main_repository", () => {
     expect(out).toMatchObject({ provisionalClosed: false });
   });
 
+  // ── A head this workspace already holds as LINKED ──────────────────────────
+  // `link_repository` refuses a link while the workspace has no main
+  // repository, but the exclusivity migration's own demotion leaves exactly
+  // that state: a head it turned from main into linked, in a workspace with no
+  // main head left. Binding a repository from there has to promote the head it
+  // finds. A second head for one (connection, repository) is refused by
+  // `repository_binding_heads_repository_uq` and a second version-1 binding by
+  // `repository_bindings_repository_version_uq`; neither is a cross-workspace
+  // claim, so `rethrowHeadConflict` passes them through and the operator used
+  // to get a 500 on the one move that would give the workspace a main
+  // repository back.
+  describe("binding a repository this workspace holds as a linked head", () => {
+    const LINKED_HEAD = {
+      id: "head-uuid",
+      role: "linked",
+      connectionId: "conn-uuid",
+      providerRepositoryId: "9001",
+      currentBindingId: "binding-1",
+    };
+    /** Its binding, recording exactly what GitHub still reports. */
+    const UNCHANGED_BINDING = {
+      id: "binding-1",
+      publicId: "rpb_first",
+      createdAt: new Date("2026-09-16T08:00:00.000Z"),
+      version: 1,
+      connectionId: "conn-uuid",
+      providerOwner: REPO.owner,
+      providerName: REPO.name,
+      providerFullName: REPO.fullName,
+      configuredDefaultRef: REPO.defaultBranch,
+    };
+
+    it("promotes the head in place instead of writing a second head or a second version-1 binding", async () => {
+      const writes = wire({
+        connections: [CONNECTED_CONNECTION],
+        selects: [[LINKED_HEAD], [UNCHANGED_BINDING]],
+      });
+      const out = await handler().run(INPUT, makeCTX());
+
+      expect(writes.inserts).toHaveLength(0);
+      const headUpdate = writes.updates.find(
+        (w) => w.table === schema.repositoryBindingHeads,
+      );
+      expect(headUpdate?.values).toMatchObject({ role: "main" });
+      // The binding records nothing new, so the retained version answers.
+      expect(out.bindingId).toBe("rpb_first");
+      // `boundAt` is the promotion, not the original link: now is when this
+      // repository became the one steering the workspace.
+      expect(Date.parse(out.boundAt)).toBeGreaterThan(
+        UNCHANGED_BINDING.createdAt.getTime(),
+      );
+    });
+
+    it("still refuses a different repository while a main head sits beside the linked one", async () => {
+      const writes = wire({
+        connections: [CONNECTED_CONNECTION],
+        selects: [
+          [
+            {
+              id: "other-head",
+              role: "main",
+              connectionId: "conn-uuid",
+              providerRepositoryId: "4242",
+              currentBindingId: "other-binding",
+            },
+            { ...LINKED_HEAD, providerRepositoryId: "7777" },
+          ],
+        ],
+      });
+      await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
+        code: "conflict",
+        reason: "main_repo_bound",
+      });
+      expect(writes.inserts).toHaveLength(0);
+      expect(writes.updates).toHaveLength(0);
+    });
+
+    it("reuses a binding version retained from an unlinked head rather than writing version 1 again", async () => {
+      // The head was removed by `unlink_repository`; its binding versions stay,
+      // because admitted runs cite them.
+      const writes = wire({
+        connections: [CONNECTED_CONNECTION],
+        selects: [[], [UNCHANGED_BINDING]],
+      });
+      const out = await handler().run(INPUT, makeCTX());
+
+      expect(
+        writes.inserts.filter((w) => w.table === schema.repositoryBindings),
+      ).toHaveLength(0);
+      const head = writes.inserts.find(
+        (w) => w.table === schema.repositoryBindingHeads,
+      );
+      expect(head?.values).toMatchObject({
+        role: "main",
+        currentBindingId: "binding-1",
+      });
+      expect(out.bindingId).toBe("rpb_first");
+    });
+  });
+
   // ── One repository steers exactly one workspace, anywhere ──────────────────
   // `.oxagen/rules/` lives in the main repository and is keyed by the
   // repository's full name, so two workspaces sharing one would write the same
@@ -699,7 +861,9 @@ describe("bind_main_repository", () => {
   // claim it collided with.
   describe("a repository already steering another workspace", () => {
     it("is refused, and the refusal names neither the org nor the workspace holding it", async () => {
-      claimedElsewhere([{ workspaceId: "someone-elses-workspace" }]);
+      claimedElsewhere([
+        { role: "main", workspaceId: "someone-elses-workspace" },
+      ]);
       const writes = wire({ connections: [CONNECTED_CONNECTION] });
 
       const err = await handler()
@@ -723,6 +887,71 @@ describe("bind_main_repository", () => {
       // lock is never even taken.
       expect(writes.inserts).toHaveLength(0);
       expect(writes.locks).toBe(0);
+    });
+
+    // A repository another workspace has LINKED cannot become this one's main
+    // either: a main repository holds the `.oxagen/` governance tree, and a
+    // linked one receives another workspace's Context PRs.
+    it("is refused as repository_linked_elsewhere when another workspace has linked it, naming neither holder", async () => {
+      claimedElsewhere([
+        { role: "linked", workspaceId: "someone-elses-workspace" },
+      ]);
+      const writes = wire({ connections: [CONNECTED_CONNECTION] });
+      const err = await handler()
+        .run(INPUT, makeCTX())
+        .then(
+          () => null,
+          (e: unknown) => e,
+        );
+      expect(err).toMatchObject({
+        code: "conflict",
+        reason: "repository_linked_elsewhere",
+      });
+      const message = (err as Error).message;
+      expect(message).toContain("Acme/Widgets");
+      expect(message).not.toContain("someone-elses-workspace");
+      expect(writes.inserts).toHaveLength(0);
+      expect(writes.locks).toBe(0);
+    });
+
+    it("a main head elsewhere wins the sentence over a linked one, as the trigger orders them", async () => {
+      claimedElsewhere([
+        { role: "linked", workspaceId: "ws-linked" },
+        { role: "main", workspaceId: "ws-main" },
+      ]);
+      wire({ connections: [CONNECTED_CONNECTION] });
+      await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
+        reason: "main_repo_claimed",
+      });
+    });
+
+    it("refuses as repository_linked_elsewhere when the trigger refuses the main head because a link landed elsewhere mid-flight", async () => {
+      claimedElsewhere([]);
+      wire({ connections: [CONNECTED_CONNECTION] });
+      const violation = Object.assign(new Error("insert failed"), {
+        cause: Object.assign(new Error("trigger refused"), {
+          code: "23505",
+          constraint_name: "repository_binding_heads_main_is_linked_elsewhere",
+        }),
+      });
+      mocks.withTenantDb.mockReset();
+      mocks.withTenantDb
+        .mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
+          fn({
+            select: () => ({
+              from: () => ({
+                where: () => ({ orderBy: async () => [CONNECTED_CONNECTION] }),
+              }),
+            }),
+          }),
+        )
+        .mockImplementationOnce(async () => {
+          throw violation;
+        });
+      await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
+        code: "conflict",
+        reason: "repository_linked_elsewhere",
+      });
     });
 
     it("refuses with the same conflict when the claim lands mid-flight, rather than surfacing a raw constraint violation", async () => {
