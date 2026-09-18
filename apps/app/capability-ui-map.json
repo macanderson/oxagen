@@ -326,6 +326,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "get_user_preferences": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Every organization and workspace page — the organization layout reads the viewer's time zone through the shell port (data/live/shell.ts) and <ViewerClock> and the chrome hand it to next-intl, so each date on the page renders in it (features/shell/viewer-clock.tsx, features/shell/shell-chrome.tsx); the Account dialog shows the stored zone",
+      "proof": "apps/app/src/features/shell/viewer-clock.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-17f8865f-user-timezone"
+    },
     "import_tools": {
       "route": "/[org]/[ws]/tools",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
@@ -520,14 +528,6 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
-    "start_subscription_upgrade": {
-      "route": "/[org]/billing",
-      "page": "apps/app/src/app/[org]/billing/page.tsx",
-      "entry": "/[org]/billing — Change plan, the page's one gold action (features/billing/change-plan.tsx, features/billing/actions.ts)",
-      "proof": "apps/app/src/features/billing/change-plan.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-9de6756e-billing-layout"
-    },
     "purchase_credits": {
       "route": "/[org]/billing",
       "page": "apps/app/src/app/[org]/billing/page.tsx",
@@ -632,6 +632,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "set_preferences": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Account in the user menu on every organization page — the Account dialog's Time zone select, saved with the profile, invokes set_preferences with {timezone} (features/shell/account-dialog.tsx, features/shell/account-actions.ts updateTimeZone)",
+      "testid": "account-time-zone",
+      "proof": "apps/app/src/features/shell/account-dialog.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-17f8865f-user-timezone"
+    },
     "set_role_grants": {
       "route": "/[org]/roles",
       "page": "apps/app/src/app/[org]/roles/page.tsx",
@@ -655,6 +664,14 @@
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "start_subscription_upgrade": {
+      "route": "/[org]/billing",
+      "page": "apps/app/src/app/[org]/billing/page.tsx",
+      "entry": "/[org]/billing — Change plan, the page's one gold action (features/billing/change-plan.tsx, features/billing/actions.ts)",
+      "proof": "apps/app/src/features/billing/change-plan.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-9de6756e-billing-layout"
     },
     "summarize_run": {
       "route": "/[org]/[ws]/runs/[run]",
