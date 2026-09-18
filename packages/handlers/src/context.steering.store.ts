@@ -636,6 +636,24 @@ export const postgresSteeringStore: SteeringStore = {
   async publishMerge(input) {
     const { scope, proposal } = input;
     return withTenantDb(async (tx) => {
+      // Take the lock the INSERT below will take anyway, BEFORE probing.
+      //
+      // `information_schema` is an ordinary catalog read and locks nothing, so
+      // without this the migration's `ALTER TABLE` -- which holds ACCESS
+      // EXCLUSIVE -- can commit, and its one-time backfill run, in the window
+      // between a `false` answer here and the insert. The insert would then
+      // succeed against a migrated table while omitting the four columns from
+      // its statement, writing a version that is unclassified for good and that
+      // the backfill has already passed by (discussion_r4050518857).
+      //
+      // ROW EXCLUSIVE is exactly what an INSERT acquires, and it does not
+      // conflict with itself, so concurrent merges are unaffected; it conflicts
+      // only with the DDL, which is the one thing that must not interleave
+      // here. Taking it early moves the acquisition, it does not add one.
+      await tx.execute(
+        sql`lock table ${schema.contextRecordVersions} in row exclusive mode`,
+      );
+
       // `hasColumnFresh`, not `hasColumn`: a cached MISS must not reach a
       // write. The read path can spend the negative TTL compiling from the
       // record row and be right again on the next call, but a merge that omits

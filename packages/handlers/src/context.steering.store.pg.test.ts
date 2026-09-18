@@ -95,6 +95,58 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
       }),
     );
 
+  // `publishMerge` takes ROW EXCLUSIVE on the version table before probing for
+  // the classification columns, so the migration's ACCESS EXCLUSIVE cannot
+  // commit between the probe and the insert. ROW EXCLUSIVE does not conflict
+  // with itself, so the lock must NOT serialize merges against each other --
+  // that is the regression the fix could have introduced, and it is what this
+  // asserts: two merges on different lineages, started together, both complete.
+  // A self-conflicting lock mode would deadlock or block here, not just slow
+  // down, because each holds its lock to commit.
+  it("does not serialize concurrent merges on different lineages", async () => {
+    const merge = async (suffix: string) => {
+      const proposal = await propose({ lineageId: `${lineage}.${suffix}` });
+      const opened = await inScope(() =>
+        store.updateProposal(
+          proposal.id,
+          {
+            status: "checks_passed",
+            repository: "a-intel/platform",
+            baseRef: "main",
+            branch: `context/${lineage}.${suffix}`,
+            path: `.oxagen/rules/${lineage}.${suffix}.toml`,
+            prNumber: 900,
+            prUrl: "https://github.com/a-intel/platform/pull/900",
+            headSha: "dee9001",
+            stampedRecordId: `rec_${suffix}`,
+            recordHash: `sha256:${suffix.repeat(64).slice(0, 64)}`,
+          },
+          ["proposed"],
+        ),
+      );
+      return inScope(() =>
+        store.publishMerge({
+          scope,
+          proposal: opened,
+          body: 'schema = "context-record/v0.1"\n',
+          checksum: suffix.repeat(64).slice(0, 64),
+          commitSha: `c0ffee${suffix}`,
+          path: opened.path!,
+          mergedAt: new Date("2026-09-18T12:00:00.000Z"),
+          mergedByUserId: userId,
+          policyVersion: "governance:team",
+        }),
+      );
+    };
+
+    const [a, b] = await Promise.all([merge("a"), merge("b")]);
+    expect(a.version).toBe(1);
+    expect(b.version).toBe(1);
+    // Both wrote their own record and their own ledger row.
+    expect(a.recordId).not.toBe(b.recordId);
+    expect(new Set([a.promotion.seq, b.promotion.seq])).toEqual(new Set([1]));
+  });
+
   it("publishes a merge in one transaction: record, version, promotion event, proposal merged; a repeat rolls back; a second merge is version 2 and chain seq 2", async () => {
     const proposal = await propose();
     const opened = await inScope(() =>
