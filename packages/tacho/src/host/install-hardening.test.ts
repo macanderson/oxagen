@@ -26,6 +26,7 @@ import {
   writeHostFile,
 } from "./host-file";
 import { acquireInstallLock } from "./install-lock";
+import { renderSystemdUnit, serviceManagerFor } from "./service";
 import { stripOxagenMcpServer } from "./mcp-config-writer";
 import {
   type HookInstallConfig,
@@ -320,5 +321,75 @@ describe("the writers on the user's own values and on wrong-shaped documents", (
     expect(stripCodexHooks(merged.settings, TEST_ENROLLMENT).settings).toEqual(
       doc,
     );
+  });
+});
+
+describe("the service managers", () => {
+  const spec = {
+    command: ["/opt/o x/tacho", "daemon"],
+    env: { HOME: "/home/100%dev", PATH: "/usr/bin:$HOME/bin" },
+    logPath: "/home/dev/tachod.log",
+    workingDirectory: "/home/dev",
+  };
+
+  it("retries launchctl bootstrap while the old instance is still going down", () => {
+    const home = scratch();
+    const calls: string[] = [];
+    let bootstraps = 0;
+    const manager = serviceManagerFor({
+      platform: "darwin",
+      home,
+      uid: 501,
+      sleep: () => undefined,
+      exec: (_command, args) => {
+        calls.push(args[0] ?? "");
+        if (args[0] === "bootstrap") {
+          bootstraps += 1;
+          // 5 is launchd's "Input/output error": the label is still loaded.
+          return bootstraps < 3
+            ? { status: 5, stdout: "", stderr: "Bootstrap failed: 5" }
+            : { status: 0, stdout: "", stderr: "" };
+        }
+        return { status: 0, stdout: "", stderr: "" };
+      },
+    });
+    manager.install(spec);
+    expect(bootstraps).toBe(3);
+  });
+
+  it("gives up after its retries and says what launchctl said", () => {
+    const manager = serviceManagerFor({
+      platform: "darwin",
+      home: scratch(),
+      uid: 501,
+      sleep: () => undefined,
+      exec: (_command, args) =>
+        args[0] === "bootstrap"
+          ? { status: 5, stdout: "", stderr: "Bootstrap failed: 5" }
+          : { status: 0, stdout: "", stderr: "" },
+    });
+    expect(() => manager.install(spec)).toThrow("Bootstrap failed: 5");
+  });
+
+  it("keeps the plist and throws when launchd still has the service after bootout", () => {
+    const home = scratch();
+    const manager = serviceManagerFor({
+      platform: "darwin",
+      home,
+      uid: 501,
+      sleep: () => undefined,
+      // `print` answering 0 means the label is still loaded.
+      exec: () => ({ status: 0, stdout: "state = running", stderr: "" }),
+    });
+    manager.install(spec);
+    expect(() => manager.uninstall()).toThrow("still loaded");
+    expect(existsSync(manager.unitPath)).toBe(true);
+  });
+
+  it("escapes % and $ in a systemd unit so a path is not read as a specifier", () => {
+    const unit = renderSystemdUnit(spec);
+    expect(unit).toContain('Environment="HOME=/home/100%%dev"');
+    expect(unit).toContain('Environment="PATH=/usr/bin:$$HOME/bin"');
+    expect(unit).toContain('ExecStart="/opt/o x/tacho" "daemon"');
   });
 });
