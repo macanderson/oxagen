@@ -22,7 +22,13 @@
  * the only reader (ADR-060 §1).
  */
 import { schema, withSystemDb, withTenantDb, type Tx } from "@oxagen/database";
-import { HandlerError } from "@oxagen/oxagen";
+// The narrow entry point, never the package root. `@oxagen/oxagen`'s index
+// re-exports the whole contracts barrel, and one contract (`org.create`)
+// imports `@oxagen/config`, whose registry reads `baseEnvSchema` at module
+// load. Importing the root from here dragged every contract into every graph
+// that touches billing — which is nearly all of them — and broke each test
+// suite that partially mocks `@oxagen/config/env`, for the sake of one class.
+import { HandlerError } from "@oxagen/oxagen/handler-error";
 import type { PriceTokenClass, PriceUnit } from "@oxagen/database/schema";
 import { and, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {

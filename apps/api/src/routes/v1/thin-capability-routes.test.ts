@@ -1421,7 +1421,9 @@ const ROUTES: ThinRoute[] = [
   {
     file: "cost.price_entry.set",
     route: costPriceEntrySetRoute as unknown as Hono<never>,
-    method: "PUT",
+    // POST, matching the route: the write moved off PUT so a body that
+    // restates the row key is not mistaken for a full-resource replace.
+    method: "POST",
     capability: costPriceEntrySet.name,
     body: {
       provider: "anthropic",
