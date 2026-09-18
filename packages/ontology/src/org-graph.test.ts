@@ -55,6 +55,14 @@ describe("isOrgGraphDatabaseName", () => {
     ["system", false],
     ["org_acme", false],
     ["ORG-ACME", false],
+    // Legal Neo4j names under the prefix that the provisioner cannot produce:
+    // the migrator must not touch a database somebody else named.
+    ["org-analytics", false],
+    ["org-a", false],
+    ["org-ab.cd", false],
+    ["org-ab-cd", false],
+    ["org-", false],
+    ["org-abcdefg", false],
   ])("%s → %s", (name, expected) => {
     expect(isOrgGraphDatabaseName(name)).toBe(expected);
   });
@@ -64,7 +72,14 @@ describe("listOrgGraphDatabases", () => {
   it("returns only organisation databases, sorted, and closes the session", async () => {
     const close = vi.fn(async () => undefined);
     const run = vi.fn(async () => ({
-      records: ["system", "org-zz", "neo4j", "org-ab"].map((name) => ({
+      records: [
+        "system",
+        "org-zz",
+        "neo4j",
+        "org-ab",
+        "org-analytics",
+        "org-ab.cd",
+      ].map((name) => ({
         get: () => name,
       })),
     }));

@@ -27,6 +27,13 @@ export const ORG_GRAPH_DATABASE_PREFIX = "org-";
  */
 const NEO4J_DATABASE_NAME = /^[a-z][a-z0-9.-]{2,62}$/;
 
+/**
+ * A namespace as the organisation CHECK constraint admits it, lowercased:
+ * 2-6 ASCII letters or digits. The provisioner names a database from nothing
+ * else, so this is also the whole set of names discovery may hand back.
+ */
+const ORG_NAMESPACE = /^[a-z0-9]{2,6}$/;
+
 /** Raised when an organisation namespace cannot name a database. */
 export class OrgGraphNameError extends Error {
   readonly code = "org_graph_name_invalid" as const;
@@ -49,7 +56,7 @@ export class OrgGraphNameError extends Error {
  */
 export function orgGraphDatabaseName(namespace: string): string {
   const ns = namespace.toLowerCase();
-  if (!/^[a-z0-9]{2,6}$/.test(ns)) throw new OrgGraphNameError(namespace);
+  if (!ORG_NAMESPACE.test(ns)) throw new OrgGraphNameError(namespace);
   const name = `${ORG_GRAPH_DATABASE_PREFIX}${ns}`;
   // Unreachable while the namespace rule above holds; kept so a future change
   // to that rule cannot produce a name the engine would refuse at runtime.
@@ -57,10 +64,20 @@ export function orgGraphDatabaseName(namespace: string): string {
   return name;
 }
 
-/** True when `name` is an organisation database under this naming rule. */
+/**
+ * Exactly the names `orgGraphDatabaseName` can produce: the prefix and then a
+ * namespace the CHECK constraint admits. The two rules are one rule read from
+ * both ends, and the difference matters: `listOrgGraphDatabases` feeds every
+ * name this accepts to the migrator, which applies schema DDL, recases labels
+ * and merges duplicate nodes. On a self-managed Enterprise cluster a database
+ * someone else named `org-analytics` is a legal Neo4j name under the prefix,
+ * and the prefix alone would have migrated it.
+ */
 export function isOrgGraphDatabaseName(name: string): boolean {
+  if (!name.startsWith(ORG_GRAPH_DATABASE_PREFIX)) return false;
+  const namespace = name.slice(ORG_GRAPH_DATABASE_PREFIX.length);
   return (
-    name.startsWith(ORG_GRAPH_DATABASE_PREFIX) && NEO4J_DATABASE_NAME.test(name)
+    ORG_NAMESPACE.test(namespace) && orgGraphDatabaseName(namespace) === name
   );
 }
 
