@@ -17,6 +17,16 @@ export default defineConfig({
       //   functions floor(86.15) = 86, raised from 70.
       //   lines/statements floor(84.93) = 84, which is below the 85 already
       //   here — a threshold never goes down, so both stay at 85.
+      //
+      // #3157 re-measured the same four floors against CI on its own head —
+      // 88.12 lines / 89.26 branches / 88.94 functions / 88.12 statements (run
+      // 35209437350, job 105170921452) — and floor(CI - 2.5) lands on the same
+      // 85/86/86/85, so the two readings agree on the gate. They are set from
+      // the instrument the gate actually runs on: CI. They were briefly 90
+      // here, calibrated against a LOCAL reading of 93.18 taken before the
+      // WL-52 cutover merged in modules this package does not yet cover. Local
+      // and CI disagree on this package in both directions and by different
+      // magnitudes, so a local reading does not set a floor.
       thresholds: {
         lines: 85,
         branches: 86,

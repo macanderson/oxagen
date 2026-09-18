@@ -518,6 +518,97 @@ describe("PlansGrid — confirmation dialog", () => {
         orgSlug: "acme",
         targetPlanSlug: "scale-plan",
         interval: "month",
+        // The figure this dialog showed. The server previews again and will
+        // refuse to charge more than this, which is the only thing tying the
+        // number the customer read to the money they are asked for
+        // (#3157, r4042477860).
+        approvedMaxCents: 1500,
+      });
+    });
+  });
+
+  it("sends the amount the dialog actually displayed, not a constant", async () => {
+    // Discriminating: a wiring that hard-coded a value, or sent the target
+    // plan's list price, would pass the test above and fail this one.
+    const preview = makePreview({ requiresCheckout: false, amountCents: 4200 });
+    mockPreviewPlanAction.mockResolvedValue(preview);
+    mockChangePlanAction.mockResolvedValue({ ok: true, url: null });
+
+    renderGrid();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /scale/i }));
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/confirm plan change/i)).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    });
+
+    await waitFor(() => {
+      expect(mockChangePlanAction).toHaveBeenCalledWith(
+        expect.objectContaining({ approvedMaxCents: 4200 }),
+      );
+    });
+  });
+
+  it("makes NO checkout claim on the confirm path, where a dialog was shown", async () => {
+    // The paired negative for the claim. The dialog path DID find a
+    // subscription, so asserting the opposite here would make the server
+    // refuse every in-place change the dialog exists to make
+    // (#3157, r4042742296).
+    const preview = makePreview({ requiresCheckout: false });
+    mockPreviewPlanAction.mockResolvedValue(preview);
+    mockChangePlanAction.mockResolvedValue({ ok: true, url: null });
+
+    renderGrid();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /scale/i }));
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/confirm plan change/i)).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    });
+
+    await waitFor(() => {
+      // Exact rather than `objectContaining`: the assertion is that the key is
+      // ABSENT, and an `objectContaining` carrying an undefined value cannot
+      // express that — it demands the key be there.
+      expect(mockChangePlanAction).toHaveBeenCalledWith({
+        orgSlug: "acme",
+        targetPlanSlug: "scale-plan",
+        interval: "month",
+        approvedMaxCents: 1500,
+      });
+    });
+  });
+
+  it("sends NO approved maximum on the checkout path, where nothing was approved", async () => {
+    // The paired negative. That path shows no dialog and charges nothing in
+    // place — the customer approves on Stripe's own page. Inventing a figure
+    // here would make the parameter meaningless, which is worse than absent.
+    mockPreviewPlanAction.mockResolvedValue(
+      makePreview({ requiresCheckout: true }),
+    );
+    mockChangePlanAction.mockResolvedValue({ ok: true, url: null });
+
+    renderGrid();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /scale/i }));
+    });
+
+    await waitFor(() => {
+      // Exact, so a field added to this payload has to be looked at rather
+      // than absorbed. `approvedMaxCents` is still absent, which is what this
+      // test is for; `previewRequiredCheckout` is the claim the preview made,
+      // which is what replaces it as this path's safeguard (r4042742296).
+      expect(mockChangePlanAction).toHaveBeenCalledWith({
+        orgSlug: "acme",
+        targetPlanSlug: "scale-plan",
+        interval: "month",
+        previewRequiredCheckout: true,
       });
     });
   });
@@ -677,6 +768,15 @@ describe("PlansGrid — requiresCheckout path (no existing subscription)", () =>
 
     // Should not show the dialog
     expect(screen.queryByText(/confirm plan change/i)).not.toBeInTheDocument();
+
+    // And it says WHY it showed no dialog. The preview asserted this org has
+    // no active subscription; if that stopped being true before the submit
+    // landed, the server takes its in-place path and invoices a proration this
+    // screen never showed. Sending the claim is what lets it refuse instead
+    // (#3157, r4042742296).
+    expect(mockChangePlanAction).toHaveBeenCalledWith(
+      expect.objectContaining({ previewRequiredCheckout: true }),
+    );
   });
 
   it("shows error toast when changePlanAction fails on checkout path", async () => {

@@ -3353,7 +3353,7 @@
       "writes": []
     }
   ],
-  "contentHash": "4dad44d5572863b3252de45dbb7fec14d5be57086b65c3a3c08c197b75fd7f39",
+  "contentHash": "610e25394f8f4ec99131ed51ad390f860ccd2c6322c48c6f840ae4cf6fa172fb",
   "domains": [
     {
       "name": "agent",
@@ -10833,6 +10833,19 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "stripe_price_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "pending_upgrade_from_plan_id",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:billing.plans",
+          "type": "uuid"
         },
         {
           "name": "status",

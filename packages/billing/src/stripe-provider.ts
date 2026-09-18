@@ -45,6 +45,14 @@ import type {
   BillingWebhookEvent,
   BillingWebhookEventType,
 } from "./provider";
+import {
+  AmbiguousProrationAnchorError,
+  PreviewedSubscriptionUnavailableError,
+  SimulatedPreviewSubscriptionError,
+  SubscriptionMovedError,
+  ProrationAttributionError,
+  ProrationLinesTruncatedError,
+} from "./provider";
 
 /** Wrap an optional Stripe idempotency key into request options. */
 function idempotency(
@@ -65,24 +73,184 @@ function automaticTaxEnabled(): boolean {
  * Reduce a previewed invoice down to the net proration of the simulated change.
  * Sums only the proration line items (the deltas Stripe would invoice now or
  * credit), so the caller can show "you'll be charged $X" / "we'll credit $X".
+ *
+ * NET OF DISCOUNTS. A line's `amount` is what the price lists, before any
+ * coupon or promotion code; what the customer actually owes for that line is
+ * `amount` minus its `discount_amounts`. Summing the gross figure overstates
+ * the quote for every discounted subscriber — and since this number is also
+ * what decides the proration direction (#3157), a gross sum would call a
+ * discounted increase a decrease and drop the charge. `allow_promotion_codes`
+ * is set on both checkout paths, so discounted subscriptions are a state we
+ * deliberately create.
+ *
+ * ONLY THIS PREVIEW'S PRORATIONS. `proration === true` selects every proration
+ * on the upcoming invoice, not the ones this simulation created. A seat
+ * decrease recorded earlier under `create_prorations` leaves a pending credit
+ * sitting on that invoice, and summing it here answers the wrong question: not
+ * *what does this change cost*, but *what is pending on this account*. A large
+ * enough pending credit makes a real upgrade sum nonpositive, the caller reads
+ * a decrease and ships `none`, and the upgrade charge is dropped — the same
+ * inversion as the tier rank, the catalogue row and the undiscounted amount,
+ * one level further in (#3157, PR #3171 review).
+ *
+ * The preview is still the money. Going to the real thing does not excuse you
+ * from asking which part of it answers your question. A preview anchors every
+ * proration it creates at the `proration_date` it was given, and Stripe sets
+ * each such line's `period.start` to that timestamp, so the anchor is what
+ * separates this change's lines from everything else on the invoice.
+ *
+ * Three cases, deliberately distinguished:
+ *
+ *  - No proration lines at all → this change prorates nothing. Zero is the
+ *    true answer.
+ *  - Some lines carry the anchor → sum those. They may legitimately net to
+ *    zero.
+ *  - Lines exist and none carry the anchor → the cost cannot be isolated.
+ *    {@link ProrationAttributionError} rather than a fabricated zero: the
+ *    lesson of the `?? 0` quote is that an unknown is not a nothing.
  */
+/**
+ * Every line of a previewed invoice, not the first handful.
+ *
+ * `Invoice.lines` is an `ApiList`: Stripe embeds one page and sets `has_more`
+ * when there are others. That flag was in the payload and never read, so a
+ * change whose credit and charge straddled the page boundary was priced from
+ * whichever side happened to land first — an upgrade reading as a downgrade,
+ * with no concurrency required, only enough pending invoice items.
+ *
+ * `listUpcomingLines` takes the same `subscription` and `subscription_details`
+ * this preview was built from, so paging asks for the same invoice rather than
+ * a differently-shaped one. The ordinary quote pays nothing for this: when
+ * `has_more` is false the embedded page IS the whole invoice and no second call
+ * is made.
+ */
+const MAX_PREVIEW_LINES = 1000;
+
+async function allPreviewLines(
+  stripe: Stripe,
+  preview: Stripe.Invoice,
+  params: Stripe.InvoiceListUpcomingLinesParams,
+): Promise<Stripe.InvoiceLineItem[]> {
+  if (!preview.lines?.has_more) return preview.lines?.data ?? [];
+  // 100 is Stripe's per-page maximum, so the bound is ten round trips.
+  const all = await stripe.invoices
+    .listUpcomingLines({ ...params, limit: 100 })
+    .autoPagingToArray({ limit: MAX_PREVIEW_LINES });
+  if (all.length >= MAX_PREVIEW_LINES) {
+    throw new ProrationLinesTruncatedError(MAX_PREVIEW_LINES);
+  }
+  return all;
+}
+
+/**
+ * The subscription a previewed invoice was computed against, taken from the
+ * preview itself.
+ *
+ * This exists so that nothing can supply the answer from somewhere else. The
+ * caller cannot hand in a subscription it retrieved a moment ago, because it
+ * is not asked for one; the only thing that can answer is the response that
+ * carries the priced invoice. That is the whole difference between this and
+ * what it replaces — a required parameter proved a value had been supplied,
+ * never that the value described the state that was priced (r4042380655).
+ *
+ * `previewWithOwnedAnchor` requests `expand: ["subscription"]`, so an
+ * unexpanded id or a null here means the preview did not report what it
+ * priced. There is deliberately no fallback to the adapter's earlier
+ * retrieval: that snapshot is from a different moment, and preferring it would
+ * restore the defect in the one case this guard exists to catch. Refuse
+ * instead — see {@link PreviewedSubscriptionUnavailableError}.
+ */
+function previewedSubscriptionOf(
+  preview: Stripe.Invoice,
+  subscriptionId: string,
+): Stripe.Subscription {
+  const sub = preview.subscription;
+  if (!sub || typeof sub === "string") {
+    throw new PreviewedSubscriptionUnavailableError(subscriptionId);
+  }
+  return sub;
+}
+
 function summarizeProration(
   preview: Stripe.Invoice,
+  /** Every line of `preview`, already paged — see {@link allPreviewLines}. */
+  lines: Stripe.InvoiceLineItem[],
   prorationDate: number,
+  /**
+   * How many prorations already sat at this anchor BEFORE the change was
+   * simulated, observed from a baseline preview. Anything above zero means the
+   * anchor is shared and ownership cannot be decided — see
+   * {@link AmbiguousProrationAnchorError}.
+   */
+  pendingAtAnchor: number,
+  /**
+   * The subscription id being priced. Used only to name it in a refusal — the
+   * subscription STATE is never passed in, because a state passed in is a
+   * state observed at another moment.
+   */
+  subscriptionId: string,
 ): BillingProrationPreview {
-  const prorationLines = (preview.lines?.data ?? [])
-    .filter((l) => l.proration === true)
-    .map((l) => ({
+  // Somebody else's change already occupies this second, so the lines carrying
+  // our anchor are not all ours and nothing in the payload says which are.
+  // Refuse rather than sum a stranger's credit into this change's direction.
+  if (pendingAtAnchor > 0) {
+    throw new AmbiguousProrationAnchorError(prorationDate, pendingAtAnchor);
+  }
+  const allProrations = lines.filter((l) => l.proration === true);
+  // The anchor this preview was taken at is what makes a line ours — sound
+  // only because the check above has established that no pre-existing
+  // proration shares it.
+  const ownProrations = allProrations.filter(
+    (l) => l.period?.start === prorationDate,
+  );
+  if (allProrations.length > 0 && ownProrations.length === 0) {
+    throw new ProrationAttributionError(prorationDate, allProrations.length);
+  }
+  const prorationLines = ownProrations.map((l) => {
+    const discounted = (l.discount_amounts ?? []).reduce(
+      (sum, d) => sum + d.amount,
+      0,
+    );
+    return {
       description: l.description ?? "",
-      amountCents: l.amount,
+      amountCents: l.amount - discounted,
       proration: true,
-    }));
+    };
+  });
   const amountCents = prorationLines.reduce((sum, l) => sum + l.amountCents, 0);
   return {
     amountCents,
     isCharge: amountCents > 0,
     currency: preview.currency,
     prorationDate,
+    // Stripe's invoice `total` is already net of discounts. It is deliberately
+    // NOT filtered to this preview's anchor: it is read only when the change
+    // resets the billing-cycle anchor, and the invoice that reset raises really
+    // does collect everything sitting on it, pending prorations included.
+    //
+    // It is reported, not quoted. `total` is what the invoice comes to;
+    // `amount_due` is what Stripe will take, and the two part company the
+    // moment the customer carries an account balance — which is why the
+    // adapter has always mapped `amount_due` for issued invoices
+    // (`stripeInvoiceToNeutral`) and now does the same here.
+    totalCents: preview.total,
+    // What is actually collected. Stripe applies the customer's credit balance
+    // to `amount_due`, so this is the figure the confirmation screen means by
+    // "charged now" (#3157, PR #3171 review).
+    amountDueCents: preview.amount_due,
+    // The interval of the subscription that was priced, off the preview's own
+    // response — see `previewedSubscriptionOf`. The price and product come off
+    // the SAME object, so the mutation binding and the grant origin are the
+    // same single observation the direction is.
+    billingInterval: pickInterval(
+      previewedSubscriptionOf(preview, subscriptionId),
+    ),
+    billingPriceId: resolvePriceId(
+      previewedSubscriptionOf(preview, subscriptionId),
+    ),
+    billingProductId: resolveProductId(
+      previewedSubscriptionOf(preview, subscriptionId),
+    ),
     lines: prorationLines,
   };
 }
@@ -325,6 +493,10 @@ function resolveProductId(sub: Stripe.Subscription): string | null {
   return typeof product === "string" ? product : product.id;
 }
 
+function resolvePriceId(sub: Stripe.Subscription): string | null {
+  return sub.items.data[0]?.price?.id ?? null;
+}
+
 function resolveCustomerId(
   ref: string | Stripe.Customer | Stripe.DeletedCustomer,
 ): string {
@@ -465,6 +637,133 @@ function stripeInvoiceToNeutral(invoice: Stripe.Invoice): BillingInvoice {
   };
 }
 
+/**
+ * How many prorations already sit at `prorationDate` on this subscription's
+ * upcoming invoice, BEFORE any change is simulated.
+ *
+ * This is the whole ownership test. `proration_date` is Unix seconds, so a
+ * change committed in the same second as a preview stamps its proration with
+ * our anchor and is indistinguishable from ours by timestamp. Rather than
+ * guess at a payload field that might mean ownership, ask what was already
+ * there: a preview with no `subscription_details` is the invoice as it stands.
+ *
+ * Read-only, and it issues nothing — the same call the change preview makes,
+ * without the change. It costs one round trip per quote, which is the trade
+ * this PR has taken every time the cheap answer turned out to be the wrong one.
+ */
+async function prorationsAlreadyAtAnchor(
+  stripe: Stripe,
+  subscriptionId: string,
+  prorationDate: number,
+): Promise<number> {
+  const baseline = await stripe.invoices.createPreview({
+    subscription: subscriptionId,
+  });
+  // Paged for the same reason the change preview is: an interloper sitting
+  // beyond the embedded page would leave this at zero, and the ownership check
+  // would pass by not looking.
+  const lines = await allPreviewLines(stripe, baseline, {
+    subscription: subscriptionId,
+  });
+  return lines.filter(
+    (l) => l.proration === true && l.period?.start === prorationDate,
+  ).length;
+}
+
+/**
+ * The changed preview, bracketed by a baseline read on either side of it.
+ *
+ * One baseline is a time-of-check/time-of-use pair: a change committed AFTER
+ * the baseline returns and BEFORE the changed preview runs stamps its proration
+ * with our second, is absent from the baseline, and is summed as ours.
+ *
+ * WHY THIS AND NOT A LOCK. Corruption requires the interloper to be present in
+ * the changed preview, which means it was committed before that call returned —
+ * so a baseline taken AFTER it sees everything that could have corrupted it.
+ * Serializing our own mutations would not do as well: a Stripe subscription is
+ * also mutated from the Dashboard, the customer portal and any other
+ * integration on the account, none of which will ever take a lock held in this
+ * process, and the lock would be held across provider I/O to buy it.
+ *
+ * WHAT IS LEFT. This narrows the window; it does not provably close it. A
+ * proration present in the changed preview but swept onto a finalised invoice
+ * before the closing read would be invisible to both baselines. That is why
+ * BOTH reads are consulted rather than only the closing one — the opening read
+ * is the only thing that sees that case — and why the residual is stated here
+ * rather than described as fixed. It is bounded by one HTTP round trip and
+ * requires an invoice to finalise inside it (#3157, PR #3171 review).
+ *
+ * Either observation finding a proration at our anchor is contention in this
+ * second, and both refuse. A refusal costs a retry with a fresh anchor; a
+ * stranger's credit summed into an upgrade is a charge never raised.
+ */
+async function previewWithOwnedAnchor(
+  stripe: Stripe,
+  subscriptionId: string,
+  prorationDate: number,
+  subscriptionDetails: Stripe.InvoiceCreatePreviewParams.SubscriptionDetails,
+): Promise<{
+  preview: Stripe.Invoice;
+  lines: Stripe.InvoiceLineItem[];
+  pendingAtAnchor: number;
+}> {
+  const before = await prorationsAlreadyAtAnchor(
+    stripe,
+    subscriptionId,
+    prorationDate,
+  );
+  // `expand` is what makes this ONE observation rather than two.
+  //
+  // The interval that decides whether this change resets the billing-cycle
+  // anchor has to come from the subscription the invoice was PRICED against.
+  // The adapter retrieves the subscription just before this, to find the item
+  // to reprice, and using that retrieval for the interval as well was the
+  // defect: two requests, a window between them, and a plan update landing in
+  // it makes the earlier snapshot a label rather than a derivation
+  // (r4042380655).
+  //
+  // PROVED, and true by construction: expanding it here returns the
+  // subscription on the SAME request that computes the invoice. There is no
+  // window to straddle and no second value to keep in step, because there is
+  // no second request.
+  //
+  // ASSUMED, and NOT verified against a live account: that the expanded
+  // `subscription` is the STORED resource as this request saw it, rather than
+  // an object reflecting the `subscription_details` overrides the preview was
+  // asked to simulate. `subscription_details` governs what the preview
+  // COMPUTES, and `invoice.subscription` reads as a reference to the
+  // subscription resource, so the stored reading is the one this code is
+  // written to — but no Stripe script has been run against any account on this
+  // change, sandbox included, and a test double cannot falsify the assumption
+  // it was written from. Settling it needs a live account, which is a
+  // maintainer action.
+  //
+  // IF THAT ASSUMPTION IS FALSE, it fails into the original bug rather than
+  // into an error: `billingInterval` would be the interval being moved TO, the
+  // caller would compare the target against itself, score every change
+  // same-interval, select `none` and quote $0 for an anchor reset that
+  // invoices a full period. That is why it is not left to a comment.
+  // `previewPlanChange` below asks the single response to be self-consistent
+  // and refuses when it is not — see {@link SimulatedPreviewSubscriptionError}
+  // for why the price alone cannot be the test.
+  const preview = await stripe.invoices.createPreview({
+    subscription: subscriptionId,
+    subscription_details: subscriptionDetails,
+    expand: ["subscription"],
+  });
+  const lines = await allPreviewLines(stripe, preview, {
+    subscription: subscriptionId,
+    subscription_details:
+      subscriptionDetails as Stripe.InvoiceListUpcomingLinesParams.SubscriptionDetails,
+  });
+  const after = await prorationsAlreadyAtAnchor(
+    stripe,
+    subscriptionId,
+    prorationDate,
+  );
+  return { preview, lines, pendingAtAnchor: Math.max(before, after) };
+}
+
 function stripeSubscriptionToNeutral(
   sub: Stripe.Subscription,
 ): BillingSubscription {
@@ -480,6 +779,7 @@ function stripeSubscriptionToNeutral(
     canceledAt: sub.canceled_at ? new Date(sub.canceled_at * 1000) : null,
     trialEnd: sub.trial_end ? new Date(sub.trial_end * 1000) : null,
     productId: resolveProductId(sub),
+    priceId: resolvePriceId(sub),
     seatCount: sub.items.data[0]?.quantity ?? 1,
   };
 }
@@ -610,13 +910,56 @@ export class StripeProvider implements BillingProvider {
     const sub = await stripe.subscriptions.retrieve(subscriptionId);
     const item = sub.items.data[0];
     if (!item) throw new Error("subscription has no items");
+
+    // The proration decision was made against a specific price. Stripe has no
+    // conditional update, so this retrieval — which the swap takes anyway, one
+    // round trip from the write — is asked whether that price still holds.
+    //
+    // Refusing, not adapting: a change that is no longer the change that was
+    // priced needs a fresh preview, and carrying `none` onto a different
+    // transition is how a real charge goes unraised. See
+    // {@link SubscriptionMovedError} for the evidence that no CAS primitive
+    // exists and for the residual this leaves.
+    const actualPriceId = resolvePriceId(sub);
+    if (
+      input.expectedCurrentPriceId !== undefined &&
+      actualPriceId !== input.expectedCurrentPriceId
+    ) {
+      throw new SubscriptionMovedError(
+        subscriptionId,
+        input.expectedCurrentPriceId,
+        actualPriceId,
+      );
+    }
     const prorationBehavior = input.prorationBehavior ?? "always_invoice";
+    // The anchor the preview priced at, when there was one.
+    //
+    // Left off, Stripe anchors the proration at the moment it processes THIS
+    // request, which is not the moment the preview was computed at — and the
+    // unused credit for the old price decays between the two. For a
+    // same-interval upgrade that shrinks the charge, which a ceiling accepts;
+    // for an interval change the charge is the new period less that decaying
+    // credit, so it GROWS, and the approved maximum checked one call earlier
+    // can be passed and exceeded anyway.
+    //
+    // Sending it also makes the anchor a parameter of the request rather than
+    // a function of when it is served, so an idempotent retry that reaches
+    // Stripe fresh reproduces the same invoice instead of re-anchoring.
+    //
+    // A `proration_date` outside the subscription's current period is refused
+    // by Stripe. That is the correct outcome and not a new failure mode: a
+    // preview whose period has since rolled over priced a change that no
+    // longer exists, and it must be taken again.
+    const params: Stripe.SubscriptionUpdateParams = {
+      items: [{ id: item.id, price: input.newPriceId }],
+      proration_behavior: prorationBehavior,
+    };
+    if (input.prorationDate !== undefined) {
+      params.proration_date = input.prorationDate;
+    }
     await stripe.subscriptions.update(
       subscriptionId,
-      {
-        items: [{ id: item.id, price: input.newPriceId }],
-        proration_behavior: prorationBehavior,
-      },
+      params,
       idempotency(input.idempotencyKey),
     );
   }
@@ -647,19 +990,37 @@ export class StripeProvider implements BillingProvider {
     input: BillingSeatPreviewInput,
   ): Promise<BillingProrationPreview> {
     const stripe = this.client();
+    // Retrieved for ONE thing: which subscription item to reprice. The state
+    // it reports decides nothing, and in particular does not supply the
+    // interval — that comes off the preview response, because this retrieval
+    // and the preview are separate requests (r4042380655).
+    //
+    // This use does not straddle that window in the same way. A stale item id
+    // cannot make a same-interval change look like an interval change, or the
+    // reverse: if the item has been removed or replaced, `createPreview` fails
+    // with a provider error and nothing is priced, rather than pricing the
+    // wrong thing quietly.
     const sub = await stripe.subscriptions.retrieve(subscriptionId);
     const item = sub.items.data[0];
     if (!item) throw new Error("subscription has no items");
     const prorationDate = Math.floor(Date.now() / 1000);
-    const preview = await stripe.invoices.createPreview({
-      subscription: subscriptionId,
-      subscription_details: {
+    const { preview, lines, pendingAtAnchor } = await previewWithOwnedAnchor(
+      stripe,
+      subscriptionId,
+      prorationDate,
+      {
         items: [{ id: item.id, quantity: input.seats }],
         proration_behavior: input.prorationBehavior ?? "always_invoice",
         proration_date: prorationDate,
       },
-    });
-    return summarizeProration(preview, prorationDate);
+    );
+    return summarizeProration(
+      preview,
+      lines,
+      prorationDate,
+      pendingAtAnchor,
+      subscriptionId,
+    );
   }
 
   async previewPlanChange(
@@ -667,19 +1028,68 @@ export class StripeProvider implements BillingProvider {
     input: BillingPlanPreviewInput,
   ): Promise<BillingProrationPreview> {
     const stripe = this.client();
+    // Retrieved for ONE thing: which subscription item to reprice. The state
+    // it reports decides nothing, and in particular does not supply the
+    // interval — that comes off the preview response, because this retrieval
+    // and the preview are separate requests (r4042380655).
+    //
+    // This use does not straddle that window in the same way. A stale item id
+    // cannot make a same-interval change look like an interval change, or the
+    // reverse: if the item has been removed or replaced, `createPreview` fails
+    // with a provider error and nothing is priced, rather than pricing the
+    // wrong thing quietly.
     const sub = await stripe.subscriptions.retrieve(subscriptionId);
     const item = sub.items.data[0];
     if (!item) throw new Error("subscription has no items");
     const prorationDate = Math.floor(Date.now() / 1000);
-    const preview = await stripe.invoices.createPreview({
-      subscription: subscriptionId,
-      subscription_details: {
+    const { preview, lines, pendingAtAnchor } = await previewWithOwnedAnchor(
+      stripe,
+      subscriptionId,
+      prorationDate,
+      {
         items: [{ id: item.id, price: input.newPriceId }],
         proration_behavior: input.prorationBehavior ?? "always_invoice",
         proration_date: prorationDate,
       },
-    });
-    return summarizeProration(preview, prorationDate);
+    );
+    const summary = summarizeProration(
+      preview,
+      lines,
+      prorationDate,
+      pendingAtAnchor,
+      subscriptionId,
+    );
+
+    // The single source, asked to be self-consistent.
+    //
+    // Everything above rests on the expanded `subscription` being the stored
+    // resource rather than a simulation of the change (see the `expand` site).
+    // That property cannot be tested from here, and if it were false this
+    // would quote $0 for an anchor reset and look right doing it. So the one
+    // response is checked against itself: a subscription genuinely on the
+    // target price cannot also be charged for moving to it.
+    //
+    // `input.newPriceId` is a request parameter, not a reading of anything, so
+    // this is a check on ONE observation and not a comparison of two — it is
+    // not the guard shape that keeps failing.
+    //
+    // The price alone cannot be the test: the quote path has no
+    // already-applied guard, so previewing the plan you are ALREADY on is a
+    // legitimate question whose answer is zero. It is the conjunction — on the
+    // target price AND real money moving for the move — that is impossible of
+    // a stored subscription.
+    const priced = previewedSubscriptionOf(preview, subscriptionId);
+    if (
+      resolvePriceId(priced) === input.newPriceId &&
+      summary.amountCents !== 0
+    ) {
+      throw new SimulatedPreviewSubscriptionError(
+        subscriptionId,
+        input.newPriceId,
+        summary.amountCents,
+      );
+    }
+    return summary;
   }
 
   // ── Payment methods ───────────────────────────────────────────────────────────
