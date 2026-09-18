@@ -13,18 +13,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
-const { haltRun, steerRun, summarizeRun, exportRun, replace } = vi.hoisted(
-  () => ({
+const { haltRun, steerRun, summarizeRun, exportRun, replace, refresh } =
+  vi.hoisted(() => ({
     haltRun: vi.fn(),
     steerRun: vi.fn(),
     summarizeRun: vi.fn(),
     exportRun: vi.fn(),
     replace: vi.fn(),
-  }),
-);
+    refresh: vi.fn(),
+  }));
 vi.mock("./actions", () => ({ haltRun, steerRun, summarizeRun, exportRun }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace, refresh: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace, refresh }),
 }));
 
 const { RunControls } = await import("./run-controls");
@@ -41,13 +41,22 @@ function renderControls() {
         runId={RUN}
         status="live"
         source="tacho"
+        orgRole="member"
+        wsRole="member"
       />
     </IntlProvider>,
   );
 }
 
 beforeEach(() => {
-  for (const fn of [haltRun, steerRun, summarizeRun, exportRun, replace]) {
+  for (const fn of [
+    haltRun,
+    steerRun,
+    summarizeRun,
+    exportRun,
+    replace,
+    refresh,
+  ]) {
     fn.mockReset();
   }
 });
@@ -156,12 +165,60 @@ describe("run controls", () => {
       expect(screen.getByTestId("queued-command")).toBeTruthy();
     });
     await user.click(screen.getByRole("button", { name: "Re-read the run" }));
-    expect(replace).toHaveBeenCalledWith("/acme/core-platform/runs/tse_7k2m9q");
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("disables every control, with the reason, for a viewer dispatch_command would refuse (negative)", async () => {
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <RunControls
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          status="live"
+          source="tacho"
+          orgRole="viewer"
+          wsRole="viewer"
+        />
+      </IntlProvider>,
+    );
+    for (const command of ["pause", "resume", "steer", "cancel"]) {
+      expect(screen.getByTestId(`run-${command}`)).toBeDisabled();
+    }
+    expect(screen.getByTestId("role-no-control")).toHaveTextContent(
+      "workspace Owner or Member role",
+    );
+    await user.click(screen.getByTestId("run-pause"));
+    expect(screen.queryByTestId("run-pause-dialog")).toBeNull();
+    expect(haltRun).not.toHaveBeenCalled();
+  });
+
+  it("admits a workspace Member who is only an organization Viewer, as dispatch_command does", () => {
+    render(
+      <IntlProvider>
+        <RunControls
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          status="live"
+          source="tacho"
+          orgRole="viewer"
+          wsRole="member"
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("run-pause")).not.toBeDisabled();
+    expect(screen.queryByTestId("role-no-control")).toBeNull();
   });
 });
 
 describe("record writes", () => {
-  function renderRecord(hasSummary: boolean, canExport = true) {
+  function renderRecord(
+    hasSummary: boolean,
+    orgRole: "owner" | "member" | "viewer" = "owner",
+  ) {
     return render(
       <IntlProvider>
         <RecordActions
@@ -170,7 +227,7 @@ describe("record writes", () => {
           runId={RUN}
           sealed
           hasSummary={hasSummary}
-          canExport={canExport}
+          orgRole={orgRole}
         />
       </IntlProvider>,
     );
@@ -229,7 +286,7 @@ describe("record writes", () => {
 
   it("draws Export disabled, with the reason, for a viewer export_run would refuse (negative)", async () => {
     const user = userEvent.setup();
-    renderRecord(true, false);
+    renderRecord(true, "member");
     const button = screen.getByTestId("run-export");
     expect(button).toBeDisabled();
     expect(screen.getByTestId("export-no-role")).toHaveTextContent(
@@ -241,6 +298,15 @@ describe("record writes", () => {
     expect(screen.getByTestId("run-resummarize")).not.toBeDisabled();
   });
 
+  it("draws Summarize disabled, with the reason, for an organization Viewer (negative)", () => {
+    renderRecord(false, "viewer");
+    expect(screen.getByTestId("run-summarize")).toBeDisabled();
+    expect(screen.getByTestId("summarize-no-role")).toHaveTextContent(
+      "Owner, Admin or Member role",
+    );
+    expect(screen.getByTestId("run-export")).toBeDisabled();
+  });
+
   it("offers neither write while the run is live (negative)", () => {
     render(
       <IntlProvider>
@@ -250,7 +316,7 @@ describe("record writes", () => {
           runId={RUN}
           sealed={false}
           hasSummary={false}
-          canExport
+          orgRole="owner"
         />
       </IntlProvider>,
     );

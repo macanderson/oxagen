@@ -163,10 +163,12 @@ describe("get_run", () => {
       body: { digest, bytesRef: null, fidelity: "digest_only" },
       cost: { micros: "1250", currency: "USD", basis: "client_attested" },
     });
-    expect(decodeFrameCursor(out.frames.cursor ?? "")).toBe("2");
+    // The session is sealed and the page held every frame, so there is no
+    // cursor to continue from; a frame's own cursor still resumes it.
+    expect(out.frames.cursor).toBeNull();
     expect(sleeps).toEqual([]);
 
-    // The cursor resumes a wrapped session the same way.
+    // A frame's cursor resumes a wrapped session the same way.
     const rest = await get(
       input({ runId: TACHO_ID, framesAfter: out.frames.frames[0]?.cursor }),
       ctx(),
@@ -250,7 +252,8 @@ describe("get_run", () => {
       taskRef: "review the PR",
     });
     expect(out.frames?.frames.map((f) => f.seq)).toEqual(["1", "2", "3"]);
-    expect(out.frames?.cursor).toBe(out.frames?.frames.at(-1)?.cursor);
+    // Sealed, and the page held the whole recording: nothing to continue from.
+    expect(out.frames?.cursor).toBeNull();
     expect(out.frames?.frames[0]).toMatchObject({
       type: "tool.call_completed",
       stage: "act",
@@ -275,6 +278,11 @@ describe("get_run", () => {
       (o) => o.frames?.frames.map((f) => f.seq) ?? [],
     );
     expect(seqs).toEqual(["1", "2", "3", "4", "5"]);
+    // The first two pages were full with a frame behind them; the third was
+    // the end of a sealed run, so it carries no cursor and a pager stops.
+    expect(first.frames?.cursor).not.toBeNull();
+    expect(second.frames?.cursor).not.toBeNull();
+    expect(third.frames?.cursor).toBeNull();
 
     // The SSE client resumes from the last frame it rendered.
     const lastFrame = second.frames?.frames.at(-1);
@@ -286,7 +294,7 @@ describe("get_run", () => {
 
     // Past the end: nothing, and the caller keeps its cursor.
     const end = await get(
-      input({ framesAfter: third.frames?.cursor ?? "" }),
+      input({ framesAfter: third.frames?.frames.at(-1)?.cursor ?? "" }),
       ctx(),
     );
     expect(end.frames).toEqual({ frames: [], cursor: null });
@@ -381,7 +389,8 @@ describe("get_run", () => {
       ctx(),
     );
     expect(out.frames?.frames.map((f) => f.seq)).toEqual(["2"]);
-    expect(decodeFrameCursor(out.frames?.cursor ?? "")).toBe("2");
+    // The fixture run is sealed, so a page with nothing behind it ends the read.
+    expect(out.frames?.cursor).toBeNull();
     expect(sleeps).toEqual([POLL_INTERVAL_MS, POLL_INTERVAL_MS]);
   });
 
@@ -400,6 +409,24 @@ describe("get_run", () => {
     const { get } = harness({ events: [1, 2, 3].map((n) => event(n)) });
     const out = await get(input({ frameLimit: 1 }), ctx());
     expect(out.frames?.frames).toHaveLength(1);
+    expect(decodeFrameCursor(out.frames?.cursor ?? "")).toBe("1");
+  });
+
+  it("answers no cursor for a sealed run whose page is exactly full with nothing behind it (negative)", async () => {
+    const { get } = harness({ events: [1, 2].map((n) => event(n)) });
+    const out = await get(input({ frameLimit: 2 }), ctx());
+    expect(out.frames?.frames.map((f) => f.seq)).toEqual(["1", "2"]);
+    expect(out.frames?.cursor).toBeNull();
+  });
+
+  it("keeps the resume point on a live run whose page held every frame so far", async () => {
+    const base = ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID });
+    const { get } = harness({
+      ledger: [{ ...base, run: { ...base.run, status: "running" } }],
+      events: [event(1)],
+    });
+    const out = await get(input(), ctx());
+    expect(out.run.status).toBe("live");
     expect(decodeFrameCursor(out.frames?.cursor ?? "")).toBe("1");
   });
 
@@ -424,7 +451,8 @@ describe("get_run", () => {
     expect(tachoFrames).toHaveBeenCalledWith({
       sessionUuid: SESSION_UUID,
       afterSeq: -1,
-      limit: 200,
+      // One past the page, so a full page can be told from the end.
+      limit: 201,
     });
     expect(out.frames).toEqual({ frames: [], cursor: null });
   });

@@ -9,7 +9,7 @@
 // is never mistaken for the recording.
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import type { RunRow } from "@/data/contracts/runs";
-import type { OrgRole } from "@/server/viewer";
+import type { OrgRole, WsRole } from "@/server/viewer";
 import { AgentCard } from "@/ui/agent-card";
 import { eyebrow, mono } from "@/ui/control-styles";
 import { GeneratedSummary } from "@/ui/generated-summary";
@@ -40,14 +40,22 @@ export function RunHeader({
   run,
   witnessed,
   orgRole,
+  wsRole,
   org,
   ws,
 }: {
   run: RunRow;
   /** True when this run witnessed another (spec §8.5); #2955 builds its tabs. */
   witnessed: boolean;
-  /** The viewer's organization role: `export_run` admits an Owner or Admin and no one else. */
+  /**
+   * The viewer's two roles, because the writes gate on them differently:
+   * `dispatch_command` admits an org Owner or Admin or a workspace Owner or
+   * Member, `summarize_run` an org Owner, Admin or Member, `export_run` an org
+   * Owner or Admin. Each control is drawn disabled for a viewer its handler
+   * would refuse.
+   */
   orgRole: OrgRole;
+  wsRole: WsRole;
   org: string;
   ws: string;
 }) {
@@ -61,7 +69,7 @@ export function RunHeader({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 flex-col gap-2">
           <p className={eyebrow}>{t("eyebrow")}</p>
-          <h1
+          <h2
             className={
               run.name === null
                 ? `${mono} text-lg font-semibold break-all`
@@ -69,7 +77,7 @@ export function RunHeader({
             }
           >
             {run.name ?? run.id}
-          </h1>
+          </h2>
           {run.name === null ? null : (
             <p className={`${mono} text-xs text-muted-foreground break-all`}>
               {run.id}
@@ -115,6 +123,8 @@ export function RunHeader({
             runId={run.id}
             status={run.status}
             source={run.source}
+            orgRole={orgRole}
+            wsRole={wsRole}
           />
           <RecordActions
             org={org}
@@ -122,7 +132,7 @@ export function RunHeader({
             runId={run.id}
             sealed={run.status !== "live"}
             hasSummary={run.summary !== null}
-            canExport={orgRole === "owner" || orgRole === "admin"}
+            orgRole={orgRole}
           />
         </div>
       </div>

@@ -130,6 +130,7 @@
       "noRecipient": "No live run took this command.",
       "reread": "Re-read the run",
       "ledgerReason": "This run's evidence comes from an external engine. Oxagen holds no run token it can revoke, so there is nothing here to pause, steer or cancel.",
+      "roleReason": "Sending a command needs an organization Owner or Admin role, or a workspace Owner or Member role.",
       "pause": {
         "open": "Pause",
         "title": "Pause {run}",
@@ -160,7 +161,7 @@
         "body": "Oxagen revokes the run token, so no further governed call succeeds. Killing the process itself is best effort, and either way it is recorded.",
         "confirm": "Cancel the run",
         "pending": "Cancelling",
-        "queued": "The cancel is queued. The run token is revoked; the process kill is best effort."
+        "queued": "The cancel is queued. Nothing is revoked until the harness takes it: the run's status says when the token was revoked, and the process kill is best effort."
       },
       "failure": {
         "orgRoleRequired": "This needs an organization Owner or Admin role.",
@@ -186,7 +187,8 @@
         "body": "A fast model reads this run's transcript and writes its name and what changed. The result is labelled generated wherever it shows, and the frames stay the record. The call is metered like any other.",
         "confirm": "Queue the summary",
         "pending": "Queueing",
-        "queued": "The summary is queued. It appears on this run once the model has written it."
+        "queued": "The summary is queued. It appears on this run once the model has written it.",
+        "needsRole": "Summarizing needs an organization Owner, Admin or Member role."
       },
       "resummarize": {
         "open": "Summarize again"

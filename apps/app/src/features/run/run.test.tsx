@@ -87,6 +87,19 @@ const memberCtx = unsafeMint(WsCtx, {
   wsRole: "member",
 });
 
+/** An organization Viewer who is only a workspace Viewer: every run write refuses this pair. */
+const viewerCtx = unsafeMint(WsCtx, {
+  userId: "usr_leowatts",
+  orgId: "7a000000-0000-4000-8000-0000000000a1",
+  orgSlug: "acme",
+  orgName: "Acme Robotics",
+  orgRole: "viewer",
+  workspaceId: "7b000000-0000-4000-8000-000000000001",
+  wsSlug: "core-platform",
+  wsName: "Core platform",
+  wsRole: "viewer",
+});
+
 async function renderRun(
   reads: Parameters<typeof runSource>[0],
   view: {
@@ -124,7 +137,7 @@ describe("header", () => {
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
     });
-    const heading = screen.getByRole("heading", { level: 1 });
+    const heading = screen.getByRole("heading", { level: 2 });
     expect(heading).toHaveTextContent("Cut the 3.2 release branch");
     expect(screen.getByText("tse_7k2m9q")).toBeTruthy();
     const summary = screen.getByTestId("generated-summary");
@@ -139,7 +152,7 @@ describe("header", () => {
       detail: ok(runDetail({ run: runRow({ name: null, summary: null }) })),
       transcript: ok(runTranscript()),
     });
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
       "tse_7k2m9q",
     );
     expect(screen.queryByTestId("generated-summary")).toBeNull();
@@ -203,6 +216,18 @@ describe("controls", () => {
     );
   });
 
+  it("disables every control on a live run for a viewer neither role admits, and says why (negative)", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail({ run: runRow({ status: "live" }) })),
+        transcript: ok(runTranscript()),
+      },
+      { viewer: viewerCtx },
+    );
+    expect(screen.getByTestId("run-steer")).toBeDisabled();
+    expect(screen.getByTestId("role-no-control")).toBeTruthy();
+  });
+
   it("offers no control on a sealed run, and offers the record writes instead", async () => {
     await renderRun({
       detail: ok(runDetail()),
@@ -232,6 +257,16 @@ describe("controls", () => {
     );
     expect(screen.getByTestId("run-resummarize")).not.toBeDisabled();
     await expectNoAxe(container);
+  });
+
+  it("draws both record writes disabled for an organization Viewer (negative)", async () => {
+    await renderRun(
+      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+      { viewer: viewerCtx },
+    );
+    expect(screen.getByTestId("run-resummarize")).toBeDisabled();
+    expect(screen.getByTestId("summarize-no-role")).toBeTruthy();
+    expect(screen.getByTestId("run-export")).toBeDisabled();
   });
 
   it("offers Export to an Owner with no reason attached", async () => {

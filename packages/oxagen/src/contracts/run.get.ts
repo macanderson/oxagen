@@ -97,7 +97,9 @@ export const runFramePageSchema = z
     /**
      * The point to continue from: past every event this read consumed, mapped
      * or not. Null when nothing lay past `framesAfter`, so the caller keeps
-     * its cursor.
+     * its cursor, and null on a sealed run whose page had nothing behind it,
+     * since nothing will ever lie past that page. A live run keeps its cursor
+     * on every non-empty page, because the next frame may still arrive.
      */
     cursor: z.string().nullable(),
   })

@@ -11,12 +11,18 @@
 // A sealed or halted run has nothing to reach, so it draws no controls. A
 // ledger run draws them disabled: its evidence arrives from an external engine
 // that Oxagen holds no revocable run token for, so a queued command would have
-// no connection point to travel down (WL-61).
+// no connection point to travel down (WL-61). A viewer `dispatch_command`
+// would refuse — neither an org Owner or Admin nor a workspace Owner or
+// Member — sees them disabled with that reason, not a button that ends in
+// `org_role_required`.
+//
+// Re-reading the run refreshes the route the person is on, so the tab, zoom
+// and frames page they were using stay put.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
 import type { RunRow } from "@/data/contracts/runs";
 import type { ActionResult } from "@/server/kernel";
-import { routes } from "@/shared/safe-path";
+import type { OrgRole, WsRole } from "@/server/viewer";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -31,14 +37,11 @@ function CommandDialog({
   command,
   runId,
   write,
-  after,
 }: {
   command: Command;
   runId: string;
   /** The reason a pause carries, or the text a steer sends. */
   write: (text: string) => Promise<ActionResult<QueuedCommand>>;
-  /** This run's page, reloaded once a command is queued. */
-  after: ReturnType<typeof routes.run>;
 }) {
   const t = useTranslations("run.commands");
   const failureText = useActionFailure();
@@ -153,7 +156,7 @@ function CommandDialog({
               className={buttonSecondary}
               onClick={() => {
                 openChange(false);
-                navigate.replace(after);
+                navigate.refresh();
               }}
             >
               {t("reread")}
@@ -165,45 +168,76 @@ function CommandDialog({
   );
 }
 
+/** Whether `dispatch_command` admits this viewer: org Owner or Admin, or workspace Owner or Member. */
+export function canCommand(orgRole: OrgRole, wsRole: WsRole): boolean {
+  return (
+    orgRole === "owner" ||
+    orgRole === "admin" ||
+    wsRole === "owner" ||
+    wsRole === "member"
+  );
+}
+
+function DisabledControls({
+  reason,
+  testId,
+}: {
+  reason: string;
+  testId: string;
+}) {
+  const t = useTranslations("run.commands");
+  return (
+    <div className="flex flex-col items-start gap-2 lg:items-end">
+      <div className="flex flex-wrap gap-2">
+        {COMMANDS.map((command) => (
+          <button
+            key={command}
+            type="button"
+            disabled
+            data-testid={`run-${command}`}
+            className={buttonSecondary}
+          >
+            {t(`${command}.open`)}
+          </button>
+        ))}
+      </div>
+      <p
+        data-testid={testId}
+        className="max-w-prose text-xs text-muted-foreground lg:text-right"
+      >
+        {reason}
+      </p>
+    </div>
+  );
+}
+
 export function RunControls({
   org,
   ws,
   runId,
   status,
   source,
+  orgRole,
+  wsRole,
 }: {
   org: string;
   ws: string;
   runId: string;
   status: RunRow["status"];
   source: RunRow["source"];
+  orgRole: OrgRole;
+  wsRole: WsRole;
 }) {
   const t = useTranslations("run.commands");
   if (status !== "live") return null;
-  const here = routes.run(org, ws, runId);
   if (source === "ledger") {
     return (
-      <div className="flex flex-col items-start gap-2 lg:items-end">
-        <div className="flex flex-wrap gap-2">
-          {COMMANDS.map((command) => (
-            <button
-              key={command}
-              type="button"
-              disabled
-              data-testid={`run-${command}`}
-              className={buttonSecondary}
-            >
-              {t(`${command}.open`)}
-            </button>
-          ))}
-        </div>
-        <p
-          data-testid="ledger-no-control"
-          className="max-w-prose text-xs text-muted-foreground lg:text-right"
-        >
-          {t("ledgerReason")}
-        </p>
-      </div>
+      <DisabledControls reason={t("ledgerReason")} testId="ledger-no-control" />
+    );
+  }
+  if (!canCommand(orgRole, wsRole)) {
+    return (
+      <DisabledControls reason={t("roleReason")} testId="role-no-control" />
     );
   }
   return (
@@ -213,7 +247,6 @@ export function RunControls({
           key={command}
           command={command}
           runId={runId}
-          after={here}
           write={(text) =>
             command === "steer"
               ? steerRun(org, ws, runId, text)

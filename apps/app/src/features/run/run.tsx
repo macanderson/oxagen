@@ -155,6 +155,7 @@ export async function Run({
         run={detail.run}
         witnessed={detail.witnessed}
         orgRole={ctx.orgRole}
+        wsRole={ctx.wsRole}
         org={place.org}
         ws={place.ws}
       />

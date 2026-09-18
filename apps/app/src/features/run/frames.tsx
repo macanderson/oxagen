@@ -24,7 +24,7 @@ import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { linkText, mono } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
-import { formatCount } from "@/ui/money-format";
+import { formatCount, formatWholeUnits } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, numericCell, Table } from "@/ui/table";
@@ -158,7 +158,7 @@ function FramesPageView({
       {page.frames.map((frame) => (
         <tr key={frame.cursor} data-testid="frame-row">
           <td className={`${numericCell} ${mono}`}>
-            {formatCount(Number(frame.seq), locale)}
+            {formatWholeUnits(frame.seq, locale)}
           </td>
           <td className={cell}>
             <span className={`${mono} break-all font-medium`}>

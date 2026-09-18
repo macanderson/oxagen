@@ -6,12 +6,13 @@
 // was queued and offers to re-read the run rather than claiming a result it
 // cannot see yet. Summarize is offered on a sealed run with no summary, and
 // again once one exists, because a run can be re-read after its bodies change
-// hands; the label says which of the two it is. Export is drawn disabled, with
-// the reason, for a viewer whose org role `export_run` would refuse.
+// hands; the label says which of the two it is. Each is drawn disabled, with
+// the reason, for a viewer whose org role its handler would refuse. Re-reading
+// the run refreshes the route the person is on, so their tab stays put.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { ActionResult } from "@/server/kernel";
-import { routes } from "@/shared/safe-path";
+import type { OrgRole } from "@/server/viewer";
 import { buttonSecondary, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -25,7 +26,6 @@ function RecordDialog<O>({
   runId,
   write,
   receipt,
-  after,
 }: {
   action: "summarize" | "resummarize" | "export";
   /** The button's words; `summarize` and `resummarize` differ only here. */
@@ -34,7 +34,6 @@ function RecordDialog<O>({
   write: () => Promise<ActionResult<O>>;
   /** The id the queued job answered with, printed so a person can chase it. */
   receipt: (value: O) => string;
-  after: ReturnType<typeof routes.run>;
 }) {
   const t = useTranslations("run.record");
   const failureText = useActionFailure();
@@ -116,7 +115,7 @@ function RecordDialog<O>({
               className={buttonSecondary}
               onClick={() => {
                 openChange(false);
-                navigate.replace(after);
+                navigate.refresh();
               }}
             >
               {t("reread")}
@@ -134,7 +133,7 @@ export function RecordActions({
   runId,
   sealed,
   hasSummary,
-  canExport,
+  orgRole,
 }: {
   org: string;
   ws: string;
@@ -143,34 +142,44 @@ export function RecordActions({
   sealed: boolean;
   hasSummary: boolean;
   /**
-   * Whether `export_run` would admit this viewer: its handler asserts an org
-   * Owner or Admin, where `summarize_run` admits a Member too. A viewer it
-   * would refuse sees Export disabled with the reason, not a button that ends
-   * in `org_role_required`.
+   * The viewer's organization role, which both handlers assert on:
+   * `summarize_run` admits an Owner, Admin or Member and `export_run` an Owner
+   * or Admin. A viewer a handler would refuse sees that button disabled with
+   * the reason, not a button that ends in `org_role_required`.
    */
-  canExport: boolean;
+  orgRole: OrgRole;
 }) {
   const t = useTranslations("run.record");
-  const here = routes.run(org, ws, runId);
   if (!sealed) return null;
+  const canExport = orgRole === "owner" || orgRole === "admin";
+  const canSummarize = canExport || orgRole === "member";
   const summarizeAction = hasSummary ? "resummarize" : "summarize";
   return (
     <div className="flex flex-col items-start gap-2 lg:items-end">
       <div className="flex flex-wrap gap-2">
-        <RecordDialog
-          action={summarizeAction}
-          label={t(`${summarizeAction}.open`)}
-          runId={runId}
-          after={here}
-          write={() => summarizeRun(org, ws, runId)}
-          receipt={(value) => value.runId}
-        />
+        {canSummarize ? (
+          <RecordDialog
+            action={summarizeAction}
+            label={t(`${summarizeAction}.open`)}
+            runId={runId}
+            write={() => summarizeRun(org, ws, runId)}
+            receipt={(value) => value.runId}
+          />
+        ) : (
+          <button
+            type="button"
+            disabled
+            data-testid={`run-${summarizeAction}`}
+            className={buttonSecondary}
+          >
+            {t(`${summarizeAction}.open`)}
+          </button>
+        )}
         {canExport ? (
           <RecordDialog
             action="export"
             label={t("export.open")}
             runId={runId}
-            after={here}
             write={() => exportRun(org, ws, runId)}
             receipt={(value) => value.exportId}
           />
@@ -185,6 +194,14 @@ export function RecordActions({
           </button>
         )}
       </div>
+      {canSummarize ? null : (
+        <p
+          data-testid="summarize-no-role"
+          className="max-w-prose text-xs text-muted-foreground lg:text-right"
+        >
+          {t("summarize.needsRole")}
+        </p>
+      )}
       {canExport ? null : (
         <p
           data-testid="export-no-role"

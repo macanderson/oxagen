@@ -1562,6 +1562,7 @@ type Messages = {
       noRecipient: string;
       reread: string;
       ledgerReason: string;
+      roleReason: string;
       pause: {
         open: string;
         title: string;
@@ -1619,6 +1620,7 @@ type Messages = {
         confirm: string;
         pending: string;
         queued: string;
+        needsRole: string;
       };
       resummarize: {
         open: string;

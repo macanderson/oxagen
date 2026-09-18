@@ -129,18 +129,25 @@ export function createRunGetHandler(
     if (cursor === null) throw invalidCursor(runGet.name);
 
     const run = await resolveRun(deps, ctx, input.runId);
-    const frames = await poll(
+    // One frame past the page tells a full page from the end of the recording.
+    // A sealed run whose page had nothing behind it answers no cursor, because
+    // nothing will ever lie past it; a live run keeps its resume point, since
+    // the next frame may still arrive.
+    const batch = await poll(
       run,
       cursor ?? startCursorSeq(run),
-      input.frameLimit,
+      input.frameLimit + 1,
       input.waitMs,
     );
+    const frames = batch.slice(0, input.frameLimit);
     const last = frames.at(-1);
+    const ended =
+      batch.length <= input.frameLimit && run.item.status !== "live";
     return {
       run: run.item,
       frames: {
         frames: frames.map(toFrame),
-        cursor: last ? encodeFrameCursor(last.seq) : null,
+        cursor: last && !ended ? encodeFrameCursor(last.seq) : null,
       },
       witnessFor: run.witnessFor,
     };
