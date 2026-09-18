@@ -40,6 +40,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { PROOF_OBSERVED_KIND } from "@oxagen/run-evidence";
 import {
+  retainsBody,
   TACHO_GATEWAY_TIER,
   TACHO_METERING_ATTR,
   TACHO_METERING_OBSERVED,
@@ -847,14 +848,27 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   const verified = verifyBatchBodies(input.events, input.bodies);
   const bodyRejections: BodyRejection[] = [...verified.rejected];
   const retained: VerifiedBody[] = [];
-  if (retention.mode === "digest_only") {
-    for (const body of verified.accepted)
+  for (const body of verified.accepted) {
+    // Both halves of the mandate bind here as they do on the host: the mode
+    // says exact bytes may be kept at all, the classes say which content the
+    // workspace authorised. `retainsBody` is the same rule the collector
+    // applies before it writes, so a body can never be kept at one end and
+    // refused at the other.
+    if (retention.mode === "digest_only") {
       bodyRejections.push({
         event_id_idem: body.eventIdIdem,
         reason: "retention_digest_only",
       });
-  } else {
-    retained.push(...verified.accepted);
+      continue;
+    }
+    if (!retainsBody(body.kind, retention)) {
+      bodyRejections.push({
+        event_id_idem: body.eventIdIdem,
+        reason: "retention_class_excluded",
+      });
+      continue;
+    }
+    retained.push(body);
   }
   const bytesRefs = new Map<string, string>();
   for (const body of retained) {

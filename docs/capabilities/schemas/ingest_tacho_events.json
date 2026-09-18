@@ -29494,6 +29494,7 @@
                 "digest_mismatch",
                 "credential_detected",
                 "retention_digest_only",
+                "retention_class_excluded",
                 "no_content_digest"
               ]
             }

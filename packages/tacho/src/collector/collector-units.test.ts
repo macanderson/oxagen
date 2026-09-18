@@ -510,7 +510,16 @@ describe("shipper", () => {
       wal,
       client: client as ControlClient,
       quarantineDir: dir,
-      ...(bodies !== undefined ? { bodies } : {}),
+      ...(bodies !== undefined
+        ? {
+            bodies,
+            retention: () =>
+              ({
+                mode: "content_exact",
+                classes: ["model_call", "tool_call"],
+              }) as const,
+          }
+        : {}),
       health: () => ({ version: "1" }),
       onControl: (c) => {
         controls.push(c);
@@ -552,6 +561,7 @@ describe("shipper", () => {
     expect(first).toBeDefined();
     store.put(
       (first as { event_id_idem: string }).event_id_idem,
+      "turn_start",
       "text/plain; charset=utf-8",
       new TextEncoder().encode("ship it"),
     );
@@ -587,6 +597,7 @@ describe("shipper", () => {
     const first = events[0] as { event_id_idem: string };
     store.put(
       first.event_id_idem,
+      "turn_start",
       "text/plain; charset=utf-8",
       new TextEncoder().encode("ship it"),
     );

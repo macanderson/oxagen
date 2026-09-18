@@ -2041,6 +2041,46 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     });
   });
 
+  it("refuses a body whose class the workspace did not authorise", async () => {
+    // `content_exact` says exact bytes MAY be kept. The classes say which.
+    // A workspace that authorised the model exchange and nothing else must
+    // not have its tool output stored because the mode alone looked open.
+    const db = fakeDb();
+    db.retentionPolicy = {
+      mode: "content_exact",
+      retainedContentClasses: ["model_call"],
+    };
+    wire(db);
+    const events = sessionWithContent();
+    const output = await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+    expect(output.body_rejections).toEqual([
+      {
+        event_id_idem: (events[1] as TachoEvent).event_id_idem,
+        reason: "retention_class_excluded",
+      },
+    ]);
+    expect(mocks.bodyPut).not.toHaveBeenCalled();
+  });
+
+  it("keeps a body whose class the workspace did authorise", async () => {
+    const db = fakeDb();
+    db.retentionPolicy = {
+      mode: "content_exact",
+      retainedContentClasses: ["tool_call"],
+    };
+    wire(db);
+    const events = sessionWithContent();
+    const output = await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+    expect(output.body_rejections).toEqual([]);
+    expect(mocks.bodyPut).toHaveBeenCalledTimes(1);
+  });
+
   it("refuses a body whose bytes do not hash to the chained digest, and one carrying a credential", async () => {
     const db = fakeDb();
     wire(db);

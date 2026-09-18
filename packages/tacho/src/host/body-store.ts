@@ -18,11 +18,14 @@
  */
 import { existsSync, readdirSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
+import { retainsBody, type RetentionMandate } from "../evidence/retention";
 import { TACHO_MAX_BODY_BYTES, type TachoBody } from "../wire";
 import { ensureDir, readJsonFileIfExists, writeSensitiveFileAtomic } from "./fs";
 
 /** What one stored body file holds. */
 interface StoredBody {
+  /** The frame's kind, so the mandate's classes can be applied later too. */
+  kind: string;
   content_type: string;
   bytes_base64: string;
 }
@@ -54,10 +57,16 @@ export class BodyStore {
    * refused: the frame keeps its digest either way, and a body the control
    * plane will not accept is not worth the disk.
    */
-  put(eventIdIdem: string, contentType: string, bytes: Uint8Array): boolean {
+  put(
+    eventIdIdem: string,
+    kind: string,
+    contentType: string,
+    bytes: Uint8Array,
+  ): boolean {
     if (!EVENT_ID_IDEM.test(eventIdIdem)) return false;
     if (bytes.byteLength > TACHO_MAX_BODY_BYTES) return false;
     const stored: StoredBody = {
+      kind,
       content_type: contentType,
       bytes_base64: Buffer.from(bytes).toString("base64"),
     };
@@ -68,8 +77,17 @@ export class BodyStore {
     return true;
   }
 
-  /** The bodies held for these events, in the order asked for. */
-  take(eventIdIdems: readonly string[]): TachoBody[] {
+  /**
+   * The bodies held for these events that the mandate in force still
+   * retains, in the order asked for. One that it no longer retains is
+   * dropped rather than returned: the mandate at ship time is the one that
+   * decides, so a narrowing between the write and the drain is honoured
+   * instead of raced.
+   */
+  take(
+    eventIdIdems: readonly string[],
+    retention: RetentionMandate | undefined,
+  ): TachoBody[] {
     const out: TachoBody[] = [];
     for (const id of eventIdIdems) {
       const stored = readJsonFileIfExists(this.fileFor(id)) as
@@ -81,6 +99,10 @@ export class BodyStore {
         typeof stored.bytes_base64 !== "string"
       )
         continue;
+      if (!retainsBody(stored.kind ?? "", retention)) {
+        this.drop([id]);
+        continue;
+      }
       out.push({
         event_id_idem: id,
         content_type: stored.content_type,
@@ -88,6 +110,25 @@ export class BodyStore {
       });
     }
     return out;
+  }
+
+  /**
+   * Drop every held body the mandate no longer retains, and answer how many
+   * went. Called when a refreshed mandate narrows: what is already on disk is
+   * bound by it too, not only what is sealed next.
+   */
+  dropDisallowed(retention: RetentionMandate | undefined): number {
+    let dropped = 0;
+    for (const name of this.files()) {
+      const id = name.replace(/\.json$/, "");
+      const stored = readJsonFileIfExists(join(this.dir, name)) as
+        | StoredBody
+        | undefined;
+      if (retainsBody(stored?.kind ?? "", retention)) continue;
+      this.drop([id]);
+      dropped += 1;
+    }
+    return dropped;
   }
 
   /** Forget these bodies: the control plane took them, or refused them. */

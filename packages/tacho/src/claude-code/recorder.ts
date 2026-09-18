@@ -76,6 +76,7 @@ export interface RecorderOptions {
    */
   onContentBody?: (
     eventIdIdem: string,
+    kind: string,
     contentType: string,
     bytes: Uint8Array,
   ) => void;
@@ -486,6 +487,7 @@ export class SessionRecorder {
     if (fields.content_bytes !== undefined)
       this.options.onContentBody?.(
         sealed.event.event_id_idem,
+        sealed.event.kind,
         CONTENT_TYPE_TEXT,
         fields.content_bytes,
       );

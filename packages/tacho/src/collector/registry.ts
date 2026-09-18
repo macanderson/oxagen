@@ -221,6 +221,7 @@ export interface RegistryOptions {
    */
   onContentBody?: (
     eventIdIdem: string,
+    kind: string,
     contentType: string,
     bytes: Uint8Array,
   ) => void;

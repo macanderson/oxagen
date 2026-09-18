@@ -42,6 +42,7 @@ What it does, from `packages/tacho/src/collector/model-proxy.ts` and
 | The injection seam `beforeForward(request) -> request` | Built, and a no-op until the assembler of ADR-093 exists |
 | The MCP gateway for connected apps | Built (ADR-078), registered into Claude Desktop only |
 | Hooks on Claude Code, Codex, and Stella: five blocking events, fail-closed, able to refuse | Built |
+| Frame bodies under a workspace's retention mandate, on the hook path | Built (#3332), see §3.3 |
 
 Two properties of the proxy are load-bearing for everything below, and both are
 deliberate (ADR-094). The vendor credential crosses in memory, forwarded
@@ -131,26 +132,39 @@ exists in `packages/tacho/src/evidence/redaction.ts` and records every removal
 as `{path, reason, original_digest}`, so a redacted body still verifies against
 its digest.
 
-Two things are missing, and between them they make the whole policy inert:
+Three things were missing, and between them they made the whole policy inert.
+The first two are closed on the hook path:
 
-- **Nothing reads `retention`.** The signed bundle carries
-  `retention: { mode: "digest_only" | "content_exact", classes: [] }`. Outside
-  `wire.ts` and `host/test-support.ts`, no code in `packages/tacho/src` reads
-  it.
-- **Nothing produces bodies.** `host/control-client.ts` posts `schema`,
-  `host_enrollment_id`, `events`, and `daemon`. There is no `bodies` key on any
-  request the collector sends.
+- **The digest could not be satisfied.** The host digested a frame's content
+  before redaction, and the control plane requires a body's bytes to hash to
+  the chained digest *and* to carry no credential. Redacted bytes failed the
+  first check, raw bytes failed the second. `contentFrameOf` redacts first
+  now, in every retention mode, and `content.redactions` records what was cut.
+- **Nothing read `retention`, and nothing produced bodies.** The collector now
+  reads the mandate at the moment a frame is sealed, keeps the redacted bytes
+  when both halves of it allow, and ships them in `bodies[]`. The shipper
+  drops a body once its batch is acknowledged, whether the control plane
+  stored or refused it, and a mandate that narrows drops what is already on
+  disk rather than racing the drain.
 
-The consequence: an organisation whose policy says `content_exact`, which is
-the default on the control plane, receives digests only. The server-side
-verification path has no producer.
+What remains under G3:
 
-Note that Phase 4 added a second place this decision has to be made. The hook
-path sees prompt text and tool bodies. The proxy sees request and response
-bodies. ADR-094 decided the proxy keeps its bodies on the machine. Whether
-`content_exact` changes that for the proxy path is a decision this spec does
-not make, and it should be made explicitly rather than by whoever writes the
-code first.
+- **The proxy path.** Phase 4 added a second place this decision has to be
+  made. The hook path sees prompt text and tool bodies. The proxy sees request
+  and response bodies, and ADR-094 decided it keeps them on the machine.
+  Whether `content_exact` changes that is a decision this spec does not make,
+  and it should be made explicitly rather than by whoever writes the code
+  first.
+- **Tool result bodies on the hook path.** `tool_call` frames map to the
+  `tool_call` content class and nothing writes their bodies yet, so a
+  workspace that authorised that class still receives digests for it.
+
+One rule decides at both ends. `retainsBody` in `@oxagen/tacho` reads the mode
+and the classes together, the collector calls it before it writes, and the
+ingest handler calls it before it accepts, answering `retention_class_excluded`
+for a body the mandate does not cover. Reading the mode alone would keep a
+prompt for a workspace that authorised tool results and nothing else, and an
+empty class list authorises nothing rather than everything.
 
 ### 3.4 G4: the tier a run earned, on the surface
 
@@ -212,7 +226,7 @@ the turn's outcome before it raises anything.
 | 1 | G2 drift detection and the managed-settings path | A machine whose base URL or hook entries were changed reports the mismatch within one control poll, and the Fleet page shows it. Enrollment writes to managed settings where the platform has them. |
 | 2 | G5 unrouted-session detection | A session carrying turn frames and no `llm_call` at proxy fidelity is identified in the record and surfaced with the drift signal. A session with no turn frames, and a turn that failed before any request left, raise nothing, and both are covered by tests. |
 | 3 | G4 computed tier on every surface | Every surface that names a tier reads the computed value, shows the two unavailable tiers as unavailable, and carries the scope phrase. |
-| 4 | G3 the body producer | With `retention.mode: content_exact`, the collector ships redacted bodies for the retained classes, the control plane verifies and stores them, and `body_rejections` is handled on the host. With `digest_only`, nothing is shipped. Both are covered by tests. |
+| 4 | G3, the rest | Tool result bodies ship on the hook path, and the proxy-path decision is recorded as an ADR. The hook path's prompt and response bodies are done. |
 | 5 | G1 the launcher | `oxagen run -- <agent>` confines a run on a Linux CI runner with all three controls, attests to each, and the run computes as `contained`. A run missing any control computes as `gateway` at most. |
 
 G2, G5, and G4 come first because they cost little, they are honest about a

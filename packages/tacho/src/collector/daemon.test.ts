@@ -812,11 +812,13 @@ describe("tachod", () => {
   });
 
   it.each([
-    ["content_exact", 1],
-    ["digest_only", 0],
+    ["content_exact", ["model_call"], 1],
+    ["content_exact", ["tool_call"], 0],
+    ["content_exact", [], 0],
+    ["digest_only", [], 0],
   ] as const)(
-    "ships a prompt body under %s retention",
-    async (mode, expected) => {
+    "ships a prompt body under %s retention for classes %j",
+    async (mode, classes, expected) => {
       // The mandate decides, and it decides on the machine. Under
       // `digest_only` the bytes never reach the disk, so an operator who
       // looks at the directory sees what the control plane sees.
@@ -824,7 +826,7 @@ describe("tachod", () => {
       const paths = scratchPaths();
       const signer = bundleSigner();
       const bundle = signer.sign(
-        unsignedBundle({ retention: { mode, classes: [] } }),
+        unsignedBundle({ retention: { mode, classes: [...classes] } }),
       );
       writeHostFile(paths.hostFile, testHostFile(signer, bundle));
       const { handle } = await boot(plane, paths);

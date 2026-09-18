@@ -37,6 +37,7 @@ import { readModelBaseUrlState } from "../host/model-base-url";
 import type { TachoPaths } from "../host/paths";
 import { isProcessAlive, listClaudeProcesses } from "../host/process-scan";
 import type { Exec } from "../host/service";
+import { retainsBody } from "../evidence/retention";
 import { BodyStore } from "../host/body-store";
 import { Wal } from "../host/wal";
 import { ulid } from "../ids";
@@ -238,9 +239,11 @@ export async function startDaemon(
     context,
     scope: host.host_enrollment_id,
     now,
-    onContentBody: (eventIdIdem, contentType, bytes) => {
-      if (host.bundle.retention.mode !== "content_exact") return;
-      bodyStore.put(eventIdIdem, contentType, bytes);
+    onContentBody: (eventIdIdem, kind, contentType, bytes) => {
+      // Both halves of the mandate bind: the mode says exact bytes may be
+      // kept at all, the classes say which content the workspace authorised.
+      if (!retainsBody(kind, host.bundle.retention)) return;
+      bodyStore.put(eventIdIdem, kind, contentType, bytes);
     },
   });
   const persisted = parseRegistryState(readJsonFileIfExists(paths.daemonState));
@@ -367,6 +370,15 @@ export async function startDaemon(
         bundle_fetched_at: toProtocolTimestamp(now()),
       });
       bundleVerified = true;
+      // A mandate that narrows retention binds what is already on disk, not
+      // only what is sealed next. Bodies kept under the old one are dropped
+      // here, or a batch still waiting to drain would carry prompt bytes the
+      // operator has just said to stop keeping.
+      const stranded = bodyStore.dropDisallowed(response.bundle.retention);
+      if (stranded > 0)
+        log(
+          `dropped ${stranded} stored body file(s) the new mandate does not retain`,
+        );
       log(`bundle ${response.bundle.version} (${response.bundle.etag}) cached`);
       return true;
     } catch (error) {
@@ -410,6 +422,9 @@ export async function startDaemon(
     wal,
     client,
     bodies: bodyStore,
+    // Read at ship time, not captured: a mandate that narrows between the
+    // refresh and the drain must still be the one that decides.
+    retention: () => host.bundle.retention,
     quarantineDir: paths.quarantine,
     // Re-enrolling leaves the WAL holding events stamped with the old id; the
     // control plane 403s a batch containing any of them, and a 403 is

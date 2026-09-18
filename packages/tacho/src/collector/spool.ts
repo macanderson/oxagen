@@ -8,6 +8,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { TachoEvent } from "../envelope";
+import type { RetentionMandate } from "../evidence/retention";
 import type { BodyStore } from "../host/body-store";
 import {
   ControlError,
@@ -50,6 +51,12 @@ export interface ShipperOptions {
    * events alone, exactly as before.
    */
   bodies?: BodyStore;
+  /**
+   * The mandate in force, read at ship time. A mandate that narrows between
+   * the moment a body was written and the moment its batch drains is still
+   * the one that decides, so this is a function rather than a value.
+   */
+  retention?: () => RetentionMandate;
 }
 
 export interface ShipResult {
@@ -233,7 +240,8 @@ export class Shipper {
 
   private async shipBatch(batch: TachoEvent[]): Promise<ShipResult> {
     const ids = batch.map((event) => event.event_id_idem);
-    const bodies = this.options.bodies?.take(ids) ?? [];
+    const bodies =
+      this.options.bodies?.take(ids, this.options.retention?.()) ?? [];
     try {
       const response = await this.options.client.ingest(
         batch,
