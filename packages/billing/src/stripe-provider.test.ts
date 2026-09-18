@@ -626,6 +626,99 @@ describe("StripeProvider", () => {
       ).rejects.toMatchObject({ code: "PREVIEWED_SUBSCRIPTION_UNAVAILABLE" });
     });
 
+    it("quotes a plan the subscription is ALREADY on, rather than refusing", async () => {
+      // Load-bearing for the simulation check below, and a real case in its
+      // own right: `previewPlanChange` in the domain has no already-applied
+      // guard (`changeOrgPlan` does), so a customer asking what their CURRENT
+      // plan would cost reaches this adapter with `newPriceId` equal to the
+      // price the subscription is on. The previewed subscription then reports
+      // the target price legitimately, and repricing an item to the price it
+      // already holds moves no money.
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing(
+        [
+          { proration: true, description: "Unused time", amount: -5_000 },
+          { proration: true, description: "Remaining time", amount: 5_000 },
+        ],
+        0,
+        0,
+        makeStripeSub({
+          items: {
+            data: [
+              {
+                id: "si_001",
+                quantity: 3,
+                price: {
+                  id: "price_same_monthly",
+                  recurring: { interval: "month" },
+                  product: "prod_test_001",
+                },
+              },
+            ],
+          },
+        }),
+      );
+
+      const preview = await provider.previewPlanChange("sub_test_001", {
+        newPriceId: "price_same_monthly",
+      });
+
+      expect(preview.amountCents).toBe(0);
+      expect(preview.billingInterval).toBe("month");
+    });
+
+    it("refuses when the preview reports the target price while pricing a real move to it", async () => {
+      // This models the failure mode the rest of this file CANNOT model: an
+      // expansion that reflects the simulated change rather than the stored
+      // subscription. Every other stub here is written to the assumption that
+      // it is stored, and a double cannot falsify the assumption it was built
+      // from — so the check is exercised directly instead.
+      //
+      // If Stripe behaved this way, `billingInterval` would be the interval
+      // being moved TO, every change would score same-interval, `none` would
+      // ship and an anchor reset would be quoted at $0. Refusing turns a
+      // silent wrong number into a loud stop.
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing(
+        [
+          {
+            proration: true,
+            description: "Unused time on annual",
+            amount: -80_000,
+          },
+          {
+            proration: true,
+            description: "Remaining time on monthly",
+            amount: 20_000,
+          },
+        ],
+        20_000,
+        20_000,
+        // Already on the price being moved TO — the simulated signature.
+        makeStripeSub({
+          items: {
+            data: [
+              {
+                id: "si_001",
+                quantity: 3,
+                price: {
+                  id: "price_scale_monthly",
+                  recurring: { interval: "month" },
+                  product: "prod_test_001",
+                },
+              },
+            ],
+          },
+        }),
+      );
+
+      await expect(
+        provider.previewPlanChange("sub_test_001", {
+          newPriceId: "price_scale_monthly",
+        }),
+      ).rejects.toMatchObject({ code: "PREVIEWED_SUBSCRIPTION_SIMULATED" });
+    });
+
     it("refuses on the seat path too, which shares the helper", async () => {
       stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
       previewing(

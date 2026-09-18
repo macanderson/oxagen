@@ -48,6 +48,7 @@ import type {
 import {
   AmbiguousProrationAnchorError,
   PreviewedSubscriptionUnavailableError,
+  SimulatedPreviewSubscriptionError,
   ProrationAttributionError,
   ProrationLinesTruncatedError,
 } from "./provider";
@@ -712,11 +713,30 @@ async function previewWithOwnedAnchor(
   // it makes the earlier snapshot a label rather than a derivation
   // (r4042380655).
   //
-  // Expanding it here returns the subscription on the SAME request that
-  // computes the invoice, so there is no window to straddle and no second
-  // value to keep in step. `subscription_details` overrides what the preview
-  // SIMULATES; the expanded `subscription` is the stored resource as this
-  // request saw it, which is exactly the state that was priced.
+  // PROVED, and true by construction: expanding it here returns the
+  // subscription on the SAME request that computes the invoice. There is no
+  // window to straddle and no second value to keep in step, because there is
+  // no second request.
+  //
+  // ASSUMED, and NOT verified against a live account: that the expanded
+  // `subscription` is the STORED resource as this request saw it, rather than
+  // an object reflecting the `subscription_details` overrides the preview was
+  // asked to simulate. `subscription_details` governs what the preview
+  // COMPUTES, and `invoice.subscription` reads as a reference to the
+  // subscription resource, so the stored reading is the one this code is
+  // written to — but no Stripe script has been run against any account on this
+  // change, sandbox included, and a test double cannot falsify the assumption
+  // it was written from. Settling it needs a live account, which is a
+  // maintainer action.
+  //
+  // IF THAT ASSUMPTION IS FALSE, it fails into the original bug rather than
+  // into an error: `billingInterval` would be the interval being moved TO, the
+  // caller would compare the target against itself, score every change
+  // same-interval, select `none` and quote $0 for an anchor reset that
+  // invoices a full period. That is why it is not left to a comment.
+  // `previewPlanChange` below asks the single response to be self-consistent
+  // and refuses when it is not — see {@link SimulatedPreviewSubscriptionError}
+  // for why the price alone cannot be the test.
   const preview = await stripe.invoices.createPreview({
     subscription: subscriptionId,
     subscription_details: subscriptionDetails,
@@ -980,13 +1000,44 @@ export class StripeProvider implements BillingProvider {
         proration_date: prorationDate,
       },
     );
-    return summarizeProration(
+    const summary = summarizeProration(
       preview,
       lines,
       prorationDate,
       pendingAtAnchor,
       subscriptionId,
     );
+
+    // The single source, asked to be self-consistent.
+    //
+    // Everything above rests on the expanded `subscription` being the stored
+    // resource rather than a simulation of the change (see the `expand` site).
+    // That property cannot be tested from here, and if it were false this
+    // would quote $0 for an anchor reset and look right doing it. So the one
+    // response is checked against itself: a subscription genuinely on the
+    // target price cannot also be charged for moving to it.
+    //
+    // `input.newPriceId` is a request parameter, not a reading of anything, so
+    // this is a check on ONE observation and not a comparison of two — it is
+    // not the guard shape that keeps failing.
+    //
+    // The price alone cannot be the test: the quote path has no
+    // already-applied guard, so previewing the plan you are ALREADY on is a
+    // legitimate question whose answer is zero. It is the conjunction — on the
+    // target price AND real money moving for the move — that is impossible of
+    // a stored subscription.
+    const priced = previewedSubscriptionOf(preview, subscriptionId);
+    if (
+      resolvePriceId(priced) === input.newPriceId &&
+      summary.amountCents !== 0
+    ) {
+      throw new SimulatedPreviewSubscriptionError(
+        subscriptionId,
+        input.newPriceId,
+        summary.amountCents,
+      );
+    }
+    return summary;
   }
 
   // ── Payment methods ───────────────────────────────────────────────────────────

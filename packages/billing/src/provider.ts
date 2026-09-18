@@ -239,6 +239,63 @@ export class PreviewedSubscriptionUnavailableError extends Error {
   }
 }
 
+/**
+ * Raised when a previewed invoice reports having been computed against a
+ * subscription that is ALREADY on the price this change is moving to, while
+ * the same invoice prices real money for making that move.
+ *
+ * WHAT THIS IS DEFENDING, AND WHY IT IS NOT PARANOIA.
+ *
+ * Deriving the interval from the preview rests on one unproven property: that
+ * the `subscription` expanded onto the response is the STORED subscription as
+ * that request saw it, not an object reflecting the `subscription_details`
+ * overrides the preview was asked to simulate. Nothing in this repository can
+ * confirm that — no Stripe script has been run against any account, sandbox
+ * included — and a test double cannot falsify an assumption it was written
+ * from.
+ *
+ * It does not fail gracefully. If the expansion were simulated,
+ * {@link BillingProrationPreview.billingInterval} would be the interval being
+ * moved TO, the caller would compare the target against itself, conclude
+ * same-interval, select `none` and quote $0 — which is the exact defect this
+ * whole change exists to remove, returning silently and looking correct.
+ *
+ * So the single source is asked to be self-consistent. A subscription really
+ * on the target price cannot also be charged for moving to it: repricing an
+ * item to the price it already holds moves no money, so the prorations
+ * attributed to this change net to zero. Reporting the target price WHILE
+ * pricing a real change is the signature of a simulated object, and it is read
+ * off one response rather than by comparing two observations of the same
+ * thing.
+ *
+ * WHY THE PRICE ALONE IS NOT ENOUGH TO REFUSE ON. `previewPlanChange` in the
+ * domain has no already-applied guard — `changeOrgPlan` has one, this does not
+ * — so a customer asking what their CURRENT plan would cost arrives here with
+ * the target price equal to the price they are on. That is a legitimate
+ * question with a legitimate answer of zero, and refusing on the price alone
+ * would break it.
+ *
+ * WHAT IS LEFT. A simulated expansion whose real change happens to net exactly
+ * zero across its proration lines would pass this. For a same-interval change
+ * that is harmless — zero is also the true answer, and `none` is what either
+ * reading selects. For an interval change it is not, and that residual is
+ * stated rather than described as closed: it needs a live account to settle,
+ * which is a maintainer action (#3157, PR #3171 review, r4042380655).
+ */
+export class SimulatedPreviewSubscriptionError extends Error {
+  readonly code = "PREVIEWED_SUBSCRIPTION_SIMULATED" as const;
+  constructor(
+    readonly subscriptionId: string,
+    readonly priceId: string,
+    readonly prorationCents: number,
+  ) {
+    super(
+      `The previewed invoice for ${subscriptionId} reports a subscription already on ${priceId}, the price this change moves to, yet prices ${prorationCents} cents of proration for making that move; the state it reports cannot be the state it priced.`,
+    );
+    this.name = "SimulatedPreviewSubscriptionError";
+  }
+}
+
 export interface BillingProrationPreview {
   /**
    * Net proration amount in cents for THIS change. Positive = the customer
