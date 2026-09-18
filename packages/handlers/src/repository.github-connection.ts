@@ -30,6 +30,31 @@ export const GITHUB_PROVIDER = "github";
 const RETIRED_STATUSES = ["deleting", "deleted"] as const;
 
 /**
+ * Whether a `source_connections` row someone already has in hand is live — the
+ * row-shaped counterpart to {@link workspaceGithubConnectionFilter}, for a
+ * reader that joins the connection rather than selecting it.
+ *
+ * `get_main_repository` needs this rather than the filter: it must still report
+ * WHICH repository a workspace binds when the connection behind it is retired,
+ * so the connection is left-joined and judged here instead of being used to
+ * drop the row. One predicate, stated twice in two shapes, is still one rule —
+ * the point of both living in this file.
+ *
+ * A null status is the left join finding no connection row at all (the purge
+ * has been through), which is as retired as a row can get.
+ */
+export function isLiveConnectionRow(row: {
+  status: string | null;
+  deletedAt: Date | null;
+}): boolean {
+  if (row.status === null) return false;
+  return (
+    row.deletedAt === null &&
+    !(RETIRED_STATUSES as readonly string[]).includes(row.status)
+  );
+}
+
+/**
  * The one predicate that says which rows are "this workspace's live GitHub
  * connections". Every reader and every writer in the product uses it, because
  * a predicate two sides nearly share is two predicates: the day they diverge,

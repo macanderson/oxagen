@@ -70,6 +70,28 @@ export const repositoryMainGet = registerCapability({
           defaultRef: z.string().min(1),
           htmlUrl: z.string().url(),
           boundAt: z.string().datetime({ offset: true }),
+          /**
+           * The GitHub connection this binding hangs off is still live — not
+           * soft-deleted, and not left at `status = 'deleting'` by
+           * `delete_connection` for a purge that has not run yet.
+           *
+           * False is a reachable and unrecoverable-looking state, not a
+           * theoretical one. Delete the workspace's GitHub connection and
+           * reconnect: the delete leaves the old row at `deleting`, so the
+           * install callback's attach — which only ever sees live rows — has to
+           * insert a NEW connection, while the binding head still points at the
+           * retired one. `readGitHubConnection` joins head → binding →
+           * connection and filters exactly those statuses, so from that moment
+           * it resolves nothing and steering and Context PRs are off, silently.
+           *
+           * It is reported rather than hidden because the repository is still
+           * the one the workspace binds and the person has to be told which it
+           * is. `bind_main_repository` is the repair: re-binding the SAME
+           * repository supersedes the binding onto the live connection and
+           * moves the head with it (changing to a DIFFERENT repository stays
+           * `conflict: main_repo_bound`, an org owner's decision, spec §10.1).
+           */
+          connectionLive: z.boolean(),
         })
         .strict()
         .nullable(),

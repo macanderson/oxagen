@@ -42,6 +42,15 @@ type MainRepository = {
   defaultRef: string;
   htmlUrl: string;
   boundAt: string;
+  /**
+   * The GitHub connection behind this binding is still live. False is the
+   * state a delete-then-reconnect leaves: the binding head still points at the
+   * retired connection, every reader that joins the two finds nothing, and
+   * steering is off while the repository still reads as bound. The panel shows
+   * the repository either way and offers the repair — re-binding the same
+   * repository, which supersedes the binding onto the live connection.
+   */
+  connectionLive: boolean;
 };
 
 type GitHubInstallation = {

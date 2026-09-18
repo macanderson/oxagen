@@ -12,7 +12,11 @@
 //   1. Role gate — assertOrgRole: org Owner or Admin (INV-29), the pair the
 //      bind admits, because the install URL here is the first half of that write.
 //   2. The binding: the workspace's binding head and the binding version it
-//      points at — the same rows the bind writes.
+//      points at — the same rows the bind writes — left-joined to the
+//      connection the head names, so the answer says whether that connection
+//      is still live (`repository.connectionLive`). A retired connection is
+//      the state in which steering silently stops resolving, and reporting the
+//      repository without it is what made that state invisible.
 //   3. The installation: the workspace's GitHub connection, through the one
 //      shared resolver. The installation id is NOT in the output; a caller that
 //      could name one could mint tokens for another account's installation.
@@ -35,7 +39,10 @@ import {
 } from "@oxagen/github";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq } from "drizzle-orm";
-import { resolveWorkspaceGithubInstallation } from "./repository.github-connection";
+import {
+  isLiveConnectionRow,
+  resolveWorkspaceGithubInstallation,
+} from "./repository.github-connection";
 
 const MAIN_REPOSITORY_ROLES = ["Owner", "Admin"] as const;
 
@@ -153,6 +160,11 @@ export function createMainRepositoryGetHandler(
             fullName: schema.repositoryBindings.providerFullName,
             defaultRef: schema.repositoryBindings.configuredDefaultRef,
             boundAt: schema.repositoryBindings.createdAt,
+            // Left-joined, not filtered on: a workspace whose connection has
+            // been retired must still be told WHICH repository it binds. See
+            // `connectionLive` below.
+            connectionStatus: schema.sourceConnections.status,
+            connectionDeletedAt: schema.sourceConnections.deletedAt,
           })
           .from(schema.repositoryBindingHeads)
           .innerJoin(
@@ -160,6 +172,13 @@ export function createMainRepositoryGetHandler(
             eq(
               schema.repositoryBindings.id,
               schema.repositoryBindingHeads.currentBindingId,
+            ),
+          )
+          .leftJoin(
+            schema.sourceConnections,
+            eq(
+              schema.sourceConnections.id,
+              schema.repositoryBindingHeads.connectionId,
             ),
           )
           .where(
@@ -189,6 +208,17 @@ export function createMainRepositoryGetHandler(
             // has not been re-observed still links somewhere GitHub redirects.
             htmlUrl: `https://github.com/${binding.fullName}`,
             boundAt: binding.boundAt.toISOString(),
+            // The same judgement `readGitHubConnection` makes before it will
+            // resolve steering, said out loud. False means the head still
+            // points at a connection that is gone or on its way out, so every
+            // reader that joins the two finds nothing and steering is off —
+            // while this read, which joined only the head to its binding,
+            // went on reporting the repository as usable. The workspace looked
+            // fine and nothing on any surface could fix it (#3233).
+            connectionLive: isLiveConnectionRow({
+              status: binding.connectionStatus,
+              deletedAt: binding.connectionDeletedAt,
+            }),
           }
         : null,
       github: {
